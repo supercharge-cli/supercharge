@@ -7,7 +7,7 @@ The upstream repository states that its first-party code is licensed under the *
 At assessment time, the source revision recorded in the checked-out upstream repository was:
 
 ```text
-See the upstream SOURCE_REV file in the source checkout used for this build.
+c2dab005c2b53c99209dc6faf82153d782f76ee4
 ```
 
 This private project is an independent implementation. It does not claim affiliation with, endorsement by, or ownership of xAI or the upstream project. If source files are copied or adapted in a future commit, the applicable copyright, license, NOTICE, and modification notices will be retained with those files, and the project will update this document with the precise revision and file paths.
