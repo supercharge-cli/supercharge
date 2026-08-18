@@ -50,6 +50,9 @@ class Storage:
                 CREATE INDEX IF NOT EXISTS idx_events_run_id ON events(run_id, id);
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(runs)")}
+            if "command" not in columns:
+                connection.execute("ALTER TABLE runs ADD COLUMN command TEXT")
 
     def create_run(self, state: RunState) -> None:
         with self._lock, self._connect() as connection:

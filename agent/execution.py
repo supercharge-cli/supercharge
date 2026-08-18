@@ -86,4 +86,8 @@ class E2BBackend:
             return CommandResult(stdout=stdout, stderr=stderr, exit_code=result.exit_code or 0)
         finally:
             if sandbox is not None:
-                await sandbox.kill()
+                try:
+                    await sandbox.kill()
+                except Exception:
+                    # The sandbox may have expired or already been killed; do not mask the run result.
+                    pass
