@@ -43,6 +43,7 @@ use xai_grok_superagent::{E2bExecutor, PersistentExecutionRequest, SandboxPlan};
 #[derive(Clone)]
 struct AppState {
     config: SuperagentConfig,
+    started_at: u64,
     approval: ApprovalPolicy,
     api_token: Option<String>,
     #[cfg(feature = "e2b")]
@@ -250,6 +251,20 @@ struct DaemonStatus {
 }
 
 #[derive(Debug, Serialize)]
+struct ObservabilityResponse {
+    uptime_seconds: u64,
+    active_gateways: Vec<String>,
+    queued_jobs: usize,
+    running_jobs: usize,
+    succeeded_jobs: usize,
+    failed_jobs: usize,
+    memory_entries: usize,
+    memory_sessions: usize,
+    schedules: usize,
+    enabled_schedules: usize,
+}
+
+#[derive(Debug, Serialize)]
 struct ConnectionReadiness {
     name: &'static str,
     mode: &'static str,
@@ -325,6 +340,7 @@ async fn main() -> anyhow::Result<()> {
     let schedule_store = Arc::new(Mutex::new(ScheduleStore::load(schedule_state_path)?));
     let state = AppState {
         config: SuperagentConfig::default(),
+        started_at: unix_seconds(),
         approval: ApprovalPolicy::default(),
         api_token,
         #[cfg(feature = "e2b")]
@@ -421,6 +437,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/schedules/:id", delete(delete_schedule))
         .route("/v1/schedules/:id/enabled", post(toggle_schedule))
         .route("/v1/daemon/status", get(daemon_status))
+        .route("/v1/observability", get(observability))
         .route("/v1/connections", get(connection_status))
         .route("/v1/memory", get(search_memory).post(remember_memory))
         .route("/v1/memory/stats", get(memory_stats))
@@ -1459,6 +1476,54 @@ async fn connection_status() -> Json<Vec<ConnectionReadiness>> {
     ])
 }
 
+async fn observability(State(state): State<Arc<AppState>>) -> Json<ObservabilityResponse> {
+    let store = state.job_store.lock().await;
+    let mut queued_jobs = 0;
+    let mut running_jobs = 0;
+    let mut succeeded_jobs = 0;
+    let mut failed_jobs = 0;
+    for job in store.all() {
+        match job.status {
+            JobStatus::Queued => queued_jobs += 1,
+            JobStatus::Running => running_jobs += 1,
+            JobStatus::Succeeded => succeeded_jobs += 1,
+            JobStatus::Failed | JobStatus::Cancelled => failed_jobs += 1,
+        }
+    }
+    drop(store);
+    let (memory_entries, memory_sessions) = state.memory_store.lock().await.stats();
+    let schedules = state.schedule_store.lock().await;
+    let schedule_list: Vec<_> = schedules.list().collect();
+    let enabled_schedules = schedule_list.iter().filter(|job| job.enabled).count();
+    Json(ObservabilityResponse {
+        uptime_seconds: unix_seconds().saturating_sub(state.started_at),
+        active_gateways: configured_gateways(),
+        queued_jobs,
+        running_jobs,
+        succeeded_jobs,
+        failed_jobs,
+        memory_entries,
+        memory_sessions,
+        schedules: schedule_list.len(),
+        enabled_schedules,
+    })
+}
+
+fn configured_gateways() -> Vec<String> {
+    [
+        (env::var("TELEGRAM_BOT_TOKEN").is_ok(), "telegram"),
+        (env::var("DISCORD_BOT_TOKEN").is_ok(), "discord"),
+        (env::var("SLACK_APP_TOKEN").is_ok(), "slack"),
+        (env::var("WHATSAPP_ACCESS_TOKEN").is_ok(), "whatsapp"),
+        (env::var("SIGNAL_ACCOUNT").is_ok(), "signal"),
+        (env::var("MATRIX_ACCESS_TOKEN").is_ok(), "matrix"),
+        (env::var("GENERIC_WEBHOOK_SECRET").is_ok(), "webhook"),
+    ]
+    .into_iter()
+    .filter_map(|(enabled, name)| enabled.then_some(name.to_owned()))
+    .collect()
+}
+
 async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus> {
     let store = state.job_store.lock().await;
     let mut status = DaemonStatus {
@@ -1469,19 +1534,7 @@ async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus>
         succeeded_jobs: 0,
         failed_jobs: 0,
     };
-    for (enabled, name) in [
-        (env::var("TELEGRAM_BOT_TOKEN").is_ok(), "telegram"),
-        (env::var("DISCORD_BOT_TOKEN").is_ok(), "discord"),
-        (env::var("SLACK_APP_TOKEN").is_ok(), "slack"),
-        (env::var("WHATSAPP_ACCESS_TOKEN").is_ok(), "whatsapp"),
-        (env::var("SIGNAL_ACCOUNT").is_ok(), "signal"),
-        (env::var("MATRIX_ACCESS_TOKEN").is_ok(), "matrix"),
-        (env::var("GENERIC_WEBHOOK_SECRET").is_ok(), "webhook"),
-    ] {
-        if enabled {
-            status.gateways.push(name.to_owned());
-        }
-    }
+    status.gateways = configured_gateways();
     for job in store.all() {
         match job.status {
             JobStatus::Queued => status.queued_jobs += 1,
