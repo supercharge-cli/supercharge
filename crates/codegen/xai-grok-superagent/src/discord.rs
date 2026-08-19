@@ -253,9 +253,10 @@ fn parse_strings(value: Option<String>) -> BTreeSet<String> {
 
 #[cfg(test)]
 mod tests {
+    use httpmock::prelude::*;
     use serde_json::json;
 
-    use super::{DiscordConfig, GatewayPayload, OP_IDENTIFY, normalize_message};
+    use super::{DiscordClient, DiscordConfig, GatewayPayload, OP_IDENTIFY, normalize_message};
 
     #[test]
     fn identify_uses_message_content_and_standard_message_intents() {
@@ -263,6 +264,30 @@ mod tests {
         assert_eq!(payload.op, OP_IDENTIFY);
         assert_eq!(payload.d["intents"], json!(33281));
         assert_eq!(payload.d["token"], json!("redacted-at-wire-serialization"));
+    }
+
+    #[tokio::test]
+    async fn sends_message_through_discord_rest_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/api/v10/channels/42/messages")
+                    .json_body(json!({"content": "hello"}));
+                then.status(200).json_body(json!({"id": "9"}));
+            })
+            .await;
+        let client = DiscordClient::new(DiscordConfig {
+            bot_token: "secret".into(),
+            api_base_url: format!("{}/api/v10", server.base_url()),
+            gateway_url: "wss://discord.test".into(),
+            intents: 0,
+            gateway: Default::default(),
+            allowed_users: Default::default(),
+            allowed_channels: Default::default(),
+        });
+        client.send_message("42", "hello").await.unwrap();
+        mock.assert_async().await;
     }
 
     #[test]

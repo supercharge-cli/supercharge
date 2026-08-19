@@ -222,8 +222,38 @@ fn parse_ids(value: Option<String>) -> BTreeSet<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SlackConfig, SlackEnvelope, normalize_event};
+    use super::{SlackClient, SlackConfig, SlackEnvelope, normalize_event};
+    use httpmock::prelude::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn sends_message_through_slack_web_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/api/chat.postMessage")
+                    .json_body(json!({
+                        "channel": "C42",
+                        "text": "hello",
+                        "thread_ts": "171234.1"
+                    }));
+                then.status(200).json_body(json!({"ok": true}));
+            })
+            .await;
+        let client = SlackClient::new(SlackConfig {
+            bot_token: "xoxb-secret".into(),
+            app_token: "xapp-secret".into(),
+            api_base_url: format!("{}/api", server.base_url()),
+            allowed_users: Default::default(),
+            allowed_channels: Default::default(),
+        });
+        client
+            .send_message("C42", "hello", Some("171234.1"))
+            .await
+            .unwrap();
+        mock.assert_async().await;
+    }
 
     #[test]
     fn normalizes_authorized_slack_messages_and_session_threads() {
