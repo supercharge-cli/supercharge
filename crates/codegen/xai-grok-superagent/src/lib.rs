@@ -9,6 +9,7 @@ mod capabilities;
 pub mod discord;
 mod e2b;
 pub mod gateway;
+pub mod integrations;
 pub mod jobs;
 pub mod matrix;
 pub mod memory;
