@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use xai_grok_superagent::SandboxPlan;
 use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
+    discord::DiscordClient,
     gateway::GatewayStateStore,
     telegram::{TelegramClient, TelegramConfig},
 };
@@ -87,6 +88,13 @@ async fn main() -> anyhow::Result<()> {
         .with_state(Arc::new(state.clone()))
         .merge(protected);
 
+    if env::var("DISCORD_BOT_TOKEN").is_ok() {
+        tokio::spawn(async {
+            if let Err(error) = run_discord_daemon().await {
+                eprintln!("discord gateway stopped: {error}");
+            }
+        });
+    }
     if env::var("TELEGRAM_BOT_TOKEN").is_ok() {
         tokio::spawn(async {
             if let Err(error) = run_telegram_daemon().await {
@@ -155,6 +163,61 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
             }
         }
     }
+}
+
+async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = xai_grok_superagent::discord::DiscordConfig::from_env()?;
+    let client = DiscordClient::new(config);
+    loop {
+        match client.run_once().await {
+            Ok(messages) => {
+                for message in messages {
+                    eprintln!(
+                        "discord message: channel={} user={:?} session={}",
+                        message.chat_id,
+                        message.user_id,
+                        message.session_key().as_str()
+                    );
+                    if let Some(binary) = env::var_os("GROK_AGENT_BINARY") {
+                        match run_grok_turn(&message).await {
+                            Ok(Some(reply)) if !reply.is_empty() => {
+                                send_discord_chunked(&client, message.chat_id, &reply).await?;
+                            }
+                            Ok(_) => {}
+                            Err(error) => {
+                                eprintln!("grok headless Discord turn failed: {error}");
+                                let _ = binary;
+                                client
+                                    .send_message(
+                                        &message.chat_id.to_string(),
+                                        "The agent turn failed; check the daemon logs.",
+                                    )
+                                    .await;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("discord gateway poll failed; reconnecting: {error}");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
+async fn send_discord_chunked(
+    client: &DiscordClient,
+    channel_id: i64,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let chars: Vec<char> = text.chars().collect();
+    for chunk in chars.chunks(1900) {
+        client
+            .send_message(&channel_id.to_string(), &chunk.iter().collect::<String>())
+            .await?;
+    }
+    Ok(())
 }
 
 async fn run_grok_turn(
