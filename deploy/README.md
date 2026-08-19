@@ -93,7 +93,7 @@ When the headless agent bridge is configured, `POST /v1/subagents` can run a bou
 
 ## Durable schedules
 
-`SUPERAGENT_SCHEDULE_STATE` persists interval schedules across restarts. Authenticated `POST /v1/schedules` creates a schedule with a name, prompt, interval, and optional `home_channel`; `GET /v1/schedules` lists schedules; `POST /v1/schedules/:id/enabled` toggles one; and `DELETE /v1/schedules/:id` removes it. Due schedules are claimed exactly once and are ready to be enqueued into the durable job store. Gateway-specific home-channel delivery remains an explicit routing step rather than an implicit broadcast.
+`SUPERAGENT_SCHEDULE_STATE` persists interval schedules across restarts. Authenticated `POST /v1/schedules` creates a schedule with a name, prompt, interval, and optional `home_channel`; `GET /v1/schedules` lists schedules; `POST /v1/schedules/:id/enabled` toggles one; and `DELETE /v1/schedules/:id` removes it. Due schedules are claimed exactly once and enqueued into the durable job store. Set `home_channel` to `telegram:CHAT_ID`, `discord:CHANNEL_ID`, `slack:CHANNEL_ID[:THREAD_TS]`, `whatsapp:PHONE`, `signal:RECIPIENT`, `matrix:ROOM_ID`, `email:ADDRESS`, or `webhook:NAME`; successful results are routed through the configured outbound client instead of being broadcast implicitly. Webhook delivery additionally requires `GENERIC_WEBHOOK_URL`.
 
 ## Media handling
 

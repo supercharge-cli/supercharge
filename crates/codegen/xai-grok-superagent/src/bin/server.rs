@@ -21,6 +21,7 @@ use xai_grok_superagent::{
         handle_text as handle_control_text, init_global as init_controls,
         is_stopped as control_is_stopped,
     },
+    delivery::{DeliveryTarget, dispatch_text},
     discord::DiscordClient,
     email::{EmailClient, EmailConfig},
     gateway::GatewayStateStore,
@@ -446,14 +447,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
             for schedule in due {
-                let (platform, chat_id) = schedule
+                let target = schedule
                     .home_channel
                     .as_deref()
-                    .and_then(|value| value.rsplit_once(':'))
-                    .and_then(|(platform, chat_id)| {
-                        chat_id.parse::<i64>().ok().map(|id| (platform, id))
-                    })
-                    .unwrap_or(("scheduler", 0));
+                    .and_then(|value| value.parse::<DeliveryTarget>().ok());
+                let (platform, chat_id) = target
+                    .as_ref()
+                    .map(|value| (format!("target:{}", value.session_channel()), 0))
+                    .unwrap_or_else(|| ("scheduler".to_owned(), 0));
                 let session_key = format!("schedule:{}", schedule.id);
                 let mut jobs = scheduler_state.job_store.lock().await;
                 if let Err(error) = jobs.enqueue(session_key, platform, chat_id, schedule.prompt, 3)
@@ -489,6 +490,18 @@ async fn main() -> anyhow::Result<()> {
             let mut jobs = worker_state.job_store.lock().await;
             match outcome {
                 Ok(reply) => {
+                    if let Some(reply_text) = reply.as_deref()
+                        && let Some(target) = job.platform.strip_prefix("target:")
+                    {
+                        match target.parse::<DeliveryTarget>() {
+                            Ok(target) => {
+                                if let Err(error) = dispatch_text(&target, reply_text).await {
+                                    eprintln!("job result delivery failed: {error}");
+                                }
+                            }
+                            Err(error) => eprintln!("job target parsing failed: {error}"),
+                        }
+                    }
                     if let Err(error) = jobs.complete_with_result(&job.id, reply) {
                         eprintln!("job completion failed: {error}");
                     }

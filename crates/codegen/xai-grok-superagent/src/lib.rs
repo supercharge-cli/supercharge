@@ -9,6 +9,7 @@ pub mod browser;
 mod capabilities;
 pub mod commands;
 pub mod controls;
+pub mod delivery;
 pub mod discord;
 mod e2b;
 pub mod email;
