@@ -1,0 +1,1 @@
+Vendored from chwzr/e2b-rs at commit 628717577c3574b7ef84349fb190f79d3129a940.

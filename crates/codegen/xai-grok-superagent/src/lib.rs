@@ -6,12 +6,16 @@
 
 mod approval;
 mod capabilities;
+mod e2b;
 mod scheduler;
 
 use sha2::{Digest, Sha256};
 
 pub use approval::{ApprovalError, ApprovalPolicy};
 pub use capabilities::CapabilityProfile;
+pub use e2b::{E2bError, ExecutionResult, SandboxPlan};
+#[cfg(feature = "e2b")]
+pub use e2b::E2bExecutor;
 pub use scheduler::ScheduledJob;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

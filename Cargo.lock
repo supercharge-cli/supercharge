@@ -2985,6 +2985,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "e2b-rs"
+version = "0.1.0"
+dependencies = [
+ "async-compression",
+ "async-stream",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "flate2",
+ "futures",
+ "glob",
+ "globset",
+ "pbjson",
+ "pbjson-types",
+ "prost",
+ "regress 0.10.5",
+ "reqwest 0.13.4",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "walkdir",
+ "wiremock",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6772,7 +6803,7 @@ dependencies = [
  "libc",
  "nix 0.31.3",
  "prettyplease",
- "regress",
+ "regress 0.11.1",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -7539,6 +7570,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
 
 [[package]]
+name = "pbjson"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8edd1efdd8ab23ba9cb9ace3d9987a72663d5d7c9f74fa00b51d6213645cf6c"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
+
+[[package]]
 name = "pbjson-build"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7548,6 +7589,21 @@ dependencies = [
  "itertools 0.14.0",
  "prost",
  "prost-types",
+]
+
+[[package]]
+name = "pbjson-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a14e2757d877c0f607a82ce1b8560e224370f159d66c5d52eb55ea187ef0350e"
+dependencies = [
+ "bytes",
+ "chrono",
+ "pbjson",
+ "pbjson-build",
+ "prost",
+ "prost-build",
+ "serde",
 ]
 
 [[package]]
@@ -8796,6 +8852,16 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "regress"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2057b2325e68a893284d1538021ab90279adac1139957ca2a74426c6f118fb48"
+dependencies = [
+ "hashbrown 0.16.1",
+ "memchr",
+]
 
 [[package]]
 name = "regress"
@@ -11291,13 +11357,18 @@ version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
 dependencies = [
+ "async-compression",
  "bitflags 2.13.0",
  "bytes",
+ "futures-core",
  "futures-util",
  "http 1.4.0",
  "http-body 1.0.1",
+ "http-body-util",
  "iri-string",
  "pin-project-lite",
+ "tokio",
+ "tokio-util",
  "tower",
  "tower-layer",
  "tower-service",
@@ -11642,7 +11713,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "regress",
+ "regress 0.11.1",
  "schemars 0.8.22",
  "semver",
  "serde",
@@ -14545,6 +14616,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "e2b-rs",
  "httpmock",
  "reqwest 0.12.24",
  "serde",
