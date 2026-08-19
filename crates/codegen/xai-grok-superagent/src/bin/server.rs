@@ -13,8 +13,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-#[cfg(feature = "e2b")]
-use xai_grok_superagent::SandboxPlan;
 use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
     discord::DiscordClient,
@@ -28,6 +26,8 @@ use xai_grok_superagent::{
     webhook::{WebhookClient, WebhookConfig},
     whatsapp::{WhatsAppClient, WhatsAppConfig},
 };
+#[cfg(feature = "e2b")]
+use xai_grok_superagent::{E2bExecutor, PersistentExecutionRequest, SandboxPlan};
 
 #[derive(Clone)]
 struct AppState {
@@ -40,6 +40,8 @@ struct AppState {
     webhook: Option<(WebhookClient, WebhookConfig)>,
     job_store: Arc<Mutex<JobStore>>,
     memory_store: Arc<Mutex<MemoryStore>>,
+    #[cfg(feature = "e2b")]
+    e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,6 +68,71 @@ struct ExecuteRequest {
     command: String,
     #[serde(default)]
     approved: bool,
+}
+
+#[cfg(feature = "e2b")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct E2bSessionRecord {
+    session_id: String,
+    sandbox_id: String,
+    strategy: String,
+    cwd: Option<String>,
+    workspace_root: String,
+    created_at: u64,
+    updated_at: u64,
+}
+
+#[cfg(feature = "e2b")]
+#[derive(Debug, Default)]
+struct E2bSessionStore {
+    path: String,
+    sessions: std::collections::BTreeMap<String, E2bSessionRecord>,
+}
+
+#[cfg(feature = "e2b")]
+impl E2bSessionStore {
+    fn load(path: String) -> anyhow::Result<Self> {
+        let sessions = match std::fs::read_to_string(&path) {
+            Ok(content) if !content.trim().is_empty() => serde_json::from_str(&content)?,
+            Ok(_) | Err(_) => std::collections::BTreeMap::new(),
+        };
+        Ok(Self { path, sessions })
+    }
+
+    fn save(&self) -> anyhow::Result<()> {
+        if let Some(parent) = std::path::Path::new(&self.path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let content = serde_json::to_string_pretty(&self.sessions)?;
+        let temporary = format!("{}.tmp", self.path);
+        std::fs::write(&temporary, content)?;
+        std::fs::rename(temporary, &self.path)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "e2b")]
+#[derive(Debug, Deserialize)]
+struct E2bSessionRequest {
+    session_id: Option<String>,
+    sandbox_id: Option<String>,
+    strategy: Option<String>,
+    cwd: Option<String>,
+    #[serde(default = "default_e2b_workspace_root")]
+    workspace_root: String,
+}
+
+#[cfg(feature = "e2b")]
+fn default_e2b_workspace_root() -> String {
+    env::var("SUPERAGENT_E2B_WORKSPACE_ROOT").unwrap_or_else(|_| "/home/user/workspace".to_owned())
+}
+
+#[cfg(feature = "e2b")]
+#[derive(Debug, Deserialize)]
+struct E2bExecRequest {
+    command: String,
+    cwd: Option<String>,
+    timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,6 +252,11 @@ async fn main() -> anyhow::Result<()> {
         webhook,
         job_store,
         memory_store,
+        #[cfg(feature = "e2b")]
+        e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
+            env::var("SUPERAGENT_E2B_SESSION_STATE")
+                .unwrap_or_else(|_| "./runtime/e2b-sessions.json".to_owned()),
+        )?)),
     };
 
     let protected = Router::new()
@@ -194,12 +266,28 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/jobs/:id", get(get_job))
         .route("/v1/daemon/status", get(daemon_status))
         .route("/v1/connections", get(connection_status))
-        .route("/v1/memory", get(search_memory).post(remember_memory))
-        .with_state(Arc::new(state.clone()))
-        .layer(middleware::from_fn_with_state(
-            Arc::new(state.clone()),
-            auth,
-        ));
+        .route("/v1/memory", get(search_memory).post(remember_memory));
+    #[cfg(feature = "e2b")]
+    let protected = protected
+        .route(
+            "/v1/e2b/sessions",
+            get(list_e2b_sessions).post(create_e2b_session),
+        )
+        .route(
+            "/v1/e2b/sessions/:id",
+            get(get_e2b_session).delete(delete_e2b_session),
+        )
+        .route("/v1/e2b/sessions/:id/exec", post(execute_e2b_session))
+        .route("/v1/e2b/sessions/:id/wake", post(wake_e2b_session))
+        .route("/v1/e2b/sessions/:id/pause", post(pause_e2b_session));
+    let protected =
+        protected
+            .with_state(Arc::new(state.clone()))
+            .layer(middleware::from_fn_with_state(
+                Arc::new(state.clone()),
+                auth,
+            ));
+
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/v1/capabilities", get(capabilities))
@@ -757,6 +845,237 @@ async fn remember_memory(
             )
         })?;
     Ok(Json(entry))
+}
+
+#[cfg(feature = "e2b")]
+async fn list_e2b_sessions(State(state): State<Arc<AppState>>) -> Json<Vec<E2bSessionRecord>> {
+    let store = state.e2b_sessions.lock().await;
+    Json(store.sessions.values().cloned().collect())
+}
+
+#[cfg(feature = "e2b")]
+async fn get_e2b_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<E2bSessionRecord>, (StatusCode, Json<ErrorResponse>)> {
+    let store = state.e2b_sessions.lock().await;
+    let Some(session) = store.sessions.get(&id).cloned() else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "E2B session not found".to_owned(),
+            }),
+        ));
+    };
+    Ok(Json(session))
+}
+
+#[cfg(feature = "e2b")]
+async fn create_e2b_session(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<E2bSessionRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let session_id = request.session_id.unwrap_or_else(|| {
+        format!(
+            "e2b-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|value| value.as_nanos())
+                .unwrap_or_default()
+        )
+    });
+    let strategy = if request.strategy.as_deref() == Some("sandbox_full") {
+        "sandbox_full".to_owned()
+    } else {
+        "host_only".to_owned()
+    };
+    let executor = E2bExecutor::new(state.sandbox_plan.clone(), env::var("E2B_API_KEY").ok());
+    let status = executor
+        .ensure_session(
+            request.sandbox_id.as_deref(),
+            request.workspace_root.clone(),
+        )
+        .await
+        .map_err(e2b_error)?;
+    let now = unix_seconds();
+    let record = E2bSessionRecord {
+        session_id: session_id.clone(),
+        sandbox_id: status.sandbox_id.clone(),
+        strategy,
+        cwd: request.cwd,
+        workspace_root: request.workspace_root,
+        created_at: now,
+        updated_at: now,
+    };
+    let mut store = state.e2b_sessions.lock().await;
+    store.sessions.insert(session_id, record.clone());
+    store.save().map_err(internal_error)?;
+    Ok(Json(
+        json!({"success": true, "session": record, "status": status}),
+    ))
+}
+
+#[cfg(feature = "e2b")]
+async fn execute_e2b_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(request): Json<E2bExecRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if request.command.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "command is required".to_owned(),
+            }),
+        ));
+    }
+    let record = {
+        let store = state.e2b_sessions.lock().await;
+        store.sessions.get(&id).cloned()
+    }
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "E2B session not found".to_owned(),
+            }),
+        )
+    })?;
+    let cwd = request.cwd.or_else(|| record.cwd.clone());
+    let executor = E2bExecutor::new(state.sandbox_plan.clone(), env::var("E2B_API_KEY").ok());
+    let result = executor
+        .execute_persistent(PersistentExecutionRequest {
+            sandbox_id: Some(record.sandbox_id.clone()),
+            command: request.command,
+            cwd,
+            workspace_root: record.workspace_root.clone(),
+            timeout_seconds: request.timeout_seconds,
+        })
+        .await
+        .map_err(e2b_error)?;
+    let mut store = state.e2b_sessions.lock().await;
+    if let Some(current) = store.sessions.get_mut(&id) {
+        current.sandbox_id = result
+            .sandbox_id
+            .clone()
+            .unwrap_or_else(|| current.sandbox_id.clone());
+        current.updated_at = unix_seconds();
+    }
+    store.save().map_err(internal_error)?;
+    Ok(Json(
+        json!({"success": result.exit_code == 0, "result": result, "session": store.sessions.get(&id)}),
+    ))
+}
+
+#[cfg(feature = "e2b")]
+async fn wake_e2b_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let record = {
+        let store = state.e2b_sessions.lock().await;
+        store.sessions.get(&id).cloned()
+    }
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "E2B session not found".to_owned(),
+            }),
+        )
+    })?;
+    let executor = E2bExecutor::new(state.sandbox_plan.clone(), env::var("E2B_API_KEY").ok());
+    let status = executor
+        .ensure_session(Some(&record.sandbox_id), record.workspace_root.clone())
+        .await
+        .map_err(e2b_error)?;
+    let mut store = state.e2b_sessions.lock().await;
+    if let Some(current) = store.sessions.get_mut(&id) {
+        current.sandbox_id = status.sandbox_id.clone();
+        current.updated_at = unix_seconds();
+    }
+    store.save().map_err(internal_error)?;
+    Ok(Json(
+        json!({"success": true, "session": store.sessions.get(&id), "status": status}),
+    ))
+}
+
+#[cfg(feature = "e2b")]
+async fn pause_e2b_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let record = {
+        let store = state.e2b_sessions.lock().await;
+        store.sessions.get(&id).cloned()
+    }
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "E2B session not found".to_owned(),
+            }),
+        )
+    })?;
+    let executor = E2bExecutor::new(state.sandbox_plan.clone(), env::var("E2B_API_KEY").ok());
+    let paused = executor
+        .pause(&record.sandbox_id)
+        .await
+        .map_err(e2b_error)?;
+    Ok(Json(
+        json!({"success": true, "paused": paused, "session": record}),
+    ))
+}
+
+#[cfg(feature = "e2b")]
+async fn delete_e2b_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let record = {
+        let mut store = state.e2b_sessions.lock().await;
+        let record = store.sessions.remove(&id);
+        store.save().map_err(internal_error)?;
+        record
+    };
+    let Some(record) = record else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "E2B session not found".to_owned(),
+            }),
+        ));
+    };
+    let executor = E2bExecutor::new(state.sandbox_plan.clone(), env::var("E2B_API_KEY").ok());
+    executor.kill(&record.sandbox_id).await.map_err(e2b_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(feature = "e2b")]
+fn e2b_error(error: xai_grok_superagent::E2bError) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(ErrorResponse {
+            error: error.to_string(),
+        }),
+    )
+}
+
+#[cfg(feature = "e2b")]
+fn unix_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or_default()
+}
+
+fn internal_error(error: impl std::fmt::Display) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorResponse {
+            error: error.to_string(),
+        }),
+    )
 }
 
 async fn connection_status() -> Json<Vec<ConnectionReadiness>> {

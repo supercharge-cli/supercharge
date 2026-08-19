@@ -26,7 +26,7 @@ pub use approval::{ApprovalError, ApprovalPolicy};
 pub use capabilities::CapabilityProfile;
 #[cfg(feature = "e2b")]
 pub use e2b::E2bExecutor;
-pub use e2b::{E2bError, ExecutionResult, SandboxPlan};
+pub use e2b::{E2bError, ExecutionResult, PersistentExecutionRequest, SandboxPlan, SandboxStatus};
 pub use scheduler::ScheduledJob;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
