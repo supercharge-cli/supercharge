@@ -55,6 +55,8 @@ pub enum TelegramError {
     MissingConfiguration(&'static str),
     #[error("Telegram HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("Telegram media file failed: {0}")]
+    Io(#[from] std::io::Error),
     #[error("Telegram API returned an error: {0}")]
     Api(String),
     #[error("Telegram response decoding failed: {0}")]
@@ -122,6 +124,37 @@ impl TelegramClient {
             .http
             .post(self.config.endpoint("sendMessage"))
             .json(&SendMessageRequest { chat_id, text })
+            .send()
+            .await?
+            .json()
+            .await?;
+        response.into_result().map(|_| ())
+    }
+
+    pub async fn send_document(
+        &self,
+        chat_id: i64,
+        path: impl AsRef<std::path::Path>,
+        caption: Option<&str>,
+    ) -> Result<(), TelegramError> {
+        let path = path.as_ref();
+        let file_name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| TelegramError::Api("media file has no valid name".to_owned()))?;
+        let part = reqwest::multipart::Part::file(path)
+            .await?
+            .file_name(file_name.to_owned());
+        let mut form = reqwest::multipart::Form::new()
+            .text("chat_id", chat_id.to_string())
+            .part("document", part);
+        if let Some(caption) = caption {
+            form = form.text("caption", caption.to_owned());
+        }
+        let response: TelegramResponse<serde_json::Value> = self
+            .http
+            .post(self.config.endpoint("sendDocument"))
+            .multipart(form)
             .send()
             .await?
             .json()
@@ -310,6 +343,40 @@ mod tests {
             gateway: GatewayConfig::default(),
         });
         client.send_message(42, "hello").await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn sending_document_uses_multipart_bot_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/botsecret/sendDocument")
+                    .body_contains("chat_id")
+                    .body_contains("42")
+                    .body_contains("report.txt")
+                    .body_contains("summary");
+                then.status(200).json_body(serde_json::json!({
+                    "ok": true,
+                    "result": {"message_id": 3}
+                }));
+            })
+            .await;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        std::fs::write(&path, "report").unwrap();
+        let client = TelegramClient::new(TelegramConfig {
+            bot_token: "secret".into(),
+            api_base_url: server.base_url(),
+            poll_timeout_seconds: 1,
+            webhook_secret: None,
+            gateway: GatewayConfig::default(),
+        });
+        client
+            .send_document(42, &path, Some("summary"))
+            .await
+            .unwrap();
         mock.assert_async().await;
     }
 
