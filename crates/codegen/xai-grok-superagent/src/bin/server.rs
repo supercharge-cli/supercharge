@@ -17,6 +17,7 @@ use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
     discord::DiscordClient,
     gateway::GatewayStateStore,
+    integrations::{SkillRegistry, parse_mcp_servers},
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     memory::{MemoryEntry, MemoryStore},
@@ -291,7 +292,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memory", get(search_memory).post(remember_memory))
         .route("/v1/memory/stats", get(memory_stats))
         .route("/v1/memory/compact", post(compact_memory))
-        .route("/v1/memory/:id", delete(delete_memory));
+        .route("/v1/memory/:id", delete(delete_memory))
+        .route("/v1/integrations/skills", get(list_skills))
+        .route("/v1/integrations/skills/:name", get(get_skill))
+        .route("/v1/integrations/mcp", get(list_mcp_servers));
     #[cfg(feature = "e2b")]
     let protected = protected
         .route(
@@ -914,6 +918,35 @@ async fn memory_stats(State(state): State<Arc<AppState>>) -> Json<Value> {
     let store = state.memory_store.lock().await;
     let (entries, sessions) = store.stats();
     Json(json!({ "entries": entries, "sessions": sessions }))
+}
+
+async fn list_skills() -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let root = env::var("SUPERAGENT_SKILLS_ROOT").unwrap_or_else(|_| "./skills".to_owned());
+    let registry = SkillRegistry::new(root);
+    let skills = registry.discover().map_err(internal_error)?;
+    Ok(Json(json!({ "skills": skills })))
+}
+
+async fn get_skill(
+    Path(name): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let root = env::var("SUPERAGENT_SKILLS_ROOT").unwrap_or_else(|_| "./skills".to_owned());
+    let registry = SkillRegistry::new(root);
+    let skill = registry.load(&name).map_err(|error| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    Ok(Json(serde_json::to_value(skill).map_err(internal_error)?))
+}
+
+async fn list_mcp_servers() -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let servers = parse_mcp_servers(env::var("SUPERAGENT_MCP_SERVERS").ok().as_deref())
+        .map_err(internal_error)?;
+    Ok(Json(json!({ "servers": servers })))
 }
 
 #[cfg(feature = "e2b")]

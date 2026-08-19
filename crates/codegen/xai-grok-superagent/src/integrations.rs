@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -12,6 +13,73 @@ pub struct SkillDescriptor {
     pub name: String,
     pub path: PathBuf,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LoadedSkill {
+    pub descriptor: SkillDescriptor,
+    pub instructions: String,
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SkillRegistry {
+    root: PathBuf,
+    max_skill_bytes: usize,
+}
+
+impl SkillRegistry {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self {
+            root: root.into(),
+            max_skill_bytes: 512 * 1024,
+        }
+    }
+
+    pub fn discover(&self) -> Result<Vec<SkillDescriptor>, IntegrationError> {
+        discover_skills(&self.root)
+    }
+
+    #[allow(clippy::disallowed_methods)]
+    pub fn load(&self, name: &str) -> Result<LoadedSkill, IntegrationError> {
+        if name.is_empty()
+            || name.contains('/')
+            || name.contains('\\')
+            || name == "."
+            || name == ".."
+        {
+            return Err(IntegrationError::Invalid("invalid skill name".to_owned()));
+        }
+        let root = fs::canonicalize(&self.root)?;
+        let manifest = root.join(name).join("SKILL.md");
+        let canonical = fs::canonicalize(&manifest)?;
+        if !canonical.starts_with(&root) {
+            return Err(IntegrationError::Invalid(
+                "skill path escapes configured root".to_owned(),
+            ));
+        }
+        let metadata = fs::metadata(&canonical)?;
+        if metadata.len() as usize > self.max_skill_bytes {
+            return Err(IntegrationError::Invalid(
+                "skill manifest exceeds size limit".to_owned(),
+            ));
+        }
+        let instructions = fs::read_to_string(&canonical)?;
+        let description = instructions.lines().find_map(|line| {
+            line.strip_prefix("description:")
+                .map(|value| value.trim().to_owned())
+        });
+        let digest = Sha256::digest(instructions.as_bytes());
+        Ok(LoadedSkill {
+            descriptor: SkillDescriptor {
+                name: name.to_owned(),
+                path: canonical,
+                description,
+            },
+            instructions,
+            sha256: format!("sha256:{digest:x}"),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -28,6 +96,8 @@ pub enum IntegrationError {
     Io(#[from] std::io::Error),
     #[error("integration JSON failed: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("invalid integration configuration: {0}")]
+    Invalid(String),
 }
 
 pub fn discover_skills(root: impl AsRef<Path>) -> Result<Vec<SkillDescriptor>, IntegrationError> {
@@ -73,15 +143,37 @@ pub fn parse_mcp_servers(
         return Ok(BTreeMap::new());
     };
     let servers: Vec<McpServerDescriptor> = serde_json::from_str(value)?;
-    Ok(servers
-        .into_iter()
-        .map(|server| (server.name.clone(), server))
-        .collect())
+    let mut parsed = BTreeMap::new();
+    for server in servers {
+        validate_mcp_server(&server)?;
+        parsed.insert(server.name.clone(), server);
+    }
+    Ok(parsed)
+}
+
+pub fn validate_mcp_server(server: &McpServerDescriptor) -> Result<(), IntegrationError> {
+    if server.name.trim().is_empty() || server.name.contains('/') || server.name.contains('\\') {
+        return Err(IntegrationError::Invalid(
+            "MCP server name is invalid".to_owned(),
+        ));
+    }
+    if !matches!(server.transport.as_str(), "stdio" | "http" | "sse") {
+        return Err(IntegrationError::Invalid(format!(
+            "unsupported MCP transport: {}",
+            server.transport
+        )));
+    }
+    if server.endpoint.trim().is_empty() {
+        return Err(IntegrationError::Invalid(
+            "MCP endpoint is empty".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{discover_skills, parse_mcp_servers};
+    use super::{SkillRegistry, discover_skills, parse_mcp_servers};
     use std::fs;
     use tempfile::tempdir;
 
@@ -92,10 +184,19 @@ mod tests {
         fs::create_dir_all(&skill).unwrap();
         fs::write(skill.join("SKILL.md"), "description: Rust coding tools\n").unwrap();
         assert_eq!(discover_skills(dir.path()).unwrap()[0].name, "coding");
+        let loaded = SkillRegistry::new(dir.path()).load("coding").unwrap();
+        assert!(loaded.instructions.contains("Rust coding tools"));
+        assert!(loaded.sha256.starts_with("sha256:"));
         let servers = parse_mcp_servers(Some(
             r#"[{"name":"notion","transport":"stdio","endpoint":"notion-mcp","enabled":true}]"#,
         ))
         .unwrap();
         assert_eq!(servers["notion"].transport, "stdio");
+        assert!(
+            parse_mcp_servers(Some(
+                r#"[{"name":"bad","transport":"grpc","endpoint":"x","enabled":true}]"#,
+            ))
+            .is_err()
+        );
     }
 }

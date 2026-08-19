@@ -78,6 +78,10 @@ The gateway adapters deliver authorized messages to the headless agent bridge wh
 
 Memory entries are persisted atomically at `SUPERAGENT_MEMORY_STATE` and are scoped by `session_key`. `POST /v1/memory` accepts optional `kind`, `importance`, and `tags` metadata; `GET /v1/memory` performs session-scoped text/tag/kind recall with bounded, importance-aware ranking; `DELETE /v1/memory/:id` removes one entry; `GET /v1/memory/stats` reports entry and session counts; and `POST /v1/memory/compact` removes the least important, oldest entries above a configured capacity. Secrets and provider credentials are never written into memory automatically by the daemon.
 
+## Skills and MCP integrations
+
+Set `SUPERAGENT_SKILLS_ROOT` to a read-only or operator-managed directory containing skill subdirectories with `SKILL.md` manifests. `GET /v1/integrations/skills` discovers manifests, while `GET /v1/integrations/skills/:name` loads one validated manifest, returns its digest, and rejects traversal or oversized files. Set `SUPERAGENT_MCP_SERVERS` to a JSON array of descriptors; `GET /v1/integrations/mcp` validates and reports only supported `stdio`, `http`, and `sse` transports. These endpoints provide controlled inspection and configuration; they do not silently execute arbitrary skill code or MCP tools.
+
 ## Gateway configuration
 
 The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.
