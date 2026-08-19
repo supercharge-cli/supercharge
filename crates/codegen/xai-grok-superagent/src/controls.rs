@@ -20,6 +20,8 @@ pub struct SessionControl {
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct PersistedControls {
     sessions: BTreeMap<String, SessionControl>,
+    #[serde(default)]
+    emergency_stopped: bool,
 }
 
 #[derive(Debug)]
@@ -63,6 +65,15 @@ impl ControlStore {
             .sessions
             .get(session_key)
             .is_some_and(|entry| entry.stopped)
+    }
+
+    pub fn is_emergency_stopped(&self) -> bool {
+        self.state.emergency_stopped
+    }
+
+    pub fn set_emergency_stopped(&mut self, stopped: bool) -> Result<(), std::io::Error> {
+        self.state.emergency_stopped = stopped;
+        self.save()
     }
 
     pub fn status(&self, session_key: &str) -> SessionControl {
@@ -148,6 +159,20 @@ pub async fn is_stopped(session_key: &str) -> bool {
     store.lock().await.is_stopped(session_key)
 }
 
+pub async fn is_emergency_stopped() -> bool {
+    let Some(store) = global() else {
+        return false;
+    };
+    store.lock().await.is_emergency_stopped()
+}
+
+pub async fn set_emergency_stopped(stopped: bool) -> Result<(), std::io::Error> {
+    let Some(store) = global() else {
+        return Err(std::io::Error::other("control store is not initialized"));
+    };
+    store.lock().await.set_emergency_stopped(stopped)
+}
+
 fn now_seconds() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -172,5 +197,8 @@ mod tests {
                 .contains("stopped")
         );
         assert!(ControlStore::load(&path).unwrap().is_stopped("session"));
+        let mut restored = ControlStore::load(&path).unwrap();
+        restored.set_emergency_stopped(true).unwrap();
+        assert!(ControlStore::load(&path).unwrap().is_emergency_stopped());
     }
 }

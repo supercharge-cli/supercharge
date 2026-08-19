@@ -29,7 +29,8 @@ use xai_grok_superagent::{
     browser::{self, StreamStatus},
     controls::{
         handle_text as handle_control_text, init_global as init_controls,
-        is_stopped as control_is_stopped,
+        is_emergency_stopped as control_is_emergency_stopped, is_stopped as control_is_stopped,
+        set_emergency_stopped,
     },
     delivery::{DeliveryTarget, dispatch_text},
     discord::DiscordClient,
@@ -568,6 +569,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/schedules/:id", delete(delete_schedule))
         .route("/v1/schedules/:id/enabled", post(toggle_schedule))
         .route("/v1/daemon/status", get(daemon_status))
+        .route("/v1/emergency-stop", post(emergency_stop))
+        .route("/v1/emergency-resume", post(emergency_resume))
         .route("/v1/observability", get(observability))
         .route("/v1/computer/status", get(browser_status))
         .route("/v1/computer/browser", get(browser_stream))
@@ -959,6 +962,11 @@ async fn run_grok_prompt(
         .prompt_chars
         .fetch_add(prompt.chars().count() as u64, Ordering::Relaxed);
     let result: Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> = async {
+        if control_is_emergency_stopped().await {
+            return Ok(Some(
+                "The daemon is in emergency-stop mode. An operator must call /v1/emergency-resume before new turns can run.".to_owned(),
+            ));
+        }
         if let Some(reply) = handle_control_text(session_key, prompt).await? {
             return Ok(Some(reply));
         }
@@ -1801,6 +1809,16 @@ async fn connection_status() -> Json<Vec<ConnectionReadiness>> {
             &["EMAIL_USERNAME", "EMAIL_PASSWORD", "EMAIL_ALLOWED_SENDERS"],
         ),
     ])
+}
+
+async fn emergency_stop() -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    set_emergency_stopped(true).await.map_err(internal_error)?;
+    Ok(Json(json!({"emergency_stopped": true})))
+}
+
+async fn emergency_resume() -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    set_emergency_stopped(false).await.map_err(internal_error)?;
+    Ok(Json(json!({"emergency_stopped": false})))
 }
 
 async fn observability(State(state): State<Arc<AppState>>) -> Json<ObservabilityResponse> {

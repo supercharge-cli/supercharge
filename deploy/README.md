@@ -109,7 +109,7 @@ Run `ci/quality-gates.sh` from the repository root to execute formatting, locked
 
 ## API protection and quotas
 
-Protected API routes reject requests without `SUPERAGENT_API_TOKEN` when a token is configured, cap request bodies at 25 MiB, emit conservative no-sniff and no-store response headers, and optionally enforce `SUPERAGENT_RATE_LIMIT_PER_MINUTE`. A positive quota applies independently to each `X-Superagent-Session` value, with `api` as the fallback key; the default value `0` disables the limiter. Put the API behind TLS and a network access policy, and persist the runtime directory so durable jobs, schedules, controls, and memory survive daemon restarts.
+Protected API routes reject requests without `SUPERAGENT_API_TOKEN` when a token is configured, cap request bodies at 25 MiB, emit conservative no-sniff and no-store response headers, and optionally enforce `SUPERAGENT_RATE_LIMIT_PER_MINUTE`. A positive quota applies independently to each `X-Superagent-Session` value, with `api` as the fallback key; the default value `0` disables the limiter. Authenticated `POST /v1/emergency-stop` persists a global stop flag that prevents new agent turns across all sessions; authenticated `POST /v1/emergency-resume` clears it. Put the API behind TLS and a network access policy, and persist the runtime directory so durable jobs, schedules, controls, and memory survive daemon restarts.
 
 ## Runtime backup and restore
 
