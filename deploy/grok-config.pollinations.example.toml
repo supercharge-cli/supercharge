@@ -1,0 +1,13 @@
+# Copy this file to the configured GROK_CONFIG_PATH on the deployment host.
+# Keep the actual POLLINATIONS_API_KEY in the secret manager or environment.
+
+[model."kimi-code"]
+model = "kimi-code"
+name = "Kimi Code via Pollinations"
+description = "OpenAI-compatible Pollinations text model"
+base_url = "https://gen.pollinations.ai/v1"
+api_base_url = "https://gen.pollinations.ai/v1"
+env_key = "POLLINATIONS_API_KEY"
+api_backend = "chat_completions"
+agent_type = "grok-build"
+context_window = 128000
