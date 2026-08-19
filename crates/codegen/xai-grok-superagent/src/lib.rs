@@ -11,6 +11,7 @@ pub mod commands;
 pub mod controls;
 pub mod discord;
 mod e2b;
+pub mod email;
 pub mod gateway;
 pub mod integrations;
 pub mod jobs;

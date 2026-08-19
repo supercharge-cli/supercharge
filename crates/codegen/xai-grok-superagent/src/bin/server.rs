@@ -22,6 +22,7 @@ use xai_grok_superagent::{
         is_stopped as control_is_stopped,
     },
     discord::DiscordClient,
+    email::{EmailClient, EmailConfig},
     gateway::GatewayStateStore,
     integrations::{SkillRegistry, discover_http_tools, parse_mcp_servers},
     jobs::{AgentJob, JobStatus, JobStore},
@@ -583,6 +584,18 @@ async fn main() -> anyhow::Result<()> {
             }
         });
     }
+    if env::var("EMAIL_USERNAME").is_ok() && env::var("EMAIL_PASSWORD").is_ok() {
+        tokio::spawn(async {
+            match EmailConfig::from_env() {
+                Ok(config) => {
+                    if let Err(error) = run_email_daemon(config).await {
+                        eprintln!("email gateway stopped: {error}");
+                    }
+                }
+                Err(error) => eprintln!("email gateway configuration failed: {error}"),
+            }
+        });
+    }
     if env::var("TELEGRAM_BOT_TOKEN").is_ok() {
         if env::var("TELEGRAM_WEBHOOK_URL").is_ok() {
             tokio::spawn(async {
@@ -605,6 +618,39 @@ async fn main() -> anyhow::Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
+}
+
+async fn run_email_daemon(
+    config: EmailConfig,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = EmailClient::new();
+    loop {
+        match client.fetch_unseen(&config).await {
+            Ok(messages) => {
+                for message in messages {
+                    match run_grok_prompt(&message.session_key(), &message.text).await {
+                        Ok(Some(reply)) if !reply.trim().is_empty() => {
+                            let subject = if message.subject.starts_with("Re:") {
+                                message.subject.clone()
+                            } else {
+                                format!("Re: {}", message.subject)
+                            };
+                            if let Err(error) = client
+                                .send_text(&config, &message.sender, &subject, &reply)
+                                .await
+                            {
+                                eprintln!("email reply delivery failed: {error}");
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(error) => eprintln!("email agent turn failed: {error}"),
+                    }
+                }
+            }
+            Err(error) => eprintln!("email receive failed; retrying: {error}"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(config.poll_seconds)).await;
+    }
 }
 
 async fn configure_telegram_webhook() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -1580,6 +1626,11 @@ async fn connection_status() -> Json<Vec<ConnectionReadiness>> {
             "authenticated-webhook",
             &["GENERIC_WEBHOOK_SECRET"],
         ),
+        connection_readiness(
+            "email",
+            "imap-smtp",
+            &["EMAIL_USERNAME", "EMAIL_PASSWORD", "EMAIL_ALLOWED_SENDERS"],
+        ),
     ])
 }
 
@@ -1624,6 +1675,10 @@ fn configured_gateways() -> Vec<String> {
         (env::var("WHATSAPP_ACCESS_TOKEN").is_ok(), "whatsapp"),
         (env::var("SIGNAL_ACCOUNT").is_ok(), "signal"),
         (env::var("MATRIX_ACCESS_TOKEN").is_ok(), "matrix"),
+        (
+            env::var("EMAIL_USERNAME").is_ok() && env::var("EMAIL_PASSWORD").is_ok(),
+            "email",
+        ),
         (env::var("GENERIC_WEBHOOK_SECRET").is_ok(), "webhook"),
     ]
     .into_iter()
