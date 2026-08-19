@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use reqwest::Client;
+use reqwest::{Client, multipart};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -151,6 +151,67 @@ impl WhatsAppClient {
         result
     }
 
+    pub async fn send_media(
+        &self,
+        recipient: &str,
+        bytes: Vec<u8>,
+        mime_type: &str,
+        filename: &str,
+    ) -> Result<(), WhatsAppError> {
+        let part = multipart::Part::bytes(bytes)
+            .file_name(filename.to_owned())
+            .mime_str(mime_type)?;
+        let upload = self
+            .http
+            .post(format!(
+                "{}/{}/media",
+                self.config.graph_base_url.trim_end_matches('/'),
+                self.config.phone_number_id
+            ))
+            .bearer_auth(&self.config.access_token)
+            .multipart(
+                multipart::Form::new()
+                    .text("messaging_product", "whatsapp")
+                    .text("type", mime_type.to_owned())
+                    .part("file", part),
+            )
+            .send()
+            .await?;
+        if !upload.status().is_success() {
+            return Err(WhatsAppError::Api(upload.text().await.unwrap_or_default()));
+        }
+        let media_id = upload
+            .json::<Value>()
+            .await?
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| WhatsAppError::Api("media upload response omitted id".to_owned()))?
+            .to_owned();
+        let response = self
+            .http
+            .post(format!(
+                "{}/{}/messages",
+                self.config.graph_base_url.trim_end_matches('/'),
+                self.config.phone_number_id
+            ))
+            .bearer_auth(&self.config.access_token)
+            .json(&serde_json::json!({
+                "messaging_product": "whatsapp",
+                "to": recipient,
+                "type": "document",
+                "document": {"id": media_id, "filename": filename}
+            }))
+            .send()
+            .await?;
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(WhatsAppError::Api(
+                response.text().await.unwrap_or_default(),
+            ))
+        }
+    }
+
     pub async fn send_text(&self, recipient: &str, text: &str) -> Result<(), WhatsAppError> {
         let response = self
             .http
@@ -281,6 +342,36 @@ mod tests {
             .await
             .unwrap();
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn uploads_and_sends_native_document() {
+        let server = MockServer::start_async().await;
+        let upload = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/phone/media");
+                then.status(200).json_body(json!({"id": "media-1"}));
+            })
+            .await;
+        let send = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/phone/messages").json_body(json!({
+                    "messaging_product": "whatsapp",
+                    "to": "1555",
+                    "type": "document",
+                    "document": {"id": "media-1", "filename": "report.txt"}
+                }));
+                then.status(200);
+            })
+            .await;
+        let mut configuration = config();
+        configuration.graph_base_url = server.base_url();
+        WhatsAppClient::new(configuration)
+            .send_media("1555", b"report".to_vec(), "text/plain", "report.txt")
+            .await
+            .unwrap();
+        upload.assert_async().await;
+        send.assert_async().await;
     }
 
     #[test]
