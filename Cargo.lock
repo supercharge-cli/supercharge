@@ -14615,6 +14615,7 @@ name = "xai-grok-superagent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
  "e2b-rs",
  "httpmock",

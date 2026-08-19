@@ -1,0 +1,26 @@
+[Unit]
+Description=Superagent Rust autonomous agent service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=superagent
+Group=superagent
+WorkingDirectory=/opt/superagent
+EnvironmentFile=/etc/superagent/superagent.env
+ExecStart=/opt/superagent/bin/xai-grok-superagent-server
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/superagent /var/log/superagent
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

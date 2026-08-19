@@ -13,9 +13,9 @@ use sha2::{Digest, Sha256};
 
 pub use approval::{ApprovalError, ApprovalPolicy};
 pub use capabilities::CapabilityProfile;
-pub use e2b::{E2bError, ExecutionResult, SandboxPlan};
 #[cfg(feature = "e2b")]
 pub use e2b::E2bExecutor;
+pub use e2b::{E2bError, ExecutionResult, SandboxPlan};
 pub use scheduler::ScheduledJob;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -57,7 +57,10 @@ mod tests {
     #[test]
     fn default_config_has_stable_fingerprint() {
         let config = SuperagentConfig::default();
-        assert_eq!(config.fingerprint(), SuperagentConfig::default().fingerprint());
+        assert_eq!(
+            config.fingerprint(),
+            SuperagentConfig::default().fingerprint()
+        );
         assert!(config.fingerprint().starts_with("sha256:"));
     }
 }

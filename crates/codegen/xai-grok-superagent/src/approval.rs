@@ -22,8 +22,17 @@ impl Default for ApprovalPolicy {
     fn default() -> Self {
         Self {
             blocked_executables: [
-                "rm", "mkfs", "mount", "umount", "shutdown", "reboot", "poweroff", "sudo",
-                "systemctl", "iptables", "nft",
+                "rm",
+                "mkfs",
+                "mount",
+                "umount",
+                "shutdown",
+                "reboot",
+                "poweroff",
+                "sudo",
+                "systemctl",
+                "iptables",
+                "nft",
             ]
             .into_iter()
             .map(str::to_owned)
@@ -37,7 +46,11 @@ impl ApprovalPolicy {
     pub fn validate(&self, command: &str, approved: bool) -> Result<(), ApprovalError> {
         let mut tokens = command.split_whitespace();
         let executable = tokens.next().ok_or(ApprovalError::Empty)?;
-        let executable = executable.rsplit('/').next().unwrap_or(executable).to_ascii_lowercase();
+        let executable = executable
+            .rsplit('/')
+            .next()
+            .unwrap_or(executable)
+            .to_ascii_lowercase();
         if self.blocked_executables.contains(&executable) {
             return Err(ApprovalError::BlockedExecutable(executable));
         }
@@ -73,8 +86,10 @@ mod tests {
             ApprovalPolicy::default().validate("curl https://example.com", false),
             Err(ApprovalError::RequiresApproval)
         );
-        assert!(ApprovalPolicy::default()
-            .validate("curl https://example.com", true)
-            .is_ok());
+        assert!(
+            ApprovalPolicy::default()
+                .validate("curl https://example.com", true)
+                .is_ok()
+        );
     }
 }

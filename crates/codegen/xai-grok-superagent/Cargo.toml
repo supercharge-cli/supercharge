@@ -11,6 +11,7 @@ e2b = ["dep:e2b-rs"]
 
 [dependencies]
 anyhow = { workspace = true }
+axum = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 e2b-rs = { path = "../../../third_party/e2b-rs", optional = true }
 reqwest = { workspace = true, features = ["json"] }
@@ -18,11 +19,15 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["macros", "net", "signal", "sync", "time"] }
 uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]
 httpmock = "0.7"
+
+[[bin]]
+name = "xai-grok-superagent-server"
+path = "src/bin/server.rs"
 
 [lints]
 workspace = true

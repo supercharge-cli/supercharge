@@ -1,0 +1,32 @@
+services:
+  superagent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: superagent:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.runtime
+    environment:
+      SUPERAGENT_BIND: 0.0.0.0:8787
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - superagent-logs:/var/log/superagent
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  superagent-logs:

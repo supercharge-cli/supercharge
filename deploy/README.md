@@ -1,0 +1,41 @@
+# 24/7 Rust deployment
+
+The persistent process is `xai-grok-superagent-server`. It exposes `/healthz`, `/v1/capabilities`, `/v1/approval/check`, and `/v1/exec`. The last endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime.
+
+## Docker Compose
+
+Create `.env.runtime` locally or through the deployment secret manager. It must not be committed:
+
+```dotenv
+SUPERAGENT_API_TOKEN=replace-with-a-long-random-token
+E2B_API_KEY=replace-with-e2b-key
+```
+
+Start the service with:
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl http://127.0.0.1:8787/healthz
+```
+
+The Compose definition uses an automatic restart policy, a non-root container, a read-only root filesystem, a temporary filesystem for `/tmp`, dropped Linux capabilities, and a local-only port binding. Put a reverse proxy or private network in front of it if remote access is required.
+
+## systemd
+
+Build the binary with E2B support and copy it to `/opt/superagent/bin/xai-grok-superagent-server`. Create `/etc/superagent/superagent.env` with mode `0600`, create the `superagent` user and state directories, install `superagent.service` into `/etc/systemd/system/`, then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now superagent.service
+sudo systemctl status superagent.service
+curl http://127.0.0.1:8787/healthz
+```
+
+The systemd unit restarts on failure, handles SIGTERM, protects the host filesystem, and grants write access only to explicitly designated state and log directories. Rotate the API token and E2B key through the host secret-management procedure rather than editing Git-tracked files.
+
+## Operational boundary
+
+The Rust HTTP service is designed to run continuously on a persistent Linux host or container platform. E2B sandboxes are created for bounded isolated command execution and are cleaned up after each run. They are not used as the permanent host for the agent control plane.
+
+Before exposing `/v1/exec`, configure an authentication token and retain the approval policy. The service rejects destructive executables and requires explicit approval for network-facing commands.
