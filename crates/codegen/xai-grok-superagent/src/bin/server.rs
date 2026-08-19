@@ -241,11 +241,19 @@ async fn main() -> anyhow::Result<()> {
         });
     }
     if env::var("TELEGRAM_BOT_TOKEN").is_ok() {
-        tokio::spawn(async {
-            if let Err(error) = run_telegram_daemon().await {
-                eprintln!("telegram gateway stopped: {error}");
-            }
-        });
+        if env::var("TELEGRAM_WEBHOOK_URL").is_ok() {
+            tokio::spawn(async {
+                if let Err(error) = configure_telegram_webhook().await {
+                    eprintln!("telegram webhook setup failed: {error}");
+                }
+            });
+        } else {
+            tokio::spawn(async {
+                if let Err(error) = run_telegram_daemon().await {
+                    eprintln!("telegram gateway stopped: {error}");
+                }
+            });
+        }
     }
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -253,6 +261,19 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+    Ok(())
+}
+
+async fn configure_telegram_webhook() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = TelegramConfig::from_env()?;
+    let webhook_url = env::var("TELEGRAM_WEBHOOK_URL")?;
+    let secret = config
+        .webhook_secret
+        .clone()
+        .ok_or("TELEGRAM_WEBHOOK_SECRET must be configured when TELEGRAM_WEBHOOK_URL is set")?;
+    let client = TelegramClient::new(config);
+    client.set_webhook(&webhook_url, Some(&secret)).await?;
+    eprintln!("telegram webhook configured at {webhook_url}");
     Ok(())
 }
 

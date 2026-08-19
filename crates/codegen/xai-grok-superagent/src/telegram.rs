@@ -98,6 +98,25 @@ impl TelegramClient {
         response.into_result()
     }
 
+    pub async fn set_webhook(
+        &self,
+        webhook_url: &str,
+        secret_token: Option<&str>,
+    ) -> Result<(), TelegramError> {
+        let response: TelegramResponse<bool> = self
+            .http
+            .post(self.config.endpoint("setWebhook"))
+            .json(&SetWebhookRequest {
+                url: webhook_url,
+                secret_token,
+            })
+            .send()
+            .await?
+            .json()
+            .await?;
+        response.into_result().map(|_| ())
+    }
+
     pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<(), TelegramError> {
         let response: TelegramResponse<serde_json::Value> = self
             .http
@@ -186,6 +205,13 @@ struct GetUpdatesRequest {
 }
 
 #[derive(Debug, Serialize)]
+struct SetWebhookRequest<'a> {
+    url: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    secret_token: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
 struct SendMessageRequest<'a> {
     chat_id: i64,
     text: &'a str,
@@ -227,6 +253,40 @@ mod tests {
 
     use super::{TelegramClient, TelegramConfig};
     use crate::gateway::{GatewayConfig, GatewayStateStore};
+
+    #[tokio::test]
+    async fn setting_webhook_uses_bot_api_and_secret() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/botsecret/setWebhook")
+                    .json_body(serde_json::json!({
+                        "url": "https://agent.example/webhooks/telegram",
+                        "secret_token": "webhook-secret"
+                    }));
+                then.status(200).json_body(serde_json::json!({
+                    "ok": true,
+                    "result": true
+                }));
+            })
+            .await;
+        let client = TelegramClient::new(TelegramConfig {
+            bot_token: "secret".into(),
+            api_base_url: server.base_url(),
+            poll_timeout_seconds: 1,
+            webhook_secret: Some("webhook-secret".into()),
+            gateway: GatewayConfig::default(),
+        });
+        client
+            .set_webhook(
+                "https://agent.example/webhooks/telegram",
+                client.webhook_secret(),
+            )
+            .await
+            .unwrap();
+        mock.assert_async().await;
+    }
 
     #[tokio::test]
     async fn sending_message_uses_bot_api() {
