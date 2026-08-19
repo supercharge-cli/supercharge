@@ -1,13 +1,13 @@
 # Upstream attribution
 
-This project was architecturally informed by the public [xai-org/grok-build](https://github.com/xai-org/grok-build) repository, described upstream as the Rust source for the `grok` CLI/TUI and its agent runtime.
-
-The upstream repository states that its first-party code is licensed under the **Apache License, Version 2.0** and includes separate notices for third-party and vendored components. The upstream license text is available at <https://github.com/xai-org/grok-build/blob/main/LICENSE>.
-
-At assessment time, the source revision recorded in the checked-out upstream repository was:
+This private repository contains the public Rust workspace from [xai-org/grok-build](https://github.com/xai-org/grok-build), assessed and copied at source revision:
 
 ```text
 c2dab005c2b53c99209dc6faf82153d782f76ee4
 ```
 
-This private project is an independent implementation. It does not claim affiliation with, endorsement by, or ownership of xAI or the upstream project. If source files are copied or adapted in a future commit, the applicable copyright, license, NOTICE, and modification notices will be retained with those files, and the project will update this document with the precise revision and file paths.
+The upstream repository identifies its first-party source as Apache License, Version 2.0. The complete upstream license text is retained in [`LICENSE`](LICENSE), and upstream third-party attribution is retained in [`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES) and the component-specific notice files.
+
+The project also uses the public [NousResearch Hermes Agent](https://github.com/NousResearch/hermes-agent) feature set as a product reference. Hermes Agent is MIT-licensed upstream, but no Hermes source files are copied into this baseline. Any future direct reuse of Hermes code will retain its MIT license, copyright notices, and file-level attribution, and will be recorded here with exact paths and revisions.
+
+This project is independent and is not affiliated with, endorsed by, or sponsored by xAI, Nous Research, or either upstream project. Modified upstream files must carry prominent change notices as required by the applicable licenses.
