@@ -373,6 +373,44 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let worker_state = Arc::new(state.clone());
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let job = {
+                let mut jobs = worker_state.job_store.lock().await;
+                let now = unix_seconds();
+                if let Err(error) = jobs.recover_expired_leases(now) {
+                    eprintln!("job lease recovery failed: {error}");
+                }
+                match jobs.claim_next(now, 300) {
+                    Ok(job) => job,
+                    Err(error) => {
+                        eprintln!("job claim failed: {error}");
+                        None
+                    }
+                }
+            };
+            let Some(job) = job else {
+                continue;
+            };
+            let outcome = run_grok_prompt(&job.session_key, &job.prompt).await;
+            let mut jobs = worker_state.job_store.lock().await;
+            match outcome {
+                Ok(reply) => {
+                    if let Err(error) = jobs.complete_with_result(&job.id, reply) {
+                        eprintln!("job completion failed: {error}");
+                    }
+                }
+                Err(error) => {
+                    if let Err(store_error) = jobs.fail(&job.id, error.to_string(), 15) {
+                        eprintln!("job failure persistence failed: {store_error}");
+                    }
+                }
+            }
+        }
+    });
+
     let protected = Router::new()
         .route("/v1/approval/check", get(check_approval))
         .route("/v1/exec", post(execute))
@@ -1360,7 +1398,6 @@ fn e2b_error(error: xai_grok_superagent::E2bError) -> (StatusCode, Json<ErrorRes
     )
 }
 
-#[cfg(feature = "e2b")]
 fn unix_seconds() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

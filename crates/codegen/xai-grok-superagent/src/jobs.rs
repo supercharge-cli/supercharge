@@ -32,6 +32,8 @@ pub struct AgentJob {
     pub created_at: u64,
     pub updated_at: u64,
     pub last_error: Option<String>,
+    #[serde(default)]
+    pub result: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -88,6 +90,7 @@ impl JobStore {
             created_at: now,
             updated_at: now,
             last_error: None,
+            result: None,
         };
         self.state.jobs.insert(job.id.clone(), job.clone());
         self.persist()?;
@@ -139,6 +142,29 @@ impl JobStore {
         let claimed = job.clone();
         self.persist()?;
         Ok(Some(claimed))
+    }
+
+    pub fn complete_with_result(
+        &mut self,
+        id: &str,
+        result: Option<String>,
+    ) -> Result<(), JobStoreError> {
+        let job = self
+            .state
+            .jobs
+            .get_mut(id)
+            .ok_or_else(|| JobStoreError::NotFound(id.to_owned()))?;
+        job.status = JobStatus::Succeeded;
+        job.lease_until = None;
+        job.updated_at = now_seconds();
+        job.result = result.map(|mut value| {
+            if value.len() > 200_000 {
+                value.truncate(200_000);
+                value.push_str("\n[output truncated]");
+            }
+            value
+        });
+        self.persist()
     }
 
     pub fn complete(&mut self, id: &str) -> Result<(), JobStoreError> {
@@ -221,6 +247,7 @@ mod tests {
         store.recover_expired_leases(u64::MAX).unwrap();
         let restored = JobStore::load(&path).unwrap();
         assert_eq!(restored.get(&job.id).unwrap().status, JobStatus::Queued);
+        assert!(restored.get(&job.id).unwrap().result.is_none());
     }
 
     #[test]
