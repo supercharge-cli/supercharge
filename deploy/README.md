@@ -100,7 +100,11 @@ Agent replies may include `MEDIA:relative/path|mime/type` markers. Authenticated
 
 ## Gateway configuration
 
-The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.
+The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/observability` endpoint adds uptime, gateway, job, memory, and schedule counters without returning prompts, credentials, or message contents. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.
+
+## API protection and quotas
+
+Protected API routes reject requests without `SUPERAGENT_API_TOKEN` when a token is configured, cap request bodies at 25 MiB, emit conservative no-sniff and no-store response headers, and optionally enforce `SUPERAGENT_RATE_LIMIT_PER_MINUTE`. A positive quota applies independently to each `X-Superagent-Session` value, with `api` as the fallback key; the default value `0` disables the limiter. Put the API behind TLS and a network access policy, and persist the runtime directory so durable jobs, schedules, controls, and memory survive daemon restarts.
 
 ## Telegram gateway
 
