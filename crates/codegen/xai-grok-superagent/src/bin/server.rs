@@ -238,6 +238,8 @@ struct ScheduleRequest {
     name: String,
     prompt: String,
     interval_seconds: u64,
+    #[serde(default)]
+    cron: Option<String>,
     home_channel: Option<String>,
 }
 
@@ -1798,6 +1800,7 @@ async fn create_schedule(
             request.name,
             request.prompt,
             request.interval_seconds,
+            request.cron,
             request.home_channel,
         )
         .map_err(internal_error)?;

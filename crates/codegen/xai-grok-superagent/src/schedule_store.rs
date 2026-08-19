@@ -12,6 +12,8 @@ pub enum ScheduleStoreError {
     Io(#[from] std::io::Error),
     #[error("schedule store JSON failed: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("invalid schedule: {0}")]
+    Invalid(String),
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -41,9 +43,12 @@ impl ScheduleStore {
         name: impl Into<String>,
         prompt: impl Into<String>,
         interval_seconds: u64,
+        cron: Option<String>,
         home_channel: Option<String>,
     ) -> Result<ScheduledJob, ScheduleStoreError> {
-        let mut job = ScheduledJob::new(name, prompt, interval_seconds);
+        let mut job = ScheduledJob::new(name, prompt, interval_seconds)
+            .with_cron(cron)
+            .map_err(|error| ScheduleStoreError::Invalid(error.to_string()))?;
         job.home_channel = home_channel;
         self.state.jobs.insert(job.id, job.clone());
         self.persist()?;
@@ -118,6 +123,7 @@ mod tests {
                 "heartbeat",
                 "check status",
                 60,
+                None,
                 Some("telegram:1".to_owned()),
             )
             .unwrap();
