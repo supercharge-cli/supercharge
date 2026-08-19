@@ -19,7 +19,7 @@ use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
     discord::DiscordClient,
     gateway::GatewayStateStore,
-    jobs::{AgentJob, JobStore},
+    jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
@@ -85,6 +85,16 @@ struct ErrorResponse {
     error: String,
 }
 
+#[derive(Debug, Serialize)]
+struct DaemonStatus {
+    daemon: &'static str,
+    gateways: Vec<String>,
+    queued_jobs: usize,
+    running_jobs: usize,
+    succeeded_jobs: usize,
+    failed_jobs: usize,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let bind = env::var("SUPERAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_owned());
@@ -125,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/exec", post(execute))
         .route("/v1/jobs", get(list_jobs).post(enqueue_job))
         .route("/v1/jobs/:id", get(get_job))
+        .route("/v1/daemon/status", get(daemon_status))
         .with_state(Arc::new(state.clone()))
         .layer(middleware::from_fn_with_state(
             Arc::new(state.clone()),
@@ -586,6 +597,40 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+}
+
+async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus> {
+    let store = state.job_store.lock().await;
+    let mut status = DaemonStatus {
+        daemon: "running",
+        gateways: Vec::new(),
+        queued_jobs: 0,
+        running_jobs: 0,
+        succeeded_jobs: 0,
+        failed_jobs: 0,
+    };
+    for (enabled, name) in [
+        (env::var("TELEGRAM_BOT_TOKEN").is_ok(), "telegram"),
+        (env::var("DISCORD_BOT_TOKEN").is_ok(), "discord"),
+        (env::var("SLACK_APP_TOKEN").is_ok(), "slack"),
+        (env::var("WHATSAPP_ACCESS_TOKEN").is_ok(), "whatsapp"),
+        (env::var("SIGNAL_ACCOUNT").is_ok(), "signal"),
+        (env::var("MATRIX_ACCESS_TOKEN").is_ok(), "matrix"),
+        (env::var("GENERIC_WEBHOOK_SECRET").is_ok(), "webhook"),
+    ] {
+        if enabled {
+            status.gateways.push(name.to_owned());
+        }
+    }
+    for job in store.all() {
+        match job.status {
+            JobStatus::Queued => status.queued_jobs += 1,
+            JobStatus::Running => status.running_jobs += 1,
+            JobStatus::Succeeded => status.succeeded_jobs += 1,
+            JobStatus::Failed | JobStatus::Cancelled => status.failed_jobs += 1,
+        }
+    }
+    Json(status)
 }
 
 async fn list_jobs(
