@@ -1,6 +1,6 @@
 # 24/7 Rust deployment
 
-The persistent process is `xai-grok-superagent-server`. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, `/v1/approval/check`, `/v1/exec`, authenticated `/v1/jobs`, `/v1/memory`, and `/v1/daemon/status`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime.
+The persistent process is `xai-grok-superagent-server`. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/daemon/status`, and `/v1/connections`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime.
 
 ## Docker Compose
 
@@ -50,6 +50,7 @@ Start the service with:
 docker compose up -d --build
 docker compose ps
 curl http://127.0.0.1:8787/healthz
+curl -H "Authorization: Bearer $SUPERAGENT_API_TOKEN" http://127.0.0.1:8787/v1/connections
 ```
 
 The Compose definition uses an automatic restart policy, a non-root container, a read-only root filesystem, a temporary filesystem for `/tmp`, dropped Linux capabilities, and a local-only port binding. Put a reverse proxy or private network in front of it if remote access is required. Persist `/var/lib/superagent` so job state, memory, offsets, and cursors survive container replacement.
@@ -63,6 +64,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now superagent.service
 sudo systemctl status superagent.service
 curl http://127.0.0.1:8787/healthz
+curl -H "Authorization: Bearer $SUPERAGENT_API_TOKEN" http://127.0.0.1:8787/v1/connections
 ```
 
 The systemd unit restarts on failure, handles SIGTERM, protects the host filesystem, and grants write access only to explicitly designated state and log directories. Rotate the API token and E2B key through the host secret-management procedure rather than editing Git-tracked files.
@@ -73,7 +75,7 @@ The gateway adapters deliver authorized messages to the grok headless bridge whe
 
 ## Gateway configuration
 
-The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts.
+The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.
 
 ## Telegram gateway
 
