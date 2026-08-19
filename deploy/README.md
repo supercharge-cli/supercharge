@@ -111,6 +111,10 @@ Protected API routes reject requests without `SUPERAGENT_API_TOKEN` when a token
 
 The `deploy/backup-runtime.sh` script archives the known durable JSON state files from `SUPERAGENT_RUNTIME_DIR` (default `/var/lib/superagent`) with restrictive permissions. The matching `deploy/restore-runtime.sh` script validates archive member names before replacing only the supported state files. Stop the daemon before restoring, keep backup archives outside the runtime directory, and encrypt them with the host’s approved secret-management or storage system when they leave the machine.
 
+## Upgrade and rollback
+
+Use `deploy/upgrade.sh /path/to/xai-grok-superagent-server` to stage an executable release under `SUPERAGENT_INSTALL_ROOT` (default `/opt/superagent`), create a pre-upgrade runtime backup, replace the daemon binary atomically, restart an active `superagent.service`, and require a successful `/healthz` check before completing. If the health check fails, the previous binary is restored automatically. `deploy/rollback.sh` restores the previous binary from the recorded release directory; both scripts support `SUPERAGENT_BINARY_PATH`, `SUPERAGENT_SERVICE_NAME`, and `SUPERAGENT_HEALTH_URL` overrides for non-systemd deployments. Keep release directories and runtime backups on the same protected host, and review service logs after every upgrade.
+
 ## Telegram gateway
 
 The default Telegram mode is long polling. To use webhook mode instead, expose `/webhooks/telegram` through a public HTTPS reverse proxy, set `TELEGRAM_WEBHOOK_SECRET`, configure Telegram’s `setWebhook` method with the same secret, and forward the `X-Telegram-Bot-Api-Secret-Token` header unchanged. The webhook route rejects requests without the configured secret, applies the same user/chat allowlists, and returns `202 Accepted` after transport processing. Do not run Telegram long polling and webhook mode for the same bot at the same time; Telegram treats them as mutually exclusive update mechanisms.

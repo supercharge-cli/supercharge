@@ -19,7 +19,7 @@ This document defines Rust-first acceptance criteria for the daemon’s agent, g
 | Browser/computer use | `xai-grok-superagent::browser` plus E2B template | Browser sessions, screenshots, navigation, approvals, sandboxed credentials, and a live user-visible Computer pane | E2B template foundation, Chromium/agent-browser stream supervision, app-compatible `/v1/computer/status`, and view-only `/v1/computer/browser` SSE frames are implemented; agent input actions and gateway-level user takeover controls remain |
 | Security | config, approvals, hooks, workspace, gateway | Command approval, DM pairing, secrets scoping, sandbox isolation, redaction, and emergency stop | Core approval policy, deny-by-default gateway authorization, pairing, E2B isolation, non-root deployment, bearer-token auth, protected request-body limits, security headers, and configurable per-session rate limits are implemented; redaction and emergency-stop parity remain |
 | Observability | diagnostics and daemon status | Structured logs, run traces, health/readiness, usage accounting, gateway state, and crash recovery | Health, capability, connection readiness, daemon status, authenticated `/v1/observability`, durable leases/recovery, and gateway retry logging are implemented; structured traces and usage accounting remain |
-| 24/7 service operation | headless binary plus Docker/systemd assets | Restart-safe service, durable queue/leases, graceful shutdown, health checks, backups, and upgrade/rollback | Docker Compose, systemd, non-root runtime, health checks, durable jobs/memory/schedules/controls/cursors, background worker recovery, and automatic gateway startup are implemented; gateway-state backup and upgrade rollback remain |
+| 24/7 service operation | headless binary plus Docker/systemd assets | Restart-safe service, durable queue/leases, graceful shutdown, health checks, backups, and upgrade/rollback | Docker Compose, systemd, non-root runtime, health checks, durable jobs/memory/schedules/controls/cursors, background worker recovery, automatic gateway startup, runtime backups, and health-checked upgrade/rollback scripts are implemented |
 | Research workflows | batch runner and trajectory crates | Batch trajectories, compression, replay, dataset export, and deterministic test fixtures | Upstream baseline; daemon workflow integration remains |
 
 ## Current verified quality gates
@@ -32,7 +32,7 @@ cargo +1.94.0 clippy -p xai-grok-superagent --features e2b -- -D warnings
 cargo +1.94.0 test -p xai-grok-superagent --features e2b
 ```
 
-The feature-gated superagent suite currently reports **43 library tests plus 2 daemon tests passing**; the email gateway adds parser, subject-session, and sender-allowlist coverage.
+The feature-gated superagent suite currently reports **44 library tests plus 2 daemon tests passing**; the email gateway and bounded MCP execution each have deterministic coverage.
  Gateway tests are deterministic normalization/authentication tests; they do not claim live platform connectivity without the corresponding credentials and service accounts.
 
 The final release claim distinguishes among **implemented and tested**, **implemented but requiring external service credentials**, **partial foundation**, **planned**, and **not supported**. This avoids presenting a robust daemon foundation as complete feature parity.
