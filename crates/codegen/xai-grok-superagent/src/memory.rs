@@ -79,7 +79,7 @@ impl MemoryStore {
                         .any(|tag| tag.to_ascii_lowercase().contains(&query))
             })
             .rev()
-            .take(limit.max(1).min(100))
+            .take(limit.clamp(1, 100))
             .cloned()
             .collect()
     }

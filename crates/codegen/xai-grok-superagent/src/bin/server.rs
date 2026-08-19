@@ -289,12 +289,11 @@ async fn run_signal_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         message.sender,
                         message.session_key()
                     );
-                    if env::var_os("GROK_AGENT_BINARY").is_some() {
-                        if let Ok(Some(reply)) =
+                    if env::var_os("GROK_AGENT_BINARY").is_some()
+                        && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
-                        {
-                            client.send_message(&message.sender, &reply).await?;
-                        }
+                    {
+                        client.send_message(&message.sender, &reply).await?;
                     }
                 }
             }
@@ -332,12 +331,11 @@ async fn run_matrix_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         message.sender,
                         message.session_key()
                     );
-                    if env::var_os("GROK_AGENT_BINARY").is_some() {
-                        if let Ok(Some(reply)) =
+                    if env::var_os("GROK_AGENT_BINARY").is_some()
+                        && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
-                        {
-                            client.send_message(&message.room_id, &reply).await?;
-                        }
+                    {
+                        client.send_message(&message.room_id, &reply).await?;
                     }
                 }
             }
@@ -361,18 +359,13 @@ async fn run_slack_daemon() -> Result<(), Box<dyn std::error::Error + Send + Syn
                         message.user_id,
                         message.session_key()
                     );
-                    if env::var_os("GROK_AGENT_BINARY").is_some() {
-                        if let Ok(Some(reply)) =
+                    if env::var_os("GROK_AGENT_BINARY").is_some()
+                        && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
-                        {
-                            client
-                                .send_message(
-                                    &message.channel_id,
-                                    &reply,
-                                    message.thread_ts.as_deref(),
-                                )
-                                .await?;
-                        }
+                    {
+                        client
+                            .send_message(&message.channel_id, &reply, message.thread_ts.as_deref())
+                            .await?;
                     }
                 }
             }
@@ -406,7 +399,7 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                             Err(error) => {
                                 eprintln!("grok headless Discord turn failed: {error}");
                                 let _ = binary;
-                                client
+                                let _ = client
                                     .send_message(
                                         &message.chat_id.to_string(),
                                         "The agent turn failed; check the daemon logs.",

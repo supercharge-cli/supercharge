@@ -12,7 +12,6 @@ use crate::gateway::{GatewayConfig, GatewayMessage};
 const OP_DISPATCH: i64 = 0;
 const OP_HEARTBEAT: i64 = 1;
 const OP_IDENTIFY: i64 = 2;
-const OP_RESUME: i64 = 6;
 const OP_RECONNECT: i64 = 7;
 const OP_INVALID_SESSION: i64 = 9;
 const OP_HELLO: i64 = 10;
@@ -158,10 +157,11 @@ impl DiscordClient {
                     if payload.op == OP_RECONNECT || payload.op == OP_INVALID_SESSION {
                         break;
                     }
-                    if payload.op == OP_DISPATCH && payload.t.as_deref() == Some("MESSAGE_CREATE") {
-                        if let Some(message) = normalize_message(payload.d, &self.config) {
-                            messages.push(message);
-                        }
+                    if payload.op == OP_DISPATCH
+                        && payload.t.as_deref() == Some("MESSAGE_CREATE")
+                        && let Some(message) = normalize_message(payload.d, &self.config)
+                    {
+                        messages.push(message);
                     }
                 }
             }
