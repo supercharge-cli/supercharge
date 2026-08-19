@@ -2,21 +2,24 @@ use std::{convert::Infallible, env, net::SocketAddr, sync::Arc};
 
 use axum::{
     Json, Router,
-    body::Body,
+    body::{Body, Bytes},
     extract::{Query, State},
-    http::{Request, StatusCode, header},
+    http::{HeaderMap, Request, StatusCode, header},
     middleware::{self, Next},
     response::Response,
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 #[cfg(feature = "e2b")]
 use xai_grok_superagent::SandboxPlan;
 use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
     discord::DiscordClient,
     gateway::GatewayStateStore,
+    slack::{SlackClient, SlackConfig},
     telegram::{TelegramClient, TelegramConfig},
+    whatsapp::{WhatsAppClient, WhatsAppConfig},
 };
 
 #[derive(Clone)]
@@ -26,6 +29,7 @@ struct AppState {
     api_token: Option<String>,
     #[cfg(feature = "e2b")]
     sandbox_plan: SandboxPlan,
+    whatsapp: Option<WhatsAppClient>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,12 +70,18 @@ async fn main() -> anyhow::Result<()> {
     let api_token = env::var("SUPERAGENT_API_TOKEN")
         .ok()
         .filter(|v| !v.is_empty());
+    let whatsapp = if env::var("WHATSAPP_ACCESS_TOKEN").is_ok() {
+        Some(WhatsAppClient::new(WhatsAppConfig::from_env()?))
+    } else {
+        None
+    };
     let state = AppState {
         config: SuperagentConfig::default(),
         approval: ApprovalPolicy::default(),
         api_token,
         #[cfg(feature = "e2b")]
         sandbox_plan: SandboxPlan::default(),
+        whatsapp,
     };
 
     let protected = Router::new()
@@ -85,9 +95,20 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/v1/capabilities", get(capabilities))
+        .route(
+            "/webhooks/whatsapp",
+            get(whatsapp_verify).post(whatsapp_webhook),
+        )
         .with_state(Arc::new(state.clone()))
         .merge(protected);
 
+    if env::var("SLACK_APP_TOKEN").is_ok() {
+        tokio::spawn(async {
+            if let Err(error) = run_slack_daemon().await {
+                eprintln!("slack gateway stopped: {error}");
+            }
+        });
+    }
     if env::var("DISCORD_BOT_TOKEN").is_ok() {
         tokio::spawn(async {
             if let Err(error) = run_discord_daemon().await {
@@ -165,6 +186,41 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
     }
 }
 
+async fn run_slack_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = SlackClient::new(SlackConfig::from_env()?);
+    loop {
+        match client.run_once().await {
+            Ok(messages) => {
+                for message in messages {
+                    eprintln!(
+                        "slack message: channel={} user={} session={}",
+                        message.channel_id,
+                        message.user_id,
+                        message.session_key()
+                    );
+                    if env::var_os("GROK_AGENT_BINARY").is_some() {
+                        if let Ok(Some(reply)) =
+                            run_grok_prompt(&message.session_key(), &message.text).await
+                        {
+                            client
+                                .send_message(
+                                    &message.channel_id,
+                                    &reply,
+                                    message.thread_ts.as_deref(),
+                                )
+                                .await?;
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("slack Socket Mode failed; reconnecting: {error}");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
 async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = xai_grok_superagent::discord::DiscordConfig::from_env()?;
     let client = DiscordClient::new(config);
@@ -223,12 +279,19 @@ async fn send_discord_chunked(
 async fn run_grok_turn(
     message: &xai_grok_superagent::gateway::GatewayMessage,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    run_grok_prompt(message.session_key().as_str(), &message.text).await
+}
+
+async fn run_grok_prompt(
+    session_key: &str,
+    prompt: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
     let binary = env::var("GROK_AGENT_BINARY")?;
     let output = tokio::process::Command::new(binary)
         .arg("--single")
-        .arg(&message.text)
+        .arg(prompt)
         .arg("--session-id")
-        .arg(message.session_key().as_str())
+        .arg(session_key)
         .output()
         .await?;
     if !output.status.success() {
@@ -251,6 +314,79 @@ async fn send_chunked(
             .await?;
     }
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct WhatsAppVerifyQuery {
+    #[serde(rename = "hub.mode")]
+    mode: Option<String>,
+    #[serde(rename = "hub.verify_token")]
+    verify_token: Option<String>,
+    #[serde(rename = "hub.challenge")]
+    challenge: Option<String>,
+}
+
+async fn whatsapp_verify(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<WhatsAppVerifyQuery>,
+) -> Result<String, StatusCode> {
+    let Some(client) = &state.whatsapp else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    client
+        .verify_challenge(
+            query.mode.as_deref(),
+            query.verify_token.as_deref(),
+            query.challenge.as_deref(),
+        )
+        .ok_or(StatusCode::FORBIDDEN)
+}
+
+async fn whatsapp_webhook(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let Some(client) = state.whatsapp.clone() else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "WhatsApp gateway is disabled".to_owned(),
+            }),
+        ));
+    };
+    client
+        .verify_signature(
+            &body,
+            headers
+                .get("x-hub-signature-256")
+                .and_then(|value| value.to_str().ok()),
+        )
+        .map_err(|error| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?;
+    let payload: Value = serde_json::from_slice(&body).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    for message in client.parse_messages(&payload) {
+        let client = client.clone();
+        tokio::spawn(async move {
+            if let Ok(Some(reply)) = run_grok_prompt(&message.session_key(), &message.text).await {
+                let _ = client.send_text(&message.user_id, &reply).await;
+            }
+        });
+    }
+    Ok(Json(json!({"ok": true})))
 }
 
 async fn shutdown_signal() {

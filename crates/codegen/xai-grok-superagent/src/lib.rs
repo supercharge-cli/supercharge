@@ -11,7 +11,9 @@ mod e2b;
 pub mod gateway;
 pub mod jobs;
 mod scheduler;
+pub mod slack;
 pub mod telegram;
+pub mod whatsapp;
 
 use sha2::{Digest, Sha256};
 
