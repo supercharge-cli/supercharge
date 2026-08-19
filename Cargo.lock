@@ -14618,6 +14618,7 @@ dependencies = [
  "axum",
  "chrono",
  "e2b-rs",
+ "futures-util",
  "httpmock",
  "reqwest 0.12.24",
  "serde",
@@ -14626,6 +14627,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-tungstenite",
+ "urlencoding",
  "uuid",
 ]
 
