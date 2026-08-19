@@ -12,6 +12,7 @@ pub mod gateway;
 pub mod jobs;
 pub mod matrix;
 mod scheduler;
+pub mod signal;
 pub mod slack;
 pub mod telegram;
 pub mod whatsapp;
