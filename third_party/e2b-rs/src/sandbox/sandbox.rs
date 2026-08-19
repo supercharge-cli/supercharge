@@ -410,6 +410,18 @@ impl SandboxCreateBuilder {
         self.opts.allow_internet_access = Some(allow);
         self
     }
+
+    /// Configure the provider lifecycle action after inactivity, such as `pause` or `kill`.
+    pub fn lifecycle_on_timeout(mut self, action: impl Into<String>) -> Self {
+        self.opts.lifecycle_on_timeout = Some(action.into());
+        self
+    }
+
+    /// Configure whether provider-side activity should auto-resume a paused sandbox.
+    pub fn lifecycle_auto_resume(mut self, enabled: bool) -> Self {
+        self.opts.lifecycle_auto_resume = Some(enabled);
+        self
+    }
 }
 
 impl IntoFuture for SandboxCreateBuilder {

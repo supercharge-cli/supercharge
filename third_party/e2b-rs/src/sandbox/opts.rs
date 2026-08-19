@@ -21,6 +21,10 @@ pub struct SandboxCreateOpts {
     pub secure: Option<bool>,
     /// Allow internet access (default true).
     pub allow_internet_access: Option<bool>,
+    /// Provider lifecycle action after inactivity, such as `pause` or `kill`.
+    pub lifecycle_on_timeout: Option<String>,
+    /// Whether provider-side activity should auto-resume a paused sandbox.
+    pub lifecycle_auto_resume: Option<bool>,
     /// Connection options (api key, domain, debug, ...).
     pub connection: ConnectionConfigOpts,
 }

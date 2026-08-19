@@ -56,6 +56,15 @@ pub(crate) async fn create_sandbox(
     if !opts.envs.is_empty() {
         body["envVars"] = serde_json::to_value(&opts.envs).unwrap_or_default();
     }
+    if opts.lifecycle_on_timeout.is_some() || opts.lifecycle_auto_resume.is_some() {
+        body["lifecycle"] = serde_json::json!({
+            "onTimeout": opts
+                .lifecycle_on_timeout
+                .as_deref()
+                .unwrap_or("pause"),
+            "autoResume": opts.lifecycle_auto_resume.unwrap_or(false),
+        });
+    }
 
     let sandbox: api_schema::Sandbox = api
         .request(reqwest::Method::POST, "/sandboxes", &[], Some(&body))
@@ -280,6 +289,30 @@ mod tests {
         };
         let sandbox = create_sandbox(&api, &opts).await.expect("create");
         assert_eq!(sandbox.sandbox_id, "sbx_new");
+    }
+
+    #[tokio::test]
+    async fn create_sends_pause_and_auto_resume_lifecycle() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/sandboxes"))
+            .and(body_partial_json(serde_json::json!({
+                "lifecycle": {"onTimeout": "pause", "autoResume": true}
+            })))
+            .respond_with(
+                ResponseTemplate::new(201).set_body_json(sandbox_json("sbx_lifecycle", "0.6.0")),
+            )
+            .mount(&server)
+            .await;
+        let opts = SandboxCreateOpts {
+            lifecycle_on_timeout: Some("pause".to_owned()),
+            lifecycle_auto_resume: Some(true),
+            ..Default::default()
+        };
+        let sandbox = create_sandbox(&api_for(&server), &opts)
+            .await
+            .expect("create");
+        assert_eq!(sandbox.sandbox_id, "sbx_lifecycle");
     }
 
     #[tokio::test]

@@ -9,6 +9,8 @@ pub struct SandboxPlan {
     pub template: String,
     pub timeout_seconds: u64,
     pub max_output_bytes: usize,
+    pub lifecycle_on_timeout: String,
+    pub lifecycle_auto_resume: bool,
 }
 
 impl Default for SandboxPlan {
@@ -17,6 +19,8 @@ impl Default for SandboxPlan {
             template: "base".to_owned(),
             timeout_seconds: 900,
             max_output_bytes: 200_000,
+            lifecycle_on_timeout: "pause".to_owned(),
+            lifecycle_auto_resume: true,
         }
     }
 }
@@ -180,7 +184,9 @@ impl E2bExecutor {
     async fn create_sandbox(&self) -> Result<e2b_rs::Sandbox, E2bError> {
         let mut builder = e2b_rs::Sandbox::create()
             .template(self.plan.template.clone())
-            .timeout(Duration::from_secs(self.plan.timeout_seconds));
+            .timeout(Duration::from_secs(self.plan.timeout_seconds))
+            .lifecycle_on_timeout(self.plan.lifecycle_on_timeout.clone())
+            .lifecycle_auto_resume(self.plan.lifecycle_auto_resume);
         if let Some(api_key) = &self.api_key {
             builder = builder.api_key(api_key.clone());
         }
@@ -281,6 +287,8 @@ mod tests {
         assert_eq!(plan.template, "base");
         assert!(plan.timeout_seconds <= 86_400);
         assert!(plan.max_output_bytes > 0);
+        assert_eq!(plan.lifecycle_on_timeout, "pause");
+        assert!(plan.lifecycle_auto_resume);
     }
 
     #[test]

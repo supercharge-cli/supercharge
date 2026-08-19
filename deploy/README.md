@@ -86,7 +86,7 @@ Copy `.env.runtime.example` to the host secret file and set `TELEGRAM_BOT_TOKEN`
 
 ## E2B session lifecycle
 
-The persistent session API follows the reference E2B gateway’s safer lifecycle model: a session creates or reconnects a sandbox, refreshes its timeout, keeps the sandbox alive across commands, reconnects paused sandboxes on wake or execution, caps stdout/stderr, and rejects absolute working directories outside the configured workspace or paths containing traversal segments. The one-shot `/v1/exec` endpoint remains available and still creates and tears down an isolated sandbox; use `/v1/e2b/sessions/:id/exec` when a durable sandbox filesystem and resumable session are required. Pausing is explicit, while deletion kills the remote sandbox and removes the local session record.
+The persistent session API follows the reference E2B gateway’s safer lifecycle model: a session creates or reconnects a sandbox, requests provider-side `onTimeout: pause` with `autoResume: true`, refreshes its timeout, keeps the sandbox alive across commands, reconnects paused sandboxes on wake or execution, caps stdout/stderr, and rejects absolute working directories outside the configured workspace or paths containing traversal segments. E2B auto-resume is activity-driven: the next SDK/API operation wakes the paused sandbox; it is not a background promise that runs without any request. The one-shot `/v1/exec` endpoint remains available and still creates and tears down an isolated sandbox; use `/v1/e2b/sessions/:id/exec` when a durable sandbox filesystem and resumable session are required. Pausing is explicit, while deletion kills the remote sandbox and removes the local session record.
 
 ## Operational boundary
 
