@@ -18,6 +18,7 @@ pub mod memory;
 mod scheduler;
 pub mod signal;
 pub mod slack;
+pub mod subagents;
 pub mod telegram;
 pub mod webhook;
 pub mod whatsapp;

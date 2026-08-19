@@ -86,6 +86,10 @@ All gateways share persisted control commands through `SUPERAGENT_CONTROL_STATE`
 
 Set `SUPERAGENT_SKILLS_ROOT` to a read-only or operator-managed directory containing skill subdirectories with `SKILL.md` manifests. `GET /v1/integrations/skills` discovers manifests, while `GET /v1/integrations/skills/:name` loads one validated manifest, returns its digest, and rejects traversal or oversized files. Set `SUPERAGENT_MCP_SERVERS` to a JSON array of descriptors; `GET /v1/integrations/mcp` validates and reports only supported `stdio`, `http`, and `sse` transports. These endpoints provide controlled inspection and configuration; they do not silently execute arbitrary skill code or MCP tools.
 
+## Subagents
+
+When the headless agent bridge is configured, `POST /v1/subagents` can run a bounded child turn with a parent session, prompt, depth, and timeout. `SUPERAGENT_MAX_SUBAGENT_DEPTH` and `SUPERAGENT_MAX_PARALLEL_SUBAGENTS` limit recursion and concurrency. Each child receives an isolated session identifier, and output is capped before it is returned. The endpoint is authenticated and returns service-unavailable when no provider bridge is configured.
+
 ## Gateway configuration
 
 The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.

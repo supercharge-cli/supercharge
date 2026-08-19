@@ -27,6 +27,9 @@ use xai_grok_superagent::{
     memory::{MemoryEntry, MemoryStore},
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
+    subagents::{
+        SubagentError, SubagentRequest, global as global_subagents, init_global as init_subagents,
+    },
     telegram::{TelegramClient, TelegramConfig, TelegramUpdate},
     webhook::{WebhookClient, WebhookConfig},
     whatsapp::{WhatsAppClient, WhatsAppConfig},
@@ -266,6 +269,17 @@ async fn main() -> anyhow::Result<()> {
     let control_state_path = env::var("SUPERAGENT_CONTROL_STATE")
         .unwrap_or_else(|_| "./runtime/controls.json".to_owned());
     init_controls(control_state_path)?;
+    if let Ok(binary) = env::var("GROK_AGENT_BINARY") {
+        let max_depth = env::var("SUPERAGENT_MAX_SUBAGENT_DEPTH")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(3);
+        let max_parallel = env::var("SUPERAGENT_MAX_PARALLEL_SUBAGENTS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(4);
+        init_subagents(binary, max_depth, max_parallel);
+    }
     let memory_state_path =
         env::var("SUPERAGENT_MEMORY_STATE").unwrap_or_else(|_| "./runtime/memory.json".to_owned());
     let memory_store = Arc::new(Mutex::new(MemoryStore::load(memory_state_path)?));
@@ -302,7 +316,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memory/:id", delete(delete_memory))
         .route("/v1/integrations/skills", get(list_skills))
         .route("/v1/integrations/skills/:name", get(get_skill))
-        .route("/v1/integrations/mcp", get(list_mcp_servers));
+        .route("/v1/integrations/mcp", get(list_mcp_servers))
+        .route("/v1/subagents", post(run_subagent));
     #[cfg(feature = "e2b")]
     let protected = protected
         .route(
@@ -962,6 +977,39 @@ async fn list_mcp_servers() -> Result<Json<Value>, (StatusCode, Json<ErrorRespon
     let servers = parse_mcp_servers(env::var("SUPERAGENT_MCP_SERVERS").ok().as_deref())
         .map_err(internal_error)?;
     Ok(Json(json!({ "servers": servers })))
+}
+
+async fn run_subagent(
+    Json(request): Json<SubagentRequest>,
+) -> Result<Json<xai_grok_superagent::subagents::SubagentResult>, (StatusCode, Json<ErrorResponse>)>
+{
+    let coordinator = global_subagents().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "subagent bridge is not configured".to_owned(),
+            }),
+        )
+    })?;
+    let result = coordinator.run(request).await.map_err(subagent_error)?;
+    Ok(Json(result))
+}
+
+fn subagent_error(error: SubagentError) -> (StatusCode, Json<ErrorResponse>) {
+    let status = match error {
+        SubagentError::InvalidPrompt | SubagentError::DepthExceeded { .. } => {
+            StatusCode::BAD_REQUEST
+        }
+        SubagentError::Busy => StatusCode::TOO_MANY_REQUESTS,
+        SubagentError::NotConfigured => StatusCode::SERVICE_UNAVAILABLE,
+        SubagentError::Process(_) | SubagentError::Timeout(_) => StatusCode::BAD_GATEWAY,
+    };
+    (
+        status,
+        Json(ErrorResponse {
+            error: error.to_string(),
+        }),
+    )
 }
 
 #[cfg(feature = "e2b")]
