@@ -9,7 +9,7 @@ use axum::{
     http::{HeaderMap, Request, StatusCode, header},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -141,6 +141,28 @@ struct MemoryRequest {
     content: String,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default = "default_memory_kind")]
+    kind: String,
+    #[serde(default = "default_memory_importance")]
+    importance: u8,
+}
+
+fn default_memory_kind() -> String {
+    "note".to_owned()
+}
+
+fn default_memory_importance() -> u8 {
+    50
+}
+
+#[derive(Debug, Deserialize)]
+struct MemoryCompactRequest {
+    #[serde(default = "default_memory_capacity")]
+    max_entries: usize,
+}
+
+fn default_memory_capacity() -> usize {
+    10_000
 }
 
 #[derive(Debug, Deserialize)]
@@ -266,7 +288,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/jobs/:id", get(get_job))
         .route("/v1/daemon/status", get(daemon_status))
         .route("/v1/connections", get(connection_status))
-        .route("/v1/memory", get(search_memory).post(remember_memory));
+        .route("/v1/memory", get(search_memory).post(remember_memory))
+        .route("/v1/memory/stats", get(memory_stats))
+        .route("/v1/memory/compact", post(compact_memory))
+        .route("/v1/memory/:id", delete(delete_memory));
     #[cfg(feature = "e2b")]
     let protected = protected
         .route(
@@ -835,7 +860,13 @@ async fn remember_memory(
 ) -> Result<Json<MemoryEntry>, (StatusCode, Json<ErrorResponse>)> {
     let mut store = state.memory_store.lock().await;
     let entry = store
-        .remember(request.session_key, request.content, request.tags)
+        .remember_with_metadata(
+            request.session_key,
+            request.content,
+            request.tags,
+            request.kind,
+            request.importance,
+        )
         .map_err(|error| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -845,6 +876,44 @@ async fn remember_memory(
             )
         })?;
     Ok(Json(entry))
+}
+
+async fn delete_memory(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let mut store = state.memory_store.lock().await;
+    let removed = store.delete(&id).map_err(internal_error)?;
+    if removed {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "memory entry not found".to_owned(),
+            }),
+        ))
+    }
+}
+
+async fn compact_memory(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<MemoryCompactRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let mut store = state.memory_store.lock().await;
+    let removed = store.compact(request.max_entries).map_err(internal_error)?;
+    let (entries, sessions) = store.stats();
+    Ok(Json(json!({
+        "removed": removed,
+        "entries": entries,
+        "sessions": sessions,
+    })))
+}
+
+async fn memory_stats(State(state): State<Arc<AppState>>) -> Json<Value> {
+    let store = state.memory_store.lock().await;
+    let (entries, sessions) = store.stats();
+    Json(json!({ "entries": entries, "sessions": sessions }))
 }
 
 #[cfg(feature = "e2b")]

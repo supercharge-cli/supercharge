@@ -1,6 +1,6 @@
 # 24/7 Rust deployment
 
-The persistent process is the Rust daemon binary. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/daemon/status`, and `/v1/connections`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime. With that feature enabled, the daemon also exposes authenticated durable E2B session routes: `POST/GET /v1/e2b/sessions`, `GET/DELETE /v1/e2b/sessions/:id`, `POST /v1/e2b/sessions/:id/exec`, `POST /v1/e2b/sessions/:id/wake`, and `POST /v1/e2b/sessions/:id/pause`. Session metadata is persisted at `SUPERAGENT_E2B_SESSION_STATE`, and `SUPERAGENT_E2B_WORKSPACE_ROOT` defines the default absolute workspace boundary.
+The persistent process is the Rust daemon binary. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/memory/stats`, `/v1/memory/compact`, `/v1/daemon/status`, and `/v1/connections`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime. With that feature enabled, the daemon also exposes authenticated durable E2B session routes: `POST/GET /v1/e2b/sessions`, `GET/DELETE /v1/e2b/sessions/:id`, `POST /v1/e2b/sessions/:id/exec`, `POST /v1/e2b/sessions/:id/wake`, and `POST /v1/e2b/sessions/:id/pause`. Session metadata is persisted at `SUPERAGENT_E2B_SESSION_STATE`, and `SUPERAGENT_E2B_WORKSPACE_ROOT` defines the default absolute workspace boundary.
 
 ## Docker Compose
 
@@ -73,6 +73,10 @@ The systemd unit restarts on failure, handles SIGTERM, protects the host filesys
 ## Model API connection
 
 The gateway adapters deliver authorized messages to the headless agent bridge when `GROK_AGENT_BINARY` is set. The upstream runtime uses the compatibility variable `XAI_API_KEY` for provider authentication and can use `GROK_DEFAULT_MODEL` or the configuration overlay at `GROK_CONFIG_PATH` for model selection. These values belong in the deployment secret/configuration store, not in Git. Without a provider key and valid headless-runtime configuration, gateway transport can still be tested, but model replies will not be available.
+
+## Durable memory
+
+Memory entries are persisted atomically at `SUPERAGENT_MEMORY_STATE` and are scoped by `session_key`. `POST /v1/memory` accepts optional `kind`, `importance`, and `tags` metadata; `GET /v1/memory` performs session-scoped text/tag/kind recall with bounded, importance-aware ranking; `DELETE /v1/memory/:id` removes one entry; `GET /v1/memory/stats` reports entry and session counts; and `POST /v1/memory/compact` removes the least important, oldest entries above a configured capacity. Secrets and provider credentials are never written into memory automatically by the daemon.
 
 ## Gateway configuration
 
