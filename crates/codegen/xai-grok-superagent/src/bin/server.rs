@@ -14,7 +14,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use xai_grok_superagent::{
-    ApprovalPolicy, SuperagentConfig,
+    ApprovalPolicy, ScheduledJob, SuperagentConfig,
     controls::{
         handle_text as handle_control_text, init_global as init_controls,
         is_stopped as control_is_stopped,
@@ -25,6 +25,7 @@ use xai_grok_superagent::{
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     memory::{MemoryEntry, MemoryStore},
+    schedule_store::ScheduleStore,
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
     subagents::{
@@ -48,6 +49,7 @@ struct AppState {
     webhook: Option<(WebhookClient, WebhookConfig)>,
     job_store: Arc<Mutex<JobStore>>,
     memory_store: Arc<Mutex<MemoryStore>>,
+    schedule_store: Arc<Mutex<ScheduleStore>>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
@@ -176,6 +178,19 @@ struct MemoryRestoreRequest {
     replace: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct ScheduleRequest {
+    name: String,
+    prompt: String,
+    interval_seconds: u64,
+    home_channel: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ScheduleToggleRequest {
+    enabled: bool,
+}
+
 fn default_memory_capacity() -> usize {
     10_000
 }
@@ -298,6 +313,9 @@ async fn main() -> anyhow::Result<()> {
     let job_state_path =
         env::var("SUPERAGENT_JOB_STATE").unwrap_or_else(|_| "./runtime/jobs.json".to_owned());
     let job_store = Arc::new(Mutex::new(JobStore::load(job_state_path)?));
+    let schedule_state_path = env::var("SUPERAGENT_SCHEDULE_STATE")
+        .unwrap_or_else(|_| "./runtime/schedules.json".to_owned());
+    let schedule_store = Arc::new(Mutex::new(ScheduleStore::load(schedule_state_path)?));
     let state = AppState {
         config: SuperagentConfig::default(),
         approval: ApprovalPolicy::default(),
@@ -308,6 +326,7 @@ async fn main() -> anyhow::Result<()> {
         webhook,
         job_store,
         memory_store,
+        schedule_store,
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
             env::var("SUPERAGENT_E2B_SESSION_STATE")
@@ -315,11 +334,47 @@ async fn main() -> anyhow::Result<()> {
         )?)),
     };
 
+    let scheduler_state = Arc::new(state.clone());
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            let due = {
+                let mut schedules = scheduler_state.schedule_store.lock().await;
+                match schedules.claim_due(chrono::Utc::now()) {
+                    Ok(due) => due,
+                    Err(error) => {
+                        eprintln!("schedule tick failed: {error}");
+                        Vec::new()
+                    }
+                }
+            };
+            for schedule in due {
+                let (platform, chat_id) = schedule
+                    .home_channel
+                    .as_deref()
+                    .and_then(|value| value.rsplit_once(':'))
+                    .and_then(|(platform, chat_id)| {
+                        chat_id.parse::<i64>().ok().map(|id| (platform, id))
+                    })
+                    .unwrap_or(("scheduler", 0));
+                let session_key = format!("schedule:{}", schedule.id);
+                let mut jobs = scheduler_state.job_store.lock().await;
+                if let Err(error) = jobs.enqueue(session_key, platform, chat_id, schedule.prompt, 3)
+                {
+                    eprintln!("scheduled job enqueue failed: {error}");
+                }
+            }
+        }
+    });
+
     let protected = Router::new()
         .route("/v1/approval/check", get(check_approval))
         .route("/v1/exec", post(execute))
         .route("/v1/jobs", get(list_jobs).post(enqueue_job))
         .route("/v1/jobs/:id", get(get_job))
+        .route("/v1/schedules", get(list_schedules).post(create_schedule))
+        .route("/v1/schedules/:id", delete(delete_schedule))
+        .route("/v1/schedules/:id/enabled", post(toggle_schedule))
         .route("/v1/daemon/status", get(daemon_status))
         .route("/v1/connections", get(connection_status))
         .route("/v1/memory", get(search_memory).post(remember_memory))
@@ -1390,6 +1445,89 @@ async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus>
         }
     }
     Json(status)
+}
+
+async fn list_schedules(State(state): State<Arc<AppState>>) -> Json<Vec<ScheduledJob>> {
+    let store = state.schedule_store.lock().await;
+    Json(store.list().cloned().collect())
+}
+
+async fn create_schedule(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ScheduleRequest>,
+) -> Result<Json<ScheduledJob>, (StatusCode, Json<ErrorResponse>)> {
+    if request.name.trim().is_empty() || request.prompt.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "schedule name and prompt are required".to_owned(),
+            }),
+        ));
+    }
+    let mut store = state.schedule_store.lock().await;
+    let job = store
+        .create(
+            request.name,
+            request.prompt,
+            request.interval_seconds,
+            request.home_channel,
+        )
+        .map_err(internal_error)?;
+    Ok(Json(job))
+}
+
+async fn delete_schedule(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let id = uuid::Uuid::parse_str(&id).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    let mut store = state.schedule_store.lock().await;
+    if store.delete(&id).map_err(internal_error)? {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "schedule not found".to_owned(),
+            }),
+        ))
+    }
+}
+
+async fn toggle_schedule(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(request): Json<ScheduleToggleRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let id = uuid::Uuid::parse_str(&id).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    let mut store = state.schedule_store.lock().await;
+    if store
+        .set_enabled(&id, request.enabled)
+        .map_err(internal_error)?
+    {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "schedule not found".to_owned(),
+            }),
+        ))
+    }
 }
 
 async fn list_jobs(

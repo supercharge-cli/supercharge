@@ -9,6 +9,8 @@ pub struct ScheduledJob {
     pub prompt: String,
     pub interval_seconds: u64,
     pub enabled: bool,
+    #[serde(default)]
+    pub home_channel: Option<String>,
     pub next_run_at: DateTime<Utc>,
 }
 
@@ -21,6 +23,7 @@ impl ScheduledJob {
             prompt: prompt.into(),
             interval_seconds: interval_seconds.max(1),
             enabled: true,
+            home_channel: None,
             next_run_at: now,
         }
     }

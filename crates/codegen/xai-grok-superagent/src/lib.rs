@@ -15,6 +15,7 @@ pub mod integrations;
 pub mod jobs;
 pub mod matrix;
 pub mod memory;
+pub mod schedule_store;
 mod scheduler;
 pub mod signal;
 pub mod slack;
