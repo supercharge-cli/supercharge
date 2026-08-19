@@ -10,6 +10,7 @@ pub mod discord;
 mod e2b;
 pub mod gateway;
 pub mod jobs;
+pub mod matrix;
 mod scheduler;
 pub mod slack;
 pub mod telegram;
