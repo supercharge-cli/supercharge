@@ -10,13 +10,16 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
-use xai_grok_superagent::{ApprovalPolicy, SandboxPlan, SuperagentConfig};
+#[cfg(feature = "e2b")]
+use xai_grok_superagent::SandboxPlan;
+use xai_grok_superagent::{ApprovalPolicy, SuperagentConfig};
 
 #[derive(Clone)]
 struct AppState {
     config: SuperagentConfig,
     approval: ApprovalPolicy,
     api_token: Option<String>,
+    #[cfg(feature = "e2b")]
     sandbox_plan: SandboxPlan,
 }
 
@@ -62,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
         config: SuperagentConfig::default(),
         approval: ApprovalPolicy::default(),
         api_token,
+        #[cfg(feature = "e2b")]
         sandbox_plan: SandboxPlan::default(),
     };
 
@@ -180,9 +184,9 @@ async fn execute(
                 }),
             )
         })?;
-        return Ok(Json(
+        Ok(Json(
             serde_json::to_value(result).expect("result is serializable"),
-        ));
+        ))
     }
 
     #[cfg(not(feature = "e2b"))]

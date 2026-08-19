@@ -1,3 +1,4 @@
+#[cfg(feature = "e2b")]
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -81,6 +82,7 @@ impl E2bExecutor {
     }
 }
 
+#[cfg(any(feature = "e2b", test))]
 fn cap_output(value: String, limit: usize) -> String {
     if value.len() <= limit {
         return value;
