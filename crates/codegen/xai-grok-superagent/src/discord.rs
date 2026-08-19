@@ -65,6 +65,8 @@ pub enum DiscordError {
     MissingConfiguration(&'static str),
     #[error("Discord HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("Discord media file failed: {0}")]
+    Io(#[from] std::io::Error),
     #[error("Discord WebSocket failed: {0}")]
     WebSocket(String),
     #[error("Discord protocol error: {0}")]
@@ -103,6 +105,45 @@ impl DiscordClient {
         } else {
             Err(DiscordError::Protocol(format!(
                 "send message returned {}: {}",
+                response.status(),
+                response.text().await.unwrap_or_default()
+            )))
+        }
+    }
+
+    pub async fn send_file(
+        &self,
+        channel_id: &str,
+        path: impl AsRef<std::path::Path>,
+        content: Option<&str>,
+    ) -> Result<(), DiscordError> {
+        let path = path.as_ref();
+        let file_name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| DiscordError::Protocol("media file has no valid name".to_owned()))?;
+        let part = reqwest::multipart::Part::file(path)
+            .await?
+            .file_name(file_name.to_owned());
+        let payload = json!({ "content": content.unwrap_or_default() });
+        let form = reqwest::multipart::Form::new()
+            .text("payload_json", payload.to_string())
+            .part("files[0]", part);
+        let response = self
+            .http
+            .post(format!(
+                "{}/channels/{channel_id}/messages",
+                self.config.api_base_url.trim_end_matches('/')
+            ))
+            .bearer_auth(&self.config.bot_token)
+            .multipart(form)
+            .send()
+            .await?;
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(DiscordError::Protocol(format!(
+                "send file returned {}: {}",
                 response.status(),
                 response.text().await.unwrap_or_default()
             )))
@@ -287,6 +328,38 @@ mod tests {
             allowed_channels: Default::default(),
         });
         client.send_message("42", "hello").await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn sends_file_through_discord_rest_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/api/v10/channels/42/messages")
+                    .body_contains("payload_json")
+                    .body_contains("summary")
+                    .body_contains("report.txt");
+                then.status(200).json_body(json!({"id": "10"}));
+            })
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        std::fs::write(&path, "report").unwrap();
+        let client = DiscordClient::new(DiscordConfig {
+            bot_token: "secret".into(),
+            api_base_url: format!("{}/api/v10", server.base_url()),
+            gateway_url: "wss://discord.test".into(),
+            intents: 0,
+            gateway: Default::default(),
+            allowed_users: Default::default(),
+            allowed_channels: Default::default(),
+        });
+        client
+            .send_file("42", &path, Some("summary"))
+            .await
+            .unwrap();
         mock.assert_async().await;
     }
 

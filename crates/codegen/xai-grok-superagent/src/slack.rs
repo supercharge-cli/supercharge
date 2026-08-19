@@ -65,6 +65,8 @@ pub enum SlackError {
     MissingConfiguration(&'static str),
     #[error("Slack HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("Slack media file failed: {0}")]
+    Io(#[from] std::io::Error),
     #[error("Slack WebSocket failed: {0}")]
     WebSocket(String),
     #[error("Slack protocol error: {0}")]
@@ -114,6 +116,53 @@ impl SlackClient {
         } else {
             Err(SlackError::Protocol(
                 response.error.unwrap_or_else(|| "send failed".to_owned()),
+            ))
+        }
+    }
+
+    pub async fn upload_file(
+        &self,
+        channel_id: &str,
+        path: impl AsRef<std::path::Path>,
+        initial_comment: Option<&str>,
+        thread_ts: Option<&str>,
+    ) -> Result<(), SlackError> {
+        let path = path.as_ref();
+        let file_name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| SlackError::Protocol("media file has no valid name".to_owned()))?;
+        let part = reqwest::multipart::Part::file(path)
+            .await?
+            .file_name(file_name.to_owned());
+        let mut form = reqwest::multipart::Form::new()
+            .text("channel_id", channel_id.to_owned())
+            .part("file", part);
+        if let Some(comment) = initial_comment {
+            form = form.text("initial_comment", comment.to_owned());
+        }
+        if let Some(thread_ts) = thread_ts {
+            form = form.text("thread_ts", thread_ts.to_owned());
+        }
+        let response: SlackApiResponse<Value> = self
+            .http
+            .post(format!(
+                "{}/files.uploadV2",
+                self.config.api_base_url.trim_end_matches('/')
+            ))
+            .bearer_auth(&self.config.bot_token)
+            .multipart(form)
+            .send()
+            .await?
+            .json()
+            .await?;
+        if response.ok {
+            Ok(())
+        } else {
+            Err(SlackError::Protocol(
+                response
+                    .error
+                    .unwrap_or_else(|| "file upload failed".to_owned()),
             ))
         }
     }
@@ -250,6 +299,40 @@ mod tests {
         });
         client
             .send_message("C42", "hello", Some("171234.1"))
+            .await
+            .unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn uploads_file_through_slack_web_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/api/files.uploadV2")
+                    .body_contains("channel_id")
+                    .body_contains("C42")
+                    .body_contains("initial_comment")
+                    .body_contains("summary")
+                    .body_contains("thread_ts")
+                    .body_contains("171234.1")
+                    .body_contains("report.txt");
+                then.status(200).json_body(json!({"ok": true}));
+            })
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        std::fs::write(&path, "report").unwrap();
+        let client = SlackClient::new(SlackConfig {
+            bot_token: "xoxb-secret".into(),
+            app_token: "xapp-secret".into(),
+            api_base_url: format!("{}/api", server.base_url()),
+            allowed_users: Default::default(),
+            allowed_channels: Default::default(),
+        });
+        client
+            .upload_file("C42", &path, Some("summary"), Some("171234.1"))
             .await
             .unwrap();
         mock.assert_async().await;
