@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
+    controls::{
+        handle_text as handle_control_text, init_global as init_controls,
+        is_stopped as control_is_stopped,
+    },
     discord::DiscordClient,
     gateway::GatewayStateStore,
     integrations::{SkillRegistry, parse_mcp_servers},
@@ -259,6 +263,9 @@ async fn main() -> anyhow::Result<()> {
     } else {
         None
     };
+    let control_state_path = env::var("SUPERAGENT_CONTROL_STATE")
+        .unwrap_or_else(|_| "./runtime/controls.json".to_owned());
+    init_controls(control_state_path)?;
     let memory_state_path =
         env::var("SUPERAGENT_MEMORY_STATE").unwrap_or_else(|_| "./runtime/memory.json".to_owned());
     let memory_store = Arc::new(Mutex::new(MemoryStore::load(memory_state_path)?));
@@ -612,6 +619,14 @@ async fn run_grok_prompt(
     session_key: &str,
     prompt: &str,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    if let Some(reply) = handle_control_text(session_key, prompt).await? {
+        return Ok(Some(reply));
+    }
+    if control_is_stopped(session_key).await {
+        return Ok(Some(
+            "This session is stopped. Use /start or /new to resume it.".to_owned(),
+        ));
+    }
     let binary = env::var("GROK_AGENT_BINARY")?;
     let output = tokio::process::Command::new(binary)
         .arg("--single")

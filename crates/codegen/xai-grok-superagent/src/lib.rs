@@ -6,6 +6,8 @@
 
 mod approval;
 mod capabilities;
+pub mod commands;
+pub mod controls;
 pub mod discord;
 mod e2b;
 pub mod gateway;
