@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -98,6 +99,16 @@ pub enum IntegrationError {
     Json(#[from] serde_json::Error),
     #[error("invalid integration configuration: {0}")]
     Invalid(String),
+    #[error("integration HTTP request failed: {0}")]
+    Http(String),
+    #[error("integration protocol response was invalid: {0}")]
+    Protocol(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct McpToolSummary {
+    pub name: String,
+    pub description: Option<String>,
 }
 
 pub fn discover_skills(root: impl AsRef<Path>) -> Result<Vec<SkillDescriptor>, IntegrationError> {
@@ -149,6 +160,97 @@ pub fn parse_mcp_servers(
         parsed.insert(server.name.clone(), server);
     }
     Ok(parsed)
+}
+
+pub async fn discover_http_tools(
+    server: &McpServerDescriptor,
+) -> Result<Vec<McpToolSummary>, IntegrationError> {
+    validate_mcp_server(server)?;
+    if !server.enabled {
+        return Ok(Vec::new());
+    }
+    if !matches!(server.transport.as_str(), "http" | "sse") {
+        return Err(IntegrationError::Invalid(
+            "only HTTP and SSE MCP discovery is enabled".to_owned(),
+        ));
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    let initialize = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "superagent", "version": env!("CARGO_PKG_VERSION")}
+        }
+    });
+    let init = client
+        .post(&server.endpoint)
+        .header("Accept", "application/json, text/event-stream")
+        .json(&initialize)
+        .send()
+        .await
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    if !init.status().is_success() {
+        return Err(IntegrationError::Http(format!(
+            "MCP initialize returned HTTP {}",
+            init.status()
+        )));
+    }
+    let _: Value = init
+        .json()
+        .await
+        .map_err(|error| IntegrationError::Protocol(error.to_string()))?;
+    let tools_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    });
+    let response = client
+        .post(&server.endpoint)
+        .header("Accept", "application/json, text/event-stream")
+        .json(&tools_request)
+        .send()
+        .await
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    if !response.status().is_success() {
+        return Err(IntegrationError::Http(format!(
+            "MCP tools/list returned HTTP {}",
+            response.status()
+        )));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| IntegrationError::Protocol(error.to_string()))?;
+    let tools = body
+        .get("result")
+        .and_then(|value| value.get("tools"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            IntegrationError::Protocol("MCP response has no result.tools array".to_owned())
+        })?;
+    tools
+        .iter()
+        .map(|tool| {
+            let name = tool
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| IntegrationError::Protocol("MCP tool has no name".to_owned()))?;
+            Ok(McpToolSummary {
+                name: name.to_owned(),
+                description: tool
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            })
+        })
+        .collect()
 }
 
 pub fn validate_mcp_server(server: &McpServerDescriptor) -> Result<(), IntegrationError> {

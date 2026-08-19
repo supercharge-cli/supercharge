@@ -84,7 +84,7 @@ All gateways share persisted control commands through `SUPERAGENT_CONTROL_STATE`
 
 ## Skills and MCP integrations
 
-Set `SUPERAGENT_SKILLS_ROOT` to a read-only or operator-managed directory containing skill subdirectories with `SKILL.md` manifests. `GET /v1/integrations/skills` discovers manifests, while `GET /v1/integrations/skills/:name` loads one validated manifest, returns its digest, and rejects traversal or oversized files. Set `SUPERAGENT_MCP_SERVERS` to a JSON array of descriptors; `GET /v1/integrations/mcp` validates and reports only supported `stdio`, `http`, and `sse` transports. These endpoints provide controlled inspection and configuration; they do not silently execute arbitrary skill code or MCP tools.
+Set `SUPERAGENT_SKILLS_ROOT` to a read-only or operator-managed directory containing skill subdirectories with `SKILL.md` manifests. `GET /v1/integrations/skills` discovers manifests, while `GET /v1/integrations/skills/:name` loads one validated manifest, returns its digest, and rejects traversal or oversized files. Set `SUPERAGENT_MCP_SERVERS` to a JSON array of descriptors; `GET /v1/integrations/mcp` validates and reports supported `stdio`, `http`, and `sse` transports, while `GET /v1/integrations/mcp/tools?name=server` performs bounded HTTP/SSE JSON-RPC initialization and `tools/list` discovery for enabled network servers. These endpoints provide controlled inspection and configuration; they do not silently execute arbitrary skill code or MCP tools.
 
 ## Subagents
 

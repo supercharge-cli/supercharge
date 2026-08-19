@@ -21,7 +21,7 @@ use xai_grok_superagent::{
     },
     discord::DiscordClient,
     gateway::GatewayStateStore,
-    integrations::{SkillRegistry, parse_mcp_servers},
+    integrations::{SkillRegistry, discover_http_tools, parse_mcp_servers},
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     memory::{MemoryEntry, MemoryStore},
@@ -181,6 +181,11 @@ fn default_memory_capacity() -> usize {
 }
 
 #[derive(Debug, Deserialize)]
+struct McpToolsQuery {
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct MemoryQuery {
     session_key: Option<String>,
     #[serde(default)]
@@ -326,6 +331,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/integrations/skills", get(list_skills))
         .route("/v1/integrations/skills/:name", get(get_skill))
         .route("/v1/integrations/mcp", get(list_mcp_servers))
+        .route("/v1/integrations/mcp/tools", get(list_mcp_tools))
         .route("/v1/subagents", post(run_subagent));
     #[cfg(feature = "e2b")]
     let protected = protected
@@ -1019,6 +1025,30 @@ async fn list_mcp_servers() -> Result<Json<Value>, (StatusCode, Json<ErrorRespon
     let servers = parse_mcp_servers(env::var("SUPERAGENT_MCP_SERVERS").ok().as_deref())
         .map_err(internal_error)?;
     Ok(Json(json!({ "servers": servers })))
+}
+
+async fn list_mcp_tools(
+    Query(query): Query<McpToolsQuery>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let servers = parse_mcp_servers(env::var("SUPERAGENT_MCP_SERVERS").ok().as_deref())
+        .map_err(internal_error)?;
+    let selected = if let Some(name) = query.name {
+        servers.get(&name).cloned().into_iter().collect::<Vec<_>>()
+    } else {
+        servers.values().cloned().collect::<Vec<_>>()
+    };
+    let mut output = serde_json::Map::new();
+    for server in selected {
+        if !server.enabled {
+            continue;
+        }
+        let tools = discover_http_tools(&server).await.map_err(internal_error)?;
+        output.insert(
+            server.name,
+            serde_json::to_value(tools).map_err(internal_error)?,
+        );
+    }
+    Ok(Json(Value::Object(output)))
 }
 
 async fn run_subagent(
