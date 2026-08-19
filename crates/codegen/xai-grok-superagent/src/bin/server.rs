@@ -301,6 +301,12 @@ struct McpToolCallRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct SkillRunRequest {
+    session_key: String,
+    prompt: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct MemoryQuery {
     session_key: Option<String>,
     #[serde(default)]
@@ -579,6 +585,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/media/parse", post(parse_media))
         .route("/v1/integrations/skills", get(list_skills))
         .route("/v1/integrations/skills/:name", get(get_skill))
+        .route("/v1/integrations/skills/:name/run", post(run_skill))
         .route("/v1/integrations/mcp", get(list_mcp_servers))
         .route("/v1/integrations/mcp/tools", get(list_mcp_tools))
         .route("/v1/integrations/mcp/call", post(call_mcp_tool))
@@ -1343,6 +1350,56 @@ async fn get_skill(
         )
     })?;
     Ok(Json(serde_json::to_value(skill).map_err(internal_error)?))
+}
+
+async fn run_skill(
+    Path(name): Path<String>,
+    Json(request): Json<SkillRunRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if request.session_key.trim().is_empty() || request.prompt.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "session_key and prompt are required".to_owned(),
+            }),
+        ));
+    }
+    let root = env::var("SUPERAGENT_SKILLS_ROOT").unwrap_or_else(|_| "./skills".to_owned());
+    let skill = SkillRegistry::new(root).load(&name).map_err(|error| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    let composed = format!(
+        "You are executing the validated skill `{}`.\n\nSkill instructions:\n{}\n\nUser request:\n{}",
+        skill.descriptor.name, skill.instructions, request.prompt
+    );
+    if composed.len() > 768 * 1024 {
+        return Err((
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(ErrorResponse {
+                error: "skill instructions and prompt exceed the 768 KiB limit".to_owned(),
+            }),
+        ));
+    }
+    let reply = run_grok_prompt(&request.session_key, &composed)
+        .await
+        .map_err(|error| {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?;
+    Ok(Json(json!({
+        "skill": skill.descriptor.name,
+        "sha256": skill.sha256,
+        "reply": reply,
+    })))
 }
 
 async fn list_mcp_servers() -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
