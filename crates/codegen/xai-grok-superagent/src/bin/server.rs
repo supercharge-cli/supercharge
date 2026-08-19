@@ -21,6 +21,7 @@ use xai_grok_superagent::{
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
     telegram::{TelegramClient, TelegramConfig},
+    webhook::{WebhookClient, WebhookConfig},
     whatsapp::{WhatsAppClient, WhatsAppConfig},
 };
 
@@ -32,6 +33,7 @@ struct AppState {
     #[cfg(feature = "e2b")]
     sandbox_plan: SandboxPlan,
     whatsapp: Option<WhatsAppClient>,
+    webhook: Option<(WebhookClient, WebhookConfig)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -72,6 +74,15 @@ async fn main() -> anyhow::Result<()> {
     let api_token = env::var("SUPERAGENT_API_TOKEN")
         .ok()
         .filter(|v| !v.is_empty());
+    let webhook = env::var("GENERIC_WEBHOOK_SECRET").ok().map(|secret| {
+        (
+            WebhookClient::new(),
+            WebhookConfig {
+                secret: Some(secret),
+                allowed_sources: Default::default(),
+            },
+        )
+    });
     let whatsapp = if env::var("WHATSAPP_ACCESS_TOKEN").is_ok() {
         Some(WhatsAppClient::new(WhatsAppConfig::from_env()?))
     } else {
@@ -84,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
         #[cfg(feature = "e2b")]
         sandbox_plan: SandboxPlan::default(),
         whatsapp,
+        webhook,
     };
 
     let protected = Router::new()
@@ -101,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
             "/webhooks/whatsapp",
             get(whatsapp_verify).post(whatsapp_webhook),
         )
+        .route("/webhooks/generic", post(generic_webhook))
         .with_state(Arc::new(state.clone()))
         .merge(protected);
 
@@ -411,6 +424,60 @@ struct WhatsAppVerifyQuery {
     verify_token: Option<String>,
     #[serde(rename = "hub.challenge")]
     challenge: Option<String>,
+}
+
+async fn generic_webhook(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let Some((client, config)) = state.webhook.clone() else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "generic webhook is disabled".to_owned(),
+            }),
+        ));
+    };
+    client
+        .verify_secret(
+            &config,
+            headers
+                .get("x-superagent-webhook-secret")
+                .and_then(|value| value.to_str().ok()),
+        )
+        .map_err(|error| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?;
+    if let Some(event) = client.parse_event(&config, &body).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })? {
+        eprintln!(
+            "generic webhook event: source={} session={}",
+            event.source,
+            event.session_key()
+        );
+        if env::var_os("GROK_AGENT_BINARY").is_some() {
+            let session = event.session_key();
+            let prompt = event.text.clone();
+            tokio::spawn(async move {
+                if let Err(error) = run_grok_prompt(&session, &prompt).await {
+                    eprintln!("generic webhook grok turn failed: {error}");
+                }
+            });
+        }
+    }
+    Ok(Json(json!({"ok": true})))
 }
 
 async fn whatsapp_verify(
