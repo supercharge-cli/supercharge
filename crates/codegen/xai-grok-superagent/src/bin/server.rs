@@ -6,13 +6,14 @@ use axum::{
     Json, Router,
     body::{Body, Bytes},
     extract::{Path, Query, State},
-    http::{HeaderMap, Request, StatusCode, header},
+    http::{HeaderMap, HeaderValue, Request, StatusCode, header},
     middleware::{self, Next},
     response::Response,
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use tower_http::limit::RequestBodyLimitLayer;
 use xai_grok_superagent::{
     ApprovalPolicy, ScheduledJob, SuperagentConfig,
     controls::{
@@ -446,13 +447,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/e2b/sessions/:id/exec", post(execute_e2b_session))
         .route("/v1/e2b/sessions/:id/wake", post(wake_e2b_session))
         .route("/v1/e2b/sessions/:id/pause", post(pause_e2b_session));
-    let protected =
-        protected
-            .with_state(Arc::new(state.clone()))
-            .layer(middleware::from_fn_with_state(
-                Arc::new(state.clone()),
-                auth,
-            ));
+    let protected = protected
+        .layer(RequestBodyLimitLayer::new(25 * 1024 * 1024))
+        .layer(middleware::from_fn(add_security_headers))
+        .with_state(Arc::new(state.clone()))
+        .layer(middleware::from_fn_with_state(
+            Arc::new(state.clone()),
+            auth,
+        ));
 
     let app = Router::new()
         .route("/healthz", get(healthz))
@@ -1639,6 +1641,17 @@ async fn enqueue_job(
             )
         })?;
     Ok(Json(job))
+}
+
+async fn add_security_headers(request: Request<Body>, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert("cache-control", HeaderValue::from_static("no-store"));
+    response
 }
 
 async fn auth(
