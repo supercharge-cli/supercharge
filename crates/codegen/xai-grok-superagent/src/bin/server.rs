@@ -21,6 +21,7 @@ use xai_grok_superagent::{
     gateway::GatewayStateStore,
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
+    memory::{MemoryEntry, MemoryStore},
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
     telegram::{TelegramClient, TelegramConfig},
@@ -38,6 +39,7 @@ struct AppState {
     whatsapp: Option<WhatsAppClient>,
     webhook: Option<(WebhookClient, WebhookConfig)>,
     job_store: Arc<Mutex<JobStore>>,
+    memory_store: Arc<Mutex<MemoryStore>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +66,27 @@ struct ExecuteRequest {
     command: String,
     #[serde(default)]
     approved: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct MemoryRequest {
+    session_key: String,
+    content: String,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MemoryQuery {
+    session_key: Option<String>,
+    #[serde(default)]
+    q: String,
+    #[serde(default = "default_memory_limit")]
+    limit: usize,
+}
+
+fn default_memory_limit() -> usize {
+    20
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,6 +139,9 @@ async fn main() -> anyhow::Result<()> {
     } else {
         None
     };
+    let memory_state_path =
+        env::var("SUPERAGENT_MEMORY_STATE").unwrap_or_else(|_| "./runtime/memory.json".to_owned());
+    let memory_store = Arc::new(Mutex::new(MemoryStore::load(memory_state_path)?));
     let job_state_path =
         env::var("SUPERAGENT_JOB_STATE").unwrap_or_else(|_| "./runtime/jobs.json".to_owned());
     let job_store = Arc::new(Mutex::new(JobStore::load(job_state_path)?));
@@ -128,6 +154,7 @@ async fn main() -> anyhow::Result<()> {
         whatsapp,
         webhook,
         job_store,
+        memory_store,
     };
 
     let protected = Router::new()
@@ -136,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/jobs", get(list_jobs).post(enqueue_job))
         .route("/v1/jobs/:id", get(get_job))
         .route("/v1/daemon/status", get(daemon_status))
+        .route("/v1/memory", get(search_memory).post(remember_memory))
         .with_state(Arc::new(state.clone()))
         .layer(middleware::from_fn_with_state(
             Arc::new(state.clone()),
@@ -597,6 +625,32 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+}
+
+async fn search_memory(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<MemoryQuery>,
+) -> Json<Vec<MemoryEntry>> {
+    let store = state.memory_store.lock().await;
+    Json(store.search(query.session_key.as_deref(), &query.q, query.limit))
+}
+
+async fn remember_memory(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<MemoryRequest>,
+) -> Result<Json<MemoryEntry>, (StatusCode, Json<ErrorResponse>)> {
+    let mut store = state.memory_store.lock().await;
+    let entry = store
+        .remember(request.session_key, request.content, request.tags)
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?;
+    Ok(Json(entry))
 }
 
 async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus> {

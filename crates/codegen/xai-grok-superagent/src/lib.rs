@@ -11,6 +11,7 @@ mod e2b;
 pub mod gateway;
 pub mod jobs;
 pub mod matrix;
+pub mod memory;
 mod scheduler;
 pub mod signal;
 pub mod slack;
