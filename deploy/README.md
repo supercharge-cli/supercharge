@@ -17,6 +17,7 @@ MATRIX_SYNC_STATE=/var/lib/superagent/matrix-sync.json
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_ALLOWED_USERS=
 TELEGRAM_ALLOWED_CHATS=
+TELEGRAM_WEBHOOK_SECRET=
 DISCORD_BOT_TOKEN=
 DISCORD_ALLOWED_USERS=
 DISCORD_ALLOWED_CHANNELS=
@@ -78,6 +79,8 @@ The gateway adapters deliver authorized messages to the grok headless bridge whe
 The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.
 
 ## Telegram gateway
+
+The default Telegram mode is long polling. To use webhook mode instead, expose `/webhooks/telegram` through a public HTTPS reverse proxy, set `TELEGRAM_WEBHOOK_SECRET`, configure Telegram’s `setWebhook` method with the same secret, and forward the `X-Telegram-Bot-Api-Secret-Token` header unchanged. The webhook route rejects requests without the configured secret, applies the same user/chat allowlists, and returns `202 Accepted` after transport processing. Do not run Telegram long polling and webhook mode for the same bot at the same time; Telegram treats them as mutually exclusive update mechanisms.
 
 Copy `.env.runtime.example` to the host secret file and set `TELEGRAM_BOT_TOKEN` from BotFather plus at least one numeric `TELEGRAM_ALLOWED_USERS` or `TELEGRAM_ALLOWED_CHATS` value. When `TELEGRAM_BOT_TOKEN` is present, daemon mode starts the Telegram long-polling loop automatically. The gateway persists its update offset at `SUPERAGENT_GATEWAY_STATE`, retries after transport failures, and denies unallowlisted users and chats by default. Set `TELEGRAM_ECHO_MODE=true` only for transport verification. When `GROK_AGENT_BINARY` is configured, authorized Telegram messages are routed into the grok headless runner.
 

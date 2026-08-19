@@ -24,7 +24,7 @@ use xai_grok_superagent::{
     memory::{MemoryEntry, MemoryStore},
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
-    telegram::{TelegramClient, TelegramConfig},
+    telegram::{TelegramClient, TelegramConfig, TelegramUpdate},
     webhook::{WebhookClient, WebhookConfig},
     whatsapp::{WhatsAppClient, WhatsAppConfig},
 };
@@ -207,6 +207,7 @@ async fn main() -> anyhow::Result<()> {
             "/webhooks/whatsapp",
             get(whatsapp_verify).post(whatsapp_webhook),
         )
+        .route("/webhooks/telegram", post(telegram_webhook))
         .route("/webhooks/generic", post(generic_webhook))
         .with_state(Arc::new(state.clone()))
         .merge(protected);
@@ -565,6 +566,66 @@ async fn generic_webhook(
         }
     }
     Ok(Json(json!({"ok": true})))
+}
+
+async fn telegram_webhook(
+    headers: HeaderMap,
+    Json(update): Json<TelegramUpdate>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let client = TelegramClient::new(TelegramConfig::from_env().map_err(|error| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?);
+    let Some(expected_secret) = client.webhook_secret() else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "TELEGRAM_WEBHOOK_SECRET must be configured for webhook mode".to_owned(),
+            }),
+        ));
+    };
+    if headers
+        .get("X-Telegram-Bot-Api-Secret-Token")
+        .and_then(|value| value.to_str().ok())
+        != Some(expected_secret)
+    {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid Telegram webhook secret".to_owned(),
+            }),
+        ));
+    }
+    let Some(message) = client.normalize_update(update) else {
+        return Ok(StatusCode::NO_CONTENT);
+    };
+    if env::var_os("GROK_AGENT_BINARY").is_some()
+        && let Some(reply) = run_grok_turn(&message).await.map_err(|error| {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?
+        && !reply.is_empty()
+    {
+        send_chunked(&client, message.chat_id, &reply)
+            .await
+            .map_err(|error| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: error.to_string(),
+                    }),
+                )
+            })?;
+    }
+    Ok(StatusCode::ACCEPTED)
 }
 
 async fn whatsapp_verify(

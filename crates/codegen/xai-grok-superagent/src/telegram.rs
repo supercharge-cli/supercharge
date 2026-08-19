@@ -11,6 +11,7 @@ pub struct TelegramConfig {
     pub bot_token: String,
     pub api_base_url: String,
     pub poll_timeout_seconds: u64,
+    pub webhook_secret: Option<String>,
     pub gateway: GatewayConfig,
 }
 
@@ -29,6 +30,7 @@ impl TelegramConfig {
                 .and_then(|value| value.parse().ok())
                 .unwrap_or(30)
                 .clamp(1, 50),
+            webhook_secret: std::env::var("TELEGRAM_WEBHOOK_SECRET").ok(),
             gateway: GatewayConfig {
                 allowed_users,
                 allowed_chats,
@@ -108,6 +110,26 @@ impl TelegramClient {
         response.into_result().map(|_| ())
     }
 
+    pub fn webhook_secret(&self) -> Option<&str> {
+        self.config.webhook_secret.as_deref()
+    }
+
+    pub fn normalize_update(&self, update: TelegramUpdate) -> Option<GatewayMessage> {
+        let message = update.message?;
+        let normalized = GatewayMessage {
+            platform: "telegram".to_owned(),
+            update_id: update.update_id,
+            chat_id: message.chat.id,
+            user_id: message.from.map(|user| user.id),
+            thread_id: message.message_thread_id,
+            text: message.text.unwrap_or_default(),
+        };
+        self.config
+            .gateway
+            .authorized(normalized.user_id, normalized.chat_id)
+            .then_some(normalized)
+    }
+
     pub async fn poll_once(
         &self,
         state: &mut GatewayStateStore,
@@ -119,22 +141,8 @@ impl TelegramClient {
         for update in updates {
             next_offset =
                 Some(next_offset.map_or(update.update_id, |value| value.max(update.update_id)));
-            if let Some(message) = update.message {
-                let normalized = GatewayMessage {
-                    platform: "telegram".to_owned(),
-                    update_id: update.update_id,
-                    chat_id: message.chat.id,
-                    user_id: message.from.map(|user| user.id),
-                    thread_id: message.message_thread_id,
-                    text: message.text.unwrap_or_default(),
-                };
-                if self
-                    .config
-                    .gateway
-                    .authorized(normalized.user_id, normalized.chat_id)
-                {
-                    messages.push(normalized);
-                }
+            if let Some(message) = self.normalize_update(update) {
+                messages.push(message);
             }
         }
         if let Some(offset) = next_offset {
@@ -244,6 +252,7 @@ mod tests {
             bot_token: "secret".into(),
             api_base_url: server.base_url(),
             poll_timeout_seconds: 1,
+            webhook_secret: None,
             gateway: GatewayConfig {
                 allowed_users: [7].into_iter().collect(),
                 ..GatewayConfig::default()
