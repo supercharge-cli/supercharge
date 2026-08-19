@@ -24,7 +24,7 @@ use xai_grok_superagent::{
     discord::DiscordClient,
     email::{EmailClient, EmailConfig},
     gateway::GatewayStateStore,
-    integrations::{SkillRegistry, discover_http_tools, parse_mcp_servers},
+    integrations::{SkillRegistry, discover_http_tools, invoke_http_tool, parse_mcp_servers},
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     media::extract_media,
@@ -257,6 +257,15 @@ fn default_memory_capacity() -> usize {
 #[derive(Debug, Deserialize)]
 struct McpToolsQuery {
     name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct McpToolCallRequest {
+    server: String,
+    tool: String,
+    #[serde(default)]
+    arguments: Value,
+    timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -521,6 +530,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/integrations/skills/:name", get(get_skill))
         .route("/v1/integrations/mcp", get(list_mcp_servers))
         .route("/v1/integrations/mcp/tools", get(list_mcp_tools))
+        .route("/v1/integrations/mcp/call", post(call_mcp_tool))
         .route("/v1/subagents", post(run_subagent));
     #[cfg(feature = "e2b")]
     let protected = protected
@@ -1285,6 +1295,30 @@ async fn list_mcp_tools(
         );
     }
     Ok(Json(Value::Object(output)))
+}
+
+async fn call_mcp_tool(
+    Json(request): Json<McpToolCallRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let servers = parse_mcp_servers(env::var("SUPERAGENT_MCP_SERVERS").ok().as_deref())
+        .map_err(internal_error)?;
+    let server = servers.get(&request.server).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "MCP server is not configured".to_owned(),
+            }),
+        )
+    })?;
+    let result = invoke_http_tool(
+        server,
+        &request.tool,
+        request.arguments,
+        request.timeout_seconds,
+    )
+    .await
+    .map_err(internal_error)?;
+    Ok(Json(result))
 }
 
 async fn run_subagent(

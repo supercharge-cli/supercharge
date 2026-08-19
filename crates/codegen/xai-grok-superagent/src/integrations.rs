@@ -162,6 +162,141 @@ pub fn parse_mcp_servers(
     Ok(parsed)
 }
 
+pub async fn invoke_http_tool(
+    server: &McpServerDescriptor,
+    tool_name: &str,
+    arguments: Value,
+    timeout_seconds: Option<u64>,
+) -> Result<Value, IntegrationError> {
+    validate_mcp_server(server)?;
+    if !server.enabled {
+        return Err(IntegrationError::Invalid(
+            "MCP server is disabled".to_owned(),
+        ));
+    }
+    if !matches!(server.transport.as_str(), "http" | "sse") {
+        return Err(IntegrationError::Invalid(
+            "only HTTP and SSE MCP invocation is enabled".to_owned(),
+        ));
+    }
+    if tool_name.trim().is_empty()
+        || tool_name.len() > 128
+        || tool_name.chars().any(char::is_control)
+    {
+        return Err(IntegrationError::Invalid(
+            "MCP tool name is invalid".to_owned(),
+        ));
+    }
+    let encoded_arguments = serde_json::to_vec(&arguments)?;
+    if encoded_arguments.len() > 256 * 1024 {
+        return Err(IntegrationError::Invalid(
+            "MCP tool arguments exceed the 256 KiB limit".to_owned(),
+        ));
+    }
+    let timeout = std::time::Duration::from_secs(timeout_seconds.unwrap_or(30).clamp(1, 120));
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    let initialize = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "superagent", "version": env!("CARGO_PKG_VERSION")}
+        }
+    });
+    let initialize_response = client
+        .post(&server.endpoint)
+        .header("Accept", "application/json, text/event-stream")
+        .json(&initialize)
+        .send()
+        .await
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    if !initialize_response.status().is_success() {
+        return Err(IntegrationError::Http(format!(
+            "MCP initialize returned HTTP {}",
+            initialize_response.status()
+        )));
+    }
+    let session_id = initialize_response
+        .headers()
+        .get("mcp-session-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let initialize_body = parse_mcp_response(initialize_response).await?;
+    if let Some(error) = initialize_body.get("error") {
+        return Err(IntegrationError::Protocol(format!(
+            "MCP initialize failed: {error}"
+        )));
+    }
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {"name": tool_name, "arguments": arguments}
+    });
+    let mut call = client
+        .post(&server.endpoint)
+        .header("Accept", "application/json, text/event-stream")
+        .json(&request);
+    if let Some(session_id) = session_id {
+        call = call.header("Mcp-Session-Id", session_id);
+    }
+    let response = call
+        .send()
+        .await
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    if !response.status().is_success() {
+        return Err(IntegrationError::Http(format!(
+            "MCP tools/call returned HTTP {}",
+            response.status()
+        )));
+    }
+    let body = parse_mcp_response(response).await?;
+    if let Some(error) = body.get("error") {
+        return Err(IntegrationError::Protocol(format!(
+            "MCP tool call failed: {error}"
+        )));
+    }
+    Ok(body.get("result").cloned().unwrap_or(body))
+}
+
+async fn parse_mcp_response(response: reqwest::Response) -> Result<Value, IntegrationError> {
+    let is_sse = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("text/event-stream"));
+    let text = response
+        .text()
+        .await
+        .map_err(|error| IntegrationError::Protocol(error.to_string()))?;
+    if !is_sse {
+        return serde_json::from_str(&text)
+            .map_err(|error| IntegrationError::Protocol(error.to_string()));
+    }
+    let mut last = None;
+    for line in text.lines() {
+        let Some(data) = line.strip_prefix("data:") else {
+            continue;
+        };
+        let data = data.trim();
+        if data.is_empty() || data == "[DONE]" {
+            continue;
+        }
+        last = Some(
+            serde_json::from_str(data)
+                .map_err(|error| IntegrationError::Protocol(error.to_string()))?,
+        );
+    }
+    last.ok_or_else(|| {
+        IntegrationError::Protocol("MCP SSE response contained no data event".to_owned())
+    })
+}
+
 pub async fn discover_http_tools(
     server: &McpServerDescriptor,
 ) -> Result<Vec<McpToolSummary>, IntegrationError> {
@@ -275,9 +410,72 @@ pub fn validate_mcp_server(server: &McpServerDescriptor) -> Result<(), Integrati
 
 #[cfg(test)]
 mod tests {
-    use super::{SkillRegistry, discover_skills, parse_mcp_servers};
+    use super::{
+        McpServerDescriptor, SkillRegistry, discover_skills, invoke_http_tool, parse_mcp_servers,
+    };
+    use httpmock::prelude::*;
+    use serde_json::json;
     use std::fs;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn invokes_http_tool_and_forwards_mcp_session() {
+        let server = MockServer::start_async().await;
+        let initialize = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/").json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "superagent", "version": env!("CARGO_PKG_VERSION")}
+                    }
+                }));
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .header("mcp-session-id", "session-1")
+                    .json_body(json!({"jsonrpc": "2.0", "id": 1, "result": {}}));
+            })
+            .await;
+        let call = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/")
+                    .header("mcp-session-id", "session-1")
+                    .json_body(json!({
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": "echo", "arguments": {"text": "hello"}}
+                    }));
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .json_body(json!({
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "result": {"content": [{"type": "text", "text": "hello"}]}
+                    }));
+            })
+            .await;
+        let result = invoke_http_tool(
+            &McpServerDescriptor {
+                name: "mock".to_owned(),
+                transport: "http".to_owned(),
+                endpoint: server.url("/"),
+                enabled: true,
+            },
+            "echo",
+            json!({"text": "hello"}),
+            Some(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["content"][0]["text"], "hello");
+        initialize.assert_async().await;
+        call.assert_async().await;
+    }
 
     #[test]
     fn discovers_skill_manifests_and_mcp_descriptors() {
