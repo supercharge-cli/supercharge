@@ -17,6 +17,8 @@ use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
     discord::DiscordClient,
     gateway::GatewayStateStore,
+    matrix::{MatrixClient, MatrixConfig},
+    signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
     telegram::{TelegramClient, TelegramConfig},
     whatsapp::{WhatsAppClient, WhatsAppConfig},
@@ -102,6 +104,20 @@ async fn main() -> anyhow::Result<()> {
         .with_state(Arc::new(state.clone()))
         .merge(protected);
 
+    if env::var("MATRIX_ACCESS_TOKEN").is_ok() {
+        tokio::spawn(async {
+            if let Err(error) = run_matrix_daemon().await {
+                eprintln!("matrix gateway stopped: {error}");
+            }
+        });
+    }
+    if env::var("SIGNAL_ACCOUNT").is_ok() {
+        tokio::spawn(async {
+            if let Err(error) = run_signal_daemon().await {
+                eprintln!("signal gateway stopped: {error}");
+            }
+        });
+    }
     if env::var("SLACK_APP_TOKEN").is_ok() {
         tokio::spawn(async {
             if let Err(error) = run_slack_daemon().await {
@@ -180,6 +196,77 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
             }
             Err(error) => {
                 eprintln!("telegram poll failed; retrying: {error}");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
+async fn run_signal_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = SignalClient::new(SignalConfig::from_env()?);
+    loop {
+        match client.receive_once().await {
+            Ok(messages) => {
+                for message in messages {
+                    eprintln!(
+                        "signal message: sender={} session={}",
+                        message.sender,
+                        message.session_key()
+                    );
+                    if env::var_os("GROK_AGENT_BINARY").is_some() {
+                        if let Ok(Some(reply)) =
+                            run_grok_prompt(&message.session_key(), &message.text).await
+                        {
+                            client.send_message(&message.sender, &reply).await?;
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("signal receive failed; retrying: {error}");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
+async fn run_matrix_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = MatrixClient::new(MatrixConfig::from_env()?);
+    let state_path =
+        env::var("MATRIX_SYNC_STATE").unwrap_or_else(|_| "./runtime/matrix-sync.json".to_owned());
+    let mut since: Option<String> = if let Ok(bytes) = tokio::fs::read(&state_path).await {
+        serde_json::from_slice(&bytes).ok()
+    } else {
+        None
+    };
+    loop {
+        match client.sync_once(since.as_deref()).await {
+            Ok((next_batch, messages)) => {
+                if let Some(next_batch) = next_batch {
+                    if let Some(parent) = std::path::Path::new(&state_path).parent() {
+                        let _ = tokio::fs::create_dir_all(parent).await;
+                    }
+                    let _ = tokio::fs::write(&state_path, serde_json::to_vec(&next_batch)?).await;
+                    since = Some(next_batch);
+                }
+                for message in messages {
+                    eprintln!(
+                        "matrix message: room={} sender={} session={}",
+                        message.room_id,
+                        message.sender,
+                        message.session_key()
+                    );
+                    if env::var_os("GROK_AGENT_BINARY").is_some() {
+                        if let Ok(Some(reply)) =
+                            run_grok_prompt(&message.session_key(), &message.text).await
+                        {
+                            client.send_message(&message.room_id, &reply).await?;
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("matrix sync failed; retrying: {error}");
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
         }
