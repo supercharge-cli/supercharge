@@ -118,6 +118,36 @@ struct DaemonStatus {
     failed_jobs: usize,
 }
 
+#[derive(Debug, Serialize)]
+struct ConnectionReadiness {
+    name: &'static str,
+    mode: &'static str,
+    configured: bool,
+    missing_env: Vec<&'static str>,
+}
+
+fn connection_readiness(
+    name: &'static str,
+    mode: &'static str,
+    required_env: &[&'static str],
+) -> ConnectionReadiness {
+    let missing_env = required_env
+        .iter()
+        .copied()
+        .filter(|key| {
+            env::var(key)
+                .ok()
+                .is_none_or(|value| value.trim().is_empty())
+        })
+        .collect::<Vec<_>>();
+    ConnectionReadiness {
+        name,
+        mode,
+        configured: missing_env.is_empty(),
+        missing_env,
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let bind = env::var("SUPERAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_owned());
@@ -163,6 +193,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/jobs", get(list_jobs).post(enqueue_job))
         .route("/v1/jobs/:id", get(get_job))
         .route("/v1/daemon/status", get(daemon_status))
+        .route("/v1/connections", get(connection_status))
         .route("/v1/memory", get(search_memory).post(remember_memory))
         .with_state(Arc::new(state.clone()))
         .layer(middleware::from_fn_with_state(
@@ -646,6 +677,49 @@ async fn remember_memory(
     Ok(Json(entry))
 }
 
+async fn connection_status() -> Json<Vec<ConnectionReadiness>> {
+    Json(vec![
+        connection_readiness("http-auth", "protected-api", &["SUPERAGENT_API_TOKEN"]),
+        connection_readiness(
+            "grok-model",
+            "headless-xai",
+            &["XAI_API_KEY", "GROK_AGENT_BINARY"],
+        ),
+        connection_readiness("e2b", "sandbox-api", &["E2B_API_KEY"]),
+        connection_readiness("telegram", "long-polling", &["TELEGRAM_BOT_TOKEN"]),
+        connection_readiness("discord", "gateway-websocket", &["DISCORD_BOT_TOKEN"]),
+        connection_readiness(
+            "slack",
+            "socket-mode",
+            &["SLACK_APP_TOKEN", "SLACK_BOT_TOKEN"],
+        ),
+        connection_readiness(
+            "whatsapp",
+            "cloud-webhook",
+            &[
+                "WHATSAPP_ACCESS_TOKEN",
+                "WHATSAPP_PHONE_NUMBER_ID",
+                "WHATSAPP_VERIFY_TOKEN",
+            ],
+        ),
+        connection_readiness(
+            "signal",
+            "signal-cli-rest",
+            &["SIGNAL_ACCOUNT", "SIGNAL_CLI_BASE_URL"],
+        ),
+        connection_readiness(
+            "matrix",
+            "client-server-sync",
+            &["MATRIX_HOMESERVER", "MATRIX_ACCESS_TOKEN", "MATRIX_USER_ID"],
+        ),
+        connection_readiness(
+            "generic-webhook",
+            "authenticated-webhook",
+            &["GENERIC_WEBHOOK_SECRET"],
+        ),
+    ])
+}
+
 async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus> {
     let store = state.job_store.lock().await;
     let mut status = DaemonStatus {
@@ -818,3 +892,22 @@ async fn execute(
 
 #[allow(dead_code)]
 fn _infallible(_: Infallible) {}
+
+#[cfg(test)]
+mod tests {
+    use super::connection_readiness;
+
+    #[test]
+    fn connection_readiness_reports_missing_environment_without_values() {
+        let status = connection_readiness(
+            "test-connection",
+            "test-mode",
+            &["SUPERAGENT_TEST_ENVIRONMENT_VARIABLE_9F3E"],
+        );
+        assert!(!status.configured);
+        assert_eq!(
+            status.missing_env,
+            vec!["SUPERAGENT_TEST_ENVIRONMENT_VARIABLE_9F3E"]
+        );
+    }
+}
