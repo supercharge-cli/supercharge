@@ -1,11 +1,11 @@
-# Hermes-style parity matrix
+# Agent Feature Matrix
 
-This document translates the publicly stated Hermes Agent capability set into Rust-first acceptance criteria for the grok-build-based superagent. A feature is considered **implemented and tested** only when the repository contains an implementation, deterministic tests, and a documented operational boundary. External-service features are additionally marked as credential-dependent when they require live platform accounts.
+This document defines Rust-first acceptance criteria for the daemon’s agent, gateway, execution, persistence, and deployment capabilities. A feature is considered **implemented and tested** only when the repository contains an implementation, deterministic tests, and a documented operational boundary. External-service features are additionally marked as credential-dependent when they require live platform accounts.
 
 | Capability | Rust extension point | Acceptance criteria | Status |
 | --- | --- | --- | --- |
 | Interactive terminal UI | `xai-grok-pager` | Multiline input, history, slash commands, streaming output, interrupt and redirect | Baseline upstream; daemon command parity remains |
-| Headless agent runtime | `xai-grok-shell` and `xai-grok-pager-bin` | Stable non-TUI entry point with structured events and resumable sessions | Implemented as the optional `GROK_AGENT_BINARY` bridge; live model credentials required |
+| Headless agent runtime | Upstream shell and pager packages | Stable non-TUI entry point with structured events and resumable sessions | Implemented as the optional headless-agent bridge; live model credentials required |
 | Tool execution | `xai-grok-tools` and workspace crates | File, shell, search, patch, browser, media, and approval-aware tools with bounded output | Upstream baseline; daemon routing and policy extension ongoing |
 | E2B execution | `xai-grok-superagent::e2b` and vendored `third_party/e2b-rs` | Create, run, collect bounded output, enforce limits, and clean up sandboxes | Implemented and unit-tested; live execution requires `e2b` build feature and `E2B_API_KEY` |
 | Provider routing | model/config crates | Switch providers and models without code changes while preserving tool-call semantics | Upstream baseline; daemon `/model` parity remains |
@@ -34,4 +34,4 @@ cargo +1.94.0 test -p xai-grok-superagent --features e2b
 
 The feature-gated superagent suite currently reports **23 passing tests**. Gateway tests are deterministic normalization/authentication tests; they do not claim live platform connectivity without the corresponding credentials and service accounts.
 
-The final release claim distinguishes among **implemented and tested**, **implemented but requiring external service credentials**, **partial foundation**, **planned**, and **not supported**. This avoids presenting a robust daemon foundation as complete Hermes feature parity.
+The final release claim distinguishes among **implemented and tested**, **implemented but requiring external service credentials**, **partial foundation**, **planned**, and **not supported**. This avoids presenting a robust daemon foundation as complete feature parity.

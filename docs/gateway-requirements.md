@@ -1,6 +1,6 @@
 # Daemon and gateway requirements
 
-The gateway target is a long-running process, not merely an HTTP health server. Hermes documents a unified gateway that connects multiple platforms, normalizes inbound events, routes them to sessions, handles slash commands and approvals, persists pairing/session state, delivers scheduled results, and performs background maintenance.
+The gateway target is a long-running process, not merely an HTTP health server. A production unified gateway must connect multiple platforms, normalize inbound events, route them to sessions, handle slash commands and approvals, persist pairing/session state, deliver scheduled results, and perform background maintenance.
 
 | Requirement | Source-grounded behavior | Rust implementation target |
 | --- | --- | --- |
@@ -8,7 +8,7 @@ The gateway target is a long-running process, not merely an HTTP health server. 
 | Telegram transport | Bot API over HTTPS; long polling and webhook are mutually exclusive | Start with long polling for private always-on hosts; add webhook verification as an optional mode |
 | Telegram auth | Bot token plus numeric allowed-user/chat IDs; default deny is safest | Environment/config allowlists, constant-time token handling, no allow-all default |
 | Telegram groups | Privacy mode, mentions, replies, topic/thread IDs, and per-chat routing matter | Normalize chat type, chat ID, thread ID, mention/reply state before session dispatch |
-| Session routing | Hermes uses `agent:main:{platform}:{chat_type}:{chat_id}` with thread-aware variants | Rust `SessionKey` type rather than hand-built strings |
+| Session routing | Stable `agent:main:{platform}:{chat_type}:{chat_id}` keys with thread-aware variants | Rust `SessionKey` type rather than hand-built strings |
 | Message guard | Queue messages while a session is active; allow control commands such as stop/approve/deny through an inline path | Per-session serial queue plus interrupt/control channel |
 | Pairing | Pairing codes authorize new users and persist across restarts | SQLite-backed pairing store with expiry, single-use codes, and audit events |
 | Delivery | Replies, scheduled results, explicit target delivery, and cross-platform routing | `GatewayMessage` and `DeliveryTarget` abstractions |
@@ -22,9 +22,6 @@ Gateway credentials must be supplied through runtime secrets and never stored in
 
 ## Sources
 
-The feature baseline was derived from the Hermes Telegram guide, Hermes gateway internals guide, Hermes Slack guide, and the official Telegram Bot API reference. Telegram documents `getUpdates` and webhooks as mutually exclusive delivery mechanisms, and Telegram updates are retained only for a bounded period, so the daemon must persist its own offset and avoid relying on Telegram as a durable queue.
+The feature baseline is expressed as an implementation-neutral gateway contract and cross-checked against official platform documentation. Telegram documents `getUpdates` and webhooks as mutually exclusive delivery mechanisms, and Telegram updates are retained only for a bounded period, so the daemon must persist its own offset and avoid relying on Telegram as a durable queue. [1]
 
-[1]: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/telegram "Hermes Telegram integration"
-[2]: https://hermes-agent.nousresearch.com/docs/developer-guide/gateway-internals "Hermes gateway internals"
-[3]: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/slack "Hermes Slack integration"
-[4]: https://core.telegram.org/bots/api "Telegram Bot API"
+[1]: https://core.telegram.org/bots/api "Telegram Bot API"

@@ -3,7 +3,7 @@ name = "xai-grok-superagent"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
-description = "Hermes-inspired extensions for the grok-build Rust agent runtime"
+description = "Rust daemon extensions for a self-hostable agent runtime"
 
 [features]
 default = []

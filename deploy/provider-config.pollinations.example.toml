@@ -1,4 +1,4 @@
-# Copy this file to the configured GROK_CONFIG_PATH on the deployment host.
+# Copy this file to the configured runtime config path on the deployment host.
 # Keep the actual POLLINATIONS_API_KEY in the secret manager or environment.
 
 [model."kimi-code"]

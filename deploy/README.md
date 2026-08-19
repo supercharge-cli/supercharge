@@ -1,6 +1,6 @@
 # 24/7 Rust deployment
 
-The persistent process is `xai-grok-superagent-server`. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/daemon/status`, and `/v1/connections`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime. With that feature enabled, the daemon also exposes authenticated durable E2B session routes: `POST/GET /v1/e2b/sessions`, `GET/DELETE /v1/e2b/sessions/:id`, `POST /v1/e2b/sessions/:id/exec`, `POST /v1/e2b/sessions/:id/wake`, and `POST /v1/e2b/sessions/:id/pause`. Session metadata is persisted at `SUPERAGENT_E2B_SESSION_STATE`, and `SUPERAGENT_E2B_WORKSPACE_ROOT` defines the default absolute workspace boundary.
+The persistent process is the Rust daemon binary. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/daemon/status`, and `/v1/connections`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime. With that feature enabled, the daemon also exposes authenticated durable E2B session routes: `POST/GET /v1/e2b/sessions`, `GET/DELETE /v1/e2b/sessions/:id`, `POST /v1/e2b/sessions/:id/exec`, `POST /v1/e2b/sessions/:id/wake`, and `POST /v1/e2b/sessions/:id/pause`. Session metadata is persisted at `SUPERAGENT_E2B_SESSION_STATE`, and `SUPERAGENT_E2B_WORKSPACE_ROOT` defines the default absolute workspace boundary.
 
 ## Docker Compose
 
@@ -72,7 +72,7 @@ The systemd unit restarts on failure, handles SIGTERM, protects the host filesys
 
 ## Model API connection
 
-The gateway adapters deliver authorized messages to the grok headless bridge when `GROK_AGENT_BINARY` is set. The upstream grok-build runtime reads `XAI_API_KEY` for xAI authentication and can use `GROK_DEFAULT_MODEL` or the configuration overlay at `GROK_CONFIG_PATH` for model selection. These values belong in the deployment secret/configuration store, not in Git. Without `XAI_API_KEY` and a valid grok runtime configuration, gateway transport can still be tested, but model replies will not be available.
+The gateway adapters deliver authorized messages to the headless agent bridge when `GROK_AGENT_BINARY` is set. The upstream runtime uses the compatibility variable `XAI_API_KEY` for provider authentication and can use `GROK_DEFAULT_MODEL` or the configuration overlay at `GROK_CONFIG_PATH` for model selection. These values belong in the deployment secret/configuration store, not in Git. Without a provider key and valid headless-runtime configuration, gateway transport can still be tested, but model replies will not be available.
 
 ## Gateway configuration
 
@@ -82,7 +82,7 @@ The daemon starts each adapter when its required environment variables are prese
 
 The default Telegram mode is long polling. To use webhook mode instead, expose `/webhooks/telegram` through a public HTTPS reverse proxy, set `TELEGRAM_WEBHOOK_SECRET`, configure Telegram’s `setWebhook` method with the same secret, and forward the `X-Telegram-Bot-Api-Secret-Token` header unchanged. The webhook route rejects requests without the configured secret, applies the same user/chat allowlists, and returns `202 Accepted` after transport processing. Do not run Telegram long polling and webhook mode for the same bot at the same time; Telegram treats them as mutually exclusive update mechanisms.
 
-Copy `.env.runtime.example` to the host secret file and set `TELEGRAM_BOT_TOKEN` from BotFather plus at least one numeric `TELEGRAM_ALLOWED_USERS` or `TELEGRAM_ALLOWED_CHATS` value. When `TELEGRAM_BOT_TOKEN` is present, daemon mode starts the Telegram long-polling loop automatically. The gateway persists its update offset at `SUPERAGENT_GATEWAY_STATE`, retries after transport failures, and denies unallowlisted users and chats by default. Set `TELEGRAM_ECHO_MODE=true` only for transport verification. When `GROK_AGENT_BINARY` is configured, authorized Telegram messages are routed into the grok headless runner.
+Copy `.env.runtime.example` to the host secret file and set `TELEGRAM_BOT_TOKEN` from BotFather plus at least one numeric `TELEGRAM_ALLOWED_USERS` or `TELEGRAM_ALLOWED_CHATS` value. When `TELEGRAM_BOT_TOKEN` is present, daemon mode starts the Telegram long-polling loop automatically. The gateway persists its update offset at `SUPERAGENT_GATEWAY_STATE`, retries after transport failures, and denies unallowlisted users and chats by default. Set `TELEGRAM_ECHO_MODE=true` only for transport verification. When `GROK_AGENT_BINARY` is configured, authorized Telegram messages are routed into the headless runner.
 
 ## E2B session lifecycle
 

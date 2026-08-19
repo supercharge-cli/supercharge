@@ -8,6 +8,6 @@ c2dab005c2b53c99209dc6faf82153d782f76ee4
 
 The upstream repository identifies its first-party source as Apache License, Version 2.0. The complete upstream license text is retained in [`LICENSE`](LICENSE), and upstream third-party attribution is retained in [`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES) and the component-specific notice files.
 
-The project also uses the public [NousResearch Hermes Agent](https://github.com/NousResearch/hermes-agent) feature set as a product reference. Hermes Agent is MIT-licensed upstream, but no Hermes source files are copied into this baseline. Any future direct reuse of Hermes code will retain its MIT license, copyright notices, and file-level attribution, and will be recorded here with exact paths and revisions.
+No source files from unrelated reference projects are copied into this baseline. Any future direct reuse of third-party code will retain its applicable license, copyright notices, and file-level attribution, and will be recorded here with exact paths and revisions.
 
 This project is independent and is not affiliated with, endorsed by, or sponsored by xAI, Nous Research, or either upstream project. Modified upstream files must carry prominent change notices as required by the applicable licenses.
