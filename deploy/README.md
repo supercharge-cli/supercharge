@@ -38,6 +38,9 @@ MATRIX_USER_ID=
 MATRIX_ALLOWED_USERS=
 MATRIX_ALLOWED_ROOMS=
 GENERIC_WEBHOOK_SECRET=
+XAI_API_KEY=replace-with-xai-api-key
+GROK_DEFAULT_MODEL=replace-with-model-id
+GROK_CONFIG_PATH=/var/lib/superagent/grok-config.toml
 GROK_AGENT_BINARY=/usr/local/bin/xai-grok-pager-bin
 ```
 
@@ -63,6 +66,10 @@ curl http://127.0.0.1:8787/healthz
 ```
 
 The systemd unit restarts on failure, handles SIGTERM, protects the host filesystem, and grants write access only to explicitly designated state and log directories. Rotate the API token and E2B key through the host secret-management procedure rather than editing Git-tracked files.
+
+## Model API connection
+
+The gateway adapters deliver authorized messages to the grok headless bridge when `GROK_AGENT_BINARY` is set. The upstream grok-build runtime reads `XAI_API_KEY` for xAI authentication and can use `GROK_DEFAULT_MODEL` or the configuration overlay at `GROK_CONFIG_PATH` for model selection. These values belong in the deployment secret/configuration store, not in Git. Without `XAI_API_KEY` and a valid grok runtime configuration, gateway transport can still be tested, but model replies will not be available.
 
 ## Gateway configuration
 
