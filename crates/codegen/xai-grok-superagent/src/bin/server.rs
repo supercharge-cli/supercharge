@@ -1,4 +1,4 @@
-use std::{convert::Infallible, env, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, convert::Infallible, env, net::SocketAddr, sync::Arc};
 
 use tokio::sync::Mutex;
 
@@ -41,10 +41,55 @@ use xai_grok_superagent::{
 use xai_grok_superagent::{E2bExecutor, PersistentExecutionRequest, SandboxPlan};
 
 #[derive(Clone)]
+struct RateLimiter {
+    per_minute: u32,
+    buckets: HashMap<String, RateBucket>,
+}
+
+#[derive(Clone)]
+struct RateBucket {
+    window_started: u64,
+    requests: u32,
+}
+
+impl RateLimiter {
+    fn from_env() -> Self {
+        let per_minute = env::var("SUPERAGENT_RATE_LIMIT_PER_MINUTE")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        Self {
+            per_minute,
+            buckets: HashMap::new(),
+        }
+    }
+
+    fn allow(&mut self, key: &str, now: u64) -> bool {
+        if self.per_minute == 0 {
+            return true;
+        }
+        let bucket = self.buckets.entry(key.to_owned()).or_insert(RateBucket {
+            window_started: now,
+            requests: 0,
+        });
+        if now.saturating_sub(bucket.window_started) >= 60 {
+            bucket.window_started = now;
+            bucket.requests = 0;
+        }
+        if bucket.requests >= self.per_minute {
+            return false;
+        }
+        bucket.requests += 1;
+        true
+    }
+}
+
+#[derive(Clone)]
 struct AppState {
     config: SuperagentConfig,
     started_at: u64,
     approval: ApprovalPolicy,
+    rate_limiter: Arc<Mutex<RateLimiter>>,
     api_token: Option<String>,
     #[cfg(feature = "e2b")]
     sandbox_plan: SandboxPlan,
@@ -342,6 +387,7 @@ async fn main() -> anyhow::Result<()> {
         config: SuperagentConfig::default(),
         started_at: unix_seconds(),
         approval: ApprovalPolicy::default(),
+        rate_limiter: Arc::new(Mutex::new(RateLimiter::from_env())),
         api_token,
         #[cfg(feature = "e2b")]
         sandbox_plan: SandboxPlan::default(),
@@ -1712,19 +1758,31 @@ async fn auth(
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let Some(expected) = &state.api_token else {
-        return Ok(next.run(request).await);
-    };
-    let supplied = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
-    if supplied == Some(expected.as_str()) {
-        Ok(next.run(request).await)
-    } else {
-        Err(StatusCode::UNAUTHORIZED)
+    if let Some(expected) = &state.api_token {
+        let supplied = request
+            .headers()
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "));
+        if supplied != Some(expected.as_str()) {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
     }
+    let session = request
+        .headers()
+        .get("x-superagent-session")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("api");
+    if !state
+        .rate_limiter
+        .lock()
+        .await
+        .allow(session, unix_seconds())
+    {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+    Ok(next.run(request).await)
 }
 
 async fn healthz(State(state): State<Arc<AppState>>) -> Json<HealthResponse> {
@@ -1801,7 +1859,22 @@ fn _infallible(_: Infallible) {}
 
 #[cfg(test)]
 mod tests {
-    use super::connection_readiness;
+    use std::collections::HashMap;
+
+    use super::{RateLimiter, connection_readiness};
+
+    #[test]
+    fn rate_limiter_scopes_requests_by_session_and_resets_window() {
+        let mut limiter = RateLimiter {
+            per_minute: 2,
+            buckets: HashMap::new(),
+        };
+        assert!(limiter.allow("alpha", 100));
+        assert!(limiter.allow("alpha", 101));
+        assert!(!limiter.allow("alpha", 102));
+        assert!(limiter.allow("beta", 102));
+        assert!(limiter.allow("alpha", 160));
+    }
 
     #[test]
     fn connection_readiness_reports_missing_environment_without_values() {
