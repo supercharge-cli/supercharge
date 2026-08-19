@@ -1,9 +1,11 @@
 use std::{convert::Infallible, env, net::SocketAddr, sync::Arc};
 
+use tokio::sync::Mutex;
+
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, Request, StatusCode, header},
     middleware::{self, Next},
     response::Response,
@@ -17,6 +19,7 @@ use xai_grok_superagent::{
     ApprovalPolicy, SuperagentConfig,
     discord::DiscordClient,
     gateway::GatewayStateStore,
+    jobs::{AgentJob, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
@@ -34,6 +37,7 @@ struct AppState {
     sandbox_plan: SandboxPlan,
     whatsapp: Option<WhatsAppClient>,
     webhook: Option<(WebhookClient, WebhookConfig)>,
+    job_store: Arc<Mutex<JobStore>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,6 +66,20 @@ struct ExecuteRequest {
     approved: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct EnqueueRequest {
+    session_key: String,
+    platform: String,
+    chat_id: i64,
+    prompt: String,
+    #[serde(default = "default_attempts")]
+    max_attempts: u32,
+}
+
+fn default_attempts() -> u32 {
+    3
+}
+
 #[derive(Debug, Serialize)]
 struct ErrorResponse {
     error: String,
@@ -88,6 +106,9 @@ async fn main() -> anyhow::Result<()> {
     } else {
         None
     };
+    let job_state_path =
+        env::var("SUPERAGENT_JOB_STATE").unwrap_or_else(|_| "./runtime/jobs.json".to_owned());
+    let job_store = Arc::new(Mutex::new(JobStore::load(job_state_path)?));
     let state = AppState {
         config: SuperagentConfig::default(),
         approval: ApprovalPolicy::default(),
@@ -96,11 +117,14 @@ async fn main() -> anyhow::Result<()> {
         sandbox_plan: SandboxPlan::default(),
         whatsapp,
         webhook,
+        job_store,
     };
 
     let protected = Router::new()
         .route("/v1/approval/check", get(check_approval))
         .route("/v1/exec", post(execute))
+        .route("/v1/jobs", get(list_jobs).post(enqueue_job))
+        .route("/v1/jobs/:id", get(get_job))
         .with_state(Arc::new(state.clone()))
         .layer(middleware::from_fn_with_state(
             Arc::new(state.clone()),
@@ -562,6 +586,53 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+}
+
+async fn list_jobs(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<AgentJob>>, (StatusCode, Json<ErrorResponse>)> {
+    let store = state.job_store.lock().await;
+    Ok(Json(store.all().cloned().collect()))
+}
+
+async fn get_job(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<AgentJob>, (StatusCode, Json<ErrorResponse>)> {
+    let store = state.job_store.lock().await;
+    let Some(job) = store.get(&id).cloned() else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "job not found".to_owned(),
+            }),
+        ));
+    };
+    Ok(Json(job))
+}
+
+async fn enqueue_job(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<EnqueueRequest>,
+) -> Result<Json<AgentJob>, (StatusCode, Json<ErrorResponse>)> {
+    let mut store = state.job_store.lock().await;
+    let job = store
+        .enqueue(
+            request.session_key,
+            request.platform,
+            request.chat_id,
+            request.prompt,
+            request.max_attempts,
+        )
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?;
+    Ok(Json(job))
 }
 
 async fn auth(
