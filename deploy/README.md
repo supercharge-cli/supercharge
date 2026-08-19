@@ -106,6 +106,10 @@ The daemon starts each adapter when its required environment variables are prese
 
 Protected API routes reject requests without `SUPERAGENT_API_TOKEN` when a token is configured, cap request bodies at 25 MiB, emit conservative no-sniff and no-store response headers, and optionally enforce `SUPERAGENT_RATE_LIMIT_PER_MINUTE`. A positive quota applies independently to each `X-Superagent-Session` value, with `api` as the fallback key; the default value `0` disables the limiter. Put the API behind TLS and a network access policy, and persist the runtime directory so durable jobs, schedules, controls, and memory survive daemon restarts.
 
+## Runtime backup and restore
+
+The `deploy/backup-runtime.sh` script archives the known durable JSON state files from `SUPERAGENT_RUNTIME_DIR` (default `/var/lib/superagent`) with restrictive permissions. The matching `deploy/restore-runtime.sh` script validates archive member names before replacing only the supported state files. Stop the daemon before restoring, keep backup archives outside the runtime directory, and encrypt them with the host’s approved secret-management or storage system when they leave the machine.
+
 ## Telegram gateway
 
 The default Telegram mode is long polling. To use webhook mode instead, expose `/webhooks/telegram` through a public HTTPS reverse proxy, set `TELEGRAM_WEBHOOK_SECRET`, configure Telegram’s `setWebhook` method with the same secret, and forward the `X-Telegram-Bot-Api-Secret-Token` header unchanged. The webhook route rejects requests without the configured secret, applies the same user/chat allowlists, and returns `202 Accepted` after transport processing. Do not run Telegram long polling and webhook mode for the same bot at the same time; Telegram treats them as mutually exclusive update mechanisms.
