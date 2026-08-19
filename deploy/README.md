@@ -94,6 +94,10 @@ When the headless agent bridge is configured, `POST /v1/subagents` can run a bou
 
 `SUPERAGENT_SCHEDULE_STATE` persists interval schedules across restarts. Authenticated `POST /v1/schedules` creates a schedule with a name, prompt, interval, and optional `home_channel`; `GET /v1/schedules` lists schedules; `POST /v1/schedules/:id/enabled` toggles one; and `DELETE /v1/schedules/:id` removes it. Due schedules are claimed exactly once and are ready to be enqueued into the durable job store. Gateway-specific home-channel delivery remains an explicit routing step rather than an implicit broadcast.
 
+## Media handling
+
+Agent replies may include `MEDIA:relative/path|mime/type` markers. Authenticated `POST /v1/media/parse` strips those markers from text and returns validated attachment metadata. `SUPERAGENT_MEDIA_ROOT` defines the only permitted root and `SUPERAGENT_MAX_MEDIA_BYTES` caps file size; absolute paths, traversal, missing files, and files outside the root are rejected. Native Telegram, Discord, and Slack uploads remain the next delivery-layer integration on top of this secure parser.
+
 ## Gateway configuration
 
 The daemon starts each adapter when its required environment variables are present. Telegram uses long polling; Discord uses the Gateway WebSocket and REST API; Slack uses Socket Mode and the Web API; WhatsApp uses its verified webhook route at `/webhooks/whatsapp`; Signal uses a signal-cli-compatible REST service; Matrix uses Client-Server `/sync`; and the generic adapter uses `/webhooks/generic` with `X-Superagent-Webhook-Secret`. The `/v1/daemon/status` endpoint reports enabled gateway names and durable job counts. The authenticated `/v1/connections` endpoint reports whether each configured integration has its required environment variables and lists only missing variable names; it never returns secret values and does not claim that a remote service is reachable until a live API check is performed.

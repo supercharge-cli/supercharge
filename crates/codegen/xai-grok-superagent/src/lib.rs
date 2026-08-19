@@ -14,6 +14,7 @@ pub mod gateway;
 pub mod integrations;
 pub mod jobs;
 pub mod matrix;
+pub mod media;
 pub mod memory;
 pub mod schedule_store;
 mod scheduler;

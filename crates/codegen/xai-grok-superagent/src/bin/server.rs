@@ -24,6 +24,7 @@ use xai_grok_superagent::{
     integrations::{SkillRegistry, discover_http_tools, parse_mcp_servers},
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
+    media::extract_media,
     memory::{MemoryEntry, MemoryStore},
     schedule_store::ScheduleStore,
     signal::{SignalClient, SignalConfig},
@@ -189,6 +190,11 @@ struct ScheduleRequest {
 #[derive(Debug, Deserialize)]
 struct ScheduleToggleRequest {
     enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct MediaParseRequest {
+    response: String,
 }
 
 fn default_memory_capacity() -> usize {
@@ -383,6 +389,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memory/restore", post(restore_memory))
         .route("/v1/memory/compact", post(compact_memory))
         .route("/v1/memory/:id", delete(delete_memory))
+        .route("/v1/media/parse", post(parse_media))
         .route("/v1/integrations/skills", get(list_skills))
         .route("/v1/integrations/skills/:name", get(get_skill))
         .route("/v1/integrations/mcp", get(list_mcp_servers))
@@ -1445,6 +1452,26 @@ async fn daemon_status(State(state): State<Arc<AppState>>) -> Json<DaemonStatus>
         }
     }
     Json(status)
+}
+
+async fn parse_media(
+    Json(request): Json<MediaParseRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let root = env::var("SUPERAGENT_MEDIA_ROOT").unwrap_or_else(|_| "./runtime/media".to_owned());
+    let max_bytes = env::var("SUPERAGENT_MAX_MEDIA_BYTES")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(25 * 1024 * 1024);
+    let (text, media) =
+        extract_media(request.response.as_str(), root, max_bytes).map_err(|error| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+        })?;
+    Ok(Json(json!({ "text": text, "media": media })))
 }
 
 async fn list_schedules(State(state): State<Arc<AppState>>) -> Json<Vec<ScheduledJob>> {
