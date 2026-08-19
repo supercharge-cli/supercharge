@@ -21,6 +21,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-native-roots"] }
+urlencoding = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "process", "signal", "sync", "time"] }
 uuid = { workspace = true, features = ["v4", "serde"] }
 
