@@ -12,7 +12,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "e2b")]
 use xai_grok_superagent::SandboxPlan;
-use xai_grok_superagent::{ApprovalPolicy, SuperagentConfig};
+use xai_grok_superagent::{
+    ApprovalPolicy, SuperagentConfig,
+    gateway::GatewayStateStore,
+    telegram::{TelegramClient, TelegramConfig},
+};
 
 #[derive(Clone)]
 struct AppState {
@@ -83,11 +87,106 @@ async fn main() -> anyhow::Result<()> {
         .with_state(Arc::new(state.clone()))
         .merge(protected);
 
+    if env::var("TELEGRAM_BOT_TOKEN").is_ok() {
+        tokio::spawn(async {
+            if let Err(error) = run_telegram_daemon().await {
+                eprintln!("telegram gateway stopped: {error}");
+            }
+        });
+    }
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("superagent server listening on {addr}");
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+    Ok(())
+}
+
+async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = TelegramConfig::from_env()?;
+    let state_path = env::var("SUPERAGENT_GATEWAY_STATE")
+        .unwrap_or_else(|_| "./runtime/telegram-gateway.json".to_owned());
+    let mut state = GatewayStateStore::load(state_path)?;
+    let echo_mode = env::var("TELEGRAM_ECHO_MODE")
+        .ok()
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"));
+    let client = TelegramClient::new(config);
+
+    loop {
+        match client.poll_once(&mut state).await {
+            Ok(messages) => {
+                for message in messages {
+                    eprintln!(
+                        "telegram message: chat={} user={:?} session={}",
+                        message.chat_id,
+                        message.user_id,
+                        message.session_key().as_str()
+                    );
+                    if echo_mode {
+                        send_chunked(
+                            &client,
+                            message.chat_id,
+                            &format!("superagent received: {}", message.text),
+                        )
+                        .await?;
+                    } else if env::var_os("GROK_AGENT_BINARY").is_some() {
+                        match run_grok_turn(&message).await {
+                            Ok(Some(reply)) if !reply.is_empty() => {
+                                send_chunked(&client, message.chat_id, &reply).await?;
+                            }
+                            Ok(_) => {}
+                            Err(error) => {
+                                eprintln!("grok headless turn failed: {error}");
+                                client
+                                    .send_message(
+                                        message.chat_id,
+                                        "The agent turn failed; check the daemon logs.",
+                                    )
+                                    .await?;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("telegram poll failed; retrying: {error}");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
+async fn run_grok_turn(
+    message: &xai_grok_superagent::gateway::GatewayMessage,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let binary = env::var("GROK_AGENT_BINARY")?;
+    let output = tokio::process::Command::new(binary)
+        .arg("--single")
+        .arg(&message.text)
+        .arg("--session-id")
+        .arg(message.session_key().as_str())
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(format!("grok exited with status {}", output.status).into());
+    }
+    Ok(Some(
+        String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+    ))
+}
+
+async fn send_chunked(
+    client: &TelegramClient,
+    chat_id: i64,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let chars: Vec<char> = text.chars().collect();
+    for chunk in chars.chunks(3900) {
+        client
+            .send_message(chat_id, &chunk.iter().collect::<String>())
+            .await?;
+    }
     Ok(())
 }
 

@@ -7,7 +7,9 @@
 mod approval;
 mod capabilities;
 mod e2b;
+pub mod gateway;
 mod scheduler;
+pub mod telegram;
 
 use sha2::{Digest, Sha256};
 
