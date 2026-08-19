@@ -5,6 +5,7 @@
 //! pieces incrementally without creating a second agent implementation.
 
 mod approval;
+pub mod browser;
 mod capabilities;
 pub mod commands;
 pub mod controls;
@@ -16,6 +17,7 @@ pub mod jobs;
 pub mod matrix;
 pub mod media;
 pub mod memory;
+pub mod provider;
 pub mod schedule_store;
 mod scheduler;
 pub mod signal;

@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use tower_http::limit::RequestBodyLimitLayer;
 use xai_grok_superagent::{
     ApprovalPolicy, ScheduledJob, SuperagentConfig,
+    browser::{self, StreamStatus},
     controls::{
         handle_text as handle_control_text, init_global as init_controls,
         is_stopped as control_is_stopped,
@@ -27,6 +28,10 @@ use xai_grok_superagent::{
     matrix::{MatrixClient, MatrixConfig},
     media::extract_media,
     memory::{MemoryEntry, MemoryStore},
+    provider::{
+        ProviderConfigRequest, ProviderProfile, builtin_profiles, configured_profile,
+        validate_request, write_runtime_config,
+    },
     schedule_store::ScheduleStore,
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
@@ -344,6 +349,8 @@ async fn main() -> anyhow::Result<()> {
     let bind = env::var("SUPERAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_owned());
     let addr: SocketAddr = bind.parse()?;
     let api_token = env::var("SUPERAGENT_API_TOKEN")
+        .or_else(|_| env::var("SUPERAGENT_GATEWAY_TOKEN"))
+        .or_else(|_| env::var("SUPERAGENT_APP_INBOX_SECRET"))
         .ok()
         .filter(|v| !v.is_empty());
     let webhook = env::var("GENERIC_WEBHOOK_SECRET").ok().map(|secret| {
@@ -363,7 +370,14 @@ async fn main() -> anyhow::Result<()> {
     let control_state_path = env::var("SUPERAGENT_CONTROL_STATE")
         .unwrap_or_else(|_| "./runtime/controls.json".to_owned());
     init_controls(control_state_path)?;
-    if let Ok(binary) = env::var("GROK_AGENT_BINARY") {
+    let provider_profile = configured_profile();
+    let provider_config_path = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
+        .or_else(|_| env::var("GROK_CONFIG_PATH"))
+        .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
+    if let Err(error) = write_runtime_config(&provider_config_path, &provider_profile) {
+        eprintln!("provider profile initialization failed: {error}");
+    }
+    if let Some(binary) = configured_agent_binary() {
         let max_depth = env::var("SUPERAGENT_MAX_SUBAGENT_DEPTH")
             .ok()
             .and_then(|value| value.parse().ok())
@@ -372,7 +386,11 @@ async fn main() -> anyhow::Result<()> {
             .ok()
             .and_then(|value| value.parse().ok())
             .unwrap_or(4);
-        init_subagents(binary, max_depth, max_parallel);
+        init_subagents(
+            binary.to_string_lossy().into_owned(),
+            max_depth,
+            max_parallel,
+        );
     }
     let memory_state_path =
         env::var("SUPERAGENT_MEMORY_STATE").unwrap_or_else(|_| "./runtime/memory.json".to_owned());
@@ -484,7 +502,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/schedules/:id/enabled", post(toggle_schedule))
         .route("/v1/daemon/status", get(daemon_status))
         .route("/v1/observability", get(observability))
+        .route("/v1/computer/status", get(browser_status))
+        .route("/v1/computer/browser", get(browser_stream))
         .route("/v1/connections", get(connection_status))
+        .route(
+            "/v1/providers",
+            get(list_providers).post(configure_provider),
+        )
         .route("/v1/memory", get(search_memory).post(remember_memory))
         .route("/v1/memory/stats", get(memory_stats))
         .route("/v1/memory/export", get(export_memory))
@@ -623,7 +647,7 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
                             &format!("superagent received: {}", message.text),
                         )
                         .await?;
-                    } else if env::var_os("GROK_AGENT_BINARY").is_some() {
+                    } else if configured_agent_binary().is_some() {
                         match run_grok_turn(&message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 send_chunked(&client, message.chat_id, &reply).await?;
@@ -661,7 +685,7 @@ async fn run_signal_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         message.sender,
                         message.session_key()
                     );
-                    if env::var_os("GROK_AGENT_BINARY").is_some()
+                    if configured_agent_binary().is_some()
                         && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
                     {
@@ -703,7 +727,7 @@ async fn run_matrix_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         message.sender,
                         message.session_key()
                     );
-                    if env::var_os("GROK_AGENT_BINARY").is_some()
+                    if configured_agent_binary().is_some()
                         && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
                     {
@@ -731,7 +755,7 @@ async fn run_slack_daemon() -> Result<(), Box<dyn std::error::Error + Send + Syn
                         message.user_id,
                         message.session_key()
                     );
-                    if env::var_os("GROK_AGENT_BINARY").is_some()
+                    if configured_agent_binary().is_some()
                         && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
                     {
@@ -762,7 +786,7 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                         message.user_id,
                         message.session_key().as_str()
                     );
-                    if let Some(binary) = env::var_os("GROK_AGENT_BINARY") {
+                    if let Some(binary) = configured_agent_binary() {
                         match run_grok_turn(&message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 send_discord_chunked(&client, message.chat_id, &reply).await?;
@@ -822,7 +846,8 @@ async fn run_grok_prompt(
             "This session is stopped. Use /start or /new to resume it.".to_owned(),
         ));
     }
-    let binary = env::var("GROK_AGENT_BINARY")?;
+    let binary = configured_agent_binary()
+        .ok_or_else(|| anyhow::anyhow!("agent binary is not configured"))?;
     let output = tokio::process::Command::new(binary)
         .arg("--single")
         .arg(prompt)
@@ -903,7 +928,7 @@ async fn generic_webhook(
             event.source,
             event.session_key()
         );
-        if env::var_os("GROK_AGENT_BINARY").is_some() {
+        if configured_agent_binary().is_some() {
             let session = event.session_key();
             let prompt = event.text.clone();
             tokio::spawn(async move {
@@ -951,7 +976,7 @@ async fn telegram_webhook(
     let Some(message) = client.normalize_update(update) else {
         return Ok(StatusCode::NO_CONTENT);
     };
-    if env::var_os("GROK_AGENT_BINARY").is_some()
+    if configured_agent_binary().is_some()
         && let Some(reply) = run_grok_turn(&message).await.map_err(|error| {
             (
                 StatusCode::BAD_GATEWAY,
@@ -1463,6 +1488,10 @@ fn e2b_error(error: xai_grok_superagent::E2bError) -> (StatusCode, Json<ErrorRes
     )
 }
 
+fn configured_agent_binary() -> Option<std::ffi::OsString> {
+    env::var_os("SUPERAGENT_AGENT_BINARY").or_else(|| env::var_os("GROK_AGENT_BINARY"))
+}
+
 fn unix_seconds() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1479,13 +1508,45 @@ fn internal_error(error: impl std::fmt::Display) -> (StatusCode, Json<ErrorRespo
     )
 }
 
+async fn list_providers() -> Json<Value> {
+    Json(json!({
+        "active": configured_profile(),
+        "providers": builtin_profiles(),
+    }))
+}
+
+async fn configure_provider(
+    Json(request): Json<ProviderConfigRequest>,
+) -> Result<Json<ProviderProfile>, (StatusCode, Json<ErrorResponse>)> {
+    let profile = validate_request(request).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    let path = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
+        .or_else(|_| env::var("GROK_CONFIG_PATH"))
+        .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
+    write_runtime_config(path, &profile).map_err(|error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+    })?;
+    Ok(Json(profile))
+}
+
 async fn connection_status() -> Json<Vec<ConnectionReadiness>> {
     Json(vec![
         connection_readiness("http-auth", "protected-api", &["SUPERAGENT_API_TOKEN"]),
         connection_readiness(
             "grok-model",
             "headless-xai",
-            &["XAI_API_KEY", "GROK_AGENT_BINARY"],
+            &["POLLINATIONS_API_KEY", "SUPERAGENT_AGENT_BINARY"],
         ),
         connection_readiness("e2b", "sandbox-api", &["E2B_API_KEY"]),
         connection_readiness("telegram", "long-polling", &["TELEGRAM_BOT_TOKEN"]),
@@ -1740,6 +1801,30 @@ async fn enqueue_job(
             )
         })?;
     Ok(Json(job))
+}
+
+async fn browser_status() -> Json<StreamStatus> {
+    Json(browser::read_stream_status(browser::stream_port()).await)
+}
+
+async fn browser_stream() -> Result<Response, StatusCode> {
+    let port = browser::stream_port();
+    let (socket, status) = browser::connect_browser_stream(port)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let mut response = Response::new(Body::from_stream(browser::sse_stream(socket, status)));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/event-stream; charset=utf-8"),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache, no-transform"),
+    );
+    response
+        .headers_mut()
+        .insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
+    Ok(response)
 }
 
 async fn add_security_headers(request: Request<Body>, next: Next) -> Response {

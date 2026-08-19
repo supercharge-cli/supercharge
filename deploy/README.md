@@ -1,6 +1,7 @@
 # 24/7 Rust deployment
 
-The persistent process is the Rust daemon binary. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/memory/stats`, `/v1/memory/compact`, `/v1/daemon/status`, and `/v1/connections`. The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime. With that feature enabled, the daemon also exposes authenticated durable E2B session routes: `POST/GET /v1/e2b/sessions`, `GET/DELETE /v1/e2b/sessions/:id`, `POST /v1/e2b/sessions/:id/exec`, `POST /v1/e2b/sessions/:id/wake`, and `POST /v1/e2b/sessions/:id/pause`. Session metadata is persisted at `SUPERAGENT_E2B_SESSION_STATE`, and `SUPERAGENT_E2B_WORKSPACE_ROOT` defines the default absolute workspace boundary.
+The persistent process is the Rust daemon binary. Starting this process is daemon mode: it keeps the HTTP service alive, starts configured gateway loops, persists gateway offsets, job state, memory, and Matrix sync cursors, and is restarted by Docker or systemd after crashes and host reboots. It exposes `/healthz`, `/v1/capabilities`, authenticated `/v1/approval/check`, `/v1/exec`, `/v1/jobs`, `/v1/memory`, `/v1/memory/stats`, `/v1/memory/compact`, `/v1/daemon/status`, `/v1/observability`, `/v1/connections`, `/v1/computer/status`, and `/v1/computer/browser`.
+ The execution endpoint requires a build with the `e2b` feature and a valid `E2B_API_KEY` at runtime. With that feature enabled, the daemon also exposes authenticated durable E2B session routes: `POST/GET /v1/e2b/sessions`, `GET/DELETE /v1/e2b/sessions/:id`, `POST /v1/e2b/sessions/:id/exec`, `POST /v1/e2b/sessions/:id/wake`, and `POST /v1/e2b/sessions/:id/pause`. Session metadata is persisted at `SUPERAGENT_E2B_SESSION_STATE`, and `SUPERAGENT_E2B_WORKSPACE_ROOT` defines the default absolute workspace boundary.
 
 ## Docker Compose
 
@@ -116,7 +117,18 @@ The default Telegram mode is long polling. To use webhook mode instead, expose `
 
 Copy `.env.runtime.example` to the host secret file and set `TELEGRAM_BOT_TOKEN` from BotFather plus at least one numeric `TELEGRAM_ALLOWED_USERS` or `TELEGRAM_ALLOWED_CHATS` value. When `TELEGRAM_BOT_TOKEN` is present, daemon mode starts the Telegram long-polling loop automatically. The gateway persists its update offset at `SUPERAGENT_GATEWAY_STATE`, retries after transport failures, and denies unallowlisted users and chats by default. Set `TELEGRAM_ECHO_MODE=true` only for transport verification. When `GROK_AGENT_BINARY` is configured, authorized Telegram messages are routed into the headless runner.
 
-## E2B session lifecycle
+## Providers and custom OpenAI-compatible endpoints
+
+The daemon supports built-in provider profiles through `SUPERAGENT_PROVIDER`, `SUPERAGENT_MODEL`, `SUPERAGENT_PROVIDER_BASE_URL`, `SUPERAGENT_PROVIDER_FORMAT`, and `SUPERAGENT_PROVIDER_API_KEY_ENV`. The registry includes Pollinations, OpenAI, OpenRouter, DeepSeek, Google AI Studio, Groq, Z.AI, Kimi Coding, Qwen Cloud, Routing.run, ZenLLM, and Nous Research. The normal deployment pattern places only the API key in the host or E2B secret store under the configured environment-variable name.
+
+Authenticated `GET /v1/providers` returns the built-in profiles and active selection. Authenticated `POST /v1/providers/config` accepts `provider`, `base_url`, `model`, `format`, and `api_key_env`; it validates HTTPS endpoints, permits plain HTTP only for loopback development services, and writes a nested upstream-compatible model TOML file without accepting a raw API key. Use `provider=custom` for arbitrary OpenAI-compatible endpoints.
+
+## Interactive browser workspace
+
+The Rust daemon’s browser adapter supervises the template’s `agent-browser stream` service on localhost port `9223`. `GET /v1/computer/status` reports stream readiness, while authenticated `GET /v1/computer/browser` emits the same SSE framing consumed by the existing app Computer pane: `status` events, base64 JPEG `frame` events, and keepalive comments. The adapter acknowledges frames for backpressure but deliberately ignores browser input events, making the observer stream view-only. Browser interaction remains an agent-side operation through the headless tool bridge; user input controls should be added only through a separately authorized action endpoint.
+
+## E2B sessions
+ lifecycle
 
 The persistent session API follows the reference E2B gateway’s safer lifecycle model: a session creates or reconnects a sandbox, requests provider-side `onTimeout: pause` with `autoResume: true`, refreshes its timeout, keeps the sandbox alive across commands, reconnects paused sandboxes on wake or execution, caps stdout/stderr, and rejects absolute working directories outside the configured workspace or paths containing traversal segments. E2B auto-resume is activity-driven: the next SDK/API operation wakes the paused sandbox; it is not a background promise that runs without any request. The one-shot `/v1/exec` endpoint remains available and still creates and tears down an isolated sandbox; use `/v1/e2b/sessions/:id/exec` when a durable sandbox filesystem and resumable session are required. Pausing is explicit, while deletion kills the remote sandbox and removes the local session record.
 
