@@ -1,4 +1,14 @@
-use std::{collections::HashMap, convert::Infallible, env, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    convert::Infallible,
+    env,
+    net::SocketAddr,
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Instant,
+};
 
 use tokio::sync::Mutex;
 
@@ -105,8 +115,27 @@ struct AppState {
     job_store: Arc<Mutex<JobStore>>,
     memory_store: Arc<Mutex<MemoryStore>>,
     schedule_store: Arc<Mutex<ScheduleStore>>,
+    metrics: Arc<RuntimeMetrics>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
+}
+
+#[derive(Default)]
+struct RuntimeMetrics {
+    turns_started: AtomicU64,
+    turns_succeeded: AtomicU64,
+    turns_failed: AtomicU64,
+    prompt_chars: AtomicU64,
+    reply_chars: AtomicU64,
+    total_duration_ms: AtomicU64,
+}
+
+static RUNTIME_METRICS: OnceLock<Arc<RuntimeMetrics>> = OnceLock::new();
+
+fn runtime_metrics() -> Arc<RuntimeMetrics> {
+    RUNTIME_METRICS
+        .get_or_init(|| Arc::new(RuntimeMetrics::default()))
+        .clone()
 }
 
 #[derive(Debug, Serialize)]
@@ -325,6 +354,12 @@ struct ObservabilityResponse {
     memory_sessions: usize,
     schedules: usize,
     enabled_schedules: usize,
+    turns_started: u64,
+    turns_succeeded: u64,
+    turns_failed: u64,
+    prompt_chars: u64,
+    reply_chars: u64,
+    total_duration_ms: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -427,6 +462,7 @@ async fn main() -> anyhow::Result<()> {
         job_store,
         memory_store,
         schedule_store,
+        metrics: runtime_metrics(),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
             env::var("SUPERAGENT_E2B_SESSION_STATE")
@@ -909,29 +945,56 @@ async fn run_grok_prompt(
     session_key: &str,
     prompt: &str,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-    if let Some(reply) = handle_control_text(session_key, prompt).await? {
-        return Ok(Some(reply));
+    let metrics = runtime_metrics();
+    let started = Instant::now();
+    metrics.turns_started.fetch_add(1, Ordering::Relaxed);
+    metrics
+        .prompt_chars
+        .fetch_add(prompt.chars().count() as u64, Ordering::Relaxed);
+    let result: Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> = async {
+        if let Some(reply) = handle_control_text(session_key, prompt).await? {
+            return Ok(Some(reply));
+        }
+        if control_is_stopped(session_key).await {
+            return Ok(Some(
+                "This session is stopped. Use /start or /new to resume it.".to_owned(),
+            ));
+        }
+        let binary = configured_agent_binary()
+            .ok_or_else(|| anyhow::anyhow!("agent binary is not configured"))?;
+        let output = tokio::process::Command::new(binary)
+            .arg("--single")
+            .arg(prompt)
+            .arg("--session-id")
+            .arg(session_key)
+            .output()
+            .await?;
+        if !output.status.success() {
+            return Err(format!("grok exited with status {}", output.status).into());
+        }
+        Ok(Some(
+            String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+        ))
     }
-    if control_is_stopped(session_key).await {
-        return Ok(Some(
-            "This session is stopped. Use /start or /new to resume it.".to_owned(),
-        ));
+    .await;
+    metrics.total_duration_ms.fetch_add(
+        started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+        Ordering::Relaxed,
+    );
+    match &result {
+        Ok(reply) => {
+            metrics.turns_succeeded.fetch_add(1, Ordering::Relaxed);
+            if let Some(reply) = reply {
+                metrics
+                    .reply_chars
+                    .fetch_add(reply.chars().count() as u64, Ordering::Relaxed);
+            }
+        }
+        Err(_) => {
+            metrics.turns_failed.fetch_add(1, Ordering::Relaxed);
+        }
     }
-    let binary = configured_agent_binary()
-        .ok_or_else(|| anyhow::anyhow!("agent binary is not configured"))?;
-    let output = tokio::process::Command::new(binary)
-        .arg("--single")
-        .arg(prompt)
-        .arg("--session-id")
-        .arg(session_key)
-        .output()
-        .await?;
-    if !output.status.success() {
-        return Err(format!("grok exited with status {}", output.status).into());
-    }
-    Ok(Some(
-        String::from_utf8_lossy(&output.stdout).trim().to_owned(),
-    ))
+    result
 }
 
 async fn send_chunked(
@@ -1713,6 +1776,12 @@ async fn observability(State(state): State<Arc<AppState>>) -> Json<Observability
         memory_sessions,
         schedules: schedule_list.len(),
         enabled_schedules,
+        turns_started: state.metrics.turns_started.load(Ordering::Relaxed),
+        turns_succeeded: state.metrics.turns_succeeded.load(Ordering::Relaxed),
+        turns_failed: state.metrics.turns_failed.load(Ordering::Relaxed),
+        prompt_chars: state.metrics.prompt_chars.load(Ordering::Relaxed),
+        reply_chars: state.metrics.reply_chars.load(Ordering::Relaxed),
+        total_duration_ms: state.metrics.total_duration_ms.load(Ordering::Relaxed),
     })
 }
 
