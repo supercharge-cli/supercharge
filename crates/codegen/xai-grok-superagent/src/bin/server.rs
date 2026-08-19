@@ -169,6 +169,13 @@ struct MemoryCompactRequest {
     max_entries: usize,
 }
 
+#[derive(Debug, Deserialize)]
+struct MemoryRestoreRequest {
+    entries: Vec<MemoryEntry>,
+    #[serde(default)]
+    replace: bool,
+}
+
 fn default_memory_capacity() -> usize {
     10_000
 }
@@ -312,6 +319,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/connections", get(connection_status))
         .route("/v1/memory", get(search_memory).post(remember_memory))
         .route("/v1/memory/stats", get(memory_stats))
+        .route("/v1/memory/export", get(export_memory))
+        .route("/v1/memory/restore", post(restore_memory))
         .route("/v1/memory/compact", post(compact_memory))
         .route("/v1/memory/:id", delete(delete_memory))
         .route("/v1/integrations/skills", get(list_skills))
@@ -928,6 +937,39 @@ async fn delete_memory(
             }),
         ))
     }
+}
+
+async fn export_memory(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let store = state.memory_store.lock().await;
+    Ok(Json(
+        json!({ "entries": store.export().map_err(internal_error)? }),
+    ))
+}
+
+async fn restore_memory(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<MemoryRestoreRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if request.entries.len() > 100_000 {
+        return Err((
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(ErrorResponse {
+                error: "memory restore exceeds the 100000-entry limit".to_owned(),
+            }),
+        ));
+    }
+    let mut store = state.memory_store.lock().await;
+    let inserted = store
+        .restore(request.entries, request.replace)
+        .map_err(internal_error)?;
+    let (entries, sessions) = store.stats();
+    Ok(Json(json!({
+        "inserted": inserted,
+        "entries": entries,
+        "sessions": sessions,
+    })))
 }
 
 async fn compact_memory(

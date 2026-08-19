@@ -172,6 +172,30 @@ impl MemoryStore {
         Ok(remove_count)
     }
 
+    pub fn export(&self) -> Result<Vec<MemoryEntry>, MemoryError> {
+        Ok(self.state.entries.values().cloned().collect())
+    }
+
+    pub fn restore(
+        &mut self,
+        entries: Vec<MemoryEntry>,
+        replace: bool,
+    ) -> Result<usize, MemoryError> {
+        if replace {
+            self.state.entries.clear();
+        }
+        let mut inserted = 0;
+        for entry in entries {
+            if entry.session_key.trim().is_empty() || entry.content.trim().is_empty() {
+                continue;
+            }
+            self.state.entries.insert(entry.id.clone(), entry);
+            inserted += 1;
+        }
+        self.persist()?;
+        Ok(inserted)
+    }
+
     pub fn stats(&self) -> (usize, usize) {
         let sessions = self
             .state
@@ -237,5 +261,10 @@ mod tests {
         assert_eq!(restored.stats(), (3, 2));
         assert!(restored.delete_session("session-b").unwrap() > 0);
         assert_eq!(restored.stats(), (2, 1));
+        let backup = restored.export().unwrap();
+        let restore_path = dir.path().join("restored.json");
+        let mut imported = MemoryStore::load(&restore_path).unwrap();
+        assert_eq!(imported.restore(backup, false).unwrap(), 2);
+        assert_eq!(imported.stats(), (2, 1));
     }
 }

@@ -76,7 +76,7 @@ The gateway adapters deliver authorized messages to the headless agent bridge wh
 
 ## Durable memory
 
-Memory entries are persisted atomically at `SUPERAGENT_MEMORY_STATE` and are scoped by `session_key`. `POST /v1/memory` accepts optional `kind`, `importance`, and `tags` metadata; `GET /v1/memory` performs session-scoped text/tag/kind recall with bounded, importance-aware ranking; `DELETE /v1/memory/:id` removes one entry; `GET /v1/memory/stats` reports entry and session counts; and `POST /v1/memory/compact` removes the least important, oldest entries above a configured capacity. Secrets and provider credentials are never written into memory automatically by the daemon.
+Memory entries are persisted atomically at `SUPERAGENT_MEMORY_STATE` and are scoped by `session_key`. `POST /v1/memory` accepts optional `kind`, `importance`, and `tags` metadata; `GET /v1/memory` performs session-scoped text/tag/kind recall with bounded, importance-aware ranking; `DELETE /v1/memory/:id` removes one entry; `GET /v1/memory/stats` reports entry and session counts; `GET /v1/memory/export` creates a JSON backup; `POST /v1/memory/restore` imports a bounded backup with optional replacement; and `POST /v1/memory/compact` removes the least important, oldest entries above a configured capacity. Secrets and provider credentials are never written into memory automatically by the daemon.
 
 ## Session controls
 
