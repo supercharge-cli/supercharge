@@ -8,6 +8,7 @@ mod approval;
 mod capabilities;
 mod e2b;
 pub mod gateway;
+pub mod jobs;
 mod scheduler;
 pub mod telegram;
 
