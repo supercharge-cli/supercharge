@@ -235,6 +235,7 @@ fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{WhatsAppClient, WhatsAppConfig};
+    use httpmock::prelude::*;
     use serde_json::json;
 
     fn config() -> WhatsAppConfig {
@@ -257,6 +258,29 @@ mod tests {
         );
         let payload = json!({"entry": [{"changes": [{"value": {"messages": [{"from": "1555", "id": "wamid-1", "type": "text", "text": {"body": "hello"}}]}}]}]});
         assert_eq!(client.parse_messages(&payload)[0].text, "hello");
+    }
+
+    #[tokio::test]
+    async fn sends_text_through_graph_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/phone/messages").json_body(json!({
+                    "messaging_product": "whatsapp",
+                    "to": "1555",
+                    "type": "text",
+                    "text": {"body": "hello"}
+                }));
+                then.status(200);
+            })
+            .await;
+        let mut configuration = config();
+        configuration.graph_base_url = server.base_url();
+        WhatsAppClient::new(configuration)
+            .send_text("1555", "hello")
+            .await
+            .unwrap();
+        mock.assert_async().await;
     }
 
     #[test]

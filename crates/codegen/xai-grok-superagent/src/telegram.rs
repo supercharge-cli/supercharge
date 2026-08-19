@@ -229,6 +229,31 @@ mod tests {
     use crate::gateway::{GatewayConfig, GatewayStateStore};
 
     #[tokio::test]
+    async fn sending_message_uses_bot_api() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/botsecret/sendMessage")
+                    .json_body(serde_json::json!({"chat_id": 42, "text": "hello"}));
+                then.status(200).json_body(serde_json::json!({
+                    "ok": true,
+                    "result": {"message_id": 2}
+                }));
+            })
+            .await;
+        let client = TelegramClient::new(TelegramConfig {
+            bot_token: "secret".into(),
+            api_base_url: server.base_url(),
+            poll_timeout_seconds: 1,
+            webhook_secret: None,
+            gateway: GatewayConfig::default(),
+        });
+        client.send_message(42, "hello").await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
     async fn polling_normalizes_authorized_messages_and_advances_offset() {
         let server = MockServer::start_async().await;
         let mock = server
