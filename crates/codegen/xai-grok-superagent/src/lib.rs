@@ -15,6 +15,7 @@ mod scheduler;
 pub mod signal;
 pub mod slack;
 pub mod telegram;
+pub mod webhook;
 pub mod whatsapp;
 
 use sha2::{Digest, Sha256};
