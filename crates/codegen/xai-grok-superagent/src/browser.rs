@@ -217,6 +217,167 @@ pub fn sse_stream(
     })
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum BrowserAction {
+    Navigate {
+        url: String,
+    },
+    Click {
+        selector: String,
+    },
+    Fill {
+        selector: String,
+        text: String,
+    },
+    Type {
+        selector: String,
+        text: String,
+    },
+    Press {
+        key: String,
+    },
+    Select {
+        selector: String,
+        value: String,
+    },
+    Scroll {
+        direction: String,
+        pixels: Option<u32>,
+    },
+    Wait {
+        milliseconds: Option<u64>,
+    },
+    Back,
+    Forward,
+    Reload,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BrowserActionResult {
+    pub ok: bool,
+    pub action: String,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+const MAX_SELECTOR_CHARS: usize = 512;
+const MAX_TEXT_CHARS: usize = 16_000;
+const MAX_URL_CHARS: usize = 2_048;
+const MAX_OUTPUT_CHARS: usize = 20_000;
+
+fn validate_text(value: &str, label: &str, max: usize) -> Result<(), String> {
+    if value.is_empty() || value.chars().count() > max || value.contains('\0') {
+        return Err(format!(
+            "{label} is empty, too long, or contains a null byte"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_selector(selector: &str) -> Result<(), String> {
+    validate_text(selector, "selector", MAX_SELECTOR_CHARS)
+}
+
+fn validate_url(url: &str) -> Result<(), String> {
+    validate_text(url, "url", MAX_URL_CHARS)?;
+    let parsed = reqwest::Url::parse(url).map_err(|error| format!("invalid url: {error}"))?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        scheme => Err(format!("unsupported browser URL scheme: {scheme}")),
+    }
+}
+
+fn cap_output(value: &[u8]) -> String {
+    String::from_utf8_lossy(value)
+        .chars()
+        .take(MAX_OUTPUT_CHARS)
+        .collect()
+}
+
+fn action_args(action: &BrowserAction) -> Result<(String, Vec<String>), String> {
+    match action {
+        BrowserAction::Navigate { url } => {
+            validate_url(url)?;
+            Ok(("navigate".to_owned(), vec!["open".to_owned(), url.clone()]))
+        }
+        BrowserAction::Click { selector } => {
+            validate_selector(selector)?;
+            Ok((
+                "click".to_owned(),
+                vec!["click".to_owned(), selector.clone()],
+            ))
+        }
+        BrowserAction::Fill { selector, text } => {
+            validate_selector(selector)?;
+            validate_text(text, "text", MAX_TEXT_CHARS)?;
+            Ok((
+                "fill".to_owned(),
+                vec!["fill".to_owned(), selector.clone(), text.clone()],
+            ))
+        }
+        BrowserAction::Type { selector, text } => {
+            validate_selector(selector)?;
+            validate_text(text, "text", MAX_TEXT_CHARS)?;
+            Ok((
+                "type".to_owned(),
+                vec!["type".to_owned(), selector.clone(), text.clone()],
+            ))
+        }
+        BrowserAction::Press { key } => {
+            validate_text(key, "key", 80)?;
+            if key.chars().any(char::is_control) {
+                return Err("key contains control characters".to_owned());
+            }
+            Ok(("press".to_owned(), vec!["press".to_owned(), key.clone()]))
+        }
+        BrowserAction::Select { selector, value } => {
+            validate_selector(selector)?;
+            validate_text(value, "value", MAX_TEXT_CHARS)?;
+            Ok((
+                "select".to_owned(),
+                vec!["select".to_owned(), selector.clone(), value.clone()],
+            ))
+        }
+        BrowserAction::Scroll { direction, pixels } => {
+            let direction = direction.to_ascii_lowercase();
+            if !matches!(direction.as_str(), "up" | "down" | "left" | "right") {
+                return Err("scroll direction must be up, down, left, or right".to_owned());
+            }
+            let pixels = pixels.unwrap_or(700).clamp(1, 3_000);
+            Ok((
+                "scroll".to_owned(),
+                vec!["scroll".to_owned(), direction, pixels.to_string()],
+            ))
+        }
+        BrowserAction::Wait { milliseconds } => {
+            let milliseconds = milliseconds.unwrap_or(500).clamp(0, 30_000);
+            Ok((
+                "wait".to_owned(),
+                vec!["wait".to_owned(), milliseconds.to_string()],
+            ))
+        }
+        BrowserAction::Back => Ok(("back".to_owned(), vec!["back".to_owned()])),
+        BrowserAction::Forward => Ok(("forward".to_owned(), vec!["forward".to_owned()])),
+        BrowserAction::Reload => Ok(("reload".to_owned(), vec!["reload".to_owned()])),
+    }
+}
+
+pub async fn execute_action(action: BrowserAction) -> Result<BrowserActionResult, String> {
+    let (name, args) = action_args(&action)?;
+    let output = Command::new("agent-browser")
+        .args(&args)
+        .output()
+        .await
+        .map_err(|error| format!("agent-browser unavailable: {error}"))?;
+    Ok(BrowserActionResult {
+        ok: output.status.success(),
+        action: name,
+        stdout: cap_output(&output.stdout),
+        stderr: cap_output(&output.stderr),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_MAX_FPS, DEFAULT_STREAM_PORT, StreamStatus, stream_port};

@@ -574,6 +574,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/observability", get(observability))
         .route("/v1/computer/status", get(browser_status))
         .route("/v1/computer/browser", get(browser_stream))
+        .route("/v1/computer/control", post(browser_control))
         .route("/v1/connections", get(connection_status))
         .route(
             "/v1/providers",
@@ -2074,6 +2075,43 @@ async fn browser_stream() -> Result<Response, StatusCode> {
         .headers_mut()
         .insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
     Ok(response)
+}
+
+#[derive(Debug, Deserialize)]
+struct BrowserControlRequest {
+    #[serde(default)]
+    approved: bool,
+    #[serde(flatten)]
+    action: browser::BrowserAction,
+}
+
+async fn browser_control(
+    Json(request): Json<BrowserControlRequest>,
+) -> Result<Json<browser::BrowserActionResult>, (StatusCode, Json<ErrorResponse>)> {
+    let enabled = env::var("SUPERAGENT_BROWSER_CONTROL_ENABLED")
+        .map(|value| value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !enabled {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "browser control is disabled by SUPERAGENT_BROWSER_CONTROL_ENABLED"
+                    .to_owned(),
+            }),
+        ));
+    }
+    if !request.approved {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "browser actions require explicit approval".to_owned(),
+            }),
+        ));
+    }
+    let result = browser::execute_action(request.action)
+        .await
+        .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
+    Ok(Json(result))
 }
 
 async fn add_security_headers(request: Request<Body>, next: Next) -> Response {
