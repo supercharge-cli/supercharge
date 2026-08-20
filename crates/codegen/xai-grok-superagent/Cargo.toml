@@ -11,6 +11,7 @@ e2b = ["dep:e2b-rs"]
 
 [dependencies]
 anyhow = { workspace = true }
+async-stream = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }

@@ -10,7 +10,9 @@ use std::{
     time::Instant,
 };
 
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, broadcast};
+
+use base64::Engine as _;
 
 use axum::{
     Json, Router,
@@ -117,6 +119,8 @@ struct AppState {
     job_store: Arc<Mutex<JobStore>>,
     memory_store: Arc<Mutex<MemoryStore>>,
     schedule_store: Arc<Mutex<ScheduleStore>>,
+    app_events: broadcast::Sender<Value>,
+    app_event_seq: Arc<AtomicU64>,
     metrics: Arc<RuntimeMetrics>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
@@ -457,6 +461,7 @@ async fn main() -> anyhow::Result<()> {
     let schedule_state_path = env::var("SUPERAGENT_SCHEDULE_STATE")
         .unwrap_or_else(|_| "./runtime/schedules.json".to_owned());
     let schedule_store = Arc::new(Mutex::new(ScheduleStore::load(schedule_state_path)?));
+    let (app_events, _) = broadcast::channel(256);
     let state = AppState {
         config: SuperagentConfig::default(),
         started_at: unix_seconds(),
@@ -470,6 +475,8 @@ async fn main() -> anyhow::Result<()> {
         job_store,
         memory_store,
         schedule_store,
+        app_events,
+        app_event_seq: Arc::new(AtomicU64::new(0)),
         metrics: runtime_metrics(),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
@@ -577,6 +584,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/computer/status", get(browser_status))
         .route("/v1/computer/browser", get(browser_stream))
         .route("/v1/computer/control", post(browser_control))
+        .route("/v1/status", get(app_status))
+        .route("/v1/chat", post(app_chat))
+        .route("/v1/chat/events", get(app_chat_events))
+        .route("/v1/chat/stop", post(app_chat_stop))
+        .route("/v1/chat/approve", post(app_chat_approve))
+        .route("/v1/chat/answer", post(app_chat_answer))
+        .route("/v1/chat/pick", post(app_chat_pick))
         .route("/v1/connections", get(connection_status))
         .route(
             "/v1/providers",
@@ -2137,6 +2151,234 @@ async fn browser_control(
         .await
         .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
     Ok(Json(result))
+}
+
+#[derive(Debug, Deserialize)]
+struct AppChatQuery {
+    chat_id: Option<String>,
+    since: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppChatFile {
+    name: Option<String>,
+    content_base64: Option<String>,
+    url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppChatRequest {
+    text: Option<String>,
+    chat_id: Option<String>,
+    files: Option<Vec<AppChatFile>>,
+}
+
+fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
+    let Some(object) = payload.as_object_mut() else {
+        return;
+    };
+    let id = state.app_event_seq.fetch_add(1, Ordering::Relaxed) + 1;
+    object.insert("id".to_owned(), json!(id));
+    object.insert("ts".to_owned(), json!(unix_seconds()));
+    object.insert("chatId".to_owned(), json!(chat_id));
+    let _ = state.app_events.send(payload);
+}
+
+fn app_workspace_root() -> std::path::PathBuf {
+    env::var("SUPERAGENT_SHARE_WORKSPACE_ROOT")
+        .or_else(|_| env::var("SUPERAGENT_DAEMON_WORKDIR"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/home/user/workspace"))
+}
+
+fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
+    let root = app_workspace_root();
+    let inbox = root.join(".superagent-inbox");
+    std::fs::create_dir_all(&inbox).map_err(|error| error.to_string())?;
+    let mut paths = Vec::new();
+    for (index, file) in files.iter().take(12).enumerate() {
+        let name = file
+            .name
+            .as_deref()
+            .and_then(|value| std::path::Path::new(value).file_name())
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty() && *value != "." && *value != "..")
+            .unwrap_or("upload.bin");
+        if let Some(url) = file
+            .url
+            .as_deref()
+            .filter(|value| value.starts_with("https://"))
+        {
+            paths.push(format!("{name} (remote URL: {url})"));
+            continue;
+        }
+        let encoded = file.content_base64.as_deref().unwrap_or_default();
+        let raw = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|error| format!("invalid upload {name}: {error}"))?;
+        if raw.len() > 25 * 1024 * 1024 {
+            return Err(format!("upload {name} exceeds 25 MiB"));
+        }
+        let path = inbox.join(format!("{}-{name}", unix_seconds() + index as u64));
+        std::fs::write(&path, raw).map_err(|error| error.to_string())?;
+        paths.push(path.to_string_lossy().into_owned());
+    }
+    Ok(paths)
+}
+
+fn spawn_app_turn(state: Arc<AppState>, chat_id: String, prompt: String) {
+    app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
+    tokio::spawn(async move {
+        let result = run_grok_prompt(format!("app:{chat_id}").as_str(), &prompt).await;
+        match result {
+            Ok(Some(reply)) if !reply.trim().is_empty() => {
+                let prepared = prepare_reply_for_delivery(&reply).await;
+                app_emit(
+                    &state,
+                    &chat_id,
+                    json!({"type":"text", "text":prepared, "final":true}),
+                );
+            }
+            Ok(_) => app_emit(
+                &state,
+                &chat_id,
+                json!({"type":"text", "text":"", "final":true}),
+            ),
+            Err(error) => app_emit(
+                &state,
+                &chat_id,
+                json!({"type":"error", "text":error.to_string()}),
+            ),
+        }
+        app_emit(&state, &chat_id, json!({"type":"status", "busy":false}));
+    });
+}
+
+async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(json!({
+        "ok": true,
+        "usage": {},
+        "turn": {"busy": false},
+        "daemon": "running",
+        "uptimeSeconds": unix_seconds().saturating_sub(state.started_at),
+    }))
+}
+
+async fn app_chat(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AppChatRequest>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<ErrorResponse>)> {
+    let chat_id = request.chat_id.unwrap_or_else(|| "default".to_owned());
+    if chat_id.len() > 128 || chat_id.chars().any(char::is_control) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid chat id".to_owned(),
+            }),
+        ));
+    }
+    let text = request.text.unwrap_or_default().trim().to_owned();
+    let files = request.files.unwrap_or_default();
+    let paths = save_app_uploads(&files)
+        .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
+    if text.is_empty() && paths.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "text or files required".to_owned(),
+            }),
+        ));
+    }
+    let mut prompt = text;
+    if !paths.is_empty() {
+        if !prompt.is_empty() {
+            prompt.push_str("\\n\\n");
+        }
+        prompt.push_str(
+            "User-provided files are available in the workspace. Inspect them when relevant:\\n",
+        );
+        prompt.push_str(
+            &paths
+                .iter()
+                .map(|path| format!("- {path}"))
+                .collect::<Vec<_>>()
+                .join("\\n"),
+        );
+    }
+    spawn_app_turn(state, chat_id.clone(), prompt);
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({"ok":true,"chatId":chat_id})),
+    ))
+}
+
+async fn app_chat_events(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<AppChatQuery>,
+) -> Response {
+    let chat_id = query.chat_id.unwrap_or_else(|| "default".to_owned());
+    let since = query.since.unwrap_or(0);
+    let mut receiver = state.app_events.subscribe();
+    let stream = async_stream::stream! {
+        yield Ok::<Bytes, Infallible>(Bytes::from(format!("data: {}\\n\\n", json!({"type":"ready","id":0,"chatId":chat_id}))));
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_secs(15), receiver.recv()).await {
+                Ok(Ok(event)) => {
+                    let same_chat = event.get("chatId").and_then(Value::as_str) == Some(chat_id.as_str());
+                    let newer = event.get("id").and_then(Value::as_u64).unwrap_or(0) > since;
+                    if same_chat && newer {
+                        yield Ok::<Bytes, Infallible>(Bytes::from(format!("data: {event}\\n\\n")));
+                    }
+                }
+                Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                    yield Ok::<Bytes, Infallible>(Bytes::from(": lagged\\n\\n"));
+                }
+                Ok(Err(broadcast::error::RecvError::Closed)) => break,
+                Err(_) => yield Ok::<Bytes, Infallible>(Bytes::from(": ping\\n\\n")),
+            }
+        }
+    };
+    let mut response = Response::new(Body::from_stream(stream));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/event-stream; charset=utf-8"),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache, no-transform"),
+    );
+    response
+        .headers_mut()
+        .insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
+    response
+}
+
+async fn app_chat_stop(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<Value>,
+) -> Json<Value> {
+    let chat_id = request
+        .get("chatId")
+        .and_then(Value::as_str)
+        .unwrap_or("default");
+    app_emit(
+        &state,
+        chat_id,
+        json!({"type":"status", "busy":false, "stopped":true}),
+    );
+    Json(json!({"ok":true}))
+}
+
+async fn app_chat_approve(Json(_request): Json<Value>) -> Json<Value> {
+    Json(json!({"ok":true}))
+}
+
+async fn app_chat_answer(Json(_request): Json<Value>) -> Json<Value> {
+    Json(json!({"ok":true}))
+}
+
+async fn app_chat_pick(Json(_request): Json<Value>) -> Json<Value> {
+    Json(json!({"ok":true}))
 }
 
 async fn add_security_headers(request: Request<Body>, next: Next) -> Response {
