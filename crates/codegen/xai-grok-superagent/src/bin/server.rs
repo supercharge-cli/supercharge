@@ -46,6 +46,7 @@ use xai_grok_superagent::{
         validate_request, write_runtime_config,
     },
     schedule_store::ScheduleStore,
+    sharing::rewrite_media_links,
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
     subagents::{
@@ -540,7 +541,8 @@ async fn main() -> anyhow::Result<()> {
                     {
                         match target.parse::<DeliveryTarget>() {
                             Ok(target) => {
-                                if let Err(error) = dispatch_text(&target, reply_text).await {
+                                let prepared = prepare_reply_for_delivery(reply_text).await;
+                                if let Err(error) = dispatch_text(&target, &prepared).await {
                                     eprintln!("job result delivery failed: {error}");
                                 }
                             }
@@ -768,7 +770,8 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
                     } else if configured_agent_binary().is_some() {
                         match run_grok_turn(&message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
-                                send_chunked(&client, message.chat_id, &reply).await?;
+                                let prepared = prepare_reply_for_delivery(&reply).await;
+                                send_chunked(&client, message.chat_id, &prepared).await?;
                             }
                             Ok(_) => {}
                             Err(error) => {
@@ -849,7 +852,8 @@ async fn run_matrix_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
                     {
-                        client.send_message(&message.room_id, &reply).await?;
+                        let prepared = prepare_reply_for_delivery(&reply).await;
+                        client.send_message(&message.room_id, &prepared).await?;
                     }
                 }
             }
@@ -877,8 +881,13 @@ async fn run_slack_daemon() -> Result<(), Box<dyn std::error::Error + Send + Syn
                         && let Ok(Some(reply)) =
                             run_grok_prompt(&message.session_key(), &message.text).await
                     {
+                        let prepared = prepare_reply_for_delivery(&reply).await;
                         client
-                            .send_message(&message.channel_id, &reply, message.thread_ts.as_deref())
+                            .send_message(
+                                &message.channel_id,
+                                &prepared,
+                                message.thread_ts.as_deref(),
+                            )
                             .await?;
                     }
                 }
@@ -907,7 +916,8 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                     if let Some(binary) = configured_agent_binary() {
                         match run_grok_turn(&message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
-                                send_discord_chunked(&client, message.chat_id, &reply).await?;
+                                let prepared = prepare_reply_for_delivery(&reply).await;
+                                send_discord_chunked(&client, message.chat_id, &prepared).await?;
                             }
                             Ok(_) => {}
                             Err(error) => {
@@ -950,6 +960,20 @@ async fn run_grok_turn(
     message: &xai_grok_superagent::gateway::GatewayMessage,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
     run_grok_prompt(message.session_key().as_str(), &message.text).await
+}
+
+async fn prepare_reply_for_delivery(reply: &str) -> String {
+    let root = env::var("SUPERAGENT_SHARE_WORKSPACE_ROOT")
+        .or_else(|_| env::var("SUPERAGENT_DAEMON_WORKDIR"))
+        .unwrap_or_else(|_| "/home/user/workspace".to_owned());
+    let max_bytes = env::var("SUPERAGENT_MAX_MEDIA_BYTES")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(25 * 1024 * 1024);
+    match rewrite_media_links(reply, root, max_bytes).await {
+        Ok(text) => text,
+        Err(error) => format!("{reply}\n\nFile sharing failed: {error}"),
+    }
 }
 
 async fn run_grok_prompt(
@@ -1137,7 +1161,8 @@ async fn telegram_webhook(
         })?
         && !reply.is_empty()
     {
-        send_chunked(&client, message.chat_id, &reply)
+        let prepared = prepare_reply_for_delivery(&reply).await;
+        send_chunked(&client, message.chat_id, &prepared)
             .await
             .map_err(|error| {
                 (

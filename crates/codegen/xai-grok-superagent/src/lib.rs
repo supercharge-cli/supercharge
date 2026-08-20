@@ -22,6 +22,7 @@ pub mod memory;
 pub mod provider;
 pub mod schedule_store;
 mod scheduler;
+pub mod sharing;
 pub mod signal;
 pub mod slack;
 pub mod subagents;
