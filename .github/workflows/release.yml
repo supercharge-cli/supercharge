@@ -1,0 +1,92 @@
+name: Build and publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create, for example v0.2.0
+        required: true
+        default: v0.1.0
+        type: string
+      build_provider_bridge:
+        description: Also build the upstream provider bridge (may require a larger runner)
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: -C debuginfo=0
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+
+      - name: Run quality gates
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked -p xai-grok-superagent -- -D warnings
+          cargo test --locked -p xai-grok-superagent
+
+      - name: Build daemon release binary
+        run: cargo build --locked --release -p xai-grok-superagent --bin xai-grok-superagent-server
+
+      - name: Optionally build provider bridge
+        if: ${{ inputs.build_provider_bridge }}
+        run: cargo build --locked --release -p xai-grok-pager-bin --bin xai-grok-pager
+
+      - name: Package artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp target/release/xai-grok-superagent-server release/superagent-server-linux-x86_64
+          tar -C sandbox -czf release/superagent-e2b-template-source.tar.gz e2b-agent-template
+          if [[ -f target/release/xai-grok-pager ]]; then
+            cp target/release/xai-grok-pager release/superagent-provider-bridge-linux-x86_64
+          fi
+          sha256sum release/* > release/SHA256SUMS
+          cat release/SHA256SUMS
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $TAG" >&2
+            exit 1
+          fi
+          gh release create "$TAG" release/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${TAG}" \
+            --generate-notes
