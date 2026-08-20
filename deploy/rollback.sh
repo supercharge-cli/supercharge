@@ -2,7 +2,7 @@
 set -euo pipefail
 
 install_root="${SUPERAGENT_INSTALL_ROOT:-/opt/superagent}"
-binary_path="${SUPERAGENT_BINARY_PATH:-$install_root/bin/xai-grok-superagent-server}"
+binary_path="${SUPERAGENT_BINARY_PATH:-$install_root/bin/superagent-server}"
 service_name="${SUPERAGENT_SERVICE_NAME:-superagent.service}"
 health_url="${SUPERAGENT_HEALTH_URL:-http://127.0.0.1:8787/healthz}"
 current_release_file="$install_root/current-release"
@@ -16,7 +16,7 @@ else
 fi
 
 if [[ -d "$release_dir" ]]; then
-  release_binary="$release_dir/xai-grok-superagent-server"
+  release_binary="$release_dir/superagent-server"
 else
   release_binary="$release_dir"
 fi

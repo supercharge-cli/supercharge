@@ -40,10 +40,14 @@ MATRIX_USER_ID=
 MATRIX_ALLOWED_USERS=
 MATRIX_ALLOWED_ROOMS=
 GENERIC_WEBHOOK_SECRET=
-XAI_API_KEY=replace-with-xai-api-key
-GROK_DEFAULT_MODEL=replace-with-model-id
-GROK_CONFIG_PATH=/var/lib/superagent/grok-config.toml
-GROK_AGENT_BINARY=/usr/local/bin/xai-grok-pager-bin
+SUPERAGENT_PROVIDER=pollinations
+SUPERAGENT_MODEL=kimi-code
+SUPERAGENT_PROVIDER_BASE_URL=https://gen.pollinations.ai/v1
+SUPERAGENT_PROVIDER_FORMAT=openai
+SUPERAGENT_PROVIDER_API_KEY_ENV=POLLINATIONS_API_KEY
+SUPERAGENT_PROVIDER_CONFIG_PATH=/var/lib/superagent/provider-config.toml
+SUPERAGENT_AGENT_BINARY=/usr/local/bin/superagent-provider-bridge
+POLLINATIONS_API_KEY=
 ```
 
 Start the service with:
@@ -59,7 +63,7 @@ The Compose definition uses an automatic restart policy, a non-root container, a
 
 ## systemd
 
-Build the binary with E2B support and copy it to `/opt/superagent/bin/xai-grok-superagent-server`. Create `/etc/superagent/superagent.env` with mode `0600`, create the `superagent` user and state directories, install `superagent.service` into `/etc/systemd/system/`, then run:
+Build the binary with E2B support and copy it to `/opt/superagent/bin/superagent-server`. Create `/etc/superagent/superagent.env` with mode `0600`, create the `superagent` user and state directories, install `superagent.service` into `/etc/systemd/system/`, then run:
 
 ```bash
 sudo systemctl daemon-reload
@@ -73,7 +77,7 @@ The systemd unit restarts on failure, handles SIGTERM, protects the host filesys
 
 ## Model API connection
 
-The gateway adapters deliver authorized messages to the headless agent bridge when `GROK_AGENT_BINARY` is set. The upstream runtime uses the compatibility variable `XAI_API_KEY` for provider authentication and can use `GROK_DEFAULT_MODEL` or the configuration overlay at `GROK_CONFIG_PATH` for model selection. These values belong in the deployment secret/configuration store, not in Git. Without a provider key and valid headless-runtime configuration, gateway transport can still be tested, but model replies will not be available.
+The gateway adapters deliver authorized messages to the configured headless agent bridge when `SUPERAGENT_AGENT_BINARY` is set. Provider selection uses `SUPERAGENT_PROVIDER`, `SUPERAGENT_MODEL`, `SUPERAGENT_PROVIDER_BASE_URL`, `SUPERAGENT_PROVIDER_FORMAT`, and `SUPERAGENT_PROVIDER_API_KEY_ENV`; the optional persisted overlay is written to `SUPERAGENT_PROVIDER_CONFIG_PATH`. The actual provider credential is read from the environment variable named by `SUPERAGENT_PROVIDER_API_KEY_ENV` and is never written to the configuration file. These values belong in the deployment secret/configuration store, not in Git. Without a provider key and valid headless-runtime configuration, gateway transport can still be tested, but model replies will not be available. Legacy compatibility variable names may still be accepted by the inherited runtime, but they are not part of the Supercharge configuration contract.
 
 ## Durable memory
 
@@ -117,7 +121,7 @@ The `deploy/backup-runtime.sh` script archives the known durable JSON state file
 
 ## Upgrade and rollback
 
-Use `deploy/upgrade.sh /path/to/xai-grok-superagent-server` to stage an executable release under `SUPERAGENT_INSTALL_ROOT` (default `/opt/superagent`), create a pre-upgrade runtime backup, replace the daemon binary atomically, restart an active `superagent.service`, and require a successful `/healthz` check before completing. If the health check fails, the previous binary is restored automatically. `deploy/rollback.sh` restores the previous binary from the recorded release directory; both scripts support `SUPERAGENT_BINARY_PATH`, `SUPERAGENT_SERVICE_NAME`, and `SUPERAGENT_HEALTH_URL` overrides for non-systemd deployments. Keep release directories and runtime backups on the same protected host, and review service logs after every upgrade.
+Use `deploy/upgrade.sh /path/to/superagent-server` to stage an executable release under `SUPERAGENT_INSTALL_ROOT` (default `/opt/superagent`), create a pre-upgrade runtime backup, replace the daemon binary atomically, restart an active `superagent.service`, and require a successful `/healthz` check before completing. If the health check fails, the previous binary is restored automatically. `deploy/rollback.sh` restores the previous binary from the recorded release directory; both scripts support `SUPERAGENT_BINARY_PATH`, `SUPERAGENT_SERVICE_NAME`, and `SUPERAGENT_HEALTH_URL` overrides for non-systemd deployments. Keep release directories and runtime backups on the same protected host, and review service logs after every upgrade.
 
 ## Telegram gateway
 
@@ -158,7 +162,7 @@ The interactive terminal client is distributed as **Supercharge AI**. The releas
 ./install-supercharge.sh
 ```
 
-The installer places the commands under `${SUPERCHARGE_INSTALL_PREFIX:-$HOME/.local/bin}`, creates the branded configuration home `${SUPERCHARGE_HOME:-$HOME/.supercharge}`, and preserves the underlying `GROK_HOME` compatibility variable for the inherited workspace runtime.
+The installer places the commands under `${SUPERCHARGE_INSTALL_PREFIX:-$HOME/.local/bin}`, creates the branded configuration home `${SUPERCHARGE_HOME:-$HOME/.supercharge}`, and keeps compatibility details internal to the inherited workspace runtime. Operators should use the Supercharge variables documented above rather than legacy names.
 
 Start interactive chat and coding with either command:
 

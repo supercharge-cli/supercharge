@@ -506,6 +506,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "session-info",
     "sessions",
     "settings",
+    "setup",
     "share",
     "show-plan",
     "skills",

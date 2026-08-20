@@ -3,13 +3,13 @@ set -euo pipefail
 
 release_binary="${1:-}"
 if [[ -z "$release_binary" || ! -f "$release_binary" || ! -x "$release_binary" ]]; then
-  echo "usage: $0 /path/to/xai-grok-superagent-server" >&2
+  echo "usage: $0 /path/to/superagent-server" >&2
   echo "the release binary must exist and be executable" >&2
   exit 2
 fi
 
 install_root="${SUPERAGENT_INSTALL_ROOT:-/opt/superagent}"
-binary_path="${SUPERAGENT_BINARY_PATH:-$install_root/bin/xai-grok-superagent-server}"
+binary_path="${SUPERAGENT_BINARY_PATH:-$install_root/bin/superagent-server}"
 runtime_dir="${SUPERAGENT_RUNTIME_DIR:-/var/lib/superagent}"
 service_name="${SUPERAGENT_SERVICE_NAME:-superagent.service}"
 health_url="${SUPERAGENT_HEALTH_URL:-http://127.0.0.1:8787/healthz}"
@@ -29,7 +29,7 @@ mkdir -p "$install_root/bin" "$release_dir" "$runtime_dir/backups"
 if [[ -x "$binary_path" ]]; then
   install -m 0755 "$binary_path" "$release_dir/previous"
 fi
-install -m 0755 "$release_binary" "$release_dir/xai-grok-superagent-server"
+install -m 0755 "$release_binary" "$release_dir/superagent-server"
 
 if [[ -x "$backup_script" && -d "$runtime_dir" ]]; then
   "$backup_script" "$runtime_dir/backups/pre-upgrade-$timestamp.tar.gz" || {
@@ -39,7 +39,7 @@ if [[ -x "$backup_script" && -d "$runtime_dir" ]]; then
 fi
 
 new_binary="$binary_path.new.$timestamp"
-install -m 0755 "$release_dir/xai-grok-superagent-server" "$new_binary"
+install -m 0755 "$release_dir/superagent-server" "$new_binary"
 mv -f "$new_binary" "$binary_path"
 printf '%s\n' "$release_dir" > "$install_root/current-release"
 

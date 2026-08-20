@@ -2,7 +2,6 @@
 set -euo pipefail
 
 mkdir -p /var/lib/superagent /home/user/workspace/media
-export GROK_CONFIG_PATH="${SUPERAGENT_PROVIDER_CONFIG_PATH:-/var/lib/superagent/provider-config.toml}"
 
 # The wake service is the E2B auto-resume doorbell and file-share endpoint.
 /opt/superagent/wake-http/start.sh || true

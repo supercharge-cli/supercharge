@@ -813,7 +813,7 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
                             }
                             Ok(_) => {}
                             Err(error) => {
-                                eprintln!("grok headless turn failed: {error}");
+                                eprintln!("agent headless turn failed: {error}");
                                 client
                                     .send_message(
                                         message.chat_id,
@@ -959,7 +959,7 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                             }
                             Ok(_) => {}
                             Err(error) => {
-                                eprintln!("grok headless Discord turn failed: {error}");
+                                eprintln!("agent headless Discord turn failed: {error}");
                                 let _ = binary;
                                 let _ = client
                                     .send_message(
@@ -1257,7 +1257,7 @@ async fn generic_webhook(
             let prompt = event.text.clone();
             tokio::spawn(async move {
                 if let Err(error) = run_grok_prompt(&session, &prompt).await {
-                    eprintln!("generic webhook grok turn failed: {error}");
+                    eprintln!("generic webhook agent turn failed: {error}");
                 }
             });
         }
@@ -1965,8 +1965,8 @@ async fn connection_status() -> Json<Vec<ConnectionReadiness>> {
     Json(vec![
         connection_readiness("http-auth", "protected-api", &["SUPERAGENT_API_TOKEN"]),
         connection_readiness(
-            "grok-model",
-            "headless-xai",
+            "provider",
+            "agent-runtime",
             &["POLLINATIONS_API_KEY", "SUPERAGENT_AGENT_BINARY"],
         ),
         connection_readiness("e2b", "sandbox-api", &["E2B_API_KEY"]),

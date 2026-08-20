@@ -255,7 +255,7 @@ Generate a video from a text (or image) description. It plans shots, generates s
 
 ### `/loop [interval] <prompt>`
 
-Run a prompt on a recurring interval. Give the interval as `30m`, `1 hour`, or `every 2 days`; leave it out and Grok will ask.
+Run a prompt on a recurring interval. Give the interval as `30m`, `1 hour`, or `every 2 days`; leave it out and Supercharge AI will ask.
 
 ```
 /loop 30m check deploy status
@@ -270,7 +270,7 @@ Intervals are `Ns` (seconds, minimum 60), `Nm` (minutes), `Nh` (hours), or `Nd` 
 
 ### `/goal`
 
-Set, manage, or check an autonomous goal. Grok works across rounds and only marks the goal complete after an independent evidence review confirms the claim; if that review can't reproduce the result or has no usable evidence, the goal stays active or pauses with concrete gaps.
+Set, manage, or check an autonomous goal. Supercharge AI works across rounds and only marks the goal complete after an independent evidence review confirms the claim; if that review can't reproduce the result or has no usable evidence, the goal stays active or pauses with concrete gaps.
 
 ```
 /goal Migrate the auth module to the new API
@@ -306,7 +306,7 @@ Launch a saved workflow, or manage a running one by the session-unique display n
 /workflow save review-changes
 ```
 
-Project workflows live in `.grok/workflows/*.rhai`; user workflows live in `~/.grok/workflows/*.rhai`. A same-process pause/resume continues the original immutable script, args, and `agent_budget` cap from committed host-call results — to iterate, edit the returned script copy and launch it as a new run.
+Project workflows live in the project workflow directory; user workflows live in the Supercharge configuration home. A same-process pause/resume continues the original immutable script, args, and `agent_budget` cap from committed host-call results — to iterate, edit the returned script copy and launch it as a new run.
 
 A budget-limited run is different: it only resumes through a model/tool resume request that supplies an `agent_budget` above the admitted agent count. A bare `/workflow resume <name>` can't raise the cap, so it rejects budget-limited runs. Runs interrupted by a process restart aren't resumed at all, because external effects have no stable cross-process identity. And resume is not exactly-once: an external effect whose result wasn't committed before a same-process pause can run again.
 
@@ -429,9 +429,15 @@ This setting doesn't touch `[features] telemetry`, `trace_upload`, or your exter
 
 ## Configuration and UI
 
-### `/settings`
+### `/setup`
 
-Open the settings modal to view and change configuration interactively. Aliases: `/config`, `/preferences`, `/prefs`.
+Open Supercharge AI’s interactive setup modal. Use it to review and change provider, model, terminal, workspace, privacy, and other local configuration through the validated settings UI. The command never writes API keys into the configuration file; provider credentials are referenced by environment-variable name and must be supplied by the host secret store.
+
+```
+/setup
+```
+
+`/settings` remains available for the same configuration surface, with aliases `/config`, `/preferences`, and `/prefs`.
 
 ### `/timestamps`
 
@@ -441,7 +447,7 @@ Toggle message timestamps on or off.
 
 ## Skills as Slash Commands
 
-Any enabled skill with `user-invocable: true` in its SKILL.md frontmatter shows up as a slash command. (Turn a skill off via `/skills` and it stops being advertised.) So a skill at `~/.grok/skills/commit/SKILL.md` runs as:
+Any enabled skill with `user-invocable: true` in its SKILL.md frontmatter shows up as a slash command. (Turn a skill off via `/skills` and it stops being advertised.) So a skill in the configured Supercharge skills directory runs as:
 
 ```
 /commit fix typo in README

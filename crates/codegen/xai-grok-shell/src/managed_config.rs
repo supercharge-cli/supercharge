@@ -450,7 +450,9 @@ pub fn resolve_deployment_id(deployment_key: Option<&str>) -> Option<String> {
         .or_else(|| Some(crate::agent::config::deployment_id_from_key(key)))
 }
 
-/// Resolve deployment key from `GROK_DEPLOYMENT_KEY` env var, then config files.
+/// Resolve deployment key from the Supercharge environment first, then the
+/// inherited compatibility variable, then configuration files. The raw key is
+/// never persisted by this resolver.
 pub fn resolve_deployment_key() -> Option<String> {
     let config_val = crate::config::load_effective_config()
         .map_err(|e| tracing::warn!("failed to load config files for deployment key: {e}"))
@@ -461,13 +463,13 @@ pub fn resolve_deployment_key() -> Option<String> {
                 .as_str()
                 .map(|s| s.to_owned())
         });
-    crate::agent::config::resolve_string_flag(
-        None,
-        "GROK_DEPLOYMENT_KEY",
-        config_val.as_deref(),
-        None,
-    )
-    .map(|r| r.value)
+    let env_name = if std::env::var_os("SUPERCHARGE_DEPLOYMENT_KEY").is_some() {
+        "SUPERCHARGE_DEPLOYMENT_KEY"
+    } else {
+        "GROK_DEPLOYMENT_KEY"
+    };
+    crate::agent::config::resolve_string_flag(None, env_name, config_val.as_deref(), None)
+        .map(|r| r.value)
 }
 
 /// One-way blake3 fingerprint of a deployment key — the deploy-key identity (see [`crate::config::ServingIdentity`]).
