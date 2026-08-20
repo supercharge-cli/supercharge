@@ -775,18 +775,18 @@ pub fn resolve_label_collision(base_dir: &Path, label: &str) -> String {
 
 /// Resolve the grok home for worktree paths via the **same** resolver used for
 /// `worktrees.db` (`xai_fast_worktree::resolve_grok_home`), so checkout dirs and
-/// the metadata DB always live under the same `.grok` tree. That resolver
-/// canonicalizes its `$HOME` fallback to match `xai_grok_config::grok_home()`,
-/// so worktree paths also agree with trust/hooks and other grok-home paths.
+/// the metadata DB always live under the same Supercharge tree. That resolver
+/// canonicalizes its `$HOME` fallback to match the resolved Supercharge home,
+/// so worktree paths also agree with trust/hooks and other home paths.
 fn grok_home() -> std::path::PathBuf {
     xai_fast_worktree::resolve_grok_home().unwrap_or_else(|_| {
         dirs::home_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-            .join(".grok")
+            .join(".supercharge")
     })
 }
 
-/// Returns `~/.grok/worktrees/<repo_slug>` for the given git root.
+/// Returns `~/.supercharge/worktrees/<repo_slug>` for the given git root.
 ///
 /// Uses [`repo_slug`] to derive a collision-resistant directory name from
 /// the last two meaningful path components.
@@ -795,16 +795,16 @@ pub fn worktree_base_dir(git_root: &Path) -> std::path::PathBuf {
     grok_home().join("worktrees").join(slug)
 }
 
-/// Resolves the worktree base directory (`~/.grok/worktrees/<repo_name>`)
-/// for a given source path, correctly handling grok-managed worktrees.
+/// Resolves the worktree base directory (`~/.supercharge/worktrees/<repo_name>`)
+/// for a given source path, correctly handling Supercharge-managed worktrees.
 ///
-/// When `source_path` is already under `~/.grok/worktrees/<repo>/...`, the
+/// When `source_path` is already under `~/.supercharge/worktrees/<repo>/...`, the
 /// repo name is derived from the directory structure directly. This avoids
 /// `find_main_repo_root_from_path`, which misidentifies standalone worktrees
 /// as the main repo root (returning the worktree itself instead of the
 /// original repo).
 ///
-/// For paths outside the grok worktree directory, falls back to
+/// For paths outside the Supercharge worktree directory, falls back to
 /// `find_main_repo_root_from_path` + `worktree_base_dir`.
 pub fn worktree_base_dir_for_source(source_path: &Path) -> Result<std::path::PathBuf> {
     let worktrees_dir = grok_home().join("worktrees");

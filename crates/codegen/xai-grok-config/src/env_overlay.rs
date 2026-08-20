@@ -7,9 +7,13 @@ use crate::loader::{
 };
 
 /// Inline config overlay: a JSON object.
+pub const SUPERCHARGE_CONFIG_ENV: &str = "SUPERCHARGE_CONFIG";
+/// Legacy inline overlay variable retained for compatibility.
 pub const GROK_CONFIG_ENV: &str = "GROK_CONFIG";
 
 /// Path to an additional JSON or TOML config-overlay file (read by extension).
+pub const SUPERCHARGE_CONFIG_PATH_ENV: &str = "SUPERCHARGE_CONFIG_PATH";
+/// Legacy config-overlay path variable retained for compatibility.
 pub const GROK_CONFIG_PATH_ENV: &str = "GROK_CONFIG_PATH";
 
 /// Hard cap on a `GROK_CONFIG_PATH` overlay read. Matches the untrusted-config
@@ -41,19 +45,21 @@ pub struct ResolvedOverlay {
 }
 
 fn env_overlay_inputs() -> (Option<String>, Option<PathBuf>) {
-    let inline = match std::env::var_os(GROK_CONFIG_ENV) {
+    let inline_raw =
+        std::env::var_os(SUPERCHARGE_CONFIG_ENV).or_else(|| std::env::var_os(GROK_CONFIG_ENV));
+    let path_raw = std::env::var_os(SUPERCHARGE_CONFIG_PATH_ENV)
+        .or_else(|| std::env::var_os(GROK_CONFIG_PATH_ENV));
+    let inline = match inline_raw {
         Some(raw) => match raw.into_string() {
             Ok(s) => Some(s),
             Err(_) => {
-                tracing::warn!("GROK_CONFIG is not valid UTF-8; ignoring the overlay");
+                tracing::warn!("Supercharge config overlay is not valid UTF-8; ignoring it");
                 None
             }
         },
         None => None,
     };
-    let path = std::env::var_os(GROK_CONFIG_PATH_ENV)
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from);
+    let path = path_raw.filter(|v| !v.is_empty()).map(PathBuf::from);
     (inline, path)
 }
 
@@ -67,7 +73,7 @@ pub(crate) fn load_env_overlay() -> Option<toml::Value> {
     tracing::trace!(
         source = source_label,
         ?sections,
-        "resolved GROK_CONFIG overlay"
+        "resolved Supercharge config overlay"
     );
     Some(overlay)
 }

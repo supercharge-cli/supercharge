@@ -363,8 +363,10 @@ fn collect_repo_config_kinds(cwd: &Path, first_only: bool) -> Vec<&'static str> 
             hit!("permission");
         }
     }
-    // Project `.grok/lsp.json`.
-    if cwd.join(".grok").join("lsp.json").is_file() {
+    // Project `.supercharge/lsp.json`; legacy `.grok/lsp.json` remains gated.
+    if cwd.join(".supercharge").join("lsp.json").is_file()
+        || cwd.join(".grok").join("lsp.json").is_file()
+    {
         hit!("lsp");
     }
     // Project `.cursor/mcp.json` — vendor MCP loading is default-on and tagged
@@ -398,21 +400,22 @@ fn collect_repo_config_kinds(cwd: &Path, first_only: bool) -> Vec<&'static str> 
     // resolve trusted and run ungated. Presence mirrors discovery's "something to
     // gate" check.
     let hook_root = chain.git_root.as_deref().unwrap_or(cwd);
-    if path_present_or_uncertain(&hook_root.join(".grok").join("hooks"))
+    if path_present_or_uncertain(&hook_root.join(".supercharge").join("hooks"))
+        || path_present_or_uncertain(&hook_root.join(".grok").join("hooks"))
         || hook_root.join(".cursor").join("hooks.json").is_file()
     {
         hit!("hooks");
     }
     // Project PLUGIN dirs: project-scoped plugins are unified under folder-trust
     // too, so a repo-local plugin dir is repo-controlled code-exec (hooks/MCP)
-    // that must be gated — else a plugin clone (e.g. `.grok/plugins/evil/`, even
+    // that must be gated — else a plugin clone (e.g. `.supercharge/plugins/evil/`, even
     // one in a subdir launched via `cd sub && grok`) would resolve trusted and
     // run ungated. Uses the shared SSOT walk (cwd→git root) so detection matches
     // exactly what `discover_plugins` scans for Project scope (errs secure).
     if !xai_grok_agent::plugins::project_plugin_dirs_in(&chain.dirs).is_empty() {
         hit!("plugins");
     }
-    // Project AGENT dirs (`.grok/agents` / `.claude/agents`): a project agent
+    // Project AGENT dirs (`.supercharge/agents` / `.claude/agents`): a project agent
     // definition can carry an inline `hooks:` block (repo-controlled code-exec)
     // AND can SHADOW a built-in subagent by name, so an agents-only clone must
     // still be gated. Uses the shared SSOT walk (cwd→git root) so detection
@@ -421,14 +424,21 @@ fn collect_repo_config_kinds(cwd: &Path, first_only: bool) -> Vec<&'static str> 
         hit!("agents");
     }
     // Presence matches exact-cwd discovery without parsing repository content.
-    let grok = cwd.join(".grok");
-    if directory_present_or_uncertain(&grok.join("roles")) {
+    let supercharge = cwd.join(".supercharge");
+    let legacy = cwd.join(".grok");
+    if directory_present_or_uncertain(&supercharge.join("roles"))
+        || directory_present_or_uncertain(&legacy.join("roles"))
+    {
         hit!("roles");
     }
-    if directory_present_or_uncertain(&grok.join("personas")) {
+    if directory_present_or_uncertain(&supercharge.join("personas"))
+        || directory_present_or_uncertain(&legacy.join("personas"))
+    {
         hit!("personas");
     }
-    if directory_present_or_uncertain(&hook_root.join(".grok").join("workflows")) {
+    if directory_present_or_uncertain(&hook_root.join(".supercharge").join("workflows"))
+        || directory_present_or_uncertain(&hook_root.join(".grok").join("workflows"))
+    {
         hit!("workflows");
     }
     // `~/.claude.json` `projects.<cwd>.mcpServers`.

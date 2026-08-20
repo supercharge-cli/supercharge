@@ -1792,14 +1792,14 @@ fn config_path() -> PathBuf {
     crate::util::grok_home::grok_home().join("config.toml")
 }
 
-/// Path to the user-level config file (`~/.grok/config.toml`).
+/// Path to the user-level config file (`~/.supercharge/config.toml`).
 pub fn user_config_path() -> PathBuf {
     config_path()
 }
 
-/// Path to a project-level config file (`<dir>/.grok/config.toml`).
+/// Path to a project-level config file (`<dir>/.supercharge/config.toml`).
 pub fn project_config_path(dir: &std::path::Path) -> PathBuf {
-    dir.join(".grok").join("config.toml")
+    dir.join(".supercharge").join("config.toml")
 }
 
 /// True when the config file at `path` defines `[mcp_servers.<name>]`.

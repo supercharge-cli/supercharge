@@ -46,7 +46,8 @@ pub use config_layers::{
     load_dismissed_ids_from_home, load_effective_config_disk_only,
 };
 pub use env_overlay::{
-    GROK_CONFIG_ENV, GROK_CONFIG_PATH_ENV, OverlaySource, ResolvedOverlay, resolved_env_overlay,
+    GROK_CONFIG_ENV, GROK_CONFIG_PATH_ENV, OverlaySource, ResolvedOverlay, SUPERCHARGE_CONFIG_ENV,
+    SUPERCHARGE_CONFIG_PATH_ENV, resolved_env_overlay,
 };
 #[cfg(unix)]
 pub use global_hook_sources::{

@@ -1,10 +1,12 @@
+pub const ENV_SUPERCHARGE_SYSTEM_PROMPT_LABEL: &str = "SUPERCHARGE_SYSTEM_PROMPT_LABEL";
 pub const ENV_SYSTEM_PROMPT_LABEL: &str = "GROK_SYSTEM_PROMPT_LABEL";
 
-pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = xai_grok_agent::DEFAULT_SYSTEM_PROMPT_LABEL;
+pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = "Supercharge AI";
 
 /// Resolve system-prompt identity label.
-/// Precedence: env → config per-model → `[agent]` → GB per-model → GB global →
-/// `"Grok"`. Empty/whitespace falls through.
+/// Precedence: Supercharge env → compatibility env → config per-model →
+/// `[agent]` → inherited per-model → inherited global → `"Supercharge AI"`.
+/// Empty/whitespace falls through.
 ///
 /// Per-model TOML is looked up by session catalog id, then routing slug
 /// (`ModelInfo.model`). Do not use CLI `-m` alone — it may outlive a mid-session
@@ -44,9 +46,14 @@ pub(crate) fn resolve_system_prompt_label_from_tiers(
             (!t.is_empty()).then(|| t.to_string())
         })
     };
-    std::env::var(ENV_SYSTEM_PROMPT_LABEL)
+    std::env::var(ENV_SUPERCHARGE_SYSTEM_PROMPT_LABEL)
         .ok()
         .and_then(|s| non_empty(Some(s)))
+        .or_else(|| {
+            std::env::var(ENV_SYSTEM_PROMPT_LABEL)
+                .ok()
+                .and_then(|s| non_empty(Some(s)))
+        })
         .or_else(|| non_empty(user_per_model))
         .or_else(|| non_empty(user_global))
         .or_else(|| non_empty(gb_per_model))

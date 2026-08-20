@@ -208,8 +208,8 @@ impl DiscoveryConfig {
 
 // ── Discovery entry point ─────────────────────────────────────────────
 
-/// User plugin directories in priority order: `$GROK_HOME/plugins` then
-/// `~/.claude/plugins`.
+/// User plugin directories in priority order: `$SUPERCHARGE_HOME/plugins`
+/// then `~/.claude/plugins`. The resolved home performs the legacy migration.
 ///
 /// Unlike agent discovery, plugins are intentionally NOT discovered from a
 /// legacy `~/.grok/plugins`: plugin trust, persisted plugin-data, and install
@@ -227,7 +227,8 @@ fn user_plugin_dirs(home: Option<&Path>, grok: Option<&Path>) -> Vec<(PathBuf, P
     dirs
 }
 
-/// Origin for a project plugins parent dir: `.claude/plugins` vs `.grok/plugins`.
+/// Origin for a project plugins parent dir: `.claude/plugins` vs the
+/// Supercharge/legacy project plugin directory.
 fn project_plugins_dir_origin(plugins_dir: &Path) -> PluginOrigin {
     let is_claude = plugins_dir
         .parent()
@@ -240,7 +241,8 @@ fn project_plugins_dir_origin(plugins_dir: &Path) -> PluginOrigin {
     }
 }
 
-/// Project-scoped plugin parent dirs (`.grok/plugins`, `.claude/plugins`) that
+/// Project-scoped plugin parent dirs (`.supercharge/plugins`, legacy
+/// `.grok/plugins`, and `.claude/plugins`) that
 /// exist along the `cwd`→git-worktree-root walk (inclusive), or just `cwd`'s own
 /// when `cwd` is not inside a git repo, paired with the resolved git worktree
 /// root (when any). This is the exact set [`discover_plugins`] scans for
@@ -256,12 +258,16 @@ pub fn project_plugin_dirs(cwd: Option<&Path>) -> (Vec<PathBuf>, Option<PathBuf>
     (project_plugin_dirs_in(&chain.dirs), chain.git_root)
 }
 
-/// Existing project plugin parent dirs (`.grok/plugins`, `.claude/plugins`)
+/// Existing project plugin parent dirs (`.supercharge/plugins`, legacy
+/// `.grok/plugins`, and `.claude/plugins`)
 /// under each dir of a precomputed cwd→git-root chain
 /// ([`crate::repo::RepoDirChain`]). The folder-trust gate reuses its one shared
 /// chain here so detection and discovery can never drift.
 pub fn project_plugin_dirs_in(chain_dirs: &[PathBuf]) -> Vec<PathBuf> {
-    crate::repo::existing_subdirs_along(chain_dirs, &[".grok/plugins", ".claude/plugins"])
+    crate::repo::existing_subdirs_along(
+        chain_dirs,
+        &[".supercharge/plugins", ".grok/plugins", ".claude/plugins"],
+    )
 }
 
 /// Discover all plugins from the filesystem.
@@ -298,7 +304,8 @@ pub fn discover_plugins(
         }
     }
 
-    // 2-3. Project plugins (.grok/plugins/, .claude/plugins/) — scan the SAME
+    // 2-3. Project plugins (.supercharge/plugins/, legacy .grok/plugins/,
+    // .claude/plugins/) — scan the SAME
     // dirs the folder-trust gate detects, via the shared `project_plugin_dirs`
     // walk (cwd→git root), so discovery and gating can never drift.
     if let Some(cwd) = cwd {
@@ -337,8 +344,9 @@ pub fn discover_plugins(
         }
     }
 
-    // 4-5. User plugins: $GROK_HOME/plugins, legacy ~/.grok/plugins, ~/.claude/plugins.
-    // Gate the grok plugins dir on user_grok_home() so a project's .grok/plugins
+    // 4-5. User plugins: $SUPERCHARGE_HOME/plugins and ~/.claude/plugins.
+    // Gate the Supercharge plugins dir on user_grok_home() so a project's
+    // .supercharge/plugins
     // is never scanned as user-global when no home resolves.
     let grok = xai_grok_config::user_grok_home();
     let plugin_dirs = user_plugin_dirs(dirs::home_dir().as_deref(), grok.as_deref());

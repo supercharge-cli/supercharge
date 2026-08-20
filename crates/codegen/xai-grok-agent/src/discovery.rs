@@ -1,8 +1,8 @@
 //! Agent definition file discovery.
 //!
-//! Searches `.grok/agents/` and `.claude/agents/` from cwd to repo root,
-//! then `~/.grok/agents/`, then `~/.claude/agents/`. Name-based dedup keeps
-//! highest priority.
+//! Searches `.supercharge/agents/` and `.claude/agents/` from cwd to repo root,
+//! then `~/.supercharge/agents/`, then `~/.claude/agents/`. Legacy `.grok`
+//! directories remain readable during migration. Name-based dedup keeps highest priority.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,10 +14,12 @@ use crate::config::{AgentDefinition, AgentScope, BuiltinAgentName};
 use crate::error::AgentBuildError;
 use crate::prompt::context::TemplateOverride;
 
-/// Project-level agent directories to scan (`.grok/agents/` + `.claude/agents/` compat).
-const PROJECT_AGENT_SUBDIRS: &[&str] = &[".grok/agents", ".claude/agents"];
+/// Project-level agent directories to scan. Supercharge is primary; `.grok`
+/// remains a guarded legacy fallback.
+const PROJECT_AGENT_SUBDIRS: &[&str] = &[".supercharge/agents", ".grok/agents", ".claude/agents"];
 
-/// Existing project-level agent dirs (`.grok/agents` / `.claude/agents`), walked
+/// Existing project-level agent dirs (`.supercharge/agents` / `.grok/agents` /
+/// `.claude/agents`), walked
 /// from `cwd` up to the git worktree root (inclusive). Returns
 /// `(existing dirs, git_root)`. Mirrors [`crate::plugins::project_plugin_dirs`].
 pub fn project_agent_dirs(cwd: Option<&Path>) -> (Vec<PathBuf>, Option<PathBuf>) {
@@ -123,7 +125,7 @@ fn merge_subagents(
     // the runtime spawn precedence in by_name_in_cwd():
     //   project > built-in > user > bundled
     //
-    // A user-level ~/.grok/agents/explore.md does NOT shadow built-in explore
+    // A user-level ~/.supercharge/agents/explore.md does NOT shadow built-in explore
     // at spawn time, so it must not shadow it in the visible list either.
     // Otherwise: visible != callable (the guarantee would be broken).
     for def in discovered {
@@ -183,10 +185,11 @@ fn merge_subagents(
 /// Discover all agent definitions from the filesystem.
 ///
 /// Search order (highest priority first):
-/// 1. `.grok/agents/` walking from `cwd` up to repo root
-/// 2. `~/.grok/agents/` (user-level)
+/// 1. `.supercharge/agents/` walking from `cwd` up to repo root
+/// 2. `~/.supercharge/agents/` (user-level)
 /// 3. `~/.claude/agents/` (compat user-level)
-/// 4. `~/.grok/bundled/agents/` (bundled, lowest priority)
+/// 4. `~/.supercharge/bundled/agents/` (bundled, lowest priority)
+/// Legacy `.grok` directories are checked only as fallbacks.
 ///
 /// Deduplicates by name — higher-priority definitions win.
 /// User-level agent directories in priority order: user grok agents, `.claude`
@@ -197,9 +200,8 @@ pub(crate) fn user_agent_dirs(
     home: Option<&Path>,
     grok_home: Option<&Path>,
 ) -> Vec<(std::path::PathBuf, AgentScope)> {
-    // Legacy literal ~/.grok, included only when it differs from grok_home
-    // (i.e. GROK_HOME points elsewhere) so agents left in the old location are
-    // still discovered and stay consistent with scope_from_path classification.
+    // Legacy literal ~/.grok, included only when it differs from the resolved
+    // Supercharge home so agents left in the old location remain discoverable.
     let legacy_grok = home
         .map(|h| h.join(".grok"))
         .filter(|legacy| grok_home != Some(legacy.as_path()));
@@ -224,8 +226,8 @@ pub(crate) fn user_agent_dirs(
 }
 
 pub fn discover(cwd: &Path) -> Vec<AgentDefinition> {
-    let grok = xai_grok_config::user_grok_home();
-    discover_with_home(cwd, dirs::home_dir().as_deref(), grok.as_deref())
+    let supercharge = xai_grok_config::user_grok_home();
+    discover_with_home(cwd, dirs::home_dir().as_deref(), supercharge.as_deref())
 }
 
 fn discover_with_home(
@@ -251,8 +253,8 @@ fn discover_with_home(
 ///
 /// Checks built-ins first, then user-level dirs, then bundled.
 pub fn by_name(name: &str) -> Option<AgentDefinition> {
-    let grok = xai_grok_config::user_grok_home();
-    by_name_with_home(name, dirs::home_dir().as_deref(), grok.as_deref())
+    let supercharge = xai_grok_config::user_grok_home();
+    by_name_with_home(name, dirs::home_dir().as_deref(), supercharge.as_deref())
 }
 
 fn by_name_with_home(

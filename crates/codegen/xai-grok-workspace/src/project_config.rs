@@ -1,5 +1,6 @@
 //! Project config-file discovery: locating repo-local `.mcp.json` and
-//! `.grok/config.toml` files by walking from `cwd` up to the git root.
+//! `.supercharge/config.toml` files by walking from `cwd` up to the git root.
+//! Legacy `.grok/config.toml` files remain readable during migration.
 //!
 //! These pure `git2` + filesystem walks are shared by the shell's config
 //! loaders and the folder-trust gate's `repo_configs_present`.
@@ -41,7 +42,7 @@ pub(crate) fn find_mcp_json_files_in(chain_dirs: &[PathBuf]) -> Vec<PathBuf> {
         .collect()
 }
 
-/// True when `config_path` is `$GROK_HOME/config.toml` (user tier, not project).
+/// True when `config_path` is the user-home `config.toml` (user tier, not project).
 fn is_user_grok_config_file(config_path: &Path) -> bool {
     let Some(user_home) = xai_grok_config::user_grok_home() else {
         return false;
@@ -57,13 +58,10 @@ fn is_user_grok_config_file(config_path: &Path) -> bool {
     canonical_config == canonical_user
 }
 
-/// Find all `.grok/config.toml` files from `cwd` upward to the git repo root.
-/// Returns paths ordered from repo root (lowest priority) to cwd (highest priority),
-/// matching the convention used by skills and AGENTS.md discovery.
-///
-/// If no git repo is found, only checks `cwd/.grok/config.toml`. Excludes the
-/// user-global config so `cwd == $HOME` does not treat `~/.grok/config.toml` as
-/// a project overlay.
+/// Find all project config files from `cwd` upward to the git repo root.
+/// `.supercharge/config.toml` is preferred; `.grok/config.toml` is a legacy
+/// fallback when the Supercharge file is absent. Results are ordered from repo
+/// root (lowest priority) to cwd (highest priority).
 pub fn find_project_configs(cwd: &Path) -> Vec<PathBuf> {
     find_project_configs_in(&RepoDirChain::resolve(cwd).dirs)
 }
@@ -78,8 +76,18 @@ pub(crate) fn find_project_configs_in(chain_dirs: &[PathBuf]) -> Vec<PathBuf> {
     chain_dirs
         .iter()
         .rev()
-        .map(|dir| dir.join(".grok").join("config.toml"))
-        .filter(|config_path| config_path.is_file() && !is_user_grok_config_file(config_path))
+        .flat_map(|dir| {
+            let current = dir.join(".supercharge").join("config.toml");
+            let legacy = dir.join(".grok").join("config.toml");
+            let mut candidates = Vec::with_capacity(2);
+            if current.is_file() {
+                candidates.push(current);
+            } else if legacy.is_file() {
+                candidates.push(legacy);
+            }
+            candidates
+        })
+        .filter(|config_path| !is_user_grok_config_file(config_path))
         .collect()
 }
 

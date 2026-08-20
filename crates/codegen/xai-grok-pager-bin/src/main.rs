@@ -156,7 +156,9 @@ async fn run_setup_command(json: bool) {
     if !managed_config::has_principal() {
         eprintln!("No deployment key or team sign-in found.");
         eprintln!();
-        eprintln!("To install managed configuration, sign in with a team using `supercharge login`,");
+        eprintln!(
+            "To install managed configuration, sign in with a team using `supercharge login`,"
+        );
         eprintln!("or set a deployment key:");
         eprintln!();
         if cfg!(unix) {
@@ -544,14 +546,14 @@ async fn workspace_start(
     );
     if !use_leader {
         anyhow::bail!(
-            "`grok workspace` requires leader mode (the workspace is shared via the leader).\n\
-             Enable it with `[cli] use_leader = true` in ~/.grok/config.toml, or pass --leader."
+            "`supercharge workspace` requires leader mode (the workspace is shared via the leader).\n\
+             Enable it with `[cli] use_leader = true` in ~/.supercharge/config.toml, or pass --leader."
         );
     }
     ensure_authenticated(
         &agent_config.grok_com_config,
         false,
-        Some("No cached credentials found. Run `grok login` first."),
+        Some("No cached credentials found. Run `supercharge login` first."),
     )
     .await?;
     let env_urls = LeaderEnvUrls::from(&agent_config.grok_com_config);
@@ -1559,7 +1561,7 @@ fn flag_dashboard_at_startup_if_requested(args: &mut PagerArgs) -> Result<()> {
     if !xai_grok_pager::views::dashboard::dashboard_enabled() {
         anyhow::bail!(
             "the Agent Dashboard is disabled. Enable it by removing \
-             `[dashboard] enabled = false` from ~/.grok/config.toml and \
+             `[dashboard] enabled = false` from ~/.supercharge/config.toml and \
              unsetting GROK_AGENT_DASHBOARD=0."
         );
     }
@@ -1830,6 +1832,13 @@ fn main() {
         std::process::exit(code);
     }
     let args = PagerArgs::parse_cli();
+    // Keep the model-facing identity independent from the inherited provider
+    // implementation. Explicit user overrides still win.
+    if env::var_os("SUPERCHARGE_SYSTEM_PROMPT_LABEL").is_none()
+        && env::var_os("GROK_SYSTEM_PROMPT_LABEL").is_none()
+    {
+        unsafe { env::set_var("SUPERCHARGE_SYSTEM_PROMPT_LABEL", "Supercharge AI") };
+    }
     if dispatch_version_if_requested(&args) || dispatch_doctor_if_requested(&args) {
         return;
     }
@@ -2357,7 +2366,7 @@ fn stdio_auto_update_enabled(
 /// True when `exe` is the binary `<grok_home>/bin/grok` resolves to, the
 /// install that adopts a staged update on respawn. Both sides are
 /// canonicalized; any failure reports unmanaged and skips the update. The
-/// npm shim hardcodes `~/.grok`, so a custom `GROK_HOME` skips here too.
+/// Legacy launchers may hardcode `~/.grok`; custom homes skip this check too.
 fn is_managed_install(exe: Option<std::path::PathBuf>, grok_home: &std::path::Path) -> bool {
     if grok_home.as_os_str().is_empty() {
         return false;
