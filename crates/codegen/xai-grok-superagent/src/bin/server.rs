@@ -11,6 +11,7 @@ use std::{
 };
 
 use tokio::sync::{Mutex, broadcast};
+use tracing::Instrument;
 
 use base64::Engine as _;
 
@@ -409,6 +410,11 @@ fn connection_readiness(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let filter = env::var("SUPERAGENT_LOG_FILTER").unwrap_or_else(|_| "info".to_owned());
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .try_init();
     let bind = env::var("SUPERAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_owned());
     let addr: SocketAddr = bind.parse()?;
     let api_token = env::var("SUPERAGENT_API_TOKEN")
@@ -1004,6 +1010,13 @@ async fn run_grok_prompt(
     metrics
         .prompt_chars
         .fetch_add(prompt.chars().count() as u64, Ordering::Relaxed);
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let span = tracing::info_span!(
+        "agent_turn",
+        trace_id = %trace_id,
+        session = %session_key,
+        prompt_chars = prompt.chars().count()
+    );
     let result: Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> = async {
         if control_is_emergency_stopped().await {
             return Ok(Some(
@@ -1034,6 +1047,7 @@ async fn run_grok_prompt(
             String::from_utf8_lossy(&output.stdout).trim().to_owned(),
         ))
     }
+    .instrument(span)
     .await;
     metrics.total_duration_ms.fetch_add(
         started.elapsed().as_millis().min(u64::MAX as u128) as u64,
