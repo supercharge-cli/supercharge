@@ -30,7 +30,7 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["ring"]
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-native-roots"] }
 tower-http = { workspace = true, features = ["limit"] }
 urlencoding = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "process", "signal", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "signal", "sync", "time"] }
 uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]

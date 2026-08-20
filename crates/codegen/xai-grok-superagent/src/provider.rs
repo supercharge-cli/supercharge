@@ -1,6 +1,7 @@
 use std::{env, fs, path::Path};
 
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -157,6 +158,59 @@ const BUILTINS: &[BuiltinProvider] = &[
         api_key_env: "NOUS_API_KEY",
     },
 ];
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderHealth {
+    pub provider: String,
+    pub base_url: String,
+    pub ok: bool,
+    pub status: Option<u16>,
+    pub latency_ms: u128,
+    pub error: Option<String>,
+}
+
+pub async fn health_check(profile: &ProviderProfile) -> ProviderHealth {
+    let started = Instant::now();
+    let endpoint = format!("{}/models", profile.base_url.trim_end_matches('/'));
+    let result = async {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .build()
+            .map_err(|error| error.to_string())?;
+        let mut request = client.get(endpoint);
+        if let Ok(key) = std::env::var(&profile.api_key_env)
+            && !key.trim().is_empty()
+        {
+            request = request.bearer_auth(key);
+        }
+        let response = request.send().await.map_err(|error| error.to_string())?;
+        let status = response.status();
+        Ok::<(bool, Option<u16>, Option<String>), String>((
+            status.is_success() || status == reqwest::StatusCode::UNAUTHORIZED,
+            Some(status.as_u16()),
+            None,
+        ))
+    }
+    .await;
+    match result {
+        Ok((ok, status, error)) => ProviderHealth {
+            provider: profile.id.clone(),
+            base_url: profile.base_url.clone(),
+            ok,
+            status,
+            latency_ms: started.elapsed().as_millis(),
+            error,
+        },
+        Err(error) => ProviderHealth {
+            provider: profile.id.clone(),
+            base_url: profile.base_url.clone(),
+            ok: false,
+            status: None,
+            latency_ms: started.elapsed().as_millis(),
+            error: Some(error),
+        },
+    }
+}
 
 pub fn builtin_profiles() -> Vec<ProviderProfile> {
     BUILTINS.iter().map(profile_for_builtin).collect()

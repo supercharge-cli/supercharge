@@ -38,13 +38,16 @@ use xai_grok_superagent::{
     discord::DiscordClient,
     email::{EmailClient, EmailConfig},
     gateway::GatewayStateStore,
-    integrations::{SkillRegistry, discover_http_tools, invoke_http_tool, parse_mcp_servers},
+    integrations::{
+        SkillRegistry, discover_http_tools, discover_stdio_tools, invoke_http_tool,
+        invoke_stdio_tool, parse_mcp_servers,
+    },
     jobs::{AgentJob, JobStatus, JobStore},
     matrix::{MatrixClient, MatrixConfig},
     media::extract_media,
     memory::{MemoryEntry, MemoryStore},
     provider::{
-        ProviderConfigRequest, ProviderProfile, builtin_profiles, configured_profile,
+        ProviderConfigRequest, ProviderProfile, builtin_profiles, configured_profile, health_check,
         validate_request, write_runtime_config,
     },
     schedule_store::ScheduleStore,
@@ -596,6 +599,7 @@ async fn main() -> anyhow::Result<()> {
             "/v1/providers",
             get(list_providers).post(configure_provider),
         )
+        .route("/v1/providers/health", get(provider_health))
         .route("/v1/memory", get(search_memory).post(remember_memory))
         .route("/v1/memory/stats", get(memory_stats))
         .route("/v1/memory/export", get(export_memory))
@@ -1471,7 +1475,11 @@ async fn list_mcp_tools(
         if !server.enabled {
             continue;
         }
-        let tools = discover_http_tools(&server).await.map_err(internal_error)?;
+        let tools = match server.transport.as_str() {
+            "stdio" => discover_stdio_tools(&server).await,
+            _ => discover_http_tools(&server).await,
+        }
+        .map_err(internal_error)?;
         output.insert(
             server.name,
             serde_json::to_value(tools).map_err(internal_error)?,
@@ -1493,13 +1501,26 @@ async fn call_mcp_tool(
             }),
         )
     })?;
-    let result = invoke_http_tool(
-        server,
-        &request.tool,
-        request.arguments,
-        request.timeout_seconds,
-    )
-    .await
+    let result = match server.transport.as_str() {
+        "stdio" => {
+            invoke_stdio_tool(
+                server,
+                &request.tool,
+                request.arguments,
+                request.timeout_seconds,
+            )
+            .await
+        }
+        _ => {
+            invoke_http_tool(
+                server,
+                &request.tool,
+                request.arguments,
+                request.timeout_seconds,
+            )
+            .await
+        }
+    }
     .map_err(internal_error)?;
     Ok(Json(result))
 }
@@ -1769,6 +1790,11 @@ fn internal_error(error: impl std::fmt::Display) -> (StatusCode, Json<ErrorRespo
             error: error.to_string(),
         }),
     )
+}
+
+async fn provider_health() -> Json<Value> {
+    let profile = configured_profile();
+    Json(serde_json::to_value(health_check(&profile).await).unwrap_or_else(|_| json!({"ok":false})))
 }
 
 async fn list_providers() -> Json<Value> {

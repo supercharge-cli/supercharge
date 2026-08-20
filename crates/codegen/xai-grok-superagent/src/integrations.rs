@@ -2,7 +2,10 @@ use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
+    process::Stdio,
 };
+
+use tokio::{io::AsyncWriteExt, process::Command};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -262,6 +265,156 @@ pub async fn invoke_http_tool(
         )));
     }
     Ok(body.get("result").cloned().unwrap_or(body))
+}
+
+fn stdio_allowed(endpoint: &str) -> bool {
+    std::env::var("SUPERAGENT_MCP_STDIO_ALLOWLIST")
+        .ok()
+        .map(|value| value.split(',').map(str::trim).any(|item| item == endpoint))
+        .unwrap_or(false)
+}
+
+#[allow(clippy::disallowed_methods)]
+async fn stdio_rpc(
+    server: &McpServerDescriptor,
+    requests: &[Value],
+    timeout: std::time::Duration,
+) -> Result<Vec<Value>, IntegrationError> {
+    if !stdio_allowed(&server.endpoint) {
+        return Err(IntegrationError::Invalid(
+            "stdio MCP endpoint is not present in SUPERAGENT_MCP_STDIO_ALLOWLIST".to_owned(),
+        ));
+    }
+    let mut child = Command::new(&server.endpoint)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| IntegrationError::Http(format!("stdio MCP spawn failed: {error}")))?;
+    let input = requests
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()?
+        .join("\\n");
+    if input.len() > 512 * 1024 {
+        return Err(IntegrationError::Invalid(
+            "stdio MCP request exceeds the 512 KiB limit".to_owned(),
+        ));
+    }
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(format!("{input}\n").as_bytes())
+            .await
+            .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    }
+    let output = tokio::time::timeout(timeout, child.wait_with_output())
+        .await
+        .map_err(|_| IntegrationError::Http("stdio MCP process timed out".to_owned()))?
+        .map_err(|error| IntegrationError::Http(error.to_string()))?;
+    if output.stdout.len() > 512 * 1024 {
+        return Err(IntegrationError::Invalid(
+            "stdio MCP output exceeds the 512 KiB limit".to_owned(),
+        ));
+    }
+    output
+        .stdout
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            serde_json::from_slice(line)
+                .map_err(|error| IntegrationError::Protocol(error.to_string()))
+        })
+        .collect()
+}
+
+pub async fn invoke_stdio_tool(
+    server: &McpServerDescriptor,
+    tool_name: &str,
+    arguments: Value,
+    timeout_seconds: Option<u64>,
+) -> Result<Value, IntegrationError> {
+    validate_mcp_server(server)?;
+    if !server.enabled || server.transport != "stdio" {
+        return Err(IntegrationError::Invalid(
+            "stdio MCP server is disabled or has the wrong transport".to_owned(),
+        ));
+    }
+    if tool_name.trim().is_empty()
+        || tool_name.len() > 128
+        || tool_name.chars().any(char::is_control)
+    {
+        return Err(IntegrationError::Invalid(
+            "MCP tool name is invalid".to_owned(),
+        ));
+    }
+    let encoded_arguments = serde_json::to_vec(&arguments)?;
+    if encoded_arguments.len() > 256 * 1024 {
+        return Err(IntegrationError::Invalid(
+            "MCP tool arguments exceed the 256 KiB limit".to_owned(),
+        ));
+    }
+    let requests = vec![
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"superagent","version":env!("CARGO_PKG_VERSION")}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":tool_name,"arguments":arguments}}),
+    ];
+    let responses = stdio_rpc(
+        server,
+        &requests,
+        std::time::Duration::from_secs(timeout_seconds.unwrap_or(30).clamp(1, 120)),
+    )
+    .await?;
+    let body = responses
+        .into_iter()
+        .last()
+        .ok_or_else(|| IntegrationError::Protocol("stdio MCP returned no response".to_owned()))?;
+    if let Some(error) = body.get("error") {
+        return Err(IntegrationError::Protocol(format!(
+            "MCP tool call failed: {error}"
+        )));
+    }
+    Ok(body.get("result").cloned().unwrap_or(body))
+}
+
+pub async fn discover_stdio_tools(
+    server: &McpServerDescriptor,
+) -> Result<Vec<McpToolSummary>, IntegrationError> {
+    validate_mcp_server(server)?;
+    if !server.enabled || server.transport != "stdio" {
+        return Ok(Vec::new());
+    }
+    let requests = vec![
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"superagent","version":env!("CARGO_PKG_VERSION")}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
+    ];
+    let responses = stdio_rpc(server, &requests, std::time::Duration::from_secs(30)).await?;
+    let body = responses
+        .into_iter()
+        .last()
+        .ok_or_else(|| IntegrationError::Protocol("stdio MCP returned no response".to_owned()))?;
+    let tools = body
+        .get("result")
+        .and_then(|result| result.get("tools"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            IntegrationError::Protocol("MCP response has no result.tools array".to_owned())
+        })?;
+    tools
+        .iter()
+        .map(|tool| {
+            Ok(McpToolSummary {
+                name: tool
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| IntegrationError::Protocol("MCP tool has no name".to_owned()))?
+                    .to_owned(),
+                description: tool
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            })
+        })
+        .collect()
 }
 
 async fn parse_mcp_response(response: reqwest::Response) -> Result<Value, IntegrationError> {
