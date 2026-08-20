@@ -74,6 +74,21 @@ impl SkillRegistry {
                 .map(|value| value.trim().to_owned())
         });
         let digest = Sha256::digest(instructions.as_bytes());
+        let digest_text = format!("sha256:{digest:x}");
+        if std::env::var("SUPERAGENT_SKILL_REQUIRE_TRUST")
+            .ok()
+            .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+        {
+            let trust_file = canonical.with_extension("sha256");
+            let trusted = fs::read_to_string(&trust_file)
+                .ok()
+                .is_some_and(|value| value.split_whitespace().any(|item| item == digest_text));
+            if !trusted {
+                return Err(IntegrationError::Invalid(
+                    "skill manifest is not trusted by its adjacent .sha256 file".to_owned(),
+                ));
+            }
+        }
         Ok(LoadedSkill {
             descriptor: SkillDescriptor {
                 name: name.to_owned(),
@@ -81,7 +96,7 @@ impl SkillRegistry {
                 description,
             },
             instructions,
-            sha256: format!("sha256:{digest:x}"),
+            sha256: digest_text,
         })
     }
 }
