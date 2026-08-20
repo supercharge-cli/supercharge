@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::redaction::redact_secrets;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum JobStatus {
     Queued,
@@ -81,7 +83,7 @@ impl JobStore {
             session_key: session_key.into(),
             platform: platform.into(),
             chat_id,
-            prompt: prompt.into(),
+            prompt: redact_secrets(&prompt.into()),
             status: JobStatus::Queued,
             attempts: 0,
             max_attempts: max_attempts.max(1),
@@ -162,7 +164,7 @@ impl JobStore {
                 value.truncate(200_000);
                 value.push_str("\n[output truncated]");
             }
-            value
+            redact_secrets(&value)
         });
         self.persist()
     }
@@ -191,7 +193,7 @@ impl JobStore {
             .jobs
             .get_mut(id)
             .ok_or_else(|| JobStoreError::NotFound(id.to_owned()))?;
-        job.last_error = Some(error.into());
+        job.last_error = Some(redact_secrets(&error.into()));
         job.lease_until = None;
         job.updated_at = now;
         if job.attempts < job.max_attempts {

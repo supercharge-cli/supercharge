@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::redaction::redact_secrets;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemoryEntry {
     pub id: String,
@@ -80,10 +82,10 @@ impl MemoryStore {
         let now = now_seconds();
         let entry = MemoryEntry {
             id: Uuid::new_v4().to_string(),
-            session_key: session_key.into(),
-            content: content.into(),
-            tags,
-            kind: kind.into(),
+            session_key: redact_secrets(&session_key.into()),
+            content: redact_secrets(&content.into()),
+            tags: tags.into_iter().map(|tag| redact_secrets(&tag)).collect(),
+            kind: redact_secrets(&kind.into()),
             importance,
             created_at: now,
             updated_at: now,
@@ -189,6 +191,14 @@ impl MemoryStore {
             if entry.session_key.trim().is_empty() || entry.content.trim().is_empty() {
                 continue;
             }
+            let mut entry = entry;
+            entry.session_key = redact_secrets(&entry.session_key);
+            entry.content = redact_secrets(&entry.content);
+            entry.tags = entry
+                .tags
+                .into_iter()
+                .map(|tag| redact_secrets(&tag))
+                .collect();
             self.state.entries.insert(entry.id.clone(), entry);
             inserted += 1;
         }

@@ -20,6 +20,7 @@ pub mod matrix;
 pub mod media;
 pub mod memory;
 pub mod provider;
+pub mod redaction;
 pub mod schedule_store;
 mod scheduler;
 pub mod sharing;
