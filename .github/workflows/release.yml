@@ -28,6 +28,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: 0
+      RUSTUP_TOOLCHAIN: 1.94.1
       RUSTFLAGS: -C debuginfo=0
     steps:
       - name: Check out source
