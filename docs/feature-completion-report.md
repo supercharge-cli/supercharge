@@ -3,8 +3,10 @@
 **Repository:** `iotserver24/hermes-agent-alternative`  
 **Companion repository:** `iotserver24/cloud-infra`  
 **Report status:** Final implementation snapshot  
-**Agent repository commit:** `38f66a7` — `docs: clarify app workspace template contract`  
-**Cloud-infra commits:** `19c3773` — `feat: add app workspace browser and file sharing`; `2585d91` — `feat: add resilient sandbox preview links`
+**Agent repository commit:** `79beac3` — `ci: add manual release build workflow`
+
+**Cloud-infra commits:**
+ `19c3773` — `feat: add app workspace browser and file sharing`; `2585d91` — `feat: add resilient sandbox preview links`; `53013f1` — `feat: expose browser controls in app`
 
 ## Executive summary
 
@@ -19,20 +21,21 @@ The app integration is now wired through the existing cloud-infra gateway contra
 | Rust daemon mode | Long-running Axum service with graceful shutdown, background scheduler, durable job worker, automatic gateway startup, health endpoint, daemon status endpoint, and automatic restart assets. |
 | Messaging gateways | Telegram long polling and webhook mode, Discord, Slack, WhatsApp, Signal, Matrix, generic authenticated webhooks, and allowlisted IMAP/SMTP email. |
 | Durable state | Restart-safe jobs, leases, retries, memory, schedules, session controls, gateway offsets, Matrix cursor, and E2B session metadata. |
-| Memory | Typed entries, tags, importance ranking, session-scoped search, deletion, compaction, statistics, export, and restore. Broad secret-redaction parity remains an explicit hardening item. |
+| Memory | Typed entries, tags, importance ranking, session-scoped search, deletion, compaction, statistics, export, restore, and shared secret redaction before durable persistence. |
 | E2B | One-shot execution plus durable sessions with bounded workspace paths, capped output, auto-pause/auto-resume lifecycle, wake, pause, and deletion routes. |
-| Browser workspace | Chromium and `agent-browser` stream supervision source, `/v1/computer/status`, app-compatible view-only browser SSE frames, Vectra dashboard rendering, raw port preview links, and automatic stream reconnect after transient failure or sandbox resume. Agent input actions and gateway-level user takeover controls remain partial. |
-| Providers | Twelve built-in provider profiles, custom OpenAI-compatible endpoint validation, secret-free TOML generation, authenticated provider configuration API, and Pollinations-compatible runtime configuration. |
-| MCP | Controlled descriptor parsing, HTTP/SSE initialization and tool discovery, plus authenticated bounded `tools/call` execution with session-header propagation, argument limits, timeout limits, and JSON-RPC error handling. Stdio MCP execution remains intentionally outside the HTTP route. |
-| Skills | Validated manifest discovery, digest reporting, and bounded manifest-composed invocation through the configured agent runtime at `POST /v1/integrations/skills/:name/run`. Installation, richer trust policy, and improvement loops remain future work. |
+| Browser workspace | Chromium and `agent-browser` stream supervision, `/v1/computer/status`, app-compatible browser SSE frames, Vectra dashboard rendering, raw port preview links, automatic reconnect, and authenticated approval-gated navigate/click/fill/type/key/scroll/history controls. Control is opt-in through `SUPERAGENT_BROWSER_CONTROL_ENABLED`. |
+| Providers | Twelve built-in provider profiles, custom OpenAI-compatible endpoint validation, secret-free TOML generation, authenticated provider configuration API, Pollinations-compatible runtime configuration, and bounded `/v1/providers/health` latency/status diagnostics. Automatic multi-provider failover and token-level accounting remain future enhancements. |
+| MCP | Controlled descriptor parsing, HTTP/SSE initialization and tool discovery, authenticated bounded `tools/call` execution, and allowlisted stdio MCP discovery/calls using no-shell child processes, bounded I/O, `kill_on_drop`, and timeouts. |
+| Skills | Validated manifest discovery, digest reporting, bounded manifest-composed invocation through `POST /v1/integrations/skills/:name/run`, and optional adjacent `.sha256` trust enforcement via `SUPERAGENT_SKILL_REQUIRE_TRUST`. Installation and improvement loops remain future work. |
 | Subagents | Bounded depth, concurrency, timeout, isolated session, and output limits. |
 | Scheduled automation | Durable interval and validated five-field cron schedules, due-job claiming, leased worker execution, bounded result persistence, crash recovery, retries, and target-based scheduled result delivery. |
 | Cross-channel delivery | Unified `platform:recipient[:thread]` dispatch for Telegram, Discord, Slack, WhatsApp, Signal, Matrix, email, and webhook targets. |
-| Media | Secure `MEDIA:` parsing and native delivery for Telegram, Discord, Slack, and WhatsApp. Voice, speech-to-text, text-to-speech, and generation providers are intentionally excluded. |
+| Media | Secure `MEDIA:` parsing, native delivery for Telegram, Discord, Slack, and WhatsApp, and autonomous wake-service share-link rewriting for outbound replies. Voice, speech-to-text, text-to-speech, and generation providers are intentionally excluded. |
 | Security | Bearer-token API protection, deny-by-default gateway authorization, request-size limits, security headers, E2B workspace validation, configurable per-session rate limits, non-root deployment assets, approval policy, and persisted authenticated global emergency-stop/resume routes. |
-| Observability | Health, capability, connection readiness, daemon status, authenticated `/v1/observability`, durable recovery, gateway retry logging, aggregate turn counters, character accounting, and execution-duration metrics. Full distributed traces and provider-token accounting remain partial. |
+| Observability | Health, capability, connection readiness, daemon status, authenticated `/v1/observability`, durable recovery, gateway retry logging, aggregate counters, character accounting, execution-duration metrics, startup subscriber initialization, and per-turn correlation spans. OpenTelemetry export and provider-token accounting remain future enhancements. |
 | Operations | Docker/systemd assets, runtime backup/restore scripts, health-checked atomic upgrade, automatic failed-upgrade recovery, explicit rollback tooling, and the local `ci/quality-gates.sh` fallback. |
-| Cloud compatibility | `cloud-infra` supports configurable daemon commands and emits neutral `SUPERAGENT_*` runtime variables for the Rust template while preserving the legacy template path. The Vectra dashboard now exposes the terminal Command pane, browser Computer pane, `https://{port}-{sandboxId}.e2b.app` preview links, wake/share service links, workspace browsing/editing, capability-scoped file sharing, and workspace archive export. |
+| Cloud compatibility | `cloud-infra` supports configurable daemon commands and emits neutral `SUPERAGENT_*` runtime variables while preserving the legacy template path. The Vectra dashboard exposes the terminal Command pane, browser Computer pane, authenticated Rust app-inbox chat/SSE contract, `https://{port}-{sandboxId}.e2b.app` preview links, wake/share service links, workspace browsing/editing, capability-scoped sharing, archive export, and explicit browser controls. |
+| Release automation | Manual `workflow_dispatch` workflow at `.github/workflows/release.yml` builds quality-gated daemon artifacts, optionally builds the provider bridge, packages the E2B template source and SHA-256 checksums, and publishes assets to a Release in the same repository. |
 
 ## Validation results
 
@@ -42,11 +45,13 @@ The final local quality gates were run with Rust **1.94.0**, the `e2b` feature e
 | --- | --- |
 | `cargo +1.94.0 fmt --all -- --check` | Passed |
 | `cargo +1.94.0 clippy --locked -p xai-grok-superagent --features e2b -- -D warnings` | Passed |
-| `cargo +1.94.0 test --locked -p xai-grok-superagent --features e2b` | Passed: **47 library tests, 2 daemon tests** |
+| Latest targeted `cargo +1.94.0 test -p xai-grok-superagent` | Passed: **49 library tests, 2 daemon tests** |
+| Previous E2B-enabled quality gate | Passed: **47 library tests, 2 daemon tests** before the latest non-E2B-only hardening increments |
 | Local fallback script `ci/quality-gates.sh` | Passed for `xai-grok-superagent (e2b)` |
 | Upgrade and rollback shell syntax | Previously validated with `bash -n` |
-| Agent repository push | `9bcab49` is on `origin/main` |
-| Cloud-infra push | `099c6ab` is on `origin/main` |
+| Agent repository push | `79beac3` is on `origin/main` |
+| Cloud-infra push | `53013f1` is on `origin/main` |
+| Release workflow visibility | GitHub Actions workflow `Build and publish release` is active with ID `338381769` |
 
 The test suite includes deterministic gateway, email, memory, scheduler, delivery, media, provider, E2B-bounds, MCP discovery/tool-call, skill-manifest, controls, and API readiness/rate-limit coverage. Tests do not claim live connectivity to external platforms without corresponding credentials and service accounts.
 
@@ -62,7 +67,7 @@ For a persistent Linux host, copy `.env.runtime.example` to a protected secret f
 
 For E2B execution, build the daemon with the `e2b` feature and provide `E2B_API_KEY`. Use the durable session routes when a filesystem and sandbox should survive across commands. The next SDK/API operation wakes a paused sandbox; auto-resume is activity-driven rather than an unbounded background process.
 
-For controlled MCP execution, set `SUPERAGENT_MCP_SERVERS` to a JSON descriptor list. Use authenticated `GET /v1/integrations/mcp/tools` for discovery and authenticated `POST /v1/integrations/mcp/call` for HTTP/SSE tool invocation. The call route enforces a 256 KiB argument limit and a 1–120 second timeout bound. Use authenticated `POST /v1/integrations/skills/:name/run` for bounded skill invocation; the route validates the skill name, loads the manifest, composes the bounded instruction, and runs it through the configured agent runtime.
+For controlled MCP execution, set `SUPERAGENT_MCP_SERVERS` to a JSON descriptor list. Use authenticated `GET /v1/integrations/mcp/tools` and `POST /v1/integrations/mcp/call`. HTTP/SSE calls enforce a 256 KiB argument limit and 1–120 second timeout bound. Stdio MCP requires the exact executable to be listed in `SUPERAGENT_MCP_STDIO_ALLOWLIST`; it is launched without a shell with bounded input/output and timeout controls. Use `SUPERAGENT_SKILL_REQUIRE_TRUST=true` to require an adjacent digest file for each skill before invoking `POST /v1/integrations/skills/:name/run`.
 
 For emergency shutdown of new turns, call authenticated `POST /v1/emergency-stop`; the state is persisted in the controls file and blocks new turns across all sessions. Resume normal operation with authenticated `POST /v1/emergency-resume` after the incident is understood.
 
@@ -82,9 +87,7 @@ Use `SUPERAGENT_INSTALL_ROOT`, `SUPERAGENT_BINARY_PATH`, `SUPERAGENT_SERVICE_NAM
 
 ## Remaining work
 
-The daemon foundations and requested no-voice feature set are implemented. Remaining work is concentrated in advanced parity and publication: obtain a reliable provider-bridge binary and publish the interactive E2B template; broaden secret redaction across every persistence and logging path; add provider health checks and provider-token accounting; add full distributed tracing; complete agent browser input and user-takeover controls; add stdio MCP execution with stronger trust isolation; and add richer skill installation, trust, and improvement workflows.
-
-The GitHub token available to the session cannot push `.github/workflows/` files, so the repository uses the local quality-gates fallback. A hosted workflow can be added later by an operator with workflow-file permission.
+The requested core no-voice feature set is implemented, including app-compatible chat, browser controls, autonomous file sharing, redaction, stdio MCP isolation, skill trust mode, provider health diagnostics, tracing spans, and manual release automation. Remaining work is concentrated in advanced parity and publication: obtain a reliable provider-bridge binary and publish the interactive E2B image; add automatic multi-provider failover and token-level usage accounting; export OpenTelemetry traces; add richer skill installation/version/improvement workflows; and add explicit user-takeover approval UX for sensitive browser sessions. The release workflow itself is now pushed and active; its optional provider-bridge build remains dependent on a runner with sufficient resources.
 
 ## Repository hygiene
 
