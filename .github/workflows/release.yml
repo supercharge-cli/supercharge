@@ -76,9 +76,13 @@ jobs:
           set -euo pipefail
           mkdir -p release
           cp target/release/xai-grok-superagent-server release/superagent-server-linux-x86_64
+          cp deploy/install-supercharge.sh release/install-supercharge.sh
+          chmod +x release/install-supercharge.sh
           tar -C sandbox -czf release/superagent-e2b-template-source.tar.gz e2b-agent-template
           if [[ -f target/release/xai-grok-pager ]]; then
             cp target/release/xai-grok-pager release/superagent-provider-bridge-linux-x86_64
+            cp target/release/xai-grok-pager release/supercharge-linux-x86_64
+            cp target/release/xai-grok-pager release/sc-linux-x86_64
           fi
           sha256sum release/* > release/SHA256SUMS
           cat release/SHA256SUMS

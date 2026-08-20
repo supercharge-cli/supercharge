@@ -149,3 +149,28 @@ The persistent session API follows the reference E2B gateway’s safer lifecycle
 The Rust HTTP service is designed to run continuously on a persistent Linux host or container platform. E2B sandboxes are created for bounded isolated command execution and are cleaned up after each run. They are not used as the permanent host for the agent control plane.
 
 Before exposing `/v1/exec`, configure an authentication token and retain the approval policy. The service rejects destructive executables and requires explicit approval for network-facing commands.
+
+## Supercharge AI terminal TUI
+
+The interactive terminal client is distributed as **Supercharge AI**. The release bundle contains the same TUI binary under `supercharge` and `sc`, while the daemon remains a separate `superagent-server` binary. Install both terminal commands with:
+
+```bash
+./install-supercharge.sh
+```
+
+The installer places the commands under `${SUPERCHARGE_INSTALL_PREFIX:-$HOME/.local/bin}`, creates the branded configuration home `${SUPERCHARGE_HOME:-$HOME/.supercharge}`, and preserves the underlying `GROK_HOME` compatibility variable for the inherited workspace runtime.
+
+Start interactive chat and coding with either command:
+
+```bash
+supercharge
+sc
+```
+
+Run a single prompt without opening the TUI:
+
+```bash
+supercharge --single "Inspect this repository and suggest the next safe change"
+```
+
+The same binary also retains the existing headless, stdio, server, and leader subcommands for automation and daemon integration. Use the daemon binary and systemd/E2B deployment assets for 24/7 operation; use `supercharge` or `sc` when a human wants to chat, inspect files, and code interactively in the terminal.
