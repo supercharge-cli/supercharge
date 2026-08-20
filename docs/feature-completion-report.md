@@ -3,14 +3,14 @@
 **Repository:** `iotserver24/hermes-agent-alternative`  
 **Companion repository:** `iotserver24/cloud-infra`  
 **Report status:** Final implementation snapshot  
-**Agent repository commit:** `9bcab49` — `feat: add persisted emergency stop`  
-**Cloud-infra commit:** `099c6ab` — `fix: sync Rust agent inbox credentials`
+**Agent repository commit:** `38f66a7` — `docs: clarify app workspace template contract`  
+**Cloud-infra commits:** `19c3773` — `feat: add app workspace browser and file sharing`; `2585d91` — `feat: add resilient sandbox preview links`
 
 ## Executive summary
 
 The project now provides a private, Rust-first, self-hostable 24/7 agent daemon built on the existing Rust workspace. The daemon includes durable state, multi-channel gateways, email, E2B execution, browser workspace streaming, provider configuration, bounded subagents, MCP and skill integrations, scheduled automation, cross-channel delivery, media delivery, session controls, observability, protected APIs, runtime backup and restore, and health-checked upgrade and rollback tooling.
 
-The remaining publication blocker is the second interactive E2B image. Its Dockerfile, wake service, browser dependencies, environment contract, and Rust daemon binary are present in the repository, but the upstream provider-bridge executable could not be produced reliably in this sandbox. Multiple lower-memory and linker strategies ended with environment termination during the final compile/link stage, so no placeholder binary was introduced.
+The app integration is now wired through the existing cloud-infra gateway contract; the remaining publication blocker is the second interactive E2B image. Its Dockerfile, wake service, browser dependencies, environment contract, and Rust daemon binary are present in the repository, but the upstream provider-bridge executable could not be produced reliably in this sandbox. Multiple lower-memory and linker strategies ended with environment termination during the final compile/link stage, so no placeholder binary was introduced.
 
 ## Implemented capabilities
 
@@ -21,7 +21,7 @@ The remaining publication blocker is the second interactive E2B image. Its Docke
 | Durable state | Restart-safe jobs, leases, retries, memory, schedules, session controls, gateway offsets, Matrix cursor, and E2B session metadata. |
 | Memory | Typed entries, tags, importance ranking, session-scoped search, deletion, compaction, statistics, export, and restore. Broad secret-redaction parity remains an explicit hardening item. |
 | E2B | One-shot execution plus durable sessions with bounded workspace paths, capped output, auto-pause/auto-resume lifecycle, wake, pause, and deletion routes. |
-| Browser workspace | Chromium and `agent-browser` stream supervision source, `/v1/computer/status`, and app-compatible view-only browser SSE frames. Agent input actions and gateway-level user takeover controls remain partial. |
+| Browser workspace | Chromium and `agent-browser` stream supervision source, `/v1/computer/status`, app-compatible view-only browser SSE frames, Vectra dashboard rendering, raw port preview links, and automatic stream reconnect after transient failure or sandbox resume. Agent input actions and gateway-level user takeover controls remain partial. |
 | Providers | Twelve built-in provider profiles, custom OpenAI-compatible endpoint validation, secret-free TOML generation, authenticated provider configuration API, and Pollinations-compatible runtime configuration. |
 | MCP | Controlled descriptor parsing, HTTP/SSE initialization and tool discovery, plus authenticated bounded `tools/call` execution with session-header propagation, argument limits, timeout limits, and JSON-RPC error handling. Stdio MCP execution remains intentionally outside the HTTP route. |
 | Skills | Validated manifest discovery, digest reporting, and bounded manifest-composed invocation through the configured agent runtime at `POST /v1/integrations/skills/:name/run`. Installation, richer trust policy, and improvement loops remain future work. |
@@ -32,7 +32,7 @@ The remaining publication blocker is the second interactive E2B image. Its Docke
 | Security | Bearer-token API protection, deny-by-default gateway authorization, request-size limits, security headers, E2B workspace validation, configurable per-session rate limits, non-root deployment assets, approval policy, and persisted authenticated global emergency-stop/resume routes. |
 | Observability | Health, capability, connection readiness, daemon status, authenticated `/v1/observability`, durable recovery, gateway retry logging, aggregate turn counters, character accounting, and execution-duration metrics. Full distributed traces and provider-token accounting remain partial. |
 | Operations | Docker/systemd assets, runtime backup/restore scripts, health-checked atomic upgrade, automatic failed-upgrade recovery, explicit rollback tooling, and the local `ci/quality-gates.sh` fallback. |
-| Cloud compatibility | `cloud-infra` supports configurable daemon commands and emits neutral `SUPERAGENT_*` runtime variables for the Rust template while preserving the legacy template path. |
+| Cloud compatibility | `cloud-infra` supports configurable daemon commands and emits neutral `SUPERAGENT_*` runtime variables for the Rust template while preserving the legacy template path. The Vectra dashboard now exposes the terminal Command pane, browser Computer pane, `https://{port}-{sandboxId}.e2b.app` preview links, wake/share service links, workspace browsing/editing, capability-scoped file sharing, and workspace archive export. |
 
 ## Validation results
 
