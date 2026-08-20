@@ -1,10 +1,10 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     convert::Infallible,
     env,
     net::SocketAddr,
     sync::{
-        Arc, OnceLock,
+        Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -51,6 +51,7 @@ use xai_grok_superagent::{
         ProviderConfigRequest, ProviderProfile, builtin_profiles, configured_profile, health_check,
         validate_request, write_runtime_config,
     },
+    redaction::redact_secrets,
     schedule_store::ScheduleStore,
     sharing::rewrite_media_links,
     signal::{SignalClient, SignalConfig},
@@ -130,6 +131,17 @@ struct AppState {
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+struct ProviderUsage {
+    attempts: u64,
+    succeeded: u64,
+    failed: u64,
+    prompt_chars: u64,
+    reply_chars: u64,
+    total_duration_ms: u64,
+    provider_usage: BTreeMap<String, ProviderUsage>,
+}
+
 #[derive(Default)]
 struct RuntimeMetrics {
     turns_started: AtomicU64,
@@ -138,6 +150,7 @@ struct RuntimeMetrics {
     prompt_chars: AtomicU64,
     reply_chars: AtomicU64,
     total_duration_ms: AtomicU64,
+    provider_usage: StdMutex<BTreeMap<String, ProviderUsage>>,
 }
 
 static RUNTIME_METRICS: OnceLock<Arc<RuntimeMetrics>> = OnceLock::new();
@@ -376,6 +389,7 @@ struct ObservabilityResponse {
     prompt_chars: u64,
     reply_chars: u64,
     total_duration_ms: u64,
+    provider_usage: BTreeMap<String, ProviderUsage>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1000,6 +1014,50 @@ async fn prepare_reply_for_delivery(reply: &str) -> String {
     }
 }
 
+fn provider_profiles_for_turn() -> Vec<ProviderProfile> {
+    let primary = configured_profile();
+    let mut profiles = vec![primary.clone()];
+    let fallbacks = env::var("SUPERAGENT_PROVIDER_FALLBACKS").unwrap_or_default();
+    for id in fallbacks
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if profiles.len() >= 4 || profiles.iter().any(|profile| profile.id == id) {
+            continue;
+        }
+        if let Some(profile) = builtin_profiles()
+            .into_iter()
+            .find(|profile| profile.id.eq_ignore_ascii_case(id))
+        {
+            profiles.push(profile);
+        }
+    }
+    profiles
+}
+
+fn record_provider_usage(
+    metrics: &RuntimeMetrics,
+    provider: &str,
+    prompt_chars: u64,
+    reply_chars: u64,
+    duration_ms: u64,
+    succeeded: bool,
+) {
+    if let Ok(mut usage) = metrics.provider_usage.lock() {
+        let entry = usage.entry(provider.to_owned()).or_default();
+        entry.attempts = entry.attempts.saturating_add(1);
+        entry.prompt_chars = entry.prompt_chars.saturating_add(prompt_chars);
+        entry.reply_chars = entry.reply_chars.saturating_add(reply_chars);
+        entry.total_duration_ms = entry.total_duration_ms.saturating_add(duration_ms);
+        if succeeded {
+            entry.succeeded = entry.succeeded.saturating_add(1);
+        } else {
+            entry.failed = entry.failed.saturating_add(1);
+        }
+    }
+}
+
 async fn run_grok_prompt(
     session_key: &str,
     prompt: &str,
@@ -1033,19 +1091,79 @@ async fn run_grok_prompt(
         }
         let binary = configured_agent_binary()
             .ok_or_else(|| anyhow::anyhow!("agent binary is not configured"))?;
-        let output = tokio::process::Command::new(binary)
-            .arg("--single")
-            .arg(prompt)
-            .arg("--session-id")
-            .arg(session_key)
-            .output()
-            .await?;
-        if !output.status.success() {
-            return Err(format!("grok exited with status {}", output.status).into());
+        let base_config = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
+            .or_else(|_| env::var("GROK_CONFIG_PATH"))
+            .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
+        let mut last_error = String::from("all provider attempts failed");
+        for profile in provider_profiles_for_turn() {
+            let attempt_started = Instant::now();
+            let safe_id = profile
+                .id
+                .chars()
+                .map(|character| if character.is_ascii_alphanumeric() { character } else { '_' })
+                .collect::<String>();
+            let attempt_config = format!("{base_config}.{trace_id}.{safe_id}.toml");
+            if let Err(error) = write_runtime_config(&attempt_config, &profile) {
+                last_error = redact_secrets(&error.to_string());
+                record_provider_usage(
+                    &metrics,
+                    &profile.id,
+                    prompt.chars().count() as u64,
+                    0,
+                    attempt_started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                    false,
+                );
+                continue;
+            }
+            let output = tokio::process::Command::new(&binary)
+                .env("GROK_CONFIG_PATH", &attempt_config)
+                .env("SUPERAGENT_PROVIDER_CONFIG_PATH", &attempt_config)
+                .arg("--single")
+                .arg(prompt)
+                .arg("--session-id")
+                .arg(session_key)
+                .output()
+                .await;
+            let _ = std::fs::remove_file(&attempt_config);
+            let elapsed_ms = attempt_started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+            match output {
+                Ok(output) if output.status.success() => {
+                    let reply = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                    record_provider_usage(
+                        &metrics,
+                        &profile.id,
+                        prompt.chars().count() as u64,
+                        reply.chars().count() as u64,
+                        elapsed_ms,
+                        true,
+                    );
+                    return Ok(Some(reply));
+                }
+                Ok(output) => {
+                    last_error = format!("{} exited with status {}", profile.id, output.status);
+                    record_provider_usage(
+                        &metrics,
+                        &profile.id,
+                        prompt.chars().count() as u64,
+                        0,
+                        elapsed_ms,
+                        false,
+                    );
+                }
+                Err(error) => {
+                    last_error = format!("{} execution failed: {}", profile.id, redact_secrets(&error.to_string()));
+                    record_provider_usage(
+                        &metrics,
+                        &profile.id,
+                        prompt.chars().count() as u64,
+                        0,
+                        elapsed_ms,
+                        false,
+                    );
+                }
+            }
         }
-        Ok(Some(
-            String::from_utf8_lossy(&output.stdout).trim().to_owned(),
-        ))
+        Err(last_error.into())
     }
     .instrument(span)
     .await;
@@ -1937,6 +2055,12 @@ async fn observability(State(state): State<Arc<AppState>>) -> Json<Observability
         prompt_chars: state.metrics.prompt_chars.load(Ordering::Relaxed),
         reply_chars: state.metrics.reply_chars.load(Ordering::Relaxed),
         total_duration_ms: state.metrics.total_duration_ms.load(Ordering::Relaxed),
+        provider_usage: state
+            .metrics
+            .provider_usage
+            .lock()
+            .map(|usage| usage.clone())
+            .unwrap_or_default(),
     })
 }
 
