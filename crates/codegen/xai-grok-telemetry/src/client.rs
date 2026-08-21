@@ -119,14 +119,14 @@ impl TelemetryClient {
 }
 
 /// Normalize a subscription tier string to a consistent lowercase_underscore
-/// format for Mixpanel. Handles both CCP display names ("SuperGrok Heavy")
-/// and JWT-derived keys ("supergrok_heavy").
+/// format for Mixpanel. Handles both CCP display names ("Supercharge Heavy")
+/// and JWT-derived keys ("supercharge_heavy").
 fn normalize_tier(tier: &str) -> String {
     match tier {
-        "SuperGrok Heavy" | "supergrok_heavy" => "supergrok_heavy",
-        "SuperGrok Plus" | "supergrok_plus" => "supergrok_plus",
-        "SuperGrok" | "supergrok" => "supergrok",
-        "SuperGrok Lite" | "supergrok_lite" => "supergrok_lite",
+        "Supercharge Heavy" | "supercharge_heavy" => "supercharge_heavy",
+        "Supercharge Plus" | "supercharge_plus" => "supercharge_plus",
+        "Supercharge" | "supercharge" => "supercharge",
+        "Supercharge Lite" | "supercharge_lite" => "supercharge_lite",
         "X Premium+" | "x_premium_plus" => "x_premium_plus",
         "X Premium" | "x_premium" => "x_premium",
         "X Basic" | "x_basic" => "x_basic",
@@ -507,15 +507,15 @@ mod tests {
     fn normalize_tier_maps_display_and_claim_names() {
         assert_eq!(normalize_tier("Free"), "free");
         assert_eq!(normalize_tier("free"), "free");
-        assert_eq!(normalize_tier("SuperGrok"), "supergrok");
-        assert_eq!(normalize_tier("SuperGrok Heavy"), "supergrok_heavy");
-        assert_eq!(normalize_tier("supergrok_heavy"), "supergrok_heavy");
+        assert_eq!(normalize_tier("Supercharge"), "supercharge");
+        assert_eq!(normalize_tier("Supercharge Heavy"), "supercharge_heavy");
+        assert_eq!(normalize_tier("supercharge_heavy"), "supercharge_heavy");
         assert_eq!(normalize_tier("X Basic"), "x_basic");
         assert_eq!(normalize_tier("X Premium+"), "x_premium_plus");
         assert_eq!(normalize_tier("X Premium"), "x_premium");
-        assert_eq!(normalize_tier("SuperGrok Lite"), "supergrok_lite");
-        assert_eq!(normalize_tier("SuperGrok Plus"), "supergrok_plus");
-        assert_eq!(normalize_tier("supergrok_plus"), "supergrok_plus");
+        assert_eq!(normalize_tier("Supercharge Lite"), "supercharge_lite");
+        assert_eq!(normalize_tier("Supercharge Plus"), "supercharge_plus");
+        assert_eq!(normalize_tier("supercharge_plus"), "supercharge_plus");
         // API key is a dedicated Mixpanel segment — never free.
         assert_eq!(normalize_tier("API Key"), "api_key");
         assert_eq!(normalize_tier("api_key"), "api_key");

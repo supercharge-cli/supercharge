@@ -1,14 +1,14 @@
-// Re-export all types from the standalone xai-grok-sampling-types crate.
+// Re-export all types from the standalone xai-Supercharge AI-sampling-types crate.
 // This keeps all existing `crate::sampling::types::*` imports working.
 pub use xai_grok_sampling_types::types::*;
 
 // `CreateResponseWrapper` and `MessagesRequestWrapper` previously lived
-// here. They were moved into `xai-grok-sampling-types::types` (and
+// here. They were moved into `xai-Supercharge AI-sampling-types::types` (and
 // are re-exported above via the wildcard) so the new
-// `xai-grok-sampler` crate can reference them without a circular
-// dep on `xai-grok-shell`.
+// `xai-Supercharge AI-sampler` crate can reference them without a circular
+// dep on `xai-Supercharge AI-shell`.
 
-// Tests for the types now live in xai-grok-sampling-types crate.
+// Tests for the types now live in xai-Supercharge AI-sampling-types crate.
 
 use xai_grok_tools::types::output::ImageContent as ToolsImageContent;
 
@@ -17,8 +17,8 @@ use xai_grok_tools::types::output::ImageContent as ToolsImageContent;
 /// explicit `uri` through if present, otherwise builds a
 /// `data:<mime>;base64,<data>` URI.
 ///
-/// Lives in the shell (rather than `xai-grok-sampling-types` or
-/// `xai-grok-tools`) so neither of those crates needs to depend on
+/// Lives in the shell (rather than `xai-Supercharge AI-sampling-types` or
+/// `xai-Supercharge AI-tools`) so neither of those crates needs to depend on
 /// `agent-client-protocol`.
 pub fn get_image_content_url(image_content: &ToolsImageContent) -> String {
     if let Some(uri) = &image_content.uri {

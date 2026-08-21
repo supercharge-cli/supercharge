@@ -100,7 +100,7 @@ pub(crate) fn discover_hook_source_paths(
         }
         let current_hooks = root.join(".supercharge").join("hooks");
         project.push(current_hooks.clone());
-        let legacy_hooks = root.join(".grok").join("hooks");
+        let legacy_hooks = root.join(".supercharge").join("hooks");
         if !current_hooks.exists() && legacy_hooks.exists() {
             project.push(legacy_hooks);
         }

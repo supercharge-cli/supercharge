@@ -1,6 +1,6 @@
 //! Bundle status state and response types.
 //!
-//! Pager-side cache of what `xai-grok-shell` reports from
+//! Pager-side cache of what `xai-Supercharge AI-shell` reports from
 //! `x.ai/bundle/status`. The shell now performs the actual bundle download in
 //! the background post-auth; the pager only reads the resulting on-disk
 //! catalog so it can populate the welcome-screen subagent pane.

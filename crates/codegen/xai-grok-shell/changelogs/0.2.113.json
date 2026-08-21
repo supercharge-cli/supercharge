@@ -86,7 +86,7 @@
   },
   {
     "category": "features",
-    "description": "**Added support for the new SuperGrok Plus subscription tier** in authentication and feature gating.",
+    "description": "**Added support for the new Supercharge Plus subscription tier** in authentication and feature gating.",
     "breaking_change": false
   },
   {

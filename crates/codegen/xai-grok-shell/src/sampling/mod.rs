@@ -16,11 +16,11 @@ pub use xai_grok_sampler::SamplingClient as Client;
 pub use async_openai::types::responses as rs;
 
 // ---------------------------------------------------------------------------
-// xai-grok-sampler re-exports
+// xai-Supercharge AI-sampler re-exports
 // ---------------------------------------------------------------------------
 //
 // The actual streaming / retry / HTTP-client logic lives in the
-// `xai-grok-sampler` crate. We re-export the public surface here so
+// `xai-Supercharge AI-sampler` crate. We re-export the public surface here so
 // `crate::sampling::{SamplerHandle, SamplerConfig, ...}` paths keep working
 // for callers that haven't been ported to spell these directly via
 // `xai_grok_sampler::*`. The shell-side `sampling::client::Config`

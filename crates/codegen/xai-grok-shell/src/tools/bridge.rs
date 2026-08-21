@@ -1,4 +1,4 @@
-//! ToolBridge: re-exported from `xai-grok-tools`.
+//! ToolBridge: re-exported from `xai-Supercharge AI-tools`.
 //!
 //! The bridge implementation now lives in `xai_grok_tools::bridge`.
 //! This module re-exports everything for backward compatibility.

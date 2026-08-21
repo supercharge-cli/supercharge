@@ -368,7 +368,7 @@ mod tests {
 
     #[tokio::test]
     async fn spawn_failure_reports_spawn_error() {
-        let cmd = Command::new("/nonexistent/grok-test-binary");
+        let cmd = Command::new("/nonexistent/Supercharge AI-test-binary");
         let out = run_detached_with_timeout(cmd, TIMEOUT, opts("test spawn failure")).await;
         assert!(matches!(out, Err(RunError::SpawnFailed)));
     }

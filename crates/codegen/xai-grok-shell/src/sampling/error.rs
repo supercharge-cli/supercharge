@@ -2,7 +2,7 @@
 //!
 //! The canonical error types now live in `xai_grok_sampling_types::error`.
 //! This module re-exports them and adds `map_sampling_err_to_acp` which
-//! depends on `agent_client_protocol::Error` (a grok-shell dependency).
+//! depends on `agent_client_protocol::Error` (a Supercharge AI-shell dependency).
 
 // Re-export everything from the standalone crate.
 pub use xai_grok_sampling_types::error::*;
@@ -22,7 +22,7 @@ pub const RATE_LIMITED_ERROR_CODE: i32 = -32003;
 pub const RATE_LIMITED_USER_MESSAGE_OAUTH: &str =
     "You\u{2019}ve hit the rate limit for your plan. Upgrade your account or try again later.";
 
-/// API key / team rate-limit copy. Personal grok.com upgrades do not raise API
+/// API key / team rate-limit copy. Personal supercharge.ai upgrades do not raise API
 /// team limits; admins purchase credits or a higher spend-based tier.
 /// See https://docs.x.ai/developers/rate-limits#rate-limit-tiers
 pub const RATE_LIMITED_USER_MESSAGE_API_KEY: &str = "You\u{2019}ve hit your team\u{2019}s API rate limit. Ask a team admin to purchase more credits for higher limits, or try again later. See https://docs.x.ai/developers/rate-limits#rate-limit-tiers";
@@ -35,7 +35,7 @@ pub const FREE_USAGE_EXHAUSTED_ERROR_CODE: &str = "subscription:free-usage-exhau
 
 /// User-facing free-usage exhaustion copy (paywall). Deliberately promises no
 /// reset duration — the quota window is backend-config-driven.
-pub const FREE_USAGE_USER_MESSAGE: &str = "You\u{2019}ve reached your free Grok Build usage limit for now. Get SuperGrok for much higher limits, or try again later: https://grok.com/supergrok?referrer=grok-build";
+pub const FREE_USAGE_USER_MESSAGE: &str = "You\u{2019}ve reached your free Supercharge AI usage limit for now. Get Supercharge for much higher limits, or try again later: https://supercharge.ai/upgrade?referrer=Supercharge AI-build";
 
 /// Whether flattened server detail is free-usage-quota exhaustion (paywall),
 /// not transient throttling. Sniffs the well-known code embedded by
@@ -47,7 +47,7 @@ pub fn is_free_usage_exhausted_error(detail: &str) -> bool {
 /// User-facing text for an ACP -32003 rate-limit error.
 ///
 /// Free-usage code first (consumer-only; intentional before API-key rewrite).
-/// API-key + personal SuperGrok upsell → team credits copy. Else the body
+/// API-key + personal Supercharge upsell → team credits copy. Else the body
 /// after stripping `API error (status …):` (SamplingError Display prefix).
 /// Empty → OAuth vs API-key fallback. Callers that show this in UI should
 /// still run their usual sanitizer (scrub/cap).
@@ -88,12 +88,13 @@ fn strip_sampling_api_error_prefix(detail: &str) -> &str {
 }
 
 /// IC sometimes reuses OAuth free-tier upsell copy on 429s ("upgrade to a Grok
-/// subscription" / grok.com/supergrok). That is wrong for API-key / team auth:
+/// subscription" / supercharge.ai/supercharge). That is wrong for API-key / team auth:
 /// higher limits come from credits and spend-based rate-limit tiers, not a
-/// personal SuperGrok plan.
+/// personal Supercharge plan.
 fn pushes_consumer_subscription_upsell(detail: &str) -> bool {
     let d = detail.to_ascii_lowercase();
-    d.contains("grok.com/supergrok") || d.contains("upgrade to a grok subscription")
+    d.contains("supercharge.ai/supercharge")
+        || d.contains("upgrade to a Supercharge AI subscription")
 }
 
 /// User-facing copy for capacity/overload failures (stream `overloaded_error`,
@@ -101,7 +102,7 @@ fn pushes_consumer_subscription_upsell(detail: &str) -> bool {
 pub const OVERLOADED_USER_MESSAGE: &str = "Model is temporarily overloaded. Try again in a moment.";
 
 /// Map a `SamplingError` to an ACP `Error` for client-facing responses.
-/// This stays in xai-grok-shell because it depends on `agent_client_protocol::Error`.
+/// This stays in xai-Supercharge AI-shell because it depends on `agent_client_protocol::Error`.
 pub(crate) fn map_sampling_err_to_acp(err: SamplingError) -> acp::Error {
     use reqwest::StatusCode;
     // Capacity/overload gets the same short copy on every surface. Message
@@ -135,9 +136,9 @@ pub(crate) fn map_sampling_err_to_acp(err: SamplingError) -> acp::Error {
                     && crate::agent::auth_method::has_xai_api_key_env()
                 {
                     format!(
-                        "{message}\n\nYou have an API key set (XAI_API_KEY). \
+                        "{message}\n\nYou have an API key set (SUPERCHARGE_API_KEY). \
                          Your cached OAuth session is being used instead. \
-                         To use your API key, run `grok logout` or type /logout in the TUI."
+                         To use your API key, run `Supercharge AI logout` or type /logout in the TUI."
                     )
                 } else {
                     message
@@ -421,7 +422,7 @@ mod tests {
         assert_eq!(format_rate_limited_user_message(Some(&wire), false), body);
         assert_eq!(format_rate_limited_user_message(Some(&wire), true), body);
 
-        // Team console rate-limit copy has no personal SuperGrok upsell — surface as-is.
+        // Team console rate-limit copy has no personal Supercharge upsell — surface as-is.
         let team = "resource-exhausted: Too many requests for team abc. See https://console.x.ai/team/default/rate-limits.";
         let team_wire = format!("API error (status 429 Too Many Requests): {team}");
         assert_eq!(
@@ -438,11 +439,11 @@ mod tests {
     fn format_rate_limited_api_key_rewrites_consumer_subscription_upsell() {
         let body = "Some resource has been exhausted: You are sending requests too quickly. \
              Please slow down, or upgrade to a Grok subscription for higher limits: \
-             https://grok.com/supergrok";
+             https://supercharge.ai/upgrade";
         let wire = format!("API error (status 429 Too Many Requests): {body}");
         // OAuth keeps the IC body (personal plan upgrade is correct).
         assert_eq!(format_rate_limited_user_message(Some(&wire), false), body);
-        // API key must not push grok.com SuperGrok — team credits / rate-limit tiers.
+        // API key must not push supercharge.ai Supercharge — team credits / rate-limit tiers.
         assert_eq!(
             format_rate_limited_user_message(Some(&wire), true),
             RATE_LIMITED_USER_MESSAGE_API_KEY
@@ -657,29 +658,29 @@ mod tests {
         );
     }
 
-    /// Helper: run a closure with XAI_API_KEY temporarily set (or cleared).
+    /// Helper: run a closure with SUPERCHARGE_API_KEY temporarily set (or cleared).
     /// Cleans up even if the closure panics.
     fn with_api_key_env<F: FnOnce()>(key: Option<&str>, f: F) {
-        let prev = std::env::var("XAI_API_KEY").ok();
-        let prev_legacy = std::env::var("GROK_CODE_XAI_API_KEY").ok();
+        let prev = std::env::var("SUPERCHARGE_API_KEY").ok();
+        let prev_legacy = std::env::var("SUPERCHARGE_CODE_API_KEY").ok();
         // SAFETY: serial_test ensures no concurrent env mutation.
         unsafe {
-            std::env::remove_var("XAI_API_KEY");
-            std::env::remove_var("GROK_CODE_XAI_API_KEY");
+            std::env::remove_var("SUPERCHARGE_API_KEY");
+            std::env::remove_var("SUPERCHARGE_CODE_API_KEY");
             if let Some(k) = key {
-                std::env::set_var("XAI_API_KEY", k);
+                std::env::set_var("SUPERCHARGE_API_KEY", k);
             }
         }
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
         // Restore original state.
         unsafe {
-            std::env::remove_var("XAI_API_KEY");
-            std::env::remove_var("GROK_CODE_XAI_API_KEY");
+            std::env::remove_var("SUPERCHARGE_API_KEY");
+            std::env::remove_var("SUPERCHARGE_CODE_API_KEY");
             if let Some(v) = prev {
-                std::env::set_var("XAI_API_KEY", v);
+                std::env::set_var("SUPERCHARGE_API_KEY", v);
             }
             if let Some(v) = prev_legacy {
-                std::env::set_var("GROK_CODE_XAI_API_KEY", v);
+                std::env::set_var("SUPERCHARGE_CODE_API_KEY", v);
             }
         }
         if let Err(e) = result {
@@ -693,7 +694,7 @@ mod tests {
         with_api_key_env(Some("xai-test"), || {
             let err = SamplingError::Api {
                 status: StatusCode::FORBIDDEN,
-                message: "The model 'grok-build' requires a Grok subscription.".into(),
+                message: "The model 'Supercharge AI-build' requires a Grok subscription.".into(),
                 model_metadata: None,
                 retry_after_secs: None,
                 should_retry: None,
@@ -703,8 +704,8 @@ mod tests {
             let data = acp_err.data.unwrap();
             let msg = data.as_str().unwrap();
             assert!(
-                msg.contains("grok logout"),
-                "should suggest grok logout when API key is available: {msg}"
+                msg.contains("Supercharge AI logout"),
+                "should suggest Supercharge AI logout when API key is available: {msg}"
             );
             assert!(
                 msg.contains("/logout"),
@@ -719,7 +720,7 @@ mod tests {
         with_api_key_env(None, || {
             let err = SamplingError::Api {
                 status: StatusCode::FORBIDDEN,
-                message: "The model 'grok-build' requires a Grok subscription.".into(),
+                message: "The model 'Supercharge AI-build' requires a Grok subscription.".into(),
                 model_metadata: None,
                 retry_after_secs: None,
                 should_retry: None,
@@ -729,7 +730,7 @@ mod tests {
             let data = acp_err.data.unwrap();
             let msg = data.as_str().unwrap();
             assert!(
-                !msg.contains("grok logout"),
+                !msg.contains("Supercharge AI logout"),
                 "should NOT suggest logout when no API key is available: {msg}"
             );
         });
@@ -751,7 +752,7 @@ mod tests {
             let data = acp_err.data.unwrap();
             let msg = data.as_str().unwrap();
             assert!(
-                !msg.contains("grok logout"),
+                !msg.contains("Supercharge AI logout"),
                 "should NOT suggest logout for non-subscription 403: {msg}"
             );
         });

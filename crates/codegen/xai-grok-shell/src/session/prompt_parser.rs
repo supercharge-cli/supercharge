@@ -358,7 +358,7 @@ mod tests {
             format!("{query}\n\n{context}")
         }
     }
-    /// Shorthand: render + assemble for grok mode.
+    /// Shorthand: render + assemble for Supercharge AI mode.
     fn render_grok(
         message: &str,
         embedded: Vec<String>,

@@ -4,7 +4,7 @@
 //! This-session [`AcpLoadBacklog::LiveHead`] releases immediately: it means
 //! unicast replay has finished. Leader mode buffers live notifications for the
 //! loading client until after the `session/load` RESPONSE (`load_live_buffer` in
-//! `xai-grok-shell` leader), so another client's live event cannot land on this
+//! `xai-Supercharge AI-shell` leader), so another client's live event cannot land on this
 //! pager's socket mid-replay even though agent-side replay now awaits between
 //! lines. The client wire order is `[unicast replay] → [load response] →
 //! [buffered live]`. Overflow of that buffer forwards live mid-replay and is

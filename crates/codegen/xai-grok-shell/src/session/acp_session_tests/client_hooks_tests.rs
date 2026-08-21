@@ -934,7 +934,7 @@ async fn subagent_session_gates_on_subagent_stop() {
 }
 
 /// Alias fire sites serialize the canonical event name: a `SubagentEnd` envelope reads
-/// `"subagent_stop"` on the wire, matching `GROK_HOOK_EVENT`.
+/// `"subagent_stop"` on the wire, matching `SUPERCHARGE_HOOK_EVENT`.
 #[tokio::test(flavor = "current_thread")]
 async fn alias_envelope_serializes_canonical_event_name() {
     let local = tokio::task::LocalSet::new();

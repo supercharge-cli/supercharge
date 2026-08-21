@@ -475,7 +475,7 @@ impl ContextInfoBlock {
         // (routed from xai-grok-shell's model config resolution). This makes
         // the “Auto-compact at X%” line and the tip band match exactly what
         // remote settings / user TOML / env have configured for the
-        // current model (e.g. 65 for grok-build).
+        // current model (e.g. 65 for supercharge-core).
         //
         // `threshold_tokens` uses `div_ceil` rather than truncating integer
         // division so it matches the rounded `usage_pct` from `ContextInfo`
@@ -1035,7 +1035,7 @@ mod tests {
             auto_compact_threshold_percent: 65,
             usage_categories: vec![],
         };
-        let block = ContextInfoBlock::new(snap, "grok-build");
+        let block = ContextInfoBlock::new(snap, "supercharge-core");
         let theme = test_theme();
         let lines = block.build_lines(&theme, BarLayout::WIDE);
 

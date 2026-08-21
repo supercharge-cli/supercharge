@@ -6,8 +6,8 @@ fn test_tmp_download_path_is_unique_per_version_and_per_attempt() {
     // name onto a single `grok-0.1.tmp`; the helper must keep distinct
     // versions distinct AND make repeated attempts (same process, e.g.
     // concurrent tokio tasks) unique.
-    let dest_181 = std::path::Path::new("/home/u/.grok/downloads/grok-0.1.181-linux-x86_64");
-    let dest_182 = std::path::Path::new("/home/u/.grok/downloads/grok-0.1.182-linux-x86_64");
+    let dest_181 = std::path::Path::new("/home/u/.supercharge/downloads/grok-0.1.181-linux-x86_64");
+    let dest_182 = std::path::Path::new("/home/u/.supercharge/downloads/grok-0.1.182-linux-x86_64");
 
     let a = tmp_download_path(dest_181);
     let b = tmp_download_path(dest_182);
@@ -30,7 +30,7 @@ fn test_tmp_download_path_is_unique_per_version_and_per_attempt() {
     );
     assert_eq!(
         a.parent(),
-        std::path::Path::new("/home/u/.grok/downloads").into(),
+        std::path::Path::new("/home/u/.supercharge/downloads").into(),
         "temp file must stay in the destination directory for atomic rename"
     );
 }
@@ -453,8 +453,8 @@ async fn test_atomic_symlink_swap_with_relative_target() {
 #[test]
 fn test_relative_symlink_target_sibling_dirs() {
     // bin/grok -> ../downloads/grok-0.1.203
-    let target = std::path::Path::new("/home/alice/.grok/downloads/grok-0.1.203");
-    let link = std::path::Path::new("/home/alice/.grok/bin/grok");
+    let target = std::path::Path::new("/home/alice/.supercharge/downloads/grok-0.1.203");
+    let link = std::path::Path::new("/home/alice/.supercharge/bin/grok");
     let result = relative_symlink_target(target, link);
     assert_eq!(
         result,
@@ -466,8 +466,8 @@ fn test_relative_symlink_target_sibling_dirs() {
 #[test]
 fn test_relative_symlink_target_same_dir() {
     // downloads/grok-latest -> grok-0.1.203 (same directory)
-    let target = std::path::Path::new("/home/alice/.grok/downloads/grok-0.1.203");
-    let link = std::path::Path::new("/home/alice/.grok/downloads/grok-latest");
+    let target = std::path::Path::new("/home/alice/.supercharge/downloads/grok-0.1.203");
+    let link = std::path::Path::new("/home/alice/.supercharge/downloads/grok-latest");
     let result = relative_symlink_target(target, link);
     assert_eq!(result, std::path::PathBuf::from("grok-0.1.203"));
 }
@@ -475,26 +475,26 @@ fn test_relative_symlink_target_same_dir() {
 #[cfg(unix)]
 #[test]
 fn test_relative_symlink_target_cross_tree_stays_absolute() {
-    // /usr/local/bin/grok -> /home/alice/.grok/downloads/grok-0.1.203
+    // /usr/local/bin/grok -> /home/alice/.supercharge/downloads/grok-0.1.203
     // Different grandparents — should stay absolute.
-    let target = std::path::Path::new("/home/alice/.grok/downloads/grok-0.1.203");
+    let target = std::path::Path::new("/home/alice/.supercharge/downloads/grok-0.1.203");
     let link = std::path::Path::new("/usr/local/bin/grok");
     let result = relative_symlink_target(target, link);
     assert_eq!(
         result,
-        std::path::PathBuf::from("/home/alice/.grok/downloads/grok-0.1.203")
+        std::path::PathBuf::from("/home/alice/.supercharge/downloads/grok-0.1.203")
     );
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn test_relative_symlink_survives_directory_move() {
-    // Simulates Docker bind-mount: create ~/.grok/ layout at path A,
+    // Simulates Docker bind-mount: create ~/.supercharge/ layout at path A,
     // then move it to path B and verify the symlink still resolves.
     let dir = tempfile::tempdir().unwrap();
 
     // Create alice's layout
-    let alice = dir.path().join("alice").join(".grok");
+    let alice = dir.path().join("alice").join(".supercharge");
     let alice_downloads = alice.join("downloads");
     let alice_bin = alice.join("bin");
     std::fs::create_dir_all(&alice_downloads).unwrap();
@@ -509,10 +509,10 @@ async fn test_relative_symlink_survives_directory_move() {
     // Verify it works at the original location
     assert_eq!(std::fs::read_to_string(&link).unwrap(), "binary-content");
 
-    // "Bind-mount" to bob: copy the entire .grok tree
+    // "Bind-mount" to bob: copy the entire .supercharge tree
     let bob_home = dir.path().join("bob");
     std::fs::create_dir_all(&bob_home).unwrap();
-    let bob = bob_home.join(".grok");
+    let bob = bob_home.join(".supercharge");
     let copy_status = std::process::Command::new("cp")
         .args(["-a", alice.to_str().unwrap(), bob.to_str().unwrap()])
         .status()
@@ -1002,7 +1002,7 @@ fn test_reinstall_hint_gh_release_mentions_gh_command() {
         "should suggest gh release download: {hint}"
     );
     assert!(
-        hint.contains("xai-org-shared/grok-build"),
+        hint.contains("xai-org-shared/supercharge-core"),
         "should name the repo: {hint}"
     );
 }
@@ -1017,7 +1017,7 @@ fn test_reinstall_hint_internal_mentions_platform_installer() {
             "should reference install.ps1: {hint}"
         );
         assert!(
-            !hint.contains("GROK_CHANNEL"),
+            !hint.contains("SUPERCHARGE_CHANNEL"),
             "stable must not set channel: {hint}"
         );
     } else {
@@ -1027,7 +1027,7 @@ fn test_reinstall_hint_internal_mentions_platform_installer() {
             "should reference install.sh: {hint}"
         );
         assert!(
-            !hint.contains("GROK_CHANNEL"),
+            !hint.contains("SUPERCHARGE_CHANNEL"),
             "stable must not set channel: {hint}"
         );
     }
@@ -1038,13 +1038,13 @@ fn test_reinstall_hint_internal_alpha_sets_channel() {
     let hint = reinstall_hint("internal", "alpha");
     if cfg!(windows) {
         assert!(
-            hint.contains("$env:GROK_CHANNEL='alpha'"),
-            "alpha should set GROK_CHANNEL: {hint}"
+            hint.contains("$env:SUPERCHARGE_CHANNEL='alpha'"),
+            "alpha should set SUPERCHARGE_CHANNEL: {hint}"
         );
     } else {
         assert!(
-            hint.contains("| GROK_CHANNEL='alpha' bash"),
-            "alpha must set GROK_CHANNEL on bash (the process running \
+            hint.contains("| SUPERCHARGE_CHANNEL='alpha' bash"),
+            "alpha must set SUPERCHARGE_CHANNEL on bash (the process running \
              install.sh), not curl: {hint}"
         );
     }
@@ -1053,14 +1053,14 @@ fn test_reinstall_hint_internal_alpha_sets_channel() {
 #[test]
 fn test_reinstall_hint_enterprise_uses_enterprise_script() {
     // Enterprise ships via its own bootstrap script (channel hardcoded
-    // there), never install.sh + GROK_CHANNEL.
+    // there), never install.sh + SUPERCHARGE_CHANNEL.
     let hint = reinstall_hint("internal", "enterprise");
     assert!(
         hint.contains("/enterprise-install."),
         "enterprise must use the published enterprise-install script: {hint}"
     );
     assert!(
-        !hint.contains("GROK_CHANNEL"),
+        !hint.contains("SUPERCHARGE_CHANNEL"),
         "enterprise script needs no channel env: {hint}"
     );
 }
@@ -1072,7 +1072,7 @@ fn test_reinstall_hint_malformed_channel_falls_back_to_stable() {
     for bad in ["al pha", "x'; rm -rf ~;'", "a\"b", ""] {
         let hint = reinstall_hint("internal", bad);
         assert!(
-            !hint.contains("GROK_CHANNEL"),
+            !hint.contains("SUPERCHARGE_CHANNEL"),
             "malformed channel {bad:?} must fall back to stable: {hint}"
         );
     }
@@ -1884,9 +1884,9 @@ fn test_user_facing_constants_are_stable() {
 // env_installer — env-var based, must run serially.
 //
 // Resolution order (matches function body):
-//   1. GROK_INSTALLER (npm | internal | gh-release | gh)
-//   2. GROK_MANAGED_BY_NPM       → npm
-//   3. GROK_MANAGED_BY_INTERNAL  → internal
+//   1. SUPERCHARGE_INSTALLER (npm | internal | gh-release | gh)
+//   2. SUPERCHARGE_MANAGED_BY_NPM       → npm
+//   3. SUPERCHARGE_MANAGED_BY_INTERNAL  → internal
 //   4. npm_config_user_agent      → npm
 //   5. None
 // ──────────────────────────────────────────────────────────────────────
@@ -1902,9 +1902,9 @@ struct InstallerEnvGuard {
 impl InstallerEnvGuard {
     fn isolate() -> Self {
         const VARS: &[&str] = &[
-            "GROK_INSTALLER",
-            "GROK_MANAGED_BY_NPM",
-            "GROK_MANAGED_BY_INTERNAL",
+            "SUPERCHARGE_INSTALLER",
+            "SUPERCHARGE_MANAGED_BY_NPM",
+            "SUPERCHARGE_MANAGED_BY_INTERNAL",
             "npm_config_user_agent",
             "NPM_TOKEN",
         ];
@@ -1942,7 +1942,7 @@ fn test_env_installer_no_vars_returns_none() {
 #[serial_test::serial]
 fn test_env_installer_explicit_npm() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "npm") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "npm") };
     assert_eq!(env_installer(), Some("npm"));
 }
 
@@ -1950,7 +1950,7 @@ fn test_env_installer_explicit_npm() {
 #[serial_test::serial]
 fn test_env_installer_explicit_internal() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "internal") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "internal") };
     assert_eq!(env_installer(), Some("internal"));
 }
 
@@ -1958,7 +1958,7 @@ fn test_env_installer_explicit_internal() {
 #[serial_test::serial]
 fn test_env_installer_explicit_gh_release() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "gh-release") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "gh-release") };
     assert_eq!(env_installer(), Some("gh-release"));
 }
 
@@ -1967,7 +1967,7 @@ fn test_env_installer_explicit_gh_release() {
 fn test_env_installer_explicit_gh_alias() {
     // `gh` is shorthand for `gh-release`.
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "gh") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "gh") };
     assert_eq!(env_installer(), Some("gh-release"));
 }
 
@@ -1975,10 +1975,10 @@ fn test_env_installer_explicit_gh_alias() {
 #[serial_test::serial]
 fn test_env_installer_explicit_uppercase_normalized() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "NPM") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "NPM") };
     assert_eq!(env_installer(), Some("npm"));
 
-    unsafe { std::env::set_var("GROK_INSTALLER", "Gh-Release") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "Gh-Release") };
     assert_eq!(env_installer(), Some("gh-release"));
 }
 
@@ -1987,16 +1987,16 @@ fn test_env_installer_explicit_uppercase_normalized() {
 fn test_env_installer_explicit_unknown_value_returns_none() {
     // CRITICAL: when the explicit env var is set to something we don't
     // recognize, we early-return None. This means we do NOT fall through
-    // to the other env vars or to config. So `GROK_INSTALLER=brew`
+    // to the other env vars or to config. So `SUPERCHARGE_INSTALLER=brew`
     // disables the env-installer detection entirely.
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "brew") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "brew") };
     // Even if MANAGED_BY_NPM is also set, the explicit var wins (and rejects).
-    unsafe { std::env::set_var("GROK_MANAGED_BY_NPM", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_MANAGED_BY_NPM", "1") };
     assert_eq!(
         env_installer(),
         None,
-        "explicit GROK_INSTALLER=brew must early-return None, not fall through"
+        "explicit SUPERCHARGE_INSTALLER=brew must early-return None, not fall through"
     );
 }
 
@@ -2004,7 +2004,7 @@ fn test_env_installer_explicit_unknown_value_returns_none() {
 #[serial_test::serial]
 fn test_env_installer_explicit_empty_returns_none() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_INSTALLER", "") };
+    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "") };
     assert_eq!(env_installer(), None);
 }
 
@@ -2012,7 +2012,7 @@ fn test_env_installer_explicit_empty_returns_none() {
 #[serial_test::serial]
 fn test_env_installer_managed_by_npm() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_MANAGED_BY_NPM", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_MANAGED_BY_NPM", "1") };
     assert_eq!(env_installer(), Some("npm"));
 }
 
@@ -2021,7 +2021,7 @@ fn test_env_installer_managed_by_npm() {
 fn test_env_installer_managed_by_npm_any_value() {
     // The check is `is_some` — any value (including empty) wins.
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_MANAGED_BY_NPM", "") };
+    unsafe { std::env::set_var("SUPERCHARGE_MANAGED_BY_NPM", "") };
     assert_eq!(env_installer(), Some("npm"));
 }
 
@@ -2029,7 +2029,7 @@ fn test_env_installer_managed_by_npm_any_value() {
 #[serial_test::serial]
 fn test_env_installer_managed_by_internal() {
     let _g = InstallerEnvGuard::isolate();
-    unsafe { std::env::set_var("GROK_MANAGED_BY_INTERNAL", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_MANAGED_BY_INTERNAL", "1") };
     assert_eq!(env_installer(), Some("internal"));
 }
 
@@ -2056,7 +2056,7 @@ fn test_env_installer_managed_by_npm_wins_over_npm_config_user_agent() {
     // resolution path matters for future maintainers.)
     let _g = InstallerEnvGuard::isolate();
     unsafe {
-        std::env::set_var("GROK_MANAGED_BY_NPM", "1");
+        std::env::set_var("SUPERCHARGE_MANAGED_BY_NPM", "1");
         std::env::set_var("npm_config_user_agent", "npm/10");
     }
     assert_eq!(env_installer(), Some("npm"));
@@ -2065,11 +2065,11 @@ fn test_env_installer_managed_by_npm_wins_over_npm_config_user_agent() {
 #[test]
 #[serial_test::serial]
 fn test_env_installer_explicit_internal_wins_over_npm_managed() {
-    // GROK_INSTALLER=internal must override an inherited MANAGED_BY_NPM.
+    // SUPERCHARGE_INSTALLER=internal must override an inherited MANAGED_BY_NPM.
     let _g = InstallerEnvGuard::isolate();
     unsafe {
-        std::env::set_var("GROK_INSTALLER", "internal");
-        std::env::set_var("GROK_MANAGED_BY_NPM", "1");
+        std::env::set_var("SUPERCHARGE_INSTALLER", "internal");
+        std::env::set_var("SUPERCHARGE_MANAGED_BY_NPM", "1");
     }
     assert_eq!(env_installer(), Some("internal"));
 }

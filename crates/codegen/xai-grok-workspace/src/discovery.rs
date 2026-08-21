@@ -147,12 +147,12 @@ pub fn discover_plugins(
 // Project config
 // ---------------------------------------------------------------------------
 
-/// Load the project config from `<root_cwd>/.grok/config.toml`.
+/// Load the project config from `<root_cwd>/.supercharge/config.toml`.
 ///
 /// Returns `Value::Null` if the file does not exist or cannot be
 /// parsed. Non-fatal errors are logged.
 pub fn load_project_config(root_cwd: &Path) -> Value {
-    let config_path = root_cwd.join(".grok").join("config.toml");
+    let config_path = root_cwd.join(".supercharge").join("config.toml");
     match xai_grok_config::load_config_file(&config_path) {
         Ok(toml::Value::Table(ref t)) if t.is_empty() => {
             // The config loader returns an empty table when the file
@@ -253,14 +253,18 @@ mod tests {
     // ---- Skill discovery tests ----
 
     // Note: `list_skills` also discovers user-scoped skills from
-    // `~/.grok/skills/`, so on a developer machine the result may be
+    // `~/.supercharge/skills/`, so on a developer machine the result may be
     // non-empty even for an empty workspace. Tests below check for
     // specific skills rather than asserting emptiness.
 
     #[tokio::test]
     async fn discover_skills_finds_skill_md() {
         let tmp = tempfile::tempdir().unwrap();
-        let skills_dir = tmp.path().join(".grok").join("skills").join("my-skill");
+        let skills_dir = tmp
+            .path()
+            .join(".supercharge")
+            .join("skills")
+            .join("my-skill");
         fs::create_dir_all(&skills_dir).unwrap();
         fs::write(
             skills_dir.join("SKILL.md"),
@@ -280,7 +284,11 @@ mod tests {
     #[tokio::test]
     async fn discover_skills_respects_ignore_config() {
         let tmp = tempfile::tempdir().unwrap();
-        let skills_dir = tmp.path().join(".grok").join("skills").join("ignored");
+        let skills_dir = tmp
+            .path()
+            .join(".supercharge")
+            .join("skills")
+            .join("ignored");
         fs::create_dir_all(&skills_dir).unwrap();
         fs::write(
             skills_dir.join("SKILL.md"),
@@ -308,7 +316,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let skills_dir = tmp
             .path()
-            .join(".grok")
+            .join(".supercharge")
             .join("skills")
             .join("serialized-check");
         fs::create_dir_all(&skills_dir).unwrap();
@@ -332,7 +340,7 @@ mod tests {
 
     #[test]
     fn agent_config_file_wire_matches_workspace_types_mirror() {
-        // The RPC serializes grok-build's AgentConfigFile and the remote
+        // The RPC serializes supercharge-core's AgentConfigFile and the remote
         // consumer deserializes the workspace-types mirror; pin the cross-crate
         // serde shape so a rename/attr drift on either side can't silently
         // break discovery.
@@ -355,7 +363,7 @@ mod tests {
         );
     }
 
-    // Discovery also scans the real `~/.grok`, so fixtures use test-unique names.
+    // Discovery also scans the real `~/.supercharge`, so fixtures use test-unique names.
     #[tokio::test]
     async fn discover_agents_md_receives_normalized_rule_content() {
         let tmp = tempfile::tempdir().unwrap();
@@ -415,12 +423,16 @@ mod tests {
     // ---- Plugin discovery tests ----
 
     // Note: `discover_plugins` also discovers user-scoped plugins
-    // from `~/.grok/plugins/`, so tests check for specific plugins.
+    // from `~/.supercharge/plugins/`, so tests check for specific plugins.
 
     #[test]
     fn discover_plugins_finds_manifest_plugin() {
         let tmp = tempfile::tempdir().unwrap();
-        let plugins_dir = tmp.path().join(".grok").join("plugins").join("test-plugin");
+        let plugins_dir = tmp
+            .path()
+            .join(".supercharge")
+            .join("plugins")
+            .join("test-plugin");
         fs::create_dir_all(&plugins_dir).unwrap();
         fs::write(
             plugins_dir.join("plugin.json"),
@@ -445,7 +457,11 @@ mod tests {
     #[test]
     fn discover_plugins_json_has_expected_fields() {
         let tmp = tempfile::tempdir().unwrap();
-        let plugins_dir = tmp.path().join(".grok").join("plugins").join("field-test");
+        let plugins_dir = tmp
+            .path()
+            .join(".supercharge")
+            .join("plugins")
+            .join("field-test");
         fs::create_dir_all(plugins_dir.join("skills")).unwrap();
         fs::write(
             plugins_dir.join("plugin.json"),
@@ -484,7 +500,7 @@ mod tests {
     #[test]
     fn load_project_config_reads_toml_as_json() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_dir = tmp.path().join(".grok");
+        let grok_dir = tmp.path().join(".supercharge");
         fs::create_dir_all(&grok_dir).unwrap();
         fs::write(
             grok_dir.join("config.toml"),

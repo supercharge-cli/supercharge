@@ -1,4 +1,4 @@
-//! GrokNight theme — neutral gray base with TokyoNight accent colors.
+//! VoltageDark theme — neutral gray base with TokyoNight accent colors.
 //!
 //! The canonical palette is defined in RGB (`Color::Rgb`). At startup the
 //! theme is run through [`Theme::quantized`] which downgrades every color
@@ -13,11 +13,11 @@ const fn rgb(r: u8, g: u8, b: u8) -> Color {
     Color::Rgb(r, g, b)
 }
 
-// GrokNight palette — neutral gray base + TokyoNight accent colors.
+// Voltage Dark palette — deep navy base with electric-blue accents.
 //
-// Backgrounds and text use a custom grayscale ramp anchored at:
-//   • bg  = #141414 (20)
-//   • fg  = #f3f3f3 (243)
+// Backgrounds use a dark navy ramp anchored at:
+//   • bg  = #10243b (16, 36, 59)
+//   • fg  = #f3f7ff (243, 247, 255)
 //
 // Accent colors are the original TokyoNight Night hex values.
 #[allow(dead_code)]
@@ -25,19 +25,19 @@ mod palette {
     use super::*;
 
     // ── Backgrounds ─────────────────────────────────────────────────────
-    pub const BG: Color = rgb(10, 10, 10); //  #0a0a0a — Night (terminal bg)
-    pub const BG_DARK: Color = rgb(12, 12, 12); //  #0c0c0c — darkest
-    pub const BG_STORM_DARK: Color = rgb(17, 17, 17); //  #111111 — dark bg
-    pub const BG_STORM: Color = rgb(20, 20, 20); //  #141414 — main bg
-    pub const BG_HIGHLIGHT: Color = rgb(36, 36, 36); //  #242424 — highlight bg
+    pub const BG: Color = rgb(6, 14, 26); //  #060e1a — terminal bg
+    pub const BG_DARK: Color = rgb(8, 19, 34); //  #081322 — darkest navy
+    pub const BG_STORM_DARK: Color = rgb(11, 27, 47); //  #0b1b2f — dark navy
+    pub const BG_STORM: Color = rgb(16, 36, 59); //  #10243b — main dark blue
+    pub const BG_HIGHLIGHT: Color = rgb(23, 59, 99); //  #173b63 — blue highlight
 
     // ── Text / grays ────────────────────────────────────────────────────
-    pub const FG: Color = rgb(225, 225, 225); // #e1e1e1 — primary text
-    pub const FG_DARK: Color = rgb(200, 200, 200); // #c8c8c8 — secondary text
-    pub const FG_GUTTER: Color = rgb(65, 65, 65); //  #414141 — dim
-    pub const COMMENT: Color = rgb(108, 108, 108); //  #6c6c6c — muted
-    pub const DARK3: Color = rgb(90, 90, 90); //  #5a5a5a — medium gray
-    pub const DARK5: Color = rgb(120, 120, 120); // #787878 — bright gray
+    pub const FG: Color = rgb(243, 247, 255); // #f3f7ff — primary text
+    pub const FG_DARK: Color = rgb(190, 211, 235); // #bed3eb — secondary text
+    pub const FG_GUTTER: Color = rgb(62, 96, 132); //  #3e6084 — dim blue
+    pub const COMMENT: Color = rgb(112, 145, 181); //  #7091b5 — muted blue
+    pub const DARK3: Color = rgb(87, 123, 161); //  #577ba1 — medium blue
+    pub const DARK5: Color = rgb(145, 181, 220); // #91b5dc — bright blue-gray
 
     // ── Accent colors (TokyoNight Night) ─────────────────────────────────
     pub const BLUE: Color = rgb(122, 162, 247); // #7aa2f7
@@ -46,7 +46,7 @@ mod palette {
     pub const CYAN: Color = rgb(125, 207, 255); // #7dcfff
     pub const GREEN: Color = rgb(158, 206, 106); // #9ece6a
     pub const GREEN1: Color = rgb(115, 218, 202); // #73daca
-    pub const MAGENTA: Color = rgb(187, 154, 247); // #bb9af7
+    pub const MAGENTA: Color = rgb(86, 180, 255); // #56b4ff — Voltage electric blue
     pub const ORANGE: Color = rgb(255, 158, 100); // #ff9e64
     pub const PURPLE: Color = rgb(157, 124, 216); // #9d7cd8
     pub const RED: Color = rgb(247, 118, 142); // #f7768e
@@ -60,11 +60,11 @@ mod palette {
 use palette::*;
 
 impl Theme {
-    /// GrokNight theme — neutral gray base with TokyoNight accents.
+    /// VoltageDark theme — neutral gray base with TokyoNight accents.
     ///
     /// Colors are defined in RGB. Call [`Theme::quantized`] to downgrade
     /// them to the terminal's supported color level before rendering.
-    pub const fn groknight() -> Self {
+    pub const fn voltage_dark() -> Self {
         Self {
             bg_base: BG_STORM,
             bg_light: BG_HIGHLIGHT,
@@ -103,10 +103,10 @@ impl Theme {
 
             accent_remember: Color::Rgb(139, 195, 74), // #8BC34A — Material Design light green
 
-            selection_border: rgb(60, 60, 65),
-            prompt_border: rgb(50, 50, 55), // #323237 — dimmer prompt chrome
-            prompt_border_active: rgb(80, 80, 88), // #505058 — brighter when focused
-            hover_border: rgb(30, 30, 34),
+            selection_border: rgb(50, 108, 170),
+            prompt_border: rgb(29, 66, 108), // #1d426c — dim blue prompt chrome
+            prompt_border_active: rgb(65, 145, 220), // #4191dc — brighter when focused
+            hover_border: rgb(24, 56, 94),
 
             accent_model: TEAL,
 
@@ -120,7 +120,7 @@ impl Theme {
             diff_equal_fg: COMMENT,
             diff_gutter_fg: COMMENT,
 
-            bg_visual: rgb(54, 54, 54),
+            bg_visual: rgb(29, 67, 108),
 
             paste_bg: BG_STORM_DARK,
             paste_fg: FG_DARK,
@@ -142,9 +142,9 @@ impl Theme {
             md_task_checked: GREEN,
             md_task_unchecked: FG_DARK, // text_secondary
             md_muted: COMMENT,
-            md_code_bg: rgb(28, 28, 28),
+            md_code_bg: rgb(12, 29, 50),
             md_text: FG_DARK,
-            link_fg: rgb(122, 166, 218), // #7aa6da -- soft blue for dark bg
+            link_fg: rgb(104, 194, 255), // #68c2ff — electric blue for dark bg
         }
     }
 }
@@ -155,8 +155,8 @@ mod tests {
 
     #[test]
     #[ignore = "known broken: expected accent values drift from runtime theme"]
-    fn test_groknight_theme() {
-        let theme = Theme::groknight();
+    fn test_voltage_dark_theme() {
+        let theme = Theme::voltage_dark();
         assert!(matches!(theme.bg_base, Color::Rgb(20, 20, 20)));
         assert!(matches!(theme.accent_user, Color::Rgb(225, 225, 225)));
         assert!(matches!(theme.text_primary, Color::Rgb(225, 225, 225)));

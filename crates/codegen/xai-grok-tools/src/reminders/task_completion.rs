@@ -342,7 +342,7 @@ pub fn format_monitor_events(
 ///
 /// Subagents share the parent's terminal backend, so `list_tasks()` returns
 /// tasks owned by other sessions (the parent, sibling subagents). A task is in
-/// scope only when it has no recorded owner (legacy / non-grok-build backends)
+/// scope only when it has no recorded owner (legacy / non-supercharge-core backends)
 /// or its owner matches the current session; cross-session tasks are filtered
 /// out so their completions surface in the owning session, not here.
 pub(crate) fn task_owned_by_session(task: &TaskSnapshot, my_owner: Option<&str>) -> bool {

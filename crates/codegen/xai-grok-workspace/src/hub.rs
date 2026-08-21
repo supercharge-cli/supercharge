@@ -519,7 +519,7 @@ impl ToolServerHandler for SessionRoutedToolHandler {
                     tracing::warn!(
                         tool = %self.name(),
                         session = %session_id,
-                        "GROK_HITL_PERMISSION_LIVE set but no hub ToolServer; rejecting guarded tool"
+                        "SUPERCHARGE_HITL_PERMISSION_LIVE set but no hub ToolServer; rejecting guarded tool"
                     );
                     return terminal_only(Err(ToolError::new(
                         ToolErrorKind::PermissionDenied,

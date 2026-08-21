@@ -1658,7 +1658,7 @@ fn apply_auth_meta_lifts_restrictions_for_paid_tiers_and_teams() {
     let mut app = test_app();
     advertise_media_tools(&mut app);
     let meta = xai_grok_shell::auth::AuthMeta {
-        subscription_tier: Some("SuperGrok".into()),
+        subscription_tier: Some("Supercharge".into()),
         ..Default::default()
     };
     app.apply_auth_meta(&meta);
@@ -1668,7 +1668,7 @@ fn apply_auth_meta_lifts_restrictions_for_paid_tiers_and_teams() {
     advertise_media_tools(&mut app);
     app.apply_auth_meta(&xai_grok_shell::auth::AuthMeta::default());
     assert!(!app.tier_restricted_commands.is_empty());
-    app.subscription_tier = Some("SuperGrok".into());
+    app.subscription_tier = Some("Supercharge".into());
     app.apply_tier_restrictions();
     assert!(app.tier_restricted_commands.is_empty());
     assert_tier_restricted_commands_present(&app);
@@ -1688,8 +1688,8 @@ fn is_restricted_tier_classification() {
     assert!(is_restricted_tier(Some("Free")));
     assert!(is_restricted_tier(Some("X Basic")));
     assert!(is_restricted_tier(Some("x_basic")));
-    assert!(!is_restricted_tier(Some("SuperGrok")));
-    assert!(!is_restricted_tier(Some("SuperGrok Heavy")));
+    assert!(!is_restricted_tier(Some("Supercharge")));
+    assert!(!is_restricted_tier(Some("Supercharge Heavy")));
     assert!(!is_restricted_tier(Some("X Premium")));
     assert!(!is_restricted_tier(Some("X Premium+")));
     assert!(!is_restricted_tier(Some("SomeFutureTier")));
@@ -1705,7 +1705,7 @@ fn is_voice_tier_restricted_tracks_tier() {
     assert!(app.is_voice_tier_restricted());
     let mut app = test_app();
     let meta = xai_grok_shell::auth::AuthMeta {
-        subscription_tier: Some("SuperGrok".into()),
+        subscription_tier: Some("Supercharge".into()),
         ..Default::default()
     };
     app.apply_auth_meta(&meta);
@@ -1715,8 +1715,8 @@ fn is_voice_tier_restricted_tracks_tier() {
 fn apply_auth_meta_clears_gate_on_subscription() {
     let mut app = test_app();
     app.gate = Some(xai_grok_shell::auth::GateInfo {
-        message: "Subscribe to use Grok Build".into(),
-        url: Some("https://grok.com/supergrok?referrer=grok-build".into()),
+        message: "Subscribe to use Supercharge AI".into(),
+        url: Some("https://supercharge.ai/upgrade?referrer=Supercharge AI-build".into()),
         label: None,
     });
     assert!(app.is_access_blocked());

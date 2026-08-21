@@ -282,7 +282,7 @@ pub(crate) struct SubagentSpawnContext {
     /// goes through `agent/config.rs::sampling_config_for_model`
     /// which always sets that field to `None`.
     pub attribution_callback: Option<xai_grok_sampler::SharedAttributionCallback>,
-    /// Parent session's agent name (e.g. "grok-build").
+    /// Parent session's agent name (e.g. "supercharge-core").
     pub parent_agent_name: Option<String>,
     /// `agent_type` of the parent's current model — the harness-flavor fallback
     /// when `parent_agent_name` is not a recognized harness, e.g. a custom
@@ -329,7 +329,7 @@ impl SubagentSpawnContext {
     /// Would installing a live bearer resolver strip this subagent's only
     /// credential? A wired resolver is the sampler's sole auth source, so
     /// with no session key at spawn it must not displace a real fallback
-    /// key (env `XAI_API_KEY`). Keyed on the resolved config key, not the
+    /// key (env `SUPERCHARGE_API_KEY`). Keyed on the resolved config key, not the
     /// session cache alone — the cache is empty in exactly the post-wake /
     /// mid-refresh states the resolver targets, and gating on it would
     /// freeze the subagent for life. Shared by all three resolver-wiring
@@ -1623,12 +1623,12 @@ pub(crate) fn subagent_harness_flavor_is_representable(agent_type: &str) -> bool
 /// Apply the harness-dependent toolset/prompt re-selection to a resolved
 /// agent definition.
 ///
-/// The harness flavor (alternate vs grok-build) normally follows the PARENT
+/// The harness flavor (alternate vs supercharge-core) normally follows the PARENT
 /// agent: `GrokBuildOrchestrator` parents give children
 /// the alternate harness; the orchestrator keeps children lean, and other parents
 /// inherit the file-tool override (hashline vs standard). A `/goal` role may
 /// pass `harness_agent_type` to OVERRIDE that flavor regardless of the parent
-/// (so a grok-build session can run an alternate-harness verifier and vice-versa);
+/// (so a supercharge-core session can run an alternate-harness verifier and vice-versa);
 /// `None` for every non-goal spawn ⇒ the parent decides (unchanged). The base
 /// toolset stays role-dependent on `subagent_type` (general-purpose →
 /// implementer, else explorer), so the role keeps a capable toolset on the

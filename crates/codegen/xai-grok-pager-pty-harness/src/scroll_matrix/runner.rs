@@ -163,7 +163,7 @@ async fn run_cell_inner(cell: MatrixCell, binary: &Path, log_path: &Path) -> Res
         .to_str()
         .context("setup: artifacts path is not UTF-8")?;
     let mut env: Vec<(&str, &str)> = cell.env.to_vec();
-    env.push(("GROK_SCROLL_LOG", log_value));
+    env.push(("SUPERCHARGE_SCROLL_LOG", log_value));
 
     let (mut harness, content, baseline, streaming_turn) =
         spawn_marker_session(binary, cell.session, MARKER_COUNT, &env).await;

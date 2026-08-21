@@ -1,7 +1,7 @@
 //! WebSocket relay connection management.
 //!
 //! This module provides a shared `RelayConnection` that handles the WebSocket
-//! connection to the grok.com relay server with automatic reconnection.
+//! connection to the supercharge.ai relay server with automatic reconnection.
 //! It is used by both `run_headless` and `run_leader` modes to avoid code duplication.
 use super::proxy;
 use crate::auth::{GrokAuth, GrokComConfig};
@@ -45,7 +45,7 @@ const CONNECT_TIMEOUT_SECS: u64 = 30;
 /// JSON-RPC auth error code
 const AUTH_ERROR_CODE: i64 = -32000;
 use crate::auth::AuthManager;
-/// Config for the grok.com WebSocket relay. Fields are private so the only
+/// Config for the supercharge.ai WebSocket relay. Fields are private so the only
 /// constructor is [`RelayConfig::for_session`] — "no relay without a session
 /// bearer" is a compile-time guarantee.
 #[derive(Clone)]
@@ -57,7 +57,7 @@ pub struct RelayConfig {
     auth_manager: Option<Arc<AuthManager>>,
 }
 impl RelayConfig {
-    /// Session gate: builds only for a grok.com first-party session
+    /// Session gate: builds only for a supercharge.ai first-party session
     /// (`is_xai_auth`: x.ai-issuer OIDC or external credential) with a
     /// non-empty bearer. BYOK/ApiKey, non-x.ai issuers (enterprise OIDC,
     /// third-party external providers), and deprecated WebLogin get `None`
@@ -85,7 +85,7 @@ impl RelayConfig {
 pub(crate) type FirstConnectCallback = Box<dyn FnOnce() + Send + 'static>;
 /// Handle to a running relay connection.
 ///
-/// The relay maintains a persistent WebSocket connection to grok.com with
+/// The relay maintains a persistent WebSocket connection to supercharge.ai with
 /// automatic reconnection on disconnection.
 pub struct RelayHandle {
     /// Cancel token to stop the relay connection loop
@@ -169,7 +169,7 @@ async fn attempt_auth_recovery(
     context: &str,
 ) -> bool {
     let Some(ref am) = config.auth_manager else {
-        teprintln!("Authentication required. Run `grok login` to re-authenticate.");
+        teprintln!("Authentication required. Run `supercharge login` to re-authenticate.");
         cancel.cancel();
         return false;
     };
@@ -387,7 +387,7 @@ fn build_relay_request(config: &RelayConfig) -> anyhow::Result<axum::http::Reque
         axum::http::header::HeaderValue::from_str(&config.auth.user_id)?,
     );
     req.headers_mut().insert(
-        "x-grok-client-version",
+        "x-Supercharge AI-client-version",
         axum::http::header::HeaderValue::from_static(xai_grok_version::VERSION),
     );
     req.headers_mut().insert(

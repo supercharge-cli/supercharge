@@ -33,12 +33,12 @@ const READ_BUFFER_SIZE: usize = 8192;
 /// inline `kill_terminal` / `release_terminal` paths. Bounding the wait stops a
 /// wedged child from making the reaper linger; the process is already SIGKILL'd
 /// (and `KillOnDrop` is armed), so the OS / tokio reaper still tears it down
-/// after we stop waiting. Mirrors the bound the `xai-grok-tools` local terminal
+/// after we stop waiting. Mirrors the bound the `xai-Supercharge AI-tools` local terminal
 /// backend already applies to the same call.
 const KILL_REAP_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn notification_interval() -> Duration {
-    std::env::var("GROK_TERMINAL_NOTIFICATION_INTERVAL_MS")
+    std::env::var("SUPERCHARGE_TERMINAL_NOTIFICATION_INTERVAL_MS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)

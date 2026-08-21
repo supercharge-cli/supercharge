@@ -70,9 +70,9 @@ fn new_filtered_debouncer<F: notify_debouncer_mini::DebounceEventHandler>(
 pub enum ConfigChangeEvent {
     AuthChanged,
     GlobalConfigChanged,
-    /// `~/.grok/models_cache.json` changed — the on-disk `/v1/models`
-    /// catalog cache was rewritten, possibly by **another** grok process
-    /// sharing the same `~/.grok` (the writer may also be this process;
+    /// `~/.supercharge/models_cache.json` changed — the on-disk `/v1/models`
+    /// catalog cache was rewritten, possibly by **another** supercharge_value process
+    /// sharing the same `~/.supercharge` (the writer may also be this process;
     /// the [`ModelsManager`](crate::agent::models::ModelsManager) dedupes
     /// by content before applying).
     ModelsCacheChanged,
@@ -98,8 +98,8 @@ pub enum ConfigChangeEvent {
     HomeClaudeJsonChanged,
 }
 
-/// Watches `~/.grok/` for `auth.json`, `config.toml`, and `models_cache.json`
-/// changes, plus any extra paths (project `.grok/config.toml`, `.mcp.json`,
+/// Watches `~/.supercharge/` for `auth.json`, `config.toml`, and `models_cache.json`
+/// changes, plus any extra paths (project `.supercharge/config.toml`, `.mcp.json`,
 /// etc.) provided at startup.
 ///
 /// Uses `notify-debouncer-mini` for built-in debounce that coalesces rapid
@@ -112,11 +112,11 @@ pub enum ConfigChangeEvent {
 /// comparison) skips the update when nothing actually changed, so the
 /// redundant read is harmless. This avoids a class of bugs where an
 /// optimistic suppression window accidentally swallows writes from external
-/// processes (e.g. `grok login` in another terminal).
+/// processes (e.g. `supercharge login` in another terminal).
 ///
 /// Adds two **non-recursive** watches per `cwd` argument:
 /// `<cwd>/` (catches `.mcp.json` and `.claude.json` at the project root) and
-/// `<cwd>/.grok/` (catches `<cwd>/.grok/config.toml`). Recursing on `<cwd>`
+/// `<cwd>/.supercharge/` (catches `<cwd>/.supercharge/config.toml`). Recursing on `<cwd>`
 /// would walk `node_modules/`, `target/`, `.git/`, etc. and blow through
 /// `fs.inotify.max_user_watches` on large repos. Use [`Self::watch_path`]
 /// to register additional cwds at runtime when new sessions open in
@@ -137,7 +137,7 @@ impl ConfigFileWatcher {
     /// Start watching. Returns `None` if the OS watcher fails to initialize.
     ///
     /// `cwd`, when `Some`, adds two non-recursive watches: `<cwd>/` and
-    /// `<cwd>/.grok/`. Use [`Self::watch_path`] later to register additional
+    /// `<cwd>/.supercharge/`. Use [`Self::watch_path`] later to register additional
     /// project cwds for sessions that open in previously-unwatched
     /// directories.
     pub fn start(
@@ -229,7 +229,7 @@ impl ConfigFileWatcher {
                 tracing::warn!(
                     path = %grok_home.display(),
                     error = %e,
-                    "failed to watch grok home directory"
+                    "failed to watch supercharge_value home directory"
                 )
             })
             .ok()?;
@@ -250,8 +250,8 @@ impl ConfigFileWatcher {
         //
         // When the leader's own cwd is also covered by
         // `extra_paths` (e.g. `find_project_configs(cwd)` already
-        // includes `<cwd>/.grok/config.toml` so the loop above
-        // watches `<cwd>/.grok/`), the call below installs a
+        // includes `<cwd>/.supercharge/config.toml` so the loop above
+        // watches `<cwd>/.supercharge/`), the call below installs a
         // duplicate watch on the same directory. `notify` dedupes
         // silently in its `RecommendedWatcher` (last-write-wins for
         // the recursion mode), so this is cosmetic — both
@@ -279,12 +279,12 @@ impl ConfigFileWatcher {
         ))
     }
 
-    /// Register `<cwd>/` and `<cwd>/.grok/` as **non-recursive** watch
+    /// Register `<cwd>/` and `<cwd>/.supercharge/` as **non-recursive** watch
     /// targets, in addition to whatever was passed to [`Self::start`].
     ///
     /// Intended for the session-open path: when a session opens in a cwd
     /// the leader hasn't seen before, calling this method ensures edits to
-    /// `<cwd>/.mcp.json` and `<cwd>/.grok/config.toml` trigger a
+    /// `<cwd>/.mcp.json` and `<cwd>/.supercharge/config.toml` trigger a
     /// [`ConfigChangeEvent`] (and downstream [`ConfigUpdate::
     /// ProjectMcpServersChanged`](super::reloader::ConfigUpdate::
     /// ProjectMcpServersChanged)) within the debounce window.
@@ -310,7 +310,7 @@ impl ConfigFileWatcher {
     }
 
     /// Remove the two non-recursive watches (`<cwd>/` and
-    /// `<cwd>/.grok/`) previously registered for `cwd` via
+    /// `<cwd>/.supercharge/`) previously registered for `cwd` via
     /// [`Self::start`] / [`Self::watch_path`].
     ///
     /// Best-effort and idempotent: a `cwd` that was never registered
@@ -345,10 +345,10 @@ fn parent_is_dir(parent: Option<&Path>, dir: &Path) -> bool {
 /// directory, quota exhausted, permission denied, etc.) — the caller has
 /// no reasonable recovery path beyond the existing user-triggered refresh.
 ///
-/// **Known limitation:** if `<cwd>/.grok/` does not yet
-/// exist at session-open time, the `.grok/` watch fails ENOENT and is
-/// swallowed at `debug!`. A later `mkdir <cwd>/.grok/` followed by a
-/// write to `<cwd>/.grok/config.toml` will NOT be observed — the
+/// **Known limitation:** if `<cwd>/.supercharge/` does not yet
+/// exist at session-open time, the `.supercharge/` watch fails ENOENT and is
+/// swallowed at `debug!`. A later `mkdir <cwd>/.supercharge/` followed by a
+/// write to `<cwd>/.supercharge/config.toml` will NOT be observed — the
 /// `<cwd>/` watch is non-recursive, so subdirectory creation isn't
 /// surfaced as a watch-add trigger. Users hitting this case must hit
 /// the explicit refresh button. A robust fix (re-attempt on parent-
@@ -357,14 +357,14 @@ fn watch_cwd_dirs(debouncer: &mut Debouncer<AccessFilteredWatcher>, cwd: &Path) 
     if let Err(e) = debouncer.watcher().watch(cwd, RecursiveMode::NonRecursive) {
         log_watch_error(&e, "failed to watch project cwd (non-recursive)");
     }
-    let grok_dir = cwd.join(".grok");
+    let grok_dir = cwd.join(".supercharge");
     if let Err(e) = debouncer
         .watcher()
         .watch(&grok_dir, RecursiveMode::NonRecursive)
     {
         log_watch_error(
             &e,
-            "failed to watch project .grok directory (non-recursive)",
+            "failed to watch project .supercharge directory (non-recursive)",
         );
     }
 }
@@ -376,15 +376,15 @@ fn unwatch_cwd_dirs(debouncer: &mut Debouncer<AccessFilteredWatcher>, cwd: &Path
     if let Err(e) = debouncer.watcher().unwatch(cwd) {
         tracing::debug!(error = %e, "failed to unwatch project cwd");
     }
-    let grok_dir = cwd.join(".grok");
+    let grok_dir = cwd.join(".supercharge");
     if let Err(e) = debouncer.watcher().unwatch(&grok_dir) {
-        tracing::debug!(error = %e, "failed to unwatch project .grok directory");
+        tracing::debug!(error = %e, "failed to unwatch project .supercharge directory");
     }
 }
 
 /// Log a `notify` watch failure, distinguishing the benign
 /// "directory doesn't exist yet" case (logged at `debug!` — it's
-/// expected for a freshly-opened session whose `<cwd>/.grok/` hasn't
+/// expected for a freshly-opened session whose `<cwd>/.supercharge/` hasn't
 /// been created) from genuinely actionable failures like
 /// `fs.inotify.max_user_watches` exhaustion or permission denied
 /// (logged at `warn!` — these mean live edits will be silently
@@ -434,7 +434,7 @@ fn discovery_change_for_path(path: &Path) -> Option<DiscoveryChange> {
 }
 
 /// Known vendor config root basenames; kept in sync with `collect_skill_config_dirs`.
-const VENDOR_CONFIG_ROOT_NAMES: &[&str] = &[".grok", ".agents", ".claude", ".cursor"];
+const VENDOR_CONFIG_ROOT_NAMES: &[&str] = &[".supercharge", ".agents", ".claude", ".cursor"];
 
 /// Vendor roots (by name or `grok_home`) must use scoped watches — they can
 /// contain large non-skill trees (`worktrees/`, etc.).
@@ -472,7 +472,7 @@ fn vendor_skill_refresh_dirs(config_dir: &Path) -> [(PathBuf, RecursiveMode); 3]
 }
 
 fn project_grok_refresh_dirs(project_root: &Path) -> Vec<(PathBuf, RecursiveMode)> {
-    let project_grok = project_root.join(".grok");
+    let project_grok = project_root.join(".supercharge");
     let mut dirs = vec![(project_grok.clone(), RecursiveMode::NonRecursive)];
     dirs.extend(vendor_skill_refresh_dirs(&project_grok));
     dirs
@@ -581,7 +581,7 @@ fn plan_skills_watch_targets(
     }
 }
 
-/// Watches project `.grok` skills/commands/workflows for mid-session discovery.
+/// Watches project `.supercharge` skills/commands/workflows for mid-session discovery.
 ///
 /// After a [`DiscoveryChange`], call [`Self::refresh_new_dirs`] so newly created
 /// seed dirs get watches attached.
@@ -594,7 +594,7 @@ pub(crate) struct ProjectDiscoveryWatcher {
 impl ProjectDiscoveryWatcher {
     pub(crate) fn start(cwd: &Path) -> Option<(Self, mpsc::UnboundedReceiver<DiscoveryChange>)> {
         let project_root = crate::session::workflow::registry::project_root(cwd);
-        let project_grok = project_root.join(".grok");
+        let project_grok = project_root.join(".supercharge");
         let (tx, rx) = mpsc::unbounded_channel();
         let project_grok_for_events = project_grok.clone();
         let mut debouncer =
@@ -806,14 +806,14 @@ mod tests {
     fn is_vendor_config_root_matches_known_names_at_any_tier() {
         let home = TempDir::new().unwrap();
         let home = home.path();
-        let grok_home = home.join(".grok");
+        let grok_home = home.join(".supercharge");
 
         assert!(is_vendor_config_root(&grok_home, &grok_home));
         assert!(is_vendor_config_root(&home.join(".claude"), &grok_home));
         assert!(is_vendor_config_root(&home.join(".cursor"), &grok_home));
         assert!(is_vendor_config_root(&home.join(".agents"), &grok_home));
         assert!(is_vendor_config_root(
-            &home.join("repo").join(".grok"),
+            &home.join("repo").join(".supercharge"),
             &grok_home
         ));
         assert!(is_vendor_config_root(
@@ -828,7 +828,7 @@ mod tests {
             &grok_home
         ));
 
-        let custom_home = home.join("custom-grok-home");
+        let custom_home = home.join("custom-supercharge_value-home");
         assert!(is_vendor_config_root(&custom_home, &custom_home));
     }
 
@@ -848,20 +848,29 @@ mod tests {
     #[test]
     fn project_grok_refresh_dirs_matches_vendor_layout() {
         let project = Path::new("/tmp/repo");
-        let grok = project.join(".grok");
+        let supercharge_value = project.join(".supercharge");
         let dirs = project_grok_refresh_dirs(project);
 
         assert_eq!(dirs.len(), 4);
-        assert_eq!(dirs[0], (grok.clone(), RecursiveMode::NonRecursive));
+        assert_eq!(
+            dirs[0],
+            (supercharge_value.clone(), RecursiveMode::NonRecursive)
+        );
         assert_eq!(
             &dirs[1..],
             [
-                (grok.join("skills"), RecursiveMode::Recursive),
-                (grok.join("commands"), RecursiveMode::NonRecursive),
-                (grok.join("workflows"), RecursiveMode::NonRecursive),
+                (supercharge_value.join("skills"), RecursiveMode::Recursive),
+                (
+                    supercharge_value.join("commands"),
+                    RecursiveMode::NonRecursive
+                ),
+                (
+                    supercharge_value.join("workflows"),
+                    RecursiveMode::NonRecursive
+                ),
             ]
         );
-        assert_eq!(dirs[1..], vendor_skill_refresh_dirs(&grok));
+        assert_eq!(dirs[1..], vendor_skill_refresh_dirs(&supercharge_value));
     }
 
     #[test]
@@ -958,7 +967,7 @@ mod tests {
     fn start_with_dirs_keeps_parent_only_watch() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-grok");
+        let grok_home = project.join("home-supercharge_value");
         fs::create_dir_all(&grok_home).unwrap();
 
         let plan = plan_skills_watch_targets(&[], &grok_home, Some(project));
@@ -982,9 +991,9 @@ mod tests {
     fn plan_skills_watch_targets_scopes_vendors_and_seeds_refresh() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-grok");
+        let grok_home = project.join("home-supercharge_value");
         let project_claude = project.join(".claude");
-        let project_grok = project.join(".grok");
+        let project_grok = project.join(".supercharge");
         let custom = project.join("my-skills");
         fs::create_dir_all(&project_claude).unwrap();
         fs::create_dir_all(&project_grok).unwrap();
@@ -1015,7 +1024,7 @@ mod tests {
 
     #[test]
     fn plan_skills_watch_targets_multi_vendor_refresh_fanout() {
-        let grok_home = PathBuf::from("/home/u/.grok");
+        let grok_home = PathBuf::from("/home/u/.supercharge");
         let a = PathBuf::from("/repo/.claude");
         let b = PathBuf::from("/repo/.agents");
         let plan = plan_skills_watch_targets(&[a.clone(), b.clone()], &grok_home, None);
@@ -1044,7 +1053,7 @@ mod tests {
     fn plan_skills_watch_targets_seeds_all_missing_project_vendor_roots() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("elsewhere").join(".grok");
+        let grok_home = project.join("elsewhere").join(".supercharge");
         let plan = plan_skills_watch_targets(&[], &grok_home, Some(project));
 
         assert_eq!(plan.project_parent_watch.as_deref(), Some(project));
@@ -1074,7 +1083,7 @@ mod tests {
     fn plan_skills_watch_targets_does_not_double_seed_present_vendor_roots() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-grok");
+        let grok_home = project.join("home-supercharge_value");
         let present: Vec<PathBuf> = VENDOR_CONFIG_ROOT_NAMES
             .iter()
             .map(|name| project.join(name))
@@ -1115,7 +1124,7 @@ mod tests {
     fn plan_skills_watch_targets_partial_vendors_seed_only_missing() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-grok");
+        let grok_home = project.join("home-supercharge_value");
         let project_claude = project.join(".claude");
         fs::create_dir_all(&project_claude).unwrap();
 
@@ -1129,7 +1138,7 @@ mod tests {
         assert_eq!(plan.project_parent_watch.as_deref(), Some(project));
 
         let mut expected = vendor_skill_refresh_dirs(&project_claude).to_vec();
-        for name in [".grok", ".agents", ".cursor"] {
+        for name in [".supercharge", ".agents", ".cursor"] {
             let root = project.join(name);
             expected.push((root.clone(), RecursiveMode::NonRecursive));
             expected.extend(vendor_skill_refresh_dirs(&root));
@@ -1146,8 +1155,8 @@ mod tests {
     fn plan_skills_watch_targets_parent_watches_project_when_grok_present_siblings_missing() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-grok");
-        let project_grok = project.join(".grok");
+        let grok_home = project.join("home-supercharge_value");
+        let project_grok = project.join(".supercharge");
         fs::create_dir_all(&project_grok).unwrap();
 
         let plan = plan_skills_watch_targets(
@@ -1192,7 +1201,7 @@ mod tests {
         let wt_skill = global
             .join("worktrees")
             .join("wt1")
-            .join(".grok")
+            .join(".supercharge")
             .join("skills")
             .join("beta");
         fs::create_dir_all(&wt_skill).unwrap();
@@ -1251,7 +1260,7 @@ mod tests {
 
         assert!(is_vendor_config_root(
             &project_claude,
-            &tmp.path().join(".grok")
+            &tmp.path().join(".supercharge")
         ));
 
         let (tx, mut rx) = mpsc::unbounded_channel();
@@ -1291,9 +1300,9 @@ mod tests {
 
     #[test]
     fn workflow_change_classifies_missing_directory_creation() {
-        let grok = Path::new("/tmp/project/.grok");
+        let supercharge_value = Path::new("/tmp/project/.supercharge");
         assert_eq!(
-            discovery_change_for_path(grok),
+            discovery_change_for_path(supercharge_value),
             Some(DiscoveryChange::Skills)
         );
         assert_eq!(
@@ -1301,23 +1310,23 @@ mod tests {
             Some(DiscoveryChange::Skills)
         );
         assert_eq!(
-            discovery_change_for_path(&grok.join("skills")),
+            discovery_change_for_path(&supercharge_value.join("skills")),
             Some(DiscoveryChange::Skills)
         );
         assert_eq!(
-            discovery_change_for_path(&grok.join("commands")),
+            discovery_change_for_path(&supercharge_value.join("commands")),
             Some(DiscoveryChange::Skills)
         );
         assert_eq!(
-            discovery_change_for_path(&grok.join("workflows")),
+            discovery_change_for_path(&supercharge_value.join("workflows")),
             Some(DiscoveryChange::Workflows)
         );
         assert_eq!(
-            discovery_change_for_path(&grok.join("workflows/review.rhai")),
+            discovery_change_for_path(&supercharge_value.join("workflows/review.rhai")),
             Some(DiscoveryChange::Workflows)
         );
         assert_eq!(
-            discovery_change_for_path(&grok.join("skills/review/SKILL.md")),
+            discovery_change_for_path(&supercharge_value.join("skills/review/SKILL.md")),
             Some(DiscoveryChange::Skills)
         );
     }
@@ -1552,7 +1561,7 @@ mod tests {
 
     /// A write to `<grok_home>/models_cache.json` must surface as
     /// `ConfigChangeEvent::ModelsCacheChanged` so a long-running leader can
-    /// hot-load a catalog fetched by another grok process.
+    /// hot-load a catalog fetched by another supercharge_value process.
     #[test]
     #[cfg_attr(
         target_os = "macos",
@@ -1632,7 +1641,7 @@ mod tests {
         assert!(count <= 3, "expected coalesced events (<=3), got {count}");
     }
 
-    /// A write to `<cwd>/.grok/config.toml` must surface as
+    /// A write to `<cwd>/.supercharge/config.toml` must surface as
     /// a `ConfigChangeEvent::ProjectConfigChanged` so the reloader emits
     /// `ConfigUpdate::ProjectMcpServersChanged { cwd }`. Uses a longer
     /// debounce and explicit poll loop so it survives the slower-than-
@@ -1645,7 +1654,7 @@ mod tests {
     fn project_cwd_toml_triggers_reload() {
         let grok_home = TempDir::new().unwrap();
         let cwd = TempDir::new().unwrap();
-        let project_grok = cwd.path().join(".grok");
+        let project_grok = cwd.path().join(".supercharge");
         fs::create_dir_all(&project_grok).unwrap();
         // Seed the file before the watcher starts so we observe the
         // modification rather than the creation event.
@@ -1679,7 +1688,7 @@ mod tests {
         }
         assert!(
             found,
-            "expected ProjectConfigChanged for <cwd>/.grok/config.toml within 2s"
+            "expected ProjectConfigChanged for <cwd>/.supercharge/config.toml within 2s"
         );
     }
 
@@ -1771,7 +1780,7 @@ mod tests {
     }
 
     /// [`ConfigFileWatcher::watch_path`] registered after
-    /// `start` must light up `<new_cwd>/.grok/config.toml` writes
+    /// `start` must light up `<new_cwd>/.supercharge/config.toml` writes
     /// identically to a cwd passed in at `start`. Exercises the
     /// session-open registration path where the leader learns about a
     /// new project root after the watcher is already running.
@@ -1783,7 +1792,7 @@ mod tests {
     fn watch_path_dynamic_registration() {
         let grok_home = TempDir::new().unwrap();
         let new_cwd = TempDir::new().unwrap();
-        let project_grok = new_cwd.path().join(".grok");
+        let project_grok = new_cwd.path().join(".supercharge");
         fs::create_dir_all(&project_grok).unwrap();
         fs::write(project_grok.join("config.toml"), "").unwrap();
 

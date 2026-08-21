@@ -4,7 +4,7 @@
 //! that the session actor needs for non-tool operations (ACP communication, git, rewind, etc.).
 //!
 //! Tool execution goes through the ToolBridge, which has its own SessionContext from
-//! xai-grok-tools. This struct is NOT used for tool execution — it's session infrastructure.
+//! xai-Supercharge AI-tools. This struct is NOT used for tool execution — it's session infrastructure.
 //!
 //! Note: Could be renamed to `SessionConfig` or flattened onto `SessionActor` in a future PR.
 use crate::terminal::AsyncTerminalRunner;

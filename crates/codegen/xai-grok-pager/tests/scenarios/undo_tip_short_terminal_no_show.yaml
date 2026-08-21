@@ -8,7 +8,7 @@ terminal:
   cols: 100
 environment:
   env:
-    - key: GROK_CONTEXTUAL_HINTS
+    - key: SUPERCHARGE_CONTEXTUAL_HINTS
       value: "1"
 mock:
   response: "unused"

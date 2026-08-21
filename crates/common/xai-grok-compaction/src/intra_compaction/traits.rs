@@ -20,7 +20,7 @@ pub enum CompactionTarget {
     /// inter-compaction.
     History,
     /// Replace the *whole* conversation (prior history + accumulated steps)
-    /// with a single summary — grok-build's full-replace strategy. No tail is
+    /// with a single summary — supercharge-core's full-replace strategy. No tail is
     /// kept; the read-view is [`CompactionStreamProc::get_all_turns_for_compaction`].
     FullReplace,
 }

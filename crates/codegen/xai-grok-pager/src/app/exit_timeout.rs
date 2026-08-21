@@ -6,9 +6,9 @@ use std::time::Duration;
 // From the earliest arm site (a signal, before loop unwind): the agent
 // join bound (SESSION_FLUSH_GRACE + slack, 12s) plus flushes and headroom.
 const DEFAULT_EXIT_TIMEOUT: Duration = Duration::from_secs(20);
-const EXIT_TIMEOUT_ENV: &str = "GROK_EXIT_TIMEOUT_SECS";
+const EXIT_TIMEOUT_ENV: &str = "SUPERCHARGE_EXIT_TIMEOUT_SECS";
 const HARD_EXIT_GRACE: Duration = Duration::from_secs(5);
-const TEST_HOLD_TEARDOWN_ENV: &str = "GROK_TEST_HOLD_TEARDOWN_SECS";
+const TEST_HOLD_TEARDOWN_ENV: &str = "SUPERCHARGE_TEST_HOLD_TEARDOWN_SECS";
 
 static ARMED: AtomicBool = AtomicBool::new(false);
 

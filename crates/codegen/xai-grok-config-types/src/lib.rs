@@ -544,7 +544,7 @@ pub struct RemoteSettings {
     /// MCP/LSP servers (commands sourced from working-tree config files) require
     /// a per-folder trust decision before they are spawned. `Some(true)`
     /// enables, `Some(false)` is a kill-switch, `None` falls back to the client
-    /// default (on). Sits below env `GROK_FOLDER_TRUST`, user
+    /// default (on). Sits below env `SUPERCHARGE_FOLDER_TRUST`, user
     /// `[folder_trust] enabled`, and managed config in the resolver chain. See
     /// `agent::folder_trust::feature_enabled`.
     #[serde(default)]
@@ -737,7 +737,7 @@ pub struct RemoteSettings {
     /// recent tail (pass 2 → final summary), keeping summarizer latency off the
     /// critical path. `Some(true)` enables (remote rollout), `Some(false)` forces
     /// off, `None` falls back to `[features] two_pass_compaction` /
-    /// `GROK_TWO_PASS_COMPACTION` / default (off).
+    /// `SUPERCHARGE_TWO_PASS_COMPACTION` / default (off).
     #[serde(default)]
     pub two_pass_compaction_enabled: Option<bool>,
     /// Dynamic tip list from remote settings. When present with non-empty entries,
@@ -779,9 +779,9 @@ pub struct RemoteSettings {
     pub image_description_model: Option<String>,
     /// Server-side pin for the next-prompt suggestion model (tab-autocomplete
     /// ghost text), from the `grok_build_settings` remote settings flag. Sits below
-    /// env (`GROK_PROMPT_SUGGESTIONS_MODEL`) and `[models] prompt_suggestion`
+    /// env (`SUPERCHARGE_PROMPT_SUGGESTIONS_MODEL`) and `[models] prompt_suggestion`
     /// in config.toml, above the client hint and the built-in
-    /// `grok-build-0.1` default. The effective model is catalog-guarded: when
+    /// `supercharge-core-0.1` default. The effective model is catalog-guarded: when
     /// it is not in the shell's model catalog the suggestion request is
     /// skipped entirely (never the session model). See
     /// `ModelOverrideConfig::resolve` and `handle_suggest_prompt`.
@@ -905,7 +905,7 @@ pub struct RemoteSettings {
     pub sharing_enabled: Option<bool>,
     /// Voice mode (STT dictation). Client default is **on** when absent.
     /// `Some(false)` is a remote kill switch; `Some(true)` forces on.
-    /// Overridable locally via `GROK_VOICE_MODE`. Free-tier SuperGrok upsell
+    /// Overridable locally via `SUPERCHARGE_VOICE_MODE`. Free-tier Supercharge upsell
     /// is a separate client tier gate.
     #[serde(default)]
     pub voice_mode_enabled: Option<bool>,
@@ -972,7 +972,7 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub permission_mode: Option<String>,
     /// User's subscription tier from remote settings `grok_build_access_gate`.
-    /// E.g. "free", "premium", "supergrok", "supergrok_heavy".
+    /// E.g. "free", "premium", "supercharge", "supercharge_heavy".
     /// Stamped on analytics events + user profile for filtering.
     #[serde(default)]
     pub subscription_tier: Option<String>,
@@ -989,13 +989,13 @@ pub struct RemoteSettings {
     /// When `None` or `Some(false)`, sessions are shown in a flat list.
     #[serde(default)]
     pub session_picker_grouped: Option<bool>,
-    /// Whether the user is allowed to use Grok Build. Set by remote settings
+    /// Whether the user is allowed to use Supercharge AI. Set by remote settings
     /// `grok_build_access_gate` targeting rules. `None` = no server response
     /// yet (client uses own fallback check). `Some(false)` = blocked.
     #[serde(default)]
     pub allow_access: Option<bool>,
     /// User-friendly display name for the current subscription tier
-    /// (e.g. "SuperGrok", "X Premium+", "Free", "API Key"). Set by CCP
+    /// (e.g. "Supercharge", "X Premium+", "Free", "API Key"). Set by CCP
     /// from the JWT tier claim (OAuth) or credential kind (API key).
     /// Free/Invalid OAuth → `"Free"`; API keys → `"API Key"` (Mixpanel
     /// `api_key`, never free).
@@ -1047,19 +1047,19 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub system_prompt_label: Option<String>,
     /// Global per-compaction wall-clock budget (seconds) from remote settings;
-    /// `0` disables. Env (`GROK_COMPACTION_WALL_CLOCK_SECS`) overrides it.
+    /// `0` disables. Env (`SUPERCHARGE_COMPACTION_WALL_CLOCK_SECS`) overrides it.
     /// Resolved via `resolve_compaction_wall_clock_budget_secs`.
     #[serde(default)]
     pub compaction_wall_clock_budget_secs: Option<u64>,
     /// Compaction mode (`summary` | `transcript` | `segments`) from remote settings.
-    /// Env (`GROK_COMPACTION_MODE`) and user config override it.
+    /// Env (`SUPERCHARGE_COMPACTION_MODE`) and user config override it.
     #[serde(default)]
     pub compaction_mode: Option<String>,
     /// Segments verbatim detail (`none` | `minimal` | `balanced` | `verbose`)
-    /// from remote settings. Env (`GROK_COMPACTION_DETAIL`) and config override it.
+    /// from remote settings. Env (`SUPERCHARGE_COMPACTION_DETAIL`) and config override it.
     #[serde(default)]
     pub compaction_detail: Option<String>,
-    /// remote settings verbatim-input flag; env (`GROK_COMPACTION_VERBATIM_INPUT`) and config override it. `None` = default (true).
+    /// remote settings verbatim-input flag; env (`SUPERCHARGE_COMPACTION_VERBATIM_INPUT`) and config override it. `None` = default (true).
     #[serde(default)]
     pub compaction_verbatim_input: Option<bool>,
     #[serde(default)]
@@ -1222,15 +1222,15 @@ where
 }
 /// A model + the harness whose system prompt / toolset flavor that model must
 /// run against. The pair is the atomic configurable unit because a model is
-/// only guaranteed to work with a compatible harness (cursor vs grok-build).
+/// only guaranteed to work with a compatible harness (cursor vs supercharge-core).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GoalRoleModel {
     /// Model id, e.g. "grok-4". Resolved against available models at
     /// spawn time; unknown/unauthorized ⇒ fail-open to current model.
     pub model: String,
-    /// Harness `agent_type` (e.g. "cursor", "grok-build-plan") whose
+    /// Harness `agent_type` (e.g. "cursor", "supercharge-core-plan") whose
     /// `AgentDefinition` decides the role subagent's harness flavor (system
-    /// prompt + cursor-vs-grok-build toolset), applied REGARDLESS of the
+    /// prompt + cursor-vs-supercharge-core toolset), applied REGARDLESS of the
     /// session/parent agent. Resolved by NAME (project/plugin/builtin lookup,
     /// then re-flavored by the subagent toolset resolver) — NOT via the main
     /// session's env/ACP/strict-harness precedence chain. NOT a subagent type:
@@ -1364,18 +1364,24 @@ mod tests {
     }
     #[test]
     fn remote_settings_image_description_model_round_trip() {
-        let json = r#"{"image_description_model": "grok-build"}"#;
+        let json = r#"{"image_description_model": "supercharge-core"}"#;
         let s: RemoteSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(s.image_description_model.as_deref(), Some("grok-build"));
+        assert_eq!(
+            s.image_description_model.as_deref(),
+            Some("supercharge-core")
+        );
         let out = serde_json::to_string(&s).unwrap();
         let s2: RemoteSettings = serde_json::from_str(&out).unwrap();
         assert_eq!(s2.image_description_model, s.image_description_model);
     }
     #[test]
     fn remote_settings_prompt_suggestion_model_round_trip() {
-        let json = r#"{"prompt_suggestion_model": "grok-build-0.1"}"#;
+        let json = r#"{"prompt_suggestion_model": "supercharge-core-0.1"}"#;
         let s: RemoteSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(s.prompt_suggestion_model.as_deref(), Some("grok-build-0.1"));
+        assert_eq!(
+            s.prompt_suggestion_model.as_deref(),
+            Some("supercharge-core-0.1")
+        );
         let out = serde_json::to_string(&s).unwrap();
         let s2: RemoteSettings = serde_json::from_str(&out).unwrap();
         assert_eq!(s2.prompt_suggestion_model, s.prompt_suggestion_model);

@@ -408,11 +408,11 @@ fn compression_notice_contains_dimensions() {
 #[test]
 fn re_encode_fallback_notice_picks_tag_per_harness() {
     let notes = vec!["Image 1 could not be re-encoded under the cap.".to_string()];
-    let grok = render_re_encode_fallback_notice(&notes, false);
-    assert!(grok.contains("<system-reminder>"));
-    assert!(grok.contains("</system-reminder>"));
-    assert!(!grok.contains("<system_reminder>"));
-    assert!(grok.contains("<image_re_encode_fallback>"));
+    let supercharge_value = render_re_encode_fallback_notice(&notes, false);
+    assert!(supercharge_value.contains("<system-reminder>"));
+    assert!(supercharge_value.contains("</system-reminder>"));
+    assert!(!supercharge_value.contains("<system_reminder>"));
+    assert!(supercharge_value.contains("<image_re_encode_fallback>"));
 }
 #[test]
 fn display_format() {
@@ -805,12 +805,12 @@ fn dropped_to_envelope_emits_notice_and_notes() {
 #[test]
 fn image_dropped_notice_picks_tag_per_harness() {
     let notes = vec!["Image 5 was dropped before send: corrupt".to_string()];
-    let grok = render_image_dropped_notice(&notes, false);
-    assert!(grok.contains("<system-reminder>"));
-    assert!(grok.contains("</system-reminder>"));
-    assert!(!grok.contains("<system_reminder>"));
-    assert!(grok.contains("<image_dropped_notice>"));
-    assert!(grok.contains("Image 5"));
+    let supercharge_value = render_image_dropped_notice(&notes, false);
+    assert!(supercharge_value.contains("<system-reminder>"));
+    assert!(supercharge_value.contains("</system-reminder>"));
+    assert!(!supercharge_value.contains("<system_reminder>"));
+    assert!(supercharge_value.contains("<image_dropped_notice>"));
+    assert!(supercharge_value.contains("Image 5"));
     assert_eq!(render_image_dropped_notice(&[], false), "");
 }
 /// Large flat-color images compress better as PNG than JPEG; the

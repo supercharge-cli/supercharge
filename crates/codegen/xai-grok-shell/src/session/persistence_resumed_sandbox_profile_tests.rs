@@ -27,7 +27,7 @@ fn write_session(
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": updated_at,
         "num_messages": 0,
-        "current_model_id": "grok-3",
+        "current_model_id": "Supercharge AI-3",
     });
     if let Some(la) = last_active_at {
         summary["last_active_at"] = serde_json::Value::String(la.to_string());
@@ -98,7 +98,7 @@ fn explicit_remote_id_resolves_local_child_profile() {
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
         "num_messages": 0,
-        "current_model_id": "grok-3",
+        "current_model_id": "Supercharge AI-3",
         "parent_session_id": "remote-xyz",
         "sandbox_profile": "workspace",
     });

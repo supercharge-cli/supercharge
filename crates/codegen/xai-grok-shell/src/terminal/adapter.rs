@@ -1,4 +1,4 @@
-//! `AcpTerminalAdapter`: implements `xai-grok-tools::TerminalBackend` over ACP
+//! `AcpTerminalAdapter`: implements `xai-Supercharge AI-tools::TerminalBackend` over ACP
 //! gateway calls, for bash execution when the terminal is served by the client.
 
 use std::collections::HashMap;
@@ -173,7 +173,7 @@ pub(super) fn parse_exit(
     }
 }
 
-/// Wraps xai-grok-shell's ACP gateway to satisfy xai-grok-tools' TerminalBackend.
+/// Wraps xai-Supercharge AI-shell's ACP gateway to satisfy xai-Supercharge AI-tools' TerminalBackend.
 pub struct AcpTerminalAdapter {
     gateway: GatewaySender,
     session_id: acp::SessionId,

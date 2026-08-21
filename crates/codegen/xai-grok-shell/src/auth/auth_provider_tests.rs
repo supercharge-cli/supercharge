@@ -320,7 +320,7 @@ async fn provider_refresh_sets_expired_env() {
     let provider = AuthProviderRef::new(
         "test-expired-env".to_owned(),
         AuthProviderConfig {
-            command: "printf 'tok-%s' \"${GROK_AUTH_EXPIRED:-0}\"".to_owned(),
+            command: "printf 'tok-%s' \"${SUPERCHARGE_AUTH_EXPIRED:-0}\"".to_owned(),
             args: None,
             token_ttl_secs: Some(3600),
             timeout_secs: None,
@@ -330,13 +330,13 @@ async fn provider_refresh_sets_expired_env() {
     assert_eq!(
         provider.ensure_fresh_token(None).await.rotated().as_deref(),
         Some("tok-0"),
-        "first mint runs without GROK_AUTH_EXPIRED"
+        "first mint runs without SUPERCHARGE_AUTH_EXPIRED"
     );
     test_expire_provider_token("test-expired-env");
     assert_eq!(
         provider.ensure_fresh_token(None).await.rotated().as_deref(),
         Some("tok-1"),
-        "re-mints run with GROK_AUTH_EXPIRED=1"
+        "re-mints run with SUPERCHARGE_AUTH_EXPIRED=1"
     );
 }
 
@@ -613,14 +613,15 @@ async fn mint_error_messages_distinguish_failure_modes() {
 }
 
 /// On an in-session re-mint, the prior credential is handed back to the command
-/// via `GROK_AUTH_PROVIDER_*`, so a refresh-grant command can refresh instead of
+/// via `SUPERCHARGE_AUTH_PROVIDER_*`, so a refresh-grant command can refresh instead of
 /// re-authenticating. Nothing is written to disk.
 #[tokio::test]
 async fn re_mint_hands_the_prior_token_back_to_the_command() {
     let provider = AuthProviderRef::new(
         "test-handback".to_owned(),
         AuthProviderConfig {
-            command: "printf 'seen-%s' \"${GROK_AUTH_PROVIDER_ACCESS_TOKEN:-none}\"".to_owned(),
+            command: "printf 'seen-%s' \"${SUPERCHARGE_AUTH_PROVIDER_ACCESS_TOKEN:-none}\""
+                .to_owned(),
             args: None,
             token_ttl_secs: Some(3600),
             timeout_secs: None,
@@ -765,15 +766,15 @@ async fn provider_helper_env_scrubs_first_party_credentials() {
     // The credentials a BYOK helper must never inherit. Editing this list is the
     // audit checkpoint: it must equal the production scrub const.
     const EXPECTED: &[&str] = &[
-        "XAI_API_KEY",
-        "GROK_CODE_XAI_API_KEY",
-        "GROK_AUTH",
-        "GROK_AUTH_PATH",
-        "GROK_DEPLOYMENT_KEY",
-        "GROK_EXTRA_AUTH_KEY",
-        "GROK_TRACE_UPLOAD_CREDENTIALS_FILE",
+        "SUPERCHARGE_API_KEY",
+        "SUPERCHARGE_CODE_API_KEY",
+        "SUPERCHARGE_AUTH",
+        "SUPERCHARGE_AUTH_PATH",
+        "SUPERCHARGE_DEPLOYMENT_KEY",
+        "SUPERCHARGE_EXTRA_AUTH_KEY",
+        "SUPERCHARGE_TRACE_UPLOAD_CREDENTIALS_FILE",
         "OTEL_EXPORTER_OTLP_HEADERS",
-        "GROK_INTERNAL_OTLP_HEADERS",
+        "SUPERCHARGE_INTERNAL_OTLP_HEADERS",
     ];
     assert_eq!(
         crate::agent::config::FIRST_PARTY_CREDENTIAL_ENV_VARS,

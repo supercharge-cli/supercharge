@@ -166,7 +166,7 @@ impl MvpAgent {
         let config = coordinator::CoordinatorConfig {
             foreground_budget:
                 xai_grok_tools::implementations::grok_build::task::backend::env_duration_or(
-                    "GROK_SUBAGENT_AWAIT_BUDGET_MS",
+                    "SUPERCHARGE_SUBAGENT_AWAIT_BUDGET_MS",
                     std::time::Duration::from_secs(600),
                 ),
             limits: xai_grok_tools::implementations::grok_build::task::admission::SubagentLimits {

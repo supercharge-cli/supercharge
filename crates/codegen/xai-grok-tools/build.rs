@@ -1,6 +1,6 @@
 //! Build script for bundling ripgrep for the xai-grok-tools crate.
 //!
-//! - If `GROK_TOOLS_BUNDLE_RG_PATH` is set, always bundle it
+//! - If `SUPERCHARGE_TOOLS_BUNDLE_RG_PATH` is set, always bundle it
 //! - Otherwise, only bundle in release builds
 use std::env;
 use std::fs;
@@ -54,10 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Download + embed fd as an optional vendored file-search binary, mirroring
 /// the ripgrep bundling
-/// (release-only or `GROK_TOOLS_BUNDLE_FD_PATH` override), plus pinned
+/// (release-only or `SUPERCHARGE_TOOLS_BUNDLE_FD_PATH` override), plus pinned
 /// per-asset SHA-256 verification of the downloaded tarball.
 fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-env-changed=GROK_TOOLS_BUNDLE_FD_PATH");
+    println!("cargo:rerun-if-env-changed=SUPERCHARGE_TOOLS_BUNDLE_FD_PATH");
     println!("cargo:rustc-check-cfg=cfg(bundle_fd)");
 
     let gen_dir = PathBuf::from(env::var("OUT_DIR")?).join("bundle-fd");
@@ -70,7 +70,7 @@ fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let path_override = env::var("GROK_TOOLS_BUNDLE_FD_PATH").ok();
+    let path_override = env::var("SUPERCHARGE_TOOLS_BUNDLE_FD_PATH").ok();
     let is_release = env::var("PROFILE").as_deref() == Ok("release");
     if path_override.is_none() && !is_release {
         return Ok(());
@@ -86,7 +86,7 @@ fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
         _ => {
             if path_override.is_none() {
                 return Err(format!(
-                    "Unsupported target for fd bundling: {target_os}-{target_arch}. Set GROK_TOOLS_BUNDLE_FD_PATH to a local fd binary for offline or unsupported builds.",
+                    "Unsupported target for fd bundling: {target_os}-{target_arch}. Set SUPERCHARGE_TOOLS_BUNDLE_FD_PATH to a local fd binary for offline or unsupported builds.",
                 )
                 .into());
             }
@@ -95,22 +95,22 @@ fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     println!("cargo:rustc-cfg=bundle_fd");
-    println!("cargo:rustc-env=GROK_TOOLS_FD_VER={ver}");
+    println!("cargo:rustc-env=SUPERCHARGE_TOOLS_FD_VER={ver}");
 
     if let Some(path) = path_override {
         let dest = gen_dir.join(format!("fd-{ver}-override.bin"));
-        println!("cargo:rustc-env=GROK_TOOLS_FD_TARGET=override");
+        println!("cargo:rustc-env=SUPERCHARGE_TOOLS_FD_TARGET=override");
         let _ = fs::remove_file(&dest);
         fs::copy(PathBuf::from(path.clone()), &dest).map_err(|e| {
             format!(
-                "Failed copying GROK_TOOLS_BUNDLE_FD_PATH: {e} from path {path} to dest {}",
+                "Failed copying SUPERCHARGE_TOOLS_BUNDLE_FD_PATH: {e} from path {path} to dest {}",
                 dest.display()
             )
         })?;
         return Ok(());
     }
 
-    println!("cargo:rustc-env=GROK_TOOLS_FD_TARGET={asset_triple}");
+    println!("cargo:rustc-env=SUPERCHARGE_TOOLS_FD_TARGET={asset_triple}");
     let dest = gen_dir.join(format!("fd-{ver}-{asset_triple}.bin"));
     let _ = fs::remove_file(&dest);
 
@@ -121,12 +121,12 @@ fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
     let bytes: Vec<u8> = {
         let resp = reqwest::blocking::get(&url).map_err(|e| {
             format!(
-                "Failed to download fd: {e}\nSet GROK_TOOLS_BUNDLE_FD_PATH to a local fd for offline builds."
+                "Failed to download fd: {e}\nSet SUPERCHARGE_TOOLS_BUNDLE_FD_PATH to a local fd for offline builds."
             )
         })?;
         if !resp.status().is_success() {
             return Err(format!(
-                "HTTP {} downloading fd. Set GROK_TOOLS_BUNDLE_FD_PATH for offline builds.",
+                "HTTP {} downloading fd. Set SUPERCHARGE_TOOLS_BUNDLE_FD_PATH for offline builds.",
                 resp.status()
             )
             .into());
@@ -173,7 +173,7 @@ fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
 
     if !found {
         return Err(format!(
-            "Could not find 'fd' in fd archive {url}. Set GROK_TOOLS_BUNDLE_FD_PATH for offline builds."
+            "Could not find 'fd' in fd archive {url}. Set SUPERCHARGE_TOOLS_BUNDLE_FD_PATH for offline builds."
         )
         .into());
     }
@@ -190,20 +190,20 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 /// Bundle a prebuilt **static** search-tool binary (`bfs`/`ugrep`) when
-/// `GROK_TOOLS_BUNDLE_<NAME>_PATH` points at one (supplied by the release
+/// `SUPERCHARGE_TOOLS_BUNDLE_<NAME>_PATH` points at one (supplied by the release
 /// pipeline). Emits
 /// `cfg(bundle_<name>)` so the crate's `include_bytes!` + self-extract engages.
 ///
 /// No auto-download (unlike ripgrep): bfs/ugrep publish no prebuilt static
 /// release assets, so the release pipeline supplies the path. Unset → not
-/// bundled (the runtime resolver falls back to `~/.grok/vendor` / `$PATH`);
+/// bundled (the runtime resolver falls back to `~/.supercharge/vendor` / `$PATH`);
 /// never a hard failure, so an un-wired build still succeeds.
 fn bundle_search_tool(
     name: &str,
     name_uc: &str,
     ver: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let override_env = format!("GROK_TOOLS_BUNDLE_{name_uc}_PATH");
+    let override_env = format!("SUPERCHARGE_TOOLS_BUNDLE_{name_uc}_PATH");
     println!("cargo:rerun-if-env-changed={override_env}");
     // Always declare the cfg so `#[cfg(bundle_<name>)]` is lint-clean when unset.
     println!("cargo:rustc-check-cfg=cfg(bundle_{name})");
@@ -226,8 +226,8 @@ fn bundle_search_tool(
         .map_err(|e| format!("copy {override_env} from {src} to {}: {e}", dest.display()))?;
 
     println!("cargo:rustc-cfg=bundle_{name}");
-    println!("cargo:rustc-env=GROK_TOOLS_{name_uc}_VER={ver}");
-    println!("cargo:rustc-env=GROK_TOOLS_{name_uc}_TARGET=override");
+    println!("cargo:rustc-env=SUPERCHARGE_TOOLS_{name_uc}_VER={ver}");
+    println!("cargo:rustc-env=SUPERCHARGE_TOOLS_{name_uc}_TARGET=override");
     Ok(())
 }
 
@@ -235,7 +235,7 @@ fn bundle_search_tool(
 /// search-tool bundling runs regardless of ripgrep's early returns.
 fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
     // Only bundle in release builds to avoid slowing down cargo check.
-    println!("cargo:rerun-if-env-changed=GROK_TOOLS_BUNDLE_RG_PATH");
+    println!("cargo:rerun-if-env-changed=SUPERCHARGE_TOOLS_BUNDLE_RG_PATH");
     // Declare our custom cfg to the compiler so cfg(bundle_rg) is recognized by lints
     println!("cargo:rustc-check-cfg=cfg(bundle_rg)");
 
@@ -243,7 +243,7 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&gen_dir)?;
 
     // Decide whether to bundle: path override OR release build
-    let path_override = env::var("GROK_TOOLS_BUNDLE_RG_PATH").ok();
+    let path_override = env::var("SUPERCHARGE_TOOLS_BUNDLE_RG_PATH").ok();
     let is_release = env::var("PROFILE").as_deref() == Ok("release");
     if path_override.is_none() && !is_release {
         return Ok(());
@@ -254,7 +254,7 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
     // emitting `cargo:rustc-cfg=bundle_rg` keeps include_bytes! macros gated
     // on cfg(bundle_rg) compiled-out, so the runtime falls back to `rg` on
     // PATH. Users install ripgrep separately (winget / scoop). An explicit
-    // GROK_TOOLS_BUNDLE_RG_PATH still bundles regardless of target.
+    // SUPERCHARGE_TOOLS_BUNDLE_RG_PATH still bundles regardless of target.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "windows" && path_override.is_none() {
         return Ok(());
@@ -262,16 +262,16 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
 
     // Expose cfg so the crate can include the bundled bytes.
     println!("cargo:rustc-cfg=bundle_rg");
-    println!("cargo:rustc-env=GROK_TOOLS_RG_VER={}", RG_VER);
+    println!("cargo:rustc-env=SUPERCHARGE_TOOLS_RG_VER={}", RG_VER);
 
     // If a local rg binary is provided, copy it directly (skips target check).
     if let Some(path) = path_override {
         let dest = gen_dir.join(format!("rg-{}-override.bin", RG_VER));
-        println!("cargo:rustc-env=GROK_TOOLS_RG_TARGET=override");
+        println!("cargo:rustc-env=SUPERCHARGE_TOOLS_RG_TARGET=override");
         let _ = fs::remove_file(&dest);
         fs::copy(PathBuf::from(path.clone()), &dest).map_err(|e| {
             format!(
-                "Failed copying GROK_TOOLS_BUNDLE_RG_PATH: {e} from path {path} to dest {}",
+                "Failed copying SUPERCHARGE_TOOLS_BUNDLE_RG_PATH: {e} from path {path} to dest {}",
                 dest.display()
             )
         })?;
@@ -287,14 +287,17 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
         ("linux", "aarch64") => "aarch64-unknown-linux-gnu",
         _ => {
             return Err(format!(
-                "Unsupported target for ripgrep bundling: {os}-{arch}. Set GROK_TOOLS_BUNDLE_RG_PATH to a local rg binary for offline or unsupported builds.",
+                "Unsupported target for ripgrep bundling: {os}-{arch}. Set SUPERCHARGE_TOOLS_BUNDLE_RG_PATH to a local rg binary for offline or unsupported builds.",
                 os = target_os,
                 arch = target_arch
             ).into());
         }
     };
 
-    println!("cargo:rustc-env=GROK_TOOLS_RG_TARGET={}", asset_triple);
+    println!(
+        "cargo:rustc-env=SUPERCHARGE_TOOLS_RG_TARGET={}",
+        asset_triple
+    );
     let dest = gen_dir.join(format!("rg-{}-{}.bin", RG_VER, asset_triple));
     let _ = fs::remove_file(&dest);
 
@@ -307,13 +310,13 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
     let bytes: Vec<u8> = {
         let resp = reqwest::blocking::get(&url).map_err(|e| {
             format!(
-                "Failed to download ripgrep: {}\nSet GROK_TOOLS_BUNDLE_RG_PATH to a local rg for offline builds.",
+                "Failed to download ripgrep: {}\nSet SUPERCHARGE_TOOLS_BUNDLE_RG_PATH to a local rg for offline builds.",
                 e
             )
         })?;
         if !resp.status().is_success() {
             return Err(format!(
-                "HTTP {} downloading ripgrep. Set GROK_TOOLS_BUNDLE_RG_PATH for offline builds.",
+                "HTTP {} downloading ripgrep. Set SUPERCHARGE_TOOLS_BUNDLE_RG_PATH for offline builds.",
                 resp.status()
             )
             .into());
@@ -341,7 +344,7 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
 
     if !found {
         return Err(format!(
-            "Could not find 'rg' in ripgrep archive {}. Set GROK_TOOLS_BUNDLE_RG_PATH for offline builds.",
+            "Could not find 'rg' in ripgrep archive {}. Set SUPERCHARGE_TOOLS_BUNDLE_RG_PATH for offline builds.",
             url
         )
         .into());

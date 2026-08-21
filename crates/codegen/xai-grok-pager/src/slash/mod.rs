@@ -42,7 +42,7 @@ pub const MAX_VISIBLE_SUGGESTIONS: usize = 6;
 /// A single row in the slash suggestion dropdown.
 #[derive(Debug, Clone)]
 pub struct SuggestionRow {
-    /// Display text (e.g., "/model" or "Grok 4 Fast").
+    /// Display text (e.g., "/model" or "Supercharge Core Fast").
     pub display: String,
     /// Description text (e.g., "Switch the active model").
     pub description: String,
@@ -2541,7 +2541,7 @@ mod tests {
     }
 
     /// Tier-restricted commands stay in the dropdown (discoverability) even
-    /// though `get()` blocks execution — invoking one shows the SuperGrok
+    /// though `get()` blocks execution — invoking one shows the Supercharge
     /// upsell (covered by the dispatch-level tests).
     #[test]
     fn restricted_commands_stay_visible_in_dropdown() {
@@ -2916,7 +2916,7 @@ mod tests {
         // A skill arrives as an ACP command carrying skill meta (scope + path).
         let skill_meta = serde_json::json!({
             "scope": "local",
-            "path": "/home/user/.grok/skills/skill-cmd/SKILL.md",
+            "path": "/home/user/.supercharge/skills/skill-cmd/SKILL.md",
         })
         .as_object()
         .cloned()

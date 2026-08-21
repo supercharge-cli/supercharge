@@ -112,7 +112,7 @@ pub struct AppCtx<'a> {
     /// Consumer billing surface (`AppView::usage_visible`). Gates `/usage` subcommands.
     pub billing_surface_visible: bool,
     /// Whether `/usage` is offered and executable. False for external-auth
-    /// deployments with no grok.com billing session.
+    /// deployments with no supercharge.ai billing session.
     pub usage_command_visible: bool,
     pub workflows_available: bool,
     /// Effective render mode of this process (gates `/minimal` and
@@ -137,7 +137,7 @@ pub struct CommandExecCtx<'a> {
     /// Consumer billing surface (`AppView::usage_visible`). Gates `/usage` subcommands.
     pub billing_surface_visible: bool,
     /// Whether `/usage` is offered and executable. False for external-auth
-    /// deployments with no grok.com billing session.
+    /// deployments with no supercharge.ai billing session.
     pub usage_command_visible: bool,
     /// Snapshot of the active agent's PAGER-owned settings, built at
     /// command-build time by the dispatcher. Slash commands like

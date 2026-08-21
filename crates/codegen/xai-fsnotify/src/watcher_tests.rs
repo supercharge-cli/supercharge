@@ -2565,18 +2565,18 @@ mod helper_tests {
         impl Drop for Restore {
             fn drop(&mut self) {
                 // Safety: serialized test; no concurrent env access.
-                unsafe { std::env::remove_var("GROK_FSNOTIFY_SAPLING") };
+                unsafe { std::env::remove_var("SUPERCHARGE_FSNOTIFY_SAPLING") };
             }
         }
         let _restore = Restore;
 
-        unsafe { std::env::remove_var("GROK_FSNOTIFY_SAPLING") };
+        unsafe { std::env::remove_var("SUPERCHARGE_FSNOTIFY_SAPLING") };
         assert!(sapling_enabled(), "default (unset) is enabled");
         for off in ["0", "false"] {
-            unsafe { std::env::set_var("GROK_FSNOTIFY_SAPLING", off) };
+            unsafe { std::env::set_var("SUPERCHARGE_FSNOTIFY_SAPLING", off) };
             assert!(!sapling_enabled(), "{off:?} must disable Sapling");
         }
-        unsafe { std::env::set_var("GROK_FSNOTIFY_SAPLING", "1") };
+        unsafe { std::env::set_var("SUPERCHARGE_FSNOTIFY_SAPLING", "1") };
         assert!(sapling_enabled(), "any other value stays enabled");
     }
 

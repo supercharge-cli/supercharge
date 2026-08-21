@@ -1,11 +1,11 @@
-//! Process-isolated: missing GROK_EXTRA_CA_BUNDLE path → fail-open client build.
+//! Process-isolated: missing SUPERCHARGE_EXTRA_CA_BUNDLE path → fail-open client build.
 
 #[test]
 fn missing_bundle_path_builds_clients_without_panic() {
     // Safety: sole test in this binary; set before any OnceLock resolve.
     unsafe {
         std::env::set_var(
-            xai_grok_extra_ca::ENV_GROK_EXTRA_CA_BUNDLE,
+            xai_grok_extra_ca::ENV_SUPERCHARGE_EXTRA_CA_BUNDLE,
             "/nonexistent/grok-extra-ca-bundle-invalid-file.pem",
         );
     }

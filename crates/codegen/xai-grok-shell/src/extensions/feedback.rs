@@ -92,7 +92,7 @@ async fn handle_btw(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
 async fn handle_feedback(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     if !agent.cfg.borrow().is_feedback_enabled() {
         return Err(acp::Error::internal_error().data(
-            "Feedback is disabled. To enable, set GROK_FEEDBACK_ENABLED=true or \
+            "Feedback is disabled. To enable, set SUPERCHARGE_FEEDBACK_ENABLED=true or \
              [features] feedback = true in config.toml.",
         ));
     }

@@ -182,7 +182,7 @@ mod merge_roster_tests {
             title: None,
             cwd: format!("/live/{id}"),
             is_worktree: false,
-            model_id: Some("grok-4".into()),
+            model_id: Some("Supercharge AI-4".into()),
             reasoning_effort: None,
             yolo: false,
             activity,

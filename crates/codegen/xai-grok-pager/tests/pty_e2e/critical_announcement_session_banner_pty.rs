@@ -52,7 +52,7 @@ fn info_override_json() -> String {
 fn spawn_with_announcements(content: &ContentController, override_json: &str) -> PtyHarness {
     let binary = pager_binary().expect("resolve pager binary");
     let overrides: Vec<(String, String)> = vec![(
-        "GROK_ANNOUNCEMENTS_OVERRIDE".into(),
+        "SUPERCHARGE_ANNOUNCEMENTS_OVERRIDE".into(),
         override_json.to_owned(),
     )];
     let env_refs: Vec<(&str, &str)> = overrides
@@ -666,7 +666,7 @@ async fn promo_announcement_banner_slash_gate_and_critical_preemption() {
 }
 
 /// Clicking the promo `[label]` button dispatches the open action through the
-/// safe-open path — observed via the `GROK_TEST_OPEN_URL_FILE` seam, never a
+/// safe-open path — observed via the `SUPERCHARGE_TEST_OPEN_URL_FILE` seam, never a
 /// real browser — and does NOT hide the row. The raw PTY stream also carries
 /// the CTA URL as OSC 8 (WezTerm pin), the mouse-off/tmux fallback. Then the
 /// promo hide roundtrip: `/announcements hide` clears the row, `show` restores.
@@ -681,7 +681,7 @@ async fn promo_cta_click_opens_link_and_hide_roundtrip() {
     // pin WezTerm like the file-path hyperlink test so the byte-level OSC 8
     // assert below is meaningful.
     let extra_env = [
-        ("GROK_TEST_OPEN_URL_FILE", url_file_str.as_str()),
+        ("SUPERCHARGE_TEST_OPEN_URL_FILE", url_file_str.as_str()),
         ("TERM_PROGRAM", "WezTerm"),
     ];
     let mut harness = spawn_polling_session_with_env(&content, "pty-announce-cta", &extra_env);
@@ -884,7 +884,7 @@ async fn non_dismissible_promo_ignores_hide_then_dismissible_hides() {
     harness.quit().expect("clean quit");
 }
 
-/// Pinned (`dismissible:false`) promo seeded via `GROK_ANNOUNCEMENTS_OVERRIDE`.
+/// Pinned (`dismissible:false`) promo seeded via `SUPERCHARGE_ANNOUNCEMENTS_OVERRIDE`.
 fn pinned_promo_override_json() -> String {
     format!(
         r#"[{{"id":"pty-promo-pinned","message":"{PROMO_MSG}","severity":"promo","dismissible":false,"cta":{{"label":"{PROMO_LABEL}","url":"{PROMO_URL}","caption":"{PROMO_CAPTION}"}}}}]"#
@@ -892,14 +892,14 @@ fn pinned_promo_override_json() -> String {
 }
 
 /// [`spawn_with_announcements`] with extra env pairs appended (e.g. the
-/// `GROK_TEST_OPEN_URL_FILE` seam + a `TERM_PROGRAM` pin for OSC 8).
+/// `SUPERCHARGE_TEST_OPEN_URL_FILE` seam + a `TERM_PROGRAM` pin for OSC 8).
 fn spawn_with_announcements_and_env(
     content: &ContentController,
     override_json: &str,
     extra_env: &[(&str, &str)],
 ) -> PtyHarness {
     let binary = pager_binary().expect("resolve pager binary");
-    let announcement = ("GROK_ANNOUNCEMENTS_OVERRIDE", override_json);
+    let announcement = ("SUPERCHARGE_ANNOUNCEMENTS_OVERRIDE", override_json);
     let mut env_refs = vec![announcement];
     env_refs.extend_from_slice(extra_env);
     PtyHarness::spawn_with_content_env_in_dir(
@@ -928,7 +928,7 @@ async fn pinned_promo_multi_surface_and_ctrl_o_open() {
     let url_file = content.home().join("opened-urls.txt");
     let url_file_str = url_file.to_str().expect("utf8 url file path").to_owned();
     let extra_env = [
-        ("GROK_TEST_OPEN_URL_FILE", url_file_str.as_str()),
+        ("SUPERCHARGE_TEST_OPEN_URL_FILE", url_file_str.as_str()),
         ("TERM_PROGRAM", "WezTerm"),
     ];
     let mut harness =

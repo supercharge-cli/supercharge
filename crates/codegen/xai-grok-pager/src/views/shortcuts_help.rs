@@ -195,7 +195,7 @@ pub fn build_entries(
                 continue;
             }
             // The voice chord (`Ctrl+Space`) is hidden when the voice gate is
-            // off (remote kill switch / `GROK_VOICE_MODE=0`) or the user turned
+            // off (remote kill switch / `SUPERCHARGE_VOICE_MODE=0`) or the user turned
             // the Voice shortcut setting off — don't advertise keys that do
             // nothing. `Ctrl+Space` decodes the same with or without the Kitty
             // keyboard protocol (it just toggles instead of hold-to-talk), so

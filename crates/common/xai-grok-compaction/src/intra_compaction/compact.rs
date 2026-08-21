@@ -31,7 +31,7 @@ use super::fit::fit_turns_for_summarizer;
 use super::observer::IntraCompactionObserver;
 use super::traits::{CompactionStreamProc, CompactionTarget};
 use super::trigger::{IntraCompactionError, IntraCompactionResult, IntraCompactionTrigger};
-// The `Shared` summarizer reuses grok-build's full-replace summarization core
+// The `Shared` summarizer reuses supercharge-core's full-replace summarization core
 // (the shared summarization core lives in `code_compaction`); intra_compaction intentionally
 // depends on `code_compaction` for it.
 use crate::code_compaction::{
@@ -204,14 +204,14 @@ where
     .await
 }
 
-/// `FullReplace` strategy (default): grok-build's full-replace — summarize the
+/// `FullReplace` strategy (default): supercharge-core's full-replace — summarize the
 /// *whole* conversation (prior history + accumulated steps) in one pass and
 /// rebuild context from scratch via [`CompactionTarget::FullReplace`].
 ///
 /// Unlike the partial modes there is no tail-keep selection and no
 /// `<grok_user_queries>` preamble: the shared `code_compaction` summarizer
 /// (always [`IntraSummarizer::Shared`] here, regardless of `policy.summarizer`)
-/// preserves user intent itself, matching grok-build. The reduction and
+/// preserves user intent itself, matching supercharge-core. The reduction and
 /// `min_compactable_tokens` guards are kept for parity with the partial modes.
 ///
 /// When `summarizer_input_budget` is `Some`, turns are **fitted** via the
@@ -283,7 +283,7 @@ where
         "[IntraCompaction] starting full replace"
     );
 
-    // 2. Summarize (possibly fitted) turns through grok-build's shared core.
+    // 2. Summarize (possibly fitted) turns through supercharge-core's shared core.
     //    FullReplace always uses the shared summarizer (it *is* the
     //    `code_compaction` path); `policy.summarizer` is ignored for this mode.
     let summary_text = sample_shared_summary_with_retries(sampler, &llm_turns, policy).await?;
@@ -553,7 +553,7 @@ where
             sample_compaction_with_retries(sampler, &turns_for_llm, &prompt, timeout, policy)
                 .await?
         }
-        // New (default): grok-build's shared summarization core from
+        // New (default): supercharge-core's shared summarization core from
         // `code_compaction` — `build_summary_prompt` + degenerate-reject +
         // `format_compact_summary` cleaning — run intra-locally.
         IntraSummarizer::Shared => {
@@ -671,14 +671,14 @@ fn build_prompt_for_target(
 
 /// `Shared` summarizer (default): sample through the shared retry loop
 /// [`sample_summary_with_retries`](crate::code_compaction::sample_summary_with_retries)
-/// — grok-build's summarization core (`build_summary_prompt` + bounded retry +
+/// — supercharge-core's summarization core (`build_summary_prompt` + bounded retry +
 /// degenerate-reject + `format_compact_summary` cleaning) — then map the
 /// structured outcome onto [`IntraCompactionError`] and return the *cleaned*
 /// summary on success.
 ///
 /// The classification (degenerate/empty = transient; deterministic vs transient
 /// sampler errors, incl. context-length overflow) lives in the shared loop, so
-/// intra and grok-build stay in lock-step. Outcome mapping:
+/// intra and supercharge-core stay in lock-step. Outcome mapping:
 /// - exhausted empty/degenerate run → [`IntraCompactionError::EmptyResponse`];
 /// - deterministic sampler error (incl. context overflow) →
 ///   [`IntraCompactionError::SamplerBuild`] (terminal);
@@ -696,7 +696,7 @@ where
     T: Send + Sync,
     P: CompactionSampler<Item = T> + ?Sized,
 {
-    // grok-build appends the summarization prompt as the final user message;
+    // supercharge-core appends the summarization prompt as the final user message;
     // there is no separate system prompt for the compaction call.
     let prompt = CompactionPrompt {
         system: String::new(),
@@ -715,7 +715,7 @@ where
     )
     .await
     {
-        // grok-build returns the raw summary and cleans it in its assembler;
+        // supercharge-core returns the raw summary and cleans it in its assembler;
         // intra has no assembler, so it cleans here (pre-refactor behavior).
         Ok(SampledSummary { summary, .. }) => Ok(format_compact_summary(&summary)),
         Err(SampleRetryError::Empty { .. }) => Err(IntraCompactionError::EmptyResponse),

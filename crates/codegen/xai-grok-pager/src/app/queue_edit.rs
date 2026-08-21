@@ -1,7 +1,7 @@
 //! Queued-prompt editing (`PromptMode::EditingQueued`) state machine.
 //!
 //! Extracted from `agent_view.rs` as a sibling `impl AgentView` block (same
-//! pattern as xai-grok-shell's `compaction.rs`): entry from the queue pane,
+//! pattern as xai-Supercharge AI-shell's `compaction.rs`): entry from the queue pane,
 //! editing-mode key intercepts, the dirty-edit focus lock, and the
 //! exit/cleanup paths.
 //!

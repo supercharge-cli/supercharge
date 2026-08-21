@@ -19,7 +19,7 @@ use crate::terminal::{MultiplexerKind, TerminalContext};
 
 /// Env var overriding where the copy backup file is written (supports `~`).
 /// Documented in `xai-grok-pager/docs/internal/22-environment-variables.md`.
-pub const GROK_COPY_FILE_ENV: &str = "GROK_COPY_FILE";
+pub const SUPERCHARGE_COPY_FILE_ENV: &str = "SUPERCHARGE_COPY_FILE";
 
 /// Cached result of the remote-session check (env vars don't change at runtime).
 fn is_remote() -> bool {
@@ -43,31 +43,31 @@ fn is_container_no_display() -> bool {
 /// even when the inner terminal brand is misdetected (e.g. over SSH, where only
 /// `TERM` propagates and Apple Terminal / unknown brands look OSC-52-incapable).
 ///
-/// Two names are accepted: the canonical `GROK_OSC52_SINK` (inherited by local
-/// children) and the `LC_`-prefixed `LC_GROK_OSC52_SINK`, which the default
+/// Two names are accepted: the canonical `SUPERCHARGE_OSC52_SINK` (inherited by local
+/// children) and the `LC_`-prefixed `LC_SUPERCHARGE_OSC52_SINK`, which the default
 /// OpenSSH client/server configs forward (`SendEnv LANG LC_*` /
 /// `AcceptEnv LANG LC_*`) so the signal survives the hop into a remote `grok`.
 pub fn osc52_sink_active() -> bool {
     static SINK: OnceLock<bool> = OnceLock::new();
     *SINK.get_or_init(|| {
-        std::env::var_os("GROK_OSC52_SINK").is_some()
-            || std::env::var_os("LC_GROK_OSC52_SINK").is_some()
+        std::env::var_os("SUPERCHARGE_OSC52_SINK").is_some()
+            || std::env::var_os("LC_SUPERCHARGE_OSC52_SINK").is_some()
     })
 }
 
 /// Kill switch: never emit OSC 52 clipboard sequences.
 ///
-/// Set `GROK_CLIPBOARD_NO_OSC52` (any value) before starting Grok. Presence
+/// Set `SUPERCHARGE_CLIPBOARD_NO_OSC52` (any value) before starting Grok. Presence
 /// forces the OSC 52 leg off for the whole process — including Linux "always
-/// emit", tmux, SSH, container, and `GROK_OSC52_SINK` paths. Use this when the
+/// emit", tmux, SSH, container, and `SUPERCHARGE_OSC52_SINK` paths. Use this when the
 /// host terminal paints OSC 52 payloads as visible garbage (e.g. OpenText
 /// Exceed and other non-supporting emulators).
 ///
-/// Same convention as `GROK_CLIPBOARD_NO_DATA_CONTROL`: env presence enables
+/// Same convention as `SUPERCHARGE_CLIPBOARD_NO_DATA_CONTROL`: env presence enables
 /// the kill switch; resolved once and cached for the process lifetime.
 pub fn osc52_disabled() -> bool {
     static DISABLED: OnceLock<bool> = OnceLock::new();
-    *DISABLED.get_or_init(|| std::env::var_os("GROK_CLIPBOARD_NO_OSC52").is_some())
+    *DISABLED.get_or_init(|| std::env::var_os("SUPERCHARGE_CLIPBOARD_NO_OSC52").is_some())
 }
 
 /// Cached clipboard route resolved at first use from the terminal context.
@@ -138,7 +138,7 @@ impl std::fmt::Display for ClipboardRoute {
 /// [`osc52_disabled()`] which read ambient env vars / filesystem markers
 /// (cached in `OnceLock`s). In tmux-backed environments `osc52` is normally
 /// unconditionally `true` regardless of SSH/container state, so this only
-/// matters for non-tmux contexts — unless `GROK_CLIPBOARD_NO_OSC52` is set,
+/// matters for non-tmux contexts — unless `SUPERCHARGE_CLIPBOARD_NO_OSC52` is set,
 /// which forces OSC 52 off everywhere. Tests that cannot control SSH env vars
 /// should skip asserting `osc52` for non-tmux cases.
 pub fn resolve_clipboard_route(ctx: &TerminalContext) -> ClipboardRoute {
@@ -166,7 +166,7 @@ fn resolve_clipboard_route_with(ctx: &TerminalContext, opts: ClipboardRouteOpts)
     // macOS/Windows: only in tmux/SSH/container contexts, or when an
     // upstream `grok wrap` sink is capturing our output and will forward
     // the sequence to the real clipboard.
-    // `GROK_CLIPBOARD_NO_OSC52` wins over every automatic path.
+    // `SUPERCHARGE_CLIPBOARD_NO_OSC52` wins over every automatic path.
     let osc52 = !opts.no_osc52
         && (cfg!(target_os = "linux")
             || is_tmux
@@ -519,15 +519,15 @@ impl CopyDelivery {
 
 /// Default path for the always-written copy backup file.
 ///
-/// Override with [`GROK_COPY_FILE_ENV`] (supports `~`). Otherwise
-/// `~/.grok/last-copy.txt` (grok's per-user home — short, stable, and
+/// Override with [`SUPERCHARGE_COPY_FILE_ENV`] (supports `~`). Otherwise
+/// `~/.supercharge/last-copy.txt` (grok's per-user home — short, stable, and
 /// readable in a toast, unlike macOS's `/var/folders/...` temp dir).
 ///
 /// `None` when no grok home resolves and the env var is unset: rather than
 /// writing to a predictable world-visible temp path, the backup file is
 /// simply skipped (the clipboard legs still fire).
 pub fn default_copy_fallback_path() -> Option<std::path::PathBuf> {
-    if let Ok(raw) = std::env::var(GROK_COPY_FILE_ENV) {
+    if let Ok(raw) = std::env::var(SUPERCHARGE_COPY_FILE_ENV) {
         let trimmed = raw.trim();
         if !trimmed.is_empty() {
             return Some(std::path::PathBuf::from(
@@ -540,7 +540,7 @@ pub fn default_copy_fallback_path() -> Option<std::path::PathBuf> {
 
 /// Render a backup-file path for user-facing messages using the codebase-wide
 /// abbreviation convention ([`crate::util::abbreviate_path`]): a grok-home
-/// prefix collapses to `~/.grok` (or `$GROK_HOME` when overridden), and a
+/// prefix collapses to `~/.supercharge` (or `$SUPERCHARGE_HOME` when overridden), and a
 /// plain home prefix collapses to `~` — so toasts stay short.
 pub fn display_copy_path(path: &std::path::Path) -> String {
     crate::util::abbreviate_path(&path.to_string_lossy()).into_owned()
@@ -592,17 +592,17 @@ fn write_owner_only(path: &std::path::Path, text: &str) -> std::io::Result<()> {
 /// Write to the default fallback path ([`default_copy_fallback_path`]).
 ///
 /// Errors with `NotFound` when no fallback path resolves (no home and no
-/// `GROK_COPY_FILE`) — the backup file is skipped rather than written to a
+/// `SUPERCHARGE_COPY_FILE`) — the backup file is skipped rather than written to a
 /// predictable temp location.
 ///
 /// On Unix a missing parent directory is created `0700` (a custom
-/// `GROK_COPY_FILE` may point at a not-yet-created private directory;
-/// `~/.grok` normally already exists).
+/// `SUPERCHARGE_COPY_FILE` may point at a not-yet-created private directory;
+/// `~/.supercharge` normally already exists).
 pub fn write_copy_fallback(text: &str) -> std::io::Result<std::path::PathBuf> {
     let Some(path) = default_copy_fallback_path() else {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "no home directory resolves; set GROK_COPY_FILE to enable the copy backup file",
+            "no home directory resolves; set SUPERCHARGE_COPY_FILE to enable the copy backup file",
         ));
     };
     #[cfg(unix)]
@@ -1802,7 +1802,7 @@ mod tests {
         ];
 
         for case in cases {
-            // Pure helper with kill switch off so ambient GROK_CLIPBOARD_NO_OSC52
+            // Pure helper with kill switch off so ambient SUPERCHARGE_CLIPBOARD_NO_OSC52
             // cannot flake CI (route() itself still reads the real env).
             let route = resolve_clipboard_route_with(
                 &case.ctx,
@@ -1907,7 +1907,7 @@ mod tests {
         );
         assert!(
             !killed.osc52,
-            "GROK_CLIPBOARD_NO_OSC52 still wins over the wrap sink"
+            "SUPERCHARGE_CLIPBOARD_NO_OSC52 still wins over the wrap sink"
         );
     }
 
@@ -1933,7 +1933,7 @@ mod tests {
 
     #[test]
     fn clipboard_route_no_osc52_kill_switch_forces_off() {
-        // GROK_CLIPBOARD_NO_OSC52 must win over Linux/tmux/SSH automatic emit.
+        // SUPERCHARGE_CLIPBOARD_NO_OSC52 must win over Linux/tmux/SSH automatic emit.
         for ctx in [
             plain_terminal_ctx(),
             plain_tmux_ctx(),
@@ -2250,11 +2250,11 @@ mod tests {
         let custom = dir.path().join("custom-copy.txt");
         // SAFETY: test-only env mutation; serialized on the grok_copy_file key.
         unsafe {
-            std::env::set_var(GROK_COPY_FILE_ENV, &custom);
+            std::env::set_var(SUPERCHARGE_COPY_FILE_ENV, &custom);
         }
         let resolved = default_copy_fallback_path();
         unsafe {
-            std::env::remove_var(GROK_COPY_FILE_ENV);
+            std::env::remove_var(SUPERCHARGE_COPY_FILE_ENV);
         }
         assert_eq!(resolved, Some(custom));
     }
@@ -2265,26 +2265,26 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let custom = dir.path().join("last.txt");
         unsafe {
-            std::env::set_var(GROK_COPY_FILE_ENV, &custom);
+            std::env::set_var(SUPERCHARGE_COPY_FILE_ENV, &custom);
         }
         let written = write_copy_fallback("payload").expect("fallback write");
         unsafe {
-            std::env::remove_var(GROK_COPY_FILE_ENV);
+            std::env::remove_var(SUPERCHARGE_COPY_FILE_ENV);
         }
         assert_eq!(written, custom);
         assert_eq!(std::fs::read_to_string(&custom).expect("read"), "payload");
     }
 
-    /// Without `GROK_COPY_FILE`, the default is `~/.grok/last-copy.txt`
+    /// Without `SUPERCHARGE_COPY_FILE`, the default is `~/.supercharge/last-copy.txt`
     /// (grok home) — short and toast-friendly, unlike macOS's temp dir.
     #[test]
     #[serial_test::serial(grok_copy_file)]
     fn default_copy_fallback_path_is_grok_home() {
         unsafe {
-            std::env::remove_var(GROK_COPY_FILE_ENV);
+            std::env::remove_var(SUPERCHARGE_COPY_FILE_ENV);
         }
         let path = default_copy_fallback_path();
-        // Test envs always resolve a home (or set GROK_HOME).
+        // Test envs always resolve a home (or set SUPERCHARGE_HOME).
         let expected = xai_grok_config::user_grok_home()
             .expect("home resolves in tests")
             .join("last-copy.txt");
@@ -2293,14 +2293,14 @@ mod tests {
 
     /// Toast paths collapse the home prefix to `~` (grok-home paths go
     /// through the shared `abbreviate_path` convention, covered further by
-    /// the `GROK_HOME`-override integration test in `xai-grok-pager`).
+    /// the `SUPERCHARGE_HOME`-override integration test in `xai-grok-pager`).
     #[test]
     fn display_copy_path_abbreviates_home() {
-        if std::env::var_os("GROK_HOME").is_none() {
+        if std::env::var_os("SUPERCHARGE_HOME").is_none() {
             let home = dirs::home_dir().expect("home resolves in tests");
             assert_eq!(
-                display_copy_path(&home.join(".grok").join("last-copy.txt")),
-                "~/.grok/last-copy.txt"
+                display_copy_path(&home.join(".supercharge").join("last-copy.txt")),
+                "~/.supercharge/last-copy.txt"
             );
         }
         // Non-home paths pass through untouched — including multi-byte

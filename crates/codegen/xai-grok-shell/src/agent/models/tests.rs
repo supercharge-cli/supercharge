@@ -450,8 +450,8 @@ async fn first_catalog_wait_is_bounded() {
 #[tokio::test(start_paused = true)]
 #[serial]
 async fn first_catalog_wait_skips_doomed_signed_out_fetch() {
-    let _no_key = EnvGuard::unset("XAI_API_KEY");
-    let _no_legacy_key = EnvGuard::unset("GROK_CODE_XAI_API_KEY");
+    let _no_key = EnvGuard::unset("SUPERCHARGE_API_KEY");
+    let _no_legacy_key = EnvGuard::unset("SUPERCHARGE_CODE_API_KEY");
     let mgr = cold_manager(config::Config::default(), Arc::new(HangingEndpoint));
     let start = tokio::time::Instant::now();
     mgr.spawn_fetch_inner(None, /*remote_fetch_enabled*/ true);
@@ -657,11 +657,11 @@ fn validate_selectable_rejects_bad_allowlists() {
             [models]
             default = "grok-3"
             allowed_models = ["grok-4*"]
-            [model.grok-3]
+            [model.supercharge-3]
             model = "grok-3"
             base_url = "https://api.x.ai/v1"
             context_window = 256000
-            [model.grok-4]
+            [model.supercharge-4]
             model = "grok-4"
             base_url = "https://api.x.ai/v1"
             context_window = 256000
@@ -678,7 +678,7 @@ fn validate_selectable_rejects_bad_allowlists() {
         r#"
             [models]
             allowed_models = ["nomatch-*"]
-            [model.grok-4]
+            [model.supercharge-4]
             model = "grok-4"
             base_url = "https://api.x.ai/v1"
             context_window = 256000
@@ -1165,8 +1165,8 @@ async fn sign_out_clears_catalog_rebuilds_bundled_without_fetching() {
     }
 
     // Unset keys so fetch_auth resolves to Session (the sign-out branch).
-    let _no_key = EnvGuard::unset("XAI_API_KEY");
-    let _no_legacy_key = EnvGuard::unset("GROK_CODE_XAI_API_KEY");
+    let _no_key = EnvGuard::unset("SUPERCHARGE_API_KEY");
+    let _no_legacy_key = EnvGuard::unset("SUPERCHARGE_CODE_API_KEY");
     let calls = Arc::new(AtomicUsize::new(0));
     let tmp = tempfile::TempDir::new().unwrap();
     let auth_manager = Arc::new(AuthManager::new(tmp.path(), GrokComConfig::default()));
@@ -1798,7 +1798,7 @@ use xai_grok_test_support::EnvGuard;
 #[test]
 #[serial]
 fn resolve_custom_endpoint_always_wins() {
-    let _key = EnvGuard::set("XAI_API_KEY", "test-key");
+    let _key = EnvGuard::set("SUPERCHARGE_API_KEY", "test-key");
     let endpoints = config::EndpointsConfig {
         models_base_url: Some("https://custom.example.com".to_owned()),
         ..config::EndpointsConfig::default()
@@ -1816,7 +1816,7 @@ fn resolve_custom_endpoint_always_wins() {
 #[test]
 #[serial]
 fn resolve_cached_session_wins_over_api_key() {
-    let _key = EnvGuard::set("XAI_API_KEY", "test-key");
+    let _key = EnvGuard::set("SUPERCHARGE_API_KEY", "test-key");
     let endpoints = config::EndpointsConfig::default();
     assert_eq!(
         ModelFetchAuth::resolve(&endpoints, true),
@@ -1828,7 +1828,7 @@ fn resolve_cached_session_wins_over_api_key() {
 #[test]
 #[serial]
 fn resolve_api_key_used_when_no_session() {
-    let _key = EnvGuard::set("XAI_API_KEY", "test-key");
+    let _key = EnvGuard::set("SUPERCHARGE_API_KEY", "test-key");
     let endpoints = config::EndpointsConfig::default();
     assert_eq!(
         ModelFetchAuth::resolve(&endpoints, false),
@@ -1840,8 +1840,8 @@ fn resolve_api_key_used_when_no_session() {
 #[test]
 #[serial]
 fn resolve_falls_back_to_session_when_nothing_set() {
-    let _unset = EnvGuard::unset("XAI_API_KEY");
-    let _unset_legacy = EnvGuard::unset("GROK_CODE_XAI_API_KEY");
+    let _unset = EnvGuard::unset("SUPERCHARGE_API_KEY");
+    let _unset_legacy = EnvGuard::unset("SUPERCHARGE_CODE_API_KEY");
     let endpoints = config::EndpointsConfig::default();
     assert_eq!(
         ModelFetchAuth::resolve(&endpoints, false),
@@ -1853,8 +1853,8 @@ fn resolve_falls_back_to_session_when_nothing_set() {
 #[test]
 #[serial]
 fn resolve_deployment_key_when_no_session_or_api_key() {
-    let _unset = EnvGuard::unset("XAI_API_KEY");
-    let _unset_legacy = EnvGuard::unset("GROK_CODE_XAI_API_KEY");
+    let _unset = EnvGuard::unset("SUPERCHARGE_API_KEY");
+    let _unset_legacy = EnvGuard::unset("SUPERCHARGE_CODE_API_KEY");
     let endpoints = config::EndpointsConfig {
         deployment_key: Some("deploy-key".to_owned()),
         ..config::EndpointsConfig::default()
@@ -1868,7 +1868,7 @@ fn resolve_deployment_key_when_no_session_or_api_key() {
 #[test]
 #[serial]
 fn resolve_deployment_key_outranks_ambient_api_key() {
-    let _key = EnvGuard::set("XAI_API_KEY", "stray-env-key");
+    let _key = EnvGuard::set("SUPERCHARGE_API_KEY", "stray-env-key");
     let endpoints = config::EndpointsConfig {
         deployment_key: Some("deploy-key".to_owned()),
         ..config::EndpointsConfig::default()
@@ -1876,7 +1876,7 @@ fn resolve_deployment_key_outranks_ambient_api_key() {
     assert_eq!(
         ModelFetchAuth::resolve(&endpoints, false),
         ModelFetchAuth::Deployment,
-        "managed deployment_key should outrank an ambient XAI_API_KEY",
+        "managed deployment_key should outrank an ambient SUPERCHARGE_API_KEY",
     );
     assert_eq!(
         ModelFetchAuth::resolve(&endpoints, true),
@@ -1890,7 +1890,7 @@ fn resolve_deployment_key_outranks_ambient_api_key() {
 #[test]
 #[serial]
 fn prefetch_env_none_when_remote_fetch_disabled_despite_credentials() {
-    let _key = EnvGuard::set("XAI_API_KEY", "stray-env-key");
+    let _key = EnvGuard::set("SUPERCHARGE_API_KEY", "stray-env-key");
     let endpoints = config::EndpointsConfig {
         deployment_key: Some("deploy-key".to_owned()),
         models_base_url: Some("https://custom.example.com".to_owned()),
@@ -1910,8 +1910,8 @@ fn prefetch_env_none_when_remote_fetch_disabled_despite_credentials() {
 #[test]
 #[serial]
 fn prefetch_env_resolves_when_remote_fetch_enabled() {
-    let _unset = EnvGuard::unset("XAI_API_KEY");
-    let _unset_legacy = EnvGuard::unset("GROK_CODE_XAI_API_KEY");
+    let _unset = EnvGuard::unset("SUPERCHARGE_API_KEY");
+    let _unset_legacy = EnvGuard::unset("SUPERCHARGE_CODE_API_KEY");
     let endpoints = config::EndpointsConfig {
         deployment_key: Some("deploy-key".to_owned()),
         ..config::EndpointsConfig::default()
@@ -2057,8 +2057,12 @@ fn make_entry_config_with_id(
 #[test]
 fn build_prefetched_map_distinct_ids_same_slug() {
     let entries = vec![
-        make_entry_config_with_id(Some("auto"), "grok-build", Some("Auto")),
-        make_entry_config_with_id(Some("grok-build"), "grok-build", Some("Grok Build")),
+        make_entry_config_with_id(Some("auto"), "supercharge-core", Some("Auto")),
+        make_entry_config_with_id(
+            Some("supercharge-core"),
+            "supercharge-core",
+            Some("Supercharge AI"),
+        ),
         make_entry_config_with_id(
             Some("experimental-fast"),
             "experimental-fast",
@@ -2069,13 +2073,13 @@ fn build_prefetched_map_distinct_ids_same_slug() {
 
     assert_eq!(map.len(), 3, "all three entries should survive");
     assert!(map.contains_key("auto"));
-    assert!(map.contains_key("grok-build"));
+    assert!(map.contains_key("supercharge-core"));
     assert!(map.contains_key("experimental-fast"));
     assert_eq!(
-        map["auto"].info.model, "grok-build",
-        "auto entry should still route to grok-build"
+        map["auto"].info.model, "supercharge-core",
+        "auto entry should still route to supercharge-core"
     );
-    assert_eq!(map["grok-build"].info.model, "grok-build");
+    assert_eq!(map["supercharge-core"].info.model, "supercharge-core");
 }
 
 #[test]
@@ -2094,42 +2098,45 @@ fn build_prefetched_map_no_id_falls_back_to_slug() {
 #[test]
 fn build_prefetched_map_duplicate_id_overwrites() {
     let entries = vec![
-        make_entry_config_with_id(Some("grok-build"), "grok-build", Some("First")),
-        make_entry_config_with_id(Some("grok-build"), "grok-build", Some("Second")),
+        make_entry_config_with_id(Some("supercharge-core"), "supercharge-core", Some("First")),
+        make_entry_config_with_id(Some("supercharge-core"), "supercharge-core", Some("Second")),
     ];
     let map = build_prefetched_map(entries, None);
 
     assert_eq!(map.len(), 1, "duplicate id: second overwrites first");
-    assert_eq!(map["grok-build"].info.name.as_deref(), Some("Second"));
+    assert_eq!(map["supercharge-core"].info.name.as_deref(), Some("Second"));
 }
 
 #[test]
 fn resolve_default_model_prefers_id_over_model_slug() {
     let mut catalog: IndexMap<String, ModelEntry> = IndexMap::new();
     catalog.insert(
-        "auto-grok-build".to_string(),
-        make_model_entry("grok-build"),
+        "auto-supercharge-core".to_string(),
+        make_model_entry("supercharge-core"),
     );
-    catalog.insert("grok-build".to_string(), make_model_entry("grok-build"));
+    catalog.insert(
+        "supercharge-core".to_string(),
+        make_model_entry("supercharge-core"),
+    );
 
     let mut cfg = config::Config::default();
-    cfg.models.default = Some("grok-build".to_string());
+    cfg.models.default = Some("supercharge-core".to_string());
 
     let (key, _, _) = resolve_default_model(&cfg, &catalog, true);
-    assert_eq!(key, "grok-build", "must match id, not first slug hit");
+    assert_eq!(key, "supercharge-core", "must match id, not first slug hit");
 }
 
 #[test]
 fn build_prefetched_map_none_id_falls_back_to_slug() {
     let entries = vec![make_entry_config_with_id(
         None,
-        "grok-build",
-        Some("Grok Build"),
+        "supercharge-core",
+        Some("Supercharge AI"),
     )];
     let map = build_prefetched_map(entries, None);
 
     assert_eq!(map.len(), 1);
-    assert!(map.contains_key("grok-build"));
+    assert!(map.contains_key("supercharge-core"));
 }
 
 // ── persisted model id → catalog key (session resume) ─────────────
@@ -2138,14 +2145,14 @@ fn build_prefetched_map_none_id_falls_back_to_slug() {
 fn resolve_catalog_key_maps_routing_slug_to_config_key() {
     let mut models = IndexMap::new();
     models.insert(
-        "enterprise-grok-build".to_string(),
+        "enterprise-supercharge-core".to_string(),
         make_model_entry("grok-4.5"),
     );
     models.insert("grok-4.3".to_string(), make_model_entry("grok-4.3"));
 
     let persisted = acp::ModelId::new("grok-4.5");
     let key = resolve_catalog_key(&models, &persisted).expect("slug must resolve");
-    assert_eq!(key.0.as_ref(), "enterprise-grok-build");
+    assert_eq!(key.0.as_ref(), "enterprise-supercharge-core");
 }
 
 #[test]
@@ -2162,21 +2169,24 @@ fn resolve_catalog_key_prefers_exact_key_match() {
 fn resolve_catalog_key_last_slug_match_wins() {
     let mut models = IndexMap::new();
     models.insert(
-        "default-grok-build".to_string(),
+        "default-supercharge-core".to_string(),
         make_model_entry("grok-4.5"),
     );
-    models.insert("user-grok-build".to_string(), make_model_entry("grok-4.5"));
+    models.insert(
+        "user-supercharge-core".to_string(),
+        make_model_entry("grok-4.5"),
+    );
 
     let persisted = acp::ModelId::new("grok-4.5");
     let key = resolve_catalog_key(&models, &persisted).expect("slug must resolve");
-    assert_eq!(key.0.as_ref(), "user-grok-build");
+    assert_eq!(key.0.as_ref(), "user-supercharge-core");
 }
 
 #[test]
 fn selectable_catalog_key_for_persisted_none_when_resolved_not_available() {
     let mut models = IndexMap::new();
     models.insert(
-        "enterprise-grok-build".to_string(),
+        "enterprise-supercharge-core".to_string(),
         make_model_entry("grok-4.5"),
     );
 
@@ -2188,57 +2198,60 @@ fn selectable_catalog_key_for_persisted_none_when_resolved_not_available() {
 #[test]
 fn selectable_prefers_available_identity_over_non_selectable_exact_key() {
     let mut models = IndexMap::new();
-    models.insert("grok-build".to_string(), make_model_entry("grok-build"));
     models.insert(
-        "enterprise-grok-build".to_string(),
-        make_model_entry("grok-build"),
+        "supercharge-core".to_string(),
+        make_model_entry("supercharge-core"),
+    );
+    models.insert(
+        "enterprise-supercharge-core".to_string(),
+        make_model_entry("supercharge-core"),
     );
     models.insert("grok-4.3".to_string(), make_model_entry("grok-4.3"));
 
-    let available = test_available_keys(&["enterprise-grok-build", "grok-4.3"]);
+    let available = test_available_keys(&["enterprise-supercharge-core", "grok-4.3"]);
 
-    let persisted = acp::ModelId::new("grok-build");
+    let persisted = acp::ModelId::new("supercharge-core");
     assert_eq!(
         resolve_catalog_key(&models, &persisted)
             .expect("exact key exists")
             .0
             .as_ref(),
-        "grok-build"
+        "supercharge-core"
     );
     let key = selectable_catalog_key_for_persisted(&models, &available, &persisted)
         .expect("must resolve to selectable section");
-    assert_eq!(key.0.as_ref(), "enterprise-grok-build");
+    assert_eq!(key.0.as_ref(), "enterprise-supercharge-core");
 }
 
 #[test]
 fn selectable_matches_routing_slug_when_no_exact_key() {
     let mut models = IndexMap::new();
     models.insert(
-        "enterprise-grok-build".to_string(),
-        make_model_entry("grok-build"),
+        "enterprise-supercharge-core".to_string(),
+        make_model_entry("supercharge-core"),
     );
     models.insert("grok-4.3".to_string(), make_model_entry("grok-4.3"));
 
-    let available = test_available_keys(&["enterprise-grok-build", "grok-4.3"]);
+    let available = test_available_keys(&["enterprise-supercharge-core", "grok-4.3"]);
 
-    let persisted = acp::ModelId::new("grok-build");
+    let persisted = acp::ModelId::new("supercharge-core");
     let key = selectable_catalog_key_for_persisted(&models, &available, &persisted)
         .expect("slug must resolve to selectable key");
-    assert_eq!(key.0.as_ref(), "enterprise-grok-build");
+    assert_eq!(key.0.as_ref(), "enterprise-supercharge-core");
 }
 
 #[test]
 fn selectable_prefers_exact_key_over_later_slug_match() {
     let mut models = IndexMap::new();
-    models.insert("grok-build".to_string(), make_model_entry("grok-4.5"));
-    models.insert("other".to_string(), make_model_entry("grok-build"));
+    models.insert("supercharge-core".to_string(), make_model_entry("grok-4.5"));
+    models.insert("other".to_string(), make_model_entry("supercharge-core"));
 
-    let available = test_available_keys(&["grok-build", "other"]);
+    let available = test_available_keys(&["supercharge-core", "other"]);
 
-    let persisted = acp::ModelId::new("grok-build");
+    let persisted = acp::ModelId::new("supercharge-core");
     let key = selectable_catalog_key_for_persisted(&models, &available, &persisted)
         .expect("exact selectable key must win");
-    assert_eq!(key.0.as_ref(), "grok-build");
+    assert_eq!(key.0.as_ref(), "supercharge-core");
 }
 
 fn test_available_keys(keys: &[&str]) -> IndexMap<acp::ModelId, acp::ModelInfo> {

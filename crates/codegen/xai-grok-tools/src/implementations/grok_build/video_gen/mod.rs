@@ -153,7 +153,7 @@ pub struct VideoGenClient {
     attribution_callback: Option<SharedAttributionCallback>,
     /// When `true`, the user is on a tier the Imagine server zero-limits
     /// (free / X Basic). The video tools short-circuit before any HTTP call
-    /// and return the SuperGrok upsell prose. See [`VideoGenClient::is_tier_restricted`].
+    /// and return the Supercharge upsell prose. See [`VideoGenClient::is_tier_restricted`].
     tier_restricted: bool,
     /// See [`VideoGenConfig::Enabled`]'s `zdr_restricted`.
     zdr_restricted: bool,
@@ -246,7 +246,7 @@ impl VideoGenClient {
 
     /// Whether the current user's tier (free / X Basic) is zero-limited on
     /// Imagine server-side. The video tools use this to short-circuit with the
-    /// SuperGrok upsell instead of issuing a doomed request.
+    /// Supercharge upsell instead of issuing a doomed request.
     pub(crate) fn is_tier_restricted(&self) -> bool {
         self.tier_restricted
     }
@@ -702,7 +702,7 @@ pub enum VideoGenConfig {
         zdr_video_output_s3: Option<Box<ZdrVideoOutputS3Config>>,
         /// `true` when the user is on a tier the Imagine server zero-limits
         /// (free / X Basic). The video tools stay advertised but short-circuit
-        /// at call time with the SuperGrok upsell prose. Set by the host from
+        /// at call time with the Supercharge upsell prose. Set by the host from
         /// the subscription tier; always `false` for team / API-key / workspace.
         tier_restricted: bool,
         /// `true` when `tools.disable_zdr_incompatible_tools` is set with no
@@ -731,14 +731,14 @@ impl VideoGenConfig {
 
 /// Prose returned to the model (as a normal, successful tool result) when a
 /// free / X Basic user calls a video tool. The model relays it to the user;
-/// the deliberate `/imagine-video` slash command shows the SuperGrok upsell
+/// the deliberate `/imagine-video` slash command shows the Supercharge upsell
 /// modal instead.
-pub(crate) const TIER_RESTRICTED_UPSELL: &str = "Video generation is a SuperGrok feature and isn't available on the free or X Basic tier. Let the user know they can unlock image and video generation by upgrading to SuperGrok: https://grok.com/supergrok?referrer=grok-build. Do not retry this tool.";
+pub(crate) const TIER_RESTRICTED_UPSELL: &str = "Video generation is a Supercharge feature and isn't available on the free or X Basic tier. Let the user know they can unlock image and video generation by upgrading to Supercharge: https://supercharge.ai/supercharge?referrer=supercharge-core. Do not retry this tool.";
 
 /// Error for video tool calls in a ZDR session with no output bucket.
 /// A verbatim tool *error* (unlike the [`TIER_RESTRICTED_UPSELL`] prose):
 /// paraphrasing a privacy-adjacent message risks distortion.
-pub(crate) const ZDR_RESTRICTED_MESSAGE: &str = "Video generation tools are unavailable under zero data retention (ZDR). To re-enable, either supply a user-hosted storage bucket (see https://docs.x.ai/build/settings/zdr-video-storage) or turn off /privacy mode to disable ZDR for all Grok Build requests (including code). Restart Grok after changing the config for it to take effect. Relay this message to the user verbatim; do not retry this tool.";
+pub(crate) const ZDR_RESTRICTED_MESSAGE: &str = "Video generation tools are unavailable under zero data retention (ZDR). To re-enable, either supply a user-hosted storage bucket (see https://docs.x.ai/build/settings/zdr-video-storage) or turn off /privacy mode to disable ZDR for all Supercharge AI requests (including code). Restart Grok after changing the config for it to take effect. Relay this message to the user verbatim; do not retry this tool.";
 
 /// The [`ZDR_RESTRICTED_MESSAGE`] as a structured tool error, with a stable
 /// details code for log/trace filtering.

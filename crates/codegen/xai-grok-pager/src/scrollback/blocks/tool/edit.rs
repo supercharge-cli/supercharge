@@ -1622,7 +1622,7 @@ mod tests {
     #[test]
     fn workflow_script_header_hides_rhai_path() {
         let theme = Theme::current();
-        let block = EditToolCallBlock::new(".grok/workflows/cc-deep-research.rhai", vec![]);
+        let block = EditToolCallBlock::new(".supercharge/workflows/cc-deep-research.rhai", vec![]);
         let header = block.header_line(
             &theme,
             false,
@@ -1642,8 +1642,8 @@ mod tests {
                 .is_some_and(|u| u.contains("cc-deep-research.rhai")),
         );
 
-        let block =
-            EditToolCallBlock::new(".grok/workflows/triage.rhai", vec![]).with_prefix("Creating ");
+        let block = EditToolCallBlock::new(".supercharge/workflows/triage.rhai", vec![])
+            .with_prefix("Creating ");
         let header = block.header_line(
             &theme,
             false,
@@ -2127,8 +2127,8 @@ mod tests {
     /// instead of flattening to a solid foreground on banded themes.
     #[test]
     fn test_diff_reflow_preserves_banded_syntect_styles_across_wrap() {
-        let _guard = pin_groknight_syntect();
-        let theme = Theme::groknight();
+        let _guard = pin_voltage_dark_syntect();
+        let theme = Theme::voltage_dark();
         let config = DiffRenderConfig::default();
         let path = Path::new("probe.rs");
         let source = "let naïve = compute(input); // café comment stretching over wraps";
@@ -2250,8 +2250,8 @@ mod tests {
     /// must keep its styles rather than flatten to `text_primary`.
     #[test]
     fn test_diff_reflow_keeps_overlong_token_styles() {
-        let _guard = pin_groknight_syntect();
-        let theme = Theme::groknight();
+        let _guard = pin_voltage_dark_syntect();
+        let theme = Theme::voltage_dark();
         let config = DiffRenderConfig::default();
         let path = Path::new("probe.rs");
         let source = format!("//{}", "x".repeat(40));
@@ -2779,13 +2779,13 @@ mod tests {
     type Rgb = (u8, u8, u8);
     type SyntectSpans = Vec<(Rgb, String)>;
 
-    /// Pins GrokNight via the shared test-lock guard; hold it for the whole
+    /// Pins VoltageDark via the shared test-lock guard; hold it for the whole
     /// test so a concurrent theme flip can't skew the compared highlighter walks.
-    fn pin_groknight_syntect() -> std::sync::MutexGuard<'static, ()> {
+    fn pin_voltage_dark_syntect() -> std::sync::MutexGuard<'static, ()> {
         let guard = crate::theme::cache::pin_theme();
         assert!(
-            !Theme::groknight().diff_uses_line_fg(),
-            "GrokNight must be banded for Equal-line syntect path in render"
+            !Theme::voltage_dark().diff_uses_line_fg(),
+            "VoltageDark must be banded for Equal-line syntect path in render"
         );
         guard
     }
@@ -2815,7 +2815,7 @@ mod tests {
     }
 
     /// Hunk-only: fresh highlighter, only the given lines in order (prod path).
-    /// Caller pins the theme via `pin_groknight_syntect` (lock is not reentrant).
+    /// Caller pins the theme via `pin_voltage_dark_syntect` (lock is not reentrant).
     fn hunk_only_raw_styles(path: &Path, lines: &[&str]) -> Vec<SyntectSpans> {
         let syntect = get_syntect();
         let mut hl = syntect
@@ -2828,7 +2828,7 @@ mod tests {
     }
 
     /// Full-file then slice: silent HL from line 1, return styles for all lines.
-    /// Caller pins the theme via `pin_groknight_syntect` (lock is not reentrant).
+    /// Caller pins the theme via `pin_voltage_dark_syntect` (lock is not reentrant).
     fn full_file_raw_styles(path: &Path, file_text: &str) -> Vec<SyntectSpans> {
         let syntect = get_syntect();
         let mut hl = syntect
@@ -2866,7 +2866,7 @@ class ProcessQueueItem(BaseModel):
     /// Control: self-contained Rust line → keyword RGB ≠ string RGB (raw syntect).
     #[test]
     fn syntax_highlight_splits_keyword_and_string_fg() {
-        let _guard = pin_groknight_syntect();
+        let _guard = pin_voltage_dark_syntect();
         let path = Path::new("probe.rs");
         let lines = hunk_only_raw_styles(path, &["let x = \"hello\";"]);
         assert_eq!(lines.len(), 1);
@@ -2891,10 +2891,10 @@ class ProcessQueueItem(BaseModel):
     /// added line highlights. The two diff sides are highlighted independently.
     #[test]
     fn delete_side_multiline_string_does_not_leak_into_insert() {
-        let _guard = pin_groknight_syntect();
+        let _guard = pin_voltage_dark_syntect();
         let path = Path::new("probe.py");
         let config = DiffRenderConfig::default();
-        let theme = Theme::groknight();
+        let theme = Theme::voltage_dark();
 
         // Content spans of the added `def` line, given the removed line above it.
         let added_def = |removed: &str| -> Vec<(ratatui::style::Color, String)> {
@@ -2964,7 +2964,7 @@ class ProcessQueueItem(BaseModel):
     /// (and differ from cold hunk-only spill) after a mid-file closing `"""`.
     #[test]
     fn file_scoped_matches_full_file_on_field_line() {
-        let _guard = pin_groknight_syntect();
+        let _guard = pin_voltage_dark_syntect();
         let path = Path::new("queue_item.py");
         let (file, hunk, field_ln) = fixture_python_close_hunk();
         let close_ln = hunk[0].ln;
@@ -3041,7 +3041,7 @@ class ProcessQueueItem(BaseModel):
     /// baked under another theme it must not paint — hunk-only output.
     #[test]
     fn file_scoped_stale_theme_falls_back_to_hunk_only() {
-        let _guard = pin_groknight_syntect();
+        let _guard = pin_voltage_dark_syntect();
         let path = Path::new("queue_item.py");
         let (file, hunk, field_ln) = fixture_python_close_hunk();
         // Real computed map: paintable by construction (line keys and texts
@@ -3084,7 +3084,7 @@ class ProcessQueueItem(BaseModel):
         );
 
         // Stale: the SAME paintable map baked under another theme is skipped.
-        let stale = ThemeKind::GrokDay;
+        let stale = ThemeKind::VoltageLight;
         assert_ne!(stale, crate::theme::cache::current_kind());
         block.highlight = EditHighlightPhase::FileScoped {
             by_new_line,
@@ -3151,7 +3151,7 @@ class ProcessQueueItem(BaseModel):
     /// after a mid-file closing `"""`.
     #[test]
     fn triple_quote_hunk_only_differs_from_full_file_today() {
-        let _guard = pin_groknight_syntect();
+        let _guard = pin_voltage_dark_syntect();
         let path = Path::new("queue_item.py");
         let (file, hunk, field_ln) = fixture_python_close_hunk();
         let close_ln = hunk[0].ln;

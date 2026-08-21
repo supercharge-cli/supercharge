@@ -172,7 +172,7 @@ pub struct SubagentRuntimeOverrides {
     /// `None` means "use role/persona default" (which itself defaults to `None`/shared workspace).
     pub isolation: Option<SubagentIsolationMode>,
     /// `/goal`-only harness override: the `agent_type` (e.g. `"cursor"`,
-    /// `"grok-build-plan"`) whose `AgentDefinition` decides the child's harness
+    /// `"supercharge-core-plan"`) whose `AgentDefinition` decides the child's harness
     /// flavor — system prompt + toolset — applied
     /// REGARDLESS of the parent agent (so a session can pin a
     /// compat-harness verifier and vice versa).

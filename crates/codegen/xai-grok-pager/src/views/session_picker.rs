@@ -284,7 +284,7 @@ impl SourceFilter {
 
     /// Returns `true` if a session with the given `source` string passes the filter.
     ///
-    /// grok.com conversations carry `source == "conversation"` and live remotely,
+    /// supercharge.ai conversations carry `source == "conversation"` and live remotely,
     /// so they pass the `Remote` filter (and `Grok` / `All`) but not `Local`.
     /// Foreign sources (`claude` / `codex` / `cursor`) only pass `External` and
     /// `All`.
@@ -1475,7 +1475,7 @@ mod tests {
         assert!(!SourceFilter::Remote.matches("local"));
         assert!(!SourceFilter::Remote.matches("cursor"));
 
-        // grok.com conversations are remote: visible under Grok + All + Remote, not Local.
+        // supercharge.ai conversations are remote: visible under Grok + All + Remote, not Local.
         assert!(SourceFilter::All.matches("conversation"));
         assert!(SourceFilter::Remote.matches("conversation"));
         assert!(!SourceFilter::Local.matches("conversation"));

@@ -8,7 +8,7 @@
 
 /// Generated protobuf types.
 pub mod pb {
-    include!(concat!(env!("OUT_DIR"), "/xai.grok.tools.v1.rs"));
+    include!(concat!(env!("OUT_DIR"), "/xai.supercharge.tools.v1.rs"));
 }
 
 pub mod config_validation;

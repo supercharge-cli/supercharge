@@ -1,8 +1,8 @@
-//! GrokDay theme — neutral gray base (light) with deepened accent colors.
+//! VoltageLight theme — neutral gray base (light) with deepened accent colors.
 //!
-//! Light counterpart to GrokNight. Backgrounds and text use a neutral
+//! Light counterpart to VoltageDark. Backgrounds and text use a neutral
 //! grayscale ramp (no blue/warm tint). Accent colors are the same hue
-//! family as GrokNight but deepened for contrast on light backgrounds.
+//! family as VoltageDark but deepened for contrast on light backgrounds.
 
 use ratatui::style::{Color, Modifier};
 
@@ -52,7 +52,7 @@ mod palette {
 use palette::*;
 
 impl Theme {
-    pub const fn grokday() -> Self {
+    pub const fn voltage_light() -> Self {
         Self {
             bg_base: BG_STORM,
             bg_light: BG_HIGHLIGHT,

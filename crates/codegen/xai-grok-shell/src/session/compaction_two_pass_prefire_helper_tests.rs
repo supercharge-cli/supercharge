@@ -41,6 +41,6 @@ fn fingerprint_changes_with_length() {
 #[test]
 fn prefire_lead_percent_defaults_to_10() {
     // SAFETY: single-threaded test mutation of our own env var.
-    unsafe { std::env::remove_var("GROK_PREFIRE_LEAD_PERCENT") };
+    unsafe { std::env::remove_var("SUPERCHARGE_PREFIRE_LEAD_PERCENT") };
     assert_eq!(prefire_lead_percent(), 10);
 }

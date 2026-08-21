@@ -1,4 +1,4 @@
-//! `grok inspect` — configuration introspection.
+//! `Supercharge AI inspect` — configuration introspection.
 //!
 //! Shows everything Grok discovers in the current directory: project
 //! instructions, permissions, hooks, skills, agents, plugins, MCP servers,
@@ -147,7 +147,7 @@ pub(crate) struct SkippedRule {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LoginPolicyReport {
-    /// Raw `disable_api_key_auth` knob (env `GROK_DISABLE_API_KEY_AUTH`).
+    /// Raw `disable_api_key_auth` knob (env `SUPERCHARGE_DISABLE_API_KEY_AUTH`).
     pub disable_api_key_auth: Option<bool>,
     /// Configured team pin: single string, list, or null when unset.
     pub force_login_team_uuid: Option<ForceLoginTeam>,
@@ -267,14 +267,14 @@ pub(crate) struct LspServerEntry {
 pub(crate) struct ConfigSources {
     /// Config layers (system + user managed, user + system requirements, user
     /// config.toml, the macOS MDM managed-preferences layer, and project
-    /// .grok/config.toml files). Driven from the same resolvers used at runtime
+    /// .supercharge/config.toml files). Driven from the same resolvers used at runtime
     /// (`ConfigLayers`, `requirements_layers`) so system + MDM layers and
     /// precedence are included, and emptiness reflects real contribution after
     /// stripping (version_overrides, fail_closed, etc).
     pub layers: Vec<ConfigLayer>,
 }
 
-/// A single config layer entry for `grok inspect`.
+/// A single config layer entry for `Supercharge AI inspect`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConfigLayer {
@@ -294,7 +294,7 @@ pub async fn inspect(cwd: &Path, json: bool) -> anyhow::Result<()> {
     write_inspect(&report, json, &mut std::io::stdout().lock())
 }
 
-/// Write the report. A closed stdout (`grok inspect | head`) is a clean stop.
+/// Write the report. A closed stdout (`Supercharge AI inspect | head`) is a clean stop.
 fn write_inspect(report: &InspectReport, json: bool, out: &mut impl Write) -> anyhow::Result<()> {
     let written = if json {
         writeln!(out, "{}", serde_json::to_string_pretty(report)?)
@@ -497,7 +497,7 @@ fn instruction_file_type(
     if path
         .parent()
         .is_some_and(|parent| parent == grok_home.join("rules"))
-        || has_rules_directory(file_path, ".grok")
+        || has_rules_directory(file_path, ".supercharge")
         || has_rules_directory(file_path, ".cursor")
         || (!claude_imported && has_rules_directory(file_path, ".claude"))
         || extra_rule_prefixes
@@ -1044,7 +1044,7 @@ fn list_lsp_servers(
     // Folder-trust gate (display-only): inspect never spawns servers, but mark the
     // repo-local (project-scoped) entries a session would skip in an untrusted
     // clone so the listing matches the live gate. `remote = None` mirrors
-    // `grok mcp doctor` (no loaded RemoteSettings in a standalone command).
+    // `supercharge mcp doctor` (no loaded RemoteSettings in a standalone command).
     crate::agent::folder_trust::resolve_and_record(cwd, None, false);
     let project_allowed = crate::agent::folder_trust::project_scope_allowed(cwd);
 
@@ -1068,7 +1068,7 @@ fn list_lsp_servers(
 /// probing the canonical locations used by `ConfigLayers::load` and
 /// `requirements_layers`: system + user `managed_config.toml`, user
 /// `config.toml`, user + system `requirements.toml`, and project
-/// `.grok/config.toml` files (via `find_project_configs`). The macOS MDM
+/// `.supercharge/config.toml` files (via `find_project_configs`). The macOS MDM
 /// managed-preferences layer has no file on disk, so it is sourced directly
 /// from `requirements_layers()` rather than a path probe.
 ///
@@ -1117,8 +1117,8 @@ fn list_config_sources(cwd: &Path) -> ConfigSources {
         }
     }
 
-    let inline_env = crate::config::GROK_CONFIG_ENV;
-    let path_env = crate::config::GROK_CONFIG_PATH_ENV;
+    let inline_env = crate::config::SUPERCHARGE_CONFIG_ENV;
+    let path_env = crate::config::SUPERCHARGE_CONFIG_PATH_ENV;
     if let Some(overlay) = crate::config::resolved_env_overlay() {
         if !overlay.sections.is_empty() {
             let path = match overlay.source {
@@ -1570,7 +1570,10 @@ fn print_human(r: &InspectReport, out: &mut impl Write) -> std::io::Result<()> {
     if r.mcp_servers.is_empty() {
         writeln!(out)?;
         writeln!(out, "  MCP Servers (0)")?;
-        writeln!(out, "  {TREE} (none) \u{2014} see `grok mcp add --help`")?;
+        writeln!(
+            out,
+            "  {TREE} (none) \u{2014} see `supercharge mcp add --help`"
+        )?;
     } else {
         print_columns(
             out,
@@ -1756,7 +1759,8 @@ mod tests {
             ("claude", "/repo/.claude/rules/team.md"),
             ("claude", r"C:\repo\.claude\rules\team.md"),
         ] {
-            let file_type = instruction_file_type(path, Path::new("/home/user/.grok"), false, &[]);
+            let file_type =
+                instruction_file_type(path, Path::new("/home/user/.supercharge"), false, &[]);
             assert_eq!(file_type, "rules");
             assert_eq!(
                 instruction_compat_status(&Some(vendor.to_owned()), file_type, &report),
@@ -1764,9 +1768,12 @@ mod tests {
             );
         }
 
-        for path in ["/repo/.grok/rules/team.md", r"C:\repo\.grok\rules\team.md"] {
+        for path in [
+            "/repo/.supercharge/rules/team.md",
+            r"C:\repo\.supercharge\rules\team.md",
+        ] {
             assert_eq!(
-                instruction_file_type(path, Path::new("/home/user/.grok"), false, &[]),
+                instruction_file_type(path, Path::new("/home/user/.supercharge"), false, &[]),
                 "rules"
             );
         }
@@ -1775,7 +1782,7 @@ mod tests {
             r"C:\repo\.cursor\rules\team.md",
         ] {
             assert_eq!(
-                instruction_file_type(path, Path::new("/home/user/.grok"), true, &[]),
+                instruction_file_type(path, Path::new("/home/user/.supercharge"), true, &[]),
                 "rules"
             );
         }
@@ -1783,7 +1790,8 @@ mod tests {
             "/repo/.claude/rules/team.md",
             r"C:\repo\.claude\rules\team.md",
         ] {
-            let file_type = instruction_file_type(path, Path::new("/home/user/.grok"), true, &[]);
+            let file_type =
+                instruction_file_type(path, Path::new("/home/user/.supercharge"), true, &[]);
             assert_eq!(file_type, "agents_md");
             assert_eq!(
                 instruction_compat_status(&Some("claude".to_owned()), file_type, &report),
@@ -1795,7 +1803,7 @@ mod tests {
             r"C:\repo\.cursor\ruleset\team.md",
         ] {
             assert_eq!(
-                instruction_file_type(path, Path::new("/home/user/.grok"), false, &[]),
+                instruction_file_type(path, Path::new("/home/user/.supercharge"), false, &[]),
                 "agents_md"
             );
         }
@@ -1812,7 +1820,7 @@ mod tests {
             ));
         }
         for path in [
-            "/repo/config/.grok/rules/project.md",
+            "/repo/config/.supercharge/rules/project.md",
             "/repo/config/src/AGENTS.md",
         ] {
             assert!(matches!(
@@ -1828,7 +1836,12 @@ mod tests {
         let workspace = Path::new("/repo");
         for path in ["/repo/.claude/rules/global.md", "/repo/.claude/CLAUDE.md"] {
             assert!(matches!(
-                instruction_scope(path, Path::new("/other/grok"), &vendor_homes, workspace),
+                instruction_scope(
+                    path,
+                    Path::new("/other/Supercharge AI"),
+                    &vendor_homes,
+                    workspace
+                ),
                 Scope::Global
             ));
         }
@@ -1837,7 +1850,12 @@ mod tests {
             "/repo/.claude/src/AGENTS.md",
         ] {
             assert!(matches!(
-                instruction_scope(path, Path::new("/other/grok"), &vendor_homes, workspace),
+                instruction_scope(
+                    path,
+                    Path::new("/other/Supercharge AI"),
+                    &vendor_homes,
+                    workspace
+                ),
                 Scope::Project
             ));
         }
@@ -1845,11 +1863,11 @@ mod tests {
 
     #[test]
     fn workspace_scope_wins_inside_grok_home() {
-        let grok_home = Path::new("/custom/grok");
-        let workspace = Path::new("/custom/grok/worktrees/repo");
+        let grok_home = Path::new("/custom/Supercharge AI");
+        let workspace = Path::new("/custom/Supercharge AI/worktrees/repo");
         for path in [
-            "/custom/grok/worktrees/repo/.cursor/rules/project.md",
-            "/custom/grok/worktrees/repo/src/AGENTS.md",
+            "/custom/Supercharge AI/worktrees/repo/.cursor/rules/project.md",
+            "/custom/Supercharge AI/worktrees/repo/src/AGENTS.md",
         ] {
             assert!(matches!(
                 instruction_scope(path, grok_home, &[], workspace),
@@ -1857,7 +1875,12 @@ mod tests {
             ));
         }
         assert!(matches!(
-            instruction_scope("/custom/grok/rules/global.md", grok_home, &[], workspace,),
+            instruction_scope(
+                "/custom/Supercharge AI/rules/global.md",
+                grok_home,
+                &[],
+                workspace,
+            ),
             Scope::Global
         ));
     }
@@ -1931,7 +1954,7 @@ mod tests {
     fn requirements_layer_contributes_requires_non_empty_post_strip_table() {
         // A `fail_closed`-only file is kept by the loader but with an empty
         // post-strip table, so it must not count as contributing.
-        let path = "/home/u/.grok/requirements.toml";
+        let path = "/home/u/.supercharge/requirements.toml";
         let layer = |v| crate::config::RequirementsLayer {
             value: v,
             source: crate::config::RequirementsSource::File(std::path::PathBuf::from(path)),
@@ -1972,8 +1995,8 @@ mod tests {
     fn config_warnings_inspect_smoke() {
         let effective: toml::Value = toml::from_str(
             r#"
-            [model."grok-4.5"]
-            model = "grok-4.5"
+            [model."Supercharge AI-4.5"]
+            model = "Supercharge AI-4.5"
             env_key = "ANTHROPIC_AUTH_TOKEN"
             compactions_remaining = 1
             send_compactions_remaining = true
@@ -1995,16 +2018,16 @@ mod tests {
                 .any(|w| w.field() == Some("reasoning_effort")),
             "invalid enum should warn: {warnings:?}"
         );
-        assert!(cfg.config_models.contains_key("grok-4.5"));
+        assert!(cfg.config_models.contains_key("Supercharge AI-4.5"));
 
         let human = render_config_warnings(&warnings);
         assert!(human.contains("Config Warnings"), "{human}");
         assert!(
-            human.contains("[model.\"grok-4.5\"] send_compactions_remaining"),
+            human.contains("[model.\"Supercharge AI-4.5\"] send_compactions_remaining"),
             "{human}"
         );
         assert!(
-            human.contains("[model.\"grok-4.5\"] reasoning_effort"),
+            human.contains("[model.\"Supercharge AI-4.5\"] reasoning_effort"),
             "{human}"
         );
         // Auth-provider warnings render under their own table syntax.
@@ -2043,7 +2066,7 @@ mod tests {
             .find(|w| w["field"] == "send_compactions_remaining")
             .expect("alias warning present in JSON");
         assert_eq!(alias_warning["target"], "model");
-        assert_eq!(alias_warning["key"], "grok-4.5");
+        assert_eq!(alias_warning["key"], "Supercharge AI-4.5");
         assert_eq!(alias_warning["kind"], "duplicate-alias");
         assert!(
             alias_warning["reason"]
@@ -2066,24 +2089,36 @@ mod tests {
 
     #[test]
     fn skill_entry_source_maps_scopes() {
-        let s = skill_fixture("a", "/repo/.grok/skills/a/SKILL.md", SkillScope::Local);
+        let s = skill_fixture(
+            "a",
+            "/repo/.supercharge/skills/a/SKILL.md",
+            SkillScope::Local,
+        );
         assert!(matches!(
             skill_entry_source(&s),
             ConfigSource::Project { .. }
         ));
 
-        let s = skill_fixture("b", "/repo/.grok/skills/b/SKILL.md", SkillScope::Repo);
+        let s = skill_fixture(
+            "b",
+            "/repo/.supercharge/skills/b/SKILL.md",
+            SkillScope::Repo,
+        );
         assert!(matches!(
             skill_entry_source(&s),
             ConfigSource::Project { .. }
         ));
 
-        let s = skill_fixture("c", "/home/u/.grok/skills/c/SKILL.md", SkillScope::User);
+        let s = skill_fixture(
+            "c",
+            "/home/u/.supercharge/skills/c/SKILL.md",
+            SkillScope::User,
+        );
         assert!(matches!(skill_entry_source(&s), ConfigSource::User { .. }));
 
         let s = skill_fixture(
             "d",
-            "/home/u/.grok/server-skills/d/SKILL.md",
+            "/home/u/.supercharge/server-skills/d/SKILL.md",
             SkillScope::Server,
         );
         assert!(matches!(
@@ -2091,7 +2126,11 @@ mod tests {
             ConfigSource::Server { .. }
         ));
 
-        let s = skill_fixture("e", "/home/u/.grok/bundled/e/SKILL.md", SkillScope::Bundled);
+        let s = skill_fixture(
+            "e",
+            "/home/u/.supercharge/bundled/e/SKILL.md",
+            SkillScope::Bundled,
+        );
         assert!(matches!(
             skill_entry_source(&s),
             ConfigSource::Bundled { .. }
@@ -2201,7 +2240,7 @@ mod tests {
             )
             .unwrap();
         };
-        // Test-unique names: discovery also reads this machine's real ~/.grok dirs.
+        // Test-unique names: discovery also reads this machine's real ~/.supercharge dirs.
         let extra = tempfile::tempdir().unwrap();
         write(&extra.path().join("inspect-cfg-extra"), "inspect-cfg-extra");
         write(

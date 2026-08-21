@@ -135,14 +135,14 @@ pub(crate) fn embedding_session_credentials(
 /// Every call site **must** pass the correct `client_identifier` so that
 /// the API proxy (and telemetry / metrics backends) can properly attribute requests:
 ///
-/// - `"grok-shell"`   — classic Grok CLI / TUI (xai-grok-shell)
-/// - `"grok-pager"`   — new Grok Pager / TUI (xai-grok-pager)
-/// - `"grok-desktop"` — Grok Desktop app
-/// - `"grok-extension"` — VS Code / browser extension
+/// - `"Supercharge AI-shell"`   — classic Grok CLI / TUI (xai-Supercharge AI-shell)
+/// - `"Supercharge AI-pager"`   — new Grok Pager / TUI (xai-Supercharge AI-pager)
+/// - `"Supercharge AI-desktop"` — Grok Desktop app
+/// - `"Supercharge AI-extension"` — VS Code / browser extension
 ///
 /// The factory forwards both:
-/// - `x-grok-client-version`   (e.g. "0.1.210-alpha.5 (279ffacddb)")
-/// - `x-grok-client-identifier`
+/// - `x-Supercharge AI-client-version`   (e.g. "0.1.210-alpha.5 (279ffacddb)")
+/// - `x-Supercharge AI-client-identifier`
 ///
 /// to the underlying `xai-file-utils::StorageClient` via
 /// `.with_client_identity(...)`. This is what powers the improved error
@@ -409,7 +409,7 @@ pub(crate) fn wire_otel_deployment_key(key: String) {
     }
 }
 /// Bootstrap helper: build the full [`OtelLayerConfig`] that both
-/// `xai-grok-pager` and `xai-grok-tui` need at tracing init time.
+/// `xai-Supercharge AI-pager` and `xai-Supercharge AI-tui` need at tracing init time.
 ///
 /// The credential provider starts in bootstrap mode (disk-read-only).
 /// Call [`wire_otel_auth_manager`] after agent init to upgrade to the
@@ -446,10 +446,10 @@ mod tests {
     use chrono::{Duration as ChronoDuration, Utc};
     use std::sync::Mutex;
     use xai_grok_auth::AuthCredentialProvider;
-    /// Serializes tests that pin `GROK_AUTH_EARLY_INVALIDATION_SECS`, since
+    /// Serializes tests that pin `SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS`, since
     /// env vars are process-global and parallel tests would race.
     static EARLY_INVALIDATION_LOCK: Mutex<()> = Mutex::new(());
-    /// RAII guard: pins `GROK_AUTH_EARLY_INVALIDATION_SECS` to the production
+    /// RAII guard: pins `SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS` to the production
     /// default (300s) while held, restoring the previous value on drop.
     /// Acquires `EARLY_INVALIDATION_LOCK` so concurrent test runners can't
     /// observe a half-mutated env.
@@ -462,8 +462,8 @@ mod tests {
             let lock = EARLY_INVALIDATION_LOCK
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            let previous = std::env::var("GROK_AUTH_EARLY_INVALIDATION_SECS").ok();
-            unsafe { std::env::set_var("GROK_AUTH_EARLY_INVALIDATION_SECS", "300") };
+            let previous = std::env::var("SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS").ok();
+            unsafe { std::env::set_var("SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS", "300") };
             Self {
                 _lock: lock,
                 previous,
@@ -474,8 +474,10 @@ mod tests {
         fn drop(&mut self) {
             unsafe {
                 match self.previous.take() {
-                    Some(prev) => std::env::set_var("GROK_AUTH_EARLY_INVALIDATION_SECS", prev),
-                    None => std::env::remove_var("GROK_AUTH_EARLY_INVALIDATION_SECS"),
+                    Some(prev) => {
+                        std::env::set_var("SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS", prev)
+                    }
+                    None => std::env::remove_var("SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS"),
                 }
             }
         }
@@ -499,7 +501,7 @@ mod tests {
         Arc::new(mgr)
     }
     /// The shell half of the subagent-401 contract (the sampler half is
-    /// pinned in xai-grok-sampler's resolver tests): over a real
+    /// pinned in xai-Supercharge AI-sampler's resolver tests): over a real
     /// `AuthManager`, the resolver returns `None` when hard-expired
     /// (fail-closed), the token inside the early-invalidation buffer
     /// (still proxy-accepted), and the fresh token after a rotation --

@@ -469,19 +469,19 @@ pub fn resolve_grok_home() -> Result<PathBuf> {
         .context("neither $SUPERCHARGE_HOME nor a home directory could be resolved")
 }
 
-/// Serializes tests that mutate the process-global `GROK_HOME` env var so they
+/// Serializes tests that mutate the process-global `SUPERCHARGE_HOME` env var so they
 /// don't clobber each other under `cargo test`, where tests share one process
 /// (nextest isolates per-process, but the suite must also pass under `cargo test`).
 #[cfg(test)]
-static GROK_HOME_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static SUPERCHARGE_HOME_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Test-only isolation for code that resolves the DB via `open_default()`.
 ///
-/// Holds [`GROK_HOME_ENV_LOCK`] (serializing concurrent setters), points
-/// `GROK_HOME` at a fresh private tmp dir, and restores the prior value on drop.
+/// Holds [`SUPERCHARGE_HOME_ENV_LOCK`] (serializing concurrent setters), points
+/// `SUPERCHARGE_HOME` at a fresh private tmp dir, and restores the prior value on drop.
 /// Use instead of hand-rolling the lock + restore guard + tmp dir per test.
 ///
-/// `Drop` restores `GROK_HOME` before `_lock` releases, so the env is correct
+/// `Drop` restores `SUPERCHARGE_HOME` before `_lock` releases, so the env is correct
 /// before another waiting setter proceeds.
 #[cfg(test)]
 pub(crate) struct GrokHomeFixture {
@@ -496,20 +496,22 @@ pub(crate) struct GrokHomeFixture {
 #[cfg(test)]
 impl GrokHomeFixture {
     pub(crate) fn new() -> Self {
-        let lock = GROK_HOME_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let lock = SUPERCHARGE_HOME_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = tempfile::TempDir::new().unwrap();
         let home = tmp.path().join("grok-home");
         std::fs::create_dir_all(&home).unwrap();
         // Warm up the DB (journal-mode conversion + schema) before exposing it
-        // via GROK_HOME, sparing the test hot loop set_journal_mode's retry
+        // via SUPERCHARGE_HOME, sparing the test hot loop set_journal_mode's retry
         // sleeps. This open has exclusive access (nothing reaches the path
-        // until GROK_HOME points here); set_journal_mode's retry is the actual
+        // until SUPERCHARGE_HOME points here); set_journal_mode's retry is the actual
         // race fix.
         let _ = WorktreeDb::open(&home);
-        let prev = std::env::var_os("GROK_HOME");
-        // SAFETY: the fixture holds the GROK_HOME env lock for its whole
+        let prev = std::env::var_os("SUPERCHARGE_HOME");
+        // SAFETY: the fixture holds the SUPERCHARGE_HOME env lock for its whole
         // lifetime, so no other test thread reads or writes the environment.
-        unsafe { std::env::set_var("GROK_HOME", &home) };
+        unsafe { std::env::set_var("SUPERCHARGE_HOME", &home) };
         Self {
             _lock: lock,
             prev,
@@ -522,12 +524,12 @@ impl GrokHomeFixture {
 #[cfg(test)]
 impl Drop for GrokHomeFixture {
     fn drop(&mut self) {
-        // SAFETY: the fixture still holds the GROK_HOME env lock here, so no
+        // SAFETY: the fixture still holds the SUPERCHARGE_HOME env lock here, so no
         // other test thread reads or writes the environment during restore.
         unsafe {
             match self.prev.take() {
-                Some(p) => std::env::set_var("GROK_HOME", p),
-                None => std::env::remove_var("GROK_HOME"),
+                Some(p) => std::env::set_var("SUPERCHARGE_HOME", p),
+                None => std::env::remove_var("SUPERCHARGE_HOME"),
             }
         }
     }

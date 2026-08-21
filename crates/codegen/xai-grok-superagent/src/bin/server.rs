@@ -455,7 +455,7 @@ async fn main() -> anyhow::Result<()> {
     init_controls(control_state_path)?;
     let provider_profile = configured_profile();
     let provider_config_path = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
-        .or_else(|_| env::var("GROK_CONFIG_PATH"))
+        .or_else(|_| env::var("SUPERCHARGE_CONFIG_PATH"))
         .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
     if let Err(error) = write_runtime_config(&provider_config_path, &provider_profile) {
         eprintln!("provider profile initialization failed: {error}");
@@ -1092,7 +1092,7 @@ async fn run_grok_prompt(
         let binary = configured_agent_binary()
             .ok_or_else(|| anyhow::anyhow!("agent binary is not configured"))?;
         let base_config = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
-            .or_else(|_| env::var("GROK_CONFIG_PATH"))
+            .or_else(|_| env::var("SUPERCHARGE_CONFIG_PATH"))
             .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
         let mut last_error = String::from("all provider attempts failed");
         for profile in provider_profiles_for_turn() {
@@ -1116,7 +1116,7 @@ async fn run_grok_prompt(
                 continue;
             }
             let output = tokio::process::Command::new(&binary)
-                .env("GROK_CONFIG_PATH", &attempt_config)
+                .env("SUPERCHARGE_CONFIG_PATH", &attempt_config)
                 .env("SUPERAGENT_PROVIDER_CONFIG_PATH", &attempt_config)
                 .arg("--single")
                 .arg(prompt)
@@ -1905,7 +1905,7 @@ fn e2b_error(error: xai_grok_superagent::E2bError) -> (StatusCode, Json<ErrorRes
 }
 
 fn configured_agent_binary() -> Option<std::ffi::OsString> {
-    env::var_os("SUPERAGENT_AGENT_BINARY").or_else(|| env::var_os("GROK_AGENT_BINARY"))
+    env::var_os("SUPERAGENT_AGENT_BINARY").or_else(|| env::var_os("SUPERCHARGE_AGENT_BINARY"))
 }
 
 fn unix_seconds() -> u64 {
@@ -1948,7 +1948,7 @@ async fn configure_provider(
         )
     })?;
     let path = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
-        .or_else(|_| env::var("GROK_CONFIG_PATH"))
+        .or_else(|_| env::var("SUPERCHARGE_CONFIG_PATH"))
         .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
     write_runtime_config(path, &profile).map_err(|error| {
         (

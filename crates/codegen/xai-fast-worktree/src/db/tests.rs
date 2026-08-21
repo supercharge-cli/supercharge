@@ -265,10 +265,10 @@ fn assert_id_shape(id: &str, basename: &str) {
 
 #[test]
 fn id_from_path_strips_worktree_prefix_and_hashes_full_path() {
-    let p = Path::new("/home/.grok/worktrees/myrepo/worktree-019caa03");
+    let p = Path::new("/home/.supercharge/worktrees/myrepo/worktree-019caa03");
     assert_id_shape(&id_from_path(p), "019caa03");
     assert_id_shape(
-        &id_from_path(Path::new("/home/.grok/worktree_pool/inst/a1b2c3")),
+        &id_from_path(Path::new("/home/.supercharge/worktree_pool/inst/a1b2c3")),
         "a1b2c3",
     );
     assert_id_shape(&id_from_path(Path::new("/tmp/my-worktree")), "my-worktree");
@@ -285,8 +285,8 @@ fn same_basename_worktrees_in_different_repos_coexist() {
     // the other via the `id` PRIMARY KEY or the `path UNIQUE` constraint.
     let db = WorktreeDb::open_in_memory().unwrap();
 
-    let path_a = "/home/.grok/worktrees/repo-a/session/wt-abc";
-    let path_b = "/home/.grok/worktrees/repo-b/session/wt-abc";
+    let path_a = "/home/.supercharge/worktrees/repo-a/session/wt-abc";
+    let path_b = "/home/.supercharge/worktrees/repo-b/session/wt-abc";
     let mut rec_a = make_record(
         &id_from_path(Path::new(path_a)),
         path_a,
@@ -532,7 +532,7 @@ fn journal_mode(db: &WorktreeDb) -> String {
 #[test]
 fn open_at_uses_wal_on_local_fs() {
     // Ambient kill-switch would override the decision; skip if set.
-    if std::env::var("GROK_SQLITE_JOURNAL_MODE").is_ok() {
+    if std::env::var("SUPERCHARGE_SQLITE_JOURNAL_MODE").is_ok() {
         return;
     }
     let tmp = tempfile::TempDir::new().unwrap();

@@ -315,7 +315,7 @@ async fn persist_state_to_dir(
 ) {
     let path = state_file_path(dir, client_identifier);
     let dir = dir.to_path_buf();
-    // Owner-only dir creation rides the writer's spawn_blocking: GROK_HOME may
+    // Owner-only dir creation rides the writer's spawn_blocking: SUPERCHARGE_HOME may
     // sit on a slow filesystem, so no blocking fs work on the async worker.
     let result = persist_state_to_path_with_writer(&path, state, move |path, contents| {
         xai_grok_config::create_dir_all_owner_only(&dir)?;

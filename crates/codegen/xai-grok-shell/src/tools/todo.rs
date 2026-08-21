@@ -1,7 +1,7 @@
-//! Todo types — re-exported from `xai-grok-tools` with ACP conversion helpers.
+//! Todo types — re-exported from `xai-Supercharge AI-tools` with ACP conversion helpers.
 //!
-//! Types are canonical in `xai-grok-tools`. This module adds ACP ↔ TodoItem
-//! conversions since `xai-grok-tools` is protocol-agnostic.
+//! Types are canonical in `xai-Supercharge AI-tools`. This module adds ACP ↔ TodoItem
+//! conversions since `xai-Supercharge AI-tools` is protocol-agnostic.
 
 pub use xai_grok_tools::implementations::grok_build::todo::TodoId;
 pub use xai_grok_tools::implementations::grok_build::todo::TodoItem;

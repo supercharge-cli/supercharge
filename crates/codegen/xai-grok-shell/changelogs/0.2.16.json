@@ -41,7 +41,7 @@
   },
   {
     "category": "features",
-    "description": "**Cursor MCP servers and hooks** are now discovered and can be disabled independently via GROK_CURSOR_MCPS_ENABLED / GROK_CURSOR_HOOKS_ENABLED.",
+    "description": "**Cursor MCP servers and hooks** are now discovered and can be disabled independently via SUPERCHARGE_CURSOR_MCPS_ENABLED / SUPERCHARGE_CURSOR_HOOKS_ENABLED.",
     "breaking_change": false
   },
   {

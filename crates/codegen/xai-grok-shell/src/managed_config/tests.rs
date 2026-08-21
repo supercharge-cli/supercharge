@@ -459,7 +459,7 @@ fn auth_mode_classification() {
     assert_eq!(auth_mode(false, &Err(err())), AuthMode::Unknown);
 }
 
-/// The `GROK_CONFIG` overlay must not arm or disarm the managed-config sync gate:
+/// The `SUPERCHARGE_CONFIG` overlay must not arm or disarm the managed-config sync gate:
 /// the reader is overlay-free, so an overlay value never reaches it in either
 /// direction. Requirements/managed layers still resolve normally.
 #[test]

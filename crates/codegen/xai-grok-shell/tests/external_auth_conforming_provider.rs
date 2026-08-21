@@ -1,6 +1,6 @@
 //! The published external-auth contract, end to end.
 //!
-//! Operator binaries live outside this repo and read `GROK_AUTH_EXPIRED=1` as
+//! Operator binaries live outside this repo and read `SUPERCHARGE_AUTH_EXPIRED=1` as
 //! "headless, don't prompt", declining a run they cannot complete silently. So
 //! a binary that declines the boot probe must still be able to sign the user
 //! in, and the two runs have to reach it in the order boot produces them.
@@ -37,8 +37,8 @@ fn write_conforming_provider(home: &Path) -> String {
         &script,
         format!(
             "#!/bin/sh\n\
-             echo \"expired=${{GROK_AUTH_EXPIRED:-unset}}\" >> {log}\n\
-             if [ \"$GROK_AUTH_EXPIRED\" = \"1\" ]; then\n\
+             echo \"expired=${{SUPERCHARGE_AUTH_EXPIRED:-unset}}\" >> {log}\n\
+             if [ \"$SUPERCHARGE_AUTH_EXPIRED\" = \"1\" ]; then\n\
              \x20   echo 'SSO session lapsed; cannot mint without the user' >&2\n\
              \x20   exit 1\n\
              fi\n\
@@ -95,14 +95,14 @@ async fn a_provider_that_declines_the_headless_run_can_still_sign_the_user_in() 
     // environment is spawned. `grok_home()` memoizes, so this must stay the
     // only test in the binary.
     unsafe {
-        std::env::set_var("GROK_HOME", home.path());
-        std::env::set_var("GROK_CLI_CHAT_PROXY_BASE_URL", &dead);
-        std::env::set_var("GROK_XAI_API_BASE_URL", &dead);
-        std::env::remove_var("XAI_API_KEY");
-        std::env::remove_var("GROK_CODE_XAI_API_KEY");
-        std::env::set_var("GROK_TELEMETRY_ENABLED", "false");
-        std::env::set_var("GROK_FEEDBACK_ENABLED", "false");
-        std::env::set_var("GROK_TRACE_UPLOAD", "false");
+        std::env::set_var("SUPERCHARGE_HOME", home.path());
+        std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", &dead);
+        std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", &dead);
+        std::env::remove_var("SUPERCHARGE_API_KEY");
+        std::env::remove_var("SUPERCHARGE_CODE_API_KEY");
+        std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
+        std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");
+        std::env::set_var("SUPERCHARGE_TRACE_UPLOAD", "false");
     }
 
     let config = GrokComConfig {

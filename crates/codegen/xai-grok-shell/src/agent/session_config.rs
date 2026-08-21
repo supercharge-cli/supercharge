@@ -126,10 +126,10 @@ mod tests {
     #[test]
     fn options_have_one_selected_model_and_a_mode_per_effort() {
         let models = [
-            model("grok-build", "Grok Build"),
-            model("grok-4.5", "Grok 4.5"),
+            model("Supercharge AI-build", "Supercharge AI"),
+            model("Supercharge AI-4.5", "Supercharge Core"),
         ];
-        let current = acp::ModelId::from("grok-build");
+        let current = acp::ModelId::from("Supercharge AI-build");
         let opts = build_session_config_options(
             &models,
             &current,
@@ -141,7 +141,7 @@ mod tests {
         assert_eq!(model_opts.len(), 2);
         let selected_models: Vec<_> = model_opts.iter().filter(|o| o.selected).collect();
         assert_eq!(selected_models.len(), 1);
-        assert_eq!(selected_models[0].id, "grok-build");
+        assert_eq!(selected_models[0].id, "Supercharge AI-build");
 
         let mode_opts: Vec<_> = opts.iter().filter(|o| o.category == "mode").collect();
         assert_eq!(mode_opts.len(), SELECTABLE_REASONING_EFFORTS.len());
@@ -154,8 +154,8 @@ mod tests {
     #[test]
     fn none_effort_is_not_a_user_selectable_mode() {
         assert!(!SELECTABLE_REASONING_EFFORTS.contains(&ReasoningEffort::None));
-        let models = [model("grok-build", "Grok Build")];
-        let current = acp::ModelId::from("grok-build");
+        let models = [model("Supercharge AI-build", "Supercharge AI")];
+        let current = acp::ModelId::from("Supercharge AI-build");
         let opts = build_session_config_options(
             &models,
             &current,
@@ -169,8 +169,8 @@ mod tests {
 
     #[test]
     fn no_mode_options_when_model_lacks_effort_support() {
-        let models = [model("grok-build", "Grok Build")];
-        let current = acp::ModelId::from("grok-build");
+        let models = [model("Supercharge AI-build", "Supercharge AI")];
+        let current = acp::ModelId::from("Supercharge AI-build");
         let opts = build_session_config_options(&models, &current, &[], None);
         assert_eq!(opts.len(), 1);
         assert!(opts.iter().all(|o| o.category == "model"));
@@ -178,25 +178,25 @@ mod tests {
 
     #[test]
     fn model_label_falls_back_to_id_when_name_empty() {
-        let models = [model("grok-build", "")];
-        let current = acp::ModelId::from("grok-build");
+        let models = [model("Supercharge AI-build", "")];
+        let current = acp::ModelId::from("Supercharge AI-build");
         let opts = build_session_config_options(&models, &current, &[], None);
-        assert_eq!(opts[0].label, "grok-build");
+        assert_eq!(opts[0].label, "Supercharge AI-build");
     }
 
     #[test]
     fn session_config_option_serializes_camel_case() {
         let opt = SessionConfigOption {
-            id: "grok-build".to_string(),
+            id: "Supercharge AI-build".to_string(),
             category: "model".to_string(),
-            label: "Grok Build".to_string(),
+            label: "Supercharge AI".to_string(),
             description: None,
             selected: true,
         };
         let v = serde_json::to_value(&opt).expect("serialize");
-        assert_eq!(v["id"], "grok-build");
+        assert_eq!(v["id"], "Supercharge AI-build");
         assert_eq!(v["category"], "model");
-        assert_eq!(v["label"], "Grok Build");
+        assert_eq!(v["label"], "Supercharge AI");
         assert_eq!(v["selected"], true);
         assert!(v.get("description").is_none());
     }
@@ -206,14 +206,14 @@ mod tests {
         let detail = GrokSessionDetail::build(
             "sess-1".to_string(),
             "/Users/me/xai".to_string(),
-            "grok-build".to_string(),
+            "Supercharge AI-build".to_string(),
             None,
         );
         let v = serde_json::to_value(&detail).expect("serialize");
         assert_eq!(v["sessionId"], "sess-1");
         assert_eq!(v["kind"], "build");
         assert_eq!(v["cwd"], "/Users/me/xai");
-        assert_eq!(v["currentModelId"], "grok-build");
+        assert_eq!(v["currentModelId"], "Supercharge AI-build");
         assert!(v.get("title").is_none());
     }
 }

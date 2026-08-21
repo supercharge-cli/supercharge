@@ -40,18 +40,18 @@ impl SubagentLimits {
     fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Self {
         let default = Self::default();
         let max_concurrent = parse_positive_env(
-            "GROK_MAX_CONCURRENT_SUBAGENTS",
-            lookup("GROK_MAX_CONCURRENT_SUBAGENTS"),
+            "SUPERCHARGE_MAX_CONCURRENT_SUBAGENTS",
+            lookup("SUPERCHARGE_MAX_CONCURRENT_SUBAGENTS"),
         )
         .unwrap_or(default.max_concurrent);
-        let behavior = match lookup("GROK_SUBAGENT_LIMIT_BEHAVIOR") {
+        let behavior = match lookup("SUPERCHARGE_SUBAGENT_LIMIT_BEHAVIOR") {
             None => LimitBehavior::Queue,
             Some(value) if value.eq_ignore_ascii_case("fail") => LimitBehavior::Fail,
             Some(value) if value.eq_ignore_ascii_case("queue") => LimitBehavior::Queue,
             Some(value) => {
                 tracing::warn!(
                     %value,
-                    "GROK_SUBAGENT_LIMIT_BEHAVIOR is neither `queue` nor `fail`; keeping `queue`"
+                    "SUPERCHARGE_SUBAGENT_LIMIT_BEHAVIOR is neither `queue` nor `fail`; keeping `queue`"
                 );
                 LimitBehavior::Queue
             }
@@ -77,7 +77,7 @@ pub(super) enum AdmissionError {
 
 impl AdmissionError {
     /// Model-facing failure text; reachable only when an operator opts
-    /// into `GROK_SUBAGENT_LIMIT_BEHAVIOR=fail`.
+    /// into `SUPERCHARGE_SUBAGENT_LIMIT_BEHAVIOR=fail`.
     pub(super) fn message(&self) -> String {
         match self {
             Self::ConcurrentLimitReached { limit } => format!(

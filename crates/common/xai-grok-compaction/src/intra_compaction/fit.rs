@@ -11,7 +11,7 @@
 //! 1. HistoryTurnSelected   drop oldest **history** turns first
 //!                          (prefer keeping all steps)
 //! 2. ToolTruncated         only if still over: prefix-clip tool results
-//!                          that alone exceed budget (grok-build style:
+//!                          that alone exceed budget (supercharge-core style:
 //!                          max_bytes = max_tokens * 4, no binary search)
 //! 3. StepTurnsSelected     only if still over: drop oldest **step** turns
 //!                          (keep remaining history)
@@ -22,7 +22,7 @@
 //! - [`select_turns_to_compact`] for history/step suffix selection
 //! - [`ItemTokenCounter`] for size decisions
 //! - harness [`CompactionItemBuilder::truncate_payload_for_compaction`]
-//!   (one-shot, same `tokens * 4` budget as grok-build)
+//!   (one-shot, same `tokens * 4` budget as supercharge-core)
 
 use tracing::info;
 
@@ -95,7 +95,7 @@ fn concat_turns<T: Clone>(history: &[T], steps: &[T]) -> Vec<T> {
     out
 }
 
-/// One-shot payload shrink (grok-build: `max_bytes = max_tokens * 4`).
+/// One-shot payload shrink (supercharge-core: `max_bytes = max_tokens * 4`).
 ///
 /// No binary search / re-tokenize loop — same as
 /// `fit_conversation_to_budget` → `truncate_item_to_tokens`.
@@ -105,7 +105,7 @@ fn shrink_item_to_token_budget<T: CompactionItemBuilder>(item: &T, max_tokens: u
 
 /// Prefix-clip **tool results** that alone exceed `max_tokens`.
 ///
-/// Matches grok-build's focus: in-place truncate is for oversized tool
+/// Matches supercharge-core's focus: in-place truncate is for oversized tool
 /// payloads (and emergency tail). Non-tool turns are left alone here.
 fn shrink_oversized_tool_results<T: CompactionItemBuilder>(
     turns: &[T],
@@ -279,7 +279,7 @@ pub fn fit_turns_for_summarizer<T: CompactionItemBuilder>(
     }
 
     // ── 2) ToolTruncated (only if history drop still insufficient) ────
-    // One-shot prefix clip on tool results only (grok-build style).
+    // One-shot prefix clip on tool results only (supercharge-core style).
     let (hist2, n1) = shrink_oversized_tool_results(&hist, counter, budget);
     let (step2, n2) = shrink_oversized_tool_results(&step, counter, budget);
     hist = hist2;
@@ -344,7 +344,7 @@ pub fn fit_turns_for_summarizer<T: CompactionItemBuilder>(
     }
 
     // ── 4) Emergency (last resort) ────────────────────────────────────
-    // grok-build: when even the newest unit alone exceeds budget, keep it
+    // supercharge-core: when even the newest unit alone exceeds budget, keep it
     // truncated in place (tool result, or lone assistant/user text).
     //
     // If the ladder emptied both sides (e.g. select returned None and both
@@ -420,7 +420,7 @@ pub fn fit_turns_for_summarizer<T: CompactionItemBuilder>(
 
 /// Prefix-truncate `text` to roughly `max_tokens` (bytes ≈ `max_tokens * 4`).
 ///
-/// Mirrors grok-build `truncate_text_to_bytes` / `truncate_item_to_tokens`:
+/// Mirrors supercharge-core `truncate_text_to_bytes` / `truncate_item_to_tokens`:
 /// keep a leading prefix, append a dropped-bytes marker. No binary search.
 pub fn truncate_text_to_token_budget(text: &str, max_tokens: u32) -> String {
     let max_bytes = (max_tokens as usize).saturating_mul(4);

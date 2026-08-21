@@ -90,7 +90,7 @@ fn trailing_glob_read_write_grants_parent_directory() {
     let output = Command::new(&exe)
         .env(ROOT_ENV, root.as_os_str())
         .env("HOME", home.as_os_str())
-        .env("GROK_HOME", grok_home.as_os_str())
+        .env("SUPERCHARGE_HOME", grok_home.as_os_str())
         .arg("--ignored")
         .arg("--exact")
         .arg("--nocapture")

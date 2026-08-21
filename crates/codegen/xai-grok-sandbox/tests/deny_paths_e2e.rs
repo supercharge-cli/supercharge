@@ -10,7 +10,7 @@ use std::process::Command;
 
 const SCENARIO_ENV: &str = "SANDBOX_E2E_SCENARIO";
 const WORKSPACE_ENV: &str = "SANDBOX_E2E_WORKSPACE";
-const GROK_HOME_ENV: &str = "SANDBOX_E2E_GROK_HOME";
+const SUPERCHARGE_HOME_ENV: &str = "SANDBOX_E2E_SUPERCHARGE_HOME";
 const HOME_ENV: &str = "SANDBOX_E2E_HOME";
 const PROFILE_ENV: &str = "SANDBOX_E2E_PROFILE";
 const TARGETS_ENV: &str = "SANDBOX_E2E_TARGETS";
@@ -22,9 +22,9 @@ const REQUIRE_ENV: &str = "SANDBOX_E2E_REQUIRE_ENFORCEMENT";
 fn apply_fixture_env(cmd: &mut Command, home: &Path, grok_home: &Path, workspace: &Path) {
     cmd.env(WORKSPACE_ENV, workspace.as_os_str())
         .env(HOME_ENV, home.as_os_str())
-        .env(GROK_HOME_ENV, grok_home.as_os_str())
+        .env(SUPERCHARGE_HOME_ENV, grok_home.as_os_str())
         .env("HOME", home.as_os_str())
-        .env("GROK_HOME", grok_home.as_os_str());
+        .env("SUPERCHARGE_HOME", grok_home.as_os_str());
 }
 
 /// Re-invoke this test binary as a subprocess driving `profile` over `targets`
@@ -259,13 +259,13 @@ fn subprocess_entry() {
     let workspace = dunce::canonicalize(&workspace).expect("canonicalize workspace");
     let workspace = workspace.as_path();
 
-    // Isolate HOME/GROK_HOME before any config OnceLock init.
+    // Isolate HOME/SUPERCHARGE_HOME before any config OnceLock init.
     let home = PathBuf::from(std::env::var(HOME_ENV).expect(HOME_ENV));
-    let grok_home = PathBuf::from(std::env::var(GROK_HOME_ENV).expect(GROK_HOME_ENV));
+    let grok_home = PathBuf::from(std::env::var(SUPERCHARGE_HOME_ENV).expect(SUPERCHARGE_HOME_ENV));
     // SAFETY: isolated subprocess; set before sandbox/config first use.
     unsafe {
         std::env::set_var("HOME", &home);
-        std::env::set_var("GROK_HOME", &grok_home);
+        std::env::set_var("SUPERCHARGE_HOME", &grok_home);
     }
 
     match scenario.as_str() {
@@ -441,7 +441,7 @@ fn subprocess_hook_write_deny_marker_spoof(_grok_home: &Path) {
         // Fixture already has hooks/ + hooks-paths from parent.
         // SAFETY: isolated subprocess.
         unsafe {
-            std::env::set_var("__GROK_INSIDE_BWRAP", "1");
+            std::env::set_var("__SUPERCHARGE_INSIDE_BWRAP", "1");
         }
         match xai_grok_sandbox::verify_hook_write_deny_enforced() {
             Ok(()) => {
@@ -466,7 +466,7 @@ fn subprocess_hook_write_deny_marker_spoof(_grok_home: &Path) {
 
 /// Workspace-profile Grok-owned hook write-deny probes (existing sources + first-run).
 fn subprocess_hook_write_deny(workspace: &Path, first_run: bool) {
-    let home = PathBuf::from(std::env::var(GROK_HOME_ENV).expect(GROK_HOME_ENV));
+    let home = PathBuf::from(std::env::var(SUPERCHARGE_HOME_ENV).expect(SUPERCHARGE_HOME_ENV));
 
     let profile = xai_grok_sandbox::ProfileName::Workspace;
     subprocess_profile_and_bwrap_reexec(&profile, workspace);
@@ -669,7 +669,7 @@ fn subprocess_hook_write_deny(workspace: &Path, first_run: bool) {
 
 // ── Parent test cases ───────────────────────────────────────────────────
 
-/// Create isolated HOME + GROK_HOME fixture dirs for a scenario.
+/// Create isolated HOME + SUPERCHARGE_HOME fixture dirs for a scenario.
 fn fixture_homes(
     tag: &str,
 ) -> (
@@ -683,8 +683,8 @@ fn fixture_homes(
     let home = unique_temp_dir(&format!("{tag}-home"));
     let grok = unique_temp_dir(&format!("{tag}-grok"));
     let workspace = unique_temp_dir(&format!("{tag}-ws"));
-    // Empty global sandbox config under fixture GROK_HOME so generic tests do
-    // not inherit the developer/runner's ~/.grok/sandbox.toml.
+    // Empty global sandbox config under fixture SUPERCHARGE_HOME so generic tests do
+    // not inherit the developer/runner's ~/.supercharge/sandbox.toml.
     fs::write(grok.join("sandbox.toml"), "").expect("empty global sandbox.toml");
     (
         home.clone(),
@@ -720,9 +720,9 @@ fn run_deny_case(
         .map(|p| format!("\"{p}\""))
         .collect::<Vec<_>>()
         .join(", ");
-    fs::create_dir_all(tmp.join(".grok")).expect("mkdir .grok");
+    fs::create_dir_all(tmp.join(".supercharge")).expect("mkdir .supercharge");
     fs::write(
-        tmp.join(".grok").join("sandbox.toml"),
+        tmp.join(".supercharge").join("sandbox.toml"),
         format!("[profiles.{profile}]\nextends = \"workspace\"\ndeny = [{deny_list}]\n"),
     )
     .expect("write sandbox.toml");

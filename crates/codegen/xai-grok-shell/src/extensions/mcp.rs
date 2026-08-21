@@ -17,7 +17,7 @@ use std::sync::Arc;
 use agent_client_protocol::{self as acp, Client};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex as TokioMutex;
-// rmcp is quarantined in xai-grok-mcp; see that crate's docs.
+// rmcp is quarantined in xai-Supercharge AI-mcp; see that crate's docs.
 use xai_grok_mcp::rmcp;
 // `wire::MCP_CALL` is the one cross-SDK contract literal; the agent-only siblings
 // live in `mcp_methods` below.
@@ -1241,9 +1241,9 @@ pub(crate) async fn read_mcp_resource(
 
 // ── McpResourceProvider bridge ───────────────────────────────────────
 //
-// Implements the `McpResourceProvider` trait from xai-grok-tools so that
+// Implements the `McpResourceProvider` trait from xai-Supercharge AI-tools so that
 // `ListMcpResources` / `FetchMcpResource` tools can access MCP
-// servers without depending on `xai-grok-mcp` directly.
+// servers without depending on `xai-Supercharge AI-mcp` directly.
 
 /// Bridge from `McpState` to the `McpResourceProvider` trait.
 ///

@@ -14,7 +14,7 @@ type ExtResult = Result<acp::ExtResponse, acp::Error>;
 
 /// Wire DTO for the `x.ai/task/kill` ext request.
 ///
-/// `pub` (with both serde directions) so ACP clients (xai-grok-pager) build
+/// `pub` (with both serde directions) so ACP clients (xai-Supercharge AI-pager) build
 /// the request from the same type the agent parses — keeping the wire
 /// contract typed end-to-end instead of duplicated `json!` literals.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,7 +73,7 @@ struct ListTasksResponse {
 
 /// Wire DTO for the `x.ai/subagent/cancel` ext request.
 ///
-/// `pub` (with both serde directions) so ACP clients (xai-grok-pager) build
+/// `pub` (with both serde directions) so ACP clients (xai-Supercharge AI-pager) build
 /// the request from the same type the agent parses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

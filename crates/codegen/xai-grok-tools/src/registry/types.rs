@@ -3783,7 +3783,7 @@ mod tests {
         assert!(task_def.is_some(), "task tool should be in definitions");
     }
     /// Verify that the task tool description renders correctly with the default
-    /// grok-build agent config (all tools present) and that the new examples
+    /// supercharge-core agent config (all tools present) and that the new examples
     /// section is included with no unresolved template placeholders.
     #[tokio::test]
     async fn bash_definition_hides_is_background_when_disabled() {
@@ -4338,7 +4338,7 @@ mod tests {
         let ctx = test_session_context(&tmp);
         let toolset = builder
             .finalize(config, ctx)
-            .expect("finalize should succeed with default grok-build tools");
+            .expect("finalize should succeed with default supercharge-core tools");
         let defs = toolset.tool_definitions();
         let task_def = defs
             .iter()

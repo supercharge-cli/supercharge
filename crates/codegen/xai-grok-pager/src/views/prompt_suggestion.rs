@@ -18,19 +18,19 @@
 //! responses are discarded via a generation counter, mirroring
 //! `SuggestionController` (shell command suggestions).
 
-/// Env override for the whole feature: `GROK_PROMPT_SUGGESTIONS=0/1`.
+/// Env override for the whole feature: `SUPERCHARGE_PROMPT_SUGGESTIONS=0/1`.
 /// When unset, the persisted `prompt_suggestions` setting applies.
-pub const PROMPT_SUGGESTIONS_ENV: &str = "GROK_PROMPT_SUGGESTIONS";
+pub const PROMPT_SUGGESTIONS_ENV: &str = "SUPERCHARGE_PROMPT_SUGGESTIONS";
 
 /// Env override for the model used by the suggestion call:
-/// `GROK_PROMPT_SUGGESTIONS_MODEL=<model-id>`.
-pub const PROMPT_SUGGESTIONS_MODEL_ENV: &str = "GROK_PROMPT_SUGGESTIONS_MODEL";
+/// `SUPERCHARGE_PROMPT_SUGGESTIONS_MODEL=<model-id>`.
+pub const PROMPT_SUGGESTIONS_MODEL_ENV: &str = "SUPERCHARGE_PROMPT_SUGGESTIONS_MODEL";
 
 /// Preferred model for suggestion calls when the server catalog offers it
 /// (cheap + fast). The session model is never used: when this is absent
 /// from the catalog the request carries no model hint and the shell
 /// resolves (or skips) it — see [`resolve_model`].
-pub const PREFERRED_SUGGESTION_MODEL: &str = "grok-build-0.1";
+pub const PREFERRED_SUGGESTION_MODEL: &str = "supercharge-core-0.1";
 
 /// Controller for the predicted-next-prompt ghost text.
 #[derive(Debug, Default)]
@@ -52,7 +52,7 @@ pub struct PromptSuggestionController {
     /// [`Self::dismiss`]/[`Self::clear`] (the suggestion is gone).
     shown_logged: bool,
     /// Whether the feature is enabled. Resolved via
-    /// `GROK_PROMPT_SUGGESTIONS` env var, falling back to the persisted
+    /// `SUPERCHARGE_PROMPT_SUGGESTIONS` env var, falling back to the persisted
     /// `prompt_suggestions` setting.
     pub enabled: bool,
 }
@@ -178,10 +178,10 @@ pub fn suggestion_size(text: &str) -> (usize, usize) {
 }
 
 /// Resolve the client-side model hint sent with the suggestion request:
-/// env override > `grok-build-0.1` when the catalog offers it > `None`.
+/// env override > `supercharge-core-0.1` when the catalog offers it > `None`.
 ///
 /// The hint is one tier of the shell-side resolution (env > config.toml >
-/// remote settings > this hint > `grok-build-0.1` default): the shell
+/// remote settings > this hint > `supercharge-core-0.1` default): the shell
 /// catalog-guards the effective model and skips the request entirely when
 /// it is not sampleable — the session model is never used for suggestion
 /// calls.

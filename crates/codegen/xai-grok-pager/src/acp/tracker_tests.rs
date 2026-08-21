@@ -4396,13 +4396,13 @@ fn media_gen_ref_skips_uploaded_only_video() {
     );
 }
 /// A tier-restricted (free / X Basic) imagine call short-circuits with the
-/// SuperGrok upsell as `ToolOutput::Text` on a `Completed` status. The media
+/// Supercharge upsell as `ToolOutput::Text` on a `Completed` status. The media
 /// renderer has no file to open, so it must surface the upsell text in the
 /// card body (not a bare title) and must NOT mark the card as an error.
 #[test]
 fn tier_restricted_media_shows_upsell_text_not_error() {
-    let upsell = "Image generation is a SuperGrok feature. Upgrade at \
-         https://grok.com/supergrok?referrer=grok-build";
+    let upsell = "Image generation is a Supercharge feature. Upgrade at \
+         https://supercharge.ai/upgrade";
     let output = ToolOutput::Text(xai_grok_tools::types::output::TextOutput::from(upsell));
     let tc = acp::ToolCall::new(
         acp::ToolCallId::new(Arc::from("tier-restricted-img")),
@@ -4428,7 +4428,7 @@ fn tier_restricted_media_shows_upsell_text_not_error() {
             .output
             .as_deref()
             .unwrap_or_default()
-            .contains("SuperGrok"),
+            .contains("Supercharge"),
         "upsell text must be shown in the card body, got: {:?}",
         block.output
     );

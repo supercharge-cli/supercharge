@@ -97,7 +97,7 @@ pub(crate) fn build_instruction_items(
 }
 
 /// Cap on the effective context window for recap budgeting: the verified
-/// `max_prompt_length` for current `grok-build` / `grok-4.5` product backends
+/// `max_prompt_length` for current `supercharge-core` / `grok-4.5` product backends
 /// (`500000`). Applied via `min(window, CAP)`, so a smaller real window still
 /// wins (e.g. a 256k legacy model or a debug override).
 const RECAP_CONTEXT_WINDOW_CAP: u64 = 500_000;
@@ -118,7 +118,7 @@ const RECAP_BUDGET_HEADROOM_TOKENS: u64 = 4_000;
 /// `ic_400_prompt_too_long` on long sessions. Not an absolute guarantee — a
 /// degenerate tiny window, an oversized retained `System` prefix, or estimator
 /// optimism can still exceed the real limit (the 85% + headroom + 500k cap make
-/// that unlikely for normal grok-build sessions).
+/// that unlikely for normal supercharge-core sessions).
 ///
 /// * Fast path — if the whole snapshot already fits, returns
 ///   `build_instruction_items(...)` verbatim (keeps the grok prefix KV cache

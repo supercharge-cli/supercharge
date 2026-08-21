@@ -556,13 +556,13 @@ mod rss {
         // SAFETY: single-threaded current-thread runtime; set before any agent
         // code reads these process-globals (same pattern as session_load_perf).
         unsafe {
-            std::env::set_var("GROK_HOME", grok_home.path());
-            std::env::set_var("GROK_CLI_CHAT_PROXY_BASE_URL", server.url());
-            std::env::set_var("GROK_XAI_API_BASE_URL", server.url());
-            std::env::set_var("XAI_API_KEY", "test-key-for-ci");
-            std::env::set_var("GROK_TELEMETRY_ENABLED", "false");
-            std::env::set_var("GROK_FEEDBACK_ENABLED", "false");
-            std::env::set_var("GROK_TRACE_UPLOAD", "false");
+            std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
+            std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url());
+            std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", server.url());
+            std::env::set_var("SUPERCHARGE_API_KEY", "test-key-for-ci");
+            std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
+            std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");
+            std::env::set_var("SUPERCHARGE_TRACE_UPLOAD", "false");
         }
 
         let (info, dir) = synth::prepare_session(grok_home.path(), cwd.path(), &opts).await;

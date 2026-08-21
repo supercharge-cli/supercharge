@@ -89,7 +89,9 @@ pub(crate) async fn submit_feedback_workflow(
         author_identity,
     } = opts;
 
-    if let Some(user_meta) = crate::agent::mvp_agent::parse_json_object_env("GROK_USER_METADATA") {
+    if let Some(user_meta) =
+        crate::agent::mvp_agent::parse_json_object_env("SUPERCHARGE_USER_METADATA")
+    {
         submission.merge_metadata(user_meta);
     }
     // Exhaustive destructure (no `..`) so a new field must be handled, not dropped.
@@ -212,10 +214,10 @@ pub struct FeedbackManagerConfig {
     /// Interval for syncing signals to the analytics backend (default: 30s)
     pub sync_interval: Duration,
     /// Whether user-facing feedback features are enabled (popups, `/feedback`,
-    /// ratings). Gated by `GROK_FEEDBACK_ENABLED`.
+    /// ratings). Gated by `SUPERCHARGE_FEEDBACK_ENABLED`.
     pub feedback_enabled: bool,
     /// Whether session analytics (signal sync, turn deltas) are enabled.
-    /// Gated by `GROK_TELEMETRY_ENABLED`. These are analytics data that
+    /// Gated by `SUPERCHARGE_TELEMETRY_ENABLED`. These are analytics data that
     /// flow continuously without user action.
     pub telemetry_enabled: bool,
     /// Client type (Agent, Tui, Web, Extension)
@@ -227,7 +229,7 @@ pub struct FeedbackManagerConfig {
     pub loc_tracking_enabled: bool,
     /// Preferred timeout for draining the upload queue on shutdown
     /// (default: 30s). Process-exit still clamps this under
-    /// [`SHUTDOWN_DRAIN_CAP`] (or `GROK_SESSION_EXIT_DRAIN_SECS`) so a
+    /// [`SHUTDOWN_DRAIN_CAP`] (or `SUPERCHARGE_SESSION_EXIT_DRAIN_SECS`) so a
     /// hung upload cannot exceed the agent join grace; abandoned durable
     /// pairs are recovered on next-session startup.
     pub drain_timeout: Duration,
@@ -913,7 +915,7 @@ impl FeedbackManager {
     /// Empty open→exit: `sync_signals_inner(force)` skips the analytics POST
     /// when there are no turns/tools; drain is skipped when pending is also 0.
     /// Non-empty drains use `min(config.drain_timeout, cap)` (default cap 5s,
-    /// `GROK_SESSION_EXIT_DRAIN_SECS` up to hard max 7s). Incomplete drains
+    /// `SUPERCHARGE_SESSION_EXIT_DRAIN_SECS` up to hard max 7s). Incomplete drains
     /// leave durable pairs on disk for next-session recovery.
     pub async fn shutdown(&self, queue: Option<&xai_file_utils::queue::UploadQueue>) {
         let pending = queue
@@ -974,7 +976,7 @@ pub(crate) const SHUTDOWN_SIGNAL_SYNC_TIMEOUT: Duration = Duration::from_secs(2)
 
 /// Default ceiling on non-empty upload-queue drain at process exit.
 /// Keeps sync+drain under [`crate::agent::activity::SESSION_FLUSH_GRACE`] with
-/// residual time for hooks/memory. Override with `GROK_SESSION_EXIT_DRAIN_SECS`
+/// residual time for hooks/memory. Override with `SUPERCHARGE_SESSION_EXIT_DRAIN_SECS`
 /// (still hard-capped by [`SHUTDOWN_DRAIN_HARD_MAX`]).
 const SHUTDOWN_DRAIN_CAP: Duration = Duration::from_secs(5);
 
@@ -988,10 +990,10 @@ const SHUTDOWN_EMPTY_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// Non-empty drain wait: honor config (tests / shorter defaults) but never
 /// exceed the process-exit cap. Cap defaults to [`SHUTDOWN_DRAIN_CAP`]; fleets
-/// on slow networks may raise it with `GROK_SESSION_EXIT_DRAIN_SECS` up to
+/// on slow networks may raise it with `SUPERCHARGE_SESSION_EXIT_DRAIN_SECS` up to
 /// [`SHUTDOWN_DRAIN_HARD_MAX`] without regressing the empty-session fast path.
 fn nonempty_drain_budget(config_timeout: Duration) -> Duration {
-    let cap = std::env::var("GROK_SESSION_EXIT_DRAIN_SECS")
+    let cap = std::env::var("SUPERCHARGE_SESSION_EXIT_DRAIN_SECS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_secs)
@@ -1375,7 +1377,8 @@ mod tests {
     fn test_shutdown_budgets_fit_under_session_flush_grace() {
         use crate::agent::activity::SESSION_FLUSH_GRACE;
         // `nonempty_drain_budget` reads env; pin default regardless of CI presets.
-        let _unset = xai_grok_test_support::env::EnvGuard::unset("GROK_SESSION_EXIT_DRAIN_SECS");
+        let _unset =
+            xai_grok_test_support::env::EnvGuard::unset("SUPERCHARGE_SESSION_EXIT_DRAIN_SECS");
         assert!(
             SHUTDOWN_SIGNAL_SYNC_TIMEOUT + SHUTDOWN_DRAIN_HARD_MAX <= SESSION_FLUSH_GRACE,
             "sync + hard-max drain must fit under flush grace"
@@ -1404,8 +1407,10 @@ mod tests {
     #[serial_test::serial]
     fn test_nonempty_drain_budget_env_raises_cap() {
         {
-            let _guard =
-                xai_grok_test_support::env::EnvGuard::set("GROK_SESSION_EXIT_DRAIN_SECS", "7");
+            let _guard = xai_grok_test_support::env::EnvGuard::set(
+                "SUPERCHARGE_SESSION_EXIT_DRAIN_SECS",
+                "7",
+            );
             assert_eq!(
                 nonempty_drain_budget(Duration::from_secs(30)),
                 Duration::from_secs(7),
@@ -1413,8 +1418,10 @@ mod tests {
             );
         }
         {
-            let _guard =
-                xai_grok_test_support::env::EnvGuard::set("GROK_SESSION_EXIT_DRAIN_SECS", "99");
+            let _guard = xai_grok_test_support::env::EnvGuard::set(
+                "SUPERCHARGE_SESSION_EXIT_DRAIN_SECS",
+                "99",
+            );
             assert_eq!(
                 nonempty_drain_budget(Duration::from_secs(30)),
                 SHUTDOWN_DRAIN_HARD_MAX,
@@ -1925,7 +1932,7 @@ mod author_identity_tests {
             ClientType::Tui,
             FeedbackContent::Text("great session".to_string()),
         );
-        s.model_id = Some("grok-4".to_string());
+        s.model_id = Some("Supercharge AI-4".to_string());
         s
     }
 
@@ -1936,17 +1943,19 @@ mod author_identity_tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn env_var_identity_reaches_the_wire_end_to_end() {
-        let _email =
-            xai_grok_test_support::env::EnvGuard::set("GROK_TEST_WORK_EMAIL", "ada@corp.example");
+        let _email = xai_grok_test_support::env::EnvGuard::set(
+            "SUPERCHARGE_TEST_WORK_EMAIL",
+            "ada@corp.example",
+        );
         let _name =
-            xai_grok_test_support::env::EnvGuard::set("GROK_TEST_WORK_NAME", "Ada Lovelace");
+            xai_grok_test_support::env::EnvGuard::set("SUPERCHARGE_TEST_WORK_NAME", "Ada Lovelace");
 
         // The loader expands `$VAR` at load, exactly as a trusted config tier ships it.
         let mut value = toml::from_str::<toml::Value>(
             r#"
 [feedback.user]
-name = ["$GROK_TEST_WORK_NAME"]
-email = ["$GROK_TEST_WORK_EMAIL"]
+name = ["$SUPERCHARGE_TEST_WORK_NAME"]
+email = ["$SUPERCHARGE_TEST_WORK_EMAIL"]
 "#,
         )
         .unwrap();
@@ -1987,7 +1996,7 @@ email = ["$GROK_TEST_WORK_EMAIL"]
         let body = captured.lock().clone().expect("server saw the POST");
         assert_eq!(body["authorName"], "Ada Lovelace");
         assert_eq!(body["authorEmail"], "ada@corp.example");
-        assert_eq!(body["modelId"], "grok-4");
+        assert_eq!(body["modelId"], "Supercharge AI-4");
         assert_eq!(body["feedbackText"], "great session");
 
         // The local entry keeps the author fields and the full context.
@@ -1998,16 +2007,16 @@ email = ["$GROK_TEST_WORK_EMAIL"]
         let persisted = entry.submission.expect("submission persisted");
         assert_eq!(persisted.author_name.as_deref(), Some("Ada Lovelace"));
         assert_eq!(persisted.author_email.as_deref(), Some("ada@corp.example"));
-        assert_eq!(persisted.model_id.as_deref(), Some("grok-4"));
+        assert_eq!(persisted.model_id.as_deref(), Some("Supercharge AI-4"));
     }
 
-    /// `GROK_USER_METADATA` is merged into the submission and travels with it:
+    /// `SUPERCHARGE_USER_METADATA` is merged into the submission and travels with it:
     /// onto the wire body for triage and onto the local feedback.jsonl entry.
     #[tokio::test]
     #[serial_test::serial]
     async fn workflow_merges_user_metadata_into_submission() {
         let _guard = xai_grok_test_support::env::EnvGuard::set(
-            "GROK_USER_METADATA",
+            "SUPERCHARGE_USER_METADATA",
             r#"{"team": "platform-tools"}"#,
         );
         let (addr, captured) = start_capture_server().await;

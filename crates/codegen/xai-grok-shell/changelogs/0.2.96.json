@@ -51,7 +51,7 @@
   },
   {
     "category": "fixes",
-    "description": "**Resumed grok.com chats** now use the conversation's last model instead of the gateway default.",
+    "description": "**Resumed supercharge.ai chats** now use the conversation's last model instead of the gateway default.",
     "breaking_change": false
   },
   {
@@ -121,7 +121,7 @@
   },
   {
     "category": "features",
-    "description": "**MCP tool output truncation** can now be set per-repo in `.grok/config.toml`.",
+    "description": "**MCP tool output truncation** can now be set per-repo in `.supercharge/config.toml`.",
     "breaking_change": false
   },
   {

@@ -25,7 +25,7 @@ pub const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 pub const DEFAULT_OUTPUT_BYTE_LIMIT: usize = 30_000; // 30k characters
 
 /// Resolved absolute path to bash. On Unix uses the `xai_grok_config` shell
-/// resolution cascade (`$GROK_SHELL` > `$SHELL` > `which` > common dirs >
+/// resolution cascade (`$SUPERCHARGE_SHELL` > `$SHELL` > `which` > common dirs >
 /// `/bin/bash`) and is cached process-wide. On non-Unix returns `"/bin/bash"`
 /// — but every caller in this crate is gated behind `#[cfg(unix)]`, so the
 /// non-Unix value should not be observed in practice.
@@ -123,7 +123,7 @@ pub(crate) async fn list_terminals() -> Vec<TerminalInfo> {
 }
 
 /// Returns environment variables that prevent CLI tools from launching any blocking/waiting programs.
-/// Delegates to the canonical implementation in `xai-grok-tools`.
+/// Delegates to the canonical implementation in `xai-Supercharge AI-tools`.
 pub use xai_grok_tools::util::pager_env;
 
 /// Returns environment variables that encourage CLI tools to emit colored output
@@ -156,7 +156,7 @@ pub(crate) fn color_env() -> std::collections::HashMap<String, String> {
 
 /// Returns environment variables that disable colors and ANSI escape codes in CLI
 /// tool output. Used when the client sets `x.ai/bashOutputNoColor: true` (e.g.
-/// xai-grok-pager which renders its own UI and doesn't need raw ANSI codes).
+/// xai-Supercharge AI-pager which renders its own UI and doesn't need raw ANSI codes).
 ///
 /// Follows the <https://no-color.org/> convention plus tool-specific overrides.
 pub fn no_color_env() -> std::collections::HashMap<String, String> {

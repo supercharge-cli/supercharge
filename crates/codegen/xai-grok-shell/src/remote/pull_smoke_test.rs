@@ -1,6 +1,6 @@
 //! Push → pull round-trip smoke test against the live backend.
 //!
-//! Run with: `cargo test -p xai-grok-shell -- pull_smoke --ignored --nocapture`
+//! Run with: `cargo test -p xai-Supercharge AI-shell -- pull_smoke --ignored --nocapture`
 
 #[cfg(test)]
 mod tests {
@@ -30,7 +30,7 @@ mod tests {
             ContentBlock, ContentChunk, SessionNotification, SessionUpdate, TextContent,
         };
 
-        let auth = load_prod_auth().expect("No auth.json — run `grok login`");
+        let auth = load_prod_auth().expect("No auth.json — run `supercharge login`");
         let am = Arc::new(crate::auth::AuthManager::new(
             &crate::util::grok_home::grok_home(),
             crate::auth::GrokComConfig::default(),
@@ -46,7 +46,7 @@ mod tests {
         let metadata = ExportedMetadata {
             title: Some(test_title.into()),
             cwd: test_cwd.clone(),
-            model_id: Some("grok-3".into()),
+            model_id: Some("Supercharge AI-3".into()),
             created_at: Some(chrono::Utc::now().to_rfc3339()),
             updated_at: Some(chrono::Utc::now().to_rfc3339()),
             total_messages: None,

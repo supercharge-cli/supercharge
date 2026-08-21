@@ -20,7 +20,7 @@ use tokio::io::AsyncReadExt;
 
 pub use xai_grok_config::shell::UnixShellKind;
 
-const INIT_MARKER: &str = "__GROK_STATIC_SHELL_MARKER__";
+const INIT_MARKER: &str = "__SUPERCHARGE_STATIC_SHELL_MARKER__";
 const INIT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// A fixed snapshot of rc-defined functions and aliases, captured once.
@@ -146,7 +146,7 @@ impl StaticShellSnapshot {
                 "snap=$(command cat <&3); builtin shopt -s extglob 2>/dev/null; \
                  builtin shopt -s expand_aliases 2>/dev/null; \
                  builtin eval -- \"$snap\"; \
-                 builtin export GROK_AGENT=1; \
+                 builtin export SUPERCHARGE_AGENT=1; \
                  builtin export PWD=\"$(builtin pwd)\"; {sudo_inject}{search_inject}\
                  __grok_user_cmd=\"$1\"; builtin declare +x __grok_user_cmd 2>/dev/null; builtin set --; \
                  builtin eval \"$__grok_user_cmd\" 2>&1"
@@ -155,7 +155,7 @@ impl StaticShellSnapshot {
                 "snap=$(command cat <&3); \
                  builtin setopt nonomatch 2>/dev/null; \
                  builtin eval \"$snap\"; \
-                 builtin export GROK_AGENT=1; \
+                 builtin export SUPERCHARGE_AGENT=1; \
                  builtin export PWD=\"$(builtin pwd)\"; \
                  builtin setopt aliases 2>/dev/null; {sudo_inject}{search_inject}\
                  __grok_user_cmd=\"$1\"; builtin typeset +x __grok_user_cmd 2>/dev/null; builtin set --; \

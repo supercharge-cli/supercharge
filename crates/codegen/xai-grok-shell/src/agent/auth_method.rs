@@ -23,21 +23,22 @@ pub(crate) fn new_shared_auth_method_id(initial: Option<acp::AuthMethodId>) -> S
 /// Env var that, when set, advertises `xai.api_key` as a viable auth method.
 ///
 /// Kept as a constant so test code and the production check stay in sync.
-pub const XAI_API_KEY_ENV_VAR: &str = "XAI_API_KEY";
+pub const SUPERCHARGE_API_KEY_ENV_VAR: &str = "SUPERCHARGE_API_KEY";
 
-/// Legacy env var name. Checked as a fallback when `XAI_API_KEY` is not set,
+/// Legacy env var name. Checked as a fallback when `SUPERCHARGE_API_KEY` is not set,
 /// so existing deployments that use the old name keep working.
-pub const LEGACY_XAI_API_KEY_ENV_VAR: &str = "GROK_CODE_XAI_API_KEY";
+pub const LEGACY_SUPERCHARGE_API_KEY_ENV_VAR: &str = "SUPERCHARGE_CODE_API_KEY";
 
 /// Read the API key from the environment.
 ///
-/// Checks `XAI_API_KEY` first, then falls back to the legacy
-/// `GROK_CODE_XAI_API_KEY` for backward compatibility.
+/// Checks `SUPERCHARGE_API_KEY` first, then falls back to the legacy
+/// `SUPERCHARGE_CODE_API_KEY` for backward compatibility.
 pub(crate) fn read_xai_api_key_env() -> Result<String, std::env::VarError> {
-    std::env::var(XAI_API_KEY_ENV_VAR).or_else(|_| std::env::var(LEGACY_XAI_API_KEY_ENV_VAR))
+    std::env::var(SUPERCHARGE_API_KEY_ENV_VAR)
+        .or_else(|_| std::env::var(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR))
 }
 
-/// Returns `true` if either `XAI_API_KEY` or `GROK_CODE_XAI_API_KEY` is set.
+/// Returns `true` if either `SUPERCHARGE_API_KEY` or `SUPERCHARGE_CODE_API_KEY` is set.
 pub fn has_xai_api_key_env() -> bool {
     read_xai_api_key_env().is_ok()
 }
@@ -46,7 +47,7 @@ pub fn has_xai_api_key_env() -> bool {
 /// the `auth_methods` list at `initialize()` time.
 ///
 /// Regression: `xai.api_key` must stay first when only per-model credentials
-/// exist (no global `XAI_API_KEY`). Deferring it made BYOK users hit the login
+/// exist (no global `SUPERCHARGE_API_KEY`). Deferring it made BYOK users hit the login
 /// screen because the pager uses `auth_methods.first()` for startup metadata.
 ///
 /// [`build_auth_methods`] consumes this predicate and pins the ordering;
@@ -57,9 +58,9 @@ pub fn has_xai_api_key_env() -> bool {
 /// result is not cached.
 ///
 /// `disable_api_key_auth` (`[grok_com_config] disable_api_key_auth` /
-/// `GROK_DISABLE_API_KEY_AUTH`) is the admin kill switch: when true the
+/// `SUPERCHARGE_DISABLE_API_KEY_AUTH`) is the admin kill switch: when true the
 /// method is never advertised, regardless of available credentials, so
-/// `XAI_API_KEY` can't bypass a deployment's forced IdP login.
+/// `SUPERCHARGE_API_KEY` can't bypass a deployment's forced IdP login.
 ///
 /// Presence-only for the first-party env key (treats it as usable). Login
 /// paths that have run the validity probe should call
@@ -106,14 +107,14 @@ pub struct AuthMethodsBuildInputs<'a> {
     /// or recovered via silent refresh).
     pub has_cached_token: bool,
     /// True if enterprise OIDC is configured. Mutually exclusive with the
-    /// default `grok.com` method.
+    /// default `supercharge.ai` method.
     pub has_enterprise_oidc: bool,
     /// Required when `has_enterprise_oidc` is true; ignored otherwise.
     pub enterprise_oidc_issuer: Option<&'a str>,
-    /// Optional display label for the login method (`grok.com` or `oidc`).
+    /// Optional display label for the login method (`supercharge.ai` or `oidc`).
     pub login_label: Option<&'a str>,
     /// True if `grok_com_config.auth_provider_command` is configured (sets
-    /// `meta.external_provider = true` on the `grok.com` method).
+    /// `meta.external_provider = true` on the `supercharge.ai` method).
     pub has_auth_provider_command: bool,
     /// Config pin (`[auth] preferred_method`). `None` keeps multi-method
     /// fallthrough; `Some` is fail-closed (only that method family).
@@ -146,7 +147,7 @@ pub struct BuiltAuthMethods {
 /// 2. `cached_token`    (if `has_cached_token`)
 /// 3. exactly one of:
 ///    - `oidc`          (if `has_enterprise_oidc`)
-///    - `grok.com`      (otherwise)
+///    - `supercharge.ai`      (otherwise)
 ///
 /// Unpinned `default_auth_method_id`:
 /// - `cached_token` if `has_cached_token`
@@ -202,7 +203,7 @@ fn build_pinned_api_key(has_external_api_key: bool) -> BuiltAuthMethods {
     }
     BuiltAuthMethods {
         methods: vec![xai_api_key_auth_method()],
-        default_auth_method_id: Some(acp::AuthMethodId::new(XAI_API_KEY_METHOD_ID)),
+        default_auth_method_id: Some(acp::AuthMethodId::new(SUPERCHARGE_API_KEY_METHOD_ID)),
     }
 }
 
@@ -248,7 +249,7 @@ fn build_unpinned(
 
     if has_external_api_key {
         methods.push(xai_api_key_auth_method());
-        default_auth_method_id = Some(acp::AuthMethodId::new(XAI_API_KEY_METHOD_ID));
+        default_auth_method_id = Some(acp::AuthMethodId::new(SUPERCHARGE_API_KEY_METHOD_ID));
     }
 
     if has_cached_token {
@@ -318,9 +319,9 @@ pub enum AuthMethodKind {
 impl AuthMethodKind {
     pub fn from_id(id: &acp::AuthMethodId) -> Self {
         match id.0.as_ref() {
-            XAI_API_KEY_METHOD_ID => Self::XaiApiKey,
+            SUPERCHARGE_API_KEY_METHOD_ID => Self::XaiApiKey,
             CACHED_TOKEN_AUTH_METHOD_ID => Self::CachedToken,
-            GROK_COM_METHOD_ID => Self::GrokCom,
+            SUPERCHARGE_COM_METHOD_ID => Self::GrokCom,
             OIDC_METHOD_ID => Self::Oidc,
             _ => Self::Unknown,
         }
@@ -331,7 +332,7 @@ impl AuthMethodKind {
         matches!(self, Self::XaiApiKey)
     }
 
-    /// `true` for session-based methods (cached_token, grok.com, oidc).
+    /// `true` for session-based methods (cached_token, supercharge.ai, oidc).
     pub(crate) fn is_session_based(self) -> bool {
         matches!(self, Self::CachedToken | Self::GrokCom | Self::Oidc)
     }
@@ -342,7 +343,7 @@ impl AuthMethodKind {
     }
 }
 
-/// `true` for session-based ACP methods (cached_token, grok.com, oidc).
+/// `true` for session-based ACP methods (cached_token, supercharge.ai, oidc).
 pub(crate) fn is_session_based_method(method_id: &acp::AuthMethodId) -> bool {
     AuthMethodKind::from_id(method_id).is_session_based()
 }
@@ -373,7 +374,7 @@ impl ModelByok {
 ///
 /// Gates on stable inputs, not `Credentials.auth_type`: that field collapses
 /// to `ApiKey` when the session-token cache is momentarily empty and
-/// `XAI_API_KEY` is set, which demoted live OIDC sessions to non-refreshable
+/// `SUPERCHARGE_API_KEY` is set, which demoted live OIDC sessions to non-refreshable
 /// api-key mode and 401'd every prompt until restart. `model_byok` still
 /// excludes genuine per-model BYOK, whose keys are not refreshable.
 ///
@@ -401,15 +402,15 @@ pub(crate) fn session_token_auth_gate(
 }
 
 pub const AUTH_ERROR_SESSION_EXPIRED: &str =
-    "Session expired. Run `grok login` to re-authenticate.";
+    "Session expired. Run `supercharge login` to re-authenticate.";
 
-pub const AUTH_ERROR_API_KEY: &str = "Authentication failed. Run `grok login`, set XAI_API_KEY, or add api_key to ~/.grok/config.toml.";
+pub const AUTH_ERROR_API_KEY: &str = "Authentication failed. Run `supercharge login`, set SUPERCHARGE_API_KEY, or add api_key to ~/.supercharge/config.toml.";
 
 /// Next ACP method id when `cached_token` cannot proceed (missing / expired /
 /// legacy WebLogin), or `None` when fallthrough is forbidden.
 ///
 /// Unpinned: prefer non-interactive `xai.api_key` when advertiseable, else
-/// interactive `grok.com`.
+/// interactive `supercharge.ai`.
 ///
 /// Pinned `oidc`: **no** fallthrough to api_key — return `None` so the caller
 /// fails auth. Pinned `api_key` should not reach this path (cached_token is
@@ -421,29 +422,29 @@ pub(crate) fn method_id_after_cached_token_unavailable(
     match preferred_method {
         Some(PreferredAuthMethod::Oidc) | Some(PreferredAuthMethod::ApiKey) => None,
         None => Some(if has_external_api_key {
-            XAI_API_KEY_METHOD_ID
+            SUPERCHARGE_API_KEY_METHOD_ID
         } else {
-            GROK_COM_METHOD_ID
+            SUPERCHARGE_COM_METHOD_ID
         }),
     }
 }
 
 /// Error when `preferred_method=api_key` but no key/BYOK credentials exist.
-pub const PREFERRED_API_KEY_UNAVAILABLE: &str = "preferred_method=api_key but no API key is configured (set XAI_API_KEY or model api_key/env_key in config.toml).";
+pub const PREFERRED_API_KEY_UNAVAILABLE: &str = "preferred_method=api_key but no API key is configured (set SUPERCHARGE_API_KEY or model api_key/env_key in config.toml).";
 
 /// Error when `preferred_method=oidc` but the session path cannot proceed.
 pub const PREFERRED_OIDC_UNAVAILABLE: &str =
-    "preferred_method=oidc but no session is available. Run `grok login` to authenticate.";
+    "preferred_method=oidc but no session is available. Run `supercharge login` to authenticate.";
 
-pub const XAI_API_KEY_METHOD_ID: &str = "xai.api_key";
+pub const SUPERCHARGE_API_KEY_METHOD_ID: &str = "xai.api_key";
 pub(crate) fn xai_api_key_auth_method() -> acp::AuthMethod {
     acp::AuthMethod::Agent(
         acp::AuthMethodAgent::new(
-            acp::AuthMethodId::new(XAI_API_KEY_METHOD_ID),
+            acp::AuthMethodId::new(SUPERCHARGE_API_KEY_METHOD_ID),
             "xai.api_key".to_string(),
         )
         .description(Some(format!(
-            "{XAI_API_KEY_ENV_VAR} or api_key/env_key in config.toml"
+            "{SUPERCHARGE_API_KEY_ENV_VAR} or api_key/env_key in config.toml"
         ))),
     )
 }
@@ -455,13 +456,15 @@ pub(crate) fn cached_token_auth_method() -> acp::AuthMethod {
             acp::AuthMethodId::new(CACHED_TOKEN_AUTH_METHOD_ID),
             "cached_token".to_string(),
         )
-        .description(Some("Cached token from ~/.grok/auth.json".to_string())),
+        .description(Some(
+            "Cached token from ~/.supercharge/auth.json".to_string(),
+        )),
     )
 }
 
-pub const GROK_COM_METHOD_ID: &str = "grok.com";
+pub const SUPERCHARGE_COM_METHOD_ID: &str = "supercharge.ai";
 
-/// xAI OAuth2/OIDC auth. Method id `"grok.com"` kept for ACP wire-compat.
+/// xAI OAuth2/OIDC auth. Method id `"supercharge.ai"` kept for ACP wire-compat.
 pub(crate) fn grok_com_auth_method(
     label: Option<&str>,
     has_auth_provider_command: bool,
@@ -475,9 +478,12 @@ pub(crate) fn grok_com_auth_method(
         None
     };
     acp::AuthMethod::Agent(
-        acp::AuthMethodAgent::new(acp::AuthMethodId::new(GROK_COM_METHOD_ID), name.to_string())
-            .description(Some(format!("Sign in with {name}")))
-            .meta(meta),
+        acp::AuthMethodAgent::new(
+            acp::AuthMethodId::new(SUPERCHARGE_COM_METHOD_ID),
+            name.to_string(),
+        )
+        .description(Some(format!("Sign in with {name}")))
+        .meta(meta),
     )
 }
 
@@ -509,16 +515,16 @@ mod tests {
     fn after_cached_token_unavailable_prefers_api_key_when_advertiseable() {
         assert_eq!(
             method_id_after_cached_token_unavailable(true, None),
-            Some(XAI_API_KEY_METHOD_ID),
+            Some(SUPERCHARGE_API_KEY_METHOD_ID),
         );
     }
 
-    /// No advertiseable API-key credentials → interactive `grok.com`.
+    /// No advertiseable API-key credentials → interactive `supercharge.ai`.
     #[test]
     fn after_cached_token_unavailable_falls_to_grok_com_without_api_key() {
         assert_eq!(
             method_id_after_cached_token_unavailable(false, None),
-            Some(GROK_COM_METHOD_ID),
+            Some(SUPERCHARGE_COM_METHOD_ID),
         );
     }
 
@@ -540,7 +546,7 @@ mod tests {
     fn auth_method_kind_classifier_matrix() {
         let session_methods = [
             CACHED_TOKEN_AUTH_METHOD_ID,
-            GROK_COM_METHOD_ID,
+            SUPERCHARGE_COM_METHOD_ID,
             OIDC_METHOD_ID,
         ];
         for method_id in session_methods {
@@ -555,7 +561,7 @@ mod tests {
                 "{method_id}: wrapper must agree"
             );
         }
-        let api_id = acp::AuthMethodId::new(XAI_API_KEY_METHOD_ID);
+        let api_id = acp::AuthMethodId::new(SUPERCHARGE_API_KEY_METHOD_ID);
         let api_kind = AuthMethodKind::from_id(&api_id);
         assert!(!api_kind.is_session_based());
         assert!(api_kind.is_api_key());
@@ -623,7 +629,7 @@ mod tests {
                 .default_auth_method_id
                 .as_ref()
                 .map(|id| id.0.as_ref()),
-            Some(XAI_API_KEY_METHOD_ID),
+            Some(SUPERCHARGE_API_KEY_METHOD_ID),
         );
         // Cross-check with the pager-side predicate: the first method must
         // not require interactive login, which is the exact condition the
@@ -670,7 +676,7 @@ mod tests {
     }
 
     /// Session-only user (no API key anywhere): cached_token first, then
-    /// `grok.com` — `auth_methods.first()` does NOT need interactive login,
+    /// `supercharge.ai` — `auth_methods.first()` does NOT need interactive login,
     /// so this user also skips the login screen at startup.
     #[test]
     fn session_only_user_first_method_is_cached_token() {
@@ -694,7 +700,7 @@ mod tests {
         );
     }
 
-    /// Brand-new user (no API key, no cached token): only `grok.com` is
+    /// Brand-new user (no API key, no cached token): only `supercharge.ai` is
     /// advertised, and the pager will (correctly) show the login screen.
     /// `default_auth_method_id` is None so the pager falls back to the
     /// advertised login method.
@@ -707,7 +713,7 @@ mod tests {
         assert_eq!(built.methods.len(), 1);
     }
 
-    /// Enterprise OIDC replaces `grok.com` (mutually exclusive). xai.api_key,
+    /// Enterprise OIDC replaces `supercharge.ai` (mutually exclusive). xai.api_key,
     /// when present, still leads.
     #[test]
     fn enterprise_oidc_replaces_grok_com_but_xai_api_key_still_first() {
@@ -733,11 +739,11 @@ mod tests {
                 .methods
                 .iter()
                 .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::GrokCom),
-            "grok.com and oidc are mutually exclusive",
+            "supercharge.ai and oidc are mutually exclusive",
         );
     }
 
-    /// `has_auth_provider_command` is plumbed through to the `grok.com` method
+    /// `has_auth_provider_command` is plumbed through to the `supercharge.ai` method
     /// as `meta.external_provider = true`. Pinning this here so the pager's
     /// `AuthStartMode::Command` path keeps working.
     #[test]
@@ -749,13 +755,13 @@ mod tests {
         };
         let built = build_auth_methods(inputs);
 
-        let grok = built
+        let provider_method = built
             .methods
             .iter()
             .find(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::GrokCom)
-            .expect("grok.com must be advertised");
-        assert_eq!(grok.name(), "Acme Corp");
-        let meta = grok.meta().expect("meta should be set");
+            .expect("supercharge.ai must be advertised");
+        assert_eq!(provider_method.name(), "Acme Corp");
+        let meta = provider_method.meta().expect("meta should be set");
         assert_eq!(
             meta.get("external_provider").and_then(|v| v.as_bool()),
             Some(true),
@@ -765,7 +771,7 @@ mod tests {
     // ── End-to-end: enterprise TOML -> resolved models -> build_auth_methods ─
 
     /// END-TO-END REGRESSION TEST: parses the literal enterprise-style
-    /// `~/.grok/config.toml` skeleton from the bug report, walks it through
+    /// `~/.supercharge/config.toml` skeleton from the bug report, walks it through
     /// the same predicate (`should_advertise_xai_api_key`) and the same
     /// list-builder (`build_auth_methods`) that `MvpAgent::initialize()` uses
     /// in production, and asserts that `auth_methods.first()` is `xai.api_key`
@@ -782,7 +788,7 @@ mod tests {
 
         // Make sure no global key is masking the per-model path we're trying
         // to exercise. Held until end-of-scope so we restore on panic too.
-        let _global = EnvGuard::unset(XAI_API_KEY_ENV_VAR);
+        let _global = EnvGuard::unset(SUPERCHARGE_API_KEY_ENV_VAR);
 
         let dm = crate::models::default_model();
         let toml: toml::Value = toml::from_str(&format!(
@@ -831,7 +837,7 @@ mod tests {
             let built = build_auth_methods(AuthMethodsBuildInputs {
                 has_external_api_key,
                 // Realistic enterprise user: no cached session token, default
-                // grok.com login (no enterprise OIDC).
+                // supercharge.ai login (no enterprise OIDC).
                 has_cached_token: false,
                 ..default_inputs()
             });
@@ -850,14 +856,14 @@ mod tests {
         }
     }
 
-    /// `XAI_API_KEY` alone (no per-model creds) also triggers
+    /// `SUPERCHARGE_API_KEY` alone (no per-model creds) also triggers
     /// advertising `xai.api_key` as the first method. Historical "external
     /// key" path; covered here so the predicate keeps treating env-var-only
     /// users the same as per-model users.
     #[test]
     #[serial]
     fn global_external_api_key_advertises_xai_api_key_first() {
-        let _set = EnvGuard::set(XAI_API_KEY_ENV_VAR, "xai-external-key");
+        let _set = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "xai-external-key");
         let cfg = Config::default();
         let models = resolve_model_list(&cfg, None);
         let has_external_api_key = should_advertise_xai_api_key(false, models.values());
@@ -876,7 +882,7 @@ mod tests {
     #[test]
     #[serial]
     fn disable_api_key_auth_suppresses_xai_api_key_method() {
-        let _set = EnvGuard::set(XAI_API_KEY_ENV_VAR, "xai-external-key");
+        let _set = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "xai-external-key");
         let cfg = Config::default();
         let models = resolve_model_list(&cfg, None);
 
@@ -909,8 +915,8 @@ mod tests {
     #[test]
     #[serial]
     fn env_key_probe_unusable_suppresses_advertise_without_byok() {
-        let _set = EnvGuard::set(XAI_API_KEY_ENV_VAR, "xai-dead-key");
-        let _legacy = EnvGuard::unset(LEGACY_XAI_API_KEY_ENV_VAR);
+        let _set = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "xai-dead-key");
+        let _legacy = EnvGuard::unset(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR);
         let cfg = Config::default();
         let models = resolve_model_list(&cfg, None);
         assert!(
@@ -931,7 +937,7 @@ mod tests {
     #[test]
     #[serial]
     fn env_key_probe_ok_still_advertises() {
-        let _set = EnvGuard::set(XAI_API_KEY_ENV_VAR, "xai-live-key");
+        let _set = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "xai-live-key");
         let cfg = Config::default();
         let models = resolve_model_list(&cfg, None);
         assert!(should_advertise_xai_api_key_with_env_ok(
@@ -945,8 +951,8 @@ mod tests {
     #[serial]
     fn byok_advertises_even_when_env_probe_unusable() {
         const TEST_ENV_VAR: &str = "TEST_BYOK_PROBE_INDEPENDENT_TOKEN";
-        let _unset = EnvGuard::unset(XAI_API_KEY_ENV_VAR);
-        let _legacy = EnvGuard::unset(LEGACY_XAI_API_KEY_ENV_VAR);
+        let _unset = EnvGuard::unset(SUPERCHARGE_API_KEY_ENV_VAR);
+        let _legacy = EnvGuard::unset(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR);
         let _byok = EnvGuard::set(TEST_ENV_VAR, "enterprise-secret-token");
 
         let dm = crate::models::default_model();
@@ -968,13 +974,13 @@ mod tests {
         );
     }
 
-    /// Legacy `GROK_CODE_XAI_API_KEY` env var is accepted as a fallback
-    /// when `XAI_API_KEY` is not set, ensuring existing deployments keep working.
+    /// Legacy `SUPERCHARGE_CODE_API_KEY` env var is accepted as a fallback
+    /// when `SUPERCHARGE_API_KEY` is not set, ensuring existing deployments keep working.
     #[test]
     #[serial]
     fn legacy_env_var_fallback_advertises_xai_api_key() {
-        let _unset_new = EnvGuard::unset(XAI_API_KEY_ENV_VAR);
-        let _set_legacy = EnvGuard::set(LEGACY_XAI_API_KEY_ENV_VAR, "xai-legacy-key");
+        let _unset_new = EnvGuard::unset(SUPERCHARGE_API_KEY_ENV_VAR);
+        let _set_legacy = EnvGuard::set(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, "xai-legacy-key");
         assert!(has_xai_api_key_env());
         assert_eq!(read_xai_api_key_env().unwrap(), "xai-legacy-key");
 
@@ -984,21 +990,21 @@ mod tests {
         assert!(has_external_api_key);
     }
 
-    /// When both `XAI_API_KEY` and `GROK_CODE_XAI_API_KEY` are set,
+    /// When both `SUPERCHARGE_API_KEY` and `SUPERCHARGE_CODE_API_KEY` are set,
     /// the new name takes precedence.
     #[test]
     #[serial]
     fn new_env_var_takes_precedence_over_legacy() {
-        let _new = EnvGuard::set(XAI_API_KEY_ENV_VAR, "new-key");
-        let _legacy = EnvGuard::set(LEGACY_XAI_API_KEY_ENV_VAR, "old-key");
+        let _new = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "new-key");
+        let _legacy = EnvGuard::set(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, "old-key");
         assert_eq!(read_xai_api_key_env().unwrap(), "new-key");
     }
 
-    // -- grok login --legacy regression coverage ------------------------
+    // -- supercharge login --legacy regression coverage ------------------------
     //
-    // `grok login --legacy` produces a GrokAuth with `auth_mode: WebLogin`,
+    // `supercharge login --legacy` produces a GrokAuth with `auth_mode: WebLogin`,
     // `oidc_issuer: None`, and no `expires_at` (30-day hardcoded TTL).
-    // When this token is present via the `GROK_AUTH` env var (or via legacy
+    // When this token is present via the `SUPERCHARGE_AUTH` env var (or via legacy
     // scope fallback in auth.json), `AuthManager::new` returns it from
     // `current()`, feeding `has_cached_token = true` into `build_auth_methods`.
     // This puts `cached_token` first so `startup_auth_metadata()` returns
@@ -1006,11 +1012,11 @@ mod tests {
     // screen.
     //
     // This test pins the env-var path (highest priority in AuthManager) end-
-    // to-end. A regression in GROK_AUTH JSON parsing or in auth method
+    // to-end. A regression in SUPERCHARGE_AUTH JSON parsing or in auth method
     // ordering would send legacy-token users to the login screen.
 
     /// END-TO-END REGRESSION TEST: a legacy auth token (WebLogin, no
-    /// expires_at) present in the `GROK_AUTH` env var, with no other auth
+    /// expires_at) present in the `SUPERCHARGE_AUTH` env var, with no other auth
     /// available, MUST be loaded by `AuthManager` and cause `build_auth_methods`
     /// to advertise `cached_token` first. The pager therefore skips the login
     /// screen (frictionless legacy auth). This behavior works; the test
@@ -1021,10 +1027,10 @@ mod tests {
         use crate::auth::{AuthManager, AuthMode, GrokAuth, GrokComConfig};
 
         // Ensure clean slate for "no other auth available".
-        let _g1 = EnvGuard::unset("GROK_AUTH_PATH");
-        let _g2 = EnvGuard::unset(XAI_API_KEY_ENV_VAR);
+        let _g1 = EnvGuard::unset("SUPERCHARGE_AUTH_PATH");
+        let _g2 = EnvGuard::unset(SUPERCHARGE_API_KEY_ENV_VAR);
 
-        // Construct a legacy-style token exactly as `grok login --legacy`
+        // Construct a legacy-style token exactly as `supercharge login --legacy`
         // produces: WebLogin mode, no OIDC fields, no refresh_token, no
         // expires_at (is_expired falls back to 30-day age check).
         let legacy_token = GrokAuth {
@@ -1040,11 +1046,11 @@ mod tests {
             ..GrokAuth::test_default()
         };
 
-        // Provide it via GROK_AUTH env var (highest priority code path in
+        // Provide it via SUPERCHARGE_AUTH env var (highest priority code path in
         // AuthManager::new). This is the "legacy auth token exists in the env"
         // case with no other auth.
         let legacy_json = serde_json::to_string(&legacy_token).expect("serialize legacy token");
-        let _g = EnvGuard::set("GROK_AUTH", &legacy_json);
+        let _g = EnvGuard::set("SUPERCHARGE_AUTH", &legacy_json);
 
         // AuthManager picks it up from the env var directly (no file needed).
         let dir = tempfile::tempdir().unwrap();
@@ -1053,7 +1059,7 @@ mod tests {
         let current = mgr.current();
         assert!(
             current.is_some(),
-            "legacy token in GROK_AUTH env MUST be loaded directly -- if this fails, \
+            "legacy token in SUPERCHARGE_AUTH env MUST be loaded directly -- if this fails, \
              users with legacy auth in env would be sent to the login screen",
         );
         assert_eq!(
@@ -1104,8 +1110,8 @@ mod tests {
     fn no_legacy_token_means_no_cached_token_advertised() {
         use crate::auth::{AuthManager, GrokComConfig};
 
-        let _g1 = EnvGuard::unset("GROK_AUTH");
-        let _g2 = EnvGuard::unset("GROK_AUTH_PATH");
+        let _g1 = EnvGuard::unset("SUPERCHARGE_AUTH");
+        let _g2 = EnvGuard::unset("SUPERCHARGE_AUTH_PATH");
 
         let dir = tempfile::tempdir().unwrap();
         // No auth.json in the tempdir.
@@ -1121,7 +1127,7 @@ mod tests {
         assert_eq!(
             first_kind(&built.methods),
             Some(AuthMethodKind::GrokCom),
-            "no cached token AND no api key: pager must show login (grok.com first)",
+            "no cached token AND no api key: pager must show login (supercharge.ai first)",
         );
     }
 
@@ -1135,8 +1141,8 @@ mod tests {
             preferred_method: Some(PreferredAuthMethod::ApiKey),
             ..default_inputs()
         });
-        assert_eq!(method_ids(&built), vec![XAI_API_KEY_METHOD_ID]);
-        assert_eq!(default_id(&built), Some(XAI_API_KEY_METHOD_ID));
+        assert_eq!(method_ids(&built), vec![SUPERCHARGE_API_KEY_METHOD_ID]);
+        assert_eq!(default_id(&built), Some(SUPERCHARGE_API_KEY_METHOD_ID));
     }
 
     #[test]
@@ -1161,7 +1167,7 @@ mod tests {
         });
         assert_eq!(
             method_ids(&built),
-            vec![CACHED_TOKEN_AUTH_METHOD_ID, GROK_COM_METHOD_ID]
+            vec![CACHED_TOKEN_AUTH_METHOD_ID, SUPERCHARGE_COM_METHOD_ID]
         );
         assert_eq!(default_id(&built), Some(CACHED_TOKEN_AUTH_METHOD_ID));
     }
@@ -1174,7 +1180,7 @@ mod tests {
             preferred_method: Some(PreferredAuthMethod::Oidc),
             ..default_inputs()
         });
-        assert_eq!(method_ids(&built), vec![GROK_COM_METHOD_ID]);
+        assert_eq!(method_ids(&built), vec![SUPERCHARGE_COM_METHOD_ID]);
         assert!(built.default_auth_method_id.is_none());
     }
 }

@@ -3,7 +3,7 @@ license = "Apache-2.0"
 edition.workspace = true
 name = "xai-grok-home"
 version = "0.1.0"
-description = "Single source of truth for resolving the grok home directory ($GROK_HOME or <home>/.grok)"
+description = "Single source of truth for resolving the grok home directory ($SUPERCHARGE_HOME or <home>/.supercharge)"
 
 [dependencies]
 dirs = { workspace = true }

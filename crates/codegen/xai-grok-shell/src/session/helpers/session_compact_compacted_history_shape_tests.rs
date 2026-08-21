@@ -210,10 +210,10 @@ async fn test_compacted_history_minimal_no_state_context() {
     );
     assert_eq!(compacted.len(), 5);
 }
-/// Regression guard: grok-build must DROP the working
-/// tail post-compaction. A prior change routed grok-build to keep `recent_messages`,
+/// Regression guard: supercharge-core must DROP the working
+/// tail post-compaction. A prior change routed supercharge-core to keep `recent_messages`,
 /// which survive only as `Tool call omitted...` stubs (dead tokens). Mirrors
-/// `summary_before_recent_compaction_with_no_user_query_yields_three_messages` for grok-build
+/// `summary_before_recent_compaction_with_no_user_query_yields_three_messages` for supercharge-core
 /// (`summary_before_recent = false`).
 #[tokio::test]
 async fn grok_build_compaction_drops_working_tail_regression_206460() {
@@ -246,7 +246,7 @@ async fn grok_build_compaction_drops_working_tail_regression_206460() {
     let dropped = full.for_compaction();
     assert!(
         dropped.recent_messages.is_empty(),
-        "grok-build must drop recent_messages post-compaction",
+        "supercharge-core must drop recent_messages post-compaction",
     );
     assert!(
         dropped.agent_message_anchor.is_none(),
@@ -264,7 +264,7 @@ async fn grok_build_compaction_drops_working_tail_regression_206460() {
             .iter()
             .any(|i| matches!(i, ConversationItem::ToolResult(_))
                 || i.text_content() == "Tool call omitted..."),
-        "no tail (ToolResult or stub) may leak into the grok-build compacted history",
+        "no tail (ToolResult or stub) may leak into the supercharge-core compacted history",
     );
 }
 /// Verify that the auto-continue prompt (sent after compaction) is also

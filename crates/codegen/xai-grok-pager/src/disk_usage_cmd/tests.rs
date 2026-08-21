@@ -529,7 +529,7 @@ fn worktrees_dominate_at_half_of_total() {
     ];
     for case in cases {
         let report = DiskUsageReport {
-            grok_home: "/home/user/.grok".into(),
+            grok_home: "/home/user/.supercharge".into(),
             total_bytes: case.total_bytes,
             top_level_dirs: vec![DirUsage {
                 name: WORKTREES_DIR.to_owned(),
@@ -547,7 +547,7 @@ fn worktrees_dominate_at_half_of_total() {
 fn json_shape_is_frozen() {
     let report = DiskUsageReport {
         schema_version: SCHEMA_VERSION,
-        grok_home: "/home/user/.grok".into(),
+        grok_home: "/home/user/.supercharge".into(),
         total_bytes: 100,
         volume_capacity_bytes: Some(1_000),
         volume_available_bytes: Some(600),
@@ -560,11 +560,11 @@ fn json_shape_is_frozen() {
         unfollowed_dir_symlinks: 0,
         worktrees_outside_managed_roots: 0,
         registry: RegistryState::Read,
-        registry_path: "/home/user/.grok/worktrees.db".into(),
+        registry_path: "/home/user/.supercharge/worktrees.db".into(),
         worktrees: vec![
             WorktreeUsage {
                 last_modified_at: Some(1_700_005_000),
-                path: "/home/user/.grok/worktrees/xai/wt-1".into(),
+                path: "/home/user/.supercharge/worktrees/xai/wt-1".into(),
                 ..tracked_row(
                     90,
                     TrackedRow {
@@ -579,7 +579,7 @@ fn json_shape_is_frozen() {
             WorktreeUsage {
                 kind: WorktreeKind::Pool,
                 last_modified_at: Some(1_700_002_000),
-                path: "/home/user/.grok/worktree_pool/inst/wt-2".into(),
+                path: "/home/user/.supercharge/worktree_pool/inst/wt-2".into(),
                 ..untracked_row(10)
             },
         ],
@@ -588,7 +588,7 @@ fn json_shape_is_frozen() {
         serde_json::to_value(&report).unwrap(),
         serde_json::json!({
             "schema_version": 1,
-            "grok_home": "/home/user/.grok",
+            "grok_home": "/home/user/.supercharge",
             "total_bytes": 100,
             "volume_capacity_bytes": 1_000,
             "volume_available_bytes": 600,
@@ -601,7 +601,7 @@ fn json_shape_is_frozen() {
             "unfollowed_dir_symlinks": 0,
             "worktrees_outside_managed_roots": 0,
             "registry": "read",
-            "registry_path": "/home/user/.grok/worktrees.db",
+            "registry_path": "/home/user/.supercharge/worktrees.db",
             "worktrees": [
                 {
                     "bytes": 90,
@@ -615,7 +615,7 @@ fn json_shape_is_frozen() {
                     "label": "my-feature",
                     "repo_name": "xai",
                     "git_ref": "brian/fix",
-                    "path": "/home/user/.grok/worktrees/xai/wt-1",
+                    "path": "/home/user/.supercharge/worktrees/xai/wt-1",
                 },
                 {
                     "bytes": 10,
@@ -629,7 +629,7 @@ fn json_shape_is_frozen() {
                     "label": null,
                     "repo_name": null,
                     "git_ref": null,
-                    "path": "/home/user/.grok/worktree_pool/inst/wt-2",
+                    "path": "/home/user/.supercharge/worktree_pool/inst/wt-2",
                 },
             ],
         })
@@ -664,7 +664,7 @@ fn json_shape_is_frozen() {
 fn missing_home_json_is_valid_and_empty() {
     let mut out = Vec::new();
     write_report(
-        &empty_report(Path::new("/nonexistent/.grok")),
+        &empty_report(Path::new("/nonexistent/.supercharge")),
         /*json*/ true,
         &mut out,
     )
@@ -829,7 +829,11 @@ fn print_report_renders_registry_notices() {
             registry: RegistryState::Busy,
             rows: true,
             expected: &["in use by another process", "Retry in a moment."],
-            absent: &["db rebuild", "damaged", "Remove $GROK_HOME/worktrees.db"],
+            absent: &[
+                "db rebuild",
+                "damaged",
+                "Remove $SUPERCHARGE_HOME/worktrees.db",
+            ],
         },
         Case {
             name: "an unopenable registry names the file without proposing deletion",
@@ -840,7 +844,11 @@ fn print_report_renders_registry_notices() {
                 "worktrees.db",
                 "Check its permissions.",
             ],
-            absent: &["db rebuild", "damaged", "Remove $GROK_HOME/worktrees.db"],
+            absent: &[
+                "db rebuild",
+                "damaged",
+                "Remove $SUPERCHARGE_HOME/worktrees.db",
+            ],
         },
     ];
     for case in cases {
@@ -990,7 +998,7 @@ fn symlinked_worktrees_dir_is_surfaced_not_silently_dropped() {
 
 #[cfg(unix)]
 #[test]
-#[serial_test::serial(GROK_HOME)]
+#[serial_test::serial(SUPERCHARGE_HOME)]
 // serial keys are independent locks, so a test setting both must hold both.
 #[serial_test::serial(HOME)]
 fn symlinked_default_home_keeps_home_label() {
@@ -999,14 +1007,16 @@ fn symlinked_default_home_keeps_home_label() {
     let real_grok = tmp.path().join("grok-on-disk");
     std::fs::create_dir_all(&fake_home).unwrap();
     std::fs::create_dir_all(&real_grok).unwrap();
-    std::os::unix::fs::symlink(&real_grok, fake_home.join(".grok")).unwrap();
+    std::os::unix::fs::symlink(&real_grok, fake_home.join(".supercharge")).unwrap();
     let _home = crate::test_util::EnvVarGuard::set("HOME", &fake_home);
 
-    let resolved = dunce::canonicalize(&fake_home).unwrap().join(".grok");
+    let resolved = dunce::canonicalize(&fake_home)
+        .unwrap()
+        .join(".supercharge");
     let canonical = dunce::canonicalize(&resolved).unwrap();
     assert_ne!(canonical, resolved, "the symlink must actually resolve");
     assert_eq!(
         crate::util::display_grok_home_prefix_for(&canonical),
-        "~/.grok"
+        "~/.supercharge"
     );
 }

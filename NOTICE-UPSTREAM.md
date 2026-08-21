@@ -1,6 +1,6 @@
 # Upstream attribution
 
-This private repository contains the public Rust workspace from [xai-org/grok-build](https://github.com/xai-org/grok-build), assessed and copied at source revision:
+This private repository contains the public Rust workspace from [xai-org/supercharge-core](https://github.com/xai-org/supercharge-core), assessed and copied at source revision:
 
 ```text
 c2dab005c2b53c99209dc6faf82153d782f76ee4

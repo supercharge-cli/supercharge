@@ -3,8 +3,8 @@
 //! cross-version eviction with real processes.
 //!
 //! Binaries are resolved per role:
-//! - `GROK_BINARY_LEADER` — the binary that elects the initial leader.
-//! - `GROK_BINARY_CLIENT` — the second client.
+//! - `SUPERCHARGE_BINARY_LEADER` — the binary that elects the initial leader.
+//! - `SUPERCHARGE_BINARY_CLIENT` — the second client.
 //!
 //! These ignored tests require two pre-built binaries.
 
@@ -30,7 +30,7 @@ fn skew_binaries() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     let new = client_binary();
     if old == new {
         eprintln!(
-            "SKIP: GROK_BINARY_LEADER/GROK_BINARY_CLIENT resolve to the same binary ({})",
+            "SKIP: SUPERCHARGE_BINARY_LEADER/SUPERCHARGE_BINARY_CLIENT resolve to the same binary ({})",
             old.display()
         );
         return None;
@@ -50,7 +50,7 @@ async fn wait_for_pid_death(pid: u32, timeout: Duration) -> bool {
 }
 
 fn sandbox_unified_log(home: &Path) -> String {
-    std::fs::read_to_string(home.join(".grok").join("logs").join("unified.jsonl"))
+    std::fs::read_to_string(home.join(".supercharge").join("logs").join("unified.jsonl"))
         .unwrap_or_default()
 }
 
@@ -158,7 +158,7 @@ async fn new_client_evicts_old_leader_and_sessions_reload() {
 
 /// An old client adopts a directly-owned new leader without triggering a downgrade.
 #[tokio::test]
-#[ignore = "two-binary version-skew test; set GROK_BINARY_LEADER/GROK_BINARY_CLIENT and run with --ignored"]
+#[ignore = "two-binary version-skew test; set SUPERCHARGE_BINARY_LEADER/SUPERCHARGE_BINARY_CLIENT and run with --ignored"]
 async fn old_client_adopts_new_leader_and_still_functions() {
     let Some((old_bin, new_bin)) = skew_binaries() else {
         return;
@@ -297,7 +297,7 @@ async fn relaunch_for_update_drives_real_old_leader_to_exit() {
                         .expect("close old client before relaunch");
 
                     let control = LeaderClient::connect(
-                        sandbox.home().join(".grok").join("leader.sock"),
+                        sandbox.home().join(".supercharge").join("leader.sock"),
                         "grok-pager-update",
                         ClientMode::Stdio,
                         ClientCapabilities::default(),
@@ -373,7 +373,7 @@ async fn eviction_leaves_single_leader_and_single_auth_owner() {
                     let old_pid = wait_for_live_leader(sandbox.home(), Duration::from_secs(10))
                         .await
                         .expect("no live old leader");
-                    let auth_path = sandbox.home().join(".grok").join("auth.json");
+                    let auth_path = sandbox.home().join(".supercharge").join("auth.json");
                     let auth_before = std::fs::metadata(&auth_path)
                         .ok()
                         .and_then(|metadata| metadata.modified().ok());

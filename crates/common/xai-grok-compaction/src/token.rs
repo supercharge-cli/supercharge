@@ -5,7 +5,7 @@
 //!
 //! - Grok chat has a real tokenizer (`TextTokenizer` / `ImageTokenizer`) and
 //!   counts whole turns via `GrokTurn::get_num_tokens`.
-//! - grok-build estimates with `bytes / 4`.
+//! - supercharge-core estimates with `bytes / 4`.
 //!
 //! Rather than bake either policy into the shared crate, callers supply an
 //! [`ItemTokenCounter`]. This keeps the engine deterministic and testable

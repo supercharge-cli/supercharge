@@ -142,7 +142,7 @@ pub struct BashParams {
     pub timeout_secs: Option<f64>,
     /// **Foreground-only** ceiling for model-provided `timeout` (seconds).
     /// None → built-in [`DEFAULT_MAX_TIMEOUT_MS`] (5 minutes); production
-    /// grok-build opts up to 10h via xai-grok-shell's `BashToolConfig`.
+    /// supercharge-core opts up to 10h via xai-grok-shell's `BashToolConfig`.
     ///
     /// When set:
     /// - Positive model `timeout` values are clamped to this ceiling (ms).
@@ -467,7 +467,7 @@ pub(crate) fn format_default_prompt(bash: &BashOutput) -> String {
 // Default upper bound for model-provided *foreground* command timeouts when
 // `BashParams.max_timeout_secs` is unset: a transport-safe **5 minutes**.
 // Consumers that want longer opt in per session via `max_timeout_secs` — in
-// particular production grok-build sets it to 10h in xai-grok-shell's
+// particular production supercharge-core sets it to 10h in xai-grok-shell's
 // `BashToolConfig`. `max_timeout_secs` only lowers/raises this *foreground*
 // ceiling; background tasks (`timeout: 0` / omitted in background mode) are
 // always unbounded regardless of this value — the model owns their lifetime via
@@ -982,11 +982,11 @@ const BACKGROUND_TIMEOUT: Duration = Duration::from_secs(86400); // 24 hours
 /// a command has only its requested `timeout` (up to 10h), so a long timeout
 /// would wedge the turn; we clamp and kill at this cap instead. Backgroundable
 /// commands use the terminal's `FOREGROUND_BLOCK_BUDGET` instead. Long work
-/// should use `background: true`. Env override: `GROK_MAX_FOREGROUND_BLOCK_MS`.
+/// should use `background: true`. Env override: `SUPERCHARGE_MAX_FOREGROUND_BLOCK_MS`.
 const MAX_FOREGROUND_BLOCK: Duration = Duration::from_secs(300); // 5 minutes
 
 fn max_foreground_block() -> Duration {
-    std::env::var("GROK_MAX_FOREGROUND_BLOCK_MS")
+    std::env::var("SUPERCHARGE_MAX_FOREGROUND_BLOCK_MS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
@@ -1317,7 +1317,7 @@ impl BashTool {
     ///
     /// - `None` when auto_bg is off, **or** when `foreground_block_budget_ms` is
     ///   unset — leave `TerminalRunRequest.foreground_block_budget` as `None` so
-    ///   the terminal backend default applies (`GROK_FOREGROUND_BLOCK_BUDGET_MS`
+    ///   the terminal backend default applies (`SUPERCHARGE_FOREGROUND_BLOCK_BUDGET_MS`
     ///   / 15s). Do not materialize a fixed 15s here; that would override the env.
     /// - `Some(Duration::MAX)` when budget is `0` (timeout-only auto-bg).
     /// - `Some(ms)` when an explicit budget is configured.
@@ -1341,7 +1341,7 @@ impl BashTool {
     ///
     /// When the session does not set `foreground_block_budget_ms`, assumes the
     /// backend's documented default (15s) for this helper — the real process
-    /// still honors `GROK_FOREGROUND_BLOCK_BUDGET_MS` via `None` on the request.
+    /// still honors `SUPERCHARGE_FOREGROUND_BLOCK_BUDGET_MS` via `None` on the request.
     ///
     /// Not yet used in model-facing descriptions (historical auto-bg copy only).
     #[allow(dead_code)] // description follow-up + unit tests

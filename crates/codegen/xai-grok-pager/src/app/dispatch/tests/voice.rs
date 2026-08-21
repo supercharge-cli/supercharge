@@ -204,7 +204,7 @@ fn voice_ctrl_space_release_leaves_toggle_recording_running() {
     );
 }
 
-/// A free-tier user hitting the voice keybinding gets the SuperGrok upsell
+/// A free-tier user hitting the voice keybinding gets the Supercharge upsell
 /// instead of a doomed voice session — the keybinding bypasses the slash
 /// registry, so this dispatcher is the enforcement point.
 #[test]
@@ -222,7 +222,7 @@ fn voice_keybinding_on_restricted_tier_opens_upsell() {
 
     assert!(
         app.agents.get(&AgentId(0)).unwrap().question_view.is_some(),
-        "restricted-tier voice keybinding must open the SuperGrok upsell"
+        "restricted-tier voice keybinding must open the Supercharge upsell"
     );
     assert!(
         !app.voice_listening(),
@@ -239,7 +239,7 @@ fn voice_keybinding_on_paid_tier_not_gated() {
     let mut app = test_app_with_agent();
     app.voice_mode_enabled = true;
     let meta = xai_grok_shell::auth::AuthMeta {
-        subscription_tier: Some("SuperGrok".into()),
+        subscription_tier: Some("Supercharge".into()),
         ..Default::default()
     };
     app.apply_auth_meta(&meta);

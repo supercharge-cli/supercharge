@@ -1,5 +1,5 @@
 //! Built-binary e2e smoke tests for Stop hook decision control. `#[ignore]`d by
-//! default since they need the grok binary (`GROK_BINARY` or a local debug build):
+//! default since they need the grok binary (`SUPERCHARGE_BINARY` or a local debug build):
 //! ```bash
 //! cargo test -p xai-grok-shell --test test_stop_hook_e2e -- --ignored
 //! ```

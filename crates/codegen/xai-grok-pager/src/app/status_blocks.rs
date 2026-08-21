@@ -340,14 +340,17 @@ mod tests {
         };
         usage
             .model_usage
-            .insert("grok-build".into(), model_row(100, 10, None));
+            .insert("Supercharge AI-build".into(), model_row(100, 10, None));
         usage
             .model_usage
-            .insert("grok-4".into(), model_row(50, 5, None));
+            .insert("Supercharge AI-4".into(), model_row(50, 5, None));
         let text = session_usage_block_text(&usage);
         assert!(text.contains("By model:"), "{text}");
-        assert!(text.contains("grok-build — 100 in / 10 out"), "{text}");
-        assert!(text.contains("grok-4 — 50 in / 5 out"), "{text}");
+        assert!(
+            text.contains("Supercharge AI-build — 100 in / 10 out"),
+            "{text}"
+        );
+        assert!(text.contains("Supercharge AI-4 — 50 in / 5 out"), "{text}");
     }
 
     #[test]

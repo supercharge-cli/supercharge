@@ -21,7 +21,7 @@ fn next_rewrite_nonce() -> u64 {
 }
 
 /// Bare `/feedback` pane label (first paragraph of the question chrome).
-pub(crate) const FEEDBACK_QUESTION_LABEL: &str = "How can we improve Grok Build?";
+pub(crate) const FEEDBACK_QUESTION_LABEL: &str = "How can we improve Supercharge AI?";
 
 /// Minimal mode has no toast surface, so the notice goes to the transcript instead.
 fn feedback_notice(app: &mut AppView, message: &str) {
@@ -133,7 +133,7 @@ pub(super) fn dispatch_send_feedback(app: &mut AppView, text: String) -> Vec<Eff
     };
 
     agent.scrollback.push_block(RenderBlock::system(
-        "Thanks for the feedback! The Grok Build team is on it.".to_string(),
+        "Thanks for the feedback! The Supercharge AI team is on it.".to_string(),
     ));
 
     vec![Effect::SendFeedback {

@@ -1,6 +1,6 @@
 use reqwest::RequestBuilder;
 use std::sync::Arc;
-/// Credentials for authenticating with grok backend services.
+/// Credentials for authenticating with Supercharge AI backend services.
 ///
 /// Two construction modes:
 /// - `with_auth_manager(am)` — live mode. `resolve_async()` drives
@@ -9,7 +9,7 @@ use std::sync::Arc;
 ///   an `AuthManager` (visibility checks, bundle fetches, tests).
 ///
 /// Deployment key (enterprise) sends bare `Bearer`, routed to management key auth.
-/// User token (xAI users) sends `Bearer` + `X-XAI-Token-Auth: xai-grok-cli`.
+/// User token (xAI users) sends `Bearer` + `X-XAI-Token-Auth: xai-Supercharge AI-cli`.
 /// Deployment key takes precedence when both are present.
 #[derive(Clone)]
 pub struct GrokAuthCredentials {
@@ -66,9 +66,9 @@ impl GrokAuthCredentials {
     /// Error hint for 401 responses, based on which credential was sent.
     pub fn auth_error_hint(&self) -> &'static str {
         if self.deployment_key.is_some() {
-            "Your GROK_DEPLOYMENT_KEY is invalid or expired. Please contact a team admin."
+            "Your SUPERCHARGE_DEPLOYMENT_KEY is invalid or expired. Please contact a team admin."
         } else if self.user_token.is_some() {
-            "Your auth token is invalid or expired. Run `grok login` to re-authenticate."
+            "Your auth token is invalid or expired. Run `supercharge login` to re-authenticate."
         } else {
             "Not authenticated."
         }
@@ -121,7 +121,7 @@ impl GrokAuthCredentials {
                 .header("Authorization", format!("Bearer {}", token))
                 .header(
                     obfstr::obfstr!("X-XAI-Token-Auth"),
-                    obfstr::obfstr!("xai-grok-cli"),
+                    obfstr::obfstr!("xai-Supercharge AI-cli"),
                 )
         } else {
             builder

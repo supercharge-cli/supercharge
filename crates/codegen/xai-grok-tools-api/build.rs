@@ -10,39 +10,39 @@ fn main() {
         // type-level) so the required `id` field still fails deserialization
         // when missing instead of silently becoming "". See tests/wire_shape.rs.
         .field_attribute(
-            ".xai.grok.tools.v1.ToolConfigEntry.params_json",
+            ".xai.supercharge.tools.v1.ToolConfigEntry.params_json",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.ToolConfigEntry.name_override",
+            ".xai.supercharge.tools.v1.ToolConfigEntry.name_override",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.ToolConfigEntry.params_name_overrides",
+            ".xai.supercharge.tools.v1.ToolConfigEntry.params_name_overrides",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.ToolConfigEntry.behavior_version",
+            ".xai.supercharge.tools.v1.ToolConfigEntry.behavior_version",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.ToolConfigEntry.description_override",
+            ".xai.supercharge.tools.v1.ToolConfigEntry.description_override",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.FinalizeToolServerConfigRequest.client_callback_addr",
+            ".xai.supercharge.tools.v1.FinalizeToolServerConfigRequest.client_callback_addr",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.FinalizeToolServerConfigRequest.session_id",
+            ".xai.supercharge.tools.v1.FinalizeToolServerConfigRequest.session_id",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.FinalizeToolServerConfigRequest.client_callback_secret",
+            ".xai.supercharge.tools.v1.FinalizeToolServerConfigRequest.client_callback_secret",
             "#[serde(default)]",
         )
         .field_attribute(
-            ".xai.grok.tools.v1.FinalizeToolServerConfigResponse.callback_status",
+            ".xai.supercharge.tools.v1.FinalizeToolServerConfigResponse.callback_status",
             "#[serde(default)]",
         )
         .compile_protos(&["proto/grok-tools.proto"], &["proto/"])

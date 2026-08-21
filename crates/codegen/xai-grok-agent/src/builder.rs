@@ -44,7 +44,7 @@ pub struct AgentBuilder {
     /// Model-facing working directory for the system prompt `<user_info>` block.
     ///
     /// In forked sessions, the real `working_directory` is an overlay/worktree
-    /// path (e.g., `~/.grok/worktrees/project/fork-...-overlay`) that must stay
+    /// path (e.g., `~/.supercharge/worktrees/project/fork-...-overlay`) that must stay
     /// hidden from the model. When set, `PromptContext.working_directory` uses
     /// this value instead of `self.working_directory`, so the system prompt
     /// shows the original project path. Tool execution (`ToolContext.cwd`,
@@ -455,7 +455,7 @@ impl AgentBuilder {
     /// When `Enabled`, the `web_fetch` tool is registered and a `WebFetchClient`
     /// is injected into `Resources`. When `Disabled` (default), the tool is not
     /// registered. Feature-flagged via remote settings `web_fetch_enabled` and
-    /// `GROK_WEB_FETCH` env var.
+    /// `SUPERCHARGE_WEB_FETCH` env var.
     pub fn with_web_fetch_config(
         mut self,
         config: xai_grok_tools::implementations::grok_build::web_fetch::WebFetchConfig,
@@ -594,7 +594,7 @@ impl AgentBuilder {
         self
     }
     /// Set the skills config (custom paths, ignore globs) from config.toml.
-    /// Without this, only auto-discovered skills (cwd/.grok/skills, ~/.grok/skills)
+    /// Without this, only auto-discovered skills (cwd/.supercharge/skills, ~/.supercharge/skills)
     /// are included — custom paths added via `x.ai/skills/add` would be ignored.
     pub fn with_skills_config(mut self, config: crate::prompt::skills::SkillsConfig) -> Self {
         self.skills_config = config;
@@ -1586,7 +1586,7 @@ mod tests {
         use xai_grok_tools::notification::ToolNotificationHandle;
         let tmp = tempfile::tempdir().unwrap();
         let write_skill = |dir: &str, content: &str| {
-            let d = tmp.path().join(".grok/skills").join(dir);
+            let d = tmp.path().join(".supercharge/skills").join(dir);
             std::fs::create_dir_all(&d).unwrap();
             std::fs::write(d.join("SKILL.md"), content).unwrap();
         };
@@ -1664,61 +1664,61 @@ mod tests {
         }
         let cases: &[PagerFlagCase] = &[
             PagerFlagCase {
-                label: "grok-build / subagents+ask_user",
+                label: "supercharge-core / subagents+ask_user",
                 profile: AgentDefinition::default_grok_build,
                 subagents: true,
                 ask_user: true,
             },
             PagerFlagCase {
-                label: "grok-build / subagents / no-ask-user",
+                label: "supercharge-core / subagents / no-ask-user",
                 profile: AgentDefinition::default_grok_build,
                 subagents: true,
                 ask_user: false,
             },
             PagerFlagCase {
-                label: "grok-build / no-subagents / ask_user",
+                label: "supercharge-core / no-subagents / ask_user",
                 profile: AgentDefinition::default_grok_build,
                 subagents: false,
                 ask_user: true,
             },
             PagerFlagCase {
-                label: "grok-build / no-subagents / no-ask-user",
+                label: "supercharge-core / no-subagents / no-ask-user",
                 profile: AgentDefinition::default_grok_build,
                 subagents: false,
                 ask_user: false,
             },
             PagerFlagCase {
-                label: "grok-build-ask-user / subagents",
+                label: "supercharge-core-ask-user / subagents",
                 profile: AgentDefinition::grok_build_ask_user,
                 subagents: true,
                 ask_user: true,
             },
             PagerFlagCase {
-                label: "grok-build-ask-user / no-subagents",
+                label: "supercharge-core-ask-user / no-subagents",
                 profile: AgentDefinition::grok_build_ask_user,
                 subagents: false,
                 ask_user: true,
             },
             PagerFlagCase {
-                label: "grok-build-plan",
+                label: "supercharge-core-plan",
                 profile: AgentDefinition::grok_build_plan,
                 subagents: true,
                 ask_user: true,
             },
             PagerFlagCase {
-                label: "grok-build-plan / no-ask-user",
+                label: "supercharge-core-plan / no-ask-user",
                 profile: AgentDefinition::grok_build_plan,
                 subagents: true,
                 ask_user: false,
             },
             PagerFlagCase {
-                label: "grok-build-plan-no-subagents",
+                label: "supercharge-core-plan-no-subagents",
                 profile: AgentDefinition::grok_build_plan_no_subagents,
                 subagents: false,
                 ask_user: true,
             },
             PagerFlagCase {
-                label: "grok-build-plan-no-subagents / no-ask-user",
+                label: "supercharge-core-plan-no-subagents / no-ask-user",
                 profile: AgentDefinition::grok_build_plan_no_subagents,
                 subagents: false,
                 ask_user: false,
@@ -2310,7 +2310,7 @@ mod tests {
             assert!(!names.contains(&excluded.to_string()), "got: {names:?}");
         }
     }
-    /// grok-build toolsets have no Skill tool — skills are read from
+    /// supercharge-core toolsets have no Skill tool — skills are read from
     /// `SKILL.md` via `read_file` — so a compat `Skill` allowlist entry grants
     /// toolset.
     #[tokio::test]

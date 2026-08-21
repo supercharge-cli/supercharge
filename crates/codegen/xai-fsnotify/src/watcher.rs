@@ -200,7 +200,7 @@ impl Watcher {
                 if dirs.len() > budget {
                     tracing::warn!(
                         "fs_notify: {} non-ignored dirs exceed watch budget {budget}; shedding \
-                         the deepest (raise with GROK_FSNOTIFY_MAX_WATCHES)",
+                         the deepest (raise with SUPERCHARGE_FSNOTIFY_MAX_WATCHES)",
                         dirs.len()
                     );
                     dirs.truncate(budget);

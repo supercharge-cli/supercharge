@@ -531,16 +531,16 @@ impl PendingAction {
         Instant::now() >= self.expires_at
     }
 }
-/// Cap for the `GROK_ESC_DOUBLE_PRESS_MS` override; the pty_e2e suite sets
+/// Cap for the `SUPERCHARGE_ESC_DOUBLE_PRESS_MS` override; the pty_e2e suite sets
 /// exactly this value.
 pub const ESC_DOUBLE_PRESS_TEST_MS: u64 = 60_000;
-/// Idle-Esc double-press confirm window, `GROK_ESC_DOUBLE_PRESS_MS`-overridable
+/// Idle-Esc double-press confirm window, `SUPERCHARGE_ESC_DOUBLE_PRESS_MS`-overridable
 /// (read once, bounded). Test seam: a loaded pty_e2e shard's render round-trip
 /// between the two presses can outlast the 800ms default and expire the arm.
 pub(crate) fn esc_double_press_ttl() -> Duration {
     use std::sync::OnceLock;
     static TTL: OnceLock<Duration> = OnceLock::new();
-    *TTL.get_or_init(|| parse_esc_ttl(std::env::var("GROK_ESC_DOUBLE_PRESS_MS").ok()))
+    *TTL.get_or_init(|| parse_esc_ttl(std::env::var("SUPERCHARGE_ESC_DOUBLE_PRESS_MS").ok()))
 }
 /// Extracted pure (no `OnceLock`) so the bounds — zero/garbage → default,
 /// oversized → clamp — are unit-testable.
@@ -646,7 +646,7 @@ pub struct AppView {
     pub scroll_state: MouseScrollState,
     /// Scroll config derived from terminal detection.
     pub scroll_config: ScrollConfig,
-    /// Current appearance config (hot-reloadable from ~/.grok/pager.toml).
+    /// Current appearance config (hot-reloadable from ~/.supercharge/pager.toml).
     /// Stored here so new agents inherit the current config.
     pub appearance: AppearanceConfig,
     /// Notification service (terminal bell, OSC sequences, title updates).
@@ -672,10 +672,10 @@ pub struct AppView {
     /// `init_tracing()`. Drained into `tracing_pane` each tick in debug/dev
     /// builds; otherwise drained-and-discarded.
     pub tracing_rx: Option<crate::tracing::LogRx>,
-    /// Scroll-diagnostics HUD (`GROK_SCROLL_DEBUG` env / `/scroll-debug`).
+    /// Scroll-diagnostics HUD (`SUPERCHARGE_SCROLL_DEBUG` env / `/scroll-debug`).
     /// Release-compiled behind its runtime gate — see the module doc.
     pub scroll_debug_hud: crate::views::scroll_debug_hud::ScrollDebugHud,
-    /// Release-safe FPS HUD (`/debug fps`; `GROK_FPS` env on release
+    /// Release-safe FPS HUD (`/debug fps`; `SUPERCHARGE_FPS` env on release
     /// builds, where the dev overlay is compiled out) — see the module doc.
     pub fps_hud: crate::views::fps_hud::FpsHud,
     pub active_announcements: Vec<xai_grok_announcements::RemoteAnnouncement>,
@@ -700,7 +700,7 @@ pub struct AppView {
     /// Whether the `/share` slash command is available. Currently forced off
     /// while session share links are temporarily disabled in clients.
     pub sharing_enabled: bool,
-    /// Whether the plugin marketplace CTA is enabled. Env `GROK_PLUGIN_CTA`
+    /// Whether the plugin marketplace CTA is enabled. Env `SUPERCHARGE_PLUGIN_CTA`
     /// overrides `RemoteSettings.plugin_cta` (remote settings); defaults to `false`.
     pub plugin_cta_enabled: bool,
     /// Consumer billing surface (credit fetches / warnings). False for team
@@ -708,7 +708,7 @@ pub struct AppView {
     /// unless [`Self::has_external_auth_provider`].
     pub usage_visible: bool,
     /// External `auth_provider_command` deployment.
-    /// No grok.com billing session exists; `/usage` and credit UI stay off.
+    /// No supercharge.ai billing session exists; `/usage` and credit UI stay off.
     pub has_external_auth_provider: bool,
     /// Slash commands denied for the current subscription tier
     /// ([`TIER_RESTRICTED_COMMANDS`] when the user is on the free / X Basic
@@ -717,7 +717,7 @@ pub struct AppView {
     /// dashboard); deny wins over all other visibility gates.
     pub tier_restricted_commands: Vec<String>,
     /// Whether the pager is connected via a leader (leader mode). The Agent
-    /// Dashboard entry points (`/dashboard`, `Ctrl+\`, `grok dashboard`, the
+    /// Dashboard entry points (`/dashboard`, `Ctrl+\`, `Supercharge AI dashboard`, the
     /// startup hook) are only meaningful when a leader is coordinating a
     /// fleet of sessions, so they are gated on this flag. Set in
     /// `event_loop::run` from `connection.leader_status_rx.is_some()`;
@@ -765,7 +765,7 @@ pub struct AppView {
     pub(crate) pending_running_adoptions:
         std::collections::HashMap<AgentId, crate::app::acp_handler::PendingRunningAdoption>,
     /// Whether the session picker groups entries by repo name with
-    /// non-selectable headers. Gated by `GROK_SESSION_PICKER_GROUPED` env var
+    /// non-selectable headers. Gated by `SUPERCHARGE_SESSION_PICKER_GROUPED` env var
     /// or remote settings `session_picker_grouped`; defaults to `false`.
     pub session_picker_grouped: bool,
     /// Startup-only seed for `AgentView::scheduler_background_loops`, resolved
@@ -776,7 +776,7 @@ pub struct AppView {
     /// the shell when that session's actor spawned.
     pub scheduler_background_loops_seed: bool,
     /// Whether Ctrl+C before first server activity rewinds the prompt
-    /// back into the input box. Gated by `GROK_CANCEL_REWIND` env /
+    /// back into the input box. Gated by `SUPERCHARGE_CANCEL_REWIND` env /
     /// `[features] cancel_rewind` config / remote settings flag.
     pub cancel_rewind_enabled: bool,
     /// Whether session recap (`/recap` + automatic away recap) is rolled out,
@@ -824,7 +824,7 @@ pub struct AppView {
     /// Minimal mode only: the Ctrl+T **force-show** pin for the todo panel.
     /// Minimal-mode-only per-session state, consolidated into a single field so
     /// the central `AppView` isn't peppered with loose minimal flags. Default-
-    /// empty and inert outside `--minimal`; the `xai-grok-pager-minimal` crate
+    /// empty and inert outside `--minimal`; the `xai-Supercharge AI-pager-minimal` crate
     /// reads/mutates it through the `crate::minimal_api` accessors. See
     /// [`crate::minimal_api::MinimalState`].
     pub(crate) minimal_state: crate::minimal_api::MinimalState,
@@ -1010,7 +1010,7 @@ pub struct AppView {
     pub new_worktree_dialog: Option<NewWorktreeDialogState>,
     /// Resolved per-tip gates for the contextual ephemeral hints (undo tip,
     /// plan nudge, clipboard-image tip, send-now tip). Default all ON; resolved
-    /// at startup and on settings toggles from `GROK_CONTEXTUAL_HINTS` (master)
+    /// at startup and on settings toggles from `SUPERCHARGE_CONTEXTUAL_HINTS` (master)
     /// > `[ui.contextual_hints]` user config > remote tier > default.
     pub contextual_hints: xai_grok_shell::util::config::ResolvedContextualHints,
     /// Remote tier for the contextual hints, kept so a settings toggle can
@@ -1030,7 +1030,7 @@ pub struct AppView {
     /// first evaluation at a stable agent-view draw (regardless of outcome),
     /// so later resizes can never re-trigger the tip within this run.
     pub small_screen_tip_evaluated: bool,
-    /// One-shot gate for the SSH `grok wrap` tip: set after the first
+    /// One-shot gate for the SSH `supercharge wrap` tip: set after the first
     /// evaluation at a stable agent-view draw (the environment gates are
     /// process-constant, so one evaluation decides the run).
     pub ssh_wrap_tip_evaluated: bool,
@@ -1078,7 +1078,7 @@ pub struct AppView {
     pub consent_state: crate::app::consent::ConsentState,
     /// Scopes the consent answer, the only identity the pager has for it.
     pub account_email: Option<String>,
-    /// Login button label from `AuthMethod.name` (e.g., "grok.com", "Acme Corp").
+    /// Login button label from `AuthMethod.name` (e.g., "supercharge.ai", "Acme Corp").
     pub login_label: Option<String>,
     /// The auth method ID to use for login.
     pub login_method_id: Option<acp::AuthMethodId>,
@@ -1147,7 +1147,7 @@ pub struct AppView {
         std::collections::BTreeSet<(String, xai_grok_telemetry::events::AnnouncementCtaSurface)>,
     /// Access gate from `grok_build_access_gate`. `Some` = blocked.
     pub gate: Option<xai_grok_shell::auth::GateInfo>,
-    /// User-friendly subscription tier name (e.g. "SuperGrok", "Free").
+    /// User-friendly subscription tier name (e.g. "Supercharge", "Free").
     pub subscription_tier: Option<String>,
     /// When the pager started auto-checking subscriptions (for 10-min timeout).
     pub paywall_check_started: Option<std::time::Instant>,
@@ -1204,7 +1204,7 @@ pub struct AppView {
     pub dashboard_return: Option<DashboardReturn>,
     /// Persisted dashboard configuration (pinned rows, reorderings,
     /// grouping). Loaded once on startup from
-    /// `~/.grok/config.toml`. `None` when the file/section is absent
+    /// `~/.supercharge/config.toml`. `None` when the file/section is absent
     /// or contained malformed data — falls back to in-memory defaults.
     pub dashboard_persisted: Option<crate::views::dashboard::PersistedDashboard>,
     /// Per-platform key event normalizer.
@@ -1213,7 +1213,7 @@ pub struct AppView {
     /// will not get rescued modifiers unless also normalizing.
     pub(crate) keyboard_normalizer: KeyboardNormalizer,
     /// Voice gate (GA default on at startup resolution). When false — remote
-    /// kill switch or `GROK_VOICE_MODE=0` — the STT pipeline is not started and
+    /// kill switch or `SUPERCHARGE_VOICE_MODE=0` — the STT pipeline is not started and
     /// session voice mode cannot turn on. Unit tests leave this false until
     /// they call [`Self::apply_voice_mode_enabled`].
     pub voice_mode_enabled: bool,
@@ -1223,7 +1223,7 @@ pub struct AppView {
     pub voice_ui_active: bool,
     /// Optional `[voice]` overrides from config (`api_base`, `language`, …).
     pub voice_config: xai_grok_voice::VoiceConfig,
-    /// Auth for STT (OAuth session via shell `AuthManager`, or `XAI_API_KEY`).
+    /// Auth for STT (OAuth session via shell `AuthManager`, or `SUPERCHARGE_API_KEY`).
     /// `None` until the pipeline is first started (lazy on `/voice`).
     pub voice_auth: Option<xai_grok_voice::SharedVoiceAuth>,
     /// Commands into the voice pipeline (start/stop capture — toggle, not hold).
@@ -2341,7 +2341,7 @@ impl AppView {
             top_offset,
         })
     }
-    /// Rows the dev `GROK_FPS` overlay occupies (0 in non-dev builds), so
+    /// Rows the dev `SUPERCHARGE_FPS` overlay occupies (0 in non-dev builds), so
     /// runtime debug overlays stack below instead of overpainting it.
     fn dev_fps_rows(&self) -> u16 {
         0
@@ -3992,7 +3992,7 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
                 if let Some(rect) = ctx.gate_url_rect
                     && rect.contains(ratatui::layout::Position::new(mouse.column, mouse.row))
                 {
-                    return InputOutcome::Action(Action::OpenSupergrokUrl);
+                    return InputOutcome::Action(Action::OpenSuperchargeUpgradeUrl);
                 }
                 if let Some(rect) = ctx.upgrade_cta_rect
                     && rect.contains(ratatui::layout::Position::new(mouse.column, mouse.row))
@@ -4222,7 +4222,7 @@ fn dispatch_zdr_menu_action(index: usize) -> InputOutcome {
 /// "Refresh" (ctrl-r) is handled as a direct key shortcut, not a menu item.
 fn dispatch_access_gate_menu_action(index: usize) -> InputOutcome {
     match index {
-        0 => InputOutcome::Action(Action::OpenSupergrokUrl),
+        0 => InputOutcome::Action(Action::OpenSuperchargeUpgradeUrl),
         1 => InputOutcome::Action(Action::Logout),
         2 => InputOutcome::Action(Action::Quit),
         _ => InputOutcome::Unchanged,
@@ -4763,9 +4763,9 @@ impl AppView {
                         if !has_access && !self.access_gate_shown_logged {
                             self.access_gate_shown_logged = true;
                             xai_grok_telemetry::session_ctx::log_event(
-                                xai_grok_telemetry::events::SuperGrokUpsellShown {
+                                xai_grok_telemetry::events::SuperchargeUpsellShown {
                                     source:
-                                        xai_grok_telemetry::events::SuperGrokUpsell::WelcomeScreen,
+                                        xai_grok_telemetry::events::SuperchargeUpsell::WelcomeScreen,
                                     auth_method: self
                                         .login_method_id
                                         .as_ref()
@@ -5296,7 +5296,7 @@ impl AppView {
         self.small_screen_tip_evaluated = true;
         super::dispatch::show_small_screen_tip(self);
     }
-    /// One-shot SSH `grok wrap` tip trigger, run at the top of every `draw`
+    /// One-shot SSH `supercharge wrap` tip trigger, run at the top of every `draw`
     /// right after [`Self::maybe_trigger_small_screen_tip`]. The welcome
     /// screen has no ephemeral-tip row, so the first stable agent-view draw
     /// is the earliest surface that can paint a session-load tip. Reads the

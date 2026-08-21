@@ -16,7 +16,7 @@ use crate::auth::manager::RefreshReason;
 use crate::auth::token_type::TokenType;
 use std::sync::Arc;
 use std::time::Duration;
-/// Whether a `/user?include=subscription` tier qualifies for Grok Build
+/// Whether a `/user?include=subscription` tier qualifies for Supercharge AI
 /// access. Any active subscription qualifies -- the proxy only returns a
 /// tier when an active subscription exists (`None` otherwise), and the
 /// access gate in remote settings controls which tiers are actually
@@ -45,7 +45,7 @@ async fn fetch_user_info(
             "X-XAI-Token-Auth",
             auth_manager.grok_com_config().token_header.as_str(),
         )
-        .header("x-grok-client-version", xai_grok_version::VERSION)
+        .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
         .header(
             crate::http::CLIENT_MODE_HEADER,
             crate::http::process_client_mode(),
@@ -146,10 +146,10 @@ mod tests {
     #[test]
     fn all_paid_tiers_qualify() {
         for tier in &[
-            "SuperGrokPro",
-            "SuperGrokPlus",
+            "SuperchargePro",
+            "SuperchargePlus",
             "GrokPro",
-            "SuperGrokLite",
+            "SuperchargeLite",
             "XPremiumPlus",
             "XPremium",
             "XBasic",

@@ -927,8 +927,12 @@ mod tests {
     fn source_dir_from_file_path() {
         let json =
             r#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"x.sh"}]}]}}"#;
-        let (specs, _) = parse_hook_file(json, Path::new("/home/user/.grok/hooks/safety.json"));
-        assert_eq!(specs[0].source_dir, PathBuf::from("/home/user/.grok/hooks"));
+        let (specs, _) =
+            parse_hook_file(json, Path::new("/home/user/.supercharge/hooks/safety.json"));
+        assert_eq!(
+            specs[0].source_dir,
+            PathBuf::from("/home/user/.supercharge/hooks")
+        );
     }
 
     #[test]
@@ -1037,7 +1041,7 @@ mod tests {
     /// paths with no other shell metachars.
     #[test]
     fn parse_hook_file_expands_env_var_in_command_from_process_env() {
-        let key = "GROK_HOOKS_PARSE_TEST_CMD_PROC_ENV";
+        let key = "SUPERCHARGE_HOOKS_PARSE_TEST_CMD_PROC_ENV";
         with_env_var(key, Some("/usr/local"), || {
             let json = format!(
                 r#"{{
@@ -1063,7 +1067,7 @@ mod tests {
     /// time so SSRF validation sees the resolved host.
     #[test]
     fn parse_hook_file_expands_env_var_in_url_from_process_env() {
-        let key = "GROK_HOOKS_PARSE_TEST_URL_PROC_ENV";
+        let key = "SUPERCHARGE_HOOKS_PARSE_TEST_URL_PROC_ENV";
         with_env_var(key, Some("hooks.example.com"), || {
             let json = format!(
                 r#"{{
@@ -1159,7 +1163,7 @@ mod tests {
     /// source of truth for run-time resolvability.
     #[test]
     fn parse_hook_file_preserves_unresolved_env_refs_in_command() {
-        let key = "GROK_HOOKS_PARSE_TEST_NEVER_SET_AT_LOAD_TIME";
+        let key = "SUPERCHARGE_HOOKS_PARSE_TEST_NEVER_SET_AT_LOAD_TIME";
         with_env_var(key, None, || {
             let json = format!(
                 r#"{{
@@ -1187,7 +1191,7 @@ mod tests {
     /// refs, otherwise a deferred plugin var would be silently stripped.
     #[test]
     fn parse_hook_file_preserves_unresolved_env_refs_in_url() {
-        let key = "GROK_HOOKS_PARSE_TEST_URL_NEVER_SET_AT_LOAD_TIME";
+        let key = "SUPERCHARGE_HOOKS_PARSE_TEST_URL_NEVER_SET_AT_LOAD_TIME";
         with_env_var(key, None, || {
             let json = format!(
                 r#"{{
@@ -1258,7 +1262,7 @@ mod tests {
 
     #[test]
     fn parse_hook_file_matcher_is_not_env_expanded() {
-        let key = "GROK_HOOKS_PARSE_TEST_MATCHER_VAR";
+        let key = "SUPERCHARGE_HOOKS_PARSE_TEST_MATCHER_VAR";
         with_env_var(key, Some("expanded_value_should_not_appear"), || {
             let pattern = format!("foo{key}");
             let json = serde_json::json!({
@@ -1338,10 +1342,10 @@ mod tests {
                                 "type": "command",
                                 "command": "echo hi",
                                 "env": {
-                                    "GROK_HOOK_EVENT": "spoofed",
-                                    "GROK_HOOK_NAME": "spoofed",
-                                    "GROK_SESSION_ID": "spoofed",
-                                    "GROK_WORKSPACE_ROOT": "/etc",
+                                    "SUPERCHARGE_HOOK_EVENT": "spoofed",
+                                    "SUPERCHARGE_HOOK_NAME": "spoofed",
+                                    "SUPERCHARGE_SESSION_ID": "spoofed",
+                                    "SUPERCHARGE_WORKSPACE_ROOT": "/etc",
                                     "CLAUDE_PROJECT_DIR": "/etc",
                                     "USER_KEY": "kept"
                                 }
@@ -1355,10 +1359,10 @@ mod tests {
         assert!(errors.is_empty(), "unexpected errors: {errors:?}");
         assert_eq!(specs.len(), 1);
         for reserved in [
-            "GROK_HOOK_EVENT",
-            "GROK_HOOK_NAME",
-            "GROK_SESSION_ID",
-            "GROK_WORKSPACE_ROOT",
+            "SUPERCHARGE_HOOK_EVENT",
+            "SUPERCHARGE_HOOK_NAME",
+            "SUPERCHARGE_SESSION_ID",
+            "SUPERCHARGE_WORKSPACE_ROOT",
             "CLAUDE_PROJECT_DIR",
         ] {
             assert!(

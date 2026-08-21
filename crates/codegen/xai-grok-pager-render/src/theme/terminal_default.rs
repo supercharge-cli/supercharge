@@ -287,8 +287,8 @@ mod tests {
     #[test]
     fn rgb_theme_muted_keeps_explicit_gray_without_forced_dim() {
         use ratatui::style::Modifier;
-        // GrokNight paints real RGB grays; muted/dim must not invent DIM.
-        let theme = Theme::groknight();
+        // VoltageDark paints real RGB grays; muted/dim must not invent DIM.
+        let theme = Theme::voltage_dark();
         assert!(!matches!(theme.gray, Color::Reset));
         let muted = theme.muted();
         assert_eq!(muted.fg, Some(theme.gray));

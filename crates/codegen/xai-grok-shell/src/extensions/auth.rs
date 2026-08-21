@@ -81,18 +81,18 @@ fn handle_set_api_key(args: &acp::ExtRequest) -> ExtResult {
             crate::auth::clear_api_key(&grok_home)
                 .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
             // SAFETY: ext_method is single-threaded per agent
-            unsafe { std::env::remove_var("XAI_API_KEY") };
+            unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
         } else {
             crate::auth::store_api_key(&grok_home, k)
                 .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
             // SAFETY: ext_method is single-threaded per agent
-            unsafe { std::env::set_var("XAI_API_KEY", k) };
+            unsafe { std::env::set_var("SUPERCHARGE_API_KEY", k) };
         }
     } else {
         crate::auth::clear_api_key(&grok_home)
             .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
         // SAFETY: ext_method is single-threaded per agent
-        unsafe { std::env::remove_var("XAI_API_KEY") };
+        unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
     }
     ExtMethodResult::success(serde_json::json!({ "ok": true }))
         .to_ext_response()
@@ -191,7 +191,7 @@ fn handle_info(agent: &MvpAgent) -> ExtResult {
         email: Option<String>,
         first_name: Option<String>,
         last_name: Option<String>,
-        /// `grok-asset://` URL resolved by the Electron protocol handler,
+        /// `Supercharge AI-asset://` URL resolved by the Electron protocol handler,
         /// or a full `http(s)://` URL passed through unchanged.
         profile_image_url: Option<String>,
         team_id: Option<String>,
@@ -215,7 +215,7 @@ fn handle_info(agent: &MvpAgent) -> ExtResult {
     let auth = agent.auth_manager.current_or_expired();
     let raw_asset_id = auth.as_ref().and_then(|a| a.profile_image_asset_id.clone());
 
-    // Return a grok-asset:// URL that the Electron renderer resolves at
+    // Return a Supercharge AI-asset:// URL that the Electron renderer resolves at
     // display time via a custom protocol handler. The handler proxies
     // through cli-chat-proxy's /asset endpoint; Electron's HTTP cache
     // handles reuse. No disk-cache or network call needed here.
@@ -223,7 +223,7 @@ fn handle_info(agent: &MvpAgent) -> ExtResult {
         Some(key) if key.starts_with("http://") || key.starts_with("https://") => {
             Some(key.to_owned())
         }
-        Some(key) => Some(format!("grok-asset:///{key}")),
+        Some(key) => Some(format!("Supercharge AI-asset:///{key}")),
         None => None,
     };
     to_raw_response(&AuthInfoResponse {

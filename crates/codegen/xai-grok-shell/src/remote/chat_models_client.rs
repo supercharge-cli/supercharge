@@ -1,5 +1,5 @@
-//! grok.com chat-product model catalog (`POST /rest/modes`) — the models
-//! grok-web's chat picker shows, distinct from the CLI `/v1/models` build
+//! supercharge.ai chat-product model catalog (`POST /rest/modes`) — the models
+//! Supercharge AI-web's chat picker shows, distinct from the CLI `/v1/models` build
 //! catalog. Transport only; cache + ACP mapping live in
 //! [`crate::agent::chat_modes`].
 
@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::auth::AuthManager;
 
-const GROK_WEB_URL: &str = "https://grok.com";
+const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,7 +61,7 @@ pub struct ListModesResponse {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChatModelsError {
-    #[error("no grok.com credentials")]
+    #[error("no supercharge.ai credentials")]
     NoAuth,
     #[error("request timed out")]
     Timeout,
@@ -83,20 +83,20 @@ pub struct ChatModelsClient {
 
 impl ChatModelsClient {
     pub fn new(auth: Arc<AuthManager>) -> Self {
-        let base_url = std::env::var("GROK_MODES_BASE_URL")
+        let base_url = std::env::var("SUPERCHARGE_MODES_BASE_URL")
             .ok()
             .filter(|s| !s.is_empty())
             .or_else(|| {
-                std::env::var("GROK_CONVERSATIONS_BASE_URL")
+                std::env::var("SUPERCHARGE_CONVERSATIONS_BASE_URL")
                     .ok()
                     .filter(|s| !s.is_empty())
             })
             .or_else(|| {
-                std::env::var("GROK_CODE_WEB_URL")
+                std::env::var("SUPERCHARGE_CODE_WEB_URL")
                     .ok()
                     .filter(|s| !s.is_empty())
             })
-            .unwrap_or_else(|| GROK_WEB_URL.to_string());
+            .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -104,7 +104,7 @@ impl ChatModelsClient {
         }
     }
 
-    /// Gated only on a valid grok.com bearer — deliberately NOT `is_xai_auth()`
+    /// Gated only on a valid supercharge.ai bearer — deliberately NOT `is_xai_auth()`
     /// (unlike workspaces/conversations), since `/rest/modes` is the public chat
     /// endpoint and that gate would exclude API-key / cached-token chat users.
     pub(crate) async fn list_modes(
@@ -129,9 +129,9 @@ impl ChatModelsClient {
                 self.auth.grok_com_config().token_header.clone(),
             )
             .header("x-userid", &auth.user_id)
-            .header("x-grok-client-version", xai_grok_version::VERSION)
+            .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
             .header(
-                "x-grok-client-identifier",
+                "x-Supercharge AI-client-identifier",
                 crate::http::process_client_identifier(),
             )
             .header(

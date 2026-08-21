@@ -168,17 +168,17 @@ fn effective_grok_home() -> std::path::PathBuf {
 }
 #[cfg(test)]
 thread_local! {
-    static REPLAY_GROK_HOME: std::cell::RefCell<Option<std::path::PathBuf>> =
+    static REPLAY_SUPERCHARGE_HOME: std::cell::RefCell<Option<std::path::PathBuf>> =
         const { std::cell::RefCell::new(None) };
 }
-/// Override grok home for disk-replay unit tests (thread-local).
+/// Override Supercharge AI home for disk-replay unit tests (thread-local).
 #[cfg(test)]
 pub(crate) fn set_replay_grok_home_for_tests(home: Option<std::path::PathBuf>) {
-    REPLAY_GROK_HOME.with(|h| *h.borrow_mut() = home);
+    REPLAY_SUPERCHARGE_HOME.with(|h| *h.borrow_mut() = home);
 }
 #[cfg(test)]
 fn effective_grok_home() -> std::path::PathBuf {
-    if let Some(home) = REPLAY_GROK_HOME.with(|h| h.borrow().clone()) {
+    if let Some(home) = REPLAY_SUPERCHARGE_HOME.with(|h| h.borrow().clone()) {
         return home;
     }
     xai_grok_shell::util::grok_home::grok_home()
@@ -1259,15 +1259,19 @@ mod tests {
     #[test]
     fn subagent_meta_all_fields() {
         assert_eq!(
-            format_subagent_meta(Some("researcher"), Some("analyst"), Some("grok-3")),
-            " (researcher \u{00b7} analyst \u{00b7} grok-3)"
+            format_subagent_meta(
+                Some("researcher"),
+                Some("analyst"),
+                Some("Supercharge AI-3")
+            ),
+            " (researcher \u{00b7} analyst \u{00b7} Supercharge AI-3)"
         );
     }
     #[test]
     fn subagent_meta_partial_skips_nones() {
         assert_eq!(
-            format_subagent_meta(Some("researcher"), None, Some("grok-3")),
-            " (researcher \u{00b7} grok-3)"
+            format_subagent_meta(Some("researcher"), None, Some("Supercharge AI-3")),
+            " (researcher \u{00b7} Supercharge AI-3)"
         );
     }
     #[test]
@@ -1308,8 +1312,8 @@ mod tests {
     #[test]
     fn subagent_meta_collapses_duplicate_persona_role() {
         assert_eq!(
-            format_subagent_meta(Some("reviewer"), Some("reviewer"), Some("grok-3")),
-            " (reviewer \u{00b7} grok-3)"
+            format_subagent_meta(Some("reviewer"), Some("reviewer"), Some("Supercharge AI-3")),
+            " (reviewer \u{00b7} Supercharge AI-3)"
         );
     }
     #[test]
@@ -1336,8 +1340,8 @@ mod tests {
     #[test]
     fn subagent_meta_drops_both_empty_persona_role() {
         assert_eq!(
-            format_subagent_meta(Some(""), Some(" "), Some("grok-3")),
-            " (grok-3)"
+            format_subagent_meta(Some(""), Some(" "), Some("Supercharge AI-3")),
+            " (Supercharge AI-3)"
         );
     }
     #[test]

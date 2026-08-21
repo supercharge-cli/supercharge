@@ -111,7 +111,7 @@ async fn word_select_tip_shows_and_ctrl_y_accepts() {
 
     // The flip persists: `[ui].keep_text_selection = "word_select"` lands in
     // config.toml (async persist — poll briefly).
-    let config_path = content.home().join(".grok").join("config.toml");
+    let config_path = content.home().join(".supercharge").join("config.toml");
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     loop {
         let config = std::fs::read_to_string(&config_path).unwrap_or_default();
@@ -206,10 +206,10 @@ async fn word_select_tip_skipped_when_mode_is_word_select() {
 #[cfg(unix)]
 async fn word_select_tip_skipped_when_contextual_hint_disabled() {
     let content = ContentController::start().await.expect("start content");
-    // flash mode + tip explicitly disabled. GROK_CONTEXTUAL_HINTS is NOT set —
+    // flash mode + tip explicitly disabled. SUPERCHARGE_CONTEXTUAL_HINTS is NOT set —
     // that env master would force all tips on and defeat the config opt-out.
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create .grok");
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
     std::fs::write(
         grok_home.join("config.toml"),
         "[ui]\n\
@@ -224,9 +224,10 @@ async fn word_select_tip_skipped_when_contextual_hint_disabled() {
 
     let binary = pager_binary().expect("resolve pager binary");
     // Content env only — pin the env master to empty (parsed as unset) so an
-    // inherited GROK_CONTEXTUAL_HINTS from the runner's shell can't force
+    // inherited SUPERCHARGE_CONTEXTUAL_HINTS from the runner's shell can't force
     // tips on and defeat the config opt-out under test.
-    let overrides: Vec<(String, String)> = vec![("GROK_CONTEXTUAL_HINTS".into(), String::new())];
+    let overrides: Vec<(String, String)> =
+        vec![("SUPERCHARGE_CONTEXTUAL_HINTS".into(), String::new())];
     let env_refs: Vec<(&str, &str)> = overrides
         .iter()
         .map(|(key, value)| (key.as_str(), value.as_str()))

@@ -12,7 +12,7 @@ fn jwt_tier_claim_maps_free_and_paid() {
     assert_eq!(jwt_tier_claim(&jwt_with_tier(0)).as_deref(), Some("free"));
     assert_eq!(
         jwt_tier_claim(&jwt_with_tier(1)).as_deref(),
-        Some("supergrok")
+        Some("supercharge")
     );
     assert_eq!(
         jwt_tier_claim(&jwt_with_tier(2)).as_deref(),
@@ -28,15 +28,15 @@ fn jwt_tier_claim_maps_free_and_paid() {
     );
     assert_eq!(
         jwt_tier_claim(&jwt_with_tier(5)).as_deref(),
-        Some("supergrok_heavy")
+        Some("supercharge_heavy")
     );
     assert_eq!(
         jwt_tier_claim(&jwt_with_tier(6)).as_deref(),
-        Some("supergrok_lite")
+        Some("supercharge_lite")
     );
     assert_eq!(
         jwt_tier_claim(&jwt_with_tier(7)).as_deref(),
-        Some("supergrok_plus")
+        Some("supercharge_plus")
     );
     assert_eq!(jwt_tier_claim(&jwt_with_tier(9)).as_deref(), Some("9"));
     assert_eq!(jwt_tier_claim(&jwt_with_tier(99)).as_deref(), Some("99"));
@@ -99,14 +99,14 @@ fn resolve_subscription_tier_prefers_display_then_api_key_then_jwt() {
 #[test]
 fn jwt_claim_matches_user_subscription_tier_known_pairs() {
     let cases = [
-        ("supergrok", "GrokPro"),
+        ("supercharge", "GrokPro"),
         ("x_basic", "XBasic"),
         ("x_premium", "XPremium"),
         ("x_premium_plus", "XPremiumPlus"),
-        ("supergrok_heavy", "SuperGrokPro"),
+        ("supercharge_heavy", "SuperchargePro"),
         ("9", "EnterpriseMystery"),
-        ("supergrok_lite", "SuperGrokLite"),
-        ("supergrok_plus", "SuperGrokPlus"),
+        ("supercharge_lite", "SuperchargeLite"),
+        ("supercharge_plus", "SuperchargePlus"),
     ];
     for (claim, user_tier) in cases {
         assert!(
@@ -119,24 +119,24 @@ fn jwt_claim_matches_user_subscription_tier_known_pairs() {
 fn jwt_claim_matches_user_subscription_tier_rejects_stale_and_unknown() {
     assert!(!jwt_claim_matches_user_subscription_tier(
         "x_basic",
-        "SuperGrokPro"
+        "SuperchargePro"
     ));
     assert!(!jwt_claim_matches_user_subscription_tier(
-        "supergrok",
-        "SuperGrokPro"
+        "supercharge",
+        "SuperchargePro"
     ));
     assert!(!jwt_claim_matches_user_subscription_tier(
-        "supergrok",
-        "SuperGrokPlus"
+        "supercharge",
+        "SuperchargePlus"
     ));
     assert!(!jwt_claim_matches_user_subscription_tier(
-        "supergrok_heavy",
-        "SuperGrokPlus"
+        "supercharge_heavy",
+        "SuperchargePlus"
     ));
     assert!(!jwt_claim_matches_user_subscription_tier("free", "GrokPro"));
     assert!(!jwt_claim_matches_user_subscription_tier("", "XPremium"));
     assert!(!jwt_claim_matches_user_subscription_tier(
-        "supergrok_heavy",
+        "supercharge_heavy",
         "EnterpriseMystery"
     ));
     assert!(!jwt_claim_matches_user_subscription_tier(
@@ -664,9 +664,9 @@ async fn upload_harness_trace_turns_build_per_turn_manifest() {
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_defaults_to_grok_build() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
     let def = MvpAgent::resolve_agent_definition(
@@ -678,17 +678,17 @@ fn resolve_agent_definition_defaults_to_grok_build() {
     );
     assert_eq!(def.name, config::DEFAULT_AGENT_TYPE);
     if let Some(v) = prev {
-        unsafe { std::env::set_var("GROK_AGENT", v) }
+        unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
 /// When model_agent_type = Some("codex"), the codex agent is selected even
-/// though the default chain would return grok-build.
+/// though the default chain would return supercharge-core.
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_model_agent_type_overrides_default() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
     let def = MvpAgent::resolve_agent_definition(
@@ -700,7 +700,7 @@ fn resolve_agent_definition_model_agent_type_overrides_default() {
     );
     assert_eq!(def.name, "codex");
     if let Some(v) = prev {
-        unsafe { std::env::set_var("GROK_AGENT", v) }
+        unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
 /// When model_agent_type is None, the chain-resolved default agent is
@@ -710,9 +710,9 @@ fn resolve_agent_definition_model_agent_type_overrides_default() {
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_none_agent_type_does_not_override() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
     let def = MvpAgent::resolve_agent_definition(
@@ -724,7 +724,7 @@ fn resolve_agent_definition_none_agent_type_does_not_override() {
     );
     assert_eq!(def.name, config::DEFAULT_AGENT_TYPE);
     if let Some(v) = prev {
-        unsafe { std::env::set_var("GROK_AGENT", v) }
+        unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
 /// Regression for the web-client devbox bug: an ACP profile must
@@ -732,9 +732,9 @@ fn resolve_agent_definition_none_agent_type_does_not_override() {
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_acp_profile_wins_when_model_agent_type_is_default() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
     let acp_profile = xai_grok_agent::AgentDefinition::from_json(&serde_json::json!(
@@ -755,20 +755,20 @@ fn resolve_agent_definition_acp_profile_wins_when_model_agent_type_is_default() 
         "ACP _meta.agentProfile must win when model_agent_type is the default value"
     );
     if let Some(v) = prev {
-        unsafe { std::env::set_var("GROK_AGENT", v) }
+        unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
 /// Regression: after `DEFAULT_AGENT_TYPE` flipped to
-/// `grok-build-plan`, models in the catalog that still declare
-/// `agent_type = "grok-build"` explicitly must NOT preempt an ACP
-/// profile. Any value in the `grok-build*` family is the stock harness
+/// `supercharge-core-plan`, models in the catalog that still declare
+/// `agent_type = "supercharge-core"` explicitly must NOT preempt an ACP
+/// profile. Any value in the `supercharge-core*` family is the stock harness
 /// with no strict requirement.
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_acp_profile_wins_for_explicit_grok_build_family() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
     let acp_profile = xai_grok_agent::AgentDefinition::from_json(&serde_json::json!({
@@ -776,7 +776,7 @@ fn resolve_agent_definition_acp_profile_wins_for_explicit_grok_build_family() {
         "description": "Custom devbox profile",
     }))
     .expect("agent definition must parse");
-    for family_variant in ["grok-build", "grok-build-plan", "grok-build-concise"] {
+    for family_variant in ["supercharge-core", "supercharge-core-plan", "supercharge-core-concise"] {
         let def = MvpAgent::resolve_agent_definition(
             tmp.path(),
             None,
@@ -786,11 +786,11 @@ fn resolve_agent_definition_acp_profile_wins_for_explicit_grok_build_family() {
         );
         assert_eq!(
             def.name, "custom-devbox-profile",
-            "ACP profile must win for grok-build family variant `{family_variant}`"
+            "ACP profile must win for supercharge-core family variant `{family_variant}`"
         );
     }
     if let Some(v) = prev {
-        unsafe { std::env::set_var("GROK_AGENT", v) }
+        unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
 /// A non-strict (stock / vision-capable) model leaves the template alone, so
@@ -822,9 +822,9 @@ fn inherited_harness_template_respects_explicit_template() {
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_cli_agent_profile_wins_when_model_agent_type_is_default() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
     let profile_path = tmp.path().join("cli-profile.md");
@@ -842,19 +842,19 @@ fn resolve_agent_definition_cli_agent_profile_wins_when_model_agent_type_is_defa
     );
     assert_eq!(def.name, "cli-profile");
     if let Some(v) = prev {
-        unsafe { std::env::set_var("GROK_AGENT", v) }
+        unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
 /// Agent profile with `model: Override(id)` preserves the field through resolution.
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_agent_profile_with_model_override() {
-    let prev = std::env::var("GROK_AGENT").ok();
+    let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
-        std::env::remove_var("GROK_AGENT");
+        std::env::remove_var("SUPERCHARGE_AGENT");
     }
     let tmp = tempfile::tempdir().unwrap();
-    let agents_dir = tmp.path().join(".grok").join("agents");
+    let agents_dir = tmp.path().join(".supercharge").join("agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     std::fs::write(
             agents_dir.join("test-architect.md"),
@@ -874,8 +874,8 @@ fn resolve_agent_definition_agent_profile_with_model_override() {
         "agent profile model override must be preserved through resolution"
     );
     match prev {
-        Some(v) => unsafe { std::env::set_var("GROK_AGENT", v) },
-        None => unsafe { std::env::remove_var("GROK_AGENT") },
+        Some(v) => unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) },
+        None => unsafe { std::env::remove_var("SUPERCHARGE_AGENT") },
     }
 }
 #[test]
@@ -1013,62 +1013,62 @@ fn enqueue_replace_system_prompt_override_noop_when_absent_or_empty() {
     );
 }
 /// Regression for the web-client `_meta.agentProfile` -> `set_session_model`
-/// flow: a zero-turn switch from `grok-build` (a client profile name) to
-/// `grok-build-plan` (the default model agent_type) must be
+/// flow: a zero-turn switch from `supercharge-core` (a client profile name) to
+/// `supercharge-core-plan` (the default model agent_type) must be
 /// treated as compatible so the harness rebuild is skipped and the
 /// custom prompt body is preserved.
 #[test]
 fn harnesses_are_compatible_for_stock_family_pairs() {
-    assert!(harnesses_are_compatible("grok-build", "grok-build-plan"));
-    assert!(harnesses_are_compatible("grok-build-plan", "grok-build"));
-    assert!(harnesses_are_compatible("grok-build", "grok-build"));
+    assert!(harnesses_are_compatible("supercharge-core", "supercharge-core-plan"));
+    assert!(harnesses_are_compatible("supercharge-core-plan", "supercharge-core"));
+    assert!(harnesses_are_compatible("supercharge-core", "supercharge-core"));
     assert!(harnesses_are_compatible(
-        "grok-build-concise",
-        "grok-build-plan"
+        "supercharge-core-concise",
+        "supercharge-core-plan"
     ));
     assert!(harnesses_are_compatible(
         "remote-sidebar",
-        "grok-build-plan"
+        "supercharge-core-plan"
     ));
 }
 #[test]
 fn harnesses_are_compatible_rejects_strict_mismatches() {
     assert!(harnesses_are_compatible("codex", "codex"));
-    assert!(!harnesses_are_compatible("grok-build-plan", "codex"));
+    assert!(!harnesses_are_compatible("supercharge-core-plan", "codex"));
 }
 #[test]
 fn explicit_agent_type_wins_over_session_default() {
     assert_eq!(
-        resolve_required_agent_type(Some("cursor"), "grok-build-plan"),
+        resolve_required_agent_type(Some("cursor"), "supercharge-core-plan"),
         "cursor"
     );
 }
 #[test]
 fn null_agent_type_falls_back_to_session_default_grok_build_plan() {
     assert_eq!(
-        resolve_required_agent_type(None, "grok-build-plan"),
-        "grok-build-plan"
+        resolve_required_agent_type(None, "supercharge-core-plan"),
+        "supercharge-core-plan"
     );
 }
 #[test]
 fn null_agent_type_falls_back_to_session_default_grok_build() {
     assert_eq!(
-        resolve_required_agent_type(None, "grok-build"),
-        "grok-build"
+        resolve_required_agent_type(None, "supercharge-core"),
+        "supercharge-core"
     );
 }
 #[test]
 fn null_agent_type_returns_to_session_default_after_cursor_switch() {
-    let session_default = "grok-build-plan";
+    let session_default = "supercharge-core-plan";
     let required_after_null = resolve_required_agent_type(None, session_default);
-    assert_eq!(required_after_null, "grok-build-plan");
+    assert_eq!(required_after_null, "supercharge-core-plan");
     assert_ne!(required_after_null, "cursor");
 }
 /// Compatible stock switches (no rebuild) must NOT mutate `agent_name`,
 /// preserving the session's original ACP `agentProfile`.
 #[test]
 fn agent_name_unchanged_without_harness_rebuild() {
-    let unchanged = agent_name_after_model_switch(false, "grok-build-plan", "remote-sidebar");
+    let unchanged = agent_name_after_model_switch(false, "supercharge-core-plan", "remote-sidebar");
     assert_eq!(
         unchanged, "remote-sidebar",
         "a compatible stock switch must preserve the original agent profile name"
@@ -1220,7 +1220,7 @@ fn make_test_handle(
         force_compact: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         permission_handle: xai_grok_workspace::permission::PermissionHandle::allow_all(),
         attribution_callback: None,
-        agent_name: "grok-build".to_string(),
+        agent_name: "supercharge-core".to_string(),
         managed_mcp_proxy_base_url: String::new(),
         session_default_agent_profile: None,
         allowed_subagent_types: None,
@@ -2097,7 +2097,7 @@ async fn ensure_plugin_registry_lazily_populates_snapshot() {
     use crate::auth::{AuthManager, GrokComConfig};
     use xai_grok_test_support::EnvGuard;
     let grok_home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", grok_home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", grok_home.path());
     let plugin_dir = tempfile::tempdir().unwrap();
     std::fs::write(
         plugin_dir.path().join("plugin.json"),
@@ -2747,7 +2747,7 @@ fn on_demand_enabled_from_remote_settings() {
 async fn auth_type_session_based_no_current_returns_session_token() {
     for method_id in [
         crate::agent::auth_method::CACHED_TOKEN_AUTH_METHOD_ID,
-        crate::agent::auth_method::GROK_COM_METHOD_ID,
+        crate::agent::auth_method::SUPERCHARGE_COM_METHOD_ID,
         crate::agent::auth_method::OIDC_METHOD_ID,
     ] {
         let agent = build_minimal_agent_for_tests();
@@ -2774,7 +2774,7 @@ async fn auth_type_session_based_no_current_returns_session_token() {
 async fn auth_type_xai_api_key_no_current_returns_api_key() {
     let agent = build_minimal_agent_for_tests();
     agent.set_auth_method(acp::AuthMethodId::new(
-        crate::agent::auth_method::XAI_API_KEY_METHOD_ID,
+        crate::agent::auth_method::SUPERCHARGE_API_KEY_METHOD_ID,
     ));
     assert!(agent.auth_manager.current().is_none());
     assert_eq!(
@@ -2838,68 +2838,68 @@ fn build_agent_with_api_key_auth_disabled() -> MvpAgent {
     cfg.grok_com_config.disable_api_key_auth = Some(true);
     MvpAgent::new(gateway, &cfg, auth_manager, None).expect("valid test config")
 }
-/// Deployment-key / managed-config user: `XAI_API_KEY` resolves and the kill
+/// Deployment-key / managed-config user: `SUPERCHARGE_API_KEY` resolves and the kill
 /// switch is off, so a dead `cached_token` MUST fall through to `xai.api_key`
 /// (no browser). This is the exact regression the fallthrough fixes.
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
 async fn cached_token_fallthrough_prefers_api_key_for_deployment_key() {
-    use crate::agent::auth_method::{XAI_API_KEY_ENV_VAR, XAI_API_KEY_METHOD_ID};
+    use crate::agent::auth_method::{SUPERCHARGE_API_KEY_ENV_VAR, SUPERCHARGE_API_KEY_METHOD_ID};
     use xai_grok_test_support::EnvGuard;
-    let _lockdown = EnvGuard::unset("GROK_DISABLE_API_KEY_AUTH");
-    let _key = EnvGuard::set(XAI_API_KEY_ENV_VAR, "test-deployment-key");
+    let _lockdown = EnvGuard::unset("SUPERCHARGE_DISABLE_API_KEY_AUTH");
+    let _key = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "test-deployment-key");
     let agent = build_minimal_agent_for_tests();
     assert_eq!(
         agent
             .cached_token_fallthrough_method_id()
             .as_ref()
             .map(|id| id.0.as_ref()),
-        Some(XAI_API_KEY_METHOD_ID),
+        Some(SUPERCHARGE_API_KEY_METHOD_ID),
         "deployment-key user (XAI_API_KEY set, no kill switch) must fall \
          through to xai.api_key on a dead cached_token -- not interactive login",
     );
 }
-/// Forced-IdP deployment: even with `XAI_API_KEY` present, the admin kill
-/// switch keeps the fallthrough on interactive `grok.com` (api-key auth is
+/// Forced-IdP deployment: even with `SUPERCHARGE_API_KEY` present, the admin kill
+/// switch keeps the fallthrough on interactive `supercharge.ai` (api-key auth is
 /// neither advertised nor an eligible fallthrough).
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
 async fn cached_token_fallthrough_respects_kill_switch() {
-    use crate::agent::auth_method::{GROK_COM_METHOD_ID, XAI_API_KEY_ENV_VAR};
+    use crate::agent::auth_method::{SUPERCHARGE_COM_METHOD_ID, SUPERCHARGE_API_KEY_ENV_VAR};
     use xai_grok_test_support::EnvGuard;
-    let _lockdown = EnvGuard::unset("GROK_DISABLE_API_KEY_AUTH");
-    let _key = EnvGuard::set(XAI_API_KEY_ENV_VAR, "test-deployment-key");
+    let _lockdown = EnvGuard::unset("SUPERCHARGE_DISABLE_API_KEY_AUTH");
+    let _key = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "test-deployment-key");
     let agent = build_agent_with_api_key_auth_disabled();
     assert_eq!(
         agent
             .cached_token_fallthrough_method_id()
             .as_ref()
             .map(|id| id.0.as_ref()),
-        Some(GROK_COM_METHOD_ID),
+        Some(SUPERCHARGE_COM_METHOD_ID),
         "disable_api_key_auth must keep the cached_token fallthrough on \
-         interactive grok.com so XAI_API_KEY can't bypass forced IdP login",
+         interactive supercharge.ai so SUPERCHARGE_API_KEY can't bypass forced IdP login",
     );
 }
 /// No advertiseable credentials at all (no env key, no kill switch): the user
-/// genuinely needs to log in, so the fallthrough is interactive `grok.com`.
+/// genuinely needs to log in, so the fallthrough is interactive `supercharge.ai`.
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
 async fn cached_token_fallthrough_falls_to_grok_com_without_credentials() {
     use crate::agent::auth_method::{
-        GROK_COM_METHOD_ID, LEGACY_XAI_API_KEY_ENV_VAR, XAI_API_KEY_ENV_VAR,
+        SUPERCHARGE_COM_METHOD_ID, LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, SUPERCHARGE_API_KEY_ENV_VAR,
     };
     use xai_grok_test_support::EnvGuard;
-    let _lockdown = EnvGuard::unset("GROK_DISABLE_API_KEY_AUTH");
-    let _new = EnvGuard::unset(XAI_API_KEY_ENV_VAR);
-    let _legacy = EnvGuard::unset(LEGACY_XAI_API_KEY_ENV_VAR);
+    let _lockdown = EnvGuard::unset("SUPERCHARGE_DISABLE_API_KEY_AUTH");
+    let _new = EnvGuard::unset(SUPERCHARGE_API_KEY_ENV_VAR);
+    let _legacy = EnvGuard::unset(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR);
     let agent = build_minimal_agent_for_tests();
     assert_eq!(
         agent
             .cached_token_fallthrough_method_id()
             .as_ref()
             .map(|id| id.0.as_ref()),
-        Some(GROK_COM_METHOD_ID),
-        "no API-key creds and no kill switch -> interactive grok.com login",
+        Some(SUPERCHARGE_COM_METHOD_ID),
+        "no API-key creds and no kill switch -> interactive supercharge.ai login",
     );
 }
 /// Verifies the 4-state matrix of `(disable_zdr_incompatible_tools, zdr_video_output_s3)`:
@@ -3296,8 +3296,8 @@ fn search_index_env() -> (tempfile::TempDir, [xai_grok_test_support::EnvGuard; 2
     use xai_grok_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
     let guards = [
-        EnvGuard::set("GROK_HOME", home.path()),
-        EnvGuard::unset("GROK_SESSION_SEARCH"),
+        EnvGuard::set("SUPERCHARGE_HOME", home.path()),
+        EnvGuard::unset("SUPERCHARGE_SESSION_SEARCH"),
     ];
     (home, guards)
 }
@@ -3306,7 +3306,7 @@ fn search_index_env() -> (tempfile::TempDir, [xai_grok_test_support::EnvGuard; 2
 async fn search_index_honors_the_session_search_feature() {
     let (_home, _env) = search_index_env();
     {
-        let _off = xai_grok_test_support::EnvGuard::set("GROK_SESSION_SEARCH", "0");
+        let _off = xai_grok_test_support::EnvGuard::set("SUPERCHARGE_SESSION_SEARCH", "0");
         let agent = build_agent_with_auth(crate::auth::GrokAuth::test_default());
         agent.decide_search_index();
         assert!(
@@ -3417,8 +3417,8 @@ async fn exhausted_fetch_decides_on_the_local_layers() {
     use crate::auth::{AuthManager, GrokComConfig};
     use xai_grok_test_support::EnvGuard;
     let (_home, _env) = search_index_env();
-    let _no_inline_auth = EnvGuard::unset("GROK_AUTH");
-    let _no_auth_path = EnvGuard::unset("GROK_AUTH_PATH");
+    let _no_inline_auth = EnvGuard::unset("SUPERCHARGE_AUTH");
+    let _no_auth_path = EnvGuard::unset("SUPERCHARGE_AUTH_PATH");
     let auth_dir = tempfile::tempdir().unwrap();
     let auth_manager =
         std::sync::Arc::new(AuthManager::new(auth_dir.path(), GrokComConfig::default()));
@@ -4016,7 +4016,7 @@ async fn remove_session_releases_workspace_binding_and_side_maps() {
 #[test]
 fn ext_method_rewind_uses_local_dispatch_without_bridge() {
     use acp::Agent as _;
-    let _env = crate::env::EnvVarGuard::remove(crate::env::GROK_DISABLE_CUSTOM_BRIDGE_ENV);
+    let _env = crate::env::EnvVarGuard::remove(crate::env::SUPERCHARGE_DISABLE_CUSTOM_BRIDGE_ENV);
     run_local_for_bridge_test(|| async {
         let agent = build_minimal_agent_for_tests();
         let params = serde_json::json!({ "sessionId": "sess-local" });
@@ -4933,7 +4933,7 @@ fn supervisor_reaps_panicked_resident_actor() {
 #[tokio::test]
 #[serial_test::serial]
 async fn storage_mode_self_corrects_to_writeback_when_settings_arrive() {
-    let _env = crate::env::EnvVarGuard::remove("GROK_STORAGE_MODE");
+    let _env = crate::env::EnvVarGuard::remove("SUPERCHARGE_STORAGE_MODE");
     let auth = crate::auth::GrokAuth {
         auth_mode: crate::auth::AuthMode::Oidc,
         oidc_issuer: Some("https://auth.x.ai".to_string()),
@@ -5096,14 +5096,14 @@ async fn access_gate_does_not_leak_verdict_across_identities() {
         user_id: "user-b".into(),
         ..GrokAuth::test_default()
     };
-    assert!(auth_b.is_xai_auth(), "precondition: first-party xAI auth");
+    assert!(auth_b.is_xai_auth(), "precondition: first-party provider authentication");
     agent.enforce_grok_code_access(&auth_b).await;
     assert!(
         agent.tier_allowed.get(),
         "identity B must not inherit identity A's denied allow_access verdict",
     );
 }
-/// First-party xAI auth + `writeback_enabled` settings → storage upgrades to
+/// First-party provider authentication + `writeback_enabled` settings → storage upgrades to
 /// Writeback; the settings arrival also emits `x.ai/settings/update` and opens
 /// the external-OTEL gate.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -5112,7 +5112,7 @@ async fn post_auth_settings_xai_upgrades_writeback_emits_and_opens_gate() {
     use crate::agent::config::AgentMode;
     use crate::auth::{GrokAuth, XAI_OAUTH2_ISSUER};
     let _restore = RestoreOtelGate;
-    let _storage_env = crate::env::EnvVarGuard::remove("GROK_STORAGE_MODE");
+    let _storage_env = crate::env::EnvVarGuard::remove("SUPERCHARGE_STORAGE_MODE");
     let server = xai_grok_test_support::MockInferenceServer::start()
         .await
         .unwrap();
@@ -5124,7 +5124,7 @@ async fn post_auth_settings_xai_upgrades_writeback_emits_and_opens_gate() {
         oidc_issuer: Some(XAI_OAUTH2_ISSUER.to_string()),
         ..GrokAuth::test_default()
     };
-    assert!(xai_auth.is_xai_auth(), "precondition: first-party xAI auth");
+    assert!(xai_auth.is_xai_auth(), "precondition: first-party provider authentication");
     let (agent, mut rx) =
         build_agent_with_auth_and_proxy(xai_auth, server.url(), AgentMode::Leader);
     assert_eq!(
@@ -5255,7 +5255,7 @@ async fn settings_self_heal_refetches_after_token_rotation() {
     use crate::auth::{GrokAuth, XAI_OAUTH2_ISSUER};
     let _restore = RestoreOtelGate;
     let server = xai_grok_test_support::MockInferenceServer::start_with_required_auth(
-        vec![xai_grok_test_support::MockModelEntry::new("grok-build")],
+        vec![xai_grok_test_support::MockModelEntry::new("supercharge-core")],
         "rotated-key",
     )
     .await
@@ -5402,8 +5402,8 @@ fn repo_with_project_mcp_server() -> tempfile::TempDir {
     tmp
 }
 fn write_project_subagent_definitions(cwd: &std::path::Path) {
-    let roles = cwd.join(".grok/roles");
-    let personas = cwd.join(".grok/personas");
+    let roles = cwd.join(".supercharge/roles");
+    let personas = cwd.join(".supercharge/personas");
     std::fs::create_dir_all(&roles).unwrap();
     std::fs::create_dir_all(&personas).unwrap();
     std::fs::write(roles.join("probe.toml"), "description = \"Project role\"").unwrap();
@@ -5480,7 +5480,7 @@ fn subagent_spawn_context_reloads_project_definitions_after_trust_changes() {
         assert!(!revoked.subagent_personas.contains_key("probe"));
     });
 }
-/// End-to-end gate wiring: project `.grok/roles` / `personas` alone must drive
+/// End-to-end gate wiring: project `.supercharge/roles` / `personas` alone must drive
 /// real `resolve_and_record` untrusted (not a forced `record_for_test` verdict),
 /// keep project defs out of Task spawn context, then re-admit them after grant.
 #[test]
@@ -5488,9 +5488,9 @@ fn subagent_spawn_context_reloads_project_definitions_after_trust_changes() {
 fn project_roles_personas_gated_via_resolve_and_record_chain() {
     use xai_grok_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = tempfile::tempdir().unwrap();
     git2::Repository::init(repo.path()).unwrap();
     write_project_subagent_definitions(repo.path());
@@ -5570,9 +5570,9 @@ fn interactive_trust_prompt_grant_reloads_project_mcp() {
     use xai_grok_test_support::EnvGuard;
     use xai_grok_workspace::trust::{TrustStore, workspace_key};
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = folder_trust_on();
@@ -5649,9 +5649,9 @@ fn interactive_trust_prompt_reject_keeps_gated() {
     use xai_grok_test_support::EnvGuard;
     use xai_grok_workspace::trust::{TrustStore, workspace_key};
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = folder_trust_on();
@@ -5686,9 +5686,9 @@ fn interactive_trust_prompt_reject_keeps_gated() {
 fn interactive_trust_prompt_dormant_when_feature_off() {
     use xai_grok_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = crate::util::config::RemoteSettings {
@@ -5716,9 +5716,9 @@ fn interactive_trust_prompt_dormant_when_feature_off() {
 fn interactive_trust_prompt_no_request_without_capability() {
     use xai_grok_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = folder_trust_on();
@@ -5744,9 +5744,9 @@ fn interactive_trust_prompt_client_error_fails_closed() {
     use xai_grok_test_support::EnvGuard;
     use xai_grok_workspace::trust::{TrustStore, workspace_key};
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = folder_trust_on();
@@ -5785,9 +5785,9 @@ fn interactive_trust_prompt_client_error_fails_closed() {
 fn interactive_trust_prompt_dedups_same_workspace() {
     use xai_grok_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = folder_trust_on();
@@ -5860,9 +5860,9 @@ async fn drain_reload_commands(
 fn interactive_trust_prompt_reloads_all_same_workspace_sessions() {
     use xai_grok_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let root = repo.path().to_path_buf();
     let subdir = root.join("sub");
@@ -5922,9 +5922,9 @@ fn interactive_trust_prompt_reprompts_after_untrust() {
     use xai_grok_test_support::EnvGuard;
     use xai_hooks_plugins_types::HooksAction;
     let home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("GROK_HOME", home.path());
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let _sim = EnvGuard::set(xai_grok_version::TEST_VERSION_ENV, "0.0-sim");
-    let _flag = EnvGuard::unset("GROK_FOLDER_TRUST");
+    let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
     let repo = repo_with_project_mcp_server();
     let repo_path = repo.path().to_path_buf();
     let remote = folder_trust_on();

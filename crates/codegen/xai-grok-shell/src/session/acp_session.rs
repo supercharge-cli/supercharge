@@ -654,7 +654,7 @@ pub(crate) struct SessionActor {
     /// 401-attribution callback. Joined with the bearer the
     /// sampler sends on the wire to emit an `auth 401 attribution`
     /// event at each of the six `OaiCompatClient` 401 arms in
-    /// `xai-grok-sampler`. Threaded into every `SamplerConfig`
+    /// `xai-Supercharge AI-sampler`. Threaded into every `SamplerConfig`
     /// reconstructed by `reconstruct_full_config`. `None` when the
     /// session was spawned without an `AuthManager` (BYOK direct
     /// mode, test fixtures).
@@ -716,7 +716,7 @@ pub(crate) struct SessionActor {
     /// Server-side doom-loop check policy, resolved once at spawn by
     /// `Config::resolve_doom_loop_recovery`; `None` = disabled.
     /// `reconstruct_full_config` threads it into the sampler config, and the
-    /// sampler itself sends the matching `x-grok-doom-loop-check` header.
+    /// sampler itself sends the matching `x-Supercharge AI-doom-loop-check` header.
     pub(crate) doom_loop_recovery: Option<xai_grok_sampling_types::DoomLoopRecoveryPolicy>,
     /// Telemetry-only per-turn doom-loop recovery tally (attempts, whether a
     /// budget-spent accept happened, tightest trigger label). Accumulated by
@@ -913,7 +913,7 @@ pub(crate) struct SessionActor {
     /// `Default` (all `InheritCurrent`, empty pool) reproduces today's
     /// behavior. Consumed by the per-role spawn wiring.
     pub(crate) goal_role_models: GoalRoleModelConfig,
-    /// Kill-switch (`GROK_GOAL_USE_CURRENT_MODEL_ONLY` / `[features]
+    /// Kill-switch (`SUPERCHARGE_GOAL_USE_CURRENT_MODEL_ONLY` / `[features]
     /// goal_use_current_model_only`) resolved at actor build. When `true`,
     /// every `/goal` role inherits the current model. `goal_role_models`
     /// already reflects it (planner/strategist `InheritCurrent`, empty pool),
@@ -1006,7 +1006,7 @@ pub(crate) struct SessionActor {
     pub(crate) client_hooks: std::cell::RefCell<crate::extensions::hooks::ClientHooks>,
     /// Resolved workspace root for hooks: git worktree root if in a git repo,
     /// otherwise session cwd. Used for hook child process cwd, envelope fields,
-    /// and GROK_WORKSPACE_ROOT env var.
+    /// and SUPERCHARGE_WORKSPACE_ROOT env var.
     pub(crate) hook_resolved_workspace_root: String,
     /// The detected VCS kind for this session's workspace.
     pub(crate) vcs_kind: xai_grok_workspace::session::git::VcsKind,
@@ -1122,7 +1122,7 @@ pub(crate) struct SessionActor {
     /// on `Failed`. See `acp_session_impl/image_strip.rs`.
     pub(crate) pending_image_strip:
         parking_lot::Mutex<Option<(xai_grok_sampler::RequestId, Vec<std::sync::Arc<str>>)>>,
-    /// Handle to the per-session `xai-grok-sampler` actor.
+    /// Handle to the per-session `xai-Supercharge AI-sampler` actor.
     ///
     /// Live sessions get a real handle from `spawn_session_actor`;
     /// tests and other constructor sites use `SamplerHandle::noop()`.
@@ -1385,7 +1385,7 @@ const PROMPT_CONTEXT_FILENAME: &str = "prompt_context.json";
 /// Persist the structured prompt context to `{session_dir}/prompt_context.json`.
 ///
 /// This is best-effort: failures are logged but do not block session creation.
-/// The saved JSON enables deterministic re-rendering, `grok prompt --json`
+/// The saved JSON enables deterministic re-rendering, `Supercharge AI prompt --json`
 /// inspection, and post-hoc debugging of what went into a session's system prompt.
 fn save_prompt_context(session_info: &SessionInfo, prompt_context: &xai_grok_agent::PromptContext) {
     let dir = match crate::session::persistence::ensure_owner_only_session_dir(session_info) {

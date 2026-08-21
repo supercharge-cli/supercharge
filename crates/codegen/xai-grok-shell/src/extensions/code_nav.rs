@@ -422,7 +422,7 @@ fn resolve_cwd(
 fn eligibility_error(reason: CodeNavEligibility) -> acp::Error {
     let msg = match reason {
         CodeNavEligibility::ClientNotWeb => {
-            "code navigation is currently only enabled for grok-web clients"
+            "code navigation is currently only enabled for Supercharge AI-web clients"
         }
         CodeNavEligibility::CapabilityNotAdvertised => {
             "client must advertise x.ai/codeNavigation.enabled to use code navigation"

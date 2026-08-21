@@ -3883,7 +3883,7 @@ async fn sampling_config_survives_compaction_replacement() {
 
     let config = SamplingConfig {
         base_url: "https://api.example.com".to_string(),
-        model: "grok-build".to_string(),
+        model: "supercharge-core".to_string(),
         max_completion_tokens: None,
         temperature: Some(0.7),
         top_p: Some(0.95),
@@ -3913,7 +3913,7 @@ async fn sampling_config_survives_compaction_replacement() {
 
     // Pre-compaction: everything correct.
     let pre = h.handle.get_sampling_config().await.unwrap();
-    assert_eq!(pre.model, "grok-build");
+    assert_eq!(pre.model, "supercharge-core");
     assert_eq!(pre.context_window.get(), 500_000);
     assert_eq!(pre.api_backend, ApiBackend::Responses);
 
@@ -3931,7 +3931,7 @@ async fn sampling_config_survives_compaction_replacement() {
     // Post-compaction: SamplingConfig MUST be preserved.
     let post = h.handle.get_sampling_config().await.unwrap();
     assert_eq!(
-        post.model, "grok-build",
+        post.model, "supercharge-core",
         "BUG: model changed after compaction"
     );
     assert_eq!(
@@ -3960,7 +3960,7 @@ async fn sampling_config_survives_compaction_replacement() {
 
 /// After compaction, the `build_session_info` display path uses
 /// `get_sampling_config().model` as the source-of-truth model slug.
-/// If that model slug is e.g. "grok-build" and not in the ModelState
+/// If that model slug is e.g. "supercharge-core" and not in the ModelState
 /// catalog with a display name, the pager shows the raw slug. This
 /// test verifies the pager's `current_model_name()` behavior when the
 /// model ID doesn't match any catalog entry.
@@ -3968,7 +3968,7 @@ async fn sampling_config_survives_compaction_replacement() {
 async fn model_metadata_lost_after_compaction_then_recovered_on_next_turn() {
     let config = SamplingConfig {
         base_url: "https://api.example.com".to_string(),
-        model: "grok-build".to_string(),
+        model: "supercharge-core".to_string(),
         max_completion_tokens: None,
         temperature: Some(0.7),
         top_p: Some(0.95),

@@ -1176,7 +1176,7 @@ impl MvpAgent {
     /// Operator-attested FS-only toolset for mid-session attach.
     #[cfg(feature = "local-workspace")]
     fn ensure_attach_fs_only_advertised_tools() -> Result<(), String> {
-        const ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS";
+        const ENV: &str = "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS";
         const ALLOW: &[&str] = &[
             "workspace.fs_list",
             "workspace.fs_exists",
@@ -1192,7 +1192,7 @@ impl MvpAgent {
             .filter(|s| !s.is_empty()) else {
             return Err(
                 "attached workspace_server advertised toolset is uncheckable; refuse attach \
-                 (set GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS to a comma-separated FS-only catalog)"
+                 (set SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS to a comma-separated FS-only catalog)"
                     .into(),
             );
         };
@@ -1351,7 +1351,7 @@ impl MvpAgent {
     /// Returns `SessionToken` when EITHER:
     ///   - `auth_manager` currently has a live (non-expired) credential, OR
     ///   - the active auth method is session-based (`cached_token`,
-    ///     `grok.com`, `oidc`) -- even if the in-memory token is currently
+    ///     `supercharge.ai`, `oidc`) -- even if the in-memory token is currently
     ///     expired or missing.
     ///
     /// Returns `ApiKey` only when the auth method is BYOK (`xai.api_key`) or
@@ -1367,7 +1367,7 @@ impl MvpAgent {
         }
     }
     /// Fall through to `xai.api_key` if the startup probe still allows it,
-    /// else `grok.com`. `None` when `preferred_method` is pinned.
+    /// else `supercharge.ai`. `None` when `preferred_method` is pinned.
     pub(super) fn cached_token_fallthrough_method_id(
         &self,
     ) -> Option<acp::AuthMethodId> {
@@ -1383,7 +1383,7 @@ impl MvpAgent {
         Some(acp::AuthMethodId::new(id))
     }
     /// Shared exit for missing/expired/legacy `cached_token`: fall through with
-    /// `use_oauth` only when the target is interactive `grok.com`. When
+    /// `use_oauth` only when the target is interactive `supercharge.ai`. When
     /// `preferred_method` is pinned, fail instead of falling through.
     pub(super) async fn authenticate_after_cached_token_unavailable(
         &self,
@@ -1409,7 +1409,7 @@ impl MvpAgent {
             );
             return Err(acp::Error::auth_required().data(msg));
         };
-        let meta = if method_id.0.as_ref() == auth_method::GROK_COM_METHOD_ID {
+        let meta = if method_id.0.as_ref() == auth_method::SUPERCHARGE_COM_METHOD_ID {
             serde_json::json!({ "use_oauth": true }).as_object().cloned()
         } else {
             arguments.meta
@@ -2146,10 +2146,10 @@ impl MvpAgent {
         );
         (id.clone(), new_config)
     }
-    /// Whether the current session is a personal grok.com account on a gated
+    /// Whether the current session is a personal supercharge.ai account on a gated
     /// tier (free / X Basic). The Imagine tools stay advertised to the model but
     /// are flagged tier-restricted so they short-circuit at call time with the
-    /// SuperGrok upsell prose (see `ImageGenConfig`/`VideoGenConfig`'s
+    /// Supercharge upsell prose (see `ImageGenConfig`/`VideoGenConfig`'s
     /// `tier_restricted`).
     ///
     /// Fails **open** (returns `false`) whenever we can't positively confirm a
@@ -2202,7 +2202,7 @@ impl MvpAgent {
             .unwrap_or_else(|| xai_grok_version::VERSION.to_string());
         let alpha_test_key = cfg.endpoints.alpha_test_key.clone();
         let mut headers = indexmap::IndexMap::new();
-        headers.insert("user-agent".to_string(), format!("xai-grok-build/{version}"));
+        headers.insert("user-agent".to_string(), format!("xai-supercharge-core/{version}"));
         inject_proxy_headers(
             &mut headers,
             cfg.client_version.as_deref(),
@@ -2257,7 +2257,7 @@ impl MvpAgent {
             .unwrap_or_else(|| xai_grok_version::VERSION.to_string());
         let alpha_test_key = cfg.endpoints.alpha_test_key.clone();
         let mut headers = indexmap::IndexMap::new();
-        headers.insert("user-agent".to_string(), format!("xai-grok-build/{version}"));
+        headers.insert("user-agent".to_string(), format!("xai-supercharge-core/{version}"));
         inject_proxy_headers(
             &mut headers,
             cfg.client_version.as_deref(),
@@ -2313,13 +2313,13 @@ impl MvpAgent {
     }
     /// Prepare the web fetch configuration based on feature flags.
     ///
-    /// Enabled gate: `disable_web_search` kill-switch > `GROK_WEB_FETCH` env >
+    /// Enabled gate: `disable_web_search` kill-switch > `SUPERCHARGE_WEB_FETCH` env >
     /// remote settings `web_fetch_enabled` > default (false).
     ///
     /// Params resolution (TOML > env > remote settings > default):
-    /// - `proxy_endpoint`: `[toolset.web_fetch] proxy_endpoint` > `GROK_WEB_FETCH_PROXY` > remote settings > None
+    /// - `proxy_endpoint`: `[toolset.web_fetch] proxy_endpoint` > `SUPERCHARGE_WEB_FETCH_PROXY` > remote settings > None
     /// - `allowed_domains`: `[toolset.web_fetch] allowed_domains` > remote settings > built-in defaults
-    /// - `allow_local`: `[toolset.web_fetch] allow_local` > `GROK_WEB_FETCH_ALLOW_LOCAL` > false
+    /// - `allow_local`: `[toolset.web_fetch] allow_local` > `SUPERCHARGE_WEB_FETCH_ALLOW_LOCAL` > false
     pub(super) fn prepare_web_fetch_config(
         &self,
     ) -> xai_grok_tools::implementations::grok_build::web_fetch::WebFetchConfig {
@@ -3006,7 +3006,7 @@ impl MvpAgent {
     /// Create a RelaySync instance if enabled and auth is available.
     /// RelaySync is only enabled when:
     /// 1. Running in TUI interactive mode (cfg.enable_relay_sync)
-    /// 2. Config file/env enables it ([relay] enabled or GROK_RELAY_SYNC_ENABLED)
+    /// 2. Config file/env enables it ([relay] enabled or SUPERCHARGE_RELAY_SYNC_ENABLED)
     /// 3. User is authenticated
     ///
     /// Returns a `RelaySync` instance whose connection state can be observed
@@ -3759,10 +3759,10 @@ impl MvpAgent {
     /// 2. `acp_agent_profile` from ACP `_meta.agentProfile` (remote clients).
     /// 3. `agent_profile_path` from CLI `--agent-profile`.
     /// 4. `agent_config` from config.toml `[agent]`.
-    /// 5. `GROK_AGENT` env var.
+    /// 5. `SUPERCHARGE_AGENT` env var.
     /// 6. Built-in default agent.
     ///
-    /// `GROK_AGENT` and an explicit `[agent] name` bypass step 1.
+    /// `SUPERCHARGE_AGENT` and an explicit `[agent] name` bypass step 1.
     /// Strict-harness classification is structural — see
     /// [`xai_grok_agent::config::is_strict_harness_agent_type`].
     ///
@@ -3776,7 +3776,7 @@ impl MvpAgent {
         model_agent_type: Option<&str>,
     ) -> xai_grok_agent::AgentDefinition {
         use xai_grok_agent::AgentDefinition;
-        let grok_agent_env_set = std::env::var("GROK_AGENT")
+        let grok_agent_env_set = std::env::var("SUPERCHARGE_AGENT")
             .ok()
             .is_some_and(|s| !s.trim().is_empty());
         let config_agent_explicitly_set = agent_config.name.is_some();
@@ -3851,10 +3851,10 @@ impl MvpAgent {
                 name
             );
         }
-        let agent_name = std::env::var("GROK_AGENT").ok();
+        let agent_name = std::env::var("SUPERCHARGE_AGENT").ok();
         let resolved = match agent_name.as_deref() {
             Some("browser-use") | Some("browser_use") => AgentDefinition::browser_use(),
-            Some("grok-build-concise") | Some("grok_build_concise") => {
+            Some("supercharge-core-concise") | Some("grok_build_concise") => {
                 AgentDefinition::grok_build_concise()
             }
             Some(path) if std::path::Path::new(path).is_absolute() => {
@@ -4087,7 +4087,7 @@ impl MvpAgent {
                 .as_ref()
                 .and_then(|s| s.loc_tracking)
                 .unwrap_or(false)
-                || std::env::var("GROK_LOC_TRACKING")
+                || std::env::var("SUPERCHARGE_LOC_TRACKING")
                     .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                     .unwrap_or(false));
         let (feedback_resolved, feedback_flags) = {
@@ -4372,7 +4372,7 @@ impl MvpAgent {
             if servers.is_empty() {
                 let user_path = xai_grok_tools::util::grok_home::grok_home()
                     .join("lsp.json");
-                let project_path = tool_ctx.cwd.as_path().join(".grok").join("lsp.json");
+                let project_path = tool_ctx.cwd.as_path().join(".supercharge").join("lsp.json");
                 tracing::debug!(
                     cwd = %tool_ctx.cwd,
                     user_lsp_path = %user_path.display(),

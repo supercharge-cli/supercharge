@@ -29,7 +29,7 @@ fn external_stream_grpc_over_tls_end_to_end() {
 
     let mut cfg = xai_grok_telemetry::external::ExternalOtelConfig::resolve_with(
         |name| match name {
-            "GROK_EXTERNAL_OTEL" => Some("1".into()),
+            "SUPERCHARGE_EXTERNAL_OTEL" => Some("1".into()),
             "OTEL_LOGS_EXPORTER" | "OTEL_METRICS_EXPORTER" => Some("otlp".into()),
             "OTEL_EXPORTER_OTLP_ENDPOINT" => Some(endpoint.clone()),
             "OTEL_EXPORTER_OTLP_PROTOCOL" => Some("grpc".into()),
@@ -68,7 +68,7 @@ fn external_stream_grpc_over_tls_end_to_end() {
         session_id: "sess-grpc-tls-1".into(),
         client_identifier: Some("grok-pager".into()),
         model_id: "grok-4".into(),
-        agent_name: "grok-build-plan".into(),
+        agent_name: "supercharge-core-plan".into(),
         permission_mode: xai_grok_telemetry::enums::PermissionMode::Ask,
         mcp_server_names: vec![],
         plugin_names: vec![],

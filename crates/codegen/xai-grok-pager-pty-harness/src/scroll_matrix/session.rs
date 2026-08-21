@@ -120,8 +120,8 @@ pub const STREAMING_CHUNK_DELAY: Duration = Duration::from_millis(30);
 /// Spawn `binary` (the pager under test — the matrix runner plumbs its
 /// `--binary` override here; tests pass `env::pager_binary()`) for `kind`
 /// over a `marker_count`-marker transcript with `extra_env` appended to the
-/// mock's pager env (terminal-class markers, `GROK_SCROLL_*`,
-/// `GROK_SCROLL_LOG` — the PTY spawn strips host-terminal identity first,
+/// mock's pager env (terminal-class markers, `SUPERCHARGE_SCROLL_*`,
+/// `SUPERCHARGE_SCROLL_LOG` — the PTY spawn strips host-terminal identity first,
 /// so injected markers always win).
 ///
 /// `blocked_turn` is present only for a streaming session.

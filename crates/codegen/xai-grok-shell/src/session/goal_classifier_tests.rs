@@ -224,7 +224,7 @@ fn validate_details_path_in_root_keys_on_injected_temp_root() {
     let mac_like = Path::new("/var/folders/zz/T");
     assert!(
         validate_details_path_in_root(
-            Path::new("/var/folders/zz/T/grok-goal-abc/goal-classifier-abc-1.md"),
+            Path::new("/var/folders/zz/T/supercharge_value-goal-abc/goal-classifier-abc-1.md"),
             mac_like,
         )
         .is_ok(),
@@ -237,7 +237,7 @@ fn validate_details_path_in_root_keys_on_injected_temp_root() {
     );
     assert!(
         validate_details_path_in_root(
-            Path::new("/tmp/grok-goal-abc/goal-classifier-abc-1.md"),
+            Path::new("/tmp/supercharge_value-goal-abc/goal-classifier-abc-1.md"),
             Path::new("/tmp"),
         )
         .is_ok(),
@@ -1183,10 +1183,10 @@ fn gap_fingerprint_is_stable_across_scratch_path_churn() {
     ]);
     assert_eq!(a, b, "scratch-path churn must not break the fingerprint");
     let c = gap_fingerprint(&[
-        "no captured output in /var/folders/x1/T/grok-goal-1/out.log for criterion 2",
+        "no captured output in /var/folders/x1/T/supercharge_value-goal-1/out.log for criterion 2",
     ]);
     let d = gap_fingerprint(&[
-        "no captured output in /var/folders/x1/T/grok-goal-2/out.log for criterion 2",
+        "no captured output in /var/folders/x1/T/supercharge_value-goal-2/out.log for criterion 2",
     ]);
     assert_eq!(c, d);
     // Genuinely different gaps still differ.
@@ -1322,14 +1322,14 @@ fn verifier_template_renders_per_agent_type_and_falls_back() {
     }
     assert_no_tool_placeholders(&cursor);
 
-    // grok-build explicit render: no leftover placeholder either.
-    let grok = RoleToolNames::from_summary(&summary_with(&[
+    // supercharge_value-build explicit render: no leftover placeholder either.
+    let supercharge_value = RoleToolNames::from_summary(&summary_with(&[
         (xai_grok_tools::types::tool::ToolKind::Read, "read_file"),
         (xai_grok_tools::types::tool::ToolKind::ListDir, "list_dir"),
         (xai_grok_tools::types::tool::ToolKind::Search, "grep"),
     ]))
     .apply(GOAL_VERIFIER_PROMPT_TEMPLATE);
-    assert_no_tool_placeholders(&grok);
+    assert_no_tool_placeholders(&supercharge_value);
 
     // Fallback path (e.g. `describe_subagent_type` ⇒ `Unavailable`): the
     // parent-toolset defaults render and no placeholder survives.
@@ -1490,8 +1490,8 @@ fn render_skeptic_prompt_substitutes_kind_lens_and_leaves_no_placeholder() {
         "/tmp/goal-verifier-details-x-1-0.md",
         "/tmp/goal-verdict-x-1-0.json",
         kind_lens(Some(GoalKind::CodeChange)),
-        "/tmp/grok-goal-x/skeptic-0",
-        "/tmp/grok-goal-x/implementer",
+        "/tmp/supercharge_value-goal-x/skeptic-0",
+        "/tmp/supercharge_value-goal-x/implementer",
         None,
         &RoleToolNames::inherit_defaults(),
         true,
@@ -1502,8 +1502,8 @@ fn render_skeptic_prompt_substitutes_kind_lens_and_leaves_no_placeholder() {
     );
     // The skeptic's own scratch dir AND the implementer-scratch
     // awareness line are both present, with no dangling placeholder.
-    assert!(body.contains("/tmp/grok-goal-x/skeptic-0"));
-    assert!(body.contains("/tmp/grok-goal-x/implementer"));
+    assert!(body.contains("/tmp/supercharge_value-goal-x/skeptic-0"));
+    assert!(body.contains("/tmp/supercharge_value-goal-x/implementer"));
     assert!(
         !body.contains("{SKEPTIC_SCRATCH}") && !body.contains("{IMPLEMENTER_SCRATCH}"),
         "scratch placeholders must be substituted:\n{body}"
@@ -1520,8 +1520,8 @@ fn render_skeptic_prompt_substitutes_kind_lens_and_leaves_no_placeholder() {
         "/tmp/goal-verifier-details-x-1-0.md",
         "/tmp/goal-verdict-x-1-0.json",
         kind_lens(None),
-        "/tmp/grok-goal-x/skeptic-1",
-        "/tmp/grok-goal-x/implementer",
+        "/tmp/supercharge_value-goal-x/skeptic-1",
+        "/tmp/supercharge_value-goal-x/implementer",
         None,
         &RoleToolNames::inherit_defaults(),
         true,
@@ -1546,8 +1546,8 @@ fn render_skeptic_prompt_scratch_status_reflects_readiness() {
             "/tmp/goal-verifier-details-x-1-0.md",
             "/tmp/goal-verdict-x-1-0.json",
             kind_lens(Some(GoalKind::CodeChange)),
-            "/tmp/grok-goal-x/skeptic-0",
-            "/tmp/grok-goal-x/implementer",
+            "/tmp/supercharge_value-goal-x/skeptic-0",
+            "/tmp/supercharge_value-goal-x/implementer",
             None,
             &RoleToolNames::inherit_defaults(),
             scratch_ready,
@@ -1597,8 +1597,8 @@ fn render_skeptic_prompt_substitutes_prior_gaps() {
             "/tmp/goal-verifier-details-x-2-1.md",
             "/tmp/goal-verdict-x-2-1.json",
             kind_lens(Some(GoalKind::CodeChange)),
-            "/tmp/grok-goal-x/skeptic-1",
-            "/tmp/grok-goal-x/implementer",
+            "/tmp/supercharge_value-goal-x/skeptic-1",
+            "/tmp/supercharge_value-goal-x/implementer",
             prior,
             &RoleToolNames::inherit_defaults(),
             true,
@@ -1630,8 +1630,8 @@ fn render_skeptic_resume_prompt_is_delta_focused_and_substitutes_paths() {
         "/tmp/goal-classifier-x-2-skeptic-0.md",
         "/tmp/goal-verdict-x-2-0.json",
         kind_lens(Some(GoalKind::CodeChange)),
-        "/tmp/grok-goal-x/skeptic-0",
-        "/tmp/grok-goal-x/implementer",
+        "/tmp/supercharge_value-goal-x/skeptic-0",
+        "/tmp/supercharge_value-goal-x/implementer",
         None,
         &RoleToolNames::inherit_defaults(),
         true,
@@ -1644,8 +1644,8 @@ fn render_skeptic_resume_prompt_is_delta_focused_and_substitutes_paths() {
     assert!(body.contains("/tmp/goal-verdict-x-2-0.json"));
     assert!(body.contains("/tmp/goal-classifier-x-2-skeptic-0.md"));
     // Scratch dirs: own + implementer-awareness, both substituted.
-    assert!(body.contains("/tmp/grok-goal-x/skeptic-0"));
-    assert!(body.contains("/tmp/grok-goal-x/implementer"));
+    assert!(body.contains("/tmp/supercharge_value-goal-x/skeptic-0"));
+    assert!(body.contains("/tmp/supercharge_value-goal-x/implementer"));
     assert!(
         !body.contains("{KIND_LENS}")
             && !body.contains("{DETAILS_FILE}")
@@ -2004,11 +2004,11 @@ fn stage_inputs_resume<'a>(
         workspace_root,
         verifier_id,
         attempt,
-        model_id: "grok-test",
+        model_id: "supercharge_value-test",
         goal_created_at: 0,
         plan_file: None,
         plan_baseline_file: None,
-        implementer_scratch_dir: Path::new("/tmp/grok-goal-test/implementer"),
+        implementer_scratch_dir: Path::new("/tmp/supercharge_value-goal-test/implementer"),
         scratch_dir_ready: true,
         skeptic_count,
         max_runs: GOAL_CLASSIFIER_MAX_RUNS_DEFAULT,
@@ -2102,7 +2102,7 @@ async fn verification_stage_n1_not_refuted_returns_achieved() {
     // and this skeptic's own dir (derived from verifier_id) are both
     // present; neither placeholder leaks.
     assert!(
-        p.contains("/tmp/grok-goal-test/implementer"),
+        p.contains("/tmp/supercharge_value-goal-test/implementer"),
         "implementer scratch dir missing in prompt",
     );
     assert!(
@@ -3196,29 +3196,29 @@ fn cfg_strategist(config: Option<u32>, remote: Option<u32>) -> crate::agent::con
 #[test]
 #[serial]
 fn resolve_goal_verifier_count_env_clamps() {
-    unsafe { std::env::set_var("GROK_GOAL_VERIFIER_N", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_VERIFIER_N", "0") };
     assert_eq!(
         cfg_verifier(None, None).resolve_goal_verifier_count().value,
         GOAL_VERIFIER_SKEPTIC_MIN
     );
-    unsafe { std::env::set_var("GROK_GOAL_VERIFIER_N", "99") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_VERIFIER_N", "99") };
     assert_eq!(
         cfg_verifier(None, None).resolve_goal_verifier_count().value,
         GOAL_VERIFIER_SKEPTIC_MAX
     );
-    unsafe { std::env::set_var("GROK_GOAL_VERIFIER_N", "garbage") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_VERIFIER_N", "garbage") };
     assert_eq!(
         cfg_verifier(None, None).resolve_goal_verifier_count().value,
         GOAL_VERIFIER_SKEPTIC_COUNT,
         "invalid env falls through to the default"
     );
-    unsafe { std::env::remove_var("GROK_GOAL_VERIFIER_N") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_VERIFIER_N") };
 }
 
 #[test]
 #[serial]
 fn resolve_goal_verifier_count_default_when_nothing_set() {
-    unsafe { std::env::remove_var("GROK_GOAL_VERIFIER_N") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_VERIFIER_N") };
     // Literal 3 (not the const) so a regression that flips the production
     // default fails LOUDLY here, where a `== CONST` tautology would pass.
     assert_eq!(
@@ -3237,7 +3237,7 @@ fn prod_default_skeptic_count_is_three() {
 #[test]
 #[serial]
 fn resolve_goal_verifier_count_precedence_and_clamp() {
-    unsafe { std::env::remove_var("GROK_GOAL_VERIFIER_N") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_VERIFIER_N") };
     // config > remote.
     let r = cfg_verifier(Some(4), Some(2)).resolve_goal_verifier_count();
     assert_eq!(r.value, 4);
@@ -3250,11 +3250,11 @@ fn resolve_goal_verifier_count_precedence_and_clamp() {
         4
     );
     // env > config.
-    unsafe { std::env::set_var("GROK_GOAL_VERIFIER_N", "2") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_VERIFIER_N", "2") };
     let r = cfg_verifier(Some(4), None).resolve_goal_verifier_count();
     assert_eq!(r.value, 2);
     assert_eq!(r.source, ConfigSource::Env);
-    unsafe { std::env::remove_var("GROK_GOAL_VERIFIER_N") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_VERIFIER_N") };
     // config is clamped to [MIN, MAX].
     assert_eq!(
         cfg_verifier(Some(99), None)
@@ -3273,14 +3273,14 @@ fn resolve_goal_verifier_count_precedence_and_clamp() {
 #[test]
 #[serial]
 fn resolve_goal_classifier_max_runs_env_clamps_and_no_ceiling() {
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER_MAX", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX", "0") };
     assert_eq!(
         cfg_max_runs(None, None)
             .resolve_goal_classifier_max_runs()
             .value,
         GOAL_CLASSIFIER_MAX_RUNS_MIN
     );
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER_MAX", "999") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX", "999") };
     assert_eq!(
         cfg_max_runs(None, None)
             .resolve_goal_classifier_max_runs()
@@ -3288,20 +3288,20 @@ fn resolve_goal_classifier_max_runs_env_clamps_and_no_ceiling() {
         999,
         "no upper ceiling"
     );
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER_MAX", "garbage") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX", "garbage") };
     assert_eq!(
         cfg_max_runs(None, None)
             .resolve_goal_classifier_max_runs()
             .value,
         GOAL_CLASSIFIER_MAX_RUNS_DEFAULT
     );
-    unsafe { std::env::remove_var("GROK_GOAL_CLASSIFIER_MAX") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX") };
 }
 
 #[test]
 #[serial]
 fn resolve_goal_classifier_max_runs_default_when_nothing_set() {
-    unsafe { std::env::remove_var("GROK_GOAL_CLASSIFIER_MAX") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX") };
     // Literal 10 so a regression flipping the production default fails here.
     assert_eq!(
         cfg_max_runs(None, None)
@@ -3314,7 +3314,7 @@ fn resolve_goal_classifier_max_runs_default_when_nothing_set() {
 #[test]
 #[serial]
 fn resolve_goal_classifier_max_runs_precedence_and_floor() {
-    unsafe { std::env::remove_var("GROK_GOAL_CLASSIFIER_MAX") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX") };
     // config > remote.
     let r = cfg_max_runs(Some(6), Some(8)).resolve_goal_classifier_max_runs();
     assert_eq!(r.value, 6);
@@ -3327,11 +3327,11 @@ fn resolve_goal_classifier_max_runs_precedence_and_floor() {
         6
     );
     // env > config.
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER_MAX", "4") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX", "4") };
     let r = cfg_max_runs(Some(6), None).resolve_goal_classifier_max_runs();
     assert_eq!(r.value, 4);
     assert_eq!(r.source, ConfigSource::Env);
-    unsafe { std::env::remove_var("GROK_GOAL_CLASSIFIER_MAX") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX") };
     // config floored at MIN.
     let r = cfg_max_runs(Some(0), None).resolve_goal_classifier_max_runs();
     assert_eq!(r.value, GOAL_CLASSIFIER_MAX_RUNS_MIN);
@@ -3343,7 +3343,7 @@ fn resolve_goal_classifier_max_runs_precedence_and_floor() {
 #[test]
 #[serial]
 fn resolve_strategist_every_default_tracks_cap_floored_at_one() {
-    unsafe { std::env::remove_var("GROK_GOAL_STRATEGIST_EVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_STRATEGIST_EVERY") };
     // Default N = max(1, cap / 2).
     assert_eq!(
         cfg_strategist(None, None)
@@ -3377,19 +3377,19 @@ fn resolve_strategist_every_precedence_and_floor() {
         4
     );
     // env > config + remote.
-    unsafe { std::env::set_var("GROK_GOAL_STRATEGIST_EVERY", "7") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_STRATEGIST_EVERY", "7") };
     let r = cfg_strategist(Some(3), Some(4)).resolve_goal_strategist_every(10);
     assert_eq!(r.value, 7);
     assert_eq!(r.source, ConfigSource::Env);
     // invalid env falls through to the default (cap/2).
-    unsafe { std::env::set_var("GROK_GOAL_STRATEGIST_EVERY", "not-a-number") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_STRATEGIST_EVERY", "not-a-number") };
     assert_eq!(
         cfg_strategist(None, None)
             .resolve_goal_strategist_every(10)
             .value,
         5
     );
-    unsafe { std::env::remove_var("GROK_GOAL_STRATEGIST_EVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL_STRATEGIST_EVERY") };
     // 0 from config/remote floors to 1 (the `every > 0` trigger guard).
     assert_eq!(
         cfg_strategist(Some(0), None)
@@ -3675,7 +3675,7 @@ async fn run_one_skeptic_fails_closed_when_scratch_root_squatted() {
         verifier_id: &vid,
         attempt: 1,
         kind_lens: "",
-        implementer_scratch: "/tmp/grok-goal-test/implementer",
+        implementer_scratch: "/tmp/supercharge_value-goal-test/implementer",
         scratch_dir_ready: true,
         prior_gaps: None,
     };

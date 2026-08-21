@@ -1,12 +1,12 @@
 # Cross-Session Memory
 
-Memory lets Grok recall facts, decisions, and patterns from earlier sessions. Grok indexes the information you save and searches it automatically, so a new session can reuse relevant context.
+Memory lets Supercharge AI recall facts, decisions, and patterns from earlier sessions. Supercharge AI indexes the information you save and searches it automatically, so a new session can reuse relevant context.
 
 ---
 
 ## What Is Memory?
 
-Without memory, each Grok session starts fresh: the model knows nothing about previous sessions. When you enable memory, Grok can:
+Without memory, each Supercharge AI session starts fresh: the model knows nothing about previous sessions. When you enable memory, Supercharge AI can:
 
 - Recall project conventions you explained before.
 - Reuse debugging steps that worked.
@@ -22,14 +22,14 @@ Memory is experimental and disabled by default.
 ### Environment Variable
 
 ```bash
-export GROK_MEMORY=1
-grok
+export SUPERCHARGE_MEMORY=1
+supercharge
 ```
 
 ### Config File (Persistent)
 
 ```toml
-# ~/.grok/config.toml
+# ~/.supercharge/config.toml
 [memory]
 enabled = true
 ```
@@ -39,7 +39,7 @@ enabled = true
 To disable memory for the process even when TOML or remote settings enable it:
 
 ```bash
-export GROK_MEMORY=0
+export SUPERCHARGE_MEMORY=0
 ```
 
 ### Mid-Session Toggle
@@ -58,7 +58,7 @@ You can also toggle from inside the `/memory` modal by pressing `t`.
 ### Priority Order
 
 1. Hidden deprecated compatibility flag, when supplied
-2. `GROK_MEMORY` env var: `1`/`true` enables, `0`/`false` disables
+2. `SUPERCHARGE_MEMORY` env var: `1`/`true` enables, `0`/`false` disables
 3. `[memory]` section in effective TOML
 4. Managed remote settings
 5. Default: disabled
@@ -67,15 +67,15 @@ You can also toggle from inside the `/memory` modal by pressing `t`.
 
 ## How Memory Is Stored
 
-Memory is stored as Markdown files under `~/.grok/memory/`:
+Memory is stored as Markdown files under `~/.supercharge/memory/`:
 
 | Location | Scope | Description |
 |----------|-------|-------------|
-| `~/.grok/memory/MEMORY.md` | Global | Facts that apply across all your projects |
-| `~/.grok/memory/<project-slug>-<hash8>/MEMORY.md` | Workspace | Project-specific conventions and context |
-| `~/.grok/memory/<project-slug>-<hash8>/sessions/` | Sessions | Per-session summaries and logs |
+| `~/.supercharge/memory/MEMORY.md` | Global | Facts that apply across all your projects |
+| `~/.supercharge/memory/<project-slug>-<hash8>/MEMORY.md` | Workspace | Project-specific conventions and context |
+| `~/.supercharge/memory/<project-slug>-<hash8>/sessions/` | Sessions | Per-session summaries and logs |
 
-Grok suffixes each workspace directory with a short hash of the repository's identity. The identity is the `origin` remote in `org/repo` form when the directory is a Git repository with an `origin` remote, or the directory path otherwise. Because clones and worktrees of the same repository share an `origin` remote, they also share one memory directory.
+Supercharge AI suffixes each workspace directory with a short hash of the repository's identity. The identity is the `origin` remote in `org/repo` form when the directory is a Git repository with an `origin` remote, or the directory path otherwise. Because clones and worktrees of the same repository share an `origin` remote, they also share one memory directory.
 
 An SQLite index supports search across all memory files:
 - **FTS5** provides the default full-text search for keyword matching.
@@ -85,13 +85,13 @@ An SQLite index supports search across all memory files:
 
 ## Automatic Saves
 
-When a session ends, Grok saves a structured metadata summary to that session's daily log. The summary contains:
+When a session ends, Supercharge AI saves a structured metadata summary to that session's daily log. The summary contains:
 
 - Message counts (user, assistant, and tool results).
 - Topics: the first few substantive user prompts from the session, up to five.
 - The session date and time (UTC).
 
-Grok builds the summary from conversation metadata without an LLM call, without added latency. Grok skips the save for trivial sessions -- those with fewer than three substantive prompts, or fewer than 50 bytes of user text.
+Supercharge AI builds the summary from conversation metadata without an LLM call, without added latency. Supercharge AI skips the save for trivial sessions -- those with fewer than three substantive prompts, or fewer than 50 bytes of user text.
 
 The summary does not record tool usage, file paths, or shell commands. The session ID forms part of the log filename. To turn automatic saves off, set `session.save_on_end = false`. For richer capture of decisions, patterns, and reasoning, use `/flush`.
 
@@ -118,13 +118,13 @@ Use `/flush` when you want to preserve important context:
 
 ### Remember
 
-Ask Grok to remember something, and it appends the note to a `MEMORY.md` file -- the workspace file for project-specific items, or the global `~/.grok/memory/MEMORY.md` for cross-project preferences:
+Ask Supercharge AI to remember something, and it appends the note to a `MEMORY.md` file -- the workspace file for project-specific items, or the global `~/.supercharge/memory/MEMORY.md` for cross-project preferences:
 
 ```
 > remember to always open PR links after pushing
 ```
 
-Grok records entries as durable statements under organized headings, such as `## Preferences`, `## Project Context`, or `## Debugging`. The file watcher reindexes the change on the next memory search, so the new entry is searchable within the current session.
+Supercharge AI records entries as durable statements under organized headings, such as `## Preferences`, `## Project Context`, or `## Debugging`. The file watcher reindexes the change on the next memory search, so the new entry is searchable within the current session.
 
 You can also save a note directly with the `/remember` command:
 
@@ -132,31 +132,31 @@ You can also save a note directly with the `/remember` command:
 /remember always open PR links after pushing
 ```
 
-Run `/remember` with no text to enter remember mode, where the next line you type becomes the note. Either way, Grok opens a review panel showing the note (with an optional rewritten version you can toggle with `Tab`); the note is written only after you confirm. On save, Grok shows `Memory saved to ~/.grok/memory/MEMORY.md`.
+Run `/remember` with no text to enter remember mode, where the next line you type becomes the note. Either way, Supercharge AI opens a review panel showing the note (with an optional rewritten version you can toggle with `Tab`); the note is written only after you confirm. On save, Supercharge AI shows `Memory saved to ~/.supercharge/memory/MEMORY.md`.
 
 ### Forget
 
-Ask Grok to forget something, and it finds and removes the matching entry:
+Ask Supercharge AI to forget something, and it finds and removes the matching entry:
 
 ```
 > forget the snake_case convention
 ```
 
-Forget is best-effort: the model searches memory and removes entries that match. For guaranteed removal, edit the files under `~/.grok/memory/` directly and delete the entry yourself. To locate a file, open the `/memory` browser and press `y` to copy its path.
+Forget is best-effort: the model searches memory and removes entries that match. For guaranteed removal, edit the files under `~/.supercharge/memory/` directly and delete the entry yourself. To locate a file, open the `/memory` browser and press `y` to copy its path.
 
 ### Recall
 
-Ask what Grok remembers:
+Ask what Supercharge AI remembers:
 
 ```
 > what do you remember?
 ```
 
-Grok searches across all memory files and summarizes what it knows, grouped by source: global preferences, project-specific knowledge, and session history. Use `/memory` to browse the raw files.
+Supercharge AI searches across all memory files and summarizes what it knows, grouped by source: global preferences, project-specific knowledge, and session history. Use `/memory` to browse the raw files.
 
 ### Direct Editing
 
-You can edit memory files directly under `~/.grok/memory/`. The file watcher reindexes your changes on the next memory search. Use `/flush` to save the current session now, and `/dream` to consolidate session logs into organized topics.
+You can edit memory files directly under `~/.supercharge/memory/`. The file watcher reindexes your changes on the next memory search. Use `/flush` to save the current session now, and `/dream` to consolidate session logs into organized topics.
 
 ---
 
@@ -198,13 +198,13 @@ You can also open `/memory` from the command palette.
 
 ## Memory Notifications
 
-When you save a note with `/remember`, Grok confirms in the scrollback:
+When you save a note with `/remember`, Supercharge AI confirms in the scrollback:
 
 ```
-Memory saved to ~/.grok/memory/MEMORY.md
+Memory saved to ~/.supercharge/memory/MEMORY.md
 ```
 
-Background saves — flush, dream, and session-end — run silently and do not post a scrollback message. Use `/memory` at any time to browse what Grok has stored.
+Background saves — flush, dream, and session-end — run silently and do not post a scrollback message. Use `/memory` at any time to browse what Supercharge AI has stored.
 
 ---
 
@@ -220,7 +220,7 @@ Dream reorganizes individual session logs and memory entries into a coherent, de
 
 ### Auto-Dream
 
-Dream also runs automatically. By default, Grok checks the consolidation gates when a session ends and runs Dream once enough time has passed and enough sessions have accumulated:
+Dream also runs automatically. By default, Supercharge AI checks the consolidation gates when a session ends and runs Dream once enough time has passed and enough sessions have accumulated:
 
 ```toml
 [memory.dream]
@@ -236,7 +236,7 @@ check_interval_secs = 3600 # Also check the gates hourly
 
 ### First-Turn Injection
 
-On the first turn of each session, Grok automatically searches memory for content relevant to the current project and injects it as context. This means Grok starts with knowledge from previous sessions without a reminder.
+On the first turn of each session, Supercharge AI automatically searches memory for content relevant to the current project and injects it as context. This means Supercharge AI starts with knowledge from previous sessions without a reminder.
 
 First-turn injection can be configured:
 
@@ -254,7 +254,7 @@ Memory is also searched after auto-compaction to recover relevant context that m
 
 ## Memory Search
 
-Grok searches memory automatically, but you can also trigger searches manually in the chat:
+Supercharge AI searches memory automatically, but you can also trigger searches manually in the chat:
 
 ```
 Search memory for "auth middleware patterns"
@@ -305,26 +305,26 @@ lambda = 0.7             # 0.0 = max diversity, 1.0 = pure relevance
 
 ## CLI Commands
 
-The `grok memory` command manages memory from the shell. It has one subcommand, `clear`:
+The `supercharge memory` command manages memory from the shell. It has one subcommand, `clear`:
 
 ```bash
 # Clear workspace memory (MEMORY.md, sessions/, and index.sqlite). This is the default scope.
-grok memory clear
+supercharge memory clear
 
 # The same scope, stated explicitly
-grok memory clear --workspace
+supercharge memory clear --workspace
 
 # Clear the global MEMORY.md
-grok memory clear --global
+supercharge memory clear --global
 
 # Clear both workspace and global memory
-grok memory clear --all
+supercharge memory clear --all
 
 # Skip the confirmation prompt (-y is the short form)
-grok memory clear --yes
+supercharge memory clear --yes
 ```
 
-To edit memory from the shell, open the files in your editor directly -- for example, `$EDITOR ~/.grok/memory/MEMORY.md`.
+To edit memory from the shell, open the files in your editor directly -- for example, `$EDITOR ~/.supercharge/memory/MEMORY.md`.
 
 ---
 
@@ -336,7 +336,7 @@ To edit memory from the shell, open the files in your editor directly -- for exa
 |-----|---------|-------------|
 | `enabled` | `false` | Enable memory |
 | `session.save_on_end` | `true` | Write metadata summary on session end |
-| `watcher.enabled` | `true` | Watch `~/.grok/memory/` for external edits and reindex |
+| `watcher.enabled` | `true` | Watch `~/.supercharge/memory/` for external edits and reindex |
 
 ### Index Settings (`[memory.index]`)
 
@@ -388,7 +388,7 @@ You configure flush under `[compaction]`, not `[memory]`, because it is a compac
 | `enabled` | `true` | Enable the pre-compaction memory flush |
 | `soft_threshold_tokens` | `4000` | Token headroom before the compact threshold that triggers a flush |
 | `max_flush_write_chars` | `8000` | Maximum characters the flush may write to memory |
-| `flush_model` | unset | Model for the flush turn. When unset or `""`, Grok uses the session's primary model. |
+| `flush_model` | unset | Model for the flush turn. When unset or `""`, Supercharge AI uses the session's primary model. |
 | `idle_timeout_secs` | `300` | Idle seconds before a background flush. Set `0` to disable idle flushes. |
 | `semantic_dedup_threshold` | unset | Cosine-similarity threshold for de-duplicating flushed content. When unset, defaults to `0.92`. |
 
@@ -409,13 +409,13 @@ You configure pruning under `[compaction]`, not `[memory]`, because it is a comp
 
 ## Memory Staleness
 
-When a session memory is old, Grok attaches a staleness note to it in search results. Older results get a stronger reminder to verify the current state before you rely on them. These notes help you spot stored facts that might no longer be accurate. Global and workspace memories never receive staleness notes, because they hold curated long-term knowledge.
+When a session memory is old, Supercharge AI attaches a staleness note to it in search results. Older results get a stronger reminder to verify the current state before you rely on them. These notes help you spot stored facts that might no longer be accurate. Global and workspace memories never receive staleness notes, because they hold curated long-term knowledge.
 
 ---
 
 ## File Watcher
 
-By default, Grok watches `~/.grok/memory/` for external file changes. If you edit memory files directly (e.g., in your editor), the changes are picked up automatically on the next memory search:
+By default, Supercharge AI watches `~/.supercharge/memory/` for external file changes. If you edit memory files directly (e.g., in your editor), the changes are picked up automatically on the next memory search:
 
 - Created or modified files are reindexed.
 - Deleted files have their stale chunks removed from the index.
@@ -431,9 +431,9 @@ enabled = true    # default
 
 ### Memory Not Working
 
-1. Verify memory is enabled: check `grok inspect` output.
-2. Check `GROK_MEMORY` or `[memory] enabled` in effective TOML.
-3. Check for `GROK_MEMORY=0` or a deprecated compatibility flag overriding config.
+1. Verify memory is enabled: check `supercharge inspect` output.
+2. Check `SUPERCHARGE_MEMORY` or `[memory] enabled` in effective TOML.
+3. Check for `SUPERCHARGE_MEMORY=0` or a deprecated compatibility flag overriding config.
 
 ### Memory Not Appearing in Sessions
 
@@ -444,14 +444,14 @@ Memory is injected on the first turn. If you started a session before enabling m
 Use `/memory` in the TUI to browse all memory files with a preview. You can also access them directly:
 
 ```bash
-ls ~/.grok/memory/
-cat ~/.grok/memory/MEMORY.md
-$EDITOR ~/.grok/memory/MEMORY.md
+ls ~/.supercharge/memory/
+cat ~/.supercharge/memory/MEMORY.md
+$EDITOR ~/.supercharge/memory/MEMORY.md
 ```
 
 ### Debug Logging
 
 ```bash
-RUST_LOG=debug GROK_LOG_FILE=/tmp/grok.log grok
-grep "memory" /tmp/grok.log
+RUST_LOG=debug SUPERCHARGE_LOG_FILE=/tmp/supercharge.log supercharge
+grep "memory" /tmp/supercharge.log
 ```

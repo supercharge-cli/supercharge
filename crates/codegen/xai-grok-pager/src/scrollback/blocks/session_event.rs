@@ -749,12 +749,12 @@ mod tests {
     fn model_unavailable_with_switch() {
         let event = SessionEvent::ModelUnavailable {
             previous_model_id: "grok-4.5".into(),
-            new_model_id: "grok-build".into(),
+            new_model_id: "supercharge-core".into(),
             reason: "Model \"grok-4.5\" is no longer available.".into(),
         };
         assert_eq!(
             event.message(),
-            "Model \"grok-4.5\" is no longer available. Switched to \"grok-build\"."
+            "Model \"grok-4.5\" is no longer available. Switched to \"supercharge-core\"."
         );
     }
 

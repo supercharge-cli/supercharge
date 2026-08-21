@@ -1,5 +1,5 @@
 //! Conversation types: re-exports the canonical set from
-//! `xai_grok_sampling_types` plus grok-shell-specific additions.
+//! `xai_grok_sampling_types` plus Supercharge AI-shell-specific additions.
 
 use std::collections::HashSet;
 
@@ -10,7 +10,7 @@ pub use xai_grok_sampling_types::conversation::*;
 mod tests;
 
 /// Tracing context for conversation requests; satisfies `TraceContext`
-/// through its blanket impl. Lives in grok-shell because it references
+/// through its blanket impl. Lives in Supercharge AI-shell because it references
 /// shell-internal config and upload types.
 #[derive(Debug, Clone)]
 pub struct ConversationRequestTrace {
@@ -28,7 +28,7 @@ pub struct ConversationRequestTrace {
 /// Reasoning and BackendToolCall items are transparent to the scan.
 ///
 /// NOTE: keep the "complete turn" definition in sync with
-/// `count_complete_turns` in `xai-grok-subagent-resolution/src/context.rs`.
+/// `count_complete_turns` in `xai-Supercharge AI-subagent-resolution/src/context.rs`.
 pub(crate) fn fork_filter_chat(items: &mut Vec<ConversationItem>) {
     items.retain(|item| match item {
         ConversationItem::User(u) => u.synthetic_reason.is_none(),

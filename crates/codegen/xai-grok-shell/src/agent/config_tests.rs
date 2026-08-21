@@ -23,7 +23,7 @@ fn auto_mode_config_parses_from_toml_and_json_equivalently() {
     let toml_src = r#"
 enabled = true
 prompt_type = "no_user_tool_prefix"
-classifier_model = "grok-4.5"
+classifier_model = "Supercharge AI-4.5"
 classify_timeout_ms = 45000
 reasoning_effort = "low"
 "#;
@@ -31,7 +31,7 @@ reasoning_effort = "low"
     let json = serde_json::json!({
         "enabled": true,
         "prompt_type": "no_user_tool_prefix",
-        "classifier_model": "grok-4.5",
+        "classifier_model": "Supercharge AI-4.5",
         "classify_timeout_ms": 45000,
         "reasoning_effort": "low"
     });
@@ -46,7 +46,7 @@ reasoning_effort = "low"
             cfg.prompt_type,
             Some(ClassifierPromptType::NoUserToolPrefix)
         );
-        assert_eq!(cfg.classifier_model.as_deref(), Some("grok-4.5"));
+        assert_eq!(cfg.classifier_model.as_deref(), Some("Supercharge AI-4.5"));
         assert_eq!(cfg.classify_timeout_ms, Some(45_000));
         assert_eq!(cfg.reasoning_effort, Some(ReasoningEffort::Low));
     }
@@ -172,7 +172,7 @@ fn inject_url_derived_headers_adds_proxy_headers_for_cli_chat_proxy_url() {
     inject_url_derived_headers(&mut headers, None, crate::env::PROD_CLI_CHAT_PROXY_BASE_URL);
     assert_eq!(
         headers.get("X-XAI-Token-Auth").map(String::as_str),
-        Some("xai-grok-cli")
+        Some("xai-Supercharge AI-cli")
     );
     assert_eq!(
         headers.get("x-authenticateresponse").map(String::as_str),
@@ -209,7 +209,7 @@ fn inject_url_derived_headers_preserves_caller_extra_headers() {
     );
     assert_eq!(
         headers.get("X-XAI-Token-Auth").map(String::as_str),
-        Some("xai-grok-cli")
+        Some("xai-Supercharge AI-cli")
     );
 }
 #[test]
@@ -389,7 +389,7 @@ fn finalize_image_describe_sampler_none_uses_active_session_model_not_forced_hel
     let (model, cfg) = finalize_image_describe_sampler_config(None, &active, None, Some(3));
     assert_eq!(model, "composer-session-model");
     assert_eq!(cfg.model, "composer-session-model");
-    assert_ne!(cfg.model, "grok-build");
+    assert_ne!(cfg.model, "Supercharge AI-build");
 }
 #[test]
 fn finalize_image_describe_sampler_some_stamps_session_fields() {
@@ -398,13 +398,13 @@ fn finalize_image_describe_sampler_some_stamps_session_fields() {
         ..Default::default()
     };
     let aux = SamplerConfig {
-        model: "grok-build".into(),
+        model: "Supercharge AI-build".into(),
         ..Default::default()
     };
     let (model, cfg) =
         finalize_image_describe_sampler_config(Some(aux), &active, Some("cli".into()), Some(7));
-    assert_eq!(model, "grok-build");
-    assert_eq!(cfg.model, "grok-build");
+    assert_eq!(model, "Supercharge AI-build");
+    assert_eq!(cfg.model, "Supercharge AI-build");
     assert_eq!(cfg.client_identifier.as_deref(), Some("cli"));
     assert_eq!(cfg.max_retries, Some(7));
 }
@@ -413,7 +413,7 @@ fn resolve_aux_model_honors_grok_build_override() {
     let endpoints = EndpointsConfig::default();
     let mut catalog = IndexMap::new();
     catalog.insert(
-        "grok-build".to_string(),
+        "Supercharge AI-build".to_string(),
         test_model_entry(
             "v9m-rl-learnability-tp8",
             "https://vendor.example/v1",
@@ -423,7 +423,7 @@ fn resolve_aux_model_honors_grok_build_override() {
         ),
     );
     let resolved = resolve_aux_model_sampling_config(
-        "grok-build",
+        "Supercharge AI-build",
         &catalog,
         &endpoints,
         None,
@@ -790,7 +790,7 @@ fn parses_model_api_key() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-custom-model]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://api.example.com/v1"
             context_window = 200000
             api_key = "sk-test-key-12345"
@@ -800,7 +800,7 @@ fn parses_model_api_key() {
     let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
     let resolved = resolve_model_list(&cfg, None);
     let model = resolved.get("my-custom-model").expect("model should exist");
-    assert_eq!(model.info.model, "grok-4.5");
+    assert_eq!(model.info.model, "Supercharge AI-4.5");
     assert_eq!(model.info.base_url, "https://api.example.com/v1");
     assert_eq!(model.api_key, Some("sk-test-key-12345".to_string()));
 }
@@ -939,7 +939,7 @@ async fn resolve_credentials_serves_cached_provider_token() {
 #[tokio::test]
 async fn set_env_key_shadows_warm_provider_at_resolve_time() {
     use xai_grok_test_support::EnvGuard;
-    let var = "GROK_TEST_ENVKEY_SHADOW";
+    let var = "SUPERCHARGE_TEST_ENVKEY_SHADOW";
     let _guard = EnvGuard::set(var, "env-token");
     let mut model = test_model_entry("m", "https://litellm.example/v1", None, Some(var), None);
     let provider = crate::auth::AuthProviderRef::new(
@@ -1238,18 +1238,21 @@ fn env_keys_deser_string_or_array() {
 }
 #[test]
 fn env_keys_resolve_first_set_wins() {
-    let keys = EnvKeys::new(["GROK_TEST_ENV_KEY_PRIMARY", "GROK_TEST_ENV_KEY_FALLBACK"]);
+    let keys = EnvKeys::new([
+        "SUPERCHARGE_TEST_ENV_KEY_PRIMARY",
+        "SUPERCHARGE_TEST_ENV_KEY_FALLBACK",
+    ]);
     assert_eq!(keys.resolve_value_with(|_| None), None, "none set");
     assert_eq!(
         keys.resolve_value_with(
-            |n| (n == "GROK_TEST_ENV_KEY_FALLBACK").then(|| "from-fallback".into())
+            |n| (n == "SUPERCHARGE_TEST_ENV_KEY_FALLBACK").then(|| "from-fallback".into())
         ),
         Some("from-fallback".into())
     );
     assert_eq!(
         keys.resolve_value_with(|n| match n {
-            "GROK_TEST_ENV_KEY_PRIMARY" => Some("from-primary".into()),
-            "GROK_TEST_ENV_KEY_FALLBACK" => Some("from-fallback".into()),
+            "SUPERCHARGE_TEST_ENV_KEY_PRIMARY" => Some("from-primary".into()),
+            "SUPERCHARGE_TEST_ENV_KEY_FALLBACK" => Some("from-fallback".into()),
             _ => None,
         }),
         Some("from-primary".into()),
@@ -1257,8 +1260,8 @@ fn env_keys_resolve_first_set_wins() {
     );
     assert_eq!(
         keys.resolve_value_with(|n| match n {
-            "GROK_TEST_ENV_KEY_PRIMARY" => Some(String::new()),
-            "GROK_TEST_ENV_KEY_FALLBACK" => Some("from-fallback".into()),
+            "SUPERCHARGE_TEST_ENV_KEY_PRIMARY" => Some(String::new()),
+            "SUPERCHARGE_TEST_ENV_KEY_FALLBACK" => Some("from-fallback".into()),
             _ => None,
         }),
         Some("from-fallback".into())
@@ -1273,21 +1276,24 @@ fn env_keys_single_and_array_are_semantically_equal() {
 }
 #[test]
 fn env_keys_resolve_skips_whitespace_only_value() {
-    let keys = EnvKeys::new(["GROK_TEST_WS_PRIMARY", "GROK_TEST_WS_FALLBACK"]);
+    let keys = EnvKeys::new([
+        "SUPERCHARGE_TEST_WS_PRIMARY",
+        "SUPERCHARGE_TEST_WS_FALLBACK",
+    ]);
     assert_eq!(
         keys.resolve_value_with(|n| match n {
-            "GROK_TEST_WS_PRIMARY" => Some("   ".into()),
-            "GROK_TEST_WS_FALLBACK" => Some("real".into()),
+            "SUPERCHARGE_TEST_WS_PRIMARY" => Some("   ".into()),
+            "SUPERCHARGE_TEST_WS_FALLBACK" => Some("real".into()),
             _ => None,
         }),
         Some("real".into())
     );
     assert_eq!(
-        EnvKeys::single("GROK_TEST_WS_ONLY").resolve_value_with(|_| Some("   ".into())),
+        EnvKeys::single("SUPERCHARGE_TEST_WS_ONLY").resolve_value_with(|_| Some("   ".into())),
         None
     );
     assert_eq!(
-        EnvKeys::single("GROK_TEST_WS_PAD").resolve_value_with(|_| Some("  tok  ".into())),
+        EnvKeys::single("SUPERCHARGE_TEST_WS_PAD").resolve_value_with(|_| Some("  tok  ".into())),
         Some("  tok  ".into())
     );
 }
@@ -1295,7 +1301,7 @@ fn env_keys_resolve_skips_whitespace_only_value() {
 #[serial]
 fn first_own_credential_empty_api_key_falls_through_to_env_key() {
     use xai_grok_test_support::EnvGuard;
-    let var = "GROK_TEST_FIRST_OWN_CRED_ENV";
+    let var = "SUPERCHARGE_TEST_FIRST_OWN_CRED_ENV";
     let _guard = EnvGuard::set(var, "env-token");
     let env_key = EnvKeys::single(var);
     assert_eq!(
@@ -1311,8 +1317,8 @@ fn first_own_credential_empty_api_key_falls_through_to_env_key() {
 #[serial]
 fn resolve_credentials_multi_env_key_uses_lc_alias() {
     use xai_chat_state::AuthType;
-    let primary = "GROK_TEST_MULTI_ENV_PRIMARY";
-    let alias = "GROK_TEST_MULTI_ENV_LC_ALIAS";
+    let primary = "SUPERCHARGE_TEST_MULTI_ENV_PRIMARY";
+    let alias = "SUPERCHARGE_TEST_MULTI_ENV_LC_ALIAS";
     unsafe {
         std::env::remove_var(primary);
         std::env::set_var(alias, "token-via-lc-alias");
@@ -1347,8 +1353,8 @@ fn resolve_credentials_multi_env_key_uses_lc_alias() {
 fn resolve_credentials_empty_env_key_falls_through_to_session() {
     use xai_chat_state::AuthType;
     use xai_grok_test_support::EnvGuard;
-    let primary = "GROK_TEST_EMPTY_ENV_PRIMARY";
-    let alias = "GROK_TEST_EMPTY_ENV_LC_ALIAS";
+    let primary = "SUPERCHARGE_TEST_EMPTY_ENV_PRIMARY";
+    let alias = "SUPERCHARGE_TEST_EMPTY_ENV_LC_ALIAS";
     let _primary = EnvGuard::set(primary, "");
     let _alias = EnvGuard::set(alias, "");
     let mut model = test_model_entry("m", "https://inference.example/v1", None, None, None);
@@ -1361,16 +1367,18 @@ fn resolve_credentials_empty_env_key_falls_through_to_session() {
 #[test]
 #[serial]
 fn resolve_credentials_empty_env_key_falls_through_to_global_key() {
-    use crate::agent::auth_method::{LEGACY_XAI_API_KEY_ENV_VAR, XAI_API_KEY_ENV_VAR};
+    use crate::agent::auth_method::{
+        LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, SUPERCHARGE_API_KEY_ENV_VAR,
+    };
     use xai_chat_state::AuthType;
     use xai_grok_test_support::EnvGuard;
     let sentinel = "xai-global-sentinel-key";
-    let primary = "GROK_TEST_EMPTY_ENV_GLOBAL_PRIMARY";
-    let alias = "GROK_TEST_EMPTY_ENV_GLOBAL_ALIAS";
+    let primary = "SUPERCHARGE_TEST_EMPTY_ENV_GLOBAL_PRIMARY";
+    let alias = "SUPERCHARGE_TEST_EMPTY_ENV_GLOBAL_ALIAS";
     let _primary = EnvGuard::set(primary, "");
     let _alias = EnvGuard::set(alias, "");
-    let _global = EnvGuard::set(XAI_API_KEY_ENV_VAR, sentinel);
-    let _legacy = EnvGuard::unset(LEGACY_XAI_API_KEY_ENV_VAR);
+    let _global = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, sentinel);
+    let _legacy = EnvGuard::unset(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR);
     let mut model = test_model_entry("m", "https://inference.example/v1", None, None, None);
     model.env_key = Some(EnvKeys::new([primary, alias]));
     assert!(!model.has_own_credentials());
@@ -1454,7 +1462,7 @@ fn resolve_credentials_env_key_byok_keeps_api_key_auth_with_session() {
 #[test]
 fn proxy_messages_models_use_bearer_auth_scheme() {
     let mut model = test_model_entry(
-        "grok-4.5",
+        "Supercharge AI-4.5",
         crate::env::PROD_CLI_CHAT_PROXY_BASE_URL,
         None,
         None,
@@ -1478,7 +1486,7 @@ fn proxy_messages_models_use_bearer_auth_scheme() {
             .extra_headers
             .get("X-XAI-Token-Auth")
             .map(String::as_str),
-        Some("xai-grok-cli")
+        Some("xai-Supercharge AI-cli")
     );
 }
 /// Regression: without a session key, `resolve_credentials` falls through
@@ -1592,7 +1600,7 @@ fn x_api_key_auth_scheme_flows_from_config_to_sampler() {
 #[test]
 fn auth_scheme_defaults_to_bearer_when_not_set_in_config() {
     let model = test_model_entry(
-        "grok-4.5",
+        "Supercharge AI-4.5",
         "https://api.example.com/v1",
         Some("sk-openai-test"),
         None,
@@ -1678,7 +1686,7 @@ fn user_override_adds_api_key_to_default_model() {
     assert_eq!(model.api_key, Some("user-custom-api-key".to_string()));
     assert_eq!(model.info.model, dm);
     assert_eq!(
-        model.info.base_url, "https://cli-chat-proxy.grok.com/v1",
+        model.info.base_url, "https://cli-chat-proxy.supercharge.com/v1",
         "base_url should inherit from default, not be stale"
     );
 }
@@ -1942,7 +1950,7 @@ fn parses_model_api_backend_responses() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-responses-model]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://api.example.com/v1"
             context_window = 200000
             api_backend = "responses"
@@ -1961,7 +1969,7 @@ fn parses_model_api_backend_chat_completions() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-chat-model]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://api.example.com/v1"
             context_window = 200000
             api_backend = "chat_completions"
@@ -1975,13 +1983,13 @@ fn parses_model_api_backend_chat_completions() {
 }
 /// Messages backend auto-defaults supports_reasoning_effort=true.
 /// Without this, `--reasoning-effort` is silently dropped in
-/// xai-grok-shell/src/agent/models.rs:857 for any BYOK Claude config.
+/// xai-Supercharge AI-shell/src/agent/models.rs:857 for any BYOK Claude config.
 #[test]
 fn model_messages_backend_auto_defaults_supports_reasoning_effort() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-claude]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://messages.example.com"
             context_window = 200000
             api_backend = "messages"
@@ -2003,7 +2011,7 @@ fn model_messages_backend_respects_explicit_supports_reasoning_effort_false() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-claude]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://messages.example.com"
             context_window = 200000
             api_backend = "messages"
@@ -2026,7 +2034,7 @@ fn model_chat_completions_backend_does_not_auto_default_supports_reasoning_effor
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-openai]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://api.example.com/v1"
             context_window = 200000
             api_backend = "chat_completions"
@@ -2046,7 +2054,7 @@ fn model_api_backend_defaults_to_chat_completions() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-model]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://api.example.com/v1"
             context_window = 200000
             "#,
@@ -2635,11 +2643,11 @@ fn allowed_models_empty_is_unrestricted() {
 #[test]
 fn invalid_glob_is_rejected_by_validation() {
     use crate::agent::models::ModelGlobSet;
-    assert!(ModelGlobSet::compile(Some(&vec!["grok[".to_string()])).is_err());
+    assert!(ModelGlobSet::compile(Some(&vec!["Supercharge AI[".to_string()])).is_err());
     let raw: toml::Value = toml::from_str(
         r#"
             [models]
-            allowed_models = ["grok["]
+            allowed_models = ["Supercharge AI["]
             "#,
     )
     .unwrap();
@@ -2690,7 +2698,7 @@ fn inference_idle_timeout_secs_round_trip() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.slow-model]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://api.x.ai/v1"
             context_window = 200000
             inference_idle_timeout_secs = 600
@@ -2707,7 +2715,7 @@ fn inference_idle_timeout_secs_absent_defaults_to_none() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.default-model]
-            model = "grok-fast"
+            model = "Supercharge AI-fast"
             base_url = "https://api.x.ai/v1"
             context_window = 200000
             "#,
@@ -2868,7 +2876,7 @@ fn disable_api_key_auth_parses_from_auth_alias() {
 #[test]
 fn force_login_team_uuid_parses_string_and_array() {
     use crate::auth::ForceLoginTeam;
-    let _g = crate::env::EnvVarGuard::remove("GROK_FORCE_LOGIN_TEAM_ID");
+    let _g = crate::env::EnvVarGuard::remove("SUPERCHARGE_FORCE_LOGIN_TEAM_ID");
     assert!(
         crate::auth::force_login_team_from_requirements().is_none(),
         "clear the force_login_team_uuid pin in requirements.toml to run this test",
@@ -2920,7 +2928,7 @@ fn force_login_team_uuid_parses_string_and_array() {
 #[test]
 fn force_login_team_id_env_overrides_user_config() {
     use crate::auth::ForceLoginTeam;
-    let _guard = crate::env::EnvVarGuard::set("GROK_FORCE_LOGIN_TEAM_ID", "env-team");
+    let _guard = crate::env::EnvVarGuard::set("SUPERCHARGE_FORCE_LOGIN_TEAM_ID", "env-team");
     assert!(
         crate::auth::force_login_team_from_requirements().is_none(),
         "clear the force_login_team_uuid pin in requirements.toml to run this test",
@@ -2948,7 +2956,7 @@ fn force_login_team_id_env_overrides_user_config() {
 #[test]
 fn force_login_team_id_env_unset_keeps_config_value() {
     use crate::auth::ForceLoginTeam;
-    let _guard = crate::env::EnvVarGuard::remove("GROK_FORCE_LOGIN_TEAM_ID");
+    let _guard = crate::env::EnvVarGuard::remove("SUPERCHARGE_FORCE_LOGIN_TEAM_ID");
     assert!(
         crate::auth::force_login_team_from_requirements().is_none(),
         "clear the force_login_team_uuid pin in requirements.toml to run this test",
@@ -3057,10 +3065,10 @@ fn e2e_config_toml_model_overrides_default() {
     let model = models.get(dm).expect("model should exist");
     let sampling = resolve_sampling(model, Some("session-tok"));
     assert_eq!(sampling.base_url, "https://inference.example.com/v1");
-    unsafe { std::env::set_var("XAI_API_KEY", "xai-key") };
+    unsafe { std::env::set_var("SUPERCHARGE_API_KEY", "xai-key") };
     let sampling = resolve_sampling(model, None);
     assert_eq!(sampling.base_url, "https://inference.example.com/v1");
-    unsafe { std::env::remove_var("XAI_API_KEY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
     let sampling = resolve_sampling(model, None);
     assert_eq!(sampling.base_url, "https://inference.example.com/v1");
 }
@@ -3116,7 +3124,7 @@ fn config_models_default_is_not_overwritten_by_default_models_json() {
     let remote_settings_default = Some("remote-settings-model");
     let resolved = resolve_string_flag(
         None,
-        "GROK_DEFAULT_MODEL_TEST_NONEXISTENT",
+        "SUPERCHARGE_DEFAULT_MODEL_TEST_NONEXISTENT",
         config_default,
         remote_settings_default,
     );
@@ -3132,8 +3140,8 @@ fn config_models_default_is_not_overwritten_by_default_models_json() {
 fn config_models_default_custom_model_is_in_resolved_model_list() {
     let (_, models) = resolve_models_from_toml(
         r#"
-            [model.acme-grok]
-            model = "grok-4.5"
+            [model.acme-Supercharge AI]
+            model = "Supercharge AI-4.5"
             base_url = "https://inference.example.com/v1"
             context_window = 256000
             env_key = "ENTERPRISE_AUTH_TOKEN"
@@ -3141,11 +3149,11 @@ fn config_models_default_custom_model_is_in_resolved_model_list() {
         None,
     );
     assert!(
-        models.contains_key("acme-grok"),
+        models.contains_key("acme-Supercharge AI"),
         "user-defined model must be in the resolved model list"
     );
-    let model = models.get("acme-grok").unwrap();
-    assert_eq!(model.info.model, "grok-4.5");
+    let model = models.get("acme-Supercharge AI").unwrap();
+    assert_eq!(model.info.model, "Supercharge AI-4.5");
     assert_eq!(model.info.base_url, "https://inference.example.com/v1");
 }
 #[test]
@@ -3157,7 +3165,7 @@ fn e2e_default_model_with_session_routes_to_proxy() {
     let sampling = resolve_sampling(model, Some("session-token-123"));
     assert_eq!(sampling.api_key.as_deref(), Some("session-token-123"));
     assert_eq!(
-        sampling.base_url, "https://cli-chat-proxy.grok.com/v1",
+        sampling.base_url, "https://cli-chat-proxy.supercharge.com/v1",
         "session auth should route to cli-chat-proxy, not api.x.ai"
     );
 }
@@ -3168,14 +3176,14 @@ fn e2e_default_model_with_external_api_key_routes_to_api_xai() {
     let model = models
         .get(crate::models::default_model())
         .expect("default model should exist");
-    unsafe { std::env::set_var("XAI_API_KEY", "xai-external-key") };
+    unsafe { std::env::set_var("SUPERCHARGE_API_KEY", "xai-external-key") };
     let sampling = resolve_sampling(model, None);
     assert_eq!(sampling.api_key.as_deref(), Some("xai-external-key"));
     assert_eq!(
         sampling.base_url, "https://api.x.ai/v1",
         "external API key should route to api.x.ai via api_base_url"
     );
-    unsafe { std::env::remove_var("XAI_API_KEY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
 }
 #[test]
 fn e2e_user_config_overrides_prefetched_model() {
@@ -3183,7 +3191,13 @@ fn e2e_user_config_overrides_prefetched_model() {
     let mut prefetched = IndexMap::new();
     prefetched.insert(
         dm.to_string(),
-        test_model_entry(dm, "https://cli-chat-proxy.grok.com/v1", None, None, None),
+        test_model_entry(
+            dm,
+            "https://cli-chat-proxy.supercharge.com/v1",
+            None,
+            None,
+            None,
+        ),
     );
     let (_, models) = resolve_models_from_toml(
         &format!(
@@ -3220,7 +3234,7 @@ fn e2e_credential_priority_model_key_beats_session_beats_env() {
         None,
         None,
     );
-    unsafe { std::env::set_var("XAI_API_KEY", "env-key") };
+    unsafe { std::env::set_var("SUPERCHARGE_API_KEY", "env-key") };
     let sampling = resolve_sampling(&model_with_key, Some("session-key"));
     assert_eq!(
         sampling.api_key.as_deref(),
@@ -3258,7 +3272,7 @@ fn e2e_credential_priority_model_key_beats_session_beats_env() {
         sampling.base_url, "https://api.x.ai/v1",
         "env key should route to api_base_url"
     );
-    unsafe { std::env::remove_var("XAI_API_KEY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
     let sampling = resolve_sampling(&model_no_key, None);
     assert!(
         sampling.api_key.is_none(),
@@ -3271,7 +3285,7 @@ fn e2e_duplicate_model_field_both_entries_survive() {
     let (_, models) = resolve_models_from_toml(
         &format!(
             r#"
-            [model.acme-grok]
+            [model.acme-Supercharge AI]
             model = "{dm}"
             base_url = "https://inference.example.com/v1"
             context_window = 200000
@@ -3282,11 +3296,11 @@ fn e2e_duplicate_model_field_both_entries_survive() {
     );
     assert!(models.contains_key(dm), "default entry should still exist");
     assert!(
-        models.contains_key("acme-grok"),
+        models.contains_key("acme-Supercharge AI"),
         "user entry with different key should also exist"
     );
     let default = models.get(dm).unwrap();
-    let user = models.get("acme-grok").unwrap();
+    let user = models.get("acme-Supercharge AI").unwrap();
     assert_eq!(default.info.model, user.info.model, "same model field");
     assert_ne!(
         default.info.base_url, user.info.base_url,
@@ -3297,7 +3311,10 @@ fn e2e_duplicate_model_field_both_entries_survive() {
     assert_eq!(sampling.base_url, "https://inference.example.com/v1");
     let sampling = resolve_sampling(default, Some("session-key"));
     assert_eq!(sampling.api_key.as_deref(), Some("session-key"));
-    assert_eq!(sampling.base_url, "https://cli-chat-proxy.grok.com/v1",);
+    assert_eq!(
+        sampling.base_url,
+        "https://cli-chat-proxy.supercharge.com/v1",
+    );
 }
 #[test]
 fn e2e_enterprise_custom_endpoint_skips_xai_defaults() {
@@ -3338,17 +3355,17 @@ fn e2e_default_endpoint_still_injects_defaults() {
 fn e2e_acp_model_info_no_dedup_on_model_field() {
     let mut models = IndexMap::new();
     models.insert(
-        "default-grok".to_string(),
+        "default-Supercharge AI".to_string(),
         test_model_entry(
             crate::models::default_model(),
-            "https://cli-chat-proxy.grok.com/v1",
+            "https://cli-chat-proxy.supercharge.com/v1",
             None,
             None,
             Some("https://api.x.ai/v1"),
         ),
     );
     models.insert(
-        "acme-grok".to_string(),
+        "acme-Supercharge AI".to_string(),
         test_model_entry(
             crate::models::default_model(),
             "https://inference.example.com/v1",
@@ -3364,11 +3381,11 @@ fn e2e_acp_model_info_no_dedup_on_model_field() {
         "both entries should survive in ACP model list"
     );
     assert!(
-        acp_models.contains_key(&acp::ModelId::new("default-grok")),
+        acp_models.contains_key(&acp::ModelId::new("default-Supercharge AI")),
         "default entry should be addressable by map key"
     );
     assert!(
-        acp_models.contains_key(&acp::ModelId::new("acme-grok")),
+        acp_models.contains_key(&acp::ModelId::new("acme-Supercharge AI")),
         "user entry should be addressable by map key"
     );
 }
@@ -3437,19 +3454,19 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
 /// the ambient environment. Gated behind `#[serial]`.
 fn unset_endpoint_env_vars() {
     for k in [
-        "GROK_CLI_CHAT_PROXY_BASE_URL",
-        "GROK_XAI_API_BASE_URL",
-        "GROK_FEEDBACK_BASE_URL",
-        "GROK_TRACE_UPLOAD_URL",
-        "GROK_MANAGED_CONFIG_URL",
-        "GROK_MODELS_BASE_URL",
-        "GROK_MODELS_LIST_URL",
+        "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
+        "SUPERCHARGE_XAI_API_BASE_URL",
+        "SUPERCHARGE_FEEDBACK_BASE_URL",
+        "SUPERCHARGE_TRACE_UPLOAD_URL",
+        "SUPERCHARGE_MANAGED_CONFIG_URL",
+        "SUPERCHARGE_MODELS_BASE_URL",
+        "SUPERCHARGE_MODELS_LIST_URL",
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
         "OTEL_EXPORTER_OTLP_HEADERS",
-        "GROK_INTERNAL_OTLP_TRACES_ENDPOINT",
-        "GROK_INTERNAL_OTLP_HEADERS",
-        "GROK_EXTERNAL_OTEL",
+        "SUPERCHARGE_INTERNAL_OTLP_TRACES_ENDPOINT",
+        "SUPERCHARGE_INTERNAL_OTLP_HEADERS",
+        "SUPERCHARGE_EXTERNAL_OTEL",
     ] {
         unsafe { std::env::remove_var(k) };
     }
@@ -3763,8 +3780,8 @@ fn non_boolean_feature_value_fails_the_load() {
 #[test]
 #[serial]
 fn resolve_title_refresh_defaults_to_turn_summary_but_decouples() {
-    unsafe { std::env::remove_var("GROK_TITLE_REFRESH") };
-    unsafe { std::env::remove_var("GROK_TURN_SUMMARY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TITLE_REFRESH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TURN_SUMMARY") };
     let r = Config::default().resolve_title_refresh();
     assert!(r.value, "title_refresh defaults to turn_summary (on)");
     let ts_off = Config {
@@ -3791,19 +3808,19 @@ fn resolve_title_refresh_defaults_to_turn_summary_but_decouples() {
         "title_refresh config overrides the turn_summary default"
     );
     assert_eq!(r.source, ConfigSource::Config);
-    unsafe { std::env::set_var("GROK_TITLE_REFRESH", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_TITLE_REFRESH", "0") };
     let r = decoupled.resolve_title_refresh();
-    assert!(!r.value, "GROK_TITLE_REFRESH env wins");
+    assert!(!r.value, "SUPERCHARGE_TITLE_REFRESH env wins");
     assert_eq!(r.source, ConfigSource::Env);
-    unsafe { std::env::remove_var("GROK_TITLE_REFRESH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TITLE_REFRESH") };
 }
 /// A `turn_summary` pin lands in the title's default slot, so it moves the title
-/// with it. Only the default slot, so `GROK_TITLE_REFRESH` still outranks it and a
+/// with it. Only the default slot, so `SUPERCHARGE_TITLE_REFRESH` still outranks it and a
 /// user can turn the title back on. Pinning `title_refresh` is what closes that.
 #[test]
 #[serial]
 fn a_turn_summary_pin_moves_the_title_default_and_the_environment_lifts_it() {
-    let _env = EnvGuard::set("GROK_TURN_SUMMARY", "1");
+    let _env = EnvGuard::set("SUPERCHARGE_TURN_SUMMARY", "1");
     let mut cfg = Config::default();
     cfg.requirements.pin_feature(
         Feature::TurnSummary,
@@ -3811,13 +3828,13 @@ fn a_turn_summary_pin_moves_the_title_default_and_the_environment_lifts_it() {
         crate::config::RequirementSource::Unknown,
     );
     {
-        let _title = EnvGuard::unset("GROK_TITLE_REFRESH");
+        let _title = EnvGuard::unset("SUPERCHARGE_TITLE_REFRESH");
         assert!(
             !cfg.resolve_title_refresh().value,
-            "the pin outranks GROK_TURN_SUMMARY, and the title default follows the pin"
+            "the pin outranks SUPERCHARGE_TURN_SUMMARY, and the title default follows the pin"
         );
     }
-    let _title = EnvGuard::set("GROK_TITLE_REFRESH", "1");
+    let _title = EnvGuard::set("SUPERCHARGE_TITLE_REFRESH", "1");
     let r = cfg.resolve_title_refresh();
     assert!(r.value, "the environment outranks a derived default");
     assert_eq!(r.source, ConfigSource::Env);
@@ -3827,13 +3844,13 @@ fn a_turn_summary_pin_moves_the_title_default_and_the_environment_lifts_it() {
 #[test]
 #[serial]
 fn a_title_refresh_pin_outranks_the_environment() {
-    let _env = EnvGuard::set("GROK_TITLE_REFRESH", "1");
+    let _env = EnvGuard::set("SUPERCHARGE_TITLE_REFRESH", "1");
     let mut cfg = Config::default();
     cfg.requirements
         .title_refresh
         .pin(false, crate::config::RequirementSource::Unknown);
     let r = cfg.resolve_title_refresh();
-    assert!(!r.value, "the pin lost to GROK_TITLE_REFRESH");
+    assert!(!r.value, "the pin lost to SUPERCHARGE_TITLE_REFRESH");
     assert_eq!(r.source, ConfigSource::Requirement);
 }
 /// Gate precedence: env > `[doom_loop_recovery]` > remote settings >
@@ -3844,7 +3861,7 @@ fn a_title_refresh_pin_outranks_the_environment() {
 #[serial]
 fn resolve_doom_loop_recovery_precedence() {
     use crate::util::config::DoomLoopRecoverySettings;
-    unsafe { std::env::remove_var("GROK_DOOM_LOOP_RECOVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_DOOM_LOOP_RECOVERY") };
     let default_cfg = Config::default();
     let p = default_cfg
         .resolve_doom_loop_recovery()
@@ -3877,12 +3894,12 @@ fn resolve_doom_loop_recovery_precedence() {
         remote_off.resolve_doom_loop_recovery().is_none(),
         "remote settings kill switch"
     );
-    unsafe { std::env::set_var("GROK_DOOM_LOOP_RECOVERY", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_DOOM_LOOP_RECOVERY", "0") };
     assert!(
         default_cfg.resolve_doom_loop_recovery().is_none(),
         "env kill switch"
     );
-    unsafe { std::env::remove_var("GROK_DOOM_LOOP_RECOVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_DOOM_LOOP_RECOVERY") };
     let remote_on = Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
             doom_loop_recovery: Some(DoomLoopRecoverySettings {
@@ -3938,19 +3955,19 @@ fn resolve_doom_loop_recovery_precedence() {
         .expect("config on beats remote kill-switch");
     assert_eq!(p.max_threshold, 4);
     assert_eq!(p.max_retries, 3);
-    unsafe { std::env::set_var("GROK_DOOM_LOOP_RECOVERY", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_DOOM_LOOP_RECOVERY", "0") };
     assert!(
         config_over_remote.resolve_doom_loop_recovery().is_none(),
         "env wins over config + remote"
     );
-    unsafe { std::env::remove_var("GROK_DOOM_LOOP_RECOVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_DOOM_LOOP_RECOVERY") };
 }
 /// The `[doom_loop_recovery]` TOML section deserializes through the
 /// standard config path (no bespoke parser).
 #[test]
 #[serial]
 fn doom_loop_recovery_section_parses_from_toml() {
-    unsafe { std::env::remove_var("GROK_DOOM_LOOP_RECOVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_DOOM_LOOP_RECOVERY") };
     let raw: toml::Value = toml::from_str(
         r#"
             [doom_loop_recovery]
@@ -4008,7 +4025,7 @@ fn worktree_auto_gc_section_parses_from_toml() {
 #[serial]
 fn resolve_doom_loop_recovery_clamps_tunables() {
     use crate::util::config::DoomLoopRecoverySettings;
-    unsafe { std::env::remove_var("GROK_DOOM_LOOP_RECOVERY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_DOOM_LOOP_RECOVERY") };
     let cfg = Config {
         doom_loop_recovery: DoomLoopRecoverySettings {
             enabled: Some(true),
@@ -4057,8 +4074,8 @@ fn resolve_doom_loop_recovery_clamps_tunables() {
 #[test]
 #[serial]
 fn resolve_trace_upload_disabled_when_telemetry_off_despite_remote_flag() {
-    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
-    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD") };
     let mut cfg = Config::default();
     cfg.features.telemetry = Some(TelemetryMode::Disabled);
     cfg.remote_settings = Some(crate::util::config::RemoteSettings {
@@ -4072,8 +4089,8 @@ fn resolve_trace_upload_disabled_when_telemetry_off_despite_remote_flag() {
 #[test]
 #[serial]
 fn resolve_trace_upload_explicit_config_wins_over_telemetry_off() {
-    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
-    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD") };
     let mut cfg = Config::default();
     cfg.features.telemetry = Some(TelemetryMode::Disabled);
     cfg.telemetry.trace_upload = Some(true);
@@ -4092,8 +4109,8 @@ fn resolve_trace_upload_explicit_config_wins_over_telemetry_off() {
 #[test]
 #[serial]
 fn trace_upload_decision_debug_reports_winning_source() {
-    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
-    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD") };
     let mut cfg = Config::default();
     cfg.features.telemetry = Some(TelemetryMode::Disabled);
     cfg.remote_settings = Some(crate::util::config::RemoteSettings {
@@ -4115,8 +4132,8 @@ fn trace_upload_decision_debug_reports_winning_source() {
 #[test]
 #[serial]
 fn resolve_trace_upload_honors_config_when_telemetry_on() {
-    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
-    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD") };
     let mut cfg = Config::default();
     cfg.features.telemetry = Some(TelemetryMode::Enabled);
     cfg.telemetry.trace_upload = Some(false);
@@ -4130,7 +4147,7 @@ fn resolve_trace_upload_honors_config_when_telemetry_on() {
 #[test]
 #[serial]
 fn resolve_goal_defaults_to_true_when_unset() {
-    unsafe { std::env::remove_var("GROK_GOAL") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL") };
     let cfg = Config::default();
     let r = cfg.resolve_goal();
     assert!(r.value, "goal should be on by default");
@@ -4139,18 +4156,18 @@ fn resolve_goal_defaults_to_true_when_unset() {
 #[test]
 #[serial]
 fn resolve_goal_env_overrides_config_without_remote_kill_switch() {
-    unsafe { std::env::set_var("GROK_GOAL", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL", "1") };
     let mut cfg = Config::default();
     cfg.goal.enabled = Some(false);
     let r = cfg.resolve_goal();
     assert_eq!(r.source, ConfigSource::Env);
     assert!(r.value);
-    unsafe { std::env::remove_var("GROK_GOAL") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL") };
 }
 #[test]
 #[serial]
 fn resolve_goal_remote_false_kills_local_opt_in() {
-    unsafe { std::env::set_var("GROK_GOAL", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL", "1") };
     let mut cfg = Config::default();
     cfg.goal.enabled = Some(true);
     cfg.remote_settings = Some(crate::util::config::RemoteSettings {
@@ -4160,12 +4177,12 @@ fn resolve_goal_remote_false_kills_local_opt_in() {
     let r = cfg.resolve_goal();
     assert_eq!(r.source, ConfigSource::Remote);
     assert!(!r.value);
-    unsafe { std::env::remove_var("GROK_GOAL") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL") };
 }
 #[test]
 #[serial]
 fn resolve_goal_remote_settings_used_when_no_local() {
-    unsafe { std::env::remove_var("GROK_GOAL") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL") };
     let cfg = Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
             goal_enabled: Some(true),
@@ -4182,7 +4199,7 @@ fn resolve_goal_remote_settings_used_when_no_local() {
 #[test]
 #[serial]
 fn resolve_goal_remote_settings_kill_switch_overrides_default_on() {
-    unsafe { std::env::remove_var("GROK_GOAL") };
+    unsafe { std::env::remove_var("SUPERCHARGE_GOAL") };
     let cfg = Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
             goal_enabled: Some(false),
@@ -4197,7 +4214,7 @@ fn resolve_goal_remote_settings_kill_switch_overrides_default_on() {
 #[test]
 #[serial]
 fn background_workflows_default_on_without_affecting_goal() {
-    unsafe { std::env::remove_var("GROK_WORKFLOWS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_WORKFLOWS") };
     let cfg = Config::default();
     let r = cfg.resolve_workflows();
     assert!(r.value);
@@ -4207,7 +4224,7 @@ fn background_workflows_default_on_without_affecting_goal() {
 #[test]
 #[serial]
 fn resolve_workflows_remote_settings_enables() {
-    unsafe { std::env::remove_var("GROK_WORKFLOWS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_WORKFLOWS") };
     let cfg = Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
             workflows_enabled: Some(true),
@@ -4222,7 +4239,7 @@ fn resolve_workflows_remote_settings_enables() {
 #[test]
 #[serial]
 fn resolve_workflows_remote_false_kills_local_opt_in() {
-    unsafe { std::env::set_var("GROK_WORKFLOWS", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_WORKFLOWS", "1") };
     let mut cfg = Config::default();
     cfg.workflows.enabled = Some(true);
     cfg.remote_settings = Some(crate::util::config::RemoteSettings {
@@ -4232,12 +4249,12 @@ fn resolve_workflows_remote_false_kills_local_opt_in() {
     let r = cfg.resolve_workflows();
     assert_eq!(r.source, ConfigSource::Remote);
     assert!(!r.value);
-    unsafe { std::env::remove_var("GROK_WORKFLOWS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_WORKFLOWS") };
 }
 #[test]
 #[serial]
 fn resolve_workflows_env_wins() {
-    unsafe { std::env::set_var("GROK_WORKFLOWS", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_WORKFLOWS", "0") };
     let cfg = Config::default();
     let r = cfg.resolve_workflows();
     assert_eq!(r.source, ConfigSource::Env);
@@ -4245,12 +4262,12 @@ fn resolve_workflows_env_wins() {
         !r.value,
         "env must be able to kill the default-on workflows"
     );
-    unsafe { std::env::remove_var("GROK_WORKFLOWS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_WORKFLOWS") };
 }
 #[test]
 #[serial]
 fn resolve_image_gen_model_override_remote_settings_or_config() {
-    unsafe { std::env::remove_var("GROK_IMAGE_GEN_MODEL_OVERRIDE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_IMAGE_GEN_MODEL_OVERRIDE") };
     let with = |config: Option<&str>, gb: Option<&str>| Config {
         features: Features {
             image_gen_model_override: config.map(String::from),
@@ -4264,19 +4281,22 @@ fn resolve_image_gen_model_override_remote_settings_or_config() {
     };
     assert_eq!(Config::default().resolve_image_gen_model_override(), None);
     assert_eq!(
-        with(None, Some("grok-imagine-image")).resolve_image_gen_model_override(),
-        Some("grok-imagine-image".to_owned())
+        with(None, Some("Supercharge AI-imagine-image")).resolve_image_gen_model_override(),
+        Some("Supercharge AI-imagine-image".to_owned())
     );
     assert_eq!(
-        with(Some("grok-imagine-image-pro"), Some("grok-imagine-image"))
-            .resolve_image_gen_model_override(),
-        Some("grok-imagine-image-pro".to_owned())
+        with(
+            Some("Supercharge AI-imagine-image-pro"),
+            Some("Supercharge AI-imagine-image")
+        )
+        .resolve_image_gen_model_override(),
+        Some("Supercharge AI-imagine-image-pro".to_owned())
     );
 }
 #[test]
 #[serial]
 fn resolve_image_edit_model_override_remote_settings_or_config() {
-    unsafe { std::env::remove_var("GROK_IMAGE_EDIT_MODEL_OVERRIDE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_IMAGE_EDIT_MODEL_OVERRIDE") };
     let with = |config: Option<&str>, gb: Option<&str>| Config {
         features: Features {
             image_edit_model_override: config.map(String::from),
@@ -4290,17 +4310,20 @@ fn resolve_image_edit_model_override_remote_settings_or_config() {
     };
     assert_eq!(Config::default().resolve_image_edit_model_override(), None);
     assert_eq!(
-        with(None, Some("grok-imagine-image")).resolve_image_edit_model_override(),
-        Some("grok-imagine-image".to_owned())
+        with(None, Some("Supercharge AI-imagine-image")).resolve_image_edit_model_override(),
+        Some("Supercharge AI-imagine-image".to_owned())
     );
     assert_eq!(
-        with(Some("grok-imagine-image-pro"), Some("grok-imagine-image"))
-            .resolve_image_edit_model_override(),
-        Some("grok-imagine-image-pro".to_owned())
+        with(
+            Some("Supercharge AI-imagine-image-pro"),
+            Some("Supercharge AI-imagine-image")
+        )
+        .resolve_image_edit_model_override(),
+        Some("Supercharge AI-imagine-image-pro".to_owned())
     );
     let gen_only = Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
-            image_gen_model_override: Some("grok-imagine-image".to_owned()),
+            image_gen_model_override: Some("Supercharge AI-imagine-image".to_owned()),
             ..Default::default()
         }),
         ..Default::default()
@@ -4310,7 +4333,7 @@ fn resolve_image_edit_model_override_remote_settings_or_config() {
 #[test]
 #[serial]
 fn imagine_tools_disabled_gates_image_edit() {
-    unsafe { std::env::remove_var("GROK_IMAGE_EDIT") };
+    unsafe { std::env::remove_var("SUPERCHARGE_IMAGE_EDIT") };
     let with_list = |tools: Vec<&str>| Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
             imagine_tools_disabled: Some(tools.into_iter().map(String::from).collect()),
@@ -4318,18 +4341,18 @@ fn imagine_tools_disabled_gates_image_edit() {
         }),
         ..Default::default()
     };
-    unsafe { std::env::set_var("GROK_IMAGE_EDIT", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_IMAGE_EDIT", "1") };
     let off = with_list(vec!["image_edit"]).resolve_image_edit();
     assert!(!off.value);
     assert_eq!(off.source, ConfigSource::Remote);
-    unsafe { std::env::remove_var("GROK_IMAGE_EDIT") };
+    unsafe { std::env::remove_var("SUPERCHARGE_IMAGE_EDIT") };
     assert!(with_list(vec!["image_to_video"]).resolve_image_edit().value);
     assert!(Config::default().resolve_image_edit().value);
 }
 #[test]
 #[serial]
 fn resolve_image_gen_gates() {
-    unsafe { std::env::remove_var("GROK_IMAGE_GEN") };
+    unsafe { std::env::remove_var("SUPERCHARGE_IMAGE_GEN") };
     assert!(Config::default().resolve_image_gen().value);
     assert!(
         !Config {
@@ -4353,7 +4376,7 @@ fn resolve_image_gen_gates() {
         .resolve_image_gen()
         .value
     );
-    unsafe { std::env::set_var("GROK_IMAGE_GEN", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_IMAGE_GEN", "1") };
     let denied = Config {
         remote_settings: Some(crate::util::config::RemoteSettings {
             imagine_tools_disabled: Some(vec!["image_gen".into()]),
@@ -4364,12 +4387,12 @@ fn resolve_image_gen_gates() {
     .resolve_image_gen();
     assert!(!denied.value);
     assert_eq!(denied.source, ConfigSource::Remote);
-    unsafe { std::env::remove_var("GROK_IMAGE_GEN") };
+    unsafe { std::env::remove_var("SUPERCHARGE_IMAGE_GEN") };
 }
 #[test]
 #[serial]
 fn resolve_video_gen_gates() {
-    unsafe { std::env::remove_var("GROK_VIDEO_GEN") };
+    unsafe { std::env::remove_var("SUPERCHARGE_VIDEO_GEN") };
     assert!(Config::default().resolve_video_gen().value);
     assert!(
         !Config {
@@ -4409,14 +4432,14 @@ fn resolve_video_gen_gates() {
 /// start from a known baseline regardless of run order.
 fn clear_goal_envs() {
     unsafe {
-        std::env::remove_var("GROK_GOAL");
-        std::env::remove_var("GROK_GOAL_CLASSIFIER");
-        std::env::remove_var("GROK_GOAL_PLANNER");
-        std::env::remove_var("GROK_GOAL_SUMMARY");
-        std::env::remove_var("GROK_GOAL_VERIFIER_N");
-        std::env::remove_var("GROK_GOAL_CLASSIFIER_MAX");
-        std::env::remove_var("GROK_GOAL_STRATEGIST_EVERY");
-        std::env::remove_var("GROK_GOAL_REVERIFY_AFTER");
+        std::env::remove_var("SUPERCHARGE_GOAL");
+        std::env::remove_var("SUPERCHARGE_GOAL_CLASSIFIER");
+        std::env::remove_var("SUPERCHARGE_GOAL_PLANNER");
+        std::env::remove_var("SUPERCHARGE_GOAL_SUMMARY");
+        std::env::remove_var("SUPERCHARGE_GOAL_VERIFIER_N");
+        std::env::remove_var("SUPERCHARGE_GOAL_CLASSIFIER_MAX");
+        std::env::remove_var("SUPERCHARGE_GOAL_STRATEGIST_EVERY");
+        std::env::remove_var("SUPERCHARGE_GOAL_REVERIFY_AFTER");
     }
 }
 fn cfg_with_goal(goal: bool) -> Config {
@@ -4504,12 +4527,12 @@ fn resolve_goal_classifier_remote_forces_either_way() {
 #[serial]
 fn resolve_goal_classifier_env_overrides_default_and_remote() {
     clear_goal_envs();
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER", "0") };
     let r = cfg_with_goal_and_remote(true, remote_classifier(true))
         .resolve_goal_classifier_enabled(true);
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Env);
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER", "1") };
     let r = cfg_with_goal_and_remote(false, remote_classifier(false))
         .resolve_goal_classifier_enabled(false);
     assert!(r.value);
@@ -4548,11 +4571,11 @@ fn resolve_goal_planner_remote_forces_either_way() {
 #[serial]
 fn resolve_goal_planner_env_overrides_default_and_remote() {
     clear_goal_envs();
-    unsafe { std::env::set_var("GROK_GOAL_PLANNER", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_PLANNER", "0") };
     let r = cfg_with_goal_and_remote(true, remote_planner(true)).resolve_goal_planner_enabled(true);
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Env);
-    unsafe { std::env::set_var("GROK_GOAL_PLANNER", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_PLANNER", "1") };
     let r =
         cfg_with_goal_and_remote(false, remote_planner(false)).resolve_goal_planner_enabled(false);
     assert!(r.value);
@@ -4591,7 +4614,7 @@ fn resolve_goal_summary_remote_forces_either_way() {
 #[serial]
 fn resolve_goal_summary_env_overrides_default_and_remote() {
     clear_goal_envs();
-    unsafe { std::env::set_var("GROK_GOAL_SUMMARY", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_SUMMARY", "0") };
     let r = cfg_with_goal_and_remote(true, remote_summary(true)).resolve_goal_summary_enabled(true);
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Env);
@@ -4614,7 +4637,7 @@ fn resolve_goal_classifier_config_honored_when_env_unset() {
 #[serial]
 fn resolve_goal_classifier_env_beats_config() {
     clear_goal_envs();
-    unsafe { std::env::set_var("GROK_GOAL_CLASSIFIER", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_CLASSIFIER", "0") };
     let r = cfg_with_goal_config(GoalConfig {
         classifier_enabled: Some(true),
         ..Default::default()
@@ -4671,7 +4694,7 @@ fn resolve_goal_planner_config_honored_when_env_unset() {
 #[serial]
 fn resolve_goal_planner_env_beats_config() {
     clear_goal_envs();
-    unsafe { std::env::set_var("GROK_GOAL_PLANNER", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_PLANNER", "0") };
     let r = cfg_with_goal_config(GoalConfig {
         planner_enabled: Some(true),
         ..Default::default()
@@ -4728,7 +4751,7 @@ fn resolve_goal_summary_config_honored_when_env_unset() {
 #[serial]
 fn resolve_goal_summary_env_beats_config() {
     clear_goal_envs();
-    unsafe { std::env::set_var("GROK_GOAL_SUMMARY", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_GOAL_SUMMARY", "0") };
     let r = cfg_with_goal_config(GoalConfig {
         summary_enabled: Some(true),
         ..Default::default()
@@ -4797,19 +4820,19 @@ reverify_after = 6
     assert_eq!(empty.goal.classifier_enabled, None);
     assert_eq!(empty.goal.verifier_count, None);
 }
-const GOAL_USE_CURRENT_ENV: &str = "GROK_GOAL_USE_CURRENT_MODEL_ONLY";
+const GOAL_USE_CURRENT_ENV: &str = "SUPERCHARGE_GOAL_USE_CURRENT_MODEL_ONLY";
 fn clear_goal_model_env() {
     unsafe { std::env::remove_var(GOAL_USE_CURRENT_ENV) };
 }
 fn planner_pair() -> crate::util::config::GoalRoleModel {
     crate::util::config::GoalRoleModel {
-        model: "grok-4".to_string(),
+        model: "Supercharge AI-4".to_string(),
         agent_type: "general-purpose".to_string(),
     }
 }
 fn strategist_pair() -> crate::util::config::GoalRoleModel {
     crate::util::config::GoalRoleModel {
-        model: "grok-4.5".to_string(),
+        model: "Supercharge AI-4.5".to_string(),
         agent_type: "cursor".to_string(),
     }
 }
@@ -5009,15 +5032,15 @@ fn goal_model_pins_parse_from_toml() {
     let toml_str = r#"
 [goal]
 enabled = true
-planner_model = { model = "grok-build", agent_type = "grok-build-plan" }
+planner_model = { model = "Supercharge AI-build", agent_type = "Supercharge AI-build-plan" }
 
 [goal.strategist_model]
 model = "test-model-fast"
 agent_type = "cursor"
 
 [[goal.skeptic_models]]
-model = "grok-build"
-agent_type = "grok-build-plan"
+model = "Supercharge AI-build"
+agent_type = "Supercharge AI-build-plan"
 
 [[goal.skeptic_models]]
 model = "test-model-fast"
@@ -5025,13 +5048,16 @@ agent_type = "cursor"
 "#;
     let raw: toml::Value = toml::from_str(toml_str).unwrap();
     let cfg = Config::new_from_toml_cfg(&raw).unwrap();
-    assert_eq!(cfg.goal.planner_model.as_ref().unwrap().model, "grok-build");
+    assert_eq!(
+        cfg.goal.planner_model.as_ref().unwrap().model,
+        "Supercharge AI-build"
+    );
     assert_eq!(
         cfg.goal.strategist_model.as_ref().unwrap().agent_type,
         "cursor"
     );
     assert_eq!(cfg.goal.skeptic_models.len(), 2);
-    assert_eq!(cfg.goal.skeptic_models[0].model, "grok-build");
+    assert_eq!(cfg.goal.skeptic_models[0].model, "Supercharge AI-build");
     assert_eq!(
         cfg.resolve_goal_planner_model(false).source,
         ConfigSource::Config
@@ -5045,7 +5071,7 @@ fn goal_model_pin_malformed_is_dropped_not_fatal() {
 [goal]
 enabled = true
 classifier_max_runs = 6
-planner_model = { agent_type = "grok-build-plan" }
+planner_model = { agent_type = "Supercharge AI-build-plan" }
 "#;
     let raw: toml::Value = toml::from_str(toml_str).unwrap();
     let cfg = Config::new_from_toml_cfg(&raw)
@@ -5060,8 +5086,8 @@ fn goal_skeptic_models_drop_malformed_entry_keep_rest() {
 enabled = true
 
 [[goal.skeptic_models]]
-model = "grok-build"
-agent_type = "grok-build-plan"
+model = "Supercharge AI-build"
+agent_type = "Supercharge AI-build-plan"
 
 [[goal.skeptic_models]]
 agent_type = "cursor"
@@ -5073,7 +5099,7 @@ agent_type = "cursor"
     let raw: toml::Value = toml::from_str(toml_str).unwrap();
     let cfg = Config::new_from_toml_cfg(&raw).unwrap();
     assert_eq!(cfg.goal.skeptic_models.len(), 2);
-    assert_eq!(cfg.goal.skeptic_models[0].model, "grok-build");
+    assert_eq!(cfg.goal.skeptic_models[0].model, "Supercharge AI-build");
     assert_eq!(cfg.goal.skeptic_models[1].model, "test-model-fast");
 }
 /// Acceptance test: a full managed-config `[goal]` block resolves end-to-end,
@@ -5091,12 +5117,12 @@ classifier_enabled = true
 planner_enabled = true
 verifier_count = 3
 classifier_max_runs = 6
-planner_model = { model = "grok-build", agent_type = "grok-build-plan" }
+planner_model = { model = "Supercharge AI-build", agent_type = "Supercharge AI-build-plan" }
 strategist_model = { model = "test-model-fast", agent_type = "cursor" }
 
 [[goal.skeptic_models]]
-model = "grok-build"
-agent_type = "grok-build-plan"
+model = "Supercharge AI-build"
+agent_type = "Supercharge AI-build-plan"
 
 [[goal.skeptic_models]]
 model = "test-model-fast"
@@ -5106,8 +5132,8 @@ agent_type = "cursor"
     .unwrap();
     let cfg = Config::new_from_toml_cfg(&raw).expect("[goal] config must parse");
     let grok_build = crate::util::config::GoalRoleModel {
-        model: "grok-build".into(),
-        agent_type: "grok-build-plan".into(),
+        model: "Supercharge AI-build".into(),
+        agent_type: "Supercharge AI-build-plan".into(),
     };
     let composer = crate::util::config::GoalRoleModel {
         model: "test-model-fast".into(),
@@ -5278,7 +5304,7 @@ fn config_accepts_all_known_sections() {
             management_api_key = "mgmt-key"
             gcs_service_account_key = "gcs-key"
             [models]
-            default = "grok-3"
+            default = "Supercharge AI-3"
             [ui]
             yolo = true
             theme = "dark"
@@ -5307,7 +5333,7 @@ fn config_accepts_all_known_sections() {
             name = ["os_user"]
             email = ["git_email", "team@example.com"]
             email_domain = "example.com"
-            command = "/opt/bin/grok-identity"
+            command = "/opt/bin/Supercharge AI-identity"
             [repo_changes_dedup]
             enabled = false
             [relay]
@@ -5557,7 +5583,7 @@ fn internal_otlp_endpoint_grok_internal_wins_regardless_of_switch() {
         assert_eq!(
             cfg.resolve_otlp_traces_endpoint(),
             "https://internal.example/traces",
-            "switch={switch}: GROK_INTERNAL_OTLP_TRACES_ENDPOINT must win verbatim (trailing / trimmed)"
+            "switch={switch}: SUPERCHARGE_INTERNAL_OTLP_TRACES_ENDPOINT must win verbatim (trailing / trimmed)"
         );
     }
 }
@@ -5748,7 +5774,7 @@ fn external_otel_default_off_and_double_opt_in() {
         resolve_external_otel_config_with(
             None,
             None,
-            ext_env(&[("GROK_EXTERNAL_OTEL", "1")]),
+            ext_env(&[("SUPERCHARGE_EXTERNAL_OTEL", "1")]),
             ext_client(),
             false,
         )
@@ -5759,7 +5785,7 @@ fn external_otel_default_off_and_double_opt_in() {
             None,
             None,
             ext_env(&[
-                ("GROK_EXTERNAL_OTEL", "1"),
+                ("SUPERCHARGE_EXTERNAL_OTEL", "1"),
                 ("OTEL_METRICS_EXPORTER", "otlp"),
             ]),
             ext_client(),
@@ -5809,7 +5835,7 @@ fn external_otel_file_table_layered_under_env() {
         resolve_external_otel_config_with(
             Some(&effective),
             None,
-            ext_env(&[("GROK_EXTERNAL_OTEL", "0")]),
+            ext_env(&[("SUPERCHARGE_EXTERNAL_OTEL", "0")]),
             ext_client(),
             false,
         )
@@ -5883,7 +5909,10 @@ fn external_otel_requirements_pin_wins_over_env() {
         resolve_external_otel_config_with(
             None,
             Some(&req),
-            ext_env(&[("GROK_EXTERNAL_OTEL", "1"), ("OTEL_LOGS_EXPORTER", "otlp"),]),
+            ext_env(&[
+                ("SUPERCHARGE_EXTERNAL_OTEL", "1"),
+                ("OTEL_LOGS_EXPORTER", "otlp"),
+            ]),
             ext_client(),
             false,
         )
@@ -5901,7 +5930,7 @@ fn external_otel_requirements_pin_wins_over_env() {
         None,
         Some(&req),
         ext_env(&[
-            ("GROK_EXTERNAL_OTEL", "1"),
+            ("SUPERCHARGE_EXTERNAL_OTEL", "1"),
             ("OTEL_LOGS_EXPORTER", "otlp"),
             ("OTEL_LOG_USER_PROMPTS", "1"),
             ("OTEL_LOG_TOOL_DETAILS", "1"),
@@ -5914,7 +5943,7 @@ fn external_otel_requirements_pin_wins_over_env() {
     assert!(!cfg.gates.log_tool_details, "requirement pin must win");
 }
 /// Regression: an org enable via `[telemetry].otel_enabled`
-/// (managed config / requirements — no `GROK_EXTERNAL_OTEL` env var) must
+/// (managed config / requirements — no `SUPERCHARGE_EXTERNAL_OTEL` env var) must
 /// flip the master switch the *internal* pipeline keys off, so legacy
 /// `OTEL_EXPORTER_OTLP_*` repointing shuts off in lockstep with the
 /// external stream activating. A desync would point the internally-authed
@@ -5966,7 +5995,10 @@ fn external_otel_carries_internal_consumed_flag() {
     let cfg = resolve_external_otel_config_with(
         None,
         None,
-        ext_env(&[("GROK_EXTERNAL_OTEL", "1"), ("OTEL_LOGS_EXPORTER", "otlp")]),
+        ext_env(&[
+            ("SUPERCHARGE_EXTERNAL_OTEL", "1"),
+            ("OTEL_LOGS_EXPORTER", "otlp"),
+        ]),
         ext_client(),
         true,
     )
@@ -5978,22 +6010,22 @@ fn empty_config() -> toml::Value {
 }
 fn clear_runtime_env_vars() {
     unsafe {
-        std::env::remove_var("GROK_SUBAGENTS");
-        std::env::remove_var("GROK_RESPECT_GITIGNORE");
-        std::env::remove_var("GROK_WEB_SEARCH_MODEL");
-        std::env::remove_var("GROK_SESSION_SUMMARY_MODEL");
-        std::env::remove_var("GROK_CURSOR_SKILLS_ENABLED");
-        std::env::remove_var("GROK_CURSOR_RULES_ENABLED");
-        std::env::remove_var("GROK_CURSOR_AGENTS_ENABLED");
-        std::env::remove_var("GROK_CLAUDE_SKILLS_ENABLED");
-        std::env::remove_var("GROK_CLAUDE_RULES_ENABLED");
-        std::env::remove_var("GROK_CLAUDE_AGENTS_ENABLED");
+        std::env::remove_var("SUPERCHARGE_SUBAGENTS");
+        std::env::remove_var("SUPERCHARGE_RESPECT_GITIGNORE");
+        std::env::remove_var("SUPERCHARGE_WEB_SEARCH_MODEL");
+        std::env::remove_var("SUPERCHARGE_SESSION_SUMMARY_MODEL");
+        std::env::remove_var("SUPERCHARGE_CURSOR_SKILLS_ENABLED");
+        std::env::remove_var("SUPERCHARGE_CURSOR_RULES_ENABLED");
+        std::env::remove_var("SUPERCHARGE_CURSOR_AGENTS_ENABLED");
+        std::env::remove_var("SUPERCHARGE_CLAUDE_SKILLS_ENABLED");
+        std::env::remove_var("SUPERCHARGE_CLAUDE_RULES_ENABLED");
+        std::env::remove_var("SUPERCHARGE_CLAUDE_AGENTS_ENABLED");
     }
 }
 fn clear_managed_mcp_env_vars() {
     unsafe {
-        std::env::remove_var("GROK_MANAGED_MCPS_ENABLED");
-        std::env::remove_var("GROK_MANAGED_MCP_GATEWAY_TOOLS_ENABLED");
+        std::env::remove_var("SUPERCHARGE_MANAGED_MCPS_ENABLED");
+        std::env::remove_var("SUPERCHARGE_MANAGED_MCP_GATEWAY_TOOLS_ENABLED");
     }
 }
 fn isolate_compat_env() -> Vec<EnvGuard> {
@@ -6154,7 +6186,7 @@ fn resolve_raw_compat_sessions_load_failure_fails_closed() {
 #[serial]
 fn resolve_raw_compat_sessions_load_failure_allows_env_override() {
     let _env = isolate_compat_env();
-    let _codex = EnvGuard::set("GROK_CODEX_SESSIONS_ENABLED", "true");
+    let _codex = EnvGuard::set("SUPERCHARGE_CODEX_SESSIONS_ENABLED", "true");
     let resolved = resolve_compat_sessions_from_raw(Err(()), None);
     assert!(!resolved.cursor.sessions);
     assert!(!resolved.claude.sessions);
@@ -6206,9 +6238,9 @@ fn remote_keys_are_one_hot_and_false_overrides_default() {
 fn resolve_compat_env_sessions_disable_independently() {
     let _env = isolate_compat_env();
     for (vendor, env_var) in [
-        (CompatVendor::Cursor, "GROK_CURSOR_SESSIONS_ENABLED"),
-        (CompatVendor::Claude, "GROK_CLAUDE_SESSIONS_ENABLED"),
-        (CompatVendor::Codex, "GROK_CODEX_SESSIONS_ENABLED"),
+        (CompatVendor::Cursor, "SUPERCHARGE_CURSOR_SESSIONS_ENABLED"),
+        (CompatVendor::Claude, "SUPERCHARGE_CLAUDE_SESSIONS_ENABLED"),
+        (CompatVendor::Codex, "SUPERCHARGE_CODEX_SESSIONS_ENABLED"),
     ] {
         let _disabled = EnvGuard::set(env_var, "false");
         assert_session_one_disabled(
@@ -6231,8 +6263,8 @@ fn resolve_compat_precedence_and_reserved_codex_hook() {
     assert!(!resolved.codex.hooks);
     assert!(resolved.cursor.hooks);
     assert!(resolved.claude.hooks);
-    let _session = EnvGuard::set("GROK_CURSOR_SESSIONS_ENABLED", "true");
-    let _hook = EnvGuard::set("GROK_CODEX_HOOKS_ENABLED", "true");
+    let _session = EnvGuard::set("SUPERCHARGE_CURSOR_SESSIONS_ENABLED", "true");
+    let _hook = EnvGuard::set("SUPERCHARGE_CODEX_HOOKS_ENABLED", "true");
     let resolved = resolve_compat_config(&config, Some(&remote));
     assert!(resolved.cursor.sessions);
     assert!(resolved.codex.hooks);
@@ -6241,7 +6273,7 @@ fn resolve_compat_precedence_and_reserved_codex_hook() {
 #[serial]
 fn resolve_runtime_fields_compat_asymmetric_sources() {
     let _env = isolate_compat_env();
-    let _cursor = EnvGuard::set("GROK_CURSOR_SESSIONS_ENABLED", "false");
+    let _cursor = EnvGuard::set("SUPERCHARGE_CURSOR_SESSIONS_ENABLED", "false");
     let raw: toml::Value =
         toml::from_str("[compat.cursor]\nsessions = true\n[compat.claude]\nsessions = false")
             .unwrap();
@@ -6401,7 +6433,7 @@ fn resolve_runtime_fields_cli_subagents_override() {
 #[serial]
 fn resolve_runtime_fields_gitignore_from_env() {
     clear_runtime_env_vars();
-    unsafe { std::env::set_var("GROK_RESPECT_GITIGNORE", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_RESPECT_GITIGNORE", "0") };
     let raw = empty_config();
     let mut cfg = Config::new_from_toml_cfg(&raw).unwrap();
     cfg.resolve_runtime_fields(&RuntimeResolutionContext {
@@ -6532,12 +6564,12 @@ telemetry = "garbage"
 #[test]
 #[serial]
 fn is_telemetry_explicitly_disabled_sync_env_signals() {
-    unsafe { std::env::set_var("GROK_TELEMETRY_ENABLED", "0") };
+    unsafe { std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "0") };
     unsafe { std::env::remove_var("DISABLE_TELEMETRY") };
     assert!(is_telemetry_explicitly_disabled_sync());
-    unsafe { std::env::set_var("GROK_TELEMETRY_ENABLED", "1") };
+    unsafe { std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "1") };
     assert!(!is_telemetry_explicitly_disabled_sync());
-    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TELEMETRY_ENABLED") };
     unsafe { std::env::set_var("DISABLE_TELEMETRY", "1") };
     assert!(is_telemetry_explicitly_disabled_sync());
     unsafe { std::env::remove_var("DISABLE_TELEMETRY") };
@@ -6547,25 +6579,25 @@ fn version_overrides_apply_into_typed_config() {
     let mut value: toml::Value = toml::from_str(
         r#"
 [models]
-default = "grok-build"
+default = "Supercharge AI-build"
 
 [[version_overrides]]
 minimum_version = "1.8.0"
 [version_overrides.models]
-default = "grok-4.5"
+default = "Supercharge AI-4.5"
 "#,
     )
     .unwrap();
     let v = semver::Version::parse("1.8.0").unwrap();
     xai_grok_config::apply_version_overrides(&mut value, &v).unwrap();
     let cfg = Config::new_from_toml_cfg(&value).unwrap();
-    assert_eq!(cfg.models.default.as_deref(), Some("grok-4.5"));
+    assert_eq!(cfg.models.default.as_deref(), Some("Supercharge AI-4.5"));
 }
-/// Reproduce the enterprise managed config bug: [model.grok-build] sets
-/// context_window=500k for model="grok-4.5", but
-/// [models].default="grok-4.5" resolves to the bare
+/// Reproduce the enterprise managed config bug: [model.supercharge-build] sets
+/// context_window=500k for model="Supercharge AI-4.5", but
+/// [models].default="Supercharge AI-4.5" resolves to the bare
 /// prefetched entry (256k) because Layer 3 only overrides key
-/// "grok-build", not key "grok-4.5".
+/// "Supercharge AI-build", not key "Supercharge AI-4.5".
 ///
 /// After the Layer 4 slug propagation fix, both keys should have 500k.
 #[test]
@@ -6574,10 +6606,10 @@ fn slug_propagation_enterprise_managed_config_key_mismatch() {
     let raw: toml::Value = toml::from_str(
         r#"
             [models]
-            default = "grok-4.5"
+            default = "Supercharge AI-4.5"
 
-            [model.grok-build]
-            model = "grok-4.5"
+            [model.supercharge-build]
+            model = "Supercharge AI-4.5"
             context_window = 500000
             base_url = "https://inference.example.com/v1"
             api_backend = "responses"
@@ -6587,26 +6619,28 @@ fn slug_propagation_enterprise_managed_config_key_mismatch() {
     let cfg = Config::new_from_toml_cfg(&raw).expect("config should parse");
     let mut prefetched = IndexMap::new();
     let mut entry = test_model_entry(
-        "grok-4.5",
+        "Supercharge AI-4.5",
         "https://inference.example.com/v1",
         None,
         None,
         None,
     );
     entry.info.context_window = NonZeroU64::new(default_cw).unwrap();
-    prefetched.insert("grok-4.5".to_owned(), entry);
+    prefetched.insert("Supercharge AI-4.5".to_owned(), entry);
     let resolved = resolve_model_list(&cfg, Some(prefetched));
     let by_key = resolved
-        .get("grok-build")
-        .expect("grok-build key must exist");
+        .get("Supercharge AI-build")
+        .expect("Supercharge AI-build key must exist");
     assert_eq!(by_key.info.context_window.get(), 500_000);
-    assert_eq!(by_key.info.model, "grok-4.5");
-    let by_latest = resolved.get("grok-4.5").expect("grok-4.5 key must exist");
+    assert_eq!(by_key.info.model, "Supercharge AI-4.5");
+    let by_latest = resolved
+        .get("Supercharge AI-4.5")
+        .expect("Supercharge AI-4.5 key must exist");
     assert_eq!(
         by_latest.info.context_window.get(),
         500_000,
-        "BUG: prefetched 'grok-4.5' should inherit 500k from \
-         sibling 'grok-build' (same model slug), not stay at {default_cw}"
+        "BUG: prefetched 'Supercharge AI-4.5' should inherit 500k from \
+         sibling 'Supercharge AI-build' (same model slug), not stay at {default_cw}"
     );
 }
 /// Slug propagation should carry over api_backend but NOT agent_type.
@@ -6615,24 +6649,30 @@ fn slug_propagation_inherits_api_backend_but_not_agent_type() {
     let default_cw = DEFAULT_CONTEXT_WINDOW;
     let raw: toml::Value = toml::from_str(
         r#"
-            [model.grok-build]
-            model = "grok-4.5"
+            [model.supercharge-build]
+            model = "Supercharge AI-4.5"
             context_window = 500000
             base_url = "https://test.example.com/v1"
             api_backend = "responses"
-            agent_type = "grok-build"
+            agent_type = "Supercharge AI-build"
             "#,
     )
     .unwrap();
     let cfg = Config::new_from_toml_cfg(&raw).expect("config should parse");
     let mut prefetched = IndexMap::new();
-    let mut entry = test_model_entry("grok-4.5", "https://test.example.com/v1", None, None, None);
+    let mut entry = test_model_entry(
+        "Supercharge AI-4.5",
+        "https://test.example.com/v1",
+        None,
+        None,
+        None,
+    );
     entry.info.context_window = NonZeroU64::new(default_cw).unwrap();
     entry.info.agent_type = default_agent_type();
     entry.info.api_backend = ApiBackend::default();
-    prefetched.insert("grok-4.5".to_owned(), entry);
+    prefetched.insert("Supercharge AI-4.5".to_owned(), entry);
     let resolved = resolve_model_list(&cfg, Some(prefetched));
-    let latest = resolved.get("grok-4.5").unwrap();
+    let latest = resolved.get("Supercharge AI-4.5").unwrap();
     assert_eq!(
         latest.info.agent_type,
         default_agent_type(),
@@ -6650,8 +6690,8 @@ fn slug_propagation_inherits_api_backend_but_not_agent_type() {
 fn slug_propagation_does_not_overwrite_explicit_context_window() {
     let raw: toml::Value = toml::from_str(
         r#"
-            [model.grok-build]
-            model = "grok-4.5"
+            [model.supercharge-build]
+            model = "Supercharge AI-4.5"
             context_window = 500000
             base_url = "https://test.example.com/v1"
             "#,
@@ -6659,11 +6699,17 @@ fn slug_propagation_does_not_overwrite_explicit_context_window() {
     .unwrap();
     let cfg = Config::new_from_toml_cfg(&raw).expect("config should parse");
     let mut prefetched = IndexMap::new();
-    let mut entry = test_model_entry("grok-4.5", "https://test.example.com/v1", None, None, None);
+    let mut entry = test_model_entry(
+        "Supercharge AI-4.5",
+        "https://test.example.com/v1",
+        None,
+        None,
+        None,
+    );
     entry.info.context_window = NonZeroU64::new(65_536).unwrap();
-    prefetched.insert("grok-4.5".to_owned(), entry);
+    prefetched.insert("Supercharge AI-4.5".to_owned(), entry);
     let resolved = resolve_model_list(&cfg, Some(prefetched));
-    let latest = resolved.get("grok-4.5").unwrap();
+    let latest = resolved.get("Supercharge AI-4.5").unwrap();
     assert_eq!(
         latest.info.context_window.get(),
         65_536,
@@ -6966,13 +7012,13 @@ fn config_model_reasoning_efforts_parses_inline_tables_and_bare_strings() {
 fn resolve_model_list_config_reasoning_efforts_beats_remote() {
     let raw_config: toml::Value = toml::from_str(
         r#"
-            [model.grok-x]
+            [model.supercharge-x]
             reasoning_efforts = ["low"]
             "#,
     )
     .unwrap();
     let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
-    let mut entry = prefetch_model_entry("grok-x", 200_000, ApiBackend::default());
+    let mut entry = prefetch_model_entry("Supercharge AI-x", 200_000, ApiBackend::default());
     entry.info.reasoning_efforts = vec![ReasoningEffortOption {
         id: "high".to_string(),
         value: ReasoningEffort::High,
@@ -6981,11 +7027,11 @@ fn resolve_model_list_config_reasoning_efforts_beats_remote() {
         default: false,
     }];
     let mut prefetched = IndexMap::new();
-    prefetched.insert("grok-x".to_owned(), entry);
+    prefetched.insert("Supercharge AI-x".to_owned(), entry);
     let resolved = resolve_model_list(&cfg, Some(prefetched));
     let efforts = &resolved
-        .get("grok-x")
-        .expect("grok-x")
+        .get("Supercharge AI-x")
+        .expect("Supercharge AI-x")
         .info
         .reasoning_efforts;
     assert_eq!(efforts.len(), 1);
@@ -7143,7 +7189,7 @@ fn byok_config_overlay_visible_to_api_key_users() {
     let raw: toml::Value = toml::from_str(
         r#"
             [model.enterprise-alias]
-            model = "grok-4.5"
+            model = "Supercharge AI-4.5"
             base_url = "https://inference.company.com/v1"
             env_key = "COMPANY_TOKEN"
             "#,
@@ -7197,7 +7243,7 @@ fn plain_config_overlay_preserves_bundled_visibility() {
 #[test]
 #[serial]
 fn mcp_liveness_watchers_default_is_true() {
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     let r = resolve_mcp_liveness_watchers(None, None, None, None, None);
     assert!(r.value, "default-on by spec");
     assert_eq!(r.source, ConfigSource::Default);
@@ -7205,35 +7251,35 @@ fn mcp_liveness_watchers_default_is_true() {
 #[test]
 #[serial]
 fn mcp_liveness_watchers_requirement_wins_over_everything() {
-    unsafe { std::env::set_var("GROK_MCP_LIVENESS_WATCHERS", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS", "true") };
     let r =
         resolve_mcp_liveness_watchers(Some(false), Some(true), Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     assert!(!r.value, "requirement overrides every other layer");
     assert_eq!(r.source, ConfigSource::Requirement);
 }
 #[test]
 #[serial]
 fn mcp_liveness_watchers_cli_wins_over_env_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_LIVENESS_WATCHERS", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS", "true") };
     let r = resolve_mcp_liveness_watchers(None, Some(false), Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Cli);
 }
 #[test]
 #[serial]
 fn mcp_liveness_watchers_env_wins_over_config_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_LIVENESS_WATCHERS", "false") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS", "false") };
     let r = resolve_mcp_liveness_watchers(None, None, Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Env);
 }
 #[test]
 #[serial]
 fn mcp_liveness_watchers_config_wins_over_managed_and_feature_flag() {
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     let r = resolve_mcp_liveness_watchers(None, None, Some(false), Some(true), Some(true));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Config);
@@ -7241,7 +7287,7 @@ fn mcp_liveness_watchers_config_wins_over_managed_and_feature_flag() {
 #[test]
 #[serial]
 fn mcp_liveness_watchers_managed_wins_over_feature_flag() {
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     let r = resolve_mcp_liveness_watchers(None, None, None, Some(false), Some(true));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::ManagedConfig);
@@ -7249,7 +7295,7 @@ fn mcp_liveness_watchers_managed_wins_over_feature_flag() {
 #[test]
 #[serial]
 fn mcp_liveness_watchers_feature_flag_used_when_no_higher_layer() {
-    unsafe { std::env::remove_var("GROK_MCP_LIVENESS_WATCHERS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_LIVENESS_WATCHERS") };
     let r = resolve_mcp_liveness_watchers(None, None, None, None, Some(false));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Remote);
@@ -7257,7 +7303,7 @@ fn mcp_liveness_watchers_feature_flag_used_when_no_higher_layer() {
 #[test]
 #[serial]
 fn mcp_auto_restart_default_is_true() {
-    unsafe { std::env::remove_var("GROK_MCP_AUTO_RESTART") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_AUTO_RESTART") };
     let r = resolve_mcp_auto_restart(None, None, None, None, None);
     assert!(r.value, "recovery is on by default");
     assert_eq!(r.source, ConfigSource::Default);
@@ -7265,7 +7311,7 @@ fn mcp_auto_restart_default_is_true() {
 #[test]
 #[serial]
 fn mcp_auto_restart_requirement_wins_over_everything() {
-    unsafe { std::env::set_var("GROK_MCP_AUTO_RESTART", "false") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_AUTO_RESTART", "false") };
     let r = resolve_mcp_auto_restart(
         Some(true),
         Some(false),
@@ -7273,23 +7319,23 @@ fn mcp_auto_restart_requirement_wins_over_everything() {
         Some(false),
         Some(false),
     );
-    unsafe { std::env::remove_var("GROK_MCP_AUTO_RESTART") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_AUTO_RESTART") };
     assert!(r.value);
     assert_eq!(r.source, ConfigSource::Requirement);
 }
 #[test]
 #[serial]
 fn mcp_auto_restart_env_wins_over_config_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_AUTO_RESTART", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_AUTO_RESTART", "true") };
     let r = resolve_mcp_auto_restart(None, None, Some(false), Some(false), Some(false));
-    unsafe { std::env::remove_var("GROK_MCP_AUTO_RESTART") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_AUTO_RESTART") };
     assert!(r.value);
     assert_eq!(r.source, ConfigSource::Env);
 }
 #[test]
 #[serial]
 fn mcp_push_server_status_default_is_true() {
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     let r = resolve_mcp_push_server_status(None, None, None, None, None);
     assert!(r.value, "default-on by spec");
     assert_eq!(r.source, ConfigSource::Default);
@@ -7297,35 +7343,35 @@ fn mcp_push_server_status_default_is_true() {
 #[test]
 #[serial]
 fn mcp_push_server_status_requirement_wins_over_everything() {
-    unsafe { std::env::set_var("GROK_MCP_PUSH_SERVER_STATUS", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS", "true") };
     let r =
         resolve_mcp_push_server_status(Some(false), Some(true), Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     assert!(!r.value, "requirement overrides every other layer");
     assert_eq!(r.source, ConfigSource::Requirement);
 }
 #[test]
 #[serial]
 fn mcp_push_server_status_cli_wins_over_env_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_PUSH_SERVER_STATUS", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS", "true") };
     let r = resolve_mcp_push_server_status(None, Some(false), Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Cli);
 }
 #[test]
 #[serial]
 fn mcp_push_server_status_env_wins_over_config_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_PUSH_SERVER_STATUS", "false") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS", "false") };
     let r = resolve_mcp_push_server_status(None, None, Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Env);
 }
 #[test]
 #[serial]
 fn mcp_push_server_status_config_wins_over_managed_and_feature_flag() {
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     let r = resolve_mcp_push_server_status(None, None, Some(false), Some(true), Some(true));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Config);
@@ -7333,7 +7379,7 @@ fn mcp_push_server_status_config_wins_over_managed_and_feature_flag() {
 #[test]
 #[serial]
 fn mcp_push_server_status_managed_wins_over_feature_flag() {
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     let r = resolve_mcp_push_server_status(None, None, None, Some(false), Some(true));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::ManagedConfig);
@@ -7341,7 +7387,7 @@ fn mcp_push_server_status_managed_wins_over_feature_flag() {
 #[test]
 #[serial]
 fn mcp_push_server_status_feature_flag_used_when_no_higher_layer() {
-    unsafe { std::env::remove_var("GROK_MCP_PUSH_SERVER_STATUS") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_PUSH_SERVER_STATUS") };
     let r = resolve_mcp_push_server_status(None, None, None, None, Some(false));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Remote);
@@ -7349,7 +7395,7 @@ fn mcp_push_server_status_feature_flag_used_when_no_higher_layer() {
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_default_is_true() {
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     let r = resolve_mcp_recursive_config_watch(None, None, None, None, None);
     assert!(r.value, "default-on by spec");
     assert_eq!(r.source, ConfigSource::Default);
@@ -7357,7 +7403,7 @@ fn mcp_recursive_config_watch_default_is_true() {
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_requirement_wins_over_everything() {
-    unsafe { std::env::set_var("GROK_MCP_RECURSIVE_CONFIG_WATCH", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH", "true") };
     let r = resolve_mcp_recursive_config_watch(
         Some(false),
         Some(true),
@@ -7365,33 +7411,33 @@ fn mcp_recursive_config_watch_requirement_wins_over_everything() {
         Some(true),
         Some(true),
     );
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     assert!(!r.value, "requirement overrides every other layer");
     assert_eq!(r.source, ConfigSource::Requirement);
 }
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_cli_wins_over_env_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_RECURSIVE_CONFIG_WATCH", "true") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH", "true") };
     let r =
         resolve_mcp_recursive_config_watch(None, Some(false), Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Cli);
 }
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_env_wins_over_config_and_below() {
-    unsafe { std::env::set_var("GROK_MCP_RECURSIVE_CONFIG_WATCH", "false") };
+    unsafe { std::env::set_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH", "false") };
     let r = resolve_mcp_recursive_config_watch(None, None, Some(true), Some(true), Some(true));
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Env);
 }
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_config_wins_over_managed_and_feature_flag() {
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     let r = resolve_mcp_recursive_config_watch(None, None, Some(false), Some(true), Some(true));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Config);
@@ -7399,7 +7445,7 @@ fn mcp_recursive_config_watch_config_wins_over_managed_and_feature_flag() {
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_managed_wins_over_feature_flag() {
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     let r = resolve_mcp_recursive_config_watch(None, None, None, Some(false), Some(true));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::ManagedConfig);
@@ -7407,7 +7453,7 @@ fn mcp_recursive_config_watch_managed_wins_over_feature_flag() {
 #[test]
 #[serial]
 fn mcp_recursive_config_watch_feature_flag_used_when_no_higher_layer() {
-    unsafe { std::env::remove_var("GROK_MCP_RECURSIVE_CONFIG_WATCH") };
+    unsafe { std::env::remove_var("SUPERCHARGE_MCP_RECURSIVE_CONFIG_WATCH") };
     let r = resolve_mcp_recursive_config_watch(None, None, None, None, Some(false));
     assert!(!r.value);
     assert_eq!(r.source, ConfigSource::Remote);
@@ -7458,7 +7504,7 @@ fn remote_settings_disarm_requires_prod_proxy_when_keys_embedded() {
         ..Default::default()
     };
     unsafe {
-        std::env::remove_var("GROK_CLI_CHAT_PROXY_BASE_URL");
+        std::env::remove_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL");
     }
     apply_remote_settings_side_effects(Some(&settings));
     assert!(
@@ -7472,7 +7518,7 @@ fn remote_settings_disarm_requires_prod_proxy_when_keys_embedded() {
     assert!(xai_grok_config::signed_policy::verification_active());
     unsafe {
         std::env::set_var(
-            "GROK_CLI_CHAT_PROXY_BASE_URL",
+            "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
             "https://attacker.example/v1",
         );
     }
@@ -7482,7 +7528,7 @@ fn remote_settings_disarm_requires_prod_proxy_when_keys_embedded() {
         "env-overridden proxy must not be able to disarm keyed verification"
     );
     unsafe {
-        std::env::remove_var("GROK_CLI_CHAT_PROXY_BASE_URL");
+        std::env::remove_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL");
     }
     xai_grok_config::signed_policy::apply_remote_managed_config_signature_verification(
         Some(true),

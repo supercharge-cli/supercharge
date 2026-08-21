@@ -2,11 +2,11 @@
 //!
 //! Runs the built grok binary headless against the mock inference server with
 //! a config-defined BYOK model whose bearer comes from a mock auth binary (a
-//! script the test writes to disk). The harness's `XAI_API_KEY` stands in for
+//! script the test writes to disk). The harness's `SUPERCHARGE_API_KEY` stands in for
 //! the session-tier credential.
 //!
 //! `#[ignore]` (needs a built binary). The CI lifecycle lanes run it against
-//! the release artifact via `GROK_BINARY`; run locally (auto-builds the pager):
+//! the release artifact via `SUPERCHARGE_BINARY`; run locally (auto-builds the pager):
 //! ```bash
 //! cargo test -p xai-grok-shell --test test_auth_provider_e2e -- --ignored
 //! ```
@@ -25,10 +25,10 @@ async fn provider_backed_model_sends_minted_token_on_the_wire() {
     let mut sandbox = TestSandbox::builder().git().mock_url(server.url()).build();
     // The baseline already omits the leader socket; keep the test's explicit
     // fresh-process intent at the typed sandbox layer that survives env_clear().
-    sandbox.remove_env("GROK_LEADER_SOCKET");
+    sandbox.remove_env("SUPERCHARGE_LEADER_SOCKET");
 
     let grok_home = sandbox.grok_home().to_path_buf();
-    std::fs::create_dir_all(&grok_home).expect("create .grok home");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge home");
 
     let counter = grok_home.join("mint-count");
     let helper = grok_home.join("mock-auth.sh");
@@ -113,7 +113,7 @@ auth_provider = "gateway"
         "the inference request must carry the minted provider token; requests:\n{}",
         server.request_log_summary()
     );
-    // `test-key-for-ci` is the harness's XAI_API_KEY; it stands in for the
+    // `test-key-for-ci` is the harness's SUPERCHARGE_API_KEY; it stands in for the
     // session credential, which resolves below the provider arm.
     assert!(
         !requests.iter().any(|e| {
@@ -144,10 +144,10 @@ async fn undefined_provider_fails_closed_and_never_leaks_session_key() {
     let mut sandbox = TestSandbox::builder().git().mock_url(server.url()).build();
     // The baseline already omits the leader socket; keep the test's explicit
     // fresh-process intent at the typed sandbox layer that survives env_clear().
-    sandbox.remove_env("GROK_LEADER_SOCKET");
+    sandbox.remove_env("SUPERCHARGE_LEADER_SOCKET");
 
     let grok_home = sandbox.grok_home().to_path_buf();
-    std::fs::create_dir_all(&grok_home).expect("create .grok home");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge home");
 
     // Model references `gateway`, but no `[auth_provider.gateway]` table exists.
     std::fs::write(
@@ -222,10 +222,10 @@ async fn provider_with_args_and_json_output_sends_minted_token() {
     let mut sandbox = TestSandbox::builder().git().mock_url(server.url()).build();
     // The baseline already omits the leader socket; keep the test's explicit
     // fresh-process intent at the typed sandbox layer that survives env_clear().
-    sandbox.remove_env("GROK_LEADER_SOCKET");
+    sandbox.remove_env("SUPERCHARGE_LEADER_SOCKET");
 
     let grok_home = sandbox.grok_home().to_path_buf();
-    std::fs::create_dir_all(&grok_home).expect("create .grok home");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge home");
 
     // The helper records the args it was invoked with (proving direct exec, no
     // shell) and prints a JSON token payload.

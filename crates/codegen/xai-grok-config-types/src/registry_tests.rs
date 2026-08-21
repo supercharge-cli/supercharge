@@ -45,26 +45,29 @@ fn registered_settings() {
     assert_eq!(
         rows,
         BTreeMap::from([
-            ("session_search", ("GROK_SESSION_SEARCH", true)),
-            ("lsp_tools", ("GROK_LSP_TOOLS", false)),
-            ("web_fetch", ("GROK_WEB_FETCH", false)),
-            ("session_recap", ("GROK_SESSION_RECAP", true)),
-            ("ask_user_question", ("GROK_ASK_USER_QUESTION", true)),
-            ("voice_mode", ("GROK_VOICE_MODE", true)),
-            ("write_file", ("GROK_WRITE_FILE", true)),
-            ("feedback", ("GROK_FEEDBACK_ENABLED", true)),
-            ("turn_summary", ("GROK_TURN_SUMMARY", true)),
-            ("cancel_rewind", ("GROK_CANCEL_REWIND", true)),
+            ("session_search", ("SUPERCHARGE_SESSION_SEARCH", true)),
+            ("lsp_tools", ("SUPERCHARGE_LSP_TOOLS", false)),
+            ("web_fetch", ("SUPERCHARGE_WEB_FETCH", false)),
+            ("session_recap", ("SUPERCHARGE_SESSION_RECAP", true)),
+            ("ask_user_question", ("SUPERCHARGE_ASK_USER_QUESTION", true)),
+            ("voice_mode", ("SUPERCHARGE_VOICE_MODE", true)),
+            ("write_file", ("SUPERCHARGE_WRITE_FILE", true)),
+            ("feedback", ("SUPERCHARGE_FEEDBACK_ENABLED", true)),
+            ("turn_summary", ("SUPERCHARGE_TURN_SUMMARY", true)),
+            ("cancel_rewind", ("SUPERCHARGE_CANCEL_REWIND", true)),
             (
                 "compaction_verbatim_input",
-                ("GROK_COMPACTION_VERBATIM_INPUT", true),
+                ("SUPERCHARGE_COMPACTION_VERBATIM_INPUT", true),
             ),
-            ("two_pass_compaction", ("GROK_TWO_PASS_COMPACTION", false)),
-            ("backend_tools", ("GROK_BACKEND_SEARCH", true)),
-            ("auto_wake", ("GROK_AUTO_WAKE", true)),
+            (
+                "two_pass_compaction",
+                ("SUPERCHARGE_TWO_PASS_COMPACTION", false)
+            ),
+            ("backend_tools", ("SUPERCHARGE_BACKEND_SEARCH", true)),
+            ("auto_wake", ("SUPERCHARGE_AUTO_WAKE", true)),
             (
                 "subagent_worktree_snapshot",
-                ("GROK_SUBAGENT_WORKTREE_SNAPSHOT", false),
+                ("SUPERCHARGE_SUBAGENT_WORKTREE_SNAPSHOT", false),
             ),
         ]),
     );
@@ -181,7 +184,7 @@ fn off_reason_names_the_setting_that_turned_it_off() {
                 env: Some(false),
                 ..Default::default()
             },
-            "the GROK_SESSION_SEARCH environment variable",
+            "the SUPERCHARGE_SESSION_SEARCH environment variable",
         ),
         (
             FeatureSources {

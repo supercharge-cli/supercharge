@@ -203,7 +203,7 @@ async fn wait_for_leader_auth_resolves_when_wired_late() {
 #[tokio::test]
 async fn workspace_start_errors_when_cancelled_before_auth() {
     // Cancel while auth is unwired → clean error, no hang.
-    let state = default_test_control_state(Path::new("/tmp/grok-ws-auth-test.sock"));
+    let state = default_test_control_state(Path::new("/tmp/Supercharge AI-ws-auth-test.sock"));
     let cancel = CancellationToken::new();
     cancel.cancel();
     let err = handle_workspace_start(state, None, "/tmp".to_string(), cancel)
@@ -361,8 +361,8 @@ async fn connect_and_register_with_mode(
 
 /// Relay demand gate (relay-on-demand): Stdio registrations must NOT
 /// signal relay demand — a leader serving only interactive clients (TUI
-/// dashboard, IDE) keeps the grok.com relay off. The first Headless
-/// registration (devbox / `grok agent headless` flow) flips the watch so
+/// dashboard, IDE) keeps the supercharge.ai relay off. The first Headless
+/// registration (devbox / `Supercharge AI agent headless` flow) flips the watch so
 /// `run_leader` starts the deferred relay connection.
 #[tokio::test]
 async fn relay_demand_signals_only_on_headless_registration() {
@@ -374,7 +374,8 @@ async fn relay_demand_signals_only_on_headless_registration() {
 
     // A Stdio (interactive) client registers: demand must stay false.
     // Hold the connection open so the server doesn't exit on disconnect.
-    let _stdio = connect_and_register_with_mode(&sock_path, "grok-tui", ClientMode::Stdio).await;
+    let _stdio =
+        connect_and_register_with_mode(&sock_path, "Supercharge AI-tui", ClientMode::Stdio).await;
     // The Registered server-event is processed asynchronously after the
     // wire ack; give the server loop a beat before asserting the negative.
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -385,7 +386,8 @@ async fn relay_demand_signals_only_on_headless_registration() {
 
     // A Headless (devbox-flow) client registers: demand flips to true.
     let _headless =
-        connect_and_register_with_mode(&sock_path, "grok-headless", ClientMode::Headless).await;
+        connect_and_register_with_mode(&sock_path, "Supercharge AI-headless", ClientMode::Headless)
+            .await;
     tokio::time::timeout(Duration::from_secs(5), relay_demand_rx.wait_for(|d| *d))
         .await
         .expect("relay demand must flip after headless registration")
@@ -706,11 +708,11 @@ async fn initialize_gets_client_identifier_injected() {
     let stream = LeaderStream::connect(&sock_path).await.unwrap();
     let (mut reader, mut writer) = tokio::io::split(stream);
 
-    // Register with client_type "grok-tui"
+    // Register with client_type "Supercharge AI-tui"
     write_message(
         &mut writer,
         &ClientMessage::Register {
-            client_type: "grok-tui".into(),
+            client_type: "Supercharge AI-tui".into(),
             mode: ClientMode::Stdio,
             capabilities: ClientCapabilities::default(),
         },
@@ -735,7 +737,7 @@ async fn initialize_gets_client_identifier_injected() {
     let received = acp_rx.recv().await.unwrap();
     let json: serde_json::Value = serde_json::from_str(&received).unwrap();
     assert_eq!(
-        json["params"]["_meta"]["clientIdentifier"], "grok-tui",
+        json["params"]["_meta"]["clientIdentifier"], "Supercharge AI-tui",
         "Leader should inject clientIdentifier from IPC registration"
     );
     // method and id should still be present (id is namespaced)
@@ -752,11 +754,11 @@ async fn initialize_preserves_existing_client_identifier() {
     let stream = LeaderStream::connect(&sock_path).await.unwrap();
     let (mut reader, mut writer) = tokio::io::split(stream);
 
-    // Register with client_type "grok-tui"
+    // Register with client_type "Supercharge AI-tui"
     write_message(
         &mut writer,
         &ClientMessage::Register {
-            client_type: "grok-tui".into(),
+            client_type: "Supercharge AI-tui".into(),
             mode: ClientMode::Stdio,
             capabilities: ClientCapabilities::default(),
         },
@@ -766,7 +768,7 @@ async fn initialize_preserves_existing_client_identifier() {
     let _: ServerMessage = read_message(&mut reader).await.unwrap();
 
     // Send initialize WITH clientIdentifier already set
-    let payload = r#"{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"0.1","_meta":{"clientIdentifier":"grok-web"}}}"#;
+    let payload = r#"{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"0.1","_meta":{"clientIdentifier":"Supercharge AI-web"}}}"#;
     write_message(
         &mut writer,
         &ClientMessage::Acp {
@@ -780,7 +782,7 @@ async fn initialize_preserves_existing_client_identifier() {
     let received = acp_rx.recv().await.unwrap();
     let json: serde_json::Value = serde_json::from_str(&received).unwrap();
     assert_eq!(
-        json["params"]["_meta"]["clientIdentifier"], "grok-web",
+        json["params"]["_meta"]["clientIdentifier"], "Supercharge AI-web",
         "Leader should not override existing clientIdentifier"
     );
 
@@ -1262,7 +1264,7 @@ fn inject_capabilities_adds_auto_mode_to_session_load() {
     assert!(inject_session_request_context(
         &mut json,
         &caps,
-        "grok-tui",
+        "Supercharge AI-tui",
         ClientId(1)
     ));
     assert_eq!(json["params"]["_meta"]["autoMode"], true);
@@ -1283,7 +1285,7 @@ fn inject_capabilities_adds_auto_mode_to_session_resume() {
     assert!(inject_session_request_context(
         &mut json,
         &caps,
-        "grok-tui",
+        "Supercharge AI-tui",
         ClientId(1)
     ));
     assert_eq!(json["params"]["_meta"]["autoMode"], true);
@@ -1331,7 +1333,7 @@ fn inject_capabilities_preserves_explicit_auto_over_stale_yolo() {
     assert!(inject_session_request_context(
         &mut json,
         &caps,
-        "grok-tui",
+        "Supercharge AI-tui",
         ClientId(1)
     ));
     assert_eq!(json["params"]["_meta"]["yoloMode"], false);
@@ -1414,7 +1416,7 @@ fn inject_capabilities_adds_default_model_to_session_new() {
     );
     let caps = ClientCapabilities {
         yolo_mode: false,
-        default_model: Some("grok-3-fast".to_string()),
+        default_model: Some("Supercharge AI-3-fast".to_string()),
         ..Default::default()
     };
 
@@ -1426,7 +1428,7 @@ fn inject_capabilities_adds_default_model_to_session_new() {
         ClientId(1)
     ));
 
-    assert_eq!(json["params"]["_meta"]["modelId"], "grok-3-fast");
+    assert_eq!(json["params"]["_meta"]["modelId"], "Supercharge AI-3-fast");
     // yoloMode should not be present since it's false
     assert!(json["params"]["_meta"].get("yoloMode").is_none());
 }
@@ -1439,7 +1441,7 @@ fn inject_capabilities_adds_both_yolo_and_model() {
     );
     let caps = ClientCapabilities {
         yolo_mode: true,
-        default_model: Some("grok-3-fast".to_string()),
+        default_model: Some("Supercharge AI-3-fast".to_string()),
         ..Default::default()
     };
 
@@ -1452,7 +1454,7 @@ fn inject_capabilities_adds_both_yolo_and_model() {
     ));
 
     assert_eq!(json["params"]["_meta"]["yoloMode"], true);
-    assert_eq!(json["params"]["_meta"]["modelId"], "grok-3-fast");
+    assert_eq!(json["params"]["_meta"]["modelId"], "Supercharge AI-3-fast");
 }
 
 #[test]
@@ -1463,7 +1465,7 @@ fn inject_capabilities_does_not_override_existing_model_id() {
     );
     let caps = ClientCapabilities {
         yolo_mode: false,
-        default_model: Some("grok-3-fast".to_string()),
+        default_model: Some("Supercharge AI-3-fast".to_string()),
         ..Default::default()
     };
 
@@ -1540,31 +1542,30 @@ fn extract_auto_mode_change_returns_none_when_no_auto_signal() {
 #[test]
 fn extract_model_id_from_set_model_returns_value() {
     let payload = format!(
-        r#"{{"jsonrpc":"2.0","method":"{}","id":1,"params":{{"sessionId":"sess-123","modelId":"grok-3-fast"}}}}"#,
+        r#"{{"jsonrpc":"2.0","method":"{}","id":1,"params":{{"sessionId":"sess-123","modelId":"Supercharge AI-3-fast"}}}}"#,
         AGENT_METHOD_NAMES.session_set_model
     );
     assert_eq!(
         extract_model_id_from_set_model(&pv(&payload)),
-        Some("grok-3-fast".to_string())
+        Some("Supercharge AI-3-fast".to_string())
     );
 }
 
 #[test]
 fn extract_model_id_from_set_model_handles_snake_case() {
     let payload = format!(
-        r#"{{"jsonrpc":"2.0","method":"{}","id":1,"params":{{"session_id":"sess-123","model_id":"grok-3"}}}}"#,
+        r#"{{"jsonrpc":"2.0","method":"{}","id":1,"params":{{"session_id":"sess-123","model_id":"Supercharge AI-3"}}}}"#,
         AGENT_METHOD_NAMES.session_set_model
     );
     assert_eq!(
         extract_model_id_from_set_model(&pv(&payload)),
-        Some("grok-3".to_string())
+        Some("Supercharge AI-3".to_string())
     );
 }
 
 #[test]
 fn extract_model_id_from_set_model_returns_none_for_other_methods() {
-    let payload =
-        r#"{"jsonrpc":"2.0","method":"other/method","id":1,"params":{"modelId":"grok-3"}}"#;
+    let payload = r#"{"jsonrpc":"2.0","method":"other/method","id":1,"params":{"modelId":"Supercharge AI-3"}}"#;
     assert_eq!(extract_model_id_from_set_model(&pv(payload)), None);
 }
 
@@ -1591,27 +1592,27 @@ fn extract_model_id_from_set_model_returns_none_for_missing_model() {
 #[test]
 fn patch_initialize_response_patches_current_model_id() {
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"grok-3","availableModels":[]}}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"Supercharge AI-3","availableModels":[]}}}}"#,
     );
-    let default_model = Some("grok-3-fast".to_string());
+    let default_model = Some("Supercharge AI-3-fast".to_string());
     assert!(patch_initialize_response_model(&mut json, &default_model));
     assert_eq!(
         json["result"]["meta"]["modelState"]["currentModelId"],
-        "grok-3-fast"
+        "Supercharge AI-3-fast"
     );
 }
 
 #[test]
 fn patch_initialize_response_preserves_other_fields() {
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"grokShell":true,"modelState":{"currentModelId":"grok-3","availableModels":[{"modelId":"grok-3"},{"modelId":"grok-3-fast"}]}}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"grokShell":true,"modelState":{"currentModelId":"Supercharge AI-3","availableModels":[{"modelId":"Supercharge AI-3"},{"modelId":"Supercharge AI-3-fast"}]}}}}"#,
     );
-    let default_model = Some("grok-3-fast".to_string());
+    let default_model = Some("Supercharge AI-3-fast".to_string());
     assert!(patch_initialize_response_model(&mut json, &default_model));
     assert_eq!(json["result"]["meta"]["grokShell"], true);
     assert_eq!(
         json["result"]["meta"]["modelState"]["currentModelId"],
-        "grok-3-fast"
+        "Supercharge AI-3-fast"
     );
     // availableModels should be preserved
     assert_eq!(
@@ -1626,7 +1627,7 @@ fn patch_initialize_response_preserves_other_fields() {
 #[test]
 fn patch_initialize_response_noop_when_no_default_model() {
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"grok-3"}}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"Supercharge AI-3"}}}}"#,
     );
     let before = json.clone();
     assert!(!patch_initialize_response_model(&mut json, &None));
@@ -1636,7 +1637,7 @@ fn patch_initialize_response_noop_when_no_default_model() {
 #[test]
 fn patch_initialize_response_noop_when_empty_default_model() {
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"grok-3"}}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"Supercharge AI-3"}}}}"#,
     );
     let before = json.clone();
     assert!(!patch_initialize_response_model(
@@ -1649,12 +1650,12 @@ fn patch_initialize_response_noop_when_empty_default_model() {
 #[test]
 fn patch_initialize_response_noop_when_already_matches() {
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"grok-3"}}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"result":{"meta":{"modelState":{"currentModelId":"Supercharge AI-3"}}}}"#,
     );
     let before = json.clone();
     assert!(!patch_initialize_response_model(
         &mut json,
-        &Some("grok-3".to_string())
+        &Some("Supercharge AI-3".to_string())
     ));
     assert_eq!(json, before);
 }
@@ -1663,12 +1664,12 @@ fn patch_initialize_response_noop_when_already_matches() {
 fn patch_initialize_response_noop_for_non_initialize_response() {
     // A session/new response has "models" not "meta.modelState"
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","id":1,"result":{"session_id":"sess-1","models":{"currentModelId":"grok-3","availableModels":[]}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"result":{"session_id":"sess-1","models":{"currentModelId":"Supercharge AI-3","availableModels":[]}}}"#,
     );
     let before = json.clone();
     assert!(!patch_initialize_response_model(
         &mut json,
-        &Some("grok-3-fast".to_string())
+        &Some("Supercharge AI-3-fast".to_string())
     ));
     // Should be unchanged — no meta.modelState path
     assert_eq!(json, before);
@@ -1901,12 +1902,12 @@ fn inject_capabilities_adds_client_identifier_to_session_new() {
     assert!(inject_session_request_context(
         &mut json,
         &caps,
-        "grok-code-extension",
+        "Supercharge AI-code-extension",
         ClientId(1),
     ));
     assert_eq!(
         json["params"]["_meta"]["clientIdentifier"],
-        "grok-code-extension"
+        "Supercharge AI-code-extension"
     );
 }
 
@@ -1919,7 +1920,7 @@ fn inject_capabilities_does_not_override_existing_client_identifier() {
     let caps = ClientCapabilities::default();
 
     let mut json = pv(&payload);
-    inject_session_request_context(&mut json, &caps, "grok-tui", ClientId(1));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-tui", ClientId(1));
     // Should preserve the existing clientIdentifier
     assert_eq!(json["params"]["_meta"]["clientIdentifier"], "custom-client");
 }
@@ -1936,12 +1937,12 @@ fn inject_capabilities_adds_client_identifier_to_session_load() {
     assert!(inject_session_request_context(
         &mut json,
         &caps,
-        "grok-code-extension",
+        "Supercharge AI-code-extension",
         ClientId(1),
     ));
     assert_eq!(
         json["params"]["_meta"]["clientIdentifier"],
-        "grok-code-extension"
+        "Supercharge AI-code-extension"
     );
     // session/load should NOT get yoloMode or modelId injected
     assert!(json["params"]["_meta"].get("yoloMode").is_none());
@@ -1957,7 +1958,7 @@ fn inject_capabilities_adds_leader_client_id_to_session_load() {
     let caps = ClientCapabilities::default();
 
     let mut json = pv(&payload);
-    inject_session_request_context(&mut json, &caps, "grok-tui", ClientId(42));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-tui", ClientId(42));
     // The unique ClientId is stamped so the agent can echo it onto replay
     // notifications for leader unicast routing.
     assert_eq!(
@@ -1975,7 +1976,7 @@ fn inject_capabilities_does_not_override_existing_leader_client_id() {
     let caps = ClientCapabilities::default();
 
     let mut json = pv(&payload);
-    inject_session_request_context(&mut json, &caps, "grok-tui", ClientId(42));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-tui", ClientId(42));
     // An explicit value already present is respected (mirrors the
     // clientIdentifier guard).
     assert_eq!(
@@ -2012,9 +2013,10 @@ fn inject_yolo_notification_adds_client_identifier() {
         pv(r#"{"jsonrpc":"2.0","method":"x.ai/yolo_mode_changed","params":{"yolo_mode":true}}"#);
 
     assert!(inject_client_identity_into_yolo_notification(
-        &mut json, "grok-tui"
+        &mut json,
+        "Supercharge AI-tui"
     ));
-    assert_eq!(json["params"]["clientIdentifier"], "grok-tui");
+    assert_eq!(json["params"]["clientIdentifier"], "Supercharge AI-tui");
     assert_eq!(json["params"]["yolo_mode"], true);
 }
 
@@ -2024,7 +2026,8 @@ fn inject_yolo_notification_skips_non_yolo_methods() {
     let before = json.clone();
 
     assert!(!inject_client_identity_into_yolo_notification(
-        &mut json, "grok-tui"
+        &mut json,
+        "Supercharge AI-tui"
     ));
     assert_eq!(json, before);
 }
@@ -2034,23 +2037,31 @@ fn inject_client_identity_adds_identifier_to_initialize() {
     let mut json =
         pv(r#"{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"0.1"}}"#);
 
-    let (mutated, was_initialize) = inject_client_identity_into_initialize(&mut json, "grok-tui");
+    let (mutated, was_initialize) =
+        inject_client_identity_into_initialize(&mut json, "Supercharge AI-tui");
     assert!(was_initialize, "should have detected an initialize message");
     assert!(mutated, "should have injected the identifier");
-    assert_eq!(json["params"]["_meta"]["clientIdentifier"], "grok-tui");
+    assert_eq!(
+        json["params"]["_meta"]["clientIdentifier"],
+        "Supercharge AI-tui"
+    );
 }
 
 #[test]
 fn inject_client_identity_does_not_override_existing() {
     let mut json = pv(
-        r#"{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"0.1","_meta":{"clientIdentifier":"grok-web"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"0.1","_meta":{"clientIdentifier":"Supercharge AI-web"}}}"#,
     );
 
-    let (mutated, was_initialize) = inject_client_identity_into_initialize(&mut json, "grok-tui");
+    let (mutated, was_initialize) =
+        inject_client_identity_into_initialize(&mut json, "Supercharge AI-tui");
     assert!(was_initialize, "should have detected an initialize message");
     assert!(!mutated, "existing identifier means nothing was injected");
     // Should preserve the existing clientIdentifier
-    assert_eq!(json["params"]["_meta"]["clientIdentifier"], "grok-web");
+    assert_eq!(
+        json["params"]["_meta"]["clientIdentifier"],
+        "Supercharge AI-web"
+    );
 }
 
 #[test]
@@ -2058,7 +2069,8 @@ fn inject_client_identity_skips_non_initialize() {
     let mut json = pv(r#"{"jsonrpc":"2.0","method":"session/new","id":1,"params":{"cwd":"/tmp"}}"#);
     let before = json.clone();
 
-    let (mutated, was_initialize) = inject_client_identity_into_initialize(&mut json, "grok-tui");
+    let (mutated, was_initialize) =
+        inject_client_identity_into_initialize(&mut json, "Supercharge AI-tui");
     assert!(
         !was_initialize,
         "session/new should not be detected as initialize"
@@ -2089,14 +2101,14 @@ fn inject_client_identity_preserves_existing_meta() {
     );
 
     let (mutated, was_initialize) =
-        inject_client_identity_into_initialize(&mut json, "grok-code-extension");
+        inject_client_identity_into_initialize(&mut json, "Supercharge AI-code-extension");
     assert!(was_initialize, "should have detected an initialize message");
     assert!(mutated);
     // Should have both existing foo and new clientIdentifier
     assert_eq!(json["params"]["_meta"]["foo"], "bar");
     assert_eq!(
         json["params"]["_meta"]["clientIdentifier"],
-        "grok-code-extension"
+        "Supercharge AI-code-extension"
     );
 }
 
@@ -2145,7 +2157,7 @@ async fn set_model_updates_default_model_for_next_session_new() {
     let stream = LeaderStream::connect(&sock_path).await.unwrap();
     let (mut reader, mut writer) = tokio::io::split(stream);
 
-    // Register with an initial default_model of "grok-original"
+    // Register with an initial default_model of "Supercharge AI-original"
     write_message(
         &mut writer,
         &ClientMessage::Register {
@@ -2153,7 +2165,7 @@ async fn set_model_updates_default_model_for_next_session_new() {
             mode: ClientMode::Stdio,
             capabilities: ClientCapabilities {
                 yolo_mode: false,
-                default_model: Some("grok-original".to_string()),
+                default_model: Some("Supercharge AI-original".to_string()),
                 ..Default::default()
             },
         },
@@ -2162,9 +2174,9 @@ async fn set_model_updates_default_model_for_next_session_new() {
     .unwrap();
     let _: ServerMessage = read_message(&mut reader).await.unwrap();
 
-    // 1. Send session/setModel to switch to "grok-4.5"
+    // 1. Send session/setModel to switch to "Supercharge AI-4.5"
     let set_model_payload = format!(
-        r#"{{"jsonrpc":"2.0","method":"{}","id":1,"params":{{"sessionId":"sess-1","modelId":"grok-4.5"}}}}"#,
+        r#"{{"jsonrpc":"2.0","method":"{}","id":1,"params":{{"sessionId":"sess-1","modelId":"Supercharge AI-4.5"}}}}"#,
         AGENT_METHOD_NAMES.session_set_model
     );
     write_message(
@@ -2178,7 +2190,7 @@ async fn set_model_updates_default_model_for_next_session_new() {
     // Consume the forwarded message
     let _ = acp_rx.recv().await.unwrap();
 
-    // 2. Send session/new — the leader should inject the UPDATED model ("grok-4.5")
+    // 2. Send session/new — the leader should inject the UPDATED model ("Supercharge AI-4.5")
     let session_new_payload = format!(
         r#"{{"jsonrpc":"2.0","method":"{}","id":2,"params":{{"cwd":"/tmp"}}}}"#,
         AGENT_METHOD_NAMES.session_new
@@ -2197,7 +2209,7 @@ async fn set_model_updates_default_model_for_next_session_new() {
 
     // The injected modelId should be the NEW model, not the original registration model
     assert_eq!(
-        json["params"]["_meta"]["modelId"], "grok-4.5",
+        json["params"]["_meta"]["modelId"], "Supercharge AI-4.5",
         "Leader should inject the updated model after session/setModel, not the stale registration model"
     );
 
@@ -3016,7 +3028,7 @@ async fn high_throughput_replay_no_drops() {
     let (sock_path, cancel, response_tx, mut acp_rx) =
         setup_persistent_server_with_agent(&temp).await;
 
-    let (mut reader, mut writer) = connect_and_register(&sock_path, "grok-tui").await;
+    let (mut reader, mut writer) = connect_and_register(&sock_path, "Supercharge AI-tui").await;
 
     let load_req =
         r#"{"jsonrpc":"2.0","method":"session/load","id":1,"params":{"session_id":"sess_replay"}}"#;
@@ -4416,17 +4428,21 @@ async fn models_update_broadcasts_to_all_clients() {
     let (mut reader_b, _writer_b) = connect_and_register(&sock_path, "client-b").await;
     tokio::time::sleep(Duration::from_millis(20)).await;
 
-    let update = r#"{"jsonrpc":"2.0","method":"_x.ai/models/update","params":{"currentModelId":"grok-new","availableModels":[{"modelId":"grok-new","name":"Grok New"}]}}"#;
+    let update = r#"{"jsonrpc":"2.0","method":"_x.ai/models/update","params":{"currentModelId":"Supercharge AI-new","availableModels":[{"modelId":"Supercharge AI-new","name":"Grok New"}]}}"#;
     response_tx.send(update.to_string()).unwrap();
 
     let got_a = next_acp_payload(&mut reader_a).await;
     let got_b = next_acp_payload(&mut reader_b).await;
     assert!(
-        got_a.as_deref().is_some_and(|p| p.contains("grok-new")),
+        got_a
+            .as_deref()
+            .is_some_and(|p| p.contains("Supercharge AI-new")),
         "client A must receive the models broadcast, got {got_a:?}"
     );
     assert!(
-        got_b.as_deref().is_some_and(|p| p.contains("grok-new")),
+        got_b
+            .as_deref()
+            .is_some_and(|p| p.contains("Supercharge AI-new")),
         "client B must receive the models broadcast, got {got_b:?}"
     );
 
@@ -4528,7 +4544,7 @@ fn inject_capabilities_sets_code_nav_enabled_true() {
     let payload =
         r#"{"jsonrpc":"2.0","method":"session/new","id":1,"params":{"cwd":"/repo","_meta":{}}}"#;
     let mut json = pv(payload);
-    inject_session_request_context(&mut json, &caps, "grok-web", ClientId(1));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-web", ClientId(1));
     assert_eq!(
         json["params"]["_meta"]["codeNavEnabled"],
         serde_json::json!(true),
@@ -4548,9 +4564,9 @@ fn inject_capabilities_sets_code_nav_enabled_false() {
         code_nav_enabled: false,
         ..Default::default()
     };
-    let payload = r#"{"jsonrpc":"2.0","method":"session/new","id":1,"params":{"cwd":"/repo","_meta":{"clientIdentifier":"grok-tui"}}}"#;
+    let payload = r#"{"jsonrpc":"2.0","method":"session/new","id":1,"params":{"cwd":"/repo","_meta":{"clientIdentifier":"Supercharge AI-tui"}}}"#;
     let mut json = pv(payload);
-    inject_session_request_context(&mut json, &caps, "grok-tui", ClientId(1));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-tui", ClientId(1));
     assert_eq!(
         json["params"]["_meta"]["codeNavEnabled"],
         serde_json::json!(false),
@@ -4571,7 +4587,7 @@ fn inject_capabilities_injects_code_nav_into_session_load() {
     };
     let payload = r#"{"jsonrpc":"2.0","method":"session/load","id":2,"params":{"sessionId":"abc","cwd":"/repo","_meta":{}}}"#;
     let mut json = pv(payload);
-    inject_session_request_context(&mut json, &caps, "grok-web", ClientId(1));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-web", ClientId(1));
     assert_eq!(
         json["params"]["_meta"]["codeNavEnabled"],
         serde_json::json!(true),
@@ -4596,9 +4612,9 @@ fn inject_capabilities_two_clients_stay_isolated() {
         r#"{"jsonrpc":"2.0","method":"session/new","id":1,"params":{"cwd":"/repo","_meta":{}}}"#;
 
     let mut web_json = pv(session_new);
-    inject_session_request_context(&mut web_json, &web_caps, "grok-web", ClientId(1));
+    inject_session_request_context(&mut web_json, &web_caps, "Supercharge AI-web", ClientId(1));
     let mut tui_json = pv(session_new);
-    inject_session_request_context(&mut tui_json, &tui_caps, "grok-tui", ClientId(2));
+    inject_session_request_context(&mut tui_json, &tui_caps, "Supercharge AI-tui", ClientId(2));
 
     assert_eq!(
         web_json["params"]["_meta"]["codeNavEnabled"],
@@ -4628,9 +4644,9 @@ fn inject_capabilities_terminal_and_fs_per_client() {
         r#"{"jsonrpc":"2.0","method":"session/new","id":1,"params":{"cwd":"/repo","_meta":{}}}"#;
 
     let mut web_json = pv(session_new);
-    inject_session_request_context(&mut web_json, &web_caps, "grok-web", ClientId(1));
+    inject_session_request_context(&mut web_json, &web_caps, "Supercharge AI-web", ClientId(1));
     let mut tui_json = pv(session_new);
-    inject_session_request_context(&mut tui_json, &tui_caps, "grok-tui", ClientId(2));
+    inject_session_request_context(&mut tui_json, &tui_caps, "Supercharge AI-tui", ClientId(2));
 
     assert_eq!(
         web_json["params"]["_meta"]["clientTerminal"],
@@ -4670,7 +4686,7 @@ fn inject_capabilities_terminal_into_session_load() {
     let session_load = r#"{"jsonrpc":"2.0","method":"session/load","id":2,"params":{"sessionId":"sess-1","_meta":{}}}"#;
 
     let mut json = pv(session_load);
-    inject_session_request_context(&mut json, &caps, "grok-web", ClientId(1));
+    inject_session_request_context(&mut json, &caps, "Supercharge AI-web", ClientId(1));
 
     assert_eq!(
         json["params"]["_meta"]["clientTerminal"],

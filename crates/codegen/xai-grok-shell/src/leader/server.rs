@@ -106,7 +106,7 @@ struct ClientState {
     tx: AsyncSender<ClientOutbound>,
     mode: ClientMode,
     capabilities: ClientCapabilities,
-    /// The client type string from IPC registration (e.g., "grok-tui", "grok-code-extension").
+    /// The client type string from IPC registration (e.g., "Supercharge AI-tui", "Supercharge AI-code-extension").
     /// Injected into `initialize` requests as `clientIdentifier` so the agent knows the real
     /// client type even when multiple clients share one leader process.
     client_type: String,
@@ -1045,7 +1045,7 @@ fn workspace_server_id() -> String {
         .collect();
     let name = sanitized.trim_matches('-');
     if name.is_empty() {
-        "grok-workspace".to_string()
+        "Supercharge AI-workspace".to_string()
     } else {
         name.to_string()
     }
@@ -1131,12 +1131,12 @@ async fn handle_workspace_start(
     let auth = wait_for_leader_auth(ws, &cancel).await?;
     let server_id = workspace_server_id();
     let metadata = serde_json::json!({
-        "source": "grok-workspace",
+        "source": "Supercharge AI-workspace",
         "hostname": gethostname::gethostname().to_string_lossy(),
         "cwd": cwd_path.display().to_string(),
     });
     let upload_queue_enabled =
-        std::env::var("GROK_WORKSPACE_UPLOAD_QUEUE_ENABLED").as_deref() != Ok("false");
+        std::env::var("SUPERCHARGE_WORKSPACE_UPLOAD_QUEUE_ENABLED").as_deref() != Ok("false");
     crate::agent::folder_trust::resolve_and_record(&cwd_path, None, false);
     let project_lsp_trusted = crate::agent::folder_trust::project_scope_allowed(&cwd_path);
     let handle = xai_grok_workspace::connect_local_workspace(
@@ -1487,7 +1487,7 @@ fn make_version_mismatch_notification(
                 "leaderVersion": leader_version,
                 "message": format!(
                     "Client version {client_version} differs from leader version \
-                     {leader_version}. Restart the grok binary to use the same version."
+                     {leader_version}. Restart the Supercharge AI binary to use the same version."
                 )
             }
         })
@@ -1534,7 +1534,7 @@ fn make_version_mismatch_notification(
 /// * `ready_rx` - Watch receiver; ACP forwarding is gated until this is `true`
 /// * `relay_demand_tx` - Watch sender flipped to `true` when the first
 ///   [`ClientMode::Headless`] client registers. `run_leader` defers starting the
-///   grok.com WebSocket relay until this fires, so a leader serving only
+///   supercharge.ai WebSocket relay until this fires, so a leader serving only
 ///   interactive clients (TUI dashboard, IDE) never duplicates its ACP stream
 ///   onto the relay. Headless registration is the devbox-flow marker: those
 ///   clients are driven remotely *through* the relay.

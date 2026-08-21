@@ -146,7 +146,7 @@ fn test_app() -> AppView {
         agent_override: None,
         bootstrap_acp_commands: Vec::new(),
         auth_methods: vec![acp::AuthMethod::Agent(acp::AuthMethodAgent::new(
-            acp::AuthMethodId::new("grok.com"),
+            acp::AuthMethodId::new("supercharge.ai"),
             "Grok".to_string(),
         ))],
         auth_state: AuthState::Done,
@@ -530,7 +530,7 @@ pub(super) fn end_turn() -> Action {
     })
 }
 /// Plant a Build session under the process `grok_home()` (OnceLock-cached;
-/// do not rely on setting `GROK_HOME` mid-process). Caller must remove `sess_dir`.
+/// do not rely on setting `SUPERCHARGE_HOME` mid-process). Caller must remove `sess_dir`.
 fn plant_local_build_session(cwd: &std::path::Path, session_id: &str) -> std::path::PathBuf {
     let home = xai_grok_shell::util::grok_home::grok_home();
     let encoded = xai_grok_shell::util::grok_home::encode_cwd_dirname(&cwd.to_string_lossy());
@@ -916,7 +916,7 @@ fn with_theme_test_env(f: impl FnOnce()) {
         .unwrap_or_else(|e| e.into_inner());
     crate::theme::cache::reset_for_test();
     crate::theme::cache::seed_auto_theme_defaults_for_test();
-    crate::theme::cache::set(crate::theme::ThemeKind::GrokNight);
+    crate::theme::cache::set(crate::theme::ThemeKind::VoltageDark);
     crate::theme::system_appearance::clear_mock();
     f();
     crate::theme::system_appearance::clear_mock();

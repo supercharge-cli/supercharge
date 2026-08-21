@@ -6,7 +6,7 @@
   },
   {
     "category": "features",
-    "description": "**GROK_EXTRA_CA_BUNDLE** env var allows adding custom TLS root certificates.",
+    "description": "**SUPERCHARGE_EXTRA_CA_BUNDLE** env var allows adding custom TLS root certificates.",
     "breaking_change": false
   },
   {

@@ -21,8 +21,8 @@ fn make_submission(thumbs_up: bool) -> FeedbackSubmission {
         } else {
             Some("could be better".into())
         },
-        model_id: Some("grok-3-fast".into()),
-        resolved_model_id: Some("grok-4.5".into()),
+        model_id: Some("Supercharge AI-3-fast".into()),
+        resolved_model_id: Some("Supercharge AI-4.5".into()),
         ..Default::default()
     }
 }

@@ -81,7 +81,7 @@ pub fn browser_unavailable_line(url: &str, copied: bool) -> String {
 pub fn open_url(url: &str) -> bool {
     // Test seam: PTY e2e must observe the open without launching a real
     // browser. When set, append the URL to the file and skip the OS opener.
-    if let Ok(path) = std::env::var("GROK_TEST_OPEN_URL_FILE") {
+    if let Ok(path) = std::env::var("SUPERCHARGE_TEST_OPEN_URL_FILE") {
         use std::io::Write;
         // Surface misconfiguration: a swallowed write leaves the PTY test
         // failing with a generic timeout and no clue why.
@@ -91,7 +91,7 @@ pub fn open_url(url: &str) -> bool {
             .open(&path)
             .and_then(|mut f| writeln!(f, "{url}"))
         {
-            tracing::warn!(error = %e, path, "GROK_TEST_OPEN_URL_FILE write failed");
+            tracing::warn!(error = %e, path, "SUPERCHARGE_TEST_OPEN_URL_FILE write failed");
             return false;
         }
         return true;
@@ -308,7 +308,7 @@ pub fn try_open_url(url: &str, filter: SchemeFilter) -> OpenUrlResult {
 /// failure, the original string is returned unchanged so this is safe to apply
 /// to opener input from untrusted sources.
 ///
-/// Used by the SuperGrok upsell flow to attribute clicks to `referrer=grok-build`,
+/// Used by the Supercharge upsell flow to attribute clicks to `referrer=supercharge-core`,
 /// matching the OAuth consent screen and x.ai/cli marketing links regardless of
 /// what the remote settings `gate_url` value happens to be.
 pub fn ensure_query_param(url: &str, key: &str, value: &str) -> String {
@@ -476,51 +476,72 @@ mod tests {
 
     #[test]
     fn ensure_query_param_appends_when_missing() {
-        let out = ensure_query_param("https://grok.com/supergrok", "referrer", "grok-build");
-        assert_eq!(out, "https://grok.com/supergrok?referrer=grok-build");
+        let out = ensure_query_param(
+            "https://supercharge.ai/supercharge",
+            "referrer",
+            "supercharge-core",
+        );
+        assert_eq!(
+            out,
+            "https://supercharge.ai/supercharge?referrer=supercharge-core"
+        );
     }
 
     #[test]
     fn ensure_query_param_preserves_existing_value() {
         let out = ensure_query_param(
-            "https://grok.com/supergrok?referrer=other",
+            "https://supercharge.ai/supercharge?referrer=other",
             "referrer",
-            "grok-build",
+            "supercharge-core",
         );
-        assert_eq!(out, "https://grok.com/supergrok?referrer=other");
+        assert_eq!(out, "https://supercharge.ai/supercharge?referrer=other");
     }
 
     #[test]
     fn ensure_query_param_keeps_other_query_pairs() {
         let out = ensure_query_param(
-            "https://grok.com/supergrok?heavy=1",
+            "https://supercharge.ai/supercharge?heavy=1",
             "referrer",
-            "grok-build",
+            "supercharge-core",
         );
         assert_eq!(
             out,
-            "https://grok.com/supergrok?heavy=1&referrer=grok-build"
+            "https://supercharge.ai/supercharge?heavy=1&referrer=supercharge-core"
         );
     }
 
     #[test]
     fn ensure_query_param_preserves_fragment() {
         // The current remote settings value uses a hash fragment for client-side
-        // routing (`grok.com/#supergrok`); we still want the referrer attached.
-        let out = ensure_query_param("https://grok.com/#supergrok", "referrer", "grok-build");
-        assert_eq!(out, "https://grok.com/?referrer=grok-build#supergrok");
+        // routing (`supercharge.ai/#supercharge`); we still want the referrer attached.
+        let out = ensure_query_param(
+            "https://supercharge.ai/#supercharge",
+            "referrer",
+            "supercharge-core",
+        );
+        assert_eq!(
+            out,
+            "https://supercharge.ai/?referrer=supercharge-core#supercharge"
+        );
     }
 
     #[test]
     fn ensure_query_param_returns_unchanged_on_parse_failure() {
-        let out = ensure_query_param("not a url", "referrer", "grok-build");
+        let out = ensure_query_param("not a url", "referrer", "supercharge-core");
         assert_eq!(out, "not a url");
     }
 
     #[test]
     fn ensure_query_param_url_encodes_value() {
-        let out = ensure_query_param("https://grok.com/supergrok", "referrer", "grok build");
-        assert_eq!(out, "https://grok.com/supergrok?referrer=grok+build");
+        let out = ensure_query_param(
+            "https://supercharge.ai/supercharge",
+            "referrer",
+            "grok build",
+        );
+        assert_eq!(
+            out,
+            "https://supercharge.ai/supercharge?referrer=grok+build"
+        );
     }
 
     #[test]
@@ -585,7 +606,7 @@ mod tests {
 
     #[test]
     fn browser_unavailable_message_includes_full_url() {
-        let url = "https://grok.com/supergrok?referrer=grok-build";
+        let url = "https://supercharge.ai/supercharge?referrer=supercharge-core";
         assert_eq!(
             browser_unavailable_message(url),
             format!("{BROWSER_UNAVAILABLE_NOTICE}:\n{url}")
@@ -594,7 +615,7 @@ mod tests {
 
     #[test]
     fn browser_unavailable_line_is_url_first_single_line() {
-        let url = "https://grok.com/supergrok?referrer=grok-build";
+        let url = "https://supercharge.ai/supercharge?referrer=supercharge-core";
         let plain = browser_unavailable_line(url, false);
         assert!(plain.starts_with(url), "{plain}");
         assert!(!plain.contains('\n'), "{plain}");

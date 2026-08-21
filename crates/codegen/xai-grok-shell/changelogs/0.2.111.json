@@ -6,7 +6,7 @@
   },
   {
     "category": "fixes",
-    "description": "**npm package** now installs the native binary under `$GROK_HOME/bin` (honoring the same override as the Rust CLI).",
+    "description": "**npm package** now installs the native binary under `$SUPERCHARGE_HOME/bin` (honoring the same override as the Rust CLI).",
     "breaking_change": false
   },
   {

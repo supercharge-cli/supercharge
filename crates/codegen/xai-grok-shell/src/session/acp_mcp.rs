@@ -1,6 +1,6 @@
 //! In-process SDK MCP servers over the ACP reverse channel (`x.ai/mcp/sdk_call`).
 //!
-//! The official `grok-agent-sdk` lets a host define in-process tools (`@tool` /
+//! The official `Supercharge AI-agent-sdk` lets a host define in-process tools (`@tool` /
 //! `create_sdk_mcp_server`). When `transport="acp"`, the SDK registers them in
 //! `session/new` `_meta["x.ai/mcp/servers"] = [{ "name", "serverId" }]` and the agent
 //! invokes their tools by sending each MCP JSON-RPC message back to the client as a

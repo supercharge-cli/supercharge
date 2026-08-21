@@ -1,4 +1,4 @@
-//! Local PTY wrapper: the engine behind `grok wrap` (see [`crate::wrap_cmd`]).
+//! Local PTY wrapper: the engine behind `supercharge wrap` (see [`crate::wrap_cmd`]).
 //!
 //! Spawns a command inside a local pseudo-terminal and pipes its output
 //! through `crate::wrap_filter::Osc52Filter`, which intercepts OSC 52
@@ -26,18 +26,18 @@ fn apply_wrap_child_env(
     cmd: &mut portable_pty::CommandBuilder,
     appearance: Option<SystemAppearance>,
 ) {
-    cmd.env("GROK_OSC52_SINK", "1");
-    cmd.env("LC_GROK_OSC52_SINK", "1");
+    cmd.env("SUPERCHARGE_OSC52_SINK", "1");
+    cmd.env("LC_SUPERCHARGE_OSC52_SINK", "1");
     if let Some(appearance) = appearance {
         let value = appearance.as_env_value();
-        cmd.env("GROK_APPEARANCE", value);
-        cmd.env("LC_GROK_APPEARANCE", value);
+        cmd.env("SUPERCHARGE_APPEARANCE", value);
+        cmd.env("LC_SUPERCHARGE_APPEARANCE", value);
     }
 }
 
 /// Run an arbitrary command inside a local PTY with OSC 52 output filtering.
 ///
-/// This is the engine behind `grok wrap`: it spawns
+/// This is the engine behind `supercharge wrap`: it spawns
 /// `program` (with `args`) attached to a local pseudo-terminal, forwards the
 /// outer terminal's size changes to it, and filters its output through
 /// `Osc52Filter`, which intercepts OSC 52 clipboard sequences and writes
@@ -78,7 +78,7 @@ pub(crate) fn run_wrapped_command(program: &str, args: &[String]) -> Result<i32>
     // channel. Cross-thread use of portable-pty's `Write` impl observed EIO
     // (errno 5) on macOS even for small inject payloads; confining `write_all`
     // to a single owner thread avoids that. Handles are intentionally
-    // detached — `grok wrap` is short-lived and exits with the child.
+    // detached — `supercharge wrap` is short-lived and exits with the child.
     let mut pty_reader = pair.master.try_clone_reader()?;
 
     // NOTE: we intentionally do NOT block SIGWINCH here. The resize handler
@@ -434,24 +434,39 @@ mod tests {
     #[test]
     fn apply_wrap_child_env_dark_overrides_parent_light_on_both_names() {
         let mut cmd = portable_pty::CommandBuilder::new("true");
-        cmd.env("GROK_APPEARANCE", "light");
-        cmd.env("LC_GROK_APPEARANCE", "light");
+        cmd.env("SUPERCHARGE_APPEARANCE", "light");
+        cmd.env("LC_SUPERCHARGE_APPEARANCE", "light");
         apply_wrap_child_env(&mut cmd, Some(SystemAppearance::Dark));
-        assert_eq!(env_str(&cmd, "GROK_APPEARANCE").as_deref(), Some("dark"));
-        assert_eq!(env_str(&cmd, "LC_GROK_APPEARANCE").as_deref(), Some("dark"));
-        assert_eq!(env_str(&cmd, "GROK_OSC52_SINK").as_deref(), Some("1"));
-        assert_eq!(env_str(&cmd, "LC_GROK_OSC52_SINK").as_deref(), Some("1"));
+        assert_eq!(
+            env_str(&cmd, "SUPERCHARGE_APPEARANCE").as_deref(),
+            Some("dark")
+        );
+        assert_eq!(
+            env_str(&cmd, "LC_SUPERCHARGE_APPEARANCE").as_deref(),
+            Some("dark")
+        );
+        assert_eq!(
+            env_str(&cmd, "SUPERCHARGE_OSC52_SINK").as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            env_str(&cmd, "LC_SUPERCHARGE_OSC52_SINK").as_deref(),
+            Some("1")
+        );
     }
 
     #[test]
     fn apply_wrap_child_env_light_overrides_parent_dark_on_both_names() {
         let mut cmd = portable_pty::CommandBuilder::new("true");
-        cmd.env("GROK_APPEARANCE", "dark");
-        cmd.env("LC_GROK_APPEARANCE", "dark");
+        cmd.env("SUPERCHARGE_APPEARANCE", "dark");
+        cmd.env("LC_SUPERCHARGE_APPEARANCE", "dark");
         apply_wrap_child_env(&mut cmd, Some(SystemAppearance::Light));
-        assert_eq!(env_str(&cmd, "GROK_APPEARANCE").as_deref(), Some("light"));
         assert_eq!(
-            env_str(&cmd, "LC_GROK_APPEARANCE").as_deref(),
+            env_str(&cmd, "SUPERCHARGE_APPEARANCE").as_deref(),
+            Some("light")
+        );
+        assert_eq!(
+            env_str(&cmd, "LC_SUPERCHARGE_APPEARANCE").as_deref(),
             Some("light")
         );
     }
@@ -459,11 +474,17 @@ mod tests {
     #[test]
     fn apply_wrap_child_env_none_does_not_stamp_from_parent_snapshot() {
         let mut cmd = portable_pty::CommandBuilder::new("true");
-        cmd.env("GROK_APPEARANCE", "dark");
-        cmd.env_remove("LC_GROK_APPEARANCE");
+        cmd.env("SUPERCHARGE_APPEARANCE", "dark");
+        cmd.env_remove("LC_SUPERCHARGE_APPEARANCE");
         apply_wrap_child_env(&mut cmd, None);
-        assert_eq!(env_str(&cmd, "GROK_APPEARANCE").as_deref(), Some("dark"));
-        assert_eq!(env_str(&cmd, "LC_GROK_APPEARANCE"), None);
-        assert_eq!(env_str(&cmd, "GROK_OSC52_SINK").as_deref(), Some("1"));
+        assert_eq!(
+            env_str(&cmd, "SUPERCHARGE_APPEARANCE").as_deref(),
+            Some("dark")
+        );
+        assert_eq!(env_str(&cmd, "LC_SUPERCHARGE_APPEARANCE"), None);
+        assert_eq!(
+            env_str(&cmd, "SUPERCHARGE_OSC52_SINK").as_deref(),
+            Some("1")
+        );
     }
 }

@@ -402,7 +402,7 @@ impl<'a> SkillListing<'a> {
 
 /// Extract the skill source directory from a SKILL.md display path.
 ///
-/// `"/path/.grok/skills/my-skill/SKILL.md"` -> `"/path/.grok/skills/"`
+/// `"/path/.supercharge/skills/my-skill/SKILL.md"` -> `"/path/.supercharge/skills/"`
 fn skill_source_dir(display_path: &str) -> Option<&str> {
     let p = std::path::Path::new(display_path);
     // SKILL.md -> skill-name dir -> skills dir
@@ -819,7 +819,7 @@ mod tests {
 
     #[test]
     fn verbatim_bypasses_is_listable_filter() {
-        // grok-build drops a description-less skill; compat mode renders all.
+        // supercharge-core drops a description-less skill; compat mode renders all.
         let skills = [plugin_skill("noise", "derived")];
         let mut a = HashSet::new();
         assert!(

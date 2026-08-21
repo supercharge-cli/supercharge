@@ -159,7 +159,7 @@ mod tests {
         theme_cache::seed_auto_theme_defaults_for_test();
         system_appearance::clear_mock();
         // Set LOADED=true so current_kind() doesn't try to read from disk.
-        theme_cache::set(ThemeKind::GrokNight);
+        theme_cache::set(ThemeKind::VoltageDark);
         f();
         system_appearance::clear_mock();
         theme_cache::reset_for_test();
@@ -244,7 +244,7 @@ mod tests {
     fn suggest_args_explicit_active_when_not_auto() {
         with_test_env(|| {
             theme_cache::set_auto_mode(false);
-            theme_cache::set(ThemeKind::GrokNight);
+            theme_cache::set(ThemeKind::VoltageDark);
             let cmd = ThemeCommand;
             let models = crate::acp::model_state::ModelState::default();
             let ctx = AppCtx {
@@ -258,14 +258,14 @@ mod tests {
                 current_title: None,
             };
             let items = cmd.suggest_args(&ctx, "").expect("should return items");
-            let groknight = items
+            let voltage_dark = items
                 .iter()
-                .find(|i| i.insert_text == "groknight")
-                .expect("groknight should be in list");
+                .find(|i| i.insert_text == "voltage-dark")
+                .expect("voltage-dark should be in list");
             assert!(
-                groknight.description.contains("(active)"),
+                voltage_dark.description.contains("(active)"),
                 "explicit theme should show (active), got: {}",
-                groknight.description
+                voltage_dark.description
             );
         });
     }
@@ -274,7 +274,7 @@ mod tests {
     fn suggest_args_no_explicit_active_when_auto() {
         with_test_env(|| {
             theme_cache::set_auto_mode(true);
-            theme_cache::set(ThemeKind::GrokNight);
+            theme_cache::set(ThemeKind::VoltageDark);
             let cmd = ThemeCommand;
             let models = crate::acp::model_state::ModelState::default();
             let ctx = AppCtx {
@@ -322,12 +322,12 @@ mod tests {
                     ..crate::settings::PagerLocalSnapshot::default()
                 },
             };
-            let result = cmd.run(&mut ctx, "groknight");
+            let result = cmd.run(&mut ctx, "voltage-dark");
             match result {
                 CommandResult::Action(Action::SetTheme(name)) => {
-                    assert_eq!(name, "groknight");
+                    assert_eq!(name, "voltage-dark");
                 }
-                other => panic!("expected Action::SetTheme(\"groknight\"), got {other:?}"),
+                other => panic!("expected Action::SetTheme(\"voltage-dark\"), got {other:?}"),
             }
         });
     }
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn run_toggle_dispatches_set_theme_action() {
         with_test_env(|| {
-            theme_cache::set(ThemeKind::GrokNight);
+            theme_cache::set(ThemeKind::VoltageDark);
             // Hard-fail with a clear message if the precondition
             // breaks — `(0 + 1) % 0` in `run` would otherwise panic
             // with `attempt to calculate the remainder with a
@@ -368,7 +368,7 @@ mod tests {
             let result = cmd.run(&mut ctx, "");
             match result {
                 CommandResult::Action(Action::SetTheme(name)) => {
-                    // available[0] = GrokNight; next is available[1].
+                    // available[0] = VoltageDark; next is available[1].
                     let expected = ThemeKind::available()[1].display_name();
                     assert_eq!(name, expected);
                 }
@@ -427,13 +427,13 @@ mod tests {
                     ..crate::settings::PagerLocalSnapshot::default()
                 },
             };
-            // "dark" is an alias for GrokNight.
+            // "dark" is an alias for VoltageDark.
             let result = cmd.run(&mut ctx, "dark");
             match result {
                 CommandResult::Action(Action::SetTheme(name)) => {
-                    assert_eq!(name, "groknight", "alias must normalise to canonical");
+                    assert_eq!(name, "voltage-dark", "alias must normalise to canonical");
                 }
-                other => panic!("expected Action::SetTheme(\"groknight\"), got {other:?}"),
+                other => panic!("expected Action::SetTheme(\"voltage-dark\"), got {other:?}"),
             }
         });
     }
@@ -446,8 +446,8 @@ mod tests {
             system_appearance::set_mock(Some(system_appearance::SystemAppearance::Light));
             let cmd = ThemeCommand;
             cmd.preview_arg("auto");
-            // Default auto config maps Light -> GrokDay.
-            assert_eq!(Theme::current_kind(), ThemeKind::GrokDay);
+            // Default auto config maps Light -> VoltageLight.
+            assert_eq!(Theme::current_kind(), ThemeKind::VoltageLight);
         });
     }
 
@@ -455,10 +455,10 @@ mod tests {
     #[test]
     fn preview_explicit_theme_applies_directly() {
         with_test_env(|| {
-            theme_cache::set(ThemeKind::GrokNight);
+            theme_cache::set(ThemeKind::VoltageDark);
             let cmd = ThemeCommand;
-            cmd.preview_arg("grokday");
-            assert_eq!(Theme::current_kind(), ThemeKind::GrokDay);
+            cmd.preview_arg("voltage-light");
+            assert_eq!(Theme::current_kind(), ThemeKind::VoltageLight);
         });
     }
 
@@ -466,12 +466,12 @@ mod tests {
     #[test]
     fn preview_unknown_theme_is_no_op() {
         with_test_env(|| {
-            theme_cache::set(ThemeKind::GrokNight);
+            theme_cache::set(ThemeKind::VoltageDark);
             let cmd = ThemeCommand;
             cmd.preview_arg("nonexistent-theme");
             assert_eq!(
                 Theme::current_kind(),
-                ThemeKind::GrokNight,
+                ThemeKind::VoltageDark,
                 "unknown theme name must NOT change Theme::current_kind",
             );
         });
@@ -483,17 +483,17 @@ mod tests {
     #[test]
     fn cancel_preview_restores_previous_kind() {
         with_test_env(|| {
-            theme_cache::set(ThemeKind::GrokNight);
+            theme_cache::set(ThemeKind::VoltageDark);
             let cmd = ThemeCommand;
             // Simulate user navigating into a different theme during preview.
-            cmd.preview_arg("grokday");
-            assert_eq!(Theme::current_kind(), ThemeKind::GrokDay);
+            cmd.preview_arg("voltage-light");
+            assert_eq!(Theme::current_kind(), ThemeKind::VoltageLight);
 
             // Then Escape (or arg picker dismissal): restore.
-            cmd.cancel_preview("groknight");
+            cmd.cancel_preview("voltage-dark");
             assert_eq!(
                 Theme::current_kind(),
-                ThemeKind::GrokNight,
+                ThemeKind::VoltageDark,
                 "cancel_preview must restore the previous canonical",
             );
         });
@@ -503,12 +503,12 @@ mod tests {
     #[test]
     fn cancel_preview_unknown_theme_is_no_op() {
         with_test_env(|| {
-            theme_cache::set(ThemeKind::GrokDay);
+            theme_cache::set(ThemeKind::VoltageLight);
             let cmd = ThemeCommand;
             cmd.cancel_preview("nonexistent-theme");
             assert_eq!(
                 Theme::current_kind(),
-                ThemeKind::GrokDay,
+                ThemeKind::VoltageLight,
                 "unknown previous must NOT change Theme::current_kind",
             );
         });

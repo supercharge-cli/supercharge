@@ -121,7 +121,7 @@ pub struct MonitorEventNotification {
     ///
     /// In leader mode every session shares one [`MonitorEventBuffer`], so the
     /// drain sites filter on this to avoid surfacing one session's monitor
-    /// events inside another session's turn. `None` for legacy / non-grok-build
+    /// events inside another session's turn. `None` for legacy / non-supercharge-core
     /// backends, which any session drains for backwards compatibility.
     pub owner_session_id: Option<String>,
 }

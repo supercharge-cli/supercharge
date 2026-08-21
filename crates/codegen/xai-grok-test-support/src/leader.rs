@@ -21,11 +21,11 @@ use crate::sandbox::TestSandbox;
 
 /// Env var naming the binary that elects/hosts the leader in a two-binary
 /// (version-skew) test. Falls back to [`grok_binary`]'s resolution.
-pub const LEADER_BINARY_ENV: &str = "GROK_BINARY_LEADER";
+pub const LEADER_BINARY_ENV: &str = "SUPERCHARGE_BINARY_LEADER";
 
 /// Env var naming the binary for the second (usually newer) client in a
 /// two-binary test. Falls back to [`grok_binary`]'s resolution.
-pub const CLIENT_BINARY_ENV: &str = "GROK_BINARY_CLIENT";
+pub const CLIENT_BINARY_ENV: &str = "SUPERCHARGE_BINARY_CLIENT";
 
 fn role_binary(env_key: &str) -> PathBuf {
     if let Ok(path) = std::env::var(env_key) {
@@ -251,13 +251,13 @@ impl LeaderFixture {
         .stdout(std::process::Stdio::null());
         sandbox.apply_to_std_command(&mut cmd);
         cmd.envs(xai_tty_utils::pager_env())
-            .env("GROK_CLI_CHAT_PROXY_BASE_URL", base_url)
-            .env("GROK_XAI_API_BASE_URL", base_url)
-            .env("GROK_MODELS_BASE_URL", base_url)
-            .env("GROK_FEEDBACK_BASE_URL", base_url)
-            .env("GROK_TRACE_UPLOAD_URL", base_url)
-            .env("XAI_API_KEY", "test-key-for-ci")
-            .env("GROK_LEADER_SOCKET", &socket)
+            .env("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", base_url)
+            .env("SUPERCHARGE_XAI_API_BASE_URL", base_url)
+            .env("SUPERCHARGE_MODELS_BASE_URL", base_url)
+            .env("SUPERCHARGE_FEEDBACK_BASE_URL", base_url)
+            .env("SUPERCHARGE_TRACE_UPLOAD_URL", base_url)
+            .env("SUPERCHARGE_API_KEY", "test-key-for-ci")
+            .env("SUPERCHARGE_LEADER_SOCKET", &socket)
             .env("RUST_LOG", "xai_grok_shell=debug");
         let log_path = sandbox.grok_home().join("leader.log");
         match std::fs::File::create(&log_path) {
@@ -637,13 +637,13 @@ impl LeaderStdioClient {
                 .label("grok leader stdio client")
                 .stdin(TestStdin::Piped)
                 .stdout(TestOutput::Piped)
-                .env("GROK_CLI_CHAT_PROXY_BASE_URL", base_url)
-                .env("GROK_XAI_API_BASE_URL", base_url)
-                .env("GROK_MODELS_BASE_URL", base_url)
-                .env("GROK_FEEDBACK_BASE_URL", base_url)
-                .env("GROK_TRACE_UPLOAD_URL", base_url)
-                .env("XAI_API_KEY", "test-key-for-ci")
-                .env("GROK_LEADER_SOCKET", leader_socket)
+                .env("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", base_url)
+                .env("SUPERCHARGE_XAI_API_BASE_URL", base_url)
+                .env("SUPERCHARGE_MODELS_BASE_URL", base_url)
+                .env("SUPERCHARGE_FEEDBACK_BASE_URL", base_url)
+                .env("SUPERCHARGE_TRACE_UPLOAD_URL", base_url)
+                .env("SUPERCHARGE_API_KEY", "test-key-for-ci")
+                .env("SUPERCHARGE_LEADER_SOCKET", leader_socket)
                 .env("RUST_LOG", "xai_grok_shell=debug"),
         )
         .map_err(|error| {
@@ -838,7 +838,7 @@ impl LeaderStdioClient {
 }
 
 pub fn leader_lock_path(home: &Path) -> PathBuf {
-    home.join(".grok").join("leader.lock")
+    home.join(".supercharge").join("leader.lock")
 }
 
 pub fn read_leader_pid(home: &Path) -> Option<u32> {
@@ -886,7 +886,7 @@ pub async fn wait_for_replay_notifications(
 }
 
 pub fn leader_log(home: &Path) -> String {
-    std::fs::read_to_string(home.join(".grok").join("leader.log")).unwrap_or_default()
+    std::fs::read_to_string(home.join(".supercharge").join("leader.log")).unwrap_or_default()
 }
 
 #[cfg(test)]

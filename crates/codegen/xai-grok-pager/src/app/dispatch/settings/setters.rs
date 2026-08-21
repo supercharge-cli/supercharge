@@ -545,7 +545,7 @@ pub(super) fn set_prompt_suggestions_inner(app: &mut AppView, new: bool) {
 /// SHELL-OWNED: cache mirror + `[ui].prompt_suggestions` via
 /// `Effect::PersistSetting`. Read at turn end (fetch gate) and per frame
 /// (display gate), so toggling applies without a restart. The
-/// `GROK_PROMPT_SUGGESTIONS` env var overrides the effective value.
+/// `SUPERCHARGE_PROMPT_SUGGESTIONS` env var overrides the effective value.
 pub(in crate::app::dispatch) fn set_prompt_suggestions(
     app: &mut AppView,
     new: bool,
@@ -1460,8 +1460,8 @@ pub(in crate::app::dispatch) fn set_auto_dark_theme(app: &mut AppView, new: Stri
         .as_deref()
         .and_then(crate::theme::canonical_name)
         .filter(|s| *s != "auto")
-        // No prior config: fall back to GrokNight (the default).
-        .unwrap_or_else(|| crate::theme::ThemeKind::GrokNight.display_name());
+        // No prior config: fall back to VoltageDark (the default).
+        .unwrap_or_else(|| crate::theme::ThemeKind::VoltageDark.display_name());
     let new_canonical = match crate::theme::canonical_name(&new) {
         Some(c) if c != crate::theme::ThemeKind::Auto.display_name() => c,
         _ => {
@@ -1574,7 +1574,7 @@ pub(in crate::app::dispatch) fn set_auto_light_theme(
         .as_deref()
         .and_then(crate::theme::canonical_name)
         .filter(|s| *s != "auto")
-        .unwrap_or_else(|| crate::theme::ThemeKind::GrokDay.display_name());
+        .unwrap_or_else(|| crate::theme::ThemeKind::VoltageLight.display_name());
     let new_canonical = match crate::theme::canonical_name(&new) {
         Some(c) if c != crate::theme::ThemeKind::Auto.display_name() => c,
         _ => {
@@ -1764,10 +1764,10 @@ pub(in crate::app::dispatch) fn set_default_model(
 
     // Persist the **model ID** (catalog key), not the display name.
     // The shell's `resolve_default_model` matches by slug / map key,
-    // so persisting the human-readable name (e.g. "Grok Build")
+    // so persisting the human-readable name (e.g. "Supercharge AI")
     // would silently fail to resolve on the next startup.
     //
-    // Chat (`--chat` / GROK_CHAT_MODE) catalogs use opaque `/rest/modes`
+    // Chat (`--chat` / SUPERCHARGE_CHAT_MODE) catalogs use opaque `/rest/modes`
     // slugs that must not become the global Build `default_model`.
     let mut effects: Vec<Effect> = Vec::new();
     if !xai_grok_shell::agent::chat_modes::process_chat_mode_enabled() {

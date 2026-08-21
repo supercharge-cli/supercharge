@@ -22,7 +22,7 @@ const ACCEPT_HINT: &str = "accept suggestion";
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore]
 async fn prompt_suggestion_ghost_tab_accepts() {
-    // The suggestion model (`grok-build-0.1`, the shell's built-in default)
+    // The suggestion model (`supercharge-core-0.1`, the shell's built-in default)
     // must be in the mock catalog: the shell catalog-guards the effective
     // suggestion model and *skips the request entirely* when it is not
     // sampleable (`prompt_suggest::effective_suggest_model`), exactly as it
@@ -32,14 +32,17 @@ async fn prompt_suggestion_ghost_tab_accepts() {
     // `test-model` stays first so it remains the session's default model.
     let content = ContentController::start_with_models(vec![
         MockModel::new("test-model"),
-        MockModel::new("grok-build-0.1"),
+        MockModel::new("supercharge-core-0.1"),
     ])
     .await
     .expect("start content");
     content.set_response(SUGGESTION);
 
     // The sandbox baseline disables the feature for the suite; re-enable it here.
-    let overrides = [("GROK_PROMPT_SUGGESTIONS".to_owned(), "true".to_owned())];
+    let overrides = [(
+        "SUPERCHARGE_PROMPT_SUGGESTIONS".to_owned(),
+        "true".to_owned(),
+    )];
     let env_refs: Vec<(&str, &str)> = overrides
         .iter()
         .map(|(key, value)| (key.as_str(), value.as_str()))

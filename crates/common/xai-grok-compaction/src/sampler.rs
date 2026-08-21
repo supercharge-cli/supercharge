@@ -110,7 +110,7 @@ impl CompactionSampleError {
 /// Interface for the LLM call that produces compaction summaries.
 ///
 /// Used by both intra-compaction (steps/history) and inter-compaction.
-/// Implemented by each harness's sampler adapter; grok-build wires its own
+/// Implemented by each harness's sampler adapter; supercharge-core wires its own
 /// transport.
 ///
 /// Returns [`LlmCompactionOutput`] containing both response and thinking

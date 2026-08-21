@@ -31,7 +31,7 @@ use xai_tool_types::{
 /// constant is not applied unless a wait is active.
 pub(crate) const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The blocking-wait ceiling: `GROK_MAX_WAIT_BLOCK_MS`, else 10 min.
+/// The blocking-wait ceiling: `SUPERCHARGE_MAX_WAIT_BLOCK_MS`, else 10 min.
 ///
 /// The same value fills `{max_wait_ms}` in the descriptions, so a wait can
 /// never exceed what the model was told it may ask for.
@@ -802,7 +802,7 @@ impl crate::types::tool_metadata::ToolMetadata for TaskOutputTool {
     fn description_template(&self) -> &str {
         // Canonical wording lives in the shared builder; `versioned_definition`
         // renders it context-aware from the finalized toolset. This static
-        // fallback mirrors the default grok-build toolset.
+        // fallback mirrors the default supercharge-core toolset.
         static DESC: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             xai_tool_types::build_task_output_description(&xai_tool_types::TaskOutputToolNaming {
                 monitor_tool: Some("monitor"),
@@ -1176,7 +1176,7 @@ mod tests {
             xai_tool_runtime::Tool::id(&tool).as_str(),
             "get_task_output"
         );
-        // The static fallback is the shared builder's default grok-build
+        // The static fallback is the shared builder's default supercharge-core
         // rendering (monitor + task + bash + read present): concrete names, no
         // leftover template markers.
         let desc = ToolMetadata::description_template(&tool);

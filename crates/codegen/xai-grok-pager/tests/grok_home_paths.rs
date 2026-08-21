@@ -1,15 +1,15 @@
-//! `GROK_HOME` override tests in an isolated binary so `grok_home()`'s
+//! `SUPERCHARGE_HOME` override tests in an isolated binary so `grok_home()`'s
 //! process-wide `OnceLock` initializes from the overridden env var.
 
 use std::path::PathBuf;
 
 #[test]
-#[serial_test::serial(GROK_HOME)]
+#[serial_test::serial(SUPERCHARGE_HOME)]
 fn grok_home_override_path_helpers() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let grok_home = tmp.path().to_path_buf();
     unsafe {
-        std::env::set_var("GROK_HOME", &grok_home);
+        std::env::set_var("SUPERCHARGE_HOME", &grok_home);
     }
 
     assert_eq!(
@@ -18,24 +18,24 @@ fn grok_home_override_path_helpers() {
     );
     assert_eq!(
         xai_grok_pager::util::display_grok_home_prefix(),
-        "$GROK_HOME"
+        "$SUPERCHARGE_HOME"
     );
     assert_eq!(
         xai_grok_pager::util::display_user_grok_path("config.toml"),
-        "$GROK_HOME/config.toml"
+        "$SUPERCHARGE_HOME/config.toml"
     );
 
     let memory_path = grok_home.join("memory/MEMORY.md");
     assert_eq!(
         xai_grok_pager::util::abbreviate_path(&memory_path.display().to_string()),
-        "$GROK_HOME/memory/MEMORY.md"
+        "$SUPERCHARGE_HOME/memory/MEMORY.md"
     );
 
     // Copy-toast paths follow the same abbreviation convention, so a custom
-    // $GROK_HOME outside $HOME still displays short.
+    // $SUPERCHARGE_HOME outside $HOME still displays short.
     assert_eq!(
         xai_grok_pager::clipboard::display_copy_path(&grok_home.join("last-copy.txt")),
-        "$GROK_HOME/last-copy.txt"
+        "$SUPERCHARGE_HOME/last-copy.txt"
     );
 
     assert!(xai_grok_pager::util::is_under_user_grok_home(&memory_path));
@@ -47,12 +47,12 @@ fn grok_home_override_path_helpers() {
 /// Isolated because `grok_home()`'s `OnceLock` is already initialized by the
 /// time the shared lib-test binary reaches a case like this.
 #[test]
-#[serial_test::serial(GROK_HOME)]
+#[serial_test::serial(SUPERCHARGE_HOME)]
 fn disk_usage_run_creates_no_grok_home() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let ghost = tmp.path().join("ghost-home");
     unsafe {
-        std::env::set_var("GROK_HOME", &ghost);
+        std::env::set_var("SUPERCHARGE_HOME", &ghost);
     }
 
     for json in [false, true] {

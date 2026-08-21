@@ -68,7 +68,7 @@ pub fn inference_request_count(content: &ContentController) -> usize {
 }
 
 /// Seed a fake xAI OAuth entry into the isolated home's `auth.json` so the
-/// shell has session auth (the harness's `XAI_API_KEY` is ApiKey/BYOK mode
+/// shell has session auth (the harness's `SUPERCHARGE_API_KEY` is ApiKey/BYOK mode
 /// and never enters the auth manager). Load-bearing details: the scope key
 /// must be `<issuer>::<client_id>`, `auth_mode` must be `oidc`,
 /// `expires_at` must be far-future so no network refresh is attempted, and
@@ -127,8 +127,8 @@ fn seed_fake_oauth_raw(
     opted_out: bool,
     team_fields: &str,
 ) {
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create temp .grok");
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create temp .supercharge");
     std::fs::write(
         grok_home.join("auth.json"),
         format!(
@@ -154,7 +154,7 @@ fn seed_fake_oauth_raw(
 /// Remove only the sandbox's fake API-key credential, allowing the `auth.json`
 /// entry written by [`seed_fake_oauth`] to determine the advertised auth method.
 pub fn oauth_credential_ops() -> [crate::EnvOp<'static>; 1] {
-    [crate::EnvOp::remove("XAI_API_KEY")]
+    [crate::EnvOp::remove("SUPERCHARGE_API_KEY")]
 }
 
 /// Drive `/new` until `model` shows on screen. Campaigns apply to **new

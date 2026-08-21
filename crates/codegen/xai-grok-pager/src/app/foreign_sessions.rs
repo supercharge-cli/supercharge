@@ -569,7 +569,7 @@ mod tests {
         let probed = RefCell::new(Vec::new());
         let enabled = gated_sources_async_with(
             EnabledForeignSessionSources::default(),
-            Path::new("/grok"),
+            Path::new("/Supercharge AI"),
             |path| {
                 probed.borrow_mut().push(path.to_path_buf());
                 std::future::ready(true)
@@ -590,7 +590,7 @@ mod tests {
                 codex: true,
                 ..Default::default()
             },
-            Path::new("/grok"),
+            Path::new("/Supercharge AI"),
             |path| {
                 probed.borrow_mut().push(path.to_path_buf());
                 std::future::ready(false)
@@ -614,15 +614,16 @@ mod tests {
 
     #[tokio::test]
     async fn async_gate_supports_bundled_and_user_skill_locations() {
-        let enabled = gated_sources_async_with(compat_all(), Path::new("/grok"), |path| {
-            let path = path.to_string_lossy();
-            std::future::ready(
-                path.contains("bundled/skills/resume-claude")
-                    || path.contains("skills/resume-codex")
-                    || path.contains("bundled/skills/resume-cursor"),
-            )
-        })
-        .await;
+        let enabled =
+            gated_sources_async_with(compat_all(), Path::new("/Supercharge AI"), |path| {
+                let path = path.to_string_lossy();
+                std::future::ready(
+                    path.contains("bundled/skills/resume-claude")
+                        || path.contains("skills/resume-codex")
+                        || path.contains("bundled/skills/resume-cursor"),
+                )
+            })
+            .await;
         assert_eq!(
             enabled,
             EnabledForeignSessionSources {

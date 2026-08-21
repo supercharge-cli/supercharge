@@ -499,7 +499,7 @@
             agent.session.state = AgentState::TurnRunning;
         }
         let rate_limit_copy = "You've hit the rate limit for your plan. Upgrade your \
-                               subscription for higher limits: https://grok.com/supergrok";
+                               subscription for higher limits: https://supercharge.ai/upgrade";
         let payload = SessionNotification {
             session_id: acp::SessionId::new("sess-wake"),
             update: XaiSessionUpdate::TurnCompleted {

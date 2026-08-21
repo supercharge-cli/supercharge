@@ -45,7 +45,7 @@ pub use model::{
 };
 pub use view::{DiagnosticSnapshot, view};
 
-/// Passive input-device probe for `grok doctor` / `/doctor`.
+/// Passive input-device probe for `supercharge doctor` / `/doctor`.
 ///
 /// Does not open a capture stream (no macOS mic-permission prompt). When
 /// `emit_missing_issue` is true and no device exists, appends an issue finding.
@@ -86,7 +86,7 @@ fn voice_missing_finding(error: String) -> DiagnosticFinding {
         automatic_remediation: None,
         note: Some(
             "Connect or select a microphone in your system sound settings. On Linux, install a \
-             supported audio recorder if none was found on PATH. Then run `/doctor` or `grok \
+             supported audio recorder if none was found on PATH. Then run `/doctor` or `Supercharge AI \
              doctor` again. Doctor can't detect denied macOS microphone access when the system \
              returns silence; follow the message shown when dictation fails."
                 .to_owned(),
@@ -135,7 +135,7 @@ pub enum WarningCategory {
     /// it rewrites every truecolor cell to the client terminfo's palette.
     TmuxColorReduced,
     SandboxProfileConflict,
-    /// The session runs over SSH without `grok wrap` on the local end, so
+    /// The session runs over SSH without `supercharge wrap` on the local end, so
     /// clipboard forwarding and terminal-mode restore on dropped connections
     /// are not guaranteed. Informational recommendation, not a breakage.
     SshWithoutWrap,
@@ -253,7 +253,7 @@ pub(crate) fn collect_startup_warnings_from(
         );
         warning.note = Some(
             "Grok also saves each copy to the backup file shown in the copy message. To copy \
-             directly, run `grok wrap ssh <host>` on your local computer or use a terminal that \
+             directly, run `supercharge wrap ssh <host>` on your local computer or use a terminal that \
              supports OSC 52. You can also use `/copy <file>` or `/minimal`."
                 .to_owned(),
         );
@@ -400,7 +400,7 @@ pub(crate) fn wezterm_kitty_keyboard_warning_from(
             None,
         );
         warning.note = Some(
-            "For this session, type `\\` and then press Enter. Grok can't negotiate the Kitty \
+            "For this session, type `\\` and then press Enter. Supercharge AI can't negotiate the Kitty \
              keyboard protocol over SSH yet. `enable_kitty_keyboard = true` applies only to \
              local WezTerm sessions."
                 .to_string(),
@@ -442,7 +442,7 @@ fn sandbox_profile_conflict_warning_from(conflicts: Vec<String>) -> Option<Termi
         fix: None,
         config_path: None,
         note: Some(format!(
-            "Grok is using the user profile. Compare `.grok/sandbox.toml` with {}, then rename \
+            "Grok is using the user profile. Compare `.supercharge/sandbox.toml` with {}, then rename \
              or remove the conflicting project profile. Project settings can add profile names \
              but can't redefine a user profile.",
             crate::util::display_user_grok_path("sandbox.toml")
@@ -450,14 +450,14 @@ fn sandbox_profile_conflict_warning_from(conflicts: Vec<String>) -> Option<Termi
     })
 }
 
-/// Pure SSH `grok wrap` recommendation — suggests launching the session
-/// through `grok wrap ssh <host>` on the user's local machine, which gives a
+/// Pure SSH `supercharge wrap` recommendation — suggests launching the session
+/// through `supercharge wrap ssh <host>` on the user's local machine, which gives a
 /// remote session reliable clipboard forwarding plus terminal-mode restore
 /// when the connection drops.
 ///
 /// Gates (all must hold):
 /// - `is_ssh` — the session runs over SSH ([`TerminalContext::is_ssh`]);
-/// - `!osc52_sink_active` — no wrap is already capturing our output. `grok
+/// - `!osc52_sink_active` — no wrap is already capturing our output. `Supercharge AI
 ///   wrap` advertises its OSC 52 sink through the SSH hop via an env var
 ///   (see `clipboard::osc52_sink_active`), so once a user adopts wrap the
 ///   hint silences itself with no further bookkeeping. Env-based, so stale
@@ -485,7 +485,7 @@ pub fn ssh_wrap_hint(
     let mut warning = TerminalWarning::new(
         WarningCategory::SshWithoutWrap,
         "Use local SSH wrapping for more reliable clipboard copy and terminal recovery",
-        Some("grok wrap ssh <host>"),
+        Some("supercharge wrap ssh <host>"),
         None,
     );
     warning.note = Some(
@@ -968,14 +968,14 @@ pub fn color_support_warning(
             None,
             None,
         );
-        warning.note = Some("Unset `NO_COLOR`, then restart Grok.".to_string());
+        warning.note = Some("Unset `NO_COLOR`, then restart Supercharge AI.".to_string());
         return Some(warning);
     }
 
     // Checked before the detected level is consulted at all: the level says
     // what Grok emits, which is a different question from what survives tmux.
     // A truecolor detection is not evidence that truecolor reaches the
-    // terminal, and a session with no color evidence (piped `grok doctor`)
+    // terminal, and a session with no color evidence (piped `supercharge doctor`)
     // still has a clamping client worth reporting.
     if color_passthrough == TmuxColorPassthrough::Reduced {
         let mut warning = TerminalWarning::new(
@@ -1026,7 +1026,7 @@ pub fn color_support_warning(
         warning.note = Some(format!(
             "In the same tmux config, also add `set -g default-terminal \"tmux-256color\"`. Add \
              `export COLORTERM=truecolor` to your shell startup file. Then reload tmux with \
-             `tmux source-file {tmux_config_path}`, then detach and reattach, and restart Grok."
+             `tmux source-file {tmux_config_path}`, then detach and reattach, and restart Supercharge AI."
         ));
         return Some(warning);
     }
@@ -1039,7 +1039,7 @@ pub fn color_support_warning(
     );
     warning.note = Some(
         "Add this export to your shell startup file, such as `~/.zshrc` or `~/.bashrc`, then \
-         restart Grok."
+         restart Supercharge AI."
             .to_string(),
     );
     Some(warning)
@@ -2132,7 +2132,7 @@ mod tests {
         assert!(w.config_path.is_none());
         assert!(w.note.as_deref().is_some_and(|note| {
             note.contains("rename or remove")
-                && note.contains(".grok/sandbox.toml")
+                && note.contains(".supercharge/sandbox.toml")
                 && note.contains(&crate::util::display_user_grok_path("sandbox.toml"))
                 && note.contains("can't redefine")
         }));
@@ -2220,14 +2220,14 @@ mod tests {
         assert!(out[1].message.contains("sandbox settings"));
     }
 
-    // -- ssh_wrap_hint: `grok wrap ssh` recommendation --------------------------
+    // -- ssh_wrap_hint: `supercharge wrap ssh` recommendation --------------------------
 
     #[test]
     fn ssh_wrap_hint_fires_over_plain_ssh() {
         // is_ssh, no sink, not VS Code remote → recommend wrap.
         let w = ssh_wrap_hint(true, false, false).expect("hint must fire");
         assert_eq!(w.category, WarningCategory::SshWithoutWrap);
-        assert_eq!(w.fix.as_deref(), Some("grok wrap ssh <host>"));
+        assert_eq!(w.fix.as_deref(), Some("supercharge wrap ssh <host>"));
         assert!(
             w.config_path.is_none(),
             "fix is a command, not a config line"
@@ -2249,7 +2249,7 @@ mod tests {
     #[test]
     fn ssh_wrap_hint_suppressed_when_sink_active() {
         // An active OSC 52 sink means the session already runs under
-        // `grok wrap` — adoption silences the hint by itself.
+        // `supercharge wrap` — adoption silences the hint by itself.
         assert!(ssh_wrap_hint(true, true, false).is_none());
     }
 
@@ -2618,7 +2618,7 @@ mod tests {
         assert!(finding.automatic_remediation.is_none());
         assert!(finding.note.as_deref().is_some_and(|note| {
             note.contains("install a supported audio recorder")
-                && note.contains("grok doctor")
+                && note.contains("supercharge doctor")
                 && note.contains("can't detect denied macOS microphone access")
         }));
     }
@@ -3089,7 +3089,7 @@ mod tests {
         );
     }
 
-    /// Piped `grok doctor` has no color evidence, but the tmux client is still
+    /// Piped `supercharge doctor` has no color evidence, but the tmux client is still
     /// measurable, and `doctor fix` needs the finding to plan against.
     #[test]
     fn color_support_warning_reports_tmux_clamp_without_color_evidence() {

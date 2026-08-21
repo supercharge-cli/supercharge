@@ -57,7 +57,7 @@ fn matches_trusted_base_url(candidate: &str, trusted_base: &str) -> bool {
 ///
 /// Unlike [`is_cli_chat_proxy_url`], this rejects loopback and staging/dev hosts.
 /// Used for security-sensitive remote kill-switches that must not become env
-/// toggles via `GROK_CLI_CHAT_PROXY_BASE_URL` (or similar) pointing at an
+/// toggles via `SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL` (or similar) pointing at an
 /// attacker-controlled origin.
 pub fn is_prod_cli_chat_proxy_url(url: &str) -> bool {
     matches_trusted_base_url(url, crate::env::PROD_CLI_CHAT_PROXY_BASE_URL)
@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn test_is_cli_chat_proxy_url_accepts_proxy_subpath() {
         assert!(is_cli_chat_proxy_url(
-            "https://cli-chat-proxy.grok.com/v1/chat/completions"
+            "https://cli-chat-proxy.supercharge.com/v1/chat/completions"
         ));
     }
     #[test]
@@ -340,13 +340,13 @@ mod tests {
     #[test]
     fn test_is_cli_chat_proxy_url_rejects_spoofed_hostname() {
         assert!(!is_cli_chat_proxy_url(
-            "https://cli-chat-proxy.grok.com.evil.example/v1"
+            "https://cli-chat-proxy.supercharge.com.evil.example/v1"
         ));
     }
     #[test]
     fn test_is_cli_chat_proxy_url_rejects_v11_prefix_confusion() {
         assert!(!is_cli_chat_proxy_url(
-            "https://cli-chat-proxy.grok.com/v11/chat/completions"
+            "https://cli-chat-proxy.supercharge.com/v11/chat/completions"
         ));
     }
     #[test]
@@ -355,7 +355,7 @@ mod tests {
         assert!(is_xai_api_url("https://api.x.ai/v1/chat/completions"));
         assert!(is_xai_api_url("https://x.ai"));
         assert!(is_xai_api_url(
-            "https://cli-chat-proxy.grok.com/v1/chat/completions"
+            "https://cli-chat-proxy.supercharge.com/v1/chat/completions"
         ));
         assert!(!is_xai_api_url("https://api.openai.com/v1"));
         assert!(!is_xai_api_url("https://api.anthropic.com/v1"));

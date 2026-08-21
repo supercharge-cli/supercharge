@@ -2,12 +2,12 @@
 //!
 //! Merge order (lowest → highest priority):
 //! 1. `/etc/grok/managed_config.toml`
-//! 2. `$GROK_HOME/managed_config.toml`
-//! 3. `$GROK_HOME/config.toml`
-//! 4. `$GROK_HOME/requirements.toml` (cloud cache; Ed25519-signed at rest once a
+//! 2. `$SUPERCHARGE_HOME/managed_config.toml`
+//! 3. `$SUPERCHARGE_HOME/config.toml`
+//! 4. `$SUPERCHARGE_HOME/requirements.toml` (cloud cache; Ed25519-signed at rest once a
 //!    key is embedded — see [`signed_policy`] — below the OS-protected layers)
 //! 5. `/etc/grok/requirements.toml`
-//! 6. macOS MDM managed preferences (`ai.x.grok`, admin-forced) — macOS only
+//! 6. macOS MDM managed preferences (`ai.x.supercharge`, admin-forced) — macOS only
 //!
 //! Each layer applies its own [`[[version_overrides]]`](version_overrides)
 //! before merge. Requirements layers (#4–#6) may opt into fail-closed startup;
@@ -46,8 +46,8 @@ pub use config_layers::{
     load_dismissed_ids_from_home, load_effective_config_disk_only,
 };
 pub use env_overlay::{
-    GROK_CONFIG_ENV, GROK_CONFIG_PATH_ENV, OverlaySource, ResolvedOverlay, SUPERCHARGE_CONFIG_ENV,
-    SUPERCHARGE_CONFIG_PATH_ENV, resolved_env_overlay,
+    OverlaySource, ResolvedOverlay, SUPERCHARGE_CONFIG_ENV, SUPERCHARGE_CONFIG_PATH_ENV,
+    resolved_env_overlay,
 };
 #[cfg(unix)]
 pub use global_hook_sources::{

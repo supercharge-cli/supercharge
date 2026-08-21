@@ -18,14 +18,14 @@
 //! Sampling traffic uses process-wide shared clients owned by
 //! `xai_grok_sampler::shared_http` (one HTTP/2 pooled client plus
 //! a pool-less HTTP/1.1 fallback shared across every
-//! `SamplingClient`). The sampler reads `GROK_POOL_*` /
-//! `GROK_CONNECT_TIMEOUT_SECS` once, when its shared client is
-//! first built, and `GROK_SAMPLER_SHARED_CLIENT=0` falls back to
+//! `SamplingClient`). The sampler reads `SUPERCHARGE_POOL_*` /
+//! `SUPERCHARGE_CONNECT_TIMEOUT_SECS` once, when its shared client is
+//! first built, and `SUPERCHARGE_SAMPLER_SHARED_CLIENT=0` falls back to
 //! a fresh client per `SamplingClient`.
 //!
 //! TLS root certificates are warmed at process start via
 //! `warm_async_http_client()` (in `mvp_agent.rs`). Optional extra roots:
-//! `GROK_EXTRA_CA_BUNDLE` via `xai_grok_extra_ca` (see env-var registry).
+//! `SUPERCHARGE_EXTRA_CA_BUNDLE` via `xai_grok_extra_ca` (see env-var registry).
 
 use std::sync::OnceLock;
 
@@ -101,15 +101,15 @@ static CLIENT_TYPE: OnceLock<ClientType> = OnceLock::new();
 // functions below.
 pub use xai_grok_sampler::OriginClientInfo;
 
-/// Construct an [`OriginClientInfo`] from `GROK_CLIENT_NAME` /
-/// `GROK_CLIENT_VERSION` env vars. Returns `None` when
-/// `GROK_CLIENT_NAME` is unset.
+/// Construct an [`OriginClientInfo`] from `SUPERCHARGE_CLIENT_NAME` /
+/// `SUPERCHARGE_CLIENT_VERSION` env vars. Returns `None` when
+/// `SUPERCHARGE_CLIENT_NAME` is unset.
 pub fn origin_client_info_from_env() -> Option<OriginClientInfo> {
-    std::env::var("GROK_CLIENT_NAME")
+    std::env::var("SUPERCHARGE_CLIENT_NAME")
         .ok()
         .map(|product| OriginClientInfo {
             product,
-            version: std::env::var("GROK_CLIENT_VERSION").ok(),
+            version: std::env::var("SUPERCHARGE_CLIENT_VERSION").ok(),
         })
 }
 
@@ -273,9 +273,9 @@ pub fn client_type_from_origin(origin: Option<&OriginClientInfo>) -> ClientType 
     ClientType::from_client_identifier(origin.map(|o| o.product.as_str()))
 }
 
-/// Process-level client identifier (`GROK_CLIENT_NAME` env var, default `"grok-shell"`).
+/// Process-level client identifier (`SUPERCHARGE_CLIENT_NAME` env var, default `"grok-shell"`).
 pub fn process_client_identifier() -> String {
-    std::env::var("GROK_CLIENT_NAME").unwrap_or_else(|_| "grok-shell".to_string())
+    std::env::var("SUPERCHARGE_CLIENT_NAME").unwrap_or_else(|_| "grok-shell".to_string())
 }
 
 /// Header telling cli-chat-proxy whether this process is a single-prompt

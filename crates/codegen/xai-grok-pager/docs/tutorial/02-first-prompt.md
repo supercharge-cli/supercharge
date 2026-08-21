@@ -1,12 +1,12 @@
 # Your First Prompt
 
-Grok Build is a conversation with an agent that can read your code, run
+Supercharge AI is a conversation with an agent that can read your code, run
 commands, and edit files — right here in your terminal.
 
-Type what you want and press `Enter`. Grok streams its work into the
+Type what you want and press `Enter`. Supercharge AI streams its work into the
 **scrollback** above the prompt: responses, shell commands, file edits.
 
-## Keep typing while Grok works
+## Keep typing while Supercharge AI works
 
 While a turn is running, `Enter` **queues** your next message instead of
 interrupting. Change your mind? Press `Enter` on the empty prompt to stop

@@ -1547,8 +1547,8 @@ fn turn_end_fetches_prompt_suggestion_when_enabled() {
     };
     assert_eq!(*agent_id, id);
     assert!(session_id.is_some());
-    // No `grok-build-0.1` in the test catalog and no env override →
-    // `None` on the wire; the shell then uses its own `grok-build-0.1`
+    // No `supercharge-core-0.1` in the test catalog and no env override →
+    // `None` on the wire; the shell then uses its own `supercharge-core-0.1`
     // default (suggestion calls never use the session model).
     assert_eq!(*model, None);
 
@@ -2008,7 +2008,7 @@ fn prompt_response_formatted_402_takes_credit_limit_path() {
         Action::TaskComplete(TaskResult::PromptResponse {
             agent_id: id,
             result: Err(
-                "Request failed (402) \u{2014} Grok Build usage balance exhausted".to_string(),
+                "Request failed (402) \u{2014} Supercharge AI usage balance exhausted".to_string(),
             ),
             http_status: None,
             prompt_id: None,
@@ -4505,7 +4505,7 @@ fn suggestions_landing_after_bash_exit_are_dropped() {
     assert!(agent.prompt.suggestions.dropdown.items.is_empty());
 }
 
-/// The always-on pipeline end to end, with `GROK_SUGGESTIONS` semantics
+/// The always-on pipeline end to end, with `SUPERCHARGE_SUGGESTIONS` semantics
 /// OFF: Tab fires a deterministic fetch, and the landing response runs the
 /// terminal Tab semantics — a single file candidate splices in place
 /// immediately and the drill-down refetch rides out with the dispatch.

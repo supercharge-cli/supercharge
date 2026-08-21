@@ -17,7 +17,7 @@ const SESSION_RPC_FLOOR: std::time::Duration = std::time::Duration::from_secs(18
 /// Headroom over the agent-side `.envrc` budget for the rest of session setup.
 const SESSION_RPC_SLACK: std::time::Duration = std::time::Duration::from_secs(50);
 /// Always covers the agent-side `.envrc` budget so the backstop cannot fire
-/// before the agent's own deadline. Reads `GROK_ENVRC_TIMEOUT_SECS` in this
+/// before the agent's own deadline. Reads `SUPERCHARGE_ENVRC_TIMEOUT_SECS` in this
 /// process; the agent inherits the same environment.
 pub(super) fn session_rpc_timeout() -> std::time::Duration {
     SESSION_RPC_FLOOR.max(xai_grok_workspace::envrc::loader_budget() + SESSION_RPC_SLACK)
@@ -125,7 +125,7 @@ pub(super) async fn fetch_plugin_cta_mcps(
 }
 /// Convert an ACP error to a user-friendly string for display.
 /// Rate-limit errors: free-usage paywall, else server detail (with API-key
-/// rewrite when the body pushes personal SuperGrok), else auth-aware fallback
+/// rewrite when the body pushes personal Supercharge), else auth-aware fallback
 /// (see [`format_rate_limited_user_message`]).
 /// All other errors render as the formatted request-failure banner text
 /// (status headline + sanitized detail).
@@ -291,14 +291,14 @@ pub(crate) fn sanitize_user_error(raw: &str) -> String {
 ///
 /// | plan  | subagents | ask-user | agentProfile                   | askUserQuestion    |
 /// |-------|-----------|----------|--------------------------------|--------------------|
-/// | false | false     | false    | `grok-build` (default)         | `false`            |
-/// | false | true      | false    | `grok-build` (default)         | `false`            |
-/// | false | false     | true     | `grok-build-ask-user`          | omitted (shell gate) |
-/// | false | true      | true     | `grok-build-ask-user`          | omitted (shell gate) |
-/// | true  | false     | false    | `grok-build-plan-no-subagents` | `false`            |
-/// | true  | true      | false    | `grok-build-plan`              | `false`            |
-/// | true  | false     | true     | `grok-build-plan-no-subagents` | omitted (shell gate) |
-/// | true  | true      | true     | `grok-build-plan`              | omitted (shell gate) |
+/// | false | false     | false    | `supercharge-core` (default)         | `false`            |
+/// | false | true      | false    | `supercharge-core` (default)         | `false`            |
+/// | false | false     | true     | `supercharge-core-ask-user`          | omitted (shell gate) |
+/// | false | true      | true     | `supercharge-core-ask-user`          | omitted (shell gate) |
+/// | true  | false     | false    | `supercharge-core-plan-no-subagents` | `false`            |
+/// | true  | true      | false    | `supercharge-core-plan`              | `false`            |
+/// | true  | false     | true     | `supercharge-core-plan-no-subagents` | omitted (shell gate) |
+/// | true  | true      | true     | `supercharge-core-plan`              | omitted (shell gate) |
 ///
 /// When [`Self::chat_mode`] is set (gateway light-frontend / `--chat`), Build
 /// `agentProfile` injection is omitted (K12) and `_meta["x.ai/session"].kind`
@@ -341,7 +341,7 @@ pub(crate) struct SessionFlags {
 impl SessionFlags {
     /// Resolve the agent profile name from the flags.
     ///
-    /// Returns `None` for the default `grok-build` profile (no `_meta`
+    /// Returns `None` for the default `supercharge-core` profile (no `_meta`
     /// needed; it already includes TaskTool). Chat mode never injects a
     /// Build profile (remote owns agent behavior).
     pub(super) fn agent_profile(&self) -> Option<&'static str> {
@@ -349,9 +349,9 @@ impl SessionFlags {
             return None;
         }
         match (self.plan_mode, self.subagents, self.ask_user) {
-            (true, true, _) => Some("grok-build-plan"),
-            (true, false, _) => Some("grok-build-plan-no-subagents"),
-            (false, _, true) => Some("grok-build-ask-user"),
+            (true, true, _) => Some("supercharge-core-plan"),
+            (true, false, _) => Some("supercharge-core-plan-no-subagents"),
+            (false, _, true) => Some("supercharge-core-ask-user"),
             (false, _, false) => None,
         }
     }
@@ -361,13 +361,13 @@ impl SessionFlags {
     /// `autoMode`) are emitted unconditionally (absent key ≠ off; see the
     /// emit-site comment below). `--no-ask-user` always forces
     /// `askUserQuestion: false` into the meta, even when paired with
-    /// `GROK_AGENT` — the env var chooses the *agent*, but the tool-strip is
+    /// `SUPERCHARGE_AGENT` — the env var chooses the *agent*, but the tool-strip is
     /// independent. Chat mode additionally stamps `x.ai/session.kind`.
     pub(crate) fn to_meta(&self) -> Option<acp::Meta> {
         let mut meta = serde_json::Map::new();
         if self.chat_mode {
             if self.plan_mode || self.agent_override.is_some()
-                || std::env::var("GROK_AGENT").ok().is_some_and(|s| !s.trim().is_empty())
+                || std::env::var("SUPERCHARGE_AGENT").ok().is_some_and(|s| !s.trim().is_empty())
             {
                 tracing::warn!(
                     "chat mode active: omitting Build agentProfile (plan/agent override ignored)"
@@ -375,7 +375,7 @@ impl SessionFlags {
             }
         } else if let Some(ref profile) = self.agent_override {
             meta.insert("agentProfile".into(), profile.clone());
-        } else if std::env::var("GROK_AGENT").ok().is_some_and(|s| !s.trim().is_empty())
+        } else if std::env::var("SUPERCHARGE_AGENT").ok().is_some_and(|s| !s.trim().is_empty())
         {} else if let Some(profile) = self.agent_profile() {
             meta.insert("agentProfile".into(), serde_json::json!(profile));
         }
@@ -554,7 +554,7 @@ pub(crate) fn reject_non_fs_only_advertised_tools(
 ) -> Result<(), String> {
     let Some(ids) = advertised_tool_ids else {
         return Err(
-            "operator attestation GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS is unset \
+            "operator attestation SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS is unset \
              (uncheckable); refuse attach. Live workspace_server was not inspected — set \
              the env to a comma-separated FS-only catalog."
                 .into(),
@@ -562,7 +562,7 @@ pub(crate) fn reject_non_fs_only_advertised_tools(
     };
     if ids.is_empty() {
         return Err(
-            "operator attestation GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS is empty \
+            "operator attestation SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS is empty \
              (uncheckable); refuse attach. Live workspace_server was not inspected."
                 .into(),
         );
@@ -579,7 +579,7 @@ pub(crate) fn reject_non_fs_only_advertised_tools(
                 format!(
             "operator attestation lists tools outside the FS-only allowlist: {}. \
              Live workspace_server was not inspected. Fix \
-             GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS or restart workspace_server \
+             SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS or restart workspace_server \
              with --require-explicit-toolset and an FS-only catalog.",
             forbidden.join(", ")
         ),
@@ -1733,7 +1733,7 @@ pub(super) fn parse_auto_topup_response(
         Err(_) => AutoTopupFetch::Unchanged,
     }
 }
-/// A blocking flock on the shared, possibly-network `~/.grok` lock must never
+/// A blocking flock on the shared, possibly-network `~/.supercharge` lock must never
 /// stall the event-loop thread (and would hang exit on `/quit`); the registry
 /// is best-effort, so skip on contention.
 pub(super) fn unregister_active_session_best_effort(session_id: &acp::SessionId) {

@@ -112,7 +112,7 @@ pub struct PromptMetadata {
     /// Current working directory of the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
-    /// The agent type / harness name for this session (e.g. "grok-build", "codex").
+    /// The agent type / harness name for this session (e.g. "supercharge-core", "codex").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_type: Option<String>,
     /// Version of the grok-shell agent binary that handled this turn

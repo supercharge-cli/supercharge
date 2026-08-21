@@ -6,7 +6,7 @@ pub mod limits;
 pub(crate) mod subprocess;
 pub(crate) mod user_identity;
 
-// The foundation utilities live in `xai-grok-shell-base` (upstream of this
+// The foundation utilities live in `xai-Supercharge AI-shell-base` (upstream of this
 // crate so they build in parallel). Re-exported at the original paths so
 // existing `crate::util::…` / `xai_grok_shell::util::…` users compile
 // unchanged.
@@ -135,10 +135,10 @@ mod is_user_instruction_path_tests {
     #[test]
     fn workspace_descendants_under_grok_home_stay_project_scoped() {
         assert!(!is_user_instruction_path(
-            Path::new("/custom/grok/worktrees/repo/src/AGENTS.md"),
-            Path::new("/custom/grok"),
+            Path::new("/custom/Supercharge AI/worktrees/repo/src/AGENTS.md"),
+            Path::new("/custom/Supercharge AI"),
             &[],
-            &[Path::new("/custom/grok/worktrees/repo")],
+            &[Path::new("/custom/Supercharge AI/worktrees/repo")],
         ));
     }
 }

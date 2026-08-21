@@ -5,7 +5,7 @@ use super::common::*;
 /// 1a. **Embedded mode (`--no-leader`) boots without hanging on a blocked backend.**
 ///
 /// Enterprise deployments set `[cli] use_leader = false` and point at their own
-/// backend, often with the grok.com proxy blocked. A TCP listener that accepts
+/// backend, often with the supercharge.ai proxy blocked. A TCP listener that accepts
 /// but never replies stands in for that endpoint, so every startup HTTP call
 /// stalls until the client's own bounded timeout fires. The welcome screen must
 /// render anyway; a hang here means some boot path went unbounded.
@@ -27,17 +27,17 @@ async fn embedded_mode_boots_without_hanging_on_blocked_backend() {
     let base = format!("http://{addr}/v1");
 
     let home = tempfile::tempdir().expect("home");
-    let grok_home = home.path().join(".grok");
+    let grok_home = home.path().join(".supercharge");
     std::fs::create_dir_all(&grok_home).unwrap();
     let env = [
         ("HOME", home.path().to_str().unwrap()),
-        ("GROK_HOME", grok_home.to_str().unwrap()),
-        ("XAI_API_KEY", "test-key-for-ci"),
-        ("GROK_CLI_CHAT_PROXY_BASE_URL", base.as_str()),
-        ("GROK_XAI_API_BASE_URL", base.as_str()),
-        ("GROK_TELEMETRY_ENABLED", "false"),
-        ("GROK_FEEDBACK_ENABLED", "false"),
-        ("GROK_TRACE_UPLOAD", "false"),
+        ("SUPERCHARGE_HOME", grok_home.to_str().unwrap()),
+        ("SUPERCHARGE_API_KEY", "test-key-for-ci"),
+        ("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", base.as_str()),
+        ("SUPERCHARGE_XAI_API_BASE_URL", base.as_str()),
+        ("SUPERCHARGE_TELEMETRY_ENABLED", "false"),
+        ("SUPERCHARGE_FEEDBACK_ENABLED", "false"),
+        ("SUPERCHARGE_TRACE_UPLOAD", "false"),
     ];
 
     let binary = pager_binary().expect("resolve pager binary");

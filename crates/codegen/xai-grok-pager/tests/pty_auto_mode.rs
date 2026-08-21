@@ -5,8 +5,8 @@
 //! and assert the mode banner / status shows Auto without conflating
 //! Always-Approve.
 //!
-//! Auth: seeds `HOME/.grok/auth.json` from `GROK_AUTH_JSON` (path) or the
-//! developer's `~/.grok/auth.json` so the pager skips device-login when
+//! Auth: seeds `HOME/.supercharge/auth.json` from `SUPERCHARGE_AUTH_JSON` (path) or the
+//! developer's `~/.supercharge/auth.json` so the pager skips device-login when
 //! credentials exist. Without auth the test records an environmental
 //! failure (login screen) and still asserts the harness API surface.
 //!
@@ -27,16 +27,16 @@ const WELCOME_SCREEN_SENTINEL: &str = "Quit";
 /// Back-tab / Shift+Tab (CSI Z) — pager binds this to CycleMode.
 const SHIFT_TAB: &[u8] = b"\x1b[Z";
 
-/// Prefer explicit path, else the user's real `~/.grok/auth.json`.
+/// Prefer explicit path, else the user's real `~/.supercharge/auth.json`.
 fn auth_json_source() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("GROK_AUTH_JSON") {
+    if let Ok(p) = std::env::var("SUPERCHARGE_AUTH_JSON") {
         let pb = PathBuf::from(p);
         if pb.is_file() {
             return Some(pb);
         }
     }
     dirs_next_home()
-        .map(|h| h.join(".grok/auth.json"))
+        .map(|h| h.join(".supercharge/auth.json"))
         .filter(|p| p.is_file())
 }
 
@@ -51,7 +51,7 @@ fn dirs_next_home() -> Option<PathBuf> {
 /// test is self-contained and deterministic regardless of the runner's shell.
 fn prepare_sandbox(sandbox: &mut TestSandbox, gate_on: bool) -> Vec<(String, String)> {
     // Remove rather than empty the fake API key so seeded OIDC remains authoritative.
-    sandbox.remove_env("XAI_API_KEY");
+    sandbox.remove_env("SUPERCHARGE_API_KEY");
 
     let home = sandbox.home();
     let grok = sandbox.grok_home();
@@ -68,7 +68,7 @@ fn prepare_sandbox(sandbox: &mut TestSandbox, gate_on: bool) -> Vec<(String, Str
             );
         }
     } else {
-        eprintln!("pty_auto_mode: no ~/.grok/auth.json — may hit device login");
+        eprintln!("pty_auto_mode: no ~/.supercharge/auth.json — may hit device login");
     }
 
     let home_s = home.display().to_string();
@@ -83,13 +83,13 @@ fn prepare_sandbox(sandbox: &mut TestSandbox, gate_on: bool) -> Vec<(String, Str
         ("TMUX".into(), "".into()),
     ];
     // Pin the feature gate explicitly so the cycle is deterministic regardless
-    // of the developer's shell. `GROK_AUTO_PERMISSION_MODE` is the highest gate
+    // of the developer's shell. `SUPERCHARGE_AUTO_PERMISSION_MODE` is the highest gate
     // layer below requirements; "1"/"0" parse to on/off (xai_grok_config::
     // env_bool), and portable-pty merges this over the inherited environment —
     // so an exported value can't flip the result (Auto is present in the ring
     // with the gate on, skipped with it off).
     env.push((
-        "GROK_AUTO_PERMISSION_MODE".into(),
+        "SUPERCHARGE_AUTO_PERMISSION_MODE".into(),
         if gate_on { "1" } else { "0" }.into(),
     ));
     env
@@ -105,7 +105,7 @@ fn is_login_screen(screen: &str) -> bool {
 /// hitting the login screen is a real failure (broken auth seeding), not an
 /// environmental skip — so the test hard-fails instead of passing vacuously.
 fn require_auth() -> bool {
-    std::env::var("GROK_PTY_REQUIRE_AUTH").is_ok_and(|v| v == "1" || v == "true")
+    std::env::var("SUPERCHARGE_PTY_REQUIRE_AUTH").is_ok_and(|v| v == "1" || v == "true")
 }
 
 /// Cycle into Auto on the welcome / pre-session path and assert screen text
@@ -134,7 +134,7 @@ fn pty_shift_tab_cycles_to_auto_mode_banner() {
     if is_login_screen(&early) {
         assert!(
             !require_auth(),
-            "GROK_PTY_REQUIRE_AUTH set but pager hit the login screen — auth seeding broke"
+            "SUPERCHARGE_PTY_REQUIRE_AUTH set but pager hit the login screen — auth seeding broke"
         );
         // Auth still blocking (expired token / no network). Honest env failure:
         // the UI-ring guarantee is covered by the dispatch-level unit tests; save
@@ -219,7 +219,7 @@ fn pty_shift_tab_skips_auto_when_gate_off() {
     if is_login_screen(&early) {
         assert!(
             !require_auth(),
-            "GROK_PTY_REQUIRE_AUTH set but pager hit the login screen — auth seeding broke"
+            "SUPERCHARGE_PTY_REQUIRE_AUTH set but pager hit the login screen — auth seeding broke"
         );
         eprintln!(
             "pty_auto_mode(gate off): login/device-auth screen blocked cycle; env auth limit"

@@ -11,11 +11,11 @@ fn auth_copy_dispatch_preserves_all_delivery_states() {
         app.auth_state = AuthState::Authenticating {
             request_seq: 1,
             handle: None,
-            auth_url: Some("https://grok.com/auth".to_owned()),
+            auth_url: Some("https://supercharge.ai/auth".to_owned()),
             mode: AuthMode::Command,
         };
         let effects = crate::app::dispatch::router::dispatch_copy_auth_url(&mut app, |url| {
-            assert_eq!(url, "https://grok.com/auth");
+            assert_eq!(url, "https://supercharge.ai/auth");
             delivery
         });
         assert_eq!(app.auth_clipboard_delivery, Some(delivery));
@@ -592,16 +592,16 @@ fn shown_banner_id(app: &AppView) -> Option<String> {
     .and_then(|a| a.id.clone())
 }
 /// `AnnouncementsOpenCta(surface)` re-resolves through the slot gate and opens
-/// the promo url (observed via the `GROK_TEST_OPEN_URL_FILE` seam, from every
+/// the promo url (observed via the `SUPERCHARGE_TEST_OPEN_URL_FILE` seam, from every
 /// surface); a critical owning the slot — or no usable cta — makes it a silent
 /// no-op (no open, so a stale prior-frame click can't leak the promo url).
-#[serial_test::serial(GROK_TEST_OPEN_URL_FILE)]
+#[serial_test::serial(SUPERCHARGE_TEST_OPEN_URL_FILE)]
 #[test]
 fn announcements_open_cta_opens_promo_and_noops_under_critical() {
     use xai_grok_telemetry::events::AnnouncementCtaSurface;
     let url_file = std::env::temp_dir().join(format!("grok-cta-open-{}.txt", std::process::id()));
     let _ = std::fs::remove_file(&url_file);
-    unsafe { std::env::set_var("GROK_TEST_OPEN_URL_FILE", &url_file) };
+    unsafe { std::env::set_var("SUPERCHARGE_TEST_OPEN_URL_FILE", &url_file) };
     let opened = || std::fs::read_to_string(&url_file).unwrap_or_default();
     let mut app = test_app_with_agent();
     app.active_announcements = vec![promo_announcement("promo-open")];
@@ -642,7 +642,7 @@ fn announcements_open_cta_opens_promo_and_noops_under_critical() {
         &mut app,
     );
     assert!(opened().trim().is_empty(), "no cta → no open");
-    unsafe { std::env::remove_var("GROK_TEST_OPEN_URL_FILE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TEST_OPEN_URL_FILE") };
     let _ = std::fs::remove_file(&url_file);
 }
 /// `AnnouncementCtaShown` latches once per (announcement, surface): first
@@ -1403,7 +1403,7 @@ fn tick_propagates_available_commands_to_bootstrap() {
     app.active_view = crate::app::app_view::ActiveView::Agent(id);
     let skill_meta = serde_json::json!({
         "scope": "user",
-        "path": "/home/user/.grok/skills/pick-best/SKILL.md",
+        "path": "/home/user/.supercharge/skills/pick-best/SKILL.md",
     });
     app.agents.get_mut(&id).unwrap().session.available_commands = vec![
         acp::AvailableCommand::new("compact".to_string(), "Builtin".to_string()),
@@ -2432,7 +2432,7 @@ fn build_rows_fallback_anchor_is_frozen_when_last_active_at_is_none() {
 /// turn boundary with no agent response after it → "Idle". (The RUNNING
 /// case follows live turn activity — see the `extract_response_type_*`
 /// tests.)
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn peek_label_reflects_last_response_type() {
     use crate::scrollback::block::RenderBlock;
@@ -2511,7 +2511,7 @@ fn mouse_event(
 /// conversation immediately (was: selects only, required
 /// double-click to attach). The user explicitly reported the
 /// previous click-to-select behaviour as unresponsive.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn mouse_left_click_attaches_immediately() {
     use crossterm::event::{Event, MouseButton, MouseEventKind};
@@ -2541,7 +2541,7 @@ fn mouse_left_click_attaches_immediately() {
 /// to distinguish single (select) from double (attach) click;
 /// the new design makes every click attach so the user's mental
 /// model "click = open" always holds.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn mouse_repeated_click_keeps_attaching() {
     use crossterm::event::{Event, MouseButton, MouseEventKind};
@@ -2576,7 +2576,7 @@ fn mouse_repeated_click_keeps_attaching() {
 /// Clicks after the previous 500ms-double-click
 /// window also attach (the previous test asserted single-click
 /// behaviour for >500ms-apart clicks; now every click attaches).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn mouse_click_after_long_pause_still_attaches() {
     use crossterm::event::{Event, MouseButton, MouseEventKind};
@@ -2607,7 +2607,7 @@ fn mouse_click_after_long_pause_still_attaches() {
     }
 }
 /// Click on the peek close-button rect closes the peek.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn mouse_click_on_peek_close_rect_clears_peek() {
     use crossterm::event::{Event, MouseButton, MouseEventKind};

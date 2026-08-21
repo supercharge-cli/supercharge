@@ -2,7 +2,7 @@
 //!
 //! The layer *files* are read by [`crate::loader`]; this module owns how those
 //! layers combine into the effective config — layer precedence, the
-//! `GROK_CONFIG` overlay, and campaign resolution.
+//! `SUPERCHARGE_CONFIG` overlay, and campaign resolution.
 
 use crate::loader::{
     deep_merge_toml, load_from_disk, load_managed_config, load_system_managed_config,
@@ -10,7 +10,7 @@ use crate::loader::{
 };
 use crate::validation::{load_requirements, load_system_requirements};
 
-/// Whether a layer merge includes the `GROK_CONFIG` overlay.
+/// Whether a layer merge includes the `SUPERCHARGE_CONFIG` overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OverlayInclusion {
     Include,
@@ -23,7 +23,7 @@ pub struct ConfigLayers {
     pub system_managed: toml::Value,
     pub managed: toml::Value,
     pub user: toml::Value,
-    /// `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay, above user but below
+    /// `SUPERCHARGE_CONFIG` / `SUPERCHARGE_CONFIG_PATH` overlay, above user but below
     /// requirements. Soft settings only, and the canonical source of truth for
     /// what the overlay can and cannot reach.
     ///
@@ -57,7 +57,7 @@ pub struct ConfigLayers {
     /// beyond the launcher's own env. A launcher that must add an env var sets it
     /// on the process directly.
     /// `sandbox` and `telemetry` are likewise not allowlisted (set them via
-    /// `GROK_SANDBOX` / `OTEL_*`); `[features] telemetry` is the master switch
+    /// `SUPERCHARGE_SANDBOX` / `OTEL_*`); `[features] telemetry` is the master switch
     /// and is allowlisted.
     ///
     /// Even on the allowlisted tables, security gates read overlay-free (the raw
@@ -160,7 +160,7 @@ impl ConfigLayers {
         })
     }
 
-    /// Layer merge (no campaigns), including the `GROK_CONFIG` overlay.
+    /// Layer merge (no campaigns), including the `SUPERCHARGE_CONFIG` overlay.
     ///
     /// Overlay-inclusive: security gates must not read this. Use
     /// [`Self::effective_config_base_without_overlay`] for any gate (the
@@ -169,7 +169,7 @@ impl ConfigLayers {
         self.merge(OverlayInclusion::Include)
     }
 
-    /// Layer merge excluding the `GROK_CONFIG` overlay, for security gates.
+    /// Layer merge excluding the `SUPERCHARGE_CONFIG` overlay, for security gates.
     pub fn effective_config_base_without_overlay(&self) -> toml::Value {
         self.merge(OverlayInclusion::Exclude)
     }
@@ -225,7 +225,7 @@ impl ConfigLayers {
 
     /// Active campaigns against `base`: kill switch → priority merge (first-id-wins)
     /// → drop dismissed. The single place disk campaign resolution lives; the shell
-    /// wraps this with the `GROK_CAMPAIGNS_OVERRIDE` env layer.
+    /// wraps this with the `SUPERCHARGE_CAMPAIGNS_OVERRIDE` env layer.
     pub fn resolve_campaigns(
         &self,
         base: &toml::Value,
@@ -251,7 +251,7 @@ impl ConfigLayers {
         }
     }
 
-    /// Apply campaign patches, re-apply the `GROK_CONFIG` overlay, then restore requirements.
+    /// Apply campaign patches, re-apply the `SUPERCHARGE_CONFIG` overlay, then restore requirements.
     pub fn apply_campaign_overrides(
         &self,
         merged: &mut toml::Value,
@@ -300,9 +300,9 @@ impl ConfigLayers {
     }
 }
 
-/// `GROK_CAMPAIGNS=0` or `[features] campaigns = false` on pre-campaign base.
+/// `SUPERCHARGE_CAMPAIGNS=0` or `[features] campaigns = false` on pre-campaign base.
 pub fn campaigns_application_disabled(base_effective: &toml::Value) -> bool {
-    if crate::env_bool("GROK_CAMPAIGNS") == Some(false) {
+    if crate::env_bool("SUPERCHARGE_CAMPAIGNS") == Some(false) {
         return true;
     }
     base_effective
@@ -314,7 +314,7 @@ pub fn campaigns_application_disabled(base_effective: &toml::Value) -> bool {
 
 /// Disk layers only (no remote, no env override). Prefer the shell loader
 /// (`xai_grok_shell::util::config::load_effective_config`) when remote campaigns
-/// or `GROK_CAMPAIGNS_OVERRIDE` must be honored. The name mirrors the
+/// or `SUPERCHARGE_CAMPAIGNS_OVERRIDE` must be honored. The name mirrors the
 /// [`ConfigLayers::effective_config_disk_only`] method so the divergence from the
 /// remote-aware loader is un-ignorable at every call site.
 pub fn load_effective_config_disk_only() -> std::io::Result<toml::Value> {
@@ -332,12 +332,12 @@ pub struct CampaignsState {
     pub dismissed_ids: Vec<String>,
 }
 
-/// Path to `$GROK_HOME/campaigns_state.json` under `home`.
+/// Path to `$SUPERCHARGE_HOME/campaigns_state.json` under `home`.
 pub fn campaigns_state_path(home: &std::path::Path) -> std::path::PathBuf {
     home.join(CAMPAIGNS_STATE_FILE)
 }
 
-/// Fail-open dismissed ids from `$GROK_HOME/campaigns_state.json`.
+/// Fail-open dismissed ids from `$SUPERCHARGE_HOME/campaigns_state.json`.
 pub fn load_dismissed_ids_from_home() -> std::collections::HashSet<String> {
     let Some(home) = crate::user_grok_home() else {
         return std::collections::HashSet::new();
@@ -442,8 +442,8 @@ mod tests {
         );
     }
 
-    /// `GROK_CAMPAIGNS=0` disables campaign application regardless of config.
-    /// `GROK_CAMPAIGNS` is process-global, so this test serializes itself with a
+    /// `SUPERCHARGE_CAMPAIGNS=0` disables campaign application regardless of config.
+    /// `SUPERCHARGE_CAMPAIGNS` is process-global, so this test serializes itself with a
     /// module-local mutex and save/restores the prior value. (This crate has no
     /// `serial_test` dev-dep and no other test reads this var, so a local guard
     /// is sufficient.)
@@ -451,20 +451,20 @@ mod tests {
     fn kill_switch_env_var_disables() {
         static ENV_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _g = ENV_GUARD.lock().unwrap_or_else(|p| p.into_inner());
-        let prior = std::env::var_os("GROK_CAMPAIGNS");
+        let prior = std::env::var_os("SUPERCHARGE_CAMPAIGNS");
         let empty = toml::Value::Table(Default::default());
 
         // SAFETY: ENV_GUARD serializes this against itself; no other test in the
-        // crate mutates or reads GROK_CAMPAIGNS concurrently.
-        unsafe { std::env::set_var("GROK_CAMPAIGNS", "0") };
+        // crate mutates or reads SUPERCHARGE_CAMPAIGNS concurrently.
+        unsafe { std::env::set_var("SUPERCHARGE_CAMPAIGNS", "0") };
         assert!(campaigns_application_disabled(&empty));
 
-        unsafe { std::env::remove_var("GROK_CAMPAIGNS") };
+        unsafe { std::env::remove_var("SUPERCHARGE_CAMPAIGNS") };
         assert!(!campaigns_application_disabled(&empty));
 
         match prior {
-            Some(v) => unsafe { std::env::set_var("GROK_CAMPAIGNS", v) },
-            None => unsafe { std::env::remove_var("GROK_CAMPAIGNS") },
+            Some(v) => unsafe { std::env::set_var("SUPERCHARGE_CAMPAIGNS", v) },
+            None => unsafe { std::env::remove_var("SUPERCHARGE_CAMPAIGNS") },
         }
     }
 

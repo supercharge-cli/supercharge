@@ -134,7 +134,7 @@ impl ContentController {
 
         let mut sandbox = TestSandbox::builder().mock_url(server.url()).build();
         // Keep unrelated autocomplete work out of PTY timing assertions.
-        sandbox.set_env("GROK_PROMPT_SUGGESTIONS", "false");
+        sandbox.set_env("SUPERCHARGE_PROMPT_SUGGESTIONS", "false");
 
         Ok(Self { server, sandbox })
     }
@@ -144,7 +144,7 @@ impl ContentController {
         self.server.url()
     }
 
-    /// Isolated `$HOME` directory that the pager should use (keeps its ~/.grok
+    /// Isolated `$HOME` directory that the pager should use (keeps its ~/.supercharge
     /// cache/state out of the real home during tests).
     pub fn home(&self) -> &Path {
         self.sandbox.home()
@@ -361,7 +361,7 @@ mod tests {
 
     /// The pre-delegation mock always served 200 `{"allow_access": true}`;
     /// the shared server defaults to 404-until-set. A 404 strands the pager
-    /// on the SuperGrok upsell screen and breaks every PTY test.
+    /// on the Supercharge upsell screen and breaks every PTY test.
     #[tokio::test]
     async fn settings_endpoint_allows_access_by_default() {
         let content = ContentController::start().await.unwrap();

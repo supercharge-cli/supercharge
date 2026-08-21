@@ -508,7 +508,7 @@ pub(super) fn dispatch_send_prompt_inner(
             .is_restricted(invocation.token)
     {
         // Only consume the composer when the upsell can actually open: with
-        // another question modal already up, `open_supergrok_upsell` would
+        // another question modal already up, `open_supercharge_upgrade_upsell` would
         // no-op and wiping the composer here would silently drop the typed
         // text. Keep it instead so the user can resubmit after closing the
         // modal — and never fall through to passthrough for restricted

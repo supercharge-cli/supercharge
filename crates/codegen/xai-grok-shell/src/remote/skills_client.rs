@@ -1,4 +1,4 @@
-//! grok.com product Skills catalog — the same REST sources grok-web uses:
+//! supercharge.ai product Skills catalog — the same REST sources Supercharge AI-web uses:
 //! - `POST /rest/skills` — first-party bundled skills (docx, pdf, ffmpeg, …)
 //! - `GET  /rest/user-skills` — enabled user-uploaded skills
 //!
@@ -27,7 +27,7 @@ use xai_grok_tools::implementations::skills::types::{SkillInfo, SkillScope};
 
 use crate::auth::AuthManager;
 
-const GROK_WEB_URL: &str = "https://grok.com";
+const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 /// Marker stored on SkillInfo.metadata / AvailableCommand._meta so clients
 /// can tell product Skills from Build disk discovery without name allowlists.
@@ -37,7 +37,7 @@ pub const CHAT_PRODUCT_META_KEY: &str = "product";
 const LIST_CATALOG_ATTEMPTS: u32 = 3;
 const LIST_CATALOG_BACKOFF: Duration = Duration::from_millis(100);
 /// Per-request budget for product Skills REST. Shared client only sets a
-/// connect timeout; without this a hung grok.com stalls the session actor.
+/// connect timeout; without this a hung supercharge.ai stalls the session actor.
 const LIST_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -89,7 +89,7 @@ pub struct ListUserSkillsResponse {
     pub skills: Vec<UserSkill>,
 }
 
-/// Combined product catalog matching grok-web's Skills menu composition.
+/// Combined product catalog matching Supercharge AI-web's Skills menu composition.
 #[derive(Debug, Clone, Default)]
 pub struct ProductSkillsCatalog {
     pub bundled: Vec<BundledSkill>,
@@ -103,7 +103,7 @@ pub struct ProductSkillsCatalog {
 impl ProductSkillsCatalog {
     /// Map to agent SkillInfo rows for slash advertising.
     ///
-    /// Mirrors grok-web: enabled user skills first (and hide same-named
+    /// Mirrors Supercharge AI-web: enabled user skills first (and hide same-named
     /// bundled entries they override), then remaining bundled skills.
     pub(crate) fn to_skill_infos(&self) -> Vec<SkillInfo> {
         let enabled_user: Vec<(String, &UserSkill)> = self
@@ -273,7 +273,7 @@ fn product_skill_info(
 
 #[derive(Debug, thiserror::Error)]
 pub enum SkillsError {
-    #[error("no grok.com credentials")]
+    #[error("no supercharge.ai credentials")]
     NoAuth,
     #[error("network error: {0}")]
     Network(#[from] reqwest::Error),
@@ -372,7 +372,7 @@ fn skills_auth_alt_candidates<'a>(
     out
 }
 
-/// Stateless transport for product Skills REST (grok-web `skillsApi`).
+/// Stateless transport for product Skills REST (Supercharge AI-web `skillsApi`).
 pub struct SkillsClient {
     http: reqwest::Client,
     base_url: String,
@@ -381,20 +381,20 @@ pub struct SkillsClient {
 
 impl SkillsClient {
     pub fn new(auth: Arc<AuthManager>) -> Self {
-        let base_url = std::env::var("GROK_SKILLS_BASE_URL")
+        let base_url = std::env::var("SUPERCHARGE_SKILLS_BASE_URL")
             .ok()
             .filter(|s| !s.is_empty())
             .or_else(|| {
-                std::env::var("GROK_CONVERSATIONS_BASE_URL")
+                std::env::var("SUPERCHARGE_CONVERSATIONS_BASE_URL")
                     .ok()
                     .filter(|s| !s.is_empty())
             })
             .or_else(|| {
-                std::env::var("GROK_CODE_WEB_URL")
+                std::env::var("SUPERCHARGE_CODE_WEB_URL")
                     .ok()
                     .filter(|s| !s.is_empty())
             })
-            .unwrap_or_else(|| GROK_WEB_URL.to_string());
+            .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -416,9 +416,9 @@ impl SkillsClient {
                 self.auth.grok_com_config().token_header.clone(),
             )
             .header("x-userid", user_id)
-            .header("x-grok-client-version", xai_grok_version::VERSION)
+            .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
             .header(
-                "x-grok-client-identifier",
+                "x-Supercharge AI-client-identifier",
                 crate::http::process_client_identifier(),
             )
             .header(
@@ -433,7 +433,7 @@ impl SkillsClient {
     }
 
     /// Grok.com product Skills require first-party session auth (same gate as
-    /// managed MCP / sibling grok.com clients — not plain BYOK API keys).
+    /// managed MCP / sibling supercharge.ai clients — not plain BYOK API keys).
     async fn require_skills_auth(&self) -> Result<crate::auth::GrokAuth, SkillsError> {
         let auth = self.auth.auth().await.map_err(|_| SkillsError::NoAuth)?;
         if !auth.is_managed_mcp_eligible() {
@@ -442,9 +442,9 @@ impl SkillsClient {
         Ok(auth)
     }
 
-    /// Credentials to try for grok.com product Skills REST.
+    /// Credentials to try for supercharge.ai product Skills REST.
     ///
-    /// Primary first. When primary is OIDC on the default grok.com host, also
+    /// Primary first. When primary is OIDC on the default supercharge.ai host, also
     /// try non-OIDC keys for the same user from this AuthManager's `auth.json`
     /// (team OIDC is often rejected with `oauth2-auth-forbidden`).
     ///
@@ -463,7 +463,7 @@ impl SkillsClient {
         if primary.auth_mode != AuthMode::Oidc || primary.user_id.is_empty() {
             return out;
         }
-        if self.base_url != GROK_WEB_URL {
+        if self.base_url != SUPERCHARGE_WEB_URL {
             return out;
         }
         let Ok(store) = crate::auth::read_auth_json(self.auth.auth_json_path()) else {
@@ -526,7 +526,7 @@ impl SkillsClient {
     }
 
     /// Bundled first-party skills (`POST /rest/skills`), gated by backend
-    /// feature-flag allow-list (same as grok-web attach menu).
+    /// feature-flag allow-list (same as Supercharge AI-web attach menu).
     ///
     /// Returns `(response, used_untagged_recovery)`.
     async fn list_bundled(

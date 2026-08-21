@@ -1,6 +1,6 @@
 //! Process-environment appearance hints when desktop APIs are unavailable.
 //!
-//! `LC_GROK_APPEARANCE` is the SSH-surviving alias (`AcceptEnv LC_*`).
+//! `LC_SUPERCHARGE_APPEARANCE` is the SSH-surviving alias (`AcceptEnv LC_*`).
 //! `COLORFGBG` is a terminal polarity hint stamped once at shell start and
 //! then inherited unchanged — a guess, not a live reading.
 //!
@@ -22,7 +22,7 @@ pub fn detect() -> Option<SystemAppearance> {
     detect_from_env_map(&crate::host::collect_unicode_env())
 }
 
-/// Ordered lookup: `GROK_APPEARANCE`, then `LC_GROK_APPEARANCE`, then `COLORFGBG`.
+/// Ordered lookup: `SUPERCHARGE_APPEARANCE`, then `LC_SUPERCHARGE_APPEARANCE`, then `COLORFGBG`.
 #[must_use]
 pub fn detect_from_env_map(env: &HashMap<String, String>) -> Option<SystemAppearance> {
     detect_explicit_from_env_map(env).or_else(|| detect_colorfgbg_from_env_map(env))
@@ -31,8 +31,8 @@ pub fn detect_from_env_map(env: &HashMap<String, String>) -> Option<SystemAppear
 /// Deliberate wrap/SSH stamps only — no inherited `COLORFGBG` guess.
 #[must_use]
 pub fn detect_explicit_from_env_map(env: &HashMap<String, String>) -> Option<SystemAppearance> {
-    parse_appearance_var(env_nonempty(env, "GROK_APPEARANCE"))
-        .or_else(|| parse_appearance_var(env_nonempty(env, "LC_GROK_APPEARANCE")))
+    parse_appearance_var(env_nonempty(env, "SUPERCHARGE_APPEARANCE"))
+        .or_else(|| parse_appearance_var(env_nonempty(env, "LC_SUPERCHARGE_APPEARANCE")))
 }
 
 /// Inherited `COLORFGBG` polarity guess.
@@ -86,19 +86,19 @@ mod tests {
     #[test]
     fn grok_appearance_dark_and_light() {
         assert_eq!(
-            detect_from_env_map(&env(&[("GROK_APPEARANCE", "dark")])),
+            detect_from_env_map(&env(&[("SUPERCHARGE_APPEARANCE", "dark")])),
             Some(SystemAppearance::Dark)
         );
         assert_eq!(
-            detect_from_env_map(&env(&[("GROK_APPEARANCE", "Light")])),
+            detect_from_env_map(&env(&[("SUPERCHARGE_APPEARANCE", "Light")])),
             Some(SystemAppearance::Light)
         );
         assert_eq!(
-            detect_from_env_map(&env(&[("GROK_APPEARANCE", "night")])),
+            detect_from_env_map(&env(&[("SUPERCHARGE_APPEARANCE", "night")])),
             Some(SystemAppearance::Dark)
         );
         assert_eq!(
-            detect_from_env_map(&env(&[("GROK_APPEARANCE", "day")])),
+            detect_from_env_map(&env(&[("SUPERCHARGE_APPEARANCE", "day")])),
             Some(SystemAppearance::Light)
         );
     }
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn lc_alias_used_when_canonical_absent() {
         assert_eq!(
-            detect_from_env_map(&env(&[("LC_GROK_APPEARANCE", "light")])),
+            detect_from_env_map(&env(&[("LC_SUPERCHARGE_APPEARANCE", "light")])),
             Some(SystemAppearance::Light)
         );
     }
@@ -115,8 +115,8 @@ mod tests {
     fn canonical_wins_over_lc_and_colorfgbg() {
         assert_eq!(
             detect_from_env_map(&env(&[
-                ("GROK_APPEARANCE", "dark"),
-                ("LC_GROK_APPEARANCE", "light"),
+                ("SUPERCHARGE_APPEARANCE", "dark"),
+                ("LC_SUPERCHARGE_APPEARANCE", "light"),
                 ("COLORFGBG", "0;15"),
             ])),
             Some(SystemAppearance::Dark)
@@ -127,13 +127,16 @@ mod tests {
     fn unknown_or_empty_appearance_falls_through_to_colorfgbg() {
         assert_eq!(
             detect_from_env_map(&env(&[
-                ("GROK_APPEARANCE", "solarized"),
+                ("SUPERCHARGE_APPEARANCE", "solarized"),
                 ("COLORFGBG", "15;0"),
             ])),
             Some(SystemAppearance::Dark)
         );
         assert_eq!(
-            detect_from_env_map(&env(&[("GROK_APPEARANCE", ""), ("COLORFGBG", "0;15"),])),
+            detect_from_env_map(&env(&[
+                ("SUPERCHARGE_APPEARANCE", ""),
+                ("COLORFGBG", "0;15"),
+            ])),
             Some(SystemAppearance::Light)
         );
     }
@@ -142,14 +145,14 @@ mod tests {
     fn lc_wins_over_conflicting_colorfgbg() {
         assert_eq!(
             detect_from_env_map(&env(&[
-                ("LC_GROK_APPEARANCE", "light"),
+                ("LC_SUPERCHARGE_APPEARANCE", "light"),
                 ("COLORFGBG", "15;0"),
             ])),
             Some(SystemAppearance::Light)
         );
         assert_eq!(
             detect_from_env_map(&env(&[
-                ("LC_GROK_APPEARANCE", "dark"),
+                ("LC_SUPERCHARGE_APPEARANCE", "dark"),
                 ("COLORFGBG", "0;15"),
             ])),
             Some(SystemAppearance::Dark)
@@ -160,13 +163,16 @@ mod tests {
     fn unknown_or_empty_lc_falls_through_to_colorfgbg_when_grok_absent() {
         assert_eq!(
             detect_from_env_map(&env(&[
-                ("LC_GROK_APPEARANCE", "solarized"),
+                ("LC_SUPERCHARGE_APPEARANCE", "solarized"),
                 ("COLORFGBG", "15;0"),
             ])),
             Some(SystemAppearance::Dark)
         );
         assert_eq!(
-            detect_from_env_map(&env(&[("LC_GROK_APPEARANCE", ""), ("COLORFGBG", "0;15"),])),
+            detect_from_env_map(&env(&[
+                ("LC_SUPERCHARGE_APPEARANCE", ""),
+                ("COLORFGBG", "0;15"),
+            ])),
             Some(SystemAppearance::Light)
         );
     }
@@ -210,7 +216,7 @@ mod tests {
         );
         assert_eq!(
             detect_explicit_from_env_map(&env(&[
-                ("GROK_APPEARANCE", "light"),
+                ("SUPERCHARGE_APPEARANCE", "light"),
                 ("COLORFGBG", "15;0"),
             ])),
             Some(SystemAppearance::Light)
@@ -221,14 +227,14 @@ mod tests {
     fn colorfgbg_map_ignores_explicit_hints() {
         assert_eq!(
             detect_colorfgbg_from_env_map(&env(&[
-                ("GROK_APPEARANCE", "light"),
-                ("LC_GROK_APPEARANCE", "light"),
+                ("SUPERCHARGE_APPEARANCE", "light"),
+                ("LC_SUPERCHARGE_APPEARANCE", "light"),
                 ("COLORFGBG", "15;0"),
             ])),
             Some(SystemAppearance::Dark)
         );
         assert_eq!(
-            detect_colorfgbg_from_env_map(&env(&[("GROK_APPEARANCE", "dark")])),
+            detect_colorfgbg_from_env_map(&env(&[("SUPERCHARGE_APPEARANCE", "dark")])),
             None
         );
     }

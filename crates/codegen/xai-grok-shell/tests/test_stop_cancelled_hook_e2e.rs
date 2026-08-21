@@ -1,7 +1,7 @@
 //! Built-binary e2e for `StopCancelled`: a `hooks/*.json` key loads, a real subprocess gets the
 //! real stdin envelope, and `matcher` filters on `reason`.
 //!
-//! `#[ignore]`d by default: it needs the grok binary (`GROK_BINARY` or a local debug build).
+//! `#[ignore]`d by default: it needs the grok binary (`SUPERCHARGE_BINARY` or a local debug build).
 //! `cargo test -p xai-grok-shell --test test_stop_cancelled_hook_e2e -- --ignored`
 
 use xai_grok_test_support::*;

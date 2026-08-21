@@ -1,20 +1,20 @@
 //! End-to-end tests for the `--debug` firehose file logging.
 //!
 //! Runs the built grok binary against the mock inference server with a
-//! caller-owned `$GROK_HOME`, then inspects `~/.grok/debug/`:
+//! caller-owned `$SUPERCHARGE_HOME`, then inspects `~/.supercharge/debug/`:
 //! - the `--debug` FLAG drives the firehose end to end through the master switch:
 //!   a live `agent` session launched with `--debug` writes a non-empty per-session
-//!   `~/.grok/debug/<sessionId>.txt` with first-party content, and does NOT enable
+//!   `~/.supercharge/debug/<sessionId>.txt` with first-party content, and does NOT enable
 //!   sampling/instrumentation. Regression for the master switch having bundled
-//!   `GROK_LOG_SAMPLING`/`GROK_INSTRUMENTATION`, whose global `TargetFilterLayer`
+//!   `SUPERCHARGE_LOG_SAMPLING`/`SUPERCHARGE_INSTRUMENTATION`, whose global `TargetFilterLayer`
 //!   suppressed every other target and starved the firehose.
 //! - `--debug` (headless) runs cleanly without crashing arg-parsing (smoke).
 //! - no `--debug` writes no firehose files.
-//! - a live `agent` session (explicit `GROK_DEBUG_LOG=1`) writes a per-session
-//!   `~/.grok/debug/<sessionId>.txt` with real first-party content + `latest.txt`.
+//! - a live `agent` session (explicit `SUPERCHARGE_DEBUG_LOG=1`) writes a per-session
+//!   `~/.supercharge/debug/<sessionId>.txt` with real first-party content + `latest.txt`.
 //! - `--debug-file <path>` writes one explicit file and bypasses per-session
-//!   routing entirely (no `~/.grok/debug/` files).
-//! - `GROK_LOG_FILE=<path>` writes that explicit file (back-compat single file).
+//!   routing entirely (no `~/.supercharge/debug/` files).
+//! - `SUPERCHARGE_LOG_FILE=<path>` writes that explicit file (back-compat single file).
 //!
 //! Per-session content is asserted via the live `agent`, not the headless run:
 //! the agent's `run_session` future runs under the `session` span (carrying
@@ -46,12 +46,12 @@ where
     tokio::task::LocalSet::new().run_until(f()).await;
 }
 
-/// The per-session firehose directory under a pinned `$GROK_HOME`.
+/// The per-session firehose directory under a pinned `$SUPERCHARGE_HOME`.
 fn debug_dir(home: &Path) -> PathBuf {
-    home.join(".grok").join("debug")
+    home.join(".supercharge").join("debug")
 }
 
-/// List firehose `*.txt` files under `~/.grok/debug` (excluding the `latest.txt`
+/// List firehose `*.txt` files under `~/.supercharge/debug` (excluding the `latest.txt`
 /// symlink). Empty if the dir is missing.
 fn firehose_txt_files(home: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(debug_dir(home)) else {
@@ -68,8 +68,8 @@ fn firehose_txt_files(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Build a headless `grok -p` command with a pinned `$GROK_HOME` so the firehose
-/// lands under `<home>/.grok/debug`. Firehose env knobs are cleared so the test
+/// Build a headless `grok -p` command with a pinned `$SUPERCHARGE_HOME` so the firehose
+/// lands under `<home>/.supercharge/debug`. Firehose env knobs are cleared so the test
 /// is hermetic regardless of the developer's shell.
 fn debug_cmd(
     server: &MockInferenceServer,
@@ -81,7 +81,7 @@ fn debug_cmd(
     sandbox
         .set_env("HOME", home)
         .set_env("USERPROFILE", home)
-        .set_env("GROK_HOME", home.join(".grok"));
+        .set_env("SUPERCHARGE_HOME", home.join(".supercharge"));
     let mut cmd = tokio::process::Command::new(grok_binary());
     cmd.args(["-p", "say hi", "--yolo", "--output-format", "json"])
         .args(extra)
@@ -169,7 +169,7 @@ async fn no_debug_flag_writes_no_debug_dir() {
     );
 }
 
-/// A live `agent` session writes `~/.grok/debug/<sessionId>.txt` with real
+/// A live `agent` session writes `~/.supercharge/debug/<sessionId>.txt` with real
 /// first-party content, and points `latest.txt` at it. This is the same
 /// `init_tracing_simple("agent")` path the spawned leader uses, so it covers
 /// leader capture deterministically without a flaky detached process.
@@ -182,7 +182,7 @@ async fn agent_session_writes_named_session_file() {
             .expect("start mock server");
         let workdir = git_workdir();
         let mut sandbox = TestSandbox::new();
-        sandbox.set_env("GROK_DEBUG_LOG", "1");
+        sandbox.set_env("SUPERCHARGE_DEBUG_LOG", "1");
         let grok_home = sandbox.grok_home().to_path_buf();
 
         let client =
@@ -200,7 +200,7 @@ async fn agent_session_writes_named_session_file() {
         read_session_firehose_when_ready(&session_file, &client).await;
 
         // `latest.txt` is a sibling symlink pointing at the just-opened session
-        // file, so `tail -f ~/.grok/debug/latest.txt` follows the live session.
+        // file, so `tail -f ~/.supercharge/debug/latest.txt` follows the live session.
         #[cfg(unix)]
         {
             let link = grok_home.join("debug").join("latest.txt");
@@ -212,9 +212,9 @@ async fn agent_session_writes_named_session_file() {
     .await;
 }
 
-/// The `--debug` FLAG (not `GROK_DEBUG_LOG` directly) drives the firehose end to
+/// The `--debug` FLAG (not `SUPERCHARGE_DEBUG_LOG` directly) drives the firehose end to
 /// end through the master switch. Regression: the master switch used to also set
-/// `GROK_LOG_SAMPLING`/`GROK_INSTRUMENTATION`, whose `TargetFilterLayer` globally
+/// `SUPERCHARGE_LOG_SAMPLING`/`SUPERCHARGE_INSTRUMENTATION`, whose `TargetFilterLayer` globally
 /// suppresses every non-matching target — starving the firehose so `--debug`
 /// produced no logs. Drives a real agent session with `--debug` and asserts the
 /// per-session file has first-party content (would FAIL pre-fix), and that
@@ -232,7 +232,7 @@ async fn debug_flag_master_switch_enables_firehose() {
 
         // Drive `grok --debug agent stdio`: the master switch (which runs before
         // the agent dispatch) must be what enables the firehose — NOT a direct
-        // GROK_DEBUG_LOG env. The sandbox baseline excludes inherited firehose
+        // SUPERCHARGE_DEBUG_LOG env. The sandbox baseline excludes inherited firehose
         // toggles, so the `--debug` flag is the only thing enabling logging here.
         let client = GrokStdioClient::spawn_with_sandbox_env_and_args(
             &server,
@@ -253,11 +253,11 @@ async fn debug_flag_master_switch_enables_firehose() {
         read_session_firehose_when_ready(&session_file, &client).await;
 
         // Slimming guard: `--debug` must NOT enable sampling. The agent spawn
-        // clears GROK_LOG_SAMPLING (hermetic), so the sampling layer stays off and
-        // `~/.grok/logs/sampling.jsonl` is never written — the `--debug`
+        // clears SUPERCHARGE_LOG_SAMPLING (hermetic), so the sampling layer stays off and
+        // `~/.supercharge/logs/sampling.jsonl` is never written — the `--debug`
         // set-if-unset must not flip it on (the pre-fix code did, starving the
         // firehose). Instrumentation isn't checked: the harness pins
-        // GROK_INSTRUMENTATION=disabled, so that assertion would be vacuous.
+        // SUPERCHARGE_INSTRUMENTATION=disabled, so that assertion would be vacuous.
         let sampling = grok_home.join("logs").join("sampling.jsonl");
         let len = std::fs::metadata(&sampling).map(|m| m.len()).unwrap_or(0);
         assert_eq!(
@@ -269,7 +269,7 @@ async fn debug_flag_master_switch_enables_firehose() {
 }
 
 /// `--debug-file <path>` writes one explicit file and bypasses per-session
-/// routing entirely (no `~/.grok/debug/` files created).
+/// routing entirely (no `~/.supercharge/debug/` files created).
 #[tokio::test]
 #[ignore] // requires pre-built binary; run with --ignored
 async fn debug_file_flag_writes_single_file_and_bypasses_routing() {
@@ -304,7 +304,7 @@ async fn debug_file_flag_writes_single_file_and_bypasses_routing() {
     );
 }
 
-/// `GROK_LOG_FILE=<path>` (no `--debug`) writes that exact file (back-compat).
+/// `SUPERCHARGE_LOG_FILE=<path>` (no `--debug`) writes that exact file (back-compat).
 #[tokio::test]
 #[ignore] // requires pre-built binary; run with --ignored
 async fn grok_log_file_explicit_path_is_written() {
@@ -316,20 +316,20 @@ async fn grok_log_file_explicit_path_is_written() {
     let custom = home.path().join("custom-log-file.log");
 
     let (cmd, mut sandbox) = debug_cmd(&server, home.path(), workdir.workspace(), &[]);
-    sandbox.set_env("GROK_LOG_FILE", &custom);
+    sandbox.set_env("SUPERCHARGE_LOG_FILE", &custom);
     let result = run_headless_in_sandbox(cmd, sandbox).await;
 
-    assert_headless_success(&result, "grok GROK_LOG_FILE=path", Some(&server));
+    assert_headless_success(&result, "grok SUPERCHARGE_LOG_FILE=path", Some(&server));
     assert_no_crashes(&result.stderr);
     assert!(
         custom.exists(),
-        "explicit GROK_LOG_FILE path not written: {custom:?}\nstderr tail:\n{}",
+        "explicit SUPERCHARGE_LOG_FILE path not written: {custom:?}\nstderr tail:\n{}",
         stderr_tail(&result.stderr, 800)
     );
     // Single-file mode bypasses per-session routing.
     assert!(
         firehose_txt_files(home.path()).is_empty(),
-        "GROK_LOG_FILE must bypass per-session routing, found: {:?}",
+        "SUPERCHARGE_LOG_FILE must bypass per-session routing, found: {:?}",
         firehose_txt_files(home.path())
     );
 }

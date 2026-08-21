@@ -386,7 +386,7 @@ pub struct BackgroundNoticeNaming<'a> {
 }
 
 impl BackgroundNoticeNaming<'static> {
-    /// Canonical grok-build names, for hosts without renaming.
+    /// Canonical supercharge-core names, for hosts without renaming.
     pub const CANONICAL: Self = Self {
         task_output_tool: "get_task_output",
         task_ids_param: "task_ids",
@@ -587,14 +587,14 @@ pub fn task_output_waits(timeout_ms: Option<u64>) -> bool {
 /// the model, so a truncated wait costs one more poll, not the result.
 pub const MAX_WAIT_BLOCK_MS_DEFAULT: u64 = 600_000;
 
-/// The blocking-wait ceiling in effect, honoring `GROK_MAX_WAIT_BLOCK_MS`.
+/// The blocking-wait ceiling in effect, honoring `SUPERCHARGE_MAX_WAIT_BLOCK_MS`.
 ///
 /// A host whose transport deadline is shorter than the default sets the env var
 /// so the server enforces — and the tool descriptions advertise — the same
 /// number the caller will actually wait for. Without that, a model believing the
 /// default asks for a wait its own client will abandon first.
 pub fn max_wait_block_ms() -> u64 {
-    std::env::var("GROK_MAX_WAIT_BLOCK_MS")
+    std::env::var("SUPERCHARGE_MAX_WAIT_BLOCK_MS")
         .ok()
         .and_then(|raw| raw.parse::<u64>().ok())
         .unwrap_or(MAX_WAIT_BLOCK_MS_DEFAULT)
@@ -1708,7 +1708,7 @@ mod tests {
     //
     // These lock the exact model-facing text. The "cli_default" cases must
     // match what the grok-shell MiniJinja templates render for the default
-    // grok-build toolset (monitor + task + bash + read present, POSIX). The
+    // supercharge-core toolset (monitor + task + bash + read present, POSIX). The
     // "toolbox" cases lock the subagent-only rendering used by the backend toolbox.
 
     #[test]

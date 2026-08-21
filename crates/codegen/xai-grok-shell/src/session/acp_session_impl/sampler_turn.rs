@@ -666,7 +666,7 @@ impl SessionActor {
     }
     /// Resolve a standalone aux-model `SamplerConfig` for `slug` via the shared
     /// catalog routing (Tier-1 catalog creds / Tier-2 xAI-proxy via session token
-    /// / `XAI_API_KEY` / deployment key), gathering the session-local auth context
+    /// / `SUPERCHARGE_API_KEY` / deployment key), gathering the session-local auth context
     /// once. Shared by image-describe and the classifier so the gather can't
     /// drift. `None` ⇒ caller falls back to the session model.
     pub(super) async fn resolve_aux_sampler_config(

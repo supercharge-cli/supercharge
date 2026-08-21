@@ -13,7 +13,7 @@ use xai_grok_sampling_types::ReasoningEffort;
 use xai_hunk_tracker::HunkTrackerHandle;
 /// Coarse lifecycle state of a session as known to the leader/agent.
 ///
-/// A grok session has no
+/// A Supercharge AI session has no
 /// terminal status field on its own — it is a resumable log on disk — so
 /// "liveness" is *residency + turn-state*, not a pid. The agent's join-handle
 /// supervisor tracks this per session so a panicked actor can be reaped

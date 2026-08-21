@@ -4,7 +4,7 @@
 //! Which function to call:
 //! - [`grok_home`]: the usual choice, a cached, created path to build on.
 //! - [`user_grok_home`]: `None` instead of a cwd fallback when no home resolves.
-//! - [`default_grok_home`]: the `<home>/.grok` default, ignoring `$GROK_HOME`, so callers can detect an override.
+//! - [`default_grok_home`]: the `<home>/.supercharge` default, ignoring `$SUPERCHARGE_HOME`, so callers can detect an override.
 //! - [`resolve_grok_home`]: a fresh, uncached resolve.
 //!
 //! TODO: collapse these getters by threading the path through config as an
@@ -45,7 +45,7 @@ fn migrate_default_home(home: &Path) -> PathBuf {
     current
 }
 
-/// `$SUPERCHARGE_HOME` verbatim when non-empty, then legacy `$GROK_HOME`,
+/// `$SUPERCHARGE_HOME` verbatim when non-empty, then legacy `$SUPERCHARGE_HOME`,
 /// else `<home>/.supercharge`. Explicit env values are used as-is (not
 /// canonicalized) so prefix checks and symlink guards remain stable.
 fn resolve_grok_home_from(
@@ -63,11 +63,11 @@ fn resolve_grok_home_from(
 }
 
 /// Resolve the Supercharge home from the environment (fresh, no cache);
-/// `None` if neither home resolves. The legacy variable remains a fallback.
+/// `None` if neither home resolves. The active environment variable is `SUPERCHARGE_HOME`.
 pub fn resolve_grok_home() -> Option<PathBuf> {
     resolve_grok_home_from(
         std::env::var_os("SUPERCHARGE_HOME").as_deref(),
-        std::env::var_os("GROK_HOME").as_deref(),
+        None,
         dirs::home_dir().as_deref(),
     )
 }
@@ -80,8 +80,8 @@ pub fn default_grok_home() -> PathBuf {
 /// The Supercharge home, created if missing and cached for the process; falls
 /// back to [`default_grok_home`] when neither home variable nor OS home resolves.
 pub fn grok_home() -> PathBuf {
-    static GROK_HOME: OnceLock<PathBuf> = OnceLock::new();
-    GROK_HOME
+    static SUPERCHARGE_HOME: OnceLock<PathBuf> = OnceLock::new();
+    SUPERCHARGE_HOME
         .get_or_init(|| {
             let home = resolve_grok_home().unwrap_or_else(default_grok_home);
             if let Err(err) = std::fs::create_dir_all(&home) {

@@ -1,5 +1,5 @@
 //! A requested quit exits within the exit timeout even when teardown hangs.
-//! `GROK_TEST_HOLD_TEARDOWN_SECS` supplies the hang; a real `SessionEnd`
+//! `SUPERCHARGE_TEST_HOLD_TEARDOWN_SECS` supplies the hang; a real `SessionEnd`
 //! hook cannot hold teardown past `SESSION_FLUSH_GRACE`.
 //!
 //! ```bash
@@ -71,8 +71,8 @@ async fn spawn_pager_with_teardown_hold() -> Result<(PtyHarness, tempfile::TempD
         &content,
         &[],
         &[
-            ("GROK_EXIT_TIMEOUT_SECS", TIMEOUT_SECS),
-            ("GROK_TEST_HOLD_TEARDOWN_SECS", HOLD_SECS),
+            ("SUPERCHARGE_EXIT_TIMEOUT_SECS", TIMEOUT_SECS),
+            ("SUPERCHARGE_TEST_HOLD_TEARDOWN_SECS", HOLD_SECS),
         ],
         Some(project.path()),
     )?;

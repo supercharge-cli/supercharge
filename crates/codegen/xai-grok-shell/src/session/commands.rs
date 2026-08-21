@@ -363,10 +363,10 @@ pub enum SessionCommand {
     /// and does NOT update `primaryModelId` in signals — the resolved model
     /// is already tracked via inference responses), this command also calls
     /// `set_primary_model()` so that signals report the override model
-    /// rather than the agent-level default (e.g. `grok-4.5`).
+    /// rather than the agent-level default (e.g. `Supercharge AI-4.5`).
     ///
     /// Keeps the existing base_url, api_key, and other config — only changes
-    /// the `model` field sent in the `x-grok-model-override` header and merges
+    /// the `model` field sent in the `x-Supercharge AI-model-override` header and merges
     /// any additional headers (e.g. `x-openrouter-api-key` for BYOK).
     ///
     /// Used to set model IDs (e.g. opaque third-party routing names) that are
@@ -403,7 +403,7 @@ pub enum SessionCommand {
     ReloadPlugins {
         registry: Option<std::sync::Arc<xai_grok_agent::plugins::PluginRegistry>>,
     },
-    /// Re-discover the session's own project hooks (`.grok/hooks`,
+    /// Re-discover the session's own project hooks (`.supercharge/hooks`,
     /// `.cursor/hooks.json`, …) mid-session, re-evaluating folder trust. Used by
     /// the interactive folder-trust grant so a granted folder's repo-local hooks
     /// start without a session restart (plugin-contributed hooks are handled by
@@ -822,7 +822,7 @@ pub enum SessionCommand {
     ///
     /// Fired by the client after a turn completes. The session builds a
     /// compact text-only transcript of the recent conversation, makes one
-    /// tool-free model call (default `grok-build-0.1` when available via
+    /// tool-free model call (default `Supercharge AI-build-0.1` when available via
     /// `model_override`, else the session model), sanitizes the output, and
     /// returns the predicted prompt via `respond_to`. Best-effort: any
     /// failure returns `None`.
@@ -832,7 +832,7 @@ pub enum SessionCommand {
     },
     /// Rewrite a raw memory note into well-structured markdown via a one-shot
     /// LLM call. The session uses `prepare_chat_completion()` with
-    /// `grok-build` model, low temperature, and capped output tokens.
+    /// `Supercharge AI-build` model, low temperature, and capped output tokens.
     RewriteMemoryNote {
         raw_text: String,
         context_summary: String,

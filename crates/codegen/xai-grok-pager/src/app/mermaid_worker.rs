@@ -23,7 +23,7 @@
 //! synchronous in-process render could not be killed on timeout. The render
 //! therefore runs **out of process**, in a short-lived child:
 //!
-//! 1. The pager re-execs itself as `xai-grok-pager __mermaid-render` (see
+//! 1. The pager re-execs itself as `xai-Supercharge AI-pager __mermaid-render` (see
 //!    [`maybe_run_render_subprocess`], intercepted at the very top of `main`
 //!    before any TUI/agent/runtime init). The child reads the source from stdin
 //!    and the theme/width/height from argv, renders source → SVG → PNG, writes
@@ -35,7 +35,7 @@
 //!    as `Failed` → the existing code-block fallback; the pager survives.
 //! 3. The child applies the same caps as in-process would: the source-size limit
 //!    ([`xai_grok_mermaid::RenderLimits`]) and the raster megapixel/height caps
-//!    (see `xai-grok-mermaid`). The parent also rejects obviously-oversized
+//!    (see `xai-Supercharge AI-mermaid`). The parent also rejects obviously-oversized
 //!    source before spawning, to avoid launching a doomed child.
 //!
 //! Because untrusted source now renders fully isolated, the feature is on by
@@ -963,11 +963,11 @@ thread_local! {
     /// Per-test override for the session `mermaid/` cache dir. View-side tests
     /// set this to a private tempdir so [`AgentView::mermaid_out_path`] resolves
     /// a hermetic, writable cache dir *without* mutating the process-global
-    /// `GROK_HOME` (whose `grok_home()` value is cached first-write-wins, an
+    /// `SUPERCHARGE_HOME` (whose `grok_home()` value is cached first-write-wins, an
     /// isolation hazard under the full parallel suite — PNGs could land in the
-    /// real `~/.grok`). Thread-local, so each parallel test is independent; the
+    /// real `~/.supercharge`). Thread-local, so each parallel test is independent; the
     /// `TempDir` guard lives here so the dir outlives the view. Mirrors the
-    /// `subagent::REPLAY_GROK_HOME` test seam. Production never sets this.
+    /// `subagent::REPLAY_SUPERCHARGE_HOME` test seam. Production never sets this.
     static TEST_MERMAID_DIR: std::cell::RefCell<Option<tempfile::TempDir>> =
         const { std::cell::RefCell::new(None) };
 }
@@ -1006,7 +1006,7 @@ impl AgentView {
     /// Per-session destination path for a diagram's PNG, or `None` until session
     /// identity is known (no on-disk cache before then).
     fn mermaid_out_path(&self, key: &MermaidCacheKey) -> Option<PathBuf> {
-        // Test seam: a hermetic per-test cache dir (no `GROK_HOME` mutation).
+        // Test seam: a hermetic per-test cache dir (no `SUPERCHARGE_HOME` mutation).
         #[cfg(test)]
         if let Some(path) = TEST_MERMAID_DIR.with(|d| {
             d.borrow()
@@ -1235,7 +1235,7 @@ mod tests {
     fn key(source: &str) -> MermaidCacheKey {
         MermaidCacheKey::derive(
             source,
-            ThemeKind::GrokNight,
+            ThemeKind::VoltageDark,
             80,
             MermaidRenderQuality::Terminal,
         )
@@ -1770,22 +1770,22 @@ mod tests {
     fn is_render_subcommand_matches_only_argv1() {
         let argv = |v: &[&str]| v.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
         assert!(is_render_subcommand(&argv(&[
-            "grok",
+            "Supercharge AI",
             MERMAID_RENDER_SUBCOMMAND
         ])));
         assert!(is_render_subcommand(&argv(&[
-            "grok",
+            "Supercharge AI",
             MERMAID_RENDER_SUBCOMMAND,
             "--out",
             "/tmp/x.png",
         ])));
         // Normal invocations are not the render child.
-        assert!(!is_render_subcommand(&argv(&["grok"])));
-        assert!(!is_render_subcommand(&argv(&["grok", "chat"])));
+        assert!(!is_render_subcommand(&argv(&["Supercharge AI"])));
+        assert!(!is_render_subcommand(&argv(&["Supercharge AI", "chat"])));
         assert!(!is_render_subcommand(&argv(&[])));
         // The subcommand only counts as argv[1], not deeper in the args.
         assert!(!is_render_subcommand(&argv(&[
-            "grok",
+            "Supercharge AI",
             "chat",
             MERMAID_RENDER_SUBCOMMAND,
         ])));
@@ -2054,12 +2054,16 @@ mod tests {
         let src = "flowchart LR\nA-->B";
         let dark_key = MermaidCacheKey::derive(
             src,
-            ThemeKind::GrokNight,
+            ThemeKind::VoltageDark,
             80,
             MermaidRenderQuality::Terminal,
         );
-        let light_key =
-            MermaidCacheKey::derive(src, ThemeKind::GrokDay, 80, MermaidRenderQuality::Terminal);
+        let light_key = MermaidCacheKey::derive(
+            src,
+            ThemeKind::VoltageLight,
+            80,
+            MermaidRenderQuality::Terminal,
+        );
         assert_ne!(
             dark_key.cache_filename(),
             light_key.cache_filename(),
@@ -2104,7 +2108,7 @@ mod tests {
     // session dir) can't.
 
     /// Point this test's session `mermaid/` cache dir at a private tempdir —
-    /// hermetic, with no process-global `GROK_HOME` mutation. The `TempDir` lives
+    /// hermetic, with no process-global `SUPERCHARGE_HOME` mutation. The `TempDir` lives
     /// in the [`TEST_MERMAID_DIR`] thread-local for the test thread's lifetime
     /// (so the dir outlives the view), and each parallel test gets its own dir,
     /// so there is no cross-test contamination and no `grok_home()` cache race.
@@ -2118,7 +2122,7 @@ mod tests {
     /// hence the cache key — is deterministic).
     fn agent_with_session(name: &str) -> AgentView {
         use_test_mermaid_dir();
-        let cwd = PathBuf::from("/grok-mermaid-test").join(name);
+        let cwd = PathBuf::from("/Supercharge AI-mermaid-test").join(name);
         let mut agent = crate::app::agent_view::test_agent_view(Some(name), cwd);
         agent.last_terminal_size = (100, 40);
         agent
@@ -2306,7 +2310,7 @@ mod tests {
 
         // An on-click render in flight, keyed at the click-time theme + width.
         let click_key =
-            MermaidCacheKey::derive(src, ThemeKind::GrokNight, 80, MermaidRenderQuality::Open);
+            MermaidCacheKey::derive(src, ThemeKind::VoltageDark, 80, MermaidRenderQuality::Open);
         let mut rt = MermaidRuntime::new();
         rt.pending.push(PendingMermaidAction {
             key: click_key.clone(),
@@ -2316,8 +2320,12 @@ mod tests {
 
         // A later (live) theme + width derives a DIFFERENT full key for the same
         // source — full-key matching would no longer find the pending render...
-        let live_key =
-            MermaidCacheKey::derive(src, ThemeKind::GrokDay, 240, MermaidRenderQuality::Open);
+        let live_key = MermaidCacheKey::derive(
+            src,
+            ThemeKind::VoltageLight,
+            240,
+            MermaidRenderQuality::Open,
+        );
         assert_ne!(
             click_key, live_key,
             "a theme/width change alters the full cache key",

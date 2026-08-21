@@ -319,7 +319,7 @@ impl WorkspaceRpc for FsDeleteFileReq {
 // epoch milliseconds (not RFC 3339 strings), `client_fs_list` paginates
 // with a post-sort `offset`, and reads are binary-safe (base64 chunks).
 // camelCase wire format with fixed-width integers only, so both the
-// workspace server (`xai-grok-workspace`) and the grok.com backend
+// workspace server (`xai-grok-workspace`) and the supercharge.ai backend
 // compile against the same structs — a field rename breaks both sides.
 //
 // The method names use a `client_fs` segment (not `fs`) because the

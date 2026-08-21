@@ -4,7 +4,7 @@ use xai_grok_sampler::SamplerConfig;
 use xai_grok_tools::implementations::grok_build;
 use xai_grok_tools::registry::types::ToolConfig;
 
-/// Production grok-build foreground command-timeout ceiling (seconds). The
+/// Production Supercharge AI-build foreground command-timeout ceiling (seconds). The
 /// tool-server binary defaults to a 5-minute foreground ceiling
 /// (`DEFAULT_MAX_TIMEOUT_MS`); production opts *up* to 10h by sending this
 /// explicitly (overridable via config.toml). Bounds only foreground commands —
@@ -54,7 +54,7 @@ impl BashToolConfig {
             map.insert("timeout_secs".into(), t.into());
         }
         // The tool-server binary defaults the foreground ceiling to 5 min;
-        // production grok-build opts up to 10h by sending it explicitly
+        // production Supercharge AI-build opts up to 10h by sending it explicitly
         // (overridable via config.toml). Foreground-only; background stays unbounded.
         let max_timeout_secs = self.max_timeout_secs.unwrap_or(PRODUCTION_MAX_TIMEOUT_SECS);
         map.insert("max_timeout_secs".into(), max_timeout_secs.into());
@@ -105,7 +105,7 @@ pub struct AskUserQuestionToolConfig {
 #[serde(default)]
 pub struct WebFetchToolConfig {
     /// Egress proxy endpoint. When set, all HTTP requests are routed through
-    /// this URL. Resolution: TOML > `GROK_WEB_FETCH_PROXY` env > remote settings > None.
+    /// this URL. Resolution: TOML > `SUPERCHARGE_WEB_FETCH_PROXY` env > remote settings > None.
     pub proxy_endpoint: Option<String>,
     /// Domains the tool is allowed to fetch. When set, overrides the built-in
     /// default allowlist. An explicit empty list blocks all fetches.
@@ -113,7 +113,7 @@ pub struct WebFetchToolConfig {
     pub allowed_domains: Option<Vec<String>>,
     /// Allow fetches to explicit loopback hosts only (`localhost` / `127.0.0.0/8`
     /// / `::1`). Private and metadata ranges stay blocked. Default off.
-    /// Resolution: TOML > `GROK_WEB_FETCH_ALLOW_LOCAL` env > false.
+    /// Resolution: TOML > `SUPERCHARGE_WEB_FETCH_ALLOW_LOCAL` env > false.
     pub allow_local: Option<bool>,
 }
 
@@ -135,7 +135,7 @@ impl WebFetchToolConfig {
             .proxy_endpoint
             .as_ref()
             .cloned()
-            .or_else(|| env_string("GROK_WEB_FETCH_PROXY"))
+            .or_else(|| env_string("SUPERCHARGE_WEB_FETCH_PROXY"))
             .or_else(|| remote_proxy.map(|s| s.to_owned()));
 
         let allowed_domains = self
@@ -146,7 +146,7 @@ impl WebFetchToolConfig {
 
         let allow_local = self
             .allow_local
-            .or_else(|| xai_grok_config::env_bool("GROK_WEB_FETCH_ALLOW_LOCAL"));
+            .or_else(|| xai_grok_config::env_bool("SUPERCHARGE_WEB_FETCH_ALLOW_LOCAL"));
 
         xai_grok_tools::implementations::grok_build::web_fetch::WebFetchParams {
             proxy_endpoint,
@@ -692,7 +692,7 @@ mod tests {
         assert_eq!(
             max_timeout(&local.to_bash_params_json(None, None)),
             Some(PRODUCTION_MAX_TIMEOUT_SECS),
-            "production grok-build must set the 10h foreground ceiling"
+            "production Supercharge AI-build must set the 10h foreground ceiling"
         );
     }
 

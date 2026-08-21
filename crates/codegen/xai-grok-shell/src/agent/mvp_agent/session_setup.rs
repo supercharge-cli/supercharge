@@ -1270,16 +1270,16 @@ impl MvpAgent {
             available_keys = ?available.keys().take(10).collect::<Vec<_>>(),
             "load_session: restoring persisted model (debug)"
         );
-        let is_grok_build = persisted_model.0.starts_with("grok-build");
+        let is_grok_build = persisted_model.0.starts_with("supercharge-core");
         let same_family_fallback = if is_grok_build {
             available
                 .keys()
-                .find(|id| id.0.starts_with("grok-build"))
+                .find(|id| id.0.starts_with("supercharge-core"))
                 .cloned()
         } else {
             available
                 .keys()
-                .find(|id| !id.0.starts_with("grok-build"))
+                .find(|id| !id.0.starts_with("supercharge-core"))
                 .cloned()
         };
         let selectable_catalog_key =

@@ -143,7 +143,7 @@ pub fn reset_oom_score_adj() -> io::Result<()> {
 /// protective (negative) `oom_score_adj`, so the commands it spawns stay
 /// ordinary OOM candidates instead of inheriting that protection.
 #[cfg(unix)]
-pub const RESET_CHILD_OOM_ENV: &str = "GROK_TOOLS_RESET_CHILD_OOM";
+pub const RESET_CHILD_OOM_ENV: &str = "SUPERCHARGE_TOOLS_RESET_CHILD_OOM";
 
 /// Lower this process's `oom_score_adj` to -900 so the kernel OOM killer
 /// prefers any ordinary child (score 0) while the server remains a last-resort

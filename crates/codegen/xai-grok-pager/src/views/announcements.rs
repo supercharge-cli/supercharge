@@ -1512,7 +1512,7 @@ mod tests {
         let mut ann = promo(
             "p",
             "New promo",
-            Some(("Get SuperGrok", "https://x.ai/grok")),
+            Some(("Get Supercharge", "https://x.ai/grok")),
         );
         ann.cta.as_mut().unwrap().caption = Some("or use Ctrl+O".into());
         let anns = [ann];
@@ -1521,7 +1521,7 @@ mod tests {
         let hits = render_banner(area, &mut buf, &anns, &no_hidden(), false, false, true);
 
         let row0 = buf_row(&buf, area, 0);
-        assert!(row0.starts_with("[Get SuperGrok]"), "row0={row0:?}");
+        assert!(row0.starts_with("[Get Supercharge]"), "row0={row0:?}");
         assert!(
             !row0.contains("New promo"),
             "message must not paint on the banner; row0={row0:?}"
@@ -1579,7 +1579,7 @@ mod tests {
             "p",
             "msg",
             Some((
-                "Upgrade to SuperGrok Heavy for the exclusive preview",
+                "Upgrade to Supercharge Heavy for the exclusive preview",
                 "https://x.ai",
             )),
         )];

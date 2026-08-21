@@ -126,14 +126,14 @@ impl Drop for EnvVarGuard {
         }
     }
 }
-/// Shared GROK_HOME boundary fixture for the resume-by-title startup and
+/// Shared SUPERCHARGE_HOME boundary fixture for the resume-by-title startup and
 /// pre-sandbox tests.
 ///
 /// `grok_home()` is OnceLock-cached process-wide, so summaries land under the
-/// *resolved* home (possibly the real `~/.grok` when another test pinned the
+/// *resolved* home (possibly the real `~/.supercharge` when another test pinned the
 /// cache first); cwd-encoded dirnames are tempdir-unique, and cleanup runs on
 /// drop so it survives assertion panics. Callers must hold
-/// `#[serial_test::serial(GROK_HOME)]`.
+/// `#[serial_test::serial(SUPERCHARGE_HOME)]`.
 pub struct GrokHomeFixture {
     _home: tempfile::TempDir,
     cwd: tempfile::TempDir,
@@ -154,7 +154,7 @@ impl Default for GrokHomeFixture {
 impl GrokHomeFixture {
     pub fn new() -> Self {
         let home = tempfile::tempdir().expect("home tempdir");
-        unsafe { std::env::set_var("GROK_HOME", home.path()) };
+        unsafe { std::env::set_var("SUPERCHARGE_HOME", home.path()) };
         let cwd = tempfile::tempdir().expect("cwd tempdir");
         Self {
             _home: home,
@@ -187,7 +187,7 @@ impl GrokHomeFixture {
             "created_at": "2026-07-01T00:00:00Z",
             "updated_at": "2026-07-01T00:00:00Z",
             "num_messages": 1,
-            "current_model_id": "grok-build",
+            "current_model_id": "supercharge-core",
         });
         if let Some(map) = extra.as_object() {
             for (k, val) in map {

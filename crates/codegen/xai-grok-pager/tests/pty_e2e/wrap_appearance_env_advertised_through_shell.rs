@@ -4,7 +4,7 @@ use super::common::*;
 
 /// Single whitespace-containing argv → `$SHELL -i -c` (same hop as OSC 52).
 const PRINT_APPEARANCE: &str =
-    "printf 'grok=%s lc=%s\\n' \"$GROK_APPEARANCE\" \"$LC_GROK_APPEARANCE\"";
+    "printf 'grok=%s lc=%s\\n' \"$SUPERCHARGE_APPEARANCE\" \"$LC_SUPERCHARGE_APPEARANCE\"";
 
 fn parse_printed_appearance(raw: &str) -> Option<(String, String)> {
     let line = raw.lines().find(|l| l.starts_with("grok="))?;
@@ -27,8 +27,8 @@ fn wrap_appearance_env_advertised_through_shell() {
         &[
             ("SHELL", "/bin/sh"),
             ("COLORFGBG", "15;0"),
-            ("GROK_APPEARANCE", ""),
-            ("LC_GROK_APPEARANCE", ""),
+            ("SUPERCHARGE_APPEARANCE", ""),
+            ("LC_SUPERCHARGE_APPEARANCE", ""),
         ],
     );
     let (grok, lc) = parse_printed_appearance(&raw)
@@ -47,7 +47,7 @@ fn wrap_appearance_env_advertised_through_shell() {
     );
 }
 
-/// Parent `GROK_APPEARANCE=light` with LC pinned empty: desktop Some overrides
+/// Parent `SUPERCHARGE_APPEARANCE=light` with LC pinned empty: desktop Some overrides
 /// both names to the same polarity; desktop None inherits GROK and must not
 /// invent LC. No second live desktop probe.
 #[test]
@@ -58,8 +58,8 @@ fn wrap_appearance_env_desktop_none_does_not_restamp_parent_grok() {
         &[PRINT_APPEARANCE],
         &[
             ("SHELL", "/bin/sh"),
-            ("GROK_APPEARANCE", "light"),
-            ("LC_GROK_APPEARANCE", ""),
+            ("SUPERCHARGE_APPEARANCE", "light"),
+            ("LC_SUPERCHARGE_APPEARANCE", ""),
         ],
     );
     let (grok, lc) = parse_printed_appearance(&raw)

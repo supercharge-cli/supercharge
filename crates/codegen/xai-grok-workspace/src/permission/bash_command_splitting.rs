@@ -910,7 +910,7 @@ fn sh_split_simple(s: &str) -> Vec<String> {
 /// Given a bash *script string* like:
 ///
 /// ```bash
-/// XAI_API_KEY='xai-some-key' cargo run --bin xai-grok-pager
+/// SUPERCHARGE_API_KEY='xai-some-key' cargo run --bin xai-grok-pager
 /// ```
 ///
 /// returns the first "important" command as a `BashCommandHighlights` where:

@@ -366,7 +366,7 @@ mod tests {
             .replace("{DETAILS_FILE}", &details_str)
             .replace("{SESSION_TRACES_DIR}", &traces_dir_str);
         let rendered = RoleToolNames::inherit_defaults().apply(&with_paths);
-        // §7 tool placeholders resolve to the default grok-build names.
+        // §7 tool placeholders resolve to the default Supercharge AI-build names.
         assert!(rendered.contains("read_file"));
         assert!(rendered.contains("grep"));
         assert!(rendered.contains("list_dir"));
@@ -447,7 +447,7 @@ mod tests {
             details_file: None,
             session_traces_dir: plan.parent().unwrap(),
             attempt: 2,
-            model_id: "grok-test",
+            model_id: "Supercharge AI-test",
             tool_names,
         }
     }

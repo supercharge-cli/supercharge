@@ -450,7 +450,7 @@ fn auth_required_message(interactive: bool) -> String {
     } else {
         "Not signed in. To authenticate without a browser, run:\n  \
          grok login --device-code\n\n\
-         Alternatively, set the XAI_API_KEY environment variable \
+         Alternatively, set the SUPERCHARGE_API_KEY environment variable \
          or run `grok login` on a machine with a browser."
             .to_string()
     }
@@ -1003,7 +1003,7 @@ pub async fn run_single_turn(
         "headless: open_session complete"
     );
 
-    let track_active = std::env::var("GROK_TRACK_HEADLESS").is_ok();
+    let track_active = std::env::var("SUPERCHARGE_TRACK_HEADLESS").is_ok();
     if track_active {
         let _ = xai_grok_active_sessions::register(xai_grok_active_sessions::ActiveSession {
             session_id: session_id.clone(),
@@ -1246,7 +1246,7 @@ pub async fn run_single_turn(
     crate::unified_log::flush_blocking().await;
 
     if track_active {
-        // Non-blocking flock so a slow/network ~/.grok can't hang exit.
+        // Non-blocking flock so a slow/network ~/.supercharge can't hang exit.
         let _ = xai_grok_active_sessions::try_unregister(&session_id);
     }
     // A mid-turn ACP close already reaped above; return that error before the normal outcome.

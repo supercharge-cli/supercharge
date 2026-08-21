@@ -889,7 +889,7 @@ pub(crate) async fn run(
     // memory growth.
     if args.log_sampling {
         // SAFETY: called before any threads are spawned by init_tracing.
-        unsafe { std::env::set_var("GROK_LOG_SAMPLING", "1") };
+        unsafe { std::env::set_var("SUPERCHARGE_LOG_SAMPLING", "1") };
     }
     let tracing_handle = crate::tracing::init_tracing();
 
@@ -1032,14 +1032,14 @@ pub(crate) async fn run(
         .and_then(|s| s.show_resolved_model)
         .unwrap_or(true);
     app.sharing_enabled = false;
-    app.privacy_notice_rollout = xai_grok_config::env_bool("GROK_PRIVACY_NOTICE_ROLLOUT")
+    app.privacy_notice_rollout = xai_grok_config::env_bool("SUPERCHARGE_PRIVACY_NOTICE_ROLLOUT")
         .or_else(|| {
             remote_settings
                 .as_ref()
                 .and_then(|s| s.privacy_notice_rollout)
         })
         .unwrap_or(false);
-    app.privacy_banner_reshow_days = std::env::var("GROK_PRIVACY_BANNER_RESHOW_DAYS")
+    app.privacy_banner_reshow_days = std::env::var("SUPERCHARGE_PRIVACY_BANNER_RESHOW_DAYS")
         .ok()
         .and_then(|v| v.trim().parse().ok())
         .or_else(|| {
@@ -1055,11 +1055,11 @@ pub(crate) async fn run(
                 .privacy
                 .privacy_banner_acked
         });
-    app.plugin_cta_enabled = xai_grok_config::env_bool("GROK_PLUGIN_CTA")
+    app.plugin_cta_enabled = xai_grok_config::env_bool("SUPERCHARGE_PLUGIN_CTA")
         .or_else(|| remote_settings.as_ref().and_then(|s| s.plugin_cta))
         .unwrap_or(false);
     // Voice is applied after auth_meta so API-key detection is accurate.
-    app.session_picker_grouped = std::env::var("GROK_SESSION_PICKER_GROUPED")
+    app.session_picker_grouped = std::env::var("SUPERCHARGE_SESSION_PICKER_GROUPED")
         .ok()
         .and_then(|v| match v.as_str() {
             "1" | "true" => Some(true),
@@ -1099,11 +1099,11 @@ pub(crate) async fn run(
                 crate::acp::AuthStartMode::Command => super::app_view::AuthMode::Command,
             };
         } else {
-            // --force-login: find the grok.com method from the advertised list
+            // --force-login: find the supercharge.ai method from the advertised list
             let grok_com = connection
                 .auth_methods
                 .iter()
-                .find(|m| m.id().0.as_ref() == "grok.com");
+                .find(|m| m.id().0.as_ref() == "supercharge.ai");
             if let Some(method) = grok_com {
                 app.login_label = Some(method.name().to_string());
                 app.login_method_id = Some(method.id().clone());
@@ -1119,7 +1119,7 @@ pub(crate) async fn run(
                     super::app_view::AuthMode::Pending
                 };
             } else {
-                // No grok.com method available, use the first method as fallback
+                // No supercharge.ai method available, use the first method as fallback
                 let first = &connection.auth_methods[0];
                 app.login_label = Some(first.name().to_string());
                 app.login_method_id = Some(first.id().clone());
@@ -1131,7 +1131,7 @@ pub(crate) async fn run(
         // by reusing dispatch_login. Effects are stashed and drained after
         // the initial render so the user sees the auth UI right away.
         // Empty auth_methods (preferred_method pin with no credentials) is
-        // fail-closed: do not invent grok.com / auto-start OIDC.
+        // fail-closed: do not invent supercharge.ai / auto-start OIDC.
         tracing::info!(
             method_id = ?app.login_method_id,
             methods_empty = connection.auth_methods.is_empty(),
@@ -1168,7 +1168,7 @@ pub(crate) async fn run(
     } else {
         // No cached session — check if the API key is the active credential.
         app.is_api_key_auth = app.auth_methods.iter().any(|m| {
-            m.id().0.as_ref() == xai_grok_shell::agent::auth_method::XAI_API_KEY_METHOD_ID
+            m.id().0.as_ref() == xai_grok_shell::agent::auth_method::SUPERCHARGE_API_KEY_METHOD_ID
         });
         // No AuthMeta on this path — API keys / external auth have no
         // consumer billing surface. External auth also hides `/usage`.
@@ -1237,7 +1237,7 @@ pub(crate) async fn run(
         );
         if let Some(table) = raw.as_table() {
             // Voice inherits the same resolved endpoints base as chat
-            // (config > GROK_XAI_API_BASE_URL env > default).
+            // (config > SUPERCHARGE_XAI_API_BASE_URL env > default).
             let endpoints_base =
                 xai_grok_shell::agent::config::EndpointsConfig::from_config_value(raw)
                     .xai_api_base_url;
@@ -1246,7 +1246,7 @@ pub(crate) async fn run(
         }
     }
     // Stamp request-identity headers so the STT handshake attributes voice usage
-    // to grok-cli server-side (mirrors sampler / imagine). Done after
+    // to Supercharge AI-cli server-side (mirrors sampler / imagine). Done after
     // `from_config_table` — which yields a fresh config with these
     // `#[serde(skip)]` fields defaulted to empty — and unconditionally, so they
     // apply even when there is no `[voice]` table (or no config at all).
@@ -1454,7 +1454,7 @@ pub(crate) async fn run(
         );
     }
 
-    // Apply initial config (may come from existing ~/.grok/pager.toml).
+    // Apply initial config (may come from existing ~/.supercharge/pager.toml).
     let mut initial_config = config_watcher.current().clone();
     // The cache holds the USER compact value; the render value is derived
     // (auto-compact while the startup terminal is short).
@@ -1591,7 +1591,7 @@ pub(crate) async fn run(
     app.apply_effective_compact();
 
     // Apply the scroll settings from the caches (seeded by `prime` above;
-    // GROK_SCROLL_SPEED/_MODE/_LINES + GROK_INVERT_SCROLL env overrides
+    // SUPERCHARGE_SCROLL_SPEED/_MODE/_LINES + SUPERCHARGE_INVERT_SCROLL env overrides
     // apply on first load).
     app.scroll_config = crate::input::mouse::ScrollConfig::from_settings();
 
@@ -1929,7 +1929,7 @@ pub(crate) async fn run(
         app.finish_startup(xai_grok_telemetry::startup::StartupOutcome::Ok);
     }
 
-    // Initial prompt from the CLI positional (`grok "fix the bug"`). When
+    // Initial prompt from the CLI positional (`Supercharge AI "fix the bug"`). When
     // already authenticated, hand it to the shared dispatcher helper (same
     // `NewSession`/`SendPrompt` path the welcome screen uses). ZDR-blocked
     // accounts cannot start a session, so drop the prompt — this mirrors the
@@ -1950,12 +1950,12 @@ pub(crate) async fn run(
         }
     }
 
-    // `grok dashboard` startup: open the dashboard view immediately. The
-    // CLI subcommand wrote a `GROK_OPEN_DASHBOARD_AT_STARTUP=1` env var
+    // `Supercharge AI dashboard` startup: open the dashboard view immediately. The
+    // CLI subcommand wrote a `SUPERCHARGE_OPEN_DASHBOARD_AT_STARTUP=1` env var
     // so we don't have to thread a flag through every arg struct.
-    if std::env::var("GROK_OPEN_DASHBOARD_AT_STARTUP").as_deref() == Ok("1") {
+    if std::env::var("SUPERCHARGE_OPEN_DASHBOARD_AT_STARTUP").as_deref() == Ok("1") {
         // SAFETY: we are pre-multithreaded init for this app loop.
-        unsafe { std::env::remove_var("GROK_OPEN_DASHBOARD_AT_STARTUP") };
+        unsafe { std::env::remove_var("SUPERCHARGE_OPEN_DASHBOARD_AT_STARTUP") };
         if app.session_startup_allowed() {
             let effs = dispatch::dispatch(Action::OpenDashboard, &mut app);
             if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
@@ -2145,7 +2145,7 @@ pub(crate) async fn run(
             } else if app.voice_cmd_tx.is_none() {
                 app.voice_state = VoiceState::Idle;
                 app.voice_ui_active = false;
-                app.show_toast("Voice could not start. Restart Grok.");
+                app.show_toast("Voice could not start. Restart Supercharge AI.");
             } else {
                 // Defensive: a queued start with the pipeline already up (which
                 // shouldn't occur) — drop it so we don't re-enter every tick.
@@ -2673,8 +2673,8 @@ pub(crate) async fn run(
             // Hot-reload: config file changed (dev mode) or initial load.
             Ok(()) = config_watcher.changed() => {
                 let mut config = config_watcher.current().clone();
-                // Preserve fields persisted via `~/.grok/config.toml [ui]`
-                // rather than `~/.grok/pager.toml`. The watcher only knows
+                // Preserve fields persisted via `~/.supercharge/config.toml [ui]`
+                // rather than `~/.supercharge/pager.toml`. The watcher only knows
                 // about pager.toml, so a hot-reload would otherwise revert
                 // these to their hardcoded defaults. Compact carries the
                 // PRE-reload render value; the canonical re-derive below owns

@@ -255,7 +255,7 @@ impl AgentRebuildSpec {
         }
         let session_env = {
             let mut env = session_env.as_ref().clone();
-            env.insert("GROK_SESSION_ID".to_string(), session_id_str.clone());
+            env.insert("SUPERCHARGE_SESSION_ID".to_string(), session_id_str.clone());
             Arc::new(env)
         };
         let mut builder = AgentBuilder::new(
@@ -505,7 +505,7 @@ mod tests {
             .expect("GrokBuild Task description should be present")
     }
     /// The `[toolset.web_search]` policy is authoritative on the backend-hosted
-    /// path: agent frontmatter is model-writable (`.grok/agents/*.md`), so a
+    /// path: agent frontmatter is model-writable (`.supercharge/agents/*.md`), so a
     /// configured blocklist must survive a frontmatter allowlist, matching the
     /// client-side `resolve_filters`. With no configured policy, frontmatter
     /// still applies.
@@ -537,7 +537,7 @@ mod tests {
             spec_mut.web_search_config = WebSearchConfig::Enabled {
                 api_key: "test-key".to_string(),
                 base_url: "https://api.x.ai/v1".to_string(),
-                model: "grok-4".to_string(),
+                model: "Supercharge AI-4".to_string(),
                 extra_headers: Default::default(),
                 alpha_test_key: None,
                 allowed_domains: None,

@@ -11,7 +11,7 @@
 //!
 //! The test drives the public entry point (`try_ensure_fresh_auth` →
 //! `AuthManager::auth` → external refresher → platform shell) and is hermetic:
-//! a throwaway `GROK_HOME`, no network, and a provider command that needs no
+//! a throwaway `SUPERCHARGE_HOME`, no network, and a provider command that needs no
 //! binary beyond what the platform shell already provides.
 
 use std::collections::BTreeMap;
@@ -29,7 +29,7 @@ fn use_temp_grok_home(dir: &Path) {
     // SAFETY: single-threaded test entry, before any thread that reads the
     // environment is spawned.
     unsafe {
-        std::env::set_var("GROK_HOME", dir);
+        std::env::set_var("SUPERCHARGE_HOME", dir);
     }
 }
 

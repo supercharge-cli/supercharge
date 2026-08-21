@@ -67,7 +67,7 @@ const CLAUDE_TOOLS: &[ClaudeTool] = &[
     k("TaskStop",        KillTaskAction,       &["kill_command_or_subagent", "kill_terminal_command"]),
     k("KillShell",       KillTaskAction,       &["kill_command_or_subagent", "kill_terminal_command"]),
     k("KillBash",        KillTaskAction,       &["kill_command_or_subagent", "kill_terminal_command"]),
-    k("Skill",           Read,                 &["skill"]),                           // matcher: opencode's `skill` tool; allowlist Read (grok-build reads SKILL.md)
+    k("Skill",           Read,                 &["skill"]),                           // matcher: opencode's `skill` tool; allowlist Read (supercharge-core reads SKILL.md)
     k("ToolSearch",      SearchTool,           &["search_tool"]),
     match_only("Agent",         &["spawn_subagent"]),                                 // canonical; Task is the legacy alias
     match_only("Task",          &["spawn_subagent"]),

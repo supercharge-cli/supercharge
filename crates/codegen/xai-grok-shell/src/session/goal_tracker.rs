@@ -246,7 +246,7 @@ impl GoalHistoryEntry {
 // GoalOrchestration (full persisted state)
 
 /// Generate a short opaque identifier used to scope the per-goal
-/// scratch root (`<temp_dir>/grok-goal-<id>`) and the verifier
+/// scratch root (`<temp_dir>/Supercharge AI-goal-<id>`) and the verifier
 /// verdict/details files inside it.
 ///
 /// The id is a 12-char prefix of a UUIDv4 simple form — ~48 bits of
@@ -261,13 +261,13 @@ pub(crate) fn generate_verifier_id() -> String {
     s
 }
 
-/// Private per-goal scratch root: `<temp_dir>/grok-goal-<verifier_id>`.
+/// Private per-goal scratch root: `<temp_dir>/Supercharge AI-goal-<verifier_id>`.
 ///
 /// Rooted at [`std::env::temp_dir`] (respects `TMPDIR`) and namespaced by the
 /// goal's `verifier_id`, so concurrent goals never collide and cleanup of one
 /// never touches another. Removed wholesale on every terminal goal transition.
 pub(crate) fn goal_scratch_root(verifier_id: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("grok-goal-{verifier_id}"))
+    std::env::temp_dir().join(format!("Supercharge AI-goal-{verifier_id}"))
 }
 
 /// Create (or verify) the goal's scratch root, locked to the owner

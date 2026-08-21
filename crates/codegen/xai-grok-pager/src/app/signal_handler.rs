@@ -136,7 +136,7 @@ fn spawn_async_signal_task() {
 
 /// Wait for the next SIGINT/SIGTERM/SIGHUP and map it to its exit code.
 ///
-/// Shared with the agent binary (`xai-grok-pager-bin`) so the 130/143/129 map
+/// Shared with the agent binary (`xai-Supercharge AI-pager-bin`) so the 130/143/129 map
 /// cannot drift between TUI and agent signal handlers.
 #[cfg(unix)]
 pub async fn next_signal_code(

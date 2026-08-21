@@ -5,13 +5,13 @@ use indexmap::IndexMap;
 use prod_mc_cli_chat_proxy_types::SubagentBundle;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-const GROK_CODE_BACKEND_URL: &str = "https://code.grok.com";
+const SUPERCHARGE_CODE_BACKEND_URL: &str = "https://code.supercharge.com";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-const GROK_CODE_WEB_URL: &str = "https://grok.com";
+const SUPERCHARGE_CODE_WEB_URL: &str = "https://supercharge.ai";
 /// Build a share URL from a permission ID
 pub fn share_url(permission_id: &str) -> String {
-    let web_url =
-        std::env::var("GROK_CODE_WEB_URL").unwrap_or_else(|_| GROK_CODE_WEB_URL.to_string());
+    let web_url = std::env::var("SUPERCHARGE_CODE_WEB_URL")
+        .unwrap_or_else(|_| SUPERCHARGE_CODE_WEB_URL.to_string());
     format!("{}/build/share/{}", web_url, permission_id)
 }
 fn add_cli_chat_proxy_headers_blocking(
@@ -24,14 +24,14 @@ fn add_cli_chat_proxy_headers_blocking(
         .header("Authorization", format!("Bearer {}", &auth.key))
         .header("X-XAI-Token-Auth", GrokComConfig::default().token_header)
         .header("x-userid", &auth.user_id)
-        .header("x-grok-client-version", xai_grok_version::VERSION);
+        .header("x-Supercharge AI-client-version", xai_grok_version::VERSION);
     if let Some(email) = &auth.email {
         builder = builder.header("x-email", email);
     }
     let _ = (alpha_test_key, url);
     builder
         .header(
-            "x-grok-client-identifier",
+            "x-Supercharge AI-client-identifier",
             crate::http::process_client_identifier(),
         )
         .header(
@@ -63,7 +63,7 @@ async fn add_bundle_fetch_headers(
     credentials.alpha_test_key = alpha_test_key.map(str::to_owned);
     let mut builder = credentials
         .apply(builder, url)
-        .header("x-grok-client-version", xai_grok_version::VERSION);
+        .header("x-Supercharge AI-client-version", xai_grok_version::VERSION);
     if deployment_key.is_none()
         && let Some(auth) = &resolved_auth
     {
@@ -74,7 +74,7 @@ async fn add_bundle_fetch_headers(
     }
     builder = builder
         .header(
-            "x-grok-client-identifier",
+            "x-Supercharge AI-client-identifier",
             crate::http::process_client_identifier(),
         )
         .header(
@@ -168,7 +168,7 @@ async fn fetch_bundle_inner(
     let mut request = client
         .get(&archive_url)
         .timeout(std::time::Duration::from_secs(30))
-        .header("x-grok-client-version", xai_grok_version::VERSION)
+        .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
         .header(
             crate::http::CLIENT_MODE_HEADER,
             crate::http::process_client_mode(),
@@ -306,8 +306,8 @@ impl BackendClient {
         Self {
             client: reqwest_middleware::ClientBuilder::new(reqwest_client.clone()).build(),
             reqwest_client,
-            base_url: std::env::var("GROK_CODE_BACKEND_URL")
-                .unwrap_or_else(|_| GROK_CODE_BACKEND_URL.to_string()),
+            base_url: std::env::var("SUPERCHARGE_CODE_BACKEND_URL")
+                .unwrap_or_else(|_| SUPERCHARGE_CODE_BACKEND_URL.to_string()),
             auth_manager: None,
         }
     }
@@ -389,7 +389,7 @@ impl BackendClient {
     }
     /// Build auth + identity headers.
     /// Must include X-XAI-Token-Auth so nginx auth subrequest routes to authenticate_xai_grok_cli_token.
-    /// See: crates/codegen/xai-grok-shell/src/agent/app.rs:run_headless
+    /// See: crates/codegen/xai-Supercharge AI-shell/src/agent/app.rs:run_headless
     async fn auth_header_map(&self) -> Result<reqwest::header::HeaderMap, BackendError> {
         use reqwest::header::{HeaderMap, HeaderValue};
         let auth = self.resolve_auth().await?;
@@ -409,14 +409,14 @@ impl BackendClient {
             headers.insert("x-email", v);
         }
         if let Ok(v) = HeaderValue::from_str(&crate::http::process_client_identifier()) {
-            headers.insert("x-grok-client-identifier", v);
+            headers.insert("x-Supercharge AI-client-identifier", v);
         }
         headers.insert(
             crate::http::CLIENT_MODE_HEADER,
             HeaderValue::from_static(crate::http::process_client_mode()),
         );
         headers.insert(
-            "x-grok-client-version",
+            "x-Supercharge AI-client-version",
             HeaderValue::from_static(xai_grok_version::VERSION),
         );
         Ok(headers)
@@ -651,7 +651,7 @@ struct LoginConfigResponse {
 }
 /// Fetch `grok_build_login_device_flow` from cli-chat-proxy `GET /v1/login-config`.
 ///
-/// Unauthenticated (pre-login); `x-grok-agent-id` is the per-install bucketing key.
+/// Unauthenticated (pre-login); `x-Supercharge AI-agent-id` is the per-install bucketing key.
 /// Best-effort: any error or unset flag returns `None` so the caller keeps the
 /// loopback default. Caps at 1.5s with no retries since it's on the login path;
 /// `agent_id()` runs on the blocking pool so the fetch never stalls the executor.
@@ -664,10 +664,10 @@ pub async fn fetch_login_device_flow(cli_chat_proxy_base_url: &str) -> Option<bo
     let response = client
         .get(&url)
         .timeout(std::time::Duration::from_millis(1500))
-        .header("x-grok-agent-id", agent_id)
-        .header("x-grok-client-version", xai_grok_version::VERSION)
+        .header("x-Supercharge AI-agent-id", agent_id)
+        .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
         .header(
-            "x-grok-client-identifier",
+            "x-Supercharge AI-client-identifier",
             crate::http::process_client_identifier(),
         )
         .header(
@@ -772,7 +772,7 @@ pub(crate) fn fetch_models_blocking(
                 })
                 .map_err(|_| {
                     BackendError::Auth(
-                        "No API key for custom models endpoint. Set XAI_API_KEY.".into(),
+                        "No API key for custom models endpoint. Set SUPERCHARGE_API_KEY.".into(),
                     )
                 })?;
             request = request.header("Authorization", format!("Bearer {}", api_key));
@@ -783,9 +783,9 @@ pub(crate) fn fetch_models_blocking(
             })?;
             request = request
                 .header("Authorization", format!("Bearer {}", &auth.key))
-                .header("X-XAI-Token-Auth", "xai-grok-cli")
+                .header("X-XAI-Token-Auth", "xai-Supercharge AI-cli")
                 .header("x-userid", &auth.user_id)
-                .header("x-grok-client-version", xai_grok_version::VERSION)
+                .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
                 .header(
                     crate::http::CLIENT_MODE_HEADER,
                     crate::http::process_client_mode(),

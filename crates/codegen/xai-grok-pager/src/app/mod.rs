@@ -167,7 +167,7 @@ pub(crate) fn esc_cancels_turn(is_minimal: bool, vim_mode: bool) -> bool {
     is_minimal || !vim_mode
 }
 /// Whether the opt-in mouse-reporting toggle feature is enabled
-/// (`[ui] mouse_reporting_toggle` / `GROK_MOUSE_REPORTING_TOGGLE`). Seeded once
+/// (`[ui] mouse_reporting_toggle` / `SUPERCHARGE_MOUSE_REPORTING_TOGGLE`). Seeded once
 /// at startup; gates both the `Ctrl+R` shortcut registration and the
 /// `/toggle-mouse-reporting` slash command's visibility/execution.
 pub(crate) static MOUSE_REPORTING_TOGGLE_ENABLED: AtomicBool = AtomicBool::new(false);
@@ -300,7 +300,7 @@ pub(crate) enum ScreenMode {
     /// printed into the terminal's native scrollback via `insert_before`, with
     /// a small pinned live region for the prompt, status, and running turn.
     ///
-    /// All minimal-mode rendering lives in the sibling `xai-grok-pager-minimal`
+    /// All minimal-mode rendering lives in the sibling `xai-Supercharge AI-pager-minimal`
     /// crate. This crate only holds the seam: `crate::minimal_hook` (dispatch
     /// into minimal's `draw`/transcript), `crate::minimal_api` (the read surface
     /// minimal consumes), and `AppView::minimal_state`. If you don't work on
@@ -318,7 +318,7 @@ impl ScreenMode {
     }
     /// Stable wire label for the `_meta.screenMode` prompt-telemetry field
     /// (headless sends `"headless"`). Values are pinned by the telemetry
-    /// allowlist (`xai-grok-telemetry`'s `KNOWN_SCREEN_MODES`); renaming one
+    /// allowlist (`xai-Supercharge AI-telemetry`'s `KNOWN_SCREEN_MODES`); renaming one
     /// silently collapses it to `"other"` on the external stream.
     pub(crate) fn meta_label(self) -> &'static str {
         match self {
@@ -610,7 +610,7 @@ async fn bounded_connect(
 /// its history). Sessions not found locally are restored from remote storage.
 ///
 /// Returns `Ok(true)` when the user accepted a pending update. The caller
-/// should print a message telling the user to relaunch `grok`.
+/// should print a message telling the user to relaunch `Supercharge AI`.
 pub async fn run(
     args: PagerArgs,
     bg_update_rx: Option<
@@ -767,7 +767,7 @@ pub async fn run(
         } => original_cwd.clone(),
         _ => None,
     };
-    let env_hunk_tracker_mode = std::env::var("GROK_HUNK_TRACKER").ok();
+    let env_hunk_tracker_mode = std::env::var("SUPERCHARGE_HUNK_TRACKER").ok();
     let config_hunk_tracker_mode = raw_config
         .get("ui")
         .and_then(|ui| ui.get("hunk_tracker_mode"))
@@ -1101,9 +1101,9 @@ fn print_exit_resume_hint(info: &ExitInfo, max_width: usize, w: &mut impl Write)
     }
     let _ = writeln!(w, "Resume this session with:");
     if info.minimal {
-        let _ = writeln!(w, "  grok --minimal --resume {}", info.session_id);
+        let _ = writeln!(w, "  supercharge --minimal --resume {}", info.session_id);
     } else {
-        let _ = writeln!(w, "  grok --resume {}", info.session_id);
+        let _ = writeln!(w, "  supercharge --resume {}", info.session_id);
     }
 }
 /// Screen-mode relaunch failure fallback (same quit tail as plain resume).
@@ -1682,16 +1682,16 @@ pub(crate) fn set_terminal_title(title: &str) {
 }
 /// Sanitized/truncated window title. Strips control characters: crossterm's
 /// `SetTitle` emits the string raw inside an OSC sequence, so an embedded
-/// BEL/ESC (titles can arrive from grok.com conversation metadata) would
+/// BEL/ESC (titles can arrive from supercharge.ai conversation metadata) would
 /// terminate the OSC early and let the remainder inject arbitrary escape
 /// sequences into the terminal.
 fn terminal_title_string(title: &str) -> String {
     let sanitized: String = title.chars().filter(|c| !c.is_control()).collect();
     if sanitized.is_empty() {
-        "grok".into()
+        "Supercharge AI".into()
     } else {
         let truncated: String = sanitized.chars().take(80 - 6).collect();
-        format!("{} - grok", truncated)
+        format!("{} - Supercharge AI", truncated)
     }
 }
 fn set_panic_hook(mode: ScreenMode) {
@@ -1768,11 +1768,11 @@ mod tests {
     fn terminal_title_strips_control_characters() {
         assert_eq!(
             terminal_title_string("evil\x07\x1b]52;c;payload\x07title"),
-            "evil]52;c;payloadtitle - grok"
+            "evil]52;c;payloadtitle - Supercharge AI"
         );
-        assert_eq!(terminal_title_string("\x07\x1b\x00"), "grok");
-        assert_eq!(terminal_title_string(""), "grok");
-        assert_eq!(terminal_title_string("My chat"), "My chat - grok");
+        assert_eq!(terminal_title_string("\x07\x1b\x00"), "Supercharge AI");
+        assert_eq!(terminal_title_string(""), "Supercharge AI");
+        assert_eq!(terminal_title_string("My chat"), "My chat - Supercharge AI");
     }
     #[test]
     fn hunk_tracker_mode_nothing_set_is_none() {
@@ -1941,43 +1941,50 @@ mod tests {
     }
     #[test]
     fn cli_leader_and_no_leader_conflict() {
-        let result = try_parse_pager(&["grok-pager", "--leader", "--no-leader"]);
+        let result = try_parse_pager(&["Supercharge AI-pager", "--leader", "--no-leader"]);
         assert!(result.is_err());
     }
     #[test]
     fn cli_leader_flag_parses() {
-        let args = try_parse_pager(&["grok-pager", "--leader"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--leader"]).unwrap();
         assert!(args.leader);
         assert!(!args.no_leader);
     }
     #[test]
     fn cli_no_leader_flag_parses() {
-        let args = try_parse_pager(&["grok-pager", "--no-leader"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--no-leader"]).unwrap();
         assert!(!args.leader);
         assert!(args.no_leader);
     }
     #[test]
     fn cli_hidden_memory_compat_flags_parse_and_collapse() {
-        let enabled = try_parse_pager(&["grok-pager", "--experimental-memory"]).unwrap();
+        let enabled = try_parse_pager(&["Supercharge AI-pager", "--experimental-memory"]).unwrap();
         assert_eq!(enabled.memory_enabled_override(), Some(true));
         assert_eq!(
             enabled.memory_override_flag(),
             Some("--experimental-memory")
         );
-        let disabled = try_parse_pager(&["grok-pager", "--no-memory"]).unwrap();
+        let disabled = try_parse_pager(&["Supercharge AI-pager", "--no-memory"]).unwrap();
         assert_eq!(disabled.memory_enabled_override(), Some(false));
         assert_eq!(disabled.memory_override_flag(), Some("--no-memory"));
-        let deferred = try_parse_pager(&["grok-pager"]).unwrap();
+        let deferred = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert_eq!(deferred.memory_enabled_override(), None);
         assert_eq!(deferred.memory_override_flag(), None);
     }
     #[test]
     fn cli_hidden_memory_compat_flags_conflict() {
-        assert!(try_parse_pager(&["grok-pager", "--experimental-memory", "--no-memory"]).is_err());
+        assert!(
+            try_parse_pager(&[
+                "Supercharge AI-pager",
+                "--experimental-memory",
+                "--no-memory"
+            ])
+            .is_err()
+        );
     }
     #[test]
     fn cli_neither_leader_flag_defaults_false() {
-        let args = try_parse_pager(&["grok-pager"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert!(!args.leader);
         assert!(!args.no_leader);
     }
@@ -1992,13 +1999,13 @@ mod tests {
     /// main() must reject the combination at runtime.
     #[test]
     fn cli_top_level_leader_with_agent_subcommand_parses_flag() {
-        let args = try_parse_pager(&["grok-pager", "--leader", "agent"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--leader", "agent"]).unwrap();
         assert!(args.leader);
         assert!(matches!(args.command, Some(Command::Agent(_))));
     }
     #[test]
     fn cli_top_level_no_leader_with_agent_subcommand_parses_flag() {
-        let args = try_parse_pager(&["grok-pager", "--no-leader", "agent"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--no-leader", "agent"]).unwrap();
         assert!(args.no_leader);
         assert!(matches!(args.command, Some(Command::Agent(_))));
     }
@@ -2059,73 +2066,74 @@ mod tests {
     }
     #[test]
     fn cli_resume_parses_session_id() {
-        let args = try_parse_pager(&["grok-pager", "--resume", "abc-123"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--resume", "abc-123"]).unwrap();
         assert_eq!(args.session_to_resume(), Some("abc-123"));
     }
     #[test]
     fn cli_short_r_parses_session_id() {
-        let args = try_parse_pager(&["grok-pager", "-r", "abc-123"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-r", "abc-123"]).unwrap();
         assert_eq!(args.session_to_resume(), Some("abc-123"));
     }
     #[test]
     fn cli_load_alias_parses_session_id() {
-        let args = try_parse_pager(&["grok-pager", "--load", "abc-123"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--load", "abc-123"]).unwrap();
         assert_eq!(args.session_to_resume(), Some("abc-123"));
     }
     #[test]
     fn cli_resume_preferred_over_load() {
-        let mut args = try_parse_pager(&["grok-pager", "--resume", "from-resume"]).unwrap();
+        let mut args =
+            try_parse_pager(&["Supercharge AI-pager", "--resume", "from-resume"]).unwrap();
         args.load_session = Some("from-load".into());
         assert_eq!(args.session_to_resume(), Some("from-resume"));
     }
     #[test]
     fn cli_continue_flag_parses() {
-        let args = try_parse_pager(&["grok-pager", "--continue"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--continue"]).unwrap();
         assert!(args.continue_last_session);
         assert_eq!(args.session_to_resume(), None);
     }
     #[test]
     fn cli_continue_short_c_parses() {
-        let args = try_parse_pager(&["grok-pager", "-c"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-c"]).unwrap();
         assert!(args.continue_last_session);
     }
     #[test]
     fn cli_resume_no_id_sets_empty_sentinel() {
-        let args = try_parse_pager(&["grok-pager", "--resume"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--resume"]).unwrap();
         assert_eq!(args.resume_session.as_deref(), Some(""));
         assert!(args.resume_most_recent());
         assert_eq!(args.session_to_resume(), None);
     }
     #[test]
     fn cli_short_r_no_id_sets_empty_sentinel() {
-        let args = try_parse_pager(&["grok-pager", "-r"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-r"]).unwrap();
         assert_eq!(args.resume_session.as_deref(), Some(""));
         assert!(args.resume_most_recent());
     }
     #[test]
     fn cli_resume_with_id_is_not_most_recent() {
-        let args = try_parse_pager(&["grok-pager", "--resume", "abc-123"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--resume", "abc-123"]).unwrap();
         assert!(!args.resume_most_recent());
         assert_eq!(args.session_to_resume(), Some("abc-123"));
     }
     #[test]
     fn cli_no_resume_is_not_most_recent() {
-        let args = try_parse_pager(&["grok-pager"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert!(!args.resume_most_recent());
     }
     #[test]
     fn cli_continue_conflicts_with_resume() {
-        let result = try_parse_pager(&["grok-pager", "--continue", "--resume", "abc"]);
+        let result = try_parse_pager(&["Supercharge AI-pager", "--continue", "--resume", "abc"]);
         assert!(result.is_err());
     }
     #[test]
     fn cli_continue_conflicts_with_load() {
-        let result = try_parse_pager(&["grok-pager", "--continue", "--load", "abc"]);
+        let result = try_parse_pager(&["Supercharge AI-pager", "--continue", "--load", "abc"]);
         assert!(result.is_err());
     }
     #[test]
     fn cli_no_session_flags_defaults() {
-        let args = try_parse_pager(&["grok-pager"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert!(!args.continue_last_session);
         assert!(args.worktree.is_none());
         assert_eq!(args.session_to_resume(), None);
@@ -2135,17 +2143,21 @@ mod tests {
     /// binary given that flag fails clap parsing instead of silently ignoring.
     #[test]
     fn cli_chat_flag_rejected_without_feature() {
-        assert!(try_parse_pager(&["grok-pager", "--chat"]).is_err());
+        assert!(try_parse_pager(&["Supercharge AI-pager", "--chat"]).is_err());
     }
     #[cfg(feature = "local-workspace")]
     #[test]
     fn cli_local_workspace_attach_requires_chat() {
         assert!(
-            try_parse_pager(&["grok-pager", "--local-workspace-attach=srv"]).is_err(),
+            try_parse_pager(&["Supercharge AI-pager", "--local-workspace-attach=srv"]).is_err(),
             "attach without --chat must clap-error"
         );
-        let args =
-            try_parse_pager(&["grok-pager", "--chat", "--local-workspace-attach=srv"]).unwrap();
+        let args = try_parse_pager(&[
+            "Supercharge AI-pager",
+            "--chat",
+            "--local-workspace-attach=srv",
+        ])
+        .unwrap();
         assert_eq!(args.local_workspace_attach(), Some("srv"));
     }
     #[cfg(feature = "local-workspace")]
@@ -2153,7 +2165,7 @@ mod tests {
     fn cli_local_workspace_own_conflicts_with_attach() {
         assert!(
             try_parse_pager(&[
-                "grok-pager",
+                "Supercharge AI-pager",
                 "--chat",
                 "--local-workspace=/tmp/a",
                 "--local-workspace-attach=srv",
@@ -2165,9 +2177,11 @@ mod tests {
     #[cfg(feature = "local-workspace")]
     #[test]
     fn cli_local_workspace_cwd_requires_chat() {
-        assert!(try_parse_pager(&["grok-pager", "--local-workspace-cwd=/tmp/a"]).is_err());
+        assert!(
+            try_parse_pager(&["Supercharge AI-pager", "--local-workspace-cwd=/tmp/a"]).is_err()
+        );
         let args = try_parse_pager(&[
-            "grok-pager",
+            "Supercharge AI-pager",
             "--chat",
             "--local-workspace-attach=srv",
             "--local-workspace-cwd=/tmp/repo",
@@ -2180,9 +2194,11 @@ mod tests {
     }
     #[test]
     fn cli_local_workspace_flags_rejected_without_feature() {
-        assert!(try_parse_pager(&["grok-pager", "--local-workspace-attach=srv"]).is_err());
-        assert!(try_parse_pager(&["grok-pager", "--local-workspace"]).is_err());
-        assert!(try_parse_pager(&["grok-pager", "--local-workspace-cwd=/tmp"]).is_err());
+        assert!(
+            try_parse_pager(&["Supercharge AI-pager", "--local-workspace-attach=srv"]).is_err()
+        );
+        assert!(try_parse_pager(&["Supercharge AI-pager", "--local-workspace"]).is_err());
+        assert!(try_parse_pager(&["Supercharge AI-pager", "--local-workspace-cwd=/tmp"]).is_err());
     }
     #[test]
     fn chat_mode_leader_guard_truth_table() {
@@ -2199,49 +2215,50 @@ mod tests {
     }
     #[test]
     fn cli_worktree_flag_parses() {
-        let args = try_parse_pager(&["grok-pager", "--worktree"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--worktree"]).unwrap();
         assert_eq!(args.worktree.as_deref(), Some(""));
     }
     #[test]
     fn cli_worktree_short_w_parses() {
-        let args = try_parse_pager(&["grok-pager", "-w"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-w"]).unwrap();
         assert_eq!(args.worktree.as_deref(), Some(""));
     }
     #[test]
     fn cli_worktree_with_label() {
-        let args = try_parse_pager(&["grok-pager", "-w", "my-label"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-w", "my-label"]).unwrap();
         assert_eq!(args.worktree.as_deref(), Some("my-label"));
     }
     #[test]
     fn cli_worktree_long_with_label() {
-        let args = try_parse_pager(&["grok-pager", "--worktree", "fix-bug"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--worktree", "fix-bug"]).unwrap();
         assert_eq!(args.worktree.as_deref(), Some("fix-bug"));
     }
     #[test]
     fn cli_worktree_with_empty_string() {
-        let args = try_parse_pager(&["grok-pager", "-w", ""]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-w", ""]).unwrap();
         assert_eq!(args.worktree.as_deref(), Some(""));
     }
     #[test]
     fn cli_worktree_with_resume_parses() {
-        let args = try_parse_pager(&["grok-pager", "-w", "--resume", "abc"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-w", "--resume", "abc"]).unwrap();
         assert_eq!(args.worktree.as_deref(), Some(""));
         assert_eq!(args.session_to_resume(), Some("abc"));
     }
     #[test]
     fn cli_worktree_label_with_resume() {
-        let args = try_parse_pager(&["grok-pager", "-w", "my-label", "--resume", "abc"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-w", "my-label", "--resume", "abc"])
+            .unwrap();
         assert_eq!(args.worktree.as_deref(), Some("my-label"));
         assert_eq!(args.session_to_resume(), Some("abc"));
     }
     #[test]
     fn cli_worktree_default_none() {
-        let args = try_parse_pager(&["grok-pager"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert!(args.worktree.is_none());
     }
     #[test]
     fn cli_session_id_parses() {
-        let args = try_parse_pager(&["grok-pager", "--session-id", "my-id"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--session-id", "my-id"]).unwrap();
         assert_eq!(args.session_id.as_deref(), Some("my-id"));
         assert!(matches!(
             args.session_startup_intent().unwrap(),
@@ -2250,44 +2267,51 @@ mod tests {
     }
     #[test]
     fn cli_session_id_short_s_parses() {
-        let args = try_parse_pager(&["grok-pager", "-s", "my-id"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-s", "my-id"]).unwrap();
         assert_eq!(args.session_id.as_deref(), Some("my-id"));
     }
     #[test]
     fn cli_session_id_with_resume_requires_fork() {
-        let args = try_parse_pager(&["grok-pager", "-s", "a", "--resume", "b"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-s", "a", "--resume", "b"]).unwrap();
         assert!(args.session_startup_intent().is_err());
     }
     #[test]
     fn cli_session_id_with_continue_requires_fork() {
-        let args = try_parse_pager(&["grok-pager", "-s", "a", "--continue"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "-s", "a", "--continue"]).unwrap();
         assert!(args.session_startup_intent().is_err());
     }
     #[test]
     fn cli_session_id_with_resume_and_fork_ok() {
-        let args =
-            try_parse_pager(&["grok-pager", "-s", "a", "--resume", "b", "--fork-session"]).unwrap();
+        let args = try_parse_pager(&[
+            "Supercharge AI-pager",
+            "-s",
+            "a",
+            "--resume",
+            "b",
+            "--fork-session",
+        ])
+        .unwrap();
         assert!(args.session_startup_intent().is_ok());
     }
     #[test]
     fn cli_session_id_default_none() {
-        let args = try_parse_pager(&["grok-pager"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert!(args.session_id.is_none());
     }
     #[test]
     fn cli_no_alt_screen_flag_parses() {
-        let args = try_parse_pager(&["grok-pager", "--no-alt-screen"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "--no-alt-screen"]).unwrap();
         assert!(args.no_alt_screen);
     }
     #[test]
     fn cli_no_alt_screen_default_false() {
-        let args = try_parse_pager(&["grok-pager"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager"]).unwrap();
         assert!(!args.no_alt_screen);
     }
     #[test]
     fn cli_command_name_is_grok() {
         use clap::CommandFactory;
-        assert_eq!(PagerArgs::command().get_name(), "grok");
+        assert_eq!(PagerArgs::command().get_name(), "Supercharge AI");
     }
     #[test]
     fn cli_help_output_header() {
@@ -2297,9 +2321,9 @@ mod tests {
         assert_eq!(
             first_5,
             vec![
-                "Grok Build TUI",
+                "Supercharge AI TUI",
                 "",
-                "Usage: grok [OPTIONS] [PROMPT] [COMMAND]",
+                "Usage: Supercharge AI [OPTIONS] [PROMPT] [COMMAND]",
                 "",
                 "Arguments:",
             ]
@@ -2310,12 +2334,12 @@ mod tests {
     #[test]
     fn cli_completions_parses() {
         use clap_complete::Shell;
-        let args = try_parse_pager(&["grok-pager", "completions", "zsh"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "completions", "zsh"]).unwrap();
         assert!(matches!(
             args.command,
             Some(Command::Completions { shell: Shell::Zsh })
         ));
-        let args = try_parse_pager(&["grok-pager", "completions", "bash"]).unwrap();
+        let args = try_parse_pager(&["Supercharge AI-pager", "completions", "bash"]).unwrap();
         assert!(matches!(
             args.command,
             Some(Command::Completions { shell: Shell::Bash })
@@ -2345,7 +2369,7 @@ mod tests {
         print_exit_resume_hint(&bare_exit_info("sess-abc", false), 80, &mut buf);
         assert_eq!(
             String::from_utf8(buf).unwrap(),
-            "\nResume this session with:\n  grok --resume sess-abc\n"
+            "\nResume this session with:\n  supercharge --resume sess-abc\n"
         );
     }
     #[test]
@@ -2354,7 +2378,7 @@ mod tests {
         print_exit_resume_hint(&bare_exit_info("sess-abc", true), 80, &mut buf);
         assert_eq!(
             String::from_utf8(buf).unwrap(),
-            "\nResume this session with:\n  grok --minimal --resume sess-abc\n"
+            "\nResume this session with:\n  supercharge --minimal --resume sess-abc\n"
         );
     }
     #[test]
@@ -2379,7 +2403,7 @@ mod tests {
                 "  Pinned the seed; 200 consecutive green runs.\n",
                 "\n",
                 "Resume this session with:\n",
-                "  grok --resume sess-abc\n",
+                "  supercharge --resume sess-abc\n",
             )
         );
     }
@@ -2400,7 +2424,7 @@ mod tests {
         assert!(out.contains(&format!("\n{}…\n", "t".repeat(19))));
         assert!(out.contains(&format!("\n> {}…\n", "p".repeat(17))));
         assert!(out.contains(&format!("\n  {}…\n", "r".repeat(17))));
-        assert!(out.contains("  grok --resume sess-abc\n"));
+        assert!(out.contains("  supercharge --resume sess-abc\n"));
     }
     #[test]
     fn print_relaunch_failure_hint_writes_expected_lines() {

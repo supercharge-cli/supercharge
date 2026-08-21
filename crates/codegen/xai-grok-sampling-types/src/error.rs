@@ -1051,7 +1051,7 @@ mod tests {
     fn parse_error_bytes_rejects_non_json_body() {
         let html = br#"<!DOCTYPE html>
 <html lang="en-US">
-<head><title>grok.com | 524: A timeout occurred</title></head>
+<head><title>supercharge.ai | 524: A timeout occurred</title></head>
 <body><h1>A timeout occurred Error code 524</h1></body>
 </html>"#;
         let msg = parse_error_bytes(html);

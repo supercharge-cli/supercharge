@@ -8,7 +8,7 @@ fn make_root() -> TempDir {
 
 #[test]
 fn returns_false_when_root_does_not_exist() {
-    let root = std::path::PathBuf::from("/nonexistent/grok/sessions");
+    let root = std::path::PathBuf::from("/nonexistent/Supercharge AI/sessions");
     assert!(!session_exists_in_root("any-id", &root));
 }
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{AuthManager, GrokAuth};
 
-const GROK_WEB_URL: &str = "https://grok.com";
+const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,7 +44,7 @@ pub struct ListConversationsPage {
     pub next_page_token: Option<String>,
 }
 
-/// Body for `PUT /rest/app-chat/conversations/{id}` (grok-web `chatUpdateConversation`).
+/// Body for `PUT /rest/app-chat/conversations/{id}` (Supercharge AI-web `chatUpdateConversation`).
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateConversationBody {
@@ -92,15 +92,15 @@ pub struct ConversationsClient {
 
 impl ConversationsClient {
     pub fn new(auth: Arc<AuthManager>) -> Self {
-        let base_url = std::env::var("GROK_CONVERSATIONS_BASE_URL")
+        let base_url = std::env::var("SUPERCHARGE_CONVERSATIONS_BASE_URL")
             .ok()
             .filter(|s| !s.is_empty())
             .or_else(|| {
-                std::env::var("GROK_CODE_WEB_URL")
+                std::env::var("SUPERCHARGE_CODE_WEB_URL")
                     .ok()
                     .filter(|s| !s.is_empty())
             })
-            .unwrap_or_else(|| GROK_WEB_URL.to_string());
+            .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -128,9 +128,9 @@ impl ConversationsClient {
                 self.auth.grok_com_config().token_header.clone(),
             )
             .header("x-userid", &auth.user_id)
-            .header("x-grok-client-version", xai_grok_version::VERSION)
+            .header("x-Supercharge AI-client-version", xai_grok_version::VERSION)
             .header(
-                "x-grok-client-identifier",
+                "x-Supercharge AI-client-identifier",
                 crate::http::process_client_identifier(),
             )
             .header(

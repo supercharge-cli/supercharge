@@ -38,7 +38,7 @@ fn resolve_overlay_inline_finalizing_empty_falls_through_to_path() {
 
 #[test]
 fn resolve_overlay_over_cap_path_is_ignored() {
-    // A `GROK_CONFIG_PATH` file larger than the cap must be refused (no stall,
+    // A `SUPERCHARGE_CONFIG_PATH` file larger than the cap must be refused (no stall,
     // no OOM) and fall through to no overlay, like an unreadable path.
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("overlay.toml");
@@ -213,8 +213,8 @@ fn malformed_overlay_parse_errors_do_not_carry_the_value() {
             .contains(secret),
         "guard: the raw TOML error echoes the offending line, so it must never be logged"
     );
-    assert!(parse_overlay(&bad_toml, OverlayFormat::Toml, GROK_CONFIG_PATH_ENV).is_none());
+    assert!(parse_overlay(&bad_toml, OverlayFormat::Toml, SUPERCHARGE_CONFIG_PATH_ENV).is_none());
 
     let bad_json = format!("{{\"models\": \"{secret}\",}}");
-    assert!(parse_overlay(&bad_json, OverlayFormat::Json, GROK_CONFIG_ENV).is_none());
+    assert!(parse_overlay(&bad_json, OverlayFormat::Json, SUPERCHARGE_CONFIG_ENV).is_none());
 }

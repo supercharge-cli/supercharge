@@ -2,7 +2,7 @@
 //! advertising `xai.api_key`. BYOK is not probed.
 //!
 //! The base URL is the caller's effective `endpoints.xai_api_base_url` so the
-//! probe hits the same host turn traffic uses (`GROK_XAI_API_BASE_URL` /
+//! probe hits the same host turn traffic uses (`SUPERCHARGE_XAI_API_BASE_URL` /
 //! `[endpoints] xai_api_base_url`), not a hardcoded production host.
 //!
 //! Unusable (auth error / blocked/disabled/team_blocked) → do not advertise.
@@ -203,7 +203,7 @@ async fn probe_xai_api_key_at_url(key: &str, url: &str, timeout: Duration) -> Ap
 ///
 /// `api_base_url` is the caller's effective `endpoints.xai_api_base_url`, so the
 /// probe follows the same endpoint as turn traffic — and, in tests, the mock
-/// server fixtures already set via `GROK_XAI_API_BASE_URL`.
+/// server fixtures already set via `SUPERCHARGE_XAI_API_BASE_URL`.
 pub(crate) async fn first_party_env_key_allows_advertise(
     api_base_url: &str,
     timeout: Duration,

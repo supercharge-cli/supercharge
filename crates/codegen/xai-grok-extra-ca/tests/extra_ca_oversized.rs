@@ -1,4 +1,4 @@
-//! Process-isolated: oversize GROK_EXTRA_CA_BUNDLE → ignored; client still builds.
+//! Process-isolated: oversize SUPERCHARGE_EXTRA_CA_BUNDLE → ignored; client still builds.
 
 use std::io::Write;
 
@@ -21,7 +21,7 @@ fn oversized_bundle_ignored_clients_build() {
     // Safety: sole test in this binary; set before any OnceLock resolve.
     unsafe {
         std::env::set_var(
-            xai_grok_extra_ca::ENV_GROK_EXTRA_CA_BUNDLE,
+            xai_grok_extra_ca::ENV_SUPERCHARGE_EXTRA_CA_BUNDLE,
             path.as_os_str(),
         );
     }

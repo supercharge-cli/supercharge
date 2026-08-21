@@ -14,7 +14,7 @@
 //! ```text
 //! cargo bench -p xai-grok-shell --bench skills_watcher_startup
 //! # optional scale:
-//! GROK_SKILLS_WATCHER_BENCH_DIRS=12000 cargo bench -p xai-grok-shell --bench skills_watcher_startup
+//! SUPERCHARGE_SKILLS_WATCHER_BENCH_DIRS=12000 cargo bench -p xai-grok-shell --bench skills_watcher_startup
 //! ```
 //!
 //! On macOS, recursive FSEvents is cheap so both arms may be close. On Linux
@@ -34,7 +34,7 @@ use xai_grok_shell::config::watcher::SkillsFileWatcher;
 const DEFAULT_WORKTREE_DIRS: usize = 6_000;
 
 fn worktree_dir_count() -> usize {
-    std::env::var("GROK_SKILLS_WATCHER_BENCH_DIRS")
+    std::env::var("SUPERCHARGE_SKILLS_WATCHER_BENCH_DIRS")
         .ok()
         .and_then(|v| v.parse().ok())
         .filter(|&n| n > 0)

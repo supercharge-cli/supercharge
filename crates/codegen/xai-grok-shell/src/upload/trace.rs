@@ -1603,7 +1603,7 @@ mod tests {
             turn_number: 1,
             request_id: "req-001".into(),
             turn_started_at: "2026-01-01T00:00:00Z".into(),
-            model: "grok-3".into(),
+            model: "Supercharge AI-3".into(),
             host_os: "linux".into(),
             host_arch: "x86_64".into(),
             prompt_has_image: Some(false),

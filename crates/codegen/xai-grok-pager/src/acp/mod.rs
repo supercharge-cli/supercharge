@@ -85,9 +85,9 @@ pub struct AcpConnection {
     // NOTE: Startup announcements from InitializeResponse.meta are not yet supported.
     // Requires shell to include announcements in initialize metadata.
     // When available, add field: startup_announcements: Option<Vec<xai_grok_announcements::RemoteAnnouncement>>
-    /// Whether interactive login is required (deferred auth for `grok.com`).
+    /// Whether interactive login is required (deferred auth for `supercharge.ai`).
     pub needs_login: bool,
-    /// Login button label from `AuthMethod.name` (e.g., "grok.com", "Acme Corp").
+    /// Login button label from `AuthMethod.name` (e.g., "supercharge.ai", "Acme Corp").
     pub login_label: Option<String>,
     /// The auth method ID to use for login (copied from the first advertised method).
     pub login_method_id: Option<acp::AuthMethodId>,
@@ -587,7 +587,7 @@ pub fn parse_session_recap_available(meta: Option<&acp::Meta>) -> bool {
 
 /// Determine whether interactive login is needed based on the advertised auth methods.
 ///
-/// Matches TUI startup behavior: if the first method is `grok.com`, defer auth
+/// Matches TUI startup behavior: if the first method is `supercharge.ai`, defer auth
 /// and show the login-aware welcome flow. Otherwise, authenticate eagerly.
 ///
 /// Returns `(needs_login, login_label, login_method_id, auth_start_mode)`.
@@ -631,7 +631,7 @@ pub fn startup_auth_metadata(
 ///
 /// Used when eager auth (cached_token / API key) fails and we need to fall
 /// back to the welcome screen with a working login button. Scans the list
-/// for a `grok.com` or `oidc` method — these are the ones that can trigger
+/// for a `supercharge.ai` or `oidc` method — these are the ones that can trigger
 /// a browser-based re-auth flow.
 pub fn find_interactive_login_method(
     auth_methods: &[acp::AuthMethod],
@@ -926,22 +926,22 @@ mod tests {
 
     #[test]
     fn startup_auth_grok_com_no_provider_needs_login_pending() {
-        let methods = vec![make_auth_method("grok.com", "grok.com", None)];
+        let methods = vec![make_auth_method("supercharge.ai", "supercharge.ai", None)];
         let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
         assert!(needs);
-        assert_eq!(label.as_deref(), Some("grok.com"));
-        assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "grok.com");
+        assert_eq!(label.as_deref(), Some("supercharge.ai"));
+        assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "supercharge.ai");
         assert_eq!(mode, AuthStartMode::Pending);
     }
 
     #[test]
     fn startup_auth_grok_com_with_external_provider_command() {
         let meta = serde_json::json!({ "external_provider": true });
-        let methods = vec![make_auth_method("grok.com", "Acme Corp", Some(meta))];
+        let methods = vec![make_auth_method("supercharge.ai", "Acme Corp", Some(meta))];
         let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
         assert!(needs);
         assert_eq!(label.as_deref(), Some("Acme Corp"));
-        assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "grok.com");
+        assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "supercharge.ai");
         assert_eq!(mode, AuthStartMode::Command);
     }
 
@@ -957,7 +957,7 @@ mod tests {
 
     /// CROSS-CRATE REGRESSION GUARD:
     ///
-    /// Enterprise/BYOK configs (e.g. an enterprise `~/.grok/config.toml` with a
+    /// Enterprise/BYOK configs (e.g. an enterprise `~/.supercharge/config.toml` with a
     /// `[model.*]` table containing `env_key = "ANTHROPIC_AUTH_TOKEN"`) MUST
     /// NOT send the user to the login screen at startup.
     ///
@@ -983,7 +983,7 @@ mod tests {
             // enterprise-style: model has `env_key` set and the env var resolves,
             // so the shell-side predicate returns true.
             has_external_api_key: true,
-            // Realistic enterprise user: no cached session token, default `grok.com`
+            // Realistic enterprise user: no cached session token, default `supercharge.ai`
             // login (no enterprise OIDC).
             has_cached_token: false,
             has_enterprise_oidc: false,
@@ -1017,23 +1017,25 @@ mod tests {
     /// either passes or fails on a meaningful new code path.
     #[test]
     fn startup_auth_xai_api_key_not_first_still_requires_login() {
-        use xai_grok_shell::agent::auth_method::{GROK_COM_METHOD_ID, XAI_API_KEY_METHOD_ID};
+        use xai_grok_shell::agent::auth_method::{
+            SUPERCHARGE_API_KEY_METHOD_ID, SUPERCHARGE_COM_METHOD_ID,
+        };
 
         let methods = vec![
-            make_auth_method(GROK_COM_METHOD_ID, "Grok", None),
-            make_auth_method(XAI_API_KEY_METHOD_ID, "xai.api_key", None),
+            make_auth_method(SUPERCHARGE_COM_METHOD_ID, "Grok", None),
+            make_auth_method(SUPERCHARGE_API_KEY_METHOD_ID, "xai.api_key", None),
         ];
         let (needs, _, _, _) = startup_auth_metadata(&methods);
         assert!(
             needs,
-            "with grok.com first, the pager must require login -- pinning \
+            "with supercharge.ai first, the pager must require login -- pinning \
              the BAD-ordering failure mode (xai.api_key not first)",
         );
     }
 
     #[test]
     fn startup_auth_method_id_is_copied_not_synthesized() {
-        let methods = vec![make_auth_method("grok.com", "My Login", None)];
+        let methods = vec![make_auth_method("supercharge.ai", "My Login", None)];
         let (_, _, method_id, _) = startup_auth_metadata(&methods);
         // Verify it's the exact same ID from the method, not hardcoded
         assert_eq!(&method_id.unwrap(), methods[0].id());
@@ -1042,7 +1044,11 @@ mod tests {
     #[test]
     fn startup_auth_external_provider_false_is_pending() {
         let meta = serde_json::json!({ "external_provider": false });
-        let methods = vec![make_auth_method("grok.com", "grok.com", Some(meta))];
+        let methods = vec![make_auth_method(
+            "supercharge.ai",
+            "supercharge.ai",
+            Some(meta),
+        )];
         let (_, _, _, mode) = startup_auth_metadata(&methods);
         assert_eq!(mode, AuthStartMode::Pending);
     }

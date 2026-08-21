@@ -1,4 +1,4 @@
-//! Process-isolated: valid GROK_EXTRA_CA_BUNDLE loads one root via OnceLock.
+//! Process-isolated: valid SUPERCHARGE_EXTRA_CA_BUNDLE loads one root via OnceLock.
 
 #[test]
 fn valid_bundle_loads_one_root() {
@@ -28,7 +28,7 @@ hJAE3EOL2ZddrMPF64QeU9UhvCm0Ch+Ceqa1ZWE0MygccggX5s2yQwtXO2ovJdjH\n\
     // Safety: sole test in this binary; set before any OnceLock resolve.
     unsafe {
         std::env::set_var(
-            xai_grok_extra_ca::ENV_GROK_EXTRA_CA_BUNDLE,
+            xai_grok_extra_ca::ENV_SUPERCHARGE_EXTRA_CA_BUNDLE,
             path.as_os_str(),
         );
     }

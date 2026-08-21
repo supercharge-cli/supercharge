@@ -1163,11 +1163,11 @@ fn classify_suppress_reason_maps_error_text() {
         SuppressReason::CreditBlock
     );
     assert_eq!(
-        classify("API error (status 402 Payment Required): Grok Build usage balance exhausted"),
+        classify("API error (status 402 Payment Required): Supercharge AI usage balance exhausted"),
         SuppressReason::CreditBlock
     );
     assert_eq!(
-        classify("Grok Build usage limit reached"),
+        classify("Supercharge AI usage limit reached"),
         SuppressReason::CreditBlock
     );
     assert_eq!(

@@ -95,7 +95,7 @@ pub const CAMPAIGN_STRIP_KEYS: &[&str] = &[
     "grok_com_config",
 ];
 
-/// Dotted paths the `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay may set, applied
+/// Dotted paths the `SUPERCHARGE_CONFIG` / `SUPERCHARGE_CONFIG_PATH` overlay may set, applied
 /// at [`crate::env_overlay`]'s finalize step by [`retain_overlay_allowed`]. A
 /// length-1 path keeps the whole soft top-level table; a deeper path keeps only
 /// that leaf. No entry is a prefix of another (a top-level key is either a

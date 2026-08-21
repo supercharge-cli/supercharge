@@ -20,10 +20,10 @@ use prod_mc_cli_chat_proxy_types::feedback_types::{
 };
 
 /// Client version header sent on every request to cli-chat-proxy for version gating.
-const CLIENT_VERSION_HEADER: &str = "x-grok-client-version";
+const CLIENT_VERSION_HEADER: &str = "x-Supercharge AI-client-version";
 
 // ============================================================================
-// Turn delta wire types (local to xai-grok-shell until cli-chat-proxy catches up)
+// Turn delta wire types (local to xai-Supercharge AI-shell until cli-chat-proxy catches up)
 // ============================================================================
 
 /// Per-turn delta sent at the end of every turn via
@@ -507,7 +507,7 @@ impl FeedbackClient {
         // User-token auth requires the companion marker header for proxy
         // routing. Deployment keys do not need it.
         if self.credentials.deployment_key.is_none() {
-            builder.header("X-XAI-Token-Auth", "xai-grok-cli")
+            builder.header("X-XAI-Token-Auth", "xai-Supercharge AI-cli")
         } else {
             builder
         }
@@ -893,8 +893,8 @@ mod tests {
             context_window_usage: 50,
             tool_call_count: 5,
             tools_used: vec!["read_file".to_string(), "search_replace".to_string()],
-            models_used: vec!["grok-3".to_string()],
-            primary_model_id: Some("grok-3".to_string()),
+            models_used: vec!["Supercharge AI-3".to_string()],
+            primary_model_id: Some("Supercharge AI-3".to_string()),
             session_duration_seconds: 120,
             // Latency metrics
             avg_time_to_first_token_ms: 150,
@@ -931,7 +931,10 @@ mod tests {
         assert_eq!(update.session_duration_seconds, Some(120));
         assert_eq!(update.tools_used.len(), 2);
         assert_eq!(update.models_used.len(), 1);
-        assert_eq!(update.primary_model_id, Some("grok-3".to_string()));
+        assert_eq!(
+            update.primary_model_id,
+            Some("Supercharge AI-3".to_string())
+        );
         // New counter assertions
         assert_eq!(update.edit_and_retry_count, Some(2));
         assert_eq!(update.positive_ratings, Some(3));

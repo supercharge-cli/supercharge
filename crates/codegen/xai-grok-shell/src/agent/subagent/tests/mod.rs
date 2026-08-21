@@ -1603,7 +1603,7 @@ fn describe_subagent_type_not_allowed_outside_allow_list() {
         other => panic!("expected NotAllowed, got {other:?}"),
     }
 }
-/// Regression: on the DEFAULT grok-build host —
+/// Regression: on the DEFAULT supercharge-core host —
 /// the primary `/goal` host — the `general-purpose` toolset's only
 /// file-mutator is `search_replace` (`ToolKind::Edit`); the `write`
 /// tool (`ToolKind::Write`) is injection-only and absent from the
@@ -1867,10 +1867,10 @@ fn byok_model_entry(model_id: &str) -> crate::agent::config::ModelEntry {
 }
 #[test]
 fn subagent_auth_type_rule() {
-    use crate::agent::auth_method::{CACHED_TOKEN_AUTH_METHOD_ID, XAI_API_KEY_METHOD_ID};
+    use crate::agent::auth_method::{CACHED_TOKEN_AUTH_METHOD_ID, SUPERCHARGE_API_KEY_METHOD_ID};
     use xai_chat_state::AuthType;
     let session = acp::AuthMethodId::new(CACHED_TOKEN_AUTH_METHOD_ID);
-    let api_key = acp::AuthMethodId::new(XAI_API_KEY_METHOD_ID);
+    let api_key = acp::AuthMethodId::new(SUPERCHARGE_API_KEY_METHOD_ID);
     let byok = byok_model_entry("grok-byok");
     let plain = test_model_entry("grok-plain");
     assert_eq!(

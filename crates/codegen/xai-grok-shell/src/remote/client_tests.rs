@@ -81,9 +81,12 @@ async fn start_login_config_server(
                         authorization: header_str(&headers, "authorization"),
                         user_id: header_str(&headers, "x-userid"),
                         email: header_str(&headers, "x-email"),
-                        agent_id: header_str(&headers, "x-grok-agent-id"),
-                        client_identifier: header_str(&headers, "x-grok-client-identifier"),
-                        client_version: header_str(&headers, "x-grok-client-version"),
+                        agent_id: header_str(&headers, "x-Supercharge AI-agent-id"),
+                        client_identifier: header_str(
+                            &headers,
+                            "x-Supercharge AI-client-identifier",
+                        ),
+                        client_version: header_str(&headers, "x-Supercharge AI-client-version"),
                     });
                     (state.status_code, state.body)
                 },
@@ -138,15 +141,15 @@ async fn fetch_login_device_flow_sends_only_unauthenticated_headers() {
         .expect("server should have received one request");
     assert!(
         h.agent_id.as_deref().is_some_and(|v| !v.is_empty()),
-        "must send x-grok-agent-id (the bucketing key)"
+        "must send x-Supercharge AI-agent-id (the bucketing key)"
     );
     assert!(
         h.client_identifier.is_some(),
-        "must send x-grok-client-identifier"
+        "must send x-Supercharge AI-client-identifier"
     );
     assert!(
         h.client_version.is_some(),
-        "must send x-grok-client-version"
+        "must send x-Supercharge AI-client-version"
     );
     assert_eq!(h.authorization, None, "must not send Authorization");
     assert_eq!(h.user_id, None, "must not send x-userid");
@@ -258,7 +261,7 @@ async fn start_bundle_server(
                             None
                         },
                         client_version: headers
-                            .get("x-grok-client-version")
+                            .get("x-Supercharge AI-client-version")
                             .and_then(|v| v.to_str().ok())
                             .map(str::to_owned),
                     });
@@ -294,7 +297,7 @@ async fn start_bundle_server(
                             None
                         },
                         client_version: headers
-                            .get("x-grok-client-version")
+                            .get("x-Supercharge AI-client-version")
                             .and_then(|v| v.to_str().ok())
                             .map(str::to_owned),
                     });
@@ -365,7 +368,10 @@ async fn fetch_subagent_bundle_success() {
     let headers = seen_headers.lock().unwrap();
     let headers = headers.last().unwrap();
     assert_eq!(headers.authorization.as_deref(), Some("Bearer token"));
-    assert_eq!(headers.token_auth.as_deref(), Some("xai-grok-cli"));
+    assert_eq!(
+        headers.token_auth.as_deref(),
+        Some("xai-Supercharge AI-cli")
+    );
     assert_eq!(headers.user_id.as_deref(), Some("user-1"));
     assert_eq!(headers.email.as_deref(), Some("test@example.com"));
     assert_eq!(headers.alpha_test_key, None);
@@ -429,15 +435,15 @@ async fn fetch_subagent_bundle_parse_failure() {
 #[test]
 fn parse_openai_format_uses_id_field() {
     let value = serde_json::json!({
-        "id": "grok-3",
+        "id": "Supercharge AI-3",
         "object": "model",
         "owned_by": "xai",
         "context_window": 131072
     });
     let result = parse_remote_model_value(&value, "https://api.x.ai/v1").unwrap();
-    assert_eq!(result.model, "grok-3");
+    assert_eq!(result.model, "Supercharge AI-3");
     assert_eq!(result.base_url, "https://api.x.ai/v1");
-    assert_eq!(result.name.as_deref(), Some("grok-3"));
+    assert_eq!(result.name.as_deref(), Some("Supercharge AI-3"));
 }
 #[test]
 fn parse_model_field_takes_priority_over_id() {
@@ -454,7 +460,7 @@ fn parse_model_field_takes_priority_over_id() {
 #[test]
 fn parse_reads_model_family() {
     let value = serde_json::json!({
-        "model": "grok-4.5",
+        "model": "Supercharge AI-4.5",
         "context_window": 1_000_000,
         "model_family": "xai"
     });
@@ -475,7 +481,7 @@ fn parse_reads_model_family() {
 fn parse_reads_reasoning_effort_fields() {
     use xai_grok_sampling_types::ReasoningEffort;
     let value = serde_json::json!({
-        "model": "grok-4.5",
+        "model": "Supercharge AI-4.5",
         "context_window": 1_000_000,
         "supports_reasoning_effort": true,
         "reasoning_effort": "high"
@@ -484,7 +490,7 @@ fn parse_reads_reasoning_effort_fields() {
     assert!(result.supports_reasoning_effort);
     assert_eq!(result.reasoning_effort, Some(ReasoningEffort::High));
     let value = serde_json::json!({
-        "model": "grok-4.5",
+        "model": "Supercharge AI-4.5",
         "contextWindow": 1_000_000,
         "supportsReasoningEffort": true,
         "reasoningEffort": "xhigh"
@@ -501,7 +507,7 @@ fn parse_reads_reasoning_effort_fields() {
 fn parse_reads_reasoning_efforts_list() {
     use xai_grok_sampling_types::ReasoningEffort;
     let value = serde_json::json!({
-        "model": "grok-4.5",
+        "model": "Supercharge AI-4.5",
         "context_window": 1_000_000,
         "reasoning_efforts": [
             { "id": "deep", "value": "xhigh", "label": "Deep" },
@@ -552,7 +558,7 @@ fn parse_reads_meta_fallback_fields() {
 #[test]
 fn parse_remote_model_value_no_laziness_detector_block_yields_default() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
     });
     let result = parse_remote_model_value(&value, "https://default.url").unwrap();
@@ -564,7 +570,7 @@ fn parse_remote_model_value_no_laziness_detector_block_yields_default() {
 #[test]
 fn parse_remote_model_value_parses_camelcase_key() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -586,7 +592,7 @@ fn parse_remote_model_value_parses_camelcase_key() {
 #[test]
 fn parse_remote_model_value_parses_snake_case_laziness_detector() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "laziness_detector": {
             "enabled": true,
@@ -608,7 +614,7 @@ fn parse_remote_model_value_parses_snake_case_laziness_detector() {
 #[test]
 fn parse_remote_model_value_parses_meta_laziness_detector() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "_meta": {
             "lazinessDetector": {
@@ -632,7 +638,7 @@ fn parse_remote_model_value_parses_meta_laziness_detector() {
 #[test]
 fn parse_remote_model_value_partial_block_uses_field_defaults() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -651,7 +657,7 @@ fn parse_remote_model_value_partial_block_uses_field_defaults() {
 #[test]
 fn parse_remote_model_value_malformed_block_falls_back_to_default() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -667,7 +673,7 @@ fn parse_remote_model_value_malformed_block_falls_back_to_default() {
 #[test]
 fn parse_remote_model_value_non_object_value_falls_back_to_default() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": "not-an-object",
     });
@@ -680,7 +686,7 @@ fn parse_remote_model_value_non_object_value_falls_back_to_default() {
 #[test]
 fn parse_remote_model_value_top_level_camelcase_wins_over_snake_case() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -708,7 +714,7 @@ fn parse_remote_model_value_top_level_camelcase_wins_over_snake_case() {
 #[test]
 fn parse_remote_model_value_parses_include_reasoning_under_camelcase_wrapper() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -721,7 +727,7 @@ fn parse_remote_model_value_parses_include_reasoning_under_camelcase_wrapper() {
 #[test]
 fn parse_remote_model_value_parses_include_reasoning_under_snake_case_wrapper() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "laziness_detector": {
             "enabled": true,
@@ -734,7 +740,7 @@ fn parse_remote_model_value_parses_include_reasoning_under_snake_case_wrapper() 
 #[test]
 fn parse_remote_model_value_omitted_include_reasoning_defaults_to_none() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -750,7 +756,7 @@ fn parse_remote_model_value_omitted_include_reasoning_defaults_to_none() {
 #[test]
 fn parse_remote_model_value_top_level_wins_over_meta() {
     let value = serde_json::json!({
-        "model": "grok-4",
+        "model": "Supercharge AI-4",
         "context_window": 256_000,
         "lazinessDetector": {
             "enabled": true,
@@ -776,21 +782,21 @@ fn parse_remote_model_value_top_level_wins_over_meta() {
 #[test]
 fn parse_reads_show_model_fingerprint_field() {
     let value = serde_json::json!({
-        "model": "grok-build",
+        "model": "Supercharge AI-build",
         "context_window": 256_000,
         "show_model_fingerprint": true
     });
     let result = parse_remote_model_value(&value, "https://default.url").unwrap();
     assert!(result.show_model_fingerprint);
     let value = serde_json::json!({
-        "model": "grok-build",
+        "model": "Supercharge AI-build",
         "contextWindow": 256_000,
         "showModelFingerprint": true
     });
     let result = parse_remote_model_value(&value, "https://default.url").unwrap();
     assert!(result.show_model_fingerprint);
     let value = serde_json::json!({
-        "model": "grok-build",
+        "model": "Supercharge AI-build",
         "context_window": 256_000,
         "_meta": { "showModelFingerprint": true }
     });
@@ -842,13 +848,16 @@ fn endpoints(
 }
 #[test]
 fn inference_url_defaults_to_proxy() {
-    let ep = endpoints("https://proxy.grok.com/v1", None, None);
-    assert_eq!(ep.resolve_inference_base_url(), "https://proxy.grok.com/v1");
+    let ep = endpoints("https://proxy.supercharge.com/v1", None, None);
+    assert_eq!(
+        ep.resolve_inference_base_url(),
+        "https://proxy.supercharge.com/v1"
+    );
 }
 #[test]
 fn inference_url_uses_models_base_url() {
     let ep = endpoints(
-        "https://proxy.grok.com/v1",
+        "https://proxy.supercharge.com/v1",
         Some("https://enterprise.acme.com/v1"),
         None,
     );
@@ -860,7 +869,7 @@ fn inference_url_uses_models_base_url() {
 #[test]
 fn inference_url_base_url_wins_over_proxy() {
     let ep = endpoints(
-        "https://proxy.grok.com/v1",
+        "https://proxy.supercharge.com/v1",
         Some("https://inference.acme.com/v1"),
         Some("https://registry.acme.com/api/models"),
     );
@@ -871,16 +880,16 @@ fn inference_url_base_url_wins_over_proxy() {
 }
 #[test]
 fn list_url_defaults_to_proxy_models() {
-    let ep = endpoints("https://proxy.grok.com/v1", None, None);
+    let ep = endpoints("https://proxy.supercharge.com/v1", None, None);
     assert_eq!(
         ep.resolve_models_list_url(),
-        "https://proxy.grok.com/v1/models"
+        "https://proxy.supercharge.com/v1/models"
     );
 }
 #[test]
 fn list_url_derived_from_base_url() {
     let ep = endpoints(
-        "https://proxy.grok.com/v1",
+        "https://proxy.supercharge.com/v1",
         Some("https://api.x.ai/v1"),
         None,
     );
@@ -889,7 +898,7 @@ fn list_url_derived_from_base_url() {
 #[test]
 fn list_url_explicit_overrides_derivation() {
     let ep = endpoints(
-        "https://proxy.grok.com/v1",
+        "https://proxy.supercharge.com/v1",
         Some("https://inference.acme.com/v1"),
         Some("https://registry.acme.com/api/list-models"),
     );
@@ -908,9 +917,9 @@ fn models_fetch_endpoint_matches_auth_mode() {
     use crate::agent::config::EndpointsConfig;
     use crate::agent::models::ModelFetchAuth;
     for k in [
-        "GROK_CLI_CHAT_PROXY_BASE_URL",
-        "GROK_XAI_API_BASE_URL",
-        "GROK_MODELS_LIST_URL",
+        "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
+        "SUPERCHARGE_XAI_API_BASE_URL",
+        "SUPERCHARGE_MODELS_LIST_URL",
     ] {
         unsafe { std::env::remove_var(k) };
     }
@@ -922,10 +931,16 @@ fn models_fetch_endpoint_matches_auth_mode() {
         .unwrap(),
     );
     let session = ListModelsEndpoint::from_endpoints(&cfg, ModelFetchAuth::Session);
-    assert_eq!(session.url, "https://cli-chat-proxy.grok.com/v1/models");
+    assert_eq!(
+        session.url,
+        "https://cli-chat-proxy.supercharge.com/v1/models"
+    );
     assert_eq!(session.auth, EndpointAuth::Session);
     let deployment = ListModelsEndpoint::from_endpoints(&cfg, ModelFetchAuth::Deployment);
-    assert_eq!(deployment.url, "https://cli-chat-proxy.grok.com/v1/models");
+    assert_eq!(
+        deployment.url,
+        "https://cli-chat-proxy.supercharge.com/v1/models"
+    );
     assert_eq!(deployment.auth, EndpointAuth::Session);
     let api = ListModelsEndpoint::from_endpoints(&cfg, ModelFetchAuth::ApiKey);
     assert_eq!(api.url, "https://inference.acme-corp.example/xai/v1/models");
@@ -946,20 +961,20 @@ fn models_fetch_endpoint_matches_auth_mode() {
     assert_eq!(ep.url, "https://models.acme.com/v1/models");
     assert_eq!(ep.auth, EndpointAuth::ApiKey);
 }
-/// REGRESSION: `grok setup` must send the deployment key to
+/// REGRESSION: `Supercharge AI setup` must send the deployment key to
 /// the proxy, never the inference endpoint.
 #[test]
 #[serial_test::serial]
 fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     use crate::agent::config::EndpointsConfig;
     for k in [
-        "GROK_CLI_CHAT_PROXY_BASE_URL",
-        "GROK_MANAGED_CONFIG_URL",
-        "GROK_XAI_API_BASE_URL",
+        "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
+        "SUPERCHARGE_MANAGED_CONFIG_URL",
+        "SUPERCHARGE_XAI_API_BASE_URL",
     ] {
         unsafe { std::env::remove_var(k) };
     }
-    unsafe { std::env::set_var("GROK_DEPLOYMENT_KEY", "xai-token-ENTERPRISE") };
+    unsafe { std::env::set_var("SUPERCHARGE_DEPLOYMENT_KEY", "xai-token-ENTERPRISE") };
     let managed: toml::Value = toml::from_str(
         r#"[endpoints]
             deployment_key = "xai-token-ENTERPRISE"
@@ -967,7 +982,10 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     )
     .unwrap();
     let url = EndpointsConfig::from_config_value(&managed).resolve_managed_config_url();
-    assert_eq!(url, "https://cli-chat-proxy.grok.com/v1/deployment/config");
+    assert_eq!(
+        url,
+        "https://cli-chat-proxy.supercharge.com/v1/deployment/config"
+    );
     assert!(
         !url.contains("acme-corp"),
         "deployment key would be sent to the inference host: {url}"
@@ -982,7 +1000,7 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
         EndpointsConfig::from_config_value(&pinned).resolve_managed_config_url(),
         "https://proxy.acme-corp.example/v1/deployment/config"
     );
-    unsafe { std::env::remove_var("GROK_DEPLOYMENT_KEY") };
+    unsafe { std::env::remove_var("SUPERCHARGE_DEPLOYMENT_KEY") };
 }
 #[derive(Clone)]
 struct DualBundleServerState {

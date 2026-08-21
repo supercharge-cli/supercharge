@@ -263,7 +263,7 @@ fn plan_file_backfills_none_on_legacy_snapshot() {
 /// fresh values on every call. The fixed length is part of the
 /// public contract — verifier file paths embed it verbatim, and
 /// drift here would silently invalidate the documented
-/// `grok-goal-<12 hex chars>` scratch-root format (and the
+/// `Supercharge AI-goal-<12 hex chars>` scratch-root format (and the
 /// 12-hex restore validation in `from_snapshot`).
 #[test]
 fn generate_verifier_id_is_short_hex_and_unique() {
@@ -1182,7 +1182,10 @@ fn serde_skip_fields_reset_on_deserialize() {
     activate_tracker(&mut t);
     t.update_live_progress(
         100,
-        vec![("grok-4".to_owned(), 60), ("grok-3".to_owned(), 40)],
+        vec![
+            ("Supercharge AI-4".to_owned(), 60),
+            ("Supercharge AI-3".to_owned(), 40),
+        ],
         200_000,
         50,
         3,
@@ -1724,11 +1727,11 @@ fn skeptic_model_assignment_round_trips_through_serde() {
     let mut o = make_base_orchestration();
     o.skeptic_model_assignment = vec![
         crate::util::config::GoalRoleModel {
-            model: "grok-4".to_string(),
+            model: "Supercharge AI-4".to_string(),
             agent_type: "general-purpose".to_string(),
         },
         crate::util::config::GoalRoleModel {
-            model: "grok-4.5".to_string(),
+            model: "Supercharge AI-4.5".to_string(),
             agent_type: "cursor".to_string(),
         },
     ];
@@ -1775,7 +1778,7 @@ fn terminal_transitions_clear_skeptic_model_assignment() {
         activate_tracker(&mut t);
         t.snapshot_mut().unwrap().skeptic_model_assignment =
             vec![crate::util::config::GoalRoleModel {
-                model: "grok-4".to_string(),
+                model: "Supercharge AI-4".to_string(),
                 agent_type: "general-purpose".to_string(),
             }];
         let applied = match ending {
@@ -1813,22 +1816,25 @@ fn terminal_transitions_clear_plan_baseline_file() {
 }
 
 /// The scratch path helpers derive the pinned layout from
-/// `temp_dir()` + `verifier_id`: a `grok-goal-<vid>` root with an
+/// `temp_dir()` + `verifier_id`: a `Supercharge AI-goal-<vid>` root with an
 /// `implementer/` subdir and per-index `skeptic-<idx>/` subdirs.
 #[test]
 fn scratch_path_helpers_derive_pinned_layout() {
     let root = goal_scratch_root("vid123");
-    assert_eq!(root, std::env::temp_dir().join("grok-goal-vid123"));
+    assert_eq!(
+        root,
+        std::env::temp_dir().join("Supercharge AI-goal-vid123")
+    );
     assert_eq!(
         implementer_scratch_dir("vid123"),
         std::env::temp_dir()
-            .join("grok-goal-vid123")
+            .join("Supercharge AI-goal-vid123")
             .join("implementer"),
     );
     assert_eq!(
         skeptic_scratch_dir("vid123", 2),
         std::env::temp_dir()
-            .join("grok-goal-vid123")
+            .join("Supercharge AI-goal-vid123")
             .join("skeptic-2"),
     );
 }

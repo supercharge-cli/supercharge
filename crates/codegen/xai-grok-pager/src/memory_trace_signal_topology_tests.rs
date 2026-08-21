@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use xai_grok_test_support::{TestProcess, TestProcessConfig, TestSandbox};
 
-const CHILD_ENV: &str = "GROK_MEMTRACE_SIGNAL_TOPOLOGY_CHILD";
-const CHILD_SUCCESS_MARKER: &str = "GROK_MEMTRACE_SIGNAL_TOPOLOGY_OK";
+const CHILD_ENV: &str = "SUPERCHARGE_MEMTRACE_SIGNAL_TOPOLOGY_CHILD";
+const CHILD_SUCCESS_MARKER: &str = "SUPERCHARGE_MEMTRACE_SIGNAL_TOPOLOGY_OK";
 const ISOLATED_TEST_NAME: &str = concat!(
     "memory_trace::memory_trace_signal_topology_tests::",
     "memtrace_wait_survives_outer_sigchld_errno_clobber"
@@ -40,10 +40,10 @@ async fn memtrace_wait_survives_outer_sigchld_errno_clobber() {
     let mut config = TestProcessConfig::new()
         .label("isolated memtrace signal topology")
         .env(CHILD_ENV, "1")
-        .env("GROK_MEMTRACE", "1")
-        .env("GROK_MEMTRACE_INTERVAL_SECS", SAMPLE_INTERVAL_SECS);
-    if let Some(scale) = std::env::var_os("GROK_TEST_TIMEOUT_SCALE") {
-        config = config.env("GROK_TEST_TIMEOUT_SCALE", scale);
+        .env("SUPERCHARGE_MEMTRACE", "1")
+        .env("SUPERCHARGE_MEMTRACE_INTERVAL_SECS", SAMPLE_INTERVAL_SECS);
+    if let Some(scale) = std::env::var_os("SUPERCHARGE_TEST_TIMEOUT_SCALE") {
+        config = config.env("SUPERCHARGE_TEST_TIMEOUT_SCALE", scale);
     }
 
     let mut child =

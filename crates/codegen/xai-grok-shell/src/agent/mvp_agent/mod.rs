@@ -131,13 +131,13 @@ pub(crate) fn jwt_tier_claim(jwt: &str) -> Option<String> {
     let tier = claims.get("tier")?.as_u64()?;
     Some(
         match tier {
-            1 => "supergrok",
+            1 => "supercharge",
             2 => "x_basic",
             3 => "x_premium",
             4 => "x_premium_plus",
-            5 => "supergrok_heavy",
-            6 => "supergrok_lite",
-            7 => "supergrok_plus",
+            5 => "supercharge_heavy",
+            6 => "supercharge_lite",
+            7 => "supercharge_plus",
             0 => "free",
             _ => return Some(tier.to_string()),
         }
@@ -168,7 +168,7 @@ pub(crate) fn resolve_subscription_tier_for_telemetry(
 ///
 /// Post-unblock catalog refresh must not treat *any* present claim as enough:
 /// an older paid claim (e.g. `x_basic`) can remain on the access token while
-/// `/user` already reports a newly qualifying tier (e.g. `SuperGrokPro`). In
+/// `/user` already reports a newly qualifying tier (e.g. `SuperchargePro`). In
 /// that case `/v1/models` would still be targeted at the stale level (the
 /// "stale JWT tier skips retry" bug).
 pub(crate) fn jwt_claim_matches_user_subscription_tier(
@@ -176,13 +176,13 @@ pub(crate) fn jwt_claim_matches_user_subscription_tier(
     user_subscription_tier: &str,
 ) -> bool {
     match user_subscription_tier {
-        "GrokPro" => jwt_claim == "supergrok",
+        "GrokPro" => jwt_claim == "supercharge",
         "XBasic" => jwt_claim == "x_basic",
         "XPremium" => jwt_claim == "x_premium",
         "XPremiumPlus" => jwt_claim == "x_premium_plus",
-        "SuperGrokPro" => jwt_claim == "supergrok_heavy",
-        "SuperGrokLite" => jwt_claim == "supergrok_lite",
-        "SuperGrokPlus" => jwt_claim == "supergrok_plus",
+        "SuperchargePro" => jwt_claim == "supercharge_heavy",
+        "SuperchargeLite" => jwt_claim == "supercharge_lite",
+        "SuperchargePlus" => jwt_claim == "supercharge_plus",
         _ => jwt_claim.parse::<u64>().is_ok_and(|n| n != 0),
     }
 }
@@ -668,10 +668,10 @@ fn announcements_push_payload(
     };
     push.then_some(current)
 }
-/// Override with `GROK_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS`. Clamped to
+/// Override with `SUPERCHARGE_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS`. Clamped to
 /// >= 1s: `tokio::time::interval` panics on a zero period.
 fn announcements_refresh_interval() -> std::time::Duration {
-    if let Ok(s) = std::env::var("GROK_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS")
+    if let Ok(s) = std::env::var("SUPERCHARGE_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS")
         && let Ok(secs) = s.parse::<u64>()
     {
         return std::time::Duration::from_secs(secs.max(1));
@@ -762,7 +762,7 @@ pub struct MvpAgent {
     pub(crate) sampling_config: RefCell<SamplingConfig>,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) models_manager: crate::agent::models::ModelsManager,
-    /// grok.com chat-product catalog (`/rest/modes`) for chat sessions; distinct
+    /// supercharge.ai chat-product catalog (`/rest/modes`) for chat sessions; distinct
     /// from `models_manager` (the build `/v1/models` catalog).
     pub(crate) chat_modes: crate::agent::chat_modes::ChatModesManager,
     /// Single-flight guard for interactive login (device poll / loopback
@@ -836,7 +836,7 @@ pub struct MvpAgent {
     /// the session's cwd to the watcher task spawned in
     /// `agent/app.rs`, which calls
     /// [`crate::config::watcher::ConfigFileWatcher::watch_path`] (a
-    /// **non-recursive** watch on `<cwd>/` and `<cwd>/.grok/`).
+    /// **non-recursive** watch on `<cwd>/` and `<cwd>/.supercharge/`).
     ///
     /// `None` outside leader mode and in tests — the registration is a
     /// no-op in that case, which is fine: the existing per-extra-path
@@ -866,7 +866,7 @@ pub struct MvpAgent {
     pub(crate) worktree_type: crate::util::config::WorktreeType,
     /// Restore codebase state on worktree resume (resolved: local config > remote > default false).
     pub(crate) restore_code: bool,
-    /// Local session-registry override: `GROK_SESSION_REGISTRY` env, else
+    /// Local session-registry override: `SUPERCHARGE_SESSION_REGISTRY` env, else
     /// `[cli] session_registry`.
     /// `Some(true)` enables, `Some(false)` disables, `None` defers to remote settings.
     session_registry_local: Option<bool>,
@@ -1077,8 +1077,8 @@ pub(crate) fn inherited_harness_template(
 ///
 /// When a zero-turn switch rebuilds the harness (`did_rebuild`), the handle
 /// must adopt the rebuilt harness's agent type. Otherwise the name is left
-/// unchanged — compatible stock switches (e.g. `grok-build` →
-/// `grok-build-plan`) intentionally preserve the session's original ACP
+/// unchanged — compatible stock switches (e.g. `supercharge-core` →
+/// `supercharge-core-plan`) intentionally preserve the session's original ACP
 /// `agentProfile`.
 pub(crate) fn agent_name_after_model_switch(
     did_rebuild: bool,
@@ -1094,8 +1094,8 @@ pub(crate) fn agent_name_after_model_switch(
 /// Harness compatibility for zero-turn / mid-turn model switching.
 ///
 /// Two stock (non-strict) agents are interchangeable — they share the
-/// default wire format and toolset, so switching e.g. `grok-build` →
-/// `grok-build-plan` doesn't require rebuilding the harness and would
+/// default wire format and toolset, so switching e.g. `supercharge-core` →
+/// `supercharge-core-plan` doesn't require rebuilding the harness and would
 /// destroy a client-supplied `_meta.agentProfile` if it did.
 ///
 /// Strict harnesses (`codex`, …) are only compatible with
@@ -1624,7 +1624,7 @@ impl MvpAgent {
     }
     /// Check whether the user has access via remote settings `allow_access`.
     ///
-    /// Non-xAI auth (API keys, enterprise) always passes. For xAI OAuth2
+    /// Non-provider authentication (API keys, enterprise) always passes. For xAI OAuth2
     /// users, reads `allow_access` from remote settings (explicit `false`
     /// blocks; absent field fails open). When settings have not arrived yet
     /// the gate is provisionally open and re-resolved on arrival.
@@ -1957,7 +1957,7 @@ impl MvpAgent {
             auto_gc_policy,
         ));
     }
-    /// The caller resolves the home: read here, $GROK_HOME would be read when the
+    /// The caller resolves the home: read here, $SUPERCHARGE_HOME would be read when the
     /// blocking thread starts, and this deletes worktrees under what it finds.
     pub(super) fn reclaim_worktrees(
         grok_home: anyhow::Result<std::path::PathBuf>,
@@ -2072,7 +2072,7 @@ impl MvpAgent {
         }
     }
     /// Spawn a best-effort bundle sync. Re-fires on every call site (init,
-    /// cached_token, grok.com/oidc); the cheap pre-checks below absorb repeats
+    /// cached_token, supercharge.ai/oidc); the cheap pre-checks below absorb repeats
     /// so reconnects are cheap.
     ///
     /// Pre-spawn gating order (cheapest first, all synchronous):
@@ -2083,7 +2083,7 @@ impl MvpAgent {
     ///    initialize + cached_token + oidc fired in quick succession before
     ///    the first sync's tar extract finished), drop this call to avoid
     ///    racing concurrent extracts that would interleave per-file writes
-    ///    against `~/.grok/bundled/` and the manifest.
+    ///    against `~/.supercharge/bundled/` and the manifest.
     pub(crate) fn maybe_sync_bundle_in_background(&self, force: bool) {
         use crate::extensions::bundle::{
             BUNDLE_SYNC_TTL, bundle_cache_is_fresh, has_bundle_credentials,

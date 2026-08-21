@@ -4,7 +4,7 @@
 //! without flushing session actors, so SessionEnd never ran on `/exit` /
 //! `grok -p` exit.
 //!
-//! `#[ignore]`d by default — needs the grok binary (`GROK_BINARY` or a local
+//! `#[ignore]`d by default — needs the grok binary (`SUPERCHARGE_BINARY` or a local
 //! debug build):
 //! ```bash
 //! cargo test -p xai-grok-shell --test test_session_end_hook_e2e -- --ignored

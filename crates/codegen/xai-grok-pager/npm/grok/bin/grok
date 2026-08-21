@@ -2,9 +2,9 @@
 // Thin trampoline: resolves the grok binary and execs it.
 //
 // Resolution order:
-//   1. $GROK_HOME/bin/grok — canonical versioned symlink (installed by postinstall.js)
+//   1. $SUPERCHARGE_HOME/bin/grok — canonical versioned symlink (installed by postinstall.js)
 //   2. bootstrap it from the per-platform @xai-official/grok-<platform> package,
-//      decompressing the brotli payload straight into $GROK_HOME/bin
+//      decompressing the brotli payload straight into $SUPERCHARGE_HOME/bin
 //   3. last resort (no resolvable version or an unwritable home): decompress the
 //      payload in place under node_modules and exec that
 //
@@ -20,14 +20,14 @@ const pkgName = '@xai-official/grok';
 const IS_WINDOWS = process.platform === 'win32';
 const EXE = IS_WINDOWS ? '.exe' : '';
 const BIN_NAME = `grok${EXE}`;
-// $GROK_HOME/bin (else ~/.grok/bin), matching the Rust grok_home(), including
+// $SUPERCHARGE_HOME/bin (else ~/.supercharge/bin), matching the Rust grok_home(), including
 // its canonicalized-home default (so a symlinked $HOME resolves the same way).
 function defaultGrokHome() {
     const home = os.homedir();
-    try { return path.join(fs.realpathSync(home), '.grok'); } catch { return path.join(home, '.grok'); }
+    try { return path.join(fs.realpathSync(home), '.supercharge'); } catch { return path.join(home, '.supercharge'); }
 }
-const GROK_HOME = process.env.GROK_HOME ?? defaultGrokHome();
-const CANONICAL_DIR = path.join(GROK_HOME, 'bin');
+const SUPERCHARGE_HOME = process.env.SUPERCHARGE_HOME ?? defaultGrokHome();
+const CANONICAL_DIR = path.join(SUPERCHARGE_HOME, 'bin');
 const CANONICAL_PATH = path.join(CANONICAL_DIR, BIN_NAME);
 
 function readLocalVersion() {
@@ -138,7 +138,7 @@ function resolveBinary() {
 }
 
 const execPath = resolveBinary();
-const childEnv = { ...process.env, GROK_MANAGED_BY_NPM: '1' };
+const childEnv = { ...process.env, SUPERCHARGE_MANAGED_BY_NPM: '1' };
 const child = spawn(execPath, process.argv.slice(2), { stdio: 'inherit', env: childEnv });
 child.on('exit', (code, signal) => {
     if (signal) {

@@ -7,7 +7,7 @@
 //!
 //! The three **common** active-agent sections (background tasks, TODO list,
 //! running subagents) are formatted by
-//! [`xai_grok_compaction::reminder`] so grok-chat and grok-build stay in lockstep.
+//! [`xai_grok_compaction::reminder`] so grok-chat and supercharge-core stay in lockstep.
 //! Harness-only sections (edited files, AGENTS.md, skills, MCP, memory) stay here.
 
 use std::path::PathBuf;

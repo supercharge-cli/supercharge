@@ -1,6 +1,6 @@
 //! Session lifecycle event structs.
 //!
-//! Re-exported from `xai-grok-telemetry` after the telemetry crate split.
+//! Re-exported from `xai-Supercharge AI-telemetry` after the telemetry crate split.
 //! The structs themselves live in the telemetry crate; this module preserves
 //! the existing import path so nothing else in shell needs to change.
 

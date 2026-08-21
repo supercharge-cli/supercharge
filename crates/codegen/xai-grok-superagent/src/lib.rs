@@ -1,4 +1,4 @@
-//! Hermes-inspired extensions for the grok-build Rust runtime.
+//! Hermes-inspired extensions for the supercharge-core Rust runtime.
 //!
 //! This crate deliberately keeps feature switches, approval policy, and
 //! scheduling independent from the interactive shell. The shell can adopt the

@@ -28,7 +28,7 @@ const LOGO_H_PAD: u16 = 3;
 /// message never paints over the button.
 const UPGRADE_CTA_ROWS: u16 = 2;
 
-const HERO_SUBTITLE: &str = "Thanks for trying Grok Build, give feedback with /feedback!";
+const HERO_SUBTITLE: &str = "Welcome to Supercharge AI — configure with /setup";
 
 use super::{PROMPT_HEIGHT, VERSION_GAP};
 
@@ -927,7 +927,7 @@ managed devices and accounts. Report security incidents";
     #[test]
     fn upgrade_cta_reserves_rows_and_returns_button_rect() {
         let area = Rect::new(0, 0, 40, 8);
-        let a = ann(None, Some("Grok 4.5 is here. Upgrade now."));
+        let a = ann(None, Some("Supercharge Core is here. Upgrade now."));
         let text_rows = announcement_text_rows(&a, area.width, false);
         assert_eq!(
             announcement_desired_rows(&a, area.width, false, true),
@@ -940,7 +940,7 @@ managed devices and accounts. Report security incidents";
         );
 
         // Pinned promo with a configured caption: button + dim caption below.
-        let mut pinned = ann(None, Some("Grok 4.5 is here. Upgrade now."));
+        let mut pinned = ann(None, Some("Supercharge Core is here. Upgrade now."));
         pinned.dismissible = Some(false);
         pinned.cta = Some(xai_grok_announcements::AnnouncementCta {
             label: Some("Upgrade Account".into()),
@@ -991,7 +991,7 @@ managed devices and accounts. Report security incidents";
         assert_eq!(row, "[Upgrade Account]", "absent caption stays bare");
 
         // Dismissible promo: bare button even with a configured caption.
-        let mut dismissible = ann(None, Some("Grok 4.5 is here. Upgrade now."));
+        let mut dismissible = ann(None, Some("Supercharge Core is here. Upgrade now."));
         dismissible.cta = Some(xai_grok_announcements::AnnouncementCta {
             label: Some("Upgrade Account".into()),
             url: Some("https://x.ai/grok".into()),

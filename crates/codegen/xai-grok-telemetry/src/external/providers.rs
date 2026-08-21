@@ -354,7 +354,7 @@ fn grpc_tls_candidates(
     }
     let mut base =
         ClientTlsConfig::new().trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    // Process-wide `GROK_EXTRA_CA_BUNDLE` roots (fail-open by that crate's
+    // Process-wide `SUPERCHARGE_EXTRA_CA_BUNDLE` roots (fail-open by that crate's
     // contract), matching what the HTTP transport applies via
     // `with_extra_root_certificates_blocking` — the same corporate/MITM CA
     // must work on both transports.
@@ -787,7 +787,7 @@ mod tests {
     fn cfg_with_headers(headers: Vec<(String, String)>) -> ExternalOtelConfig {
         let mut cfg = ExternalOtelConfig::resolve_with(
             |name| match name {
-                "GROK_EXTERNAL_OTEL" => Some("1".into()),
+                "SUPERCHARGE_EXTERNAL_OTEL" => Some("1".into()),
                 "OTEL_LOGS_EXPORTER" => Some("otlp".into()),
                 _ => None,
             },
@@ -840,7 +840,7 @@ mod tests {
     fn grpc_exporters_build_for_https_endpoints() {
         let cfg = ExternalOtelConfig::resolve_with(
             |name| match name {
-                "GROK_EXTERNAL_OTEL" => Some("1".into()),
+                "SUPERCHARGE_EXTERNAL_OTEL" => Some("1".into()),
                 "OTEL_LOGS_EXPORTER" | "OTEL_METRICS_EXPORTER" => Some("otlp".into()),
                 "OTEL_EXPORTER_OTLP_PROTOCOL" => Some("grpc".into()),
                 // Nothing listens here: gRPC channels connect lazily, so
@@ -909,7 +909,7 @@ mod tests {
     fn inactive_signal_ca_does_not_disable_http_stream() {
         let cfg = ExternalOtelConfig::resolve_with(
             |name| match name {
-                "GROK_EXTERNAL_OTEL" => Some("1".into()),
+                "SUPERCHARGE_EXTERNAL_OTEL" => Some("1".into()),
                 // Only metrics export; logs are off but carry a broken CA.
                 "OTEL_METRICS_EXPORTER" => Some("otlp".into()),
                 "OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE" => {
@@ -1009,7 +1009,7 @@ mod tests {
         assert!(err.to_string().contains("CLIENT_KEY"), "{err}");
     }
 
-    /// The DER→PEM re-encode used for `GROK_EXTRA_CA_BUNDLE` must produce a
+    /// The DER→PEM re-encode used for `SUPERCHARGE_EXTRA_CA_BUNDLE` must produce a
     /// bundle other PEM parsers can read back, one block per DER.
     #[test]
     fn ders_to_pem_bundle_roundtrips() {

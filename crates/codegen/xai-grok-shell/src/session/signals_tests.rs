@@ -132,20 +132,31 @@ async fn test_model_tracking() {
     let actor_handle = tokio::spawn(actor.run());
 
     // Set primary model
-    handle.set_primary_model("grok-3");
+    handle.set_primary_model("Supercharge AI-3");
 
     let snapshot = handle.snapshot().await.unwrap();
-    assert_eq!(snapshot.primary_model_id, Some("grok-3".to_string()));
-    assert_eq!(snapshot.models_used, vec!["grok-3".to_string()]);
+    assert_eq!(
+        snapshot.primary_model_id,
+        Some("Supercharge AI-3".to_string())
+    );
+    assert_eq!(snapshot.models_used, vec!["Supercharge AI-3".to_string()]);
 
     // Record additional model usage
-    handle.record_model_usage("grok-4");
-    handle.record_model_usage("grok-3"); // Duplicate
+    handle.record_model_usage("Supercharge AI-4");
+    handle.record_model_usage("Supercharge AI-3"); // Duplicate
 
     let snapshot = handle.snapshot().await.unwrap();
     assert_eq!(snapshot.models_used.len(), 2);
-    assert!(snapshot.models_used.contains(&"grok-3".to_string()));
-    assert!(snapshot.models_used.contains(&"grok-4".to_string()));
+    assert!(
+        snapshot
+            .models_used
+            .contains(&"Supercharge AI-3".to_string())
+    );
+    assert!(
+        snapshot
+            .models_used
+            .contains(&"Supercharge AI-4".to_string())
+    );
 
     handle.shutdown();
     actor_handle.await.unwrap();
@@ -705,7 +716,10 @@ async fn test_seed_counts_restores_all_counters() {
             "bash".to_string(),
             "search_replace".to_string(),
         ],
-        vec!["grok-3".to_string(), "grok-4".to_string()],
+        vec![
+            "Supercharge AI-3".to_string(),
+            "Supercharge AI-4".to_string(),
+        ],
     );
 
     let snapshot = handle.snapshot().await.unwrap();
@@ -724,21 +738,33 @@ async fn test_seed_counts_restores_all_counters() {
 
     // Model tracking (newly restored)
     assert_eq!(snapshot.models_used.len(), 2);
-    assert!(snapshot.models_used.contains(&"grok-3".to_string()));
-    assert!(snapshot.models_used.contains(&"grok-4".to_string()));
+    assert!(
+        snapshot
+            .models_used
+            .contains(&"Supercharge AI-3".to_string())
+    );
+    assert!(
+        snapshot
+            .models_used
+            .contains(&"Supercharge AI-4".to_string())
+    );
 
     // After seeding, new tool calls should accumulate correctly
     handle.record_tool_call("bash"); // existing tool
     handle.record_tool_call("grep"); // new tool
-    handle.record_model_usage("grok-3"); // existing model
-    handle.record_model_usage("grok-4.5"); // new model
+    handle.record_model_usage("Supercharge AI-3"); // existing model
+    handle.record_model_usage("Supercharge AI-4.5"); // new model
 
     let snapshot = handle.snapshot().await.unwrap();
     assert_eq!(snapshot.tool_call_count, 14); // 12 + 2
     assert_eq!(snapshot.tools_used.len(), 4); // bash not duplicated, grep added
     assert!(snapshot.tools_used.contains(&"grep".to_string()));
-    assert_eq!(snapshot.models_used.len(), 3); // grok-3 not duplicated, grok-5 added
-    assert!(snapshot.models_used.contains(&"grok-4.5".to_string()));
+    assert_eq!(snapshot.models_used.len(), 3); // Supercharge AI-3 not duplicated, Supercharge AI-5 added
+    assert!(
+        snapshot
+            .models_used
+            .contains(&"Supercharge AI-4.5".to_string())
+    );
 
     handle.shutdown();
     actor_handle.await.unwrap();
@@ -757,7 +783,7 @@ async fn test_restore_signals_full_round_trip() {
     handle1.record_tool_failure("bash");
     handle1.record_error();
     handle1.record_assistant_message();
-    handle1.record_model_usage("grok-3");
+    handle1.record_model_usage("Supercharge AI-3");
 
     // Record inference metrics with ITL intervals for turn 1
     handle1.record_inference_metrics(InferenceLatencyStats {
@@ -776,7 +802,7 @@ async fn test_restore_signals_full_round_trip() {
     handle1.record_tool_call("search_replace");
     handle1.record_cancellation();
     handle1.record_assistant_message();
-    handle1.record_model_usage("grok-4");
+    handle1.record_model_usage("Supercharge AI-4");
 
     handle1.increment_turn(); // turn 3
     handle1.record_tool_call("bash");
@@ -843,14 +869,22 @@ async fn test_restore_signals_full_round_trip() {
     assert!(restored.tools_used.contains(&"read_file".to_string()));
     assert!(restored.tools_used.contains(&"search_replace".to_string()));
     assert_eq!(restored.models_used.len(), 2);
-    assert!(restored.models_used.contains(&"grok-3".to_string()));
-    assert!(restored.models_used.contains(&"grok-4".to_string()));
+    assert!(
+        restored
+            .models_used
+            .contains(&"Supercharge AI-3".to_string())
+    );
+    assert!(
+        restored
+            .models_used
+            .contains(&"Supercharge AI-4".to_string())
+    );
     assert_eq!(restored.latency_sample_count, 2);
     assert_eq!(restored.avg_time_to_first_token_ms, 150);
     assert_eq!(restored.avg_response_time_ms, 1500);
     assert_eq!(restored.min_time_to_first_token_ms, 100);
     assert_eq!(restored.max_time_to_first_token_ms, 200);
-    // ITL stats must survive the restore (regression test for grok-critique bug)
+    // ITL stats must survive the restore (regression test for Supercharge AI-critique bug)
     assert_eq!(
         restored.itl_p50_ms, snapshot.itl_p50_ms,
         "itl_p50_ms should survive restore"
@@ -873,7 +907,7 @@ async fn test_restore_signals_full_round_trip() {
     assert_eq!(restored.itl_sample_count, 1);
 
     // Phase 2b: Take a turn-end snapshot *without* recording new ITL data.
-    // This is the exact scenario the grok-critique bug describes: the
+    // This is the exact scenario the Supercharge AI-critique bug describes: the
     // TakeTurnEndSnapshot handler calls update_session_itl_percentiles()
     // which must NOT wipe persisted ITL p50/p99 when itl_digest is None.
     handle2.increment_turn(); // turn 4 (no ITL data recorded this turn)
@@ -898,7 +932,7 @@ async fn test_restore_signals_full_round_trip() {
     handle2.increment_turn(); // turn 5
     handle2.record_tool_call("grep"); // new tool
     handle2.record_tool_call("bash"); // existing tool (should dedup)
-    handle2.record_model_usage("grok-3"); // existing model (should dedup)
+    handle2.record_model_usage("Supercharge AI-3"); // existing model (should dedup)
     handle2.record_error();
     handle2.record_assistant_message();
 
@@ -913,7 +947,7 @@ async fn test_restore_signals_full_round_trip() {
     assert_eq!(after_turn.error_count, 3); // 2 + 1
     assert_eq!(after_turn.tools_used.len(), 4); // bash not duplicated, grep added
     assert!(after_turn.tools_used.contains(&"grep".to_string()));
-    assert_eq!(after_turn.models_used.len(), 2); // grok-3 not duplicated
+    assert_eq!(after_turn.models_used.len(), 2); // Supercharge AI-3 not duplicated
     // Latency: (100+200+300)/3 = 200
     assert_eq!(after_turn.latency_sample_count, 3);
     assert_eq!(after_turn.avg_time_to_first_token_ms, 200);

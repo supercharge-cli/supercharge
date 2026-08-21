@@ -31,13 +31,13 @@ where
 /// second spawn in a resume test reads the stale cache written by phase 1
 /// and never sees the updated model list.
 fn invalidate_models_cache(home: &std::path::Path) {
-    let cache = home.join(".grok").join("models_cache.json");
+    let cache = home.join(".supercharge").join("models_cache.json");
     if cache.exists() {
         std::fs::remove_file(&cache).expect("failed to delete models_cache.json");
     }
 }
 /// Start a mock server with two models:
-/// - `default-model`: no agent_type (→ defaults to "grok-build")
+/// - `default-model`: no agent_type (→ defaults to "supercharge-core")
 async fn dual_model_server() -> MockInferenceServer {
     MockInferenceServer::start_with_models(vec![
         MockModelEntry::new("default-model"),
@@ -47,8 +47,8 @@ async fn dual_model_server() -> MockInferenceServer {
     .expect("start mock server")
 }
 /// Start a mock server with two models that share the same agent_type:
-/// - `model-a`: no agent_type (→ "grok-build")
-/// - `model-b`: no agent_type (→ "grok-build")
+/// - `model-a`: no agent_type (→ "supercharge-core")
+/// - `model-b`: no agent_type (→ "supercharge-core")
 async fn same_type_server() -> MockInferenceServer {
     MockInferenceServer::start_with_models(vec![
         MockModelEntry::new("model-a"),
@@ -58,8 +58,8 @@ async fn same_type_server() -> MockInferenceServer {
     .expect("start mock server")
 }
 /// Session created with a model that has no `agent_type` should use the
-/// `grok-build` harness. The system prompt sent to the LLM should contain
-/// the grok-build identity string.
+/// `supercharge-core` harness. The system prompt sent to the LLM should contain
+/// the supercharge-core identity string.
 #[tokio::test]
 #[ignore]
 async fn test_default_model_uses_grok_build_harness() {
@@ -80,7 +80,7 @@ async fn test_default_model_uses_grok_build_harness() {
             .expect("should have at least one inference request");
         assert!(
             sys_prompt.contains("Grok") || sys_prompt.contains("grok"),
-            "default model should use grok-build harness\nsystem prompt preview: {}",
+            "default model should use supercharge-core harness\nsystem prompt preview: {}",
             &sys_prompt[..sys_prompt.len().min(500)]
         );
     })
@@ -175,7 +175,7 @@ async fn test_session_resume_preserves_harness() {
     .await;
 }
 /// A model that doesn't declare `agent_type` in its metadata should
-/// default to `"grok-build"`. This exercises the serde default.
+/// default to `"supercharge-core"`. This exercises the serde default.
 #[tokio::test]
 #[ignore]
 async fn test_model_without_agent_type_defaults_to_grok_build() {
@@ -203,15 +203,15 @@ async fn test_model_without_agent_type_defaults_to_grok_build() {
                 .expect("should have at least one inference request");
             assert!(
             sys_prompt.contains("Grok") || sys_prompt.contains("grok"),
-            "model without agent_type should default to grok-build harness\nsystem prompt preview: {}",
+            "model without agent_type should default to supercharge-core harness\nsystem prompt preview: {}",
             &sys_prompt[..sys_prompt.len().min(500)]
         );
         })
         .await;
 }
-/// The `GROK_AGENT` escape hatch should override the model's agent_type.
-/// Setting `GROK_AGENT=grok-build` with an alternate-agent model should use
-/// grok-build harness.
+/// The `SUPERCHARGE_AGENT` escape hatch should override the model's agent_type.
+/// Setting `SUPERCHARGE_AGENT=supercharge-core` with an alternate-agent model should use
+/// supercharge-core harness.
 #[tokio::test]
 #[ignore]
 async fn test_grok_agent_env_overrides_model_agent_type() {
@@ -223,7 +223,7 @@ async fn test_grok_agent_env_overrides_model_agent_type() {
                     &server,
                     workdir.workspace(),
                     sandbox,
-                    &[("GROK_AGENT", "grok-build")],
+                    &[("SUPERCHARGE_AGENT", "supercharge-core")],
                     &[],
                 )
                 .await;
@@ -234,7 +234,7 @@ async fn test_grok_agent_env_overrides_model_agent_type() {
             let result = client.prompt_with_timeout(&session_id, "say hello").await;
             assert!(
             result.is_ok(),
-            "prompt with GROK_AGENT override failed: {:?}\nstderr:\n{}",
+            "prompt with SUPERCHARGE_AGENT override failed: {:?}\nstderr:\n{}",
             result.err(),
             client.stderr()
         );
@@ -243,7 +243,7 @@ async fn test_grok_agent_env_overrides_model_agent_type() {
                 .expect("should have inference request");
             assert!(
             sys_prompt.contains("Grok") || sys_prompt.contains("grok"),
-            "GROK_AGENT=grok-build should override catalog model agent_type\nsystem prompt preview: {}",
+            "SUPERCHARGE_AGENT=supercharge-core should override catalog model agent_type\nsystem prompt preview: {}",
             &sys_prompt[..sys_prompt.len().min(500)]
         );
         })

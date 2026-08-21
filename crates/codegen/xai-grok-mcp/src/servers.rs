@@ -51,7 +51,7 @@ fn with_extra_root_certificates(mut builder: reqwest::ClientBuilder) -> reqwest:
             Ok(cert) => builder = builder.add_root_certificate(cert),
             Err(e) => tracing::warn!(
                 error = %e,
-                "GROK_EXTRA_CA_BUNDLE: validated DER rejected by reqwest 0.13; skipping cert"
+                "SUPERCHARGE_EXTRA_CA_BUNDLE: validated DER rejected by reqwest 0.13; skipping cert"
             ),
         }
     }
@@ -385,7 +385,7 @@ pub struct McpState {
     /// as `Ready`. Cleared when the server begins a fresh init attempt.
     pub init_failed: std::collections::HashMap<McpServerName, String>,
     /// Per-server set of unqualified tool names that the user has disabled.
-    /// Persisted to `~/.grok/config.toml` under `[mcp_servers.<name>].disabled_tools`.
+    /// Persisted to `~/.supercharge/config.toml` under `[mcp_servers.<name>].disabled_tools`.
     pub disabled_tools: HashMap<McpServerName, std::collections::HashSet<ToolName>>,
     /// Stashed registrations for disabled tools so they can be re-enabled
     /// without a full MCP re-init (no need to call `list_tools` again).
@@ -4003,7 +4003,7 @@ fn sanitize_mcp_log_filename(name: &str) -> String {
     }
 }
 
-/// Copy an MCP server's stderr to `~/.grok/logs/mcp/<server>.stderr.log`
+/// Copy an MCP server's stderr to `~/.supercharge/logs/mcp/<server>.stderr.log`
 /// in a background task. Truncated per spawn.
 fn drain_mcp_stderr_to_log(server_name: &str, mut stderr: tokio::process::ChildStderr) {
     let log_dir = xai_grok_config::grok_home().join("logs").join("mcp");
@@ -4133,7 +4133,7 @@ fn apply_stdio_env(cmd: &mut Command, env: &[acp::EnvVariable], session_id: Opti
         cmd.env(&env_variable.name, &env_variable.value);
     }
     if let Some(session_id) = session_id {
-        cmd.env("GROK_SESSION_ID", session_id);
+        cmd.env("SUPERCHARGE_SESSION_ID", session_id);
     }
 }
 

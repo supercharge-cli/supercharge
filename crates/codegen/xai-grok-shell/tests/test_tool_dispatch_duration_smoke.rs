@@ -116,12 +116,12 @@ async fn sleep_tool_records_multi_second_dispatch_duration() {
     assert_headless_success(&result, "grok -p sleep timing smoke", Some(&server));
     assert_no_crashes(&result.stderr);
 
-    // Session artifacts live under the sandbox GROK_HOME.
+    // Session artifacts live under the sandbox SUPERCHARGE_HOME.
     let home = sandbox.grok_home();
     let events_files = collect_events_jsonl(home);
     assert!(
         !events_files.is_empty(),
-        "no events.jsonl under GROK_HOME {}\nstderr:\n{}",
+        "no events.jsonl under SUPERCHARGE_HOME {}\nstderr:\n{}",
         home.display(),
         stderr_tail(&result.stderr, 2000)
     );

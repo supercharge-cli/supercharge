@@ -74,7 +74,7 @@ pub(crate) fn wipe_substantial_draft(harness: &mut PtyHarness) {
 }
 
 /// Contextual-hints opt-in. The feature ships default-OFF.
-pub(crate) const CONTEXTUAL_HINTS_ENV: &[(&str, &str)] = &[("GROK_CONTEXTUAL_HINTS", "1")];
+pub(crate) const CONTEXTUAL_HINTS_ENV: &[(&str, &str)] = &[("SUPERCHARGE_CONTEXTUAL_HINTS", "1")];
 
 /// Collect short OSC 8 payloads for assertion failure messages.
 pub(crate) fn osc8_snippets(raw: &str) -> String {
@@ -145,8 +145,8 @@ pub(crate) fn tall_response(sentinel: &str, rows: usize) -> String {
 /// Spawn a pager with fake session (OAuth) auth and a 1s announcements poll,
 /// then drive it into a live session (welcome → prompt → mock response).
 /// Session auth matters: the settings poll requires `auth_manager.auth()`, and
-/// the harness's default `XAI_API_KEY` (ApiKey/BYOK mode, no auth.json entry)
-/// would never fetch `/v1/settings`. Spawns WITHOUT `GROK_ANNOUNCEMENTS_OVERRIDE`
+/// the harness's default `SUPERCHARGE_API_KEY` (ApiKey/BYOK mode, no auth.json entry)
+/// would never fetch `/v1/settings`. Spawns WITHOUT `SUPERCHARGE_ANNOUNCEMENTS_OVERRIDE`
 /// (the env override beats pushed lists in the pager and would mask updates).
 /// Call `content.set_response(..)` BEFORE this so the entry prompt streams.
 pub(crate) fn spawn_polling_session(content: &ContentController, oauth_user: &str) -> PtyHarness {
@@ -162,7 +162,10 @@ pub(crate) fn spawn_polling_session_with_env(
 ) -> PtyHarness {
     seed_fake_oauth(content, oauth_user);
     let mut overrides = Vec::from(oauth_credential_ops());
-    overrides.push(EnvOp::set("GROK_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS", "1"));
+    overrides.push(EnvOp::set(
+        "SUPERCHARGE_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS",
+        "1",
+    ));
     overrides.extend(extra_env.iter().map(|(key, value)| EnvOp::set(key, value)));
 
     let binary = pager_binary().expect("resolve pager binary");
@@ -194,7 +197,7 @@ pub(crate) fn spawn_polling_session_with_env(
 /// Start the mock server with two models that have different agent types,
 /// and return a `ContentController` configured for agent-type-mismatch
 /// testing. The default model is `"default-model"` (no agent type → uses
-/// `grok-build` harness).
+/// `supercharge-core` harness).
 pub(crate) async fn start_dual_agent_type_content() -> ContentController {
     ContentController::start_with_models(vec![
         MockModel::new("default-model"),
@@ -220,11 +223,14 @@ pub(crate) fn git_repo_with_mcp_json() -> tempfile::TempDir {
 }
 
 /// Explicit overrides for a folder-trust run. A self-built grok auto-trusts,
-/// so `GROK_TEST_VERSION` simulates a release; the gate is pinned both ways.
+/// so `SUPERCHARGE_TEST_VERSION` simulates a release; the gate is pinned both ways.
 pub(crate) fn trust_env(feature_on: bool) -> [(&'static str, &'static str); 2] {
     [
-        ("GROK_TEST_VERSION", "0.0.0-sim"),
-        ("GROK_FOLDER_TRUST", if feature_on { "1" } else { "0" }),
+        ("SUPERCHARGE_TEST_VERSION", "0.0.0-sim"),
+        (
+            "SUPERCHARGE_FOLDER_TRUST",
+            if feature_on { "1" } else { "0" },
+        ),
     ]
 }
 
@@ -232,7 +238,7 @@ pub(crate) fn trust_env(feature_on: bool) -> [(&'static str, &'static str); 2] {
 pub(crate) fn folder_is_trusted(content: &ContentController, repo: &std::path::Path) -> bool {
     let store_path = content
         .home()
-        .join(".grok")
+        .join(".supercharge")
         .join(xai_grok_workspace::trust::TRUST_FILE_NAME);
     let store = xai_grok_workspace::trust::TrustStore::load_from(store_path);
     store.is_trusted(&xai_grok_workspace::trust::workspace_key(repo))
@@ -268,8 +274,8 @@ pub(crate) fn seed_mcp_server_config(content: &ContentController) {
     #[cfg(windows)]
     let command = "cmd.exe";
 
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create fake GROK_HOME");
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create fake SUPERCHARGE_HOME");
     let config = format!(
         "[mcp_servers.{MCP_TEST_SERVER}]\ncommand = \"{command}\"\nargs = []\nstartup_timeout_sec = 2\n"
     );
@@ -391,7 +397,7 @@ pub(crate) const SEND_NOW_TIP_SENTINEL: &str = "to send now";
 // The core fix (deduplication in load_hooks_from_sources) is verified by
 // unit tests in xai-grok-hooks::discovery::tests. The PTY E2E test requires
 // careful environment variable setup to avoid static caching issues with
-// GROK_HOME.
+// SUPERCHARGE_HOME.
 
 // ── Mouse reporting toggle (opt-in scrollback Ctrl+R) ───────────────────
 
@@ -403,20 +409,20 @@ pub(crate) const MOUSE_OFF_STICKY: &str =
 pub(crate) const MOUSE_OFF_HINT_PROMPT: &str =
     "/toggle-mouse-reporting to enable mouse reporting and restore TUI features";
 
-/// Seed `~/.grok/config.toml` with a `[ui]` section body (e.g.
-/// `"vim_mode = true"`). Same `{GROK_HOME|HOME}/.grok/config.toml` location
+/// Seed `~/.supercharge/config.toml` with a `[ui]` section body (e.g.
+/// `"vim_mode = true"`). Same `{SUPERCHARGE_HOME|HOME}/.supercharge/config.toml` location
 /// `seed_mouse_reporting_toggle_config` uses; call before spawning the pager.
 pub(crate) fn seed_ui_config(content: &ContentController, ui_body: &str) {
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create .grok");
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
     let config = format!("[ui]\n{ui_body}\n");
     std::fs::write(grok_home.join("config.toml"), config).expect("write config.toml");
 }
 
 pub(crate) fn seed_mouse_reporting_toggle_config(content: &ContentController, enabled: bool) {
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create .grok");
-    // Minimal opt-in only — matches load_config's `{GROK_HOME|HOME}/.grok/config.toml`.
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
+    // Minimal opt-in only — matches load_config's `{SUPERCHARGE_HOME|HOME}/.supercharge/config.toml`.
     let config = if enabled {
         "[ui]\nmouse_reporting_toggle = true\n"
     } else {
@@ -428,8 +434,8 @@ pub(crate) fn seed_mouse_reporting_toggle_config(content: &ContentController, en
 
 /// Seed `[ui] keep_text_selection = "hold"` under the content controller's home.
 pub(crate) fn seed_keep_text_selection_config(content: &ContentController) {
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create .grok");
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
     std::fs::write(
         grok_home.join("config.toml"),
         "[ui]\nkeep_text_selection = \"hold\"\n",
@@ -446,7 +452,7 @@ pub(crate) fn spawn_mouse_toggle_pager(content: &ContentController) -> PtyHarnes
         DEFAULT_COLS,
         content,
         &[],
-        &[EnvOp::set("GROK_MOUSE_REPORTING_TOGGLE", "true")],
+        &[EnvOp::set("SUPERCHARGE_MOUSE_REPORTING_TOGGLE", "true")],
     )
     .expect("spawn pager")
 }
@@ -466,7 +472,7 @@ pub(crate) fn inject_keys_paced(harness: &mut PtyHarness, keys: &[u8]) {
 /// Widens the pager's idle-Esc double-press window (bounded by
 /// `esc_double_press_ttl` in `app_view.rs`) so a loaded shard's inter-press
 /// render round-trip can't expire the arm.
-pub(crate) const ESC_DOUBLE_PRESS_ENV: &str = "GROK_ESC_DOUBLE_PRESS_MS";
+pub(crate) const ESC_DOUBLE_PRESS_ENV: &str = "SUPERCHARGE_ESC_DOUBLE_PRESS_MS";
 
 /// Spawn the pager with [`ESC_DOUBLE_PRESS_ENV`] set to the 60s cap.
 pub(crate) fn spawn_esc_double_press_pager(content: &ContentController) -> PtyHarness {
@@ -956,7 +962,7 @@ pub(crate) fn plan_lines_duplicated(
 /// keeps the session's `plan.md`. Polls: the first turn creates it
 /// asynchronously.
 pub(crate) fn session_dir(content: &ContentController, harness: &mut PtyHarness) -> PathBuf {
-    let sessions = content.home().join(".grok").join("sessions");
+    let sessions = content.home().join(".supercharge").join("sessions");
     for _ in 0..100 {
         if let Ok(outer) = std::fs::read_dir(&sessions) {
             for cwd_dir in outer.flatten() {
@@ -1099,7 +1105,7 @@ pub(crate) const WRAP_TIMEOUT: Duration = Duration::from_secs(120);
 const WRAP_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Run `grok wrap <wrap_args...>` to completion inside a PTY with an isolated
-/// `GROK_HOME`, returning the exit code (`None` only while still running at
+/// `SUPERCHARGE_HOME`, returning the exit code (`None` only while still running at
 /// [`WRAP_TIMEOUT`]) and everything the wrap PTY emitted. `extra_env` is where
 /// tests pin `SHELL`; wrap needs no mock content — it dispatches in `main`
 /// before auth/network/sandbox.
@@ -1123,7 +1129,7 @@ pub(crate) fn run_wrap_driving(
 
     let mut args = vec!["wrap"];
     args.extend_from_slice(wrap_args);
-    let mut env: Vec<(&str, &str)> = vec![("GROK_HOME", &home_str), ("NO_COLOR", "1")];
+    let mut env: Vec<(&str, &str)> = vec![("SUPERCHARGE_HOME", &home_str), ("NO_COLOR", "1")];
     env.extend_from_slice(extra_env);
 
     let mut harness =
@@ -1233,12 +1239,12 @@ pub(crate) fn extract_task_id(body: &str) -> Option<String> {
     (!id.is_empty()).then(|| id.to_string())
 }
 
-/// Dump an asciinema cast of `harness` into `$GROK_PTY_CAST_DIR/<file_name>`
+/// Dump an asciinema cast of `harness` into `$SUPERCHARGE_PTY_CAST_DIR/<file_name>`
 /// when the env var is set. Failures are logged, never fatal — the cast is a
 /// diagnostic artifact, not part of the assertion surface.
 #[cfg(unix)]
 pub(crate) fn write_cast_if_requested(harness: &PtyHarness, file_name: &str) {
-    let Ok(dir) = std::env::var("GROK_PTY_CAST_DIR") else {
+    let Ok(dir) = std::env::var("SUPERCHARGE_PTY_CAST_DIR") else {
         return;
     };
     if dir.is_empty() {
@@ -1252,11 +1258,11 @@ pub(crate) fn write_cast_if_requested(harness: &PtyHarness, file_name: &str) {
 }
 
 /// Dump the current screen (plain text and HTML) into
-/// `$GROK_PTY_CAST_DIR/<file_stem>.{txt,html}` when the env var is set.
+/// `$SUPERCHARGE_PTY_CAST_DIR/<file_stem>.{txt,html}` when the env var is set.
 /// Failures are logged, never fatal — same opt-in as
 /// [`write_cast_if_requested`].
 pub(crate) fn write_screen_dump_if_requested(harness: &PtyHarness, file_stem: &str) {
-    let Ok(dir) = std::env::var("GROK_PTY_CAST_DIR") else {
+    let Ok(dir) = std::env::var("SUPERCHARGE_PTY_CAST_DIR") else {
         return;
     };
     if dir.is_empty() {

@@ -1,14 +1,14 @@
 #
 # Grok CLI installer for PowerShell — https://x.ai/cli/install.ps1
 #
-# Auth: GROK_DEPLOYMENT_KEY env var (takes precedence) or ~/.grok/auth.json from `grok login`.
-# Env: GROK_CHANNEL (stable|alpha|enterprise, default: stable), GROK_BIN_DIR, GROK_PROXY_URL
+# Auth: SUPERCHARGE_DEPLOYMENT_KEY env var (takes precedence) or ~/.supercharge/auth.json from `grok login`.
+# Env: SUPERCHARGE_CHANNEL (stable|alpha|enterprise, default: stable), SUPERCHARGE_BIN_DIR, SUPERCHARGE_PROXY_URL
 #
 # Usage:
 #   irm https://x.ai/cli/install.ps1 | iex                                       # latest stable
 #   & ([scriptblock]::Create((irm https://x.ai/cli/install.ps1))) -Version 0.1.42 # specific version
-#   $env:GROK_VERSION="0.1.42"; irm https://x.ai/cli/install.ps1 | iex           # specific version (alt)
-#   $env:GROK_DEPLOYMENT_KEY="<key>"; irm https://x.ai/cli/install.ps1 | iex
+#   $env:SUPERCHARGE_VERSION="0.1.42"; irm https://x.ai/cli/install.ps1 | iex           # specific version (alt)
+#   $env:SUPERCHARGE_DEPLOYMENT_KEY="<key>"; irm https://x.ai/cli/install.ps1 | iex
 #
 
 param(
@@ -25,8 +25,8 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 # Accept version from environment variable (useful with irm | iex).
-if (-not $Version -and $env:GROK_VERSION) {
-    $Version = $env:GROK_VERSION
+if (-not $Version -and $env:SUPERCHARGE_VERSION) {
+    $Version = $env:SUPERCHARGE_VERSION
 }
 
 # This script is Windows-only. PS 5.1 has no Platform property and only runs on Windows.
@@ -35,7 +35,7 @@ if ($PSVersionTable.Platform -and $PSVersionTable.Platform -ne 'Win32NT') {
     exit 1
 }
 
-$GrokDir = Join-Path $env:USERPROFILE '.grok'
+$GrokDir = Join-Path $env:USERPROFILE '.supercharge'
 
 # --- Helpers ---
 
@@ -114,7 +114,7 @@ $OidcScope = 'https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828'
 $LegacyScope = 'https://accounts.x.ai/sign-in'
 $AuthSource = ''
 
-if ($env:GROK_DEPLOYMENT_KEY) {
+if ($env:SUPERCHARGE_DEPLOYMENT_KEY) {
     $AuthSource = 'deployment key'
     Write-Host 'Auth: using deployment key.' -ForegroundColor DarkGray
 } else {
@@ -122,10 +122,10 @@ if ($env:GROK_DEPLOYMENT_KEY) {
     $legacyToken = Read-GrokToken $LegacyScope
     if ($oidcToken) {
         $AuthSource = 'auth.json (oidc)'
-        Write-Host 'Auth: using OIDC token from ~/.grok/auth.json.' -ForegroundColor DarkGray
+        Write-Host 'Auth: using OIDC token from ~/.supercharge/auth.json.' -ForegroundColor DarkGray
     } elseif ($legacyToken) {
         $AuthSource = 'auth.json (legacy)'
-        Write-Host 'Auth: using legacy token from ~/.grok/auth.json.' -ForegroundColor DarkGray
+        Write-Host 'Auth: using legacy token from ~/.supercharge/auth.json.' -ForegroundColor DarkGray
     }
 }
 
@@ -148,14 +148,14 @@ $platform = "windows-$arch"
 # --- Resolve version and channel ---
 
 $BaseUrlPrimary = 'https://x.ai/cli'
-$BaseUrlFallback = 'https://storage.googleapis.com/grok-build-public-artifacts/cli'
+$BaseUrlFallback = 'https://storage.googleapis.com/supercharge-core-public-artifacts/cli'
 $DownloadDir = Join-Path $GrokDir 'downloads'
-$BinDir = if ($env:GROK_BIN_DIR) { $env:GROK_BIN_DIR } else { Join-Path $GrokDir 'bin' }
+$BinDir = if ($env:SUPERCHARGE_BIN_DIR) { $env:SUPERCHARGE_BIN_DIR } else { Join-Path $GrokDir 'bin' }
 
 New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null
 New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 
-$Channel = if ($env:GROK_CHANNEL) { $env:GROK_CHANNEL } else { 'stable' }
+$Channel = if ($env:SUPERCHARGE_CHANNEL) { $env:SUPERCHARGE_CHANNEL } else { 'stable' }
 
 # Pick a working BaseUrl: try Cloudflare-fronted x.ai first, fall back to
 # direct GCS if it's unreachable. The probe doubles as the channel-pointer
@@ -280,11 +280,11 @@ if (-not (Test-Path $ConfigFile)) {
 
 # --- Fetch deployment config (deployment key only) ---
 
-if ($env:GROK_DEPLOYMENT_KEY) {
-    $ProxyUrl = if ($env:GROK_PROXY_URL) { $env:GROK_PROXY_URL } else { 'https://cli-chat-proxy.grok.com/v1' }
+if ($env:SUPERCHARGE_DEPLOYMENT_KEY) {
+    $ProxyUrl = if ($env:SUPERCHARGE_PROXY_URL) { $env:SUPERCHARGE_PROXY_URL } else { 'https://cli-chat-proxy.supercharge.com/v1' }
     Write-Host '  Fetching deployment config...' -ForegroundColor DarkGray
     try {
-        $headers = @{ 'Authorization' = "Bearer $($env:GROK_DEPLOYMENT_KEY)" }
+        $headers = @{ 'Authorization' = "Bearer $($env:SUPERCHARGE_DEPLOYMENT_KEY)" }
         $deployResponse = Invoke-RestMethod -Uri "$ProxyUrl/deployment/config" -Headers $headers -UseBasicParsing
     } catch {
         Write-Host "  Warning: failed to fetch deployment config from $ProxyUrl/deployment/config" -ForegroundColor Yellow

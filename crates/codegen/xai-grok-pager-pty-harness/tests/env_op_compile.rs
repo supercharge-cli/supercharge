@@ -8,7 +8,7 @@ fn set_and_remove_operations_have_one_typed_surface() {
     let value = OsStr::new("enabled");
     let operations: [EnvOp<'_>; 4] = [
         EnvOp::set("FEATURE_FLAG", "enabled"),
-        EnvOp::remove("XAI_API_KEY"),
+        EnvOp::remove("SUPERCHARGE_API_KEY"),
         EnvOp::set_os(key, value),
         EnvOp::remove_os(key),
     ];
@@ -21,5 +21,8 @@ fn set_and_remove_operations_have_one_typed_surface() {
 
 #[test]
 fn oauth_credential_operations_remove_the_api_key() {
-    assert_eq!(oauth_credential_ops(), [EnvOp::remove("XAI_API_KEY")],);
+    assert_eq!(
+        oauth_credential_ops(),
+        [EnvOp::remove("SUPERCHARGE_API_KEY")],
+    );
 }

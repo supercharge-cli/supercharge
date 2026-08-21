@@ -10,7 +10,7 @@ fn default_oidc_scopes() -> Vec<String> {
         "api:access".into(),
     ]
 }
-/// Default scopes for the xAI OAuth2 provider. Includes `grok-cli:access`
+/// Default scopes for the xAI OAuth2 provider. Includes `Supercharge AI-cli:access`
 /// which authorizes the token for API proxy requests.
 fn default_oauth2_scopes() -> Vec<String> {
     vec![
@@ -18,7 +18,7 @@ fn default_oauth2_scopes() -> Vec<String> {
         "profile".into(),
         "email".into(),
         "offline_access".into(),
-        "grok-cli:access".into(),
+        "Supercharge AI-cli:access".into(),
         "api:access".into(),
         "conversations:read".into(),
         "conversations:write".into(),
@@ -30,7 +30,7 @@ fn default_team_oauth2_scopes() -> Vec<String> {
     vec![
         "profile".into(),
         "offline_access".into(),
-        "grok-cli:access".into(),
+        "Supercharge AI-cli:access".into(),
         "api:access".into(),
         "team:read".into(),
         "conversations:read".into(),
@@ -45,9 +45,9 @@ fn default_team_oauth2_scopes() -> Vec<String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PreferredAuthMethod {
-    /// `XAI_API_KEY` / auth.json `xai::api_key` / per-model BYOK (`xai.api_key`).
+    /// `SUPERCHARGE_API_KEY` / auth.json `xai::api_key` / per-model BYOK (`xai.api_key`).
     ApiKey,
-    /// OIDC / OAuth2 session (`cached_token`, interactive `grok.com` / `oidc`,
+    /// OIDC / OAuth2 session (`cached_token`, interactive `supercharge.ai` / `oidc`,
     /// including devbox-minted OIDC).
     Oidc,
 }
@@ -66,21 +66,21 @@ pub struct GrokComConfig {
     /// External auth provider command (stdout = token, stderr = user UX, exit 0 = success).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_provider_command: Option<String>,
-    /// Login button label (env: `GROK_AUTH_PROVIDER_LABEL`).
+    /// Login button label (env: `SUPERCHARGE_AUTH_PROVIDER_LABEL`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_provider_label: Option<String>,
     /// Token TTL in seconds for external auth providers that output bare
     /// tokens without `expires_in`. Synthesizes `expires_at` so proactive
-    /// refresh works. Env: `GROK_AUTH_TOKEN_TTL`.
+    /// refresh works. Env: `SUPERCHARGE_AUTH_TOKEN_TTL`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_token_ttl: Option<u64>,
     /// Admin kill switch: when `Some(true)`, the `xai.api_key` auth method is
-    /// neither advertised nor accepted, so `XAI_API_KEY`/per-model credentials
-    /// can't bypass the deployment's IdP login. Env: `GROK_DISABLE_API_KEY_AUTH`.
+    /// neither advertised nor accepted, so `SUPERCHARGE_API_KEY`/per-model credentials
+    /// can't bypass the deployment's IdP login. Env: `SUPERCHARGE_DISABLE_API_KEY_AUTH`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disable_api_key_auth: Option<bool>,
     /// Restrict login to a specific team: the login token's team principal must
-    /// equal this. Also settable via `GROK_FORCE_LOGIN_TEAM_ID`; see
+    /// equal this. Also settable via `SUPERCHARGE_FORCE_LOGIN_TEAM_ID`; see
     /// `resolve_force_login_team` for how the tiers resolve.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub force_login_team_uuid: Option<ForceLoginTeam>,
@@ -107,7 +107,7 @@ pub struct OidcAuthConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audience: Option<String>,
 }
-/// OAuth2 provider configuration (`GROK_OAUTH2_ISSUER` / `GROK_OAUTH2_CLIENT_ID`).
+/// OAuth2 provider configuration (`SUPERCHARGE_OAUTH2_ISSUER` / `SUPERCHARGE_OAUTH2_CLIENT_ID`).
 ///
 /// Uses the standard OAuth 2.1 Auth Code + PKCE flow via [`OidcAuthConfig`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,16 +155,16 @@ pub(crate) fn accounts_app_cors_layer(method: axum::http::Method) -> tower_http:
 }
 /// Local-dev OAuth2 issuer (accounts-app running on localhost).
 const XAI_OAUTH2_LOCAL_ISSUER: &str = "http://localhost:22255";
-const DEFAULT_OAUTH2_REFERRER: &str = "grok-build";
-/// Returns `true` when `GROK_LOCAL_AUTH=1` is set,
+const DEFAULT_OAUTH2_REFERRER: &str = "Supercharge AI-build";
+/// Returns `true` when `SUPERCHARGE_LOCAL_AUTH=1` is set,
 /// indicating the local accounts-app should be used as the OAuth2 issuer.
 pub(crate) fn use_local_auth() -> bool {
-    std::env::var("GROK_LOCAL_AUTH")
+    std::env::var("SUPERCHARGE_LOCAL_AUTH")
         .map(|v| !v.is_empty() && v != "0")
         .unwrap_or(false)
 }
 /// Returns the active xAI OAuth2 issuer: the local-dev issuer when
-/// `GROK_LOCAL_AUTH=1` is set, otherwise the production issuer.
+/// `SUPERCHARGE_LOCAL_AUTH=1` is set, otherwise the production issuer.
 pub fn xai_oauth2_issuer() -> &'static str {
     if use_local_auth() {
         XAI_OAUTH2_LOCAL_ISSUER
@@ -174,17 +174,17 @@ pub fn xai_oauth2_issuer() -> &'static str {
 }
 /// Whether `issuer` is a recognised xAI OAuth2 issuer (production or local-dev).
 /// Use this instead of comparing to [`XAI_OAUTH2_ISSUER`] so local-dev counts as
-/// first-party xAI auth.
+/// first-party provider authentication.
 pub fn is_xai_oauth2_issuer(issuer: &str) -> bool {
     issuer == XAI_OAUTH2_ISSUER || issuer == XAI_OAUTH2_LOCAL_ISSUER
 }
-/// auth.json scope key used by the pre-OIDC `grok login --legacy` flow.
+/// auth.json scope key used by the pre-OIDC `supercharge login --legacy` flow.
 /// Matches the key format produced by the original `accounts.x.ai` relay auth.
 pub(crate) const LEGACY_AUTH_SCOPE: &str = "https://accounts.x.ai/sign-in";
 impl GrokComConfig {
     /// Whether `xai.api_key` auth is disabled. Pinning a team
     /// (`force_login_team_uuid`) implies this: team membership can't be verified
-    /// from a bare API key. The `GROK_DISABLE_API_KEY_AUTH` env lockdown is
+    /// from a bare API key. The `SUPERCHARGE_DISABLE_API_KEY_AUTH` env lockdown is
     /// OR-ed in live, so a lower-trust user `config.toml` cannot turn it back
     /// off; `requirements.toml` already wins by layer precedence.
     pub(crate) fn api_key_auth_disabled(&self) -> bool {
@@ -194,7 +194,7 @@ impl GrokComConfig {
     }
     /// When `preferred_method = api_key`, automatic OIDC paths (devbox mint,
     /// interactive browser login, external auth provider) must not run: the pin
-    /// is fail-closed. Explicit `grok login --devbox`/`--api-key` bypass this.
+    /// is fail-closed. Explicit `supercharge login --devbox`/`--api-key` bypass this.
     pub(crate) fn blocks_automatic_oidc(&self) -> bool {
         matches!(self.preferred_method, Some(PreferredAuthMethod::ApiKey))
     }
@@ -214,10 +214,10 @@ impl OAuth2ProviderConfig {
         self.principal_type.as_deref() == Some(TEAM_PRINCIPAL_TYPE)
     }
     pub fn from_env() -> Option<Self> {
-        let issuer = std::env::var("GROK_OAUTH2_ISSUER").ok()?;
-        let client_id = std::env::var("GROK_OAUTH2_CLIENT_ID").ok()?;
-        let principal_type = std::env::var("GROK_OAUTH2_PRINCIPAL_TYPE").ok();
-        let principal_id = std::env::var("GROK_OAUTH2_PRINCIPAL_ID").ok();
+        let issuer = std::env::var("SUPERCHARGE_OAUTH2_ISSUER").ok()?;
+        let client_id = std::env::var("SUPERCHARGE_OAUTH2_CLIENT_ID").ok()?;
+        let principal_type = std::env::var("SUPERCHARGE_OAUTH2_PRINCIPAL_TYPE").ok();
+        let principal_id = std::env::var("SUPERCHARGE_OAUTH2_PRINCIPAL_ID").ok();
         let default_scopes = match principal_type.as_deref() {
             Some(TEAM_PRINCIPAL_TYPE) => default_team_oauth2_scopes(),
             _ => default_oauth2_scopes(),
@@ -225,13 +225,13 @@ impl OAuth2ProviderConfig {
         Some(Self {
             issuer,
             client_id,
-            scopes: std::env::var("GROK_OAUTH2_SCOPES")
+            scopes: std::env::var("SUPERCHARGE_OAUTH2_SCOPES")
                 .map(|s| s.split(',').map(|s| s.trim().to_owned()).collect())
                 .unwrap_or(default_scopes),
             principal_type,
             principal_id,
             referrer: Some(
-                std::env::var("GROK_OAUTH2_REFERRER")
+                std::env::var("SUPERCHARGE_OAUTH2_REFERRER")
                     .unwrap_or_else(|_| DEFAULT_OAUTH2_REFERRER.to_owned()),
             ),
         })
@@ -270,19 +270,19 @@ impl Default for GrokComConfig {
             )
         };
         Self {
-            grok_ws_origin: std::env::var("GROK_WS_ORIGIN")
+            grok_ws_origin: std::env::var("SUPERCHARGE_WS_ORIGIN")
                 .unwrap_or_else(|_| PROD_WS_ORIGIN.to_owned()),
-            grok_ws_url: std::env::var("GROK_WS_URL")
+            grok_ws_url: std::env::var("SUPERCHARGE_WS_URL")
                 .unwrap_or_else(|_| PROD_RELAY_WS_URL.to_owned()),
-            token_header: "xai-grok-cli".to_owned(),
+            token_header: "xai-Supercharge AI-cli".to_owned(),
             oidc,
             oauth2,
-            auth_provider_command: std::env::var("GROK_AUTH_PROVIDER_COMMAND").ok(),
-            auth_provider_label: std::env::var("GROK_AUTH_PROVIDER_LABEL").ok(),
-            auth_token_ttl: std::env::var("GROK_AUTH_TOKEN_TTL")
+            auth_provider_command: std::env::var("SUPERCHARGE_AUTH_PROVIDER_COMMAND").ok(),
+            auth_provider_label: std::env::var("SUPERCHARGE_AUTH_PROVIDER_LABEL").ok(),
+            auth_token_ttl: std::env::var("SUPERCHARGE_AUTH_TOKEN_TTL")
                 .ok()
                 .and_then(|v| v.parse().ok()),
-            disable_api_key_auth: std::env::var("GROK_DISABLE_API_KEY_AUTH")
+            disable_api_key_auth: std::env::var("SUPERCHARGE_DISABLE_API_KEY_AUTH")
                 .ok()
                 .map(|v| env_flag_enabled(&v)),
             force_login_team_uuid: None,
@@ -290,29 +290,29 @@ impl Default for GrokComConfig {
         }
     }
 }
-/// Parse a boolean env-var value for grok's on/off flags. Bare presence enables
+/// Parse a boolean env-var value for Supercharge AI's on/off flags. Bare presence enables
 /// the flag, but falsy spellings (`0`, `false`, `off`, `no`, empty) count as
-/// disabled, so `GROK_DISABLE_API_KEY_AUTH=false` does NOT enable the flag.
+/// disabled, so `SUPERCHARGE_DISABLE_API_KEY_AUTH=false` does NOT enable the flag.
 fn env_flag_enabled(value: &str) -> bool {
     !matches!(
         value.trim().to_ascii_lowercase().as_str(),
         "" | "0" | "false" | "off" | "no"
     )
 }
-/// True when the admin has set `GROK_DISABLE_API_KEY_AUTH` to a truthy value in
+/// True when the admin has set `SUPERCHARGE_DISABLE_API_KEY_AUTH` to a truthy value in
 /// the process environment. Read live (call-time) and OR-ed into
 /// `api_key_auth_disabled()` so the env lockdown is non-overridable by a
 /// user-layer `config.toml`.
 fn env_lockdown_forced() -> bool {
-    std::env::var("GROK_DISABLE_API_KEY_AUTH")
+    std::env::var("SUPERCHARGE_DISABLE_API_KEY_AUTH")
         .ok()
         .is_some_and(|v| env_flag_enabled(&v))
 }
 /// Env var for the login-team pin. Named `..._TEAM_ID` (the user-facing "team
 /// id") while the config key stays `force_login_team_uuid` for backward
 /// compatibility; the two intentionally differ, so do not rename either.
-const FORCE_LOGIN_TEAM_ID_ENV: &str = "GROK_FORCE_LOGIN_TEAM_ID";
-/// The `GROK_FORCE_LOGIN_TEAM_ID` env override; the env tier in
+const FORCE_LOGIN_TEAM_ID_ENV: &str = "SUPERCHARGE_FORCE_LOGIN_TEAM_ID";
+/// The `SUPERCHARGE_FORCE_LOGIN_TEAM_ID` env override; the env tier in
 /// [`resolve_force_login_team`].
 pub(crate) fn force_login_team_from_env() -> Option<ForceLoginTeam> {
     let raw = std::env::var(FORCE_LOGIN_TEAM_ID_ENV).ok()?;
@@ -349,7 +349,7 @@ fn force_login_team_from_requirements_value(requirements: &toml::Value) -> Optio
     }
 }
 /// Resolve the effective login-team pin by tier, highest precedence first:
-/// `requirements.toml` / MDM > `GROK_FORCE_LOGIN_TEAM_ID` env > merged
+/// `requirements.toml` / MDM > `SUPERCHARGE_FORCE_LOGIN_TEAM_ID` env > merged
 /// user/managed `config.toml`. `requirements` is the non-overridable pin; the
 /// env override wins over user config but is clamped by it.
 pub(crate) fn resolve_force_login_team(
@@ -359,7 +359,7 @@ pub(crate) fn resolve_force_login_team(
 ) -> Option<ForceLoginTeam> {
     requirements.or(env).or(config)
 }
-/// Parse a `GROK_FORCE_LOGIN_TEAM_ID` value into a [`ForceLoginTeam`]: a bare
+/// Parse a `SUPERCHARGE_FORCE_LOGIN_TEAM_ID` value into a [`ForceLoginTeam`]: a bare
 /// value is a single team, a JSON array is an any-of set (each element trimmed),
 /// and an empty or whitespace-only value yields `None`. A value that looks like
 /// a JSON array but does not parse fails closed (an empty any-of, which blocks
@@ -376,7 +376,7 @@ fn parse_force_login_team(raw: &str) -> Option<ForceLoginTeam> {
             )),
             Err(_) => {
                 tracing::warn!(
-                    "GROK_FORCE_LOGIN_TEAM_ID is not a valid JSON array; failing closed"
+                    "SUPERCHARGE_FORCE_LOGIN_TEAM_ID is not a valid JSON array; failing closed"
                 );
                 Some(ForceLoginTeam::AnyOf(vec![]))
             }
@@ -387,15 +387,15 @@ fn parse_force_login_team(raw: &str) -> Option<ForceLoginTeam> {
 }
 impl OidcAuthConfig {
     pub fn from_env() -> Option<Self> {
-        let issuer = std::env::var("GROK_OIDC_ISSUER").ok()?;
-        let client_id = std::env::var("GROK_OIDC_CLIENT_ID").ok()?;
+        let issuer = std::env::var("SUPERCHARGE_OIDC_ISSUER").ok()?;
+        let client_id = std::env::var("SUPERCHARGE_OIDC_CLIENT_ID").ok()?;
         Some(Self {
             issuer,
             client_id,
-            scopes: std::env::var("GROK_OIDC_SCOPES")
+            scopes: std::env::var("SUPERCHARGE_OIDC_SCOPES")
                 .map(|s| s.split(',').map(|s| s.trim().to_owned()).collect())
                 .unwrap_or_else(|_| default_oidc_scopes()),
-            audience: std::env::var("GROK_OIDC_AUDIENCE").ok(),
+            audience: std::env::var("SUPERCHARGE_OIDC_AUDIENCE").ok(),
         })
     }
 }
@@ -410,7 +410,7 @@ mod tests {
             scopes: default_team_oauth2_scopes(),
             principal_type: Some("Team".into()),
             principal_id: Some("team-abc".into()),
-            referrer: Some("grok-build".into()),
+            referrer: Some("Supercharge AI-build".into()),
         };
         assert_eq!(cfg.auth_scope(), "https://auth.x.ai::client-123");
     }
@@ -431,7 +431,7 @@ mod tests {
             scopes: default_oauth2_scopes(),
             principal_type: None,
             principal_id: None,
-            referrer: Some("grok-build".into()),
+            referrer: Some("Supercharge AI-build".into()),
         };
         assert_eq!(cfg.auth_scope(), "https://auth.x.ai::client-123");
     }
@@ -460,7 +460,7 @@ mod tests {
                 "profile",
                 "email",
                 "offline_access",
-                "grok-cli:access",
+                "Supercharge AI-cli:access",
                 "api:access",
                 "conversations:read",
                 "conversations:write",
@@ -488,7 +488,7 @@ mod tests {
         let cfg: GrokComConfig = toml::from_str("").expect("parse empty");
         assert_eq!(cfg.preferred_method, None);
     }
-    /// Every `GROK_FORCE_LOGIN_TEAM_ID` shape: bare value, arrays, empty-array,
+    /// Every `SUPERCHARGE_FORCE_LOGIN_TEAM_ID` shape: bare value, arrays, empty-array,
     /// malformed, and empty/whitespace.
     #[test]
     fn parse_force_login_team_handles_all_shapes() {

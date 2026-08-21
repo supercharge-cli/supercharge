@@ -78,7 +78,7 @@ impl crate::types::tool_metadata::ToolMetadata for KillTaskTool {
     fn description_template(&self) -> &str {
         // Canonical wording lives in the shared builder; `versioned_definition`
         // renders it context-aware from the finalized toolset. This static
-        // fallback mirrors the default grok-build toolset on the current OS.
+        // fallback mirrors the default supercharge-core toolset on the current OS.
         static DESC: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             xai_tool_types::build_kill_task_description(&xai_tool_types::KillTaskToolNaming {
                 monitor_tool: Some("monitor"),
@@ -341,7 +341,7 @@ mod tests {
     fn tool_name_and_description() {
         let tool = KillTaskTool;
         assert_eq!(xai_tool_runtime::Tool::id(&tool).as_str(), "kill_task");
-        // The static fallback is the shared builder's default grok-build
+        // The static fallback is the shared builder's default supercharge-core
         // rendering (monitor + task + bash present) for the current OS.
         let desc = crate::types::tool_metadata::ToolMetadata::description_template(&tool);
         assert!(desc.contains("Terminate"));

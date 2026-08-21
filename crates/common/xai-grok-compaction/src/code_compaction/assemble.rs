@@ -1,4 +1,4 @@
-//! Compacted-history assembly (grok-build's rebuild structure, generic).
+//! Compacted-history assembly (supercharge-core's rebuild structure, generic).
 //!
 //! Moved from `xai-chat-state::compaction_utils::build_compacted_history` and
 //! made generic over a write-side item factory so any harness can assemble
@@ -8,7 +8,7 @@
 //! [SP, UP', AGENTS_MD?, UQ_last?, recent…, summary, reminder?]
 //! ```
 //!
-//! grok-build is the canonical harness. The summary carrier text is built by
+//! supercharge-core is the canonical harness. The summary carrier text is built by
 //! [`super::summary::format_compact_summary_content`].
 
 use crate::item::CompactionItemFactory;
@@ -80,7 +80,7 @@ pub fn assemble_compacted_history<T: CompactionItemFactory>(
         compacted.push(T::new_user(wrap_user_query(last_query.as_str())));
     }
 
-    // grok-build keeps the legacy `<user_query>`-wrapped continuation text and
+    // supercharge-core keeps the legacy `<user_query>`-wrapped continuation text and
     // appends the transcript hint after the continuation summary.
     let mut formatted_summary = format_compact_summary_content(&parts.compaction_summary);
     if let Some(ref hint) = parts.transcript_hint {

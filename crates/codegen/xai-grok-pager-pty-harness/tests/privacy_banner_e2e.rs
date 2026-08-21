@@ -8,8 +8,8 @@
 //!
 //! Drives the real pager binary through a PTY against the shared mock
 //! inference server (isolated `$HOME`), with a seeded opted-out OAuth entry
-//! as the active auth (`XAI_API_KEY` removed) and the rollout forced on via
-//! `GROK_PRIVACY_NOTICE_ROLLOUT=1`.
+//! as the active auth (`SUPERCHARGE_API_KEY` removed) and the rollout forced on via
+//! `SUPERCHARGE_PRIVACY_NOTICE_ROLLOUT=1`.
 //!
 //! ```bash
 //! cargo test -p xai-grok-pager-pty-harness --test privacy_banner_e2e \
@@ -45,12 +45,12 @@ async fn privacy_banner_persists_into_agent_view_and_opt_in_shares() {
 }
 
 /// Rollout flag forced on (env override beats remote settings) and the
-/// sandbox's fake `XAI_API_KEY` removed so the seeded opted-out OAuth entry
+/// sandbox's fake `SUPERCHARGE_API_KEY` removed so the seeded opted-out OAuth entry
 /// is the active auth — the banner's two preconditions.
 fn banner_env_ops() -> [EnvOp<'static>; 2] {
     [
-        EnvOp::set("GROK_PRIVACY_NOTICE_ROLLOUT", "1"),
-        EnvOp::remove("XAI_API_KEY"),
+        EnvOp::set("SUPERCHARGE_PRIVACY_NOTICE_ROLLOUT", "1"),
+        EnvOp::remove("SUPERCHARGE_API_KEY"),
     ]
 }
 
@@ -200,11 +200,11 @@ fn click_text(pager: &mut PtyHarness, needle: &str) -> Result<()> {
     Ok(())
 }
 
-/// Poll `<home>/.grok/config.toml` for the async `privacy_banner_acked`
+/// Poll `<home>/.supercharge/config.toml` for the async `privacy_banner_acked`
 /// write, pumping PTY output between polls so the pager never blocks on a
 /// full output buffer.
 fn wait_for_ack_on_disk(pager: &mut PtyHarness, home: &Path, timeout: Duration) -> Result<()> {
-    let path = home.join(".grok").join("config.toml");
+    let path = home.join(".supercharge").join("config.toml");
     let deadline = Instant::now() + timeout;
     loop {
         let body = std::fs::read_to_string(&path).unwrap_or_default();

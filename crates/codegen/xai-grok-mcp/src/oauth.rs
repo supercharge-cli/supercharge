@@ -30,7 +30,7 @@ const CREDENTIAL_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_
 
 /// Overall budget for one interactive browser consent flow (waiting for the
 /// loopback callback / disk poll after opening the browser). Mirrors the main
-/// grok.com login's 10-minute callback budget. Without a bound, an abandoned
+/// supercharge.ai login's 10-minute callback budget. Without a bound, an abandoned
 /// browser tab left the leader parked in its `select!` forever — holding both
 /// the in-process watch channel and the cross-process `mcp_auth_*.lock`, so
 /// every other session blocked indefinitely on the same server's auth.
@@ -49,7 +49,7 @@ const AUTH_LOCK_WAIT: std::time::Duration =
 // (multiple async tasks / sessions) and across separate processes (leader
 // mode disabled, multiple `grok` invocations).
 //
-// Layer 1 (cross-process): filesystem lock at $GROK_HOME/mcp_auth_{safe_name}.lock
+// Layer 1 (cross-process): filesystem lock at $SUPERCHARGE_HOME/mcp_auth_{safe_name}.lock
 // Layer 2 (in-process):    watch channel so only one task runs the flow
 // ---------------------------------------------------------------------------
 

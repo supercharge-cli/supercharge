@@ -1,4 +1,4 @@
-//! `GROK_CONFIG` / `GROK_CONFIG_PATH` config overlay resolution.
+//! `SUPERCHARGE_CONFIG` / `SUPERCHARGE_CONFIG_PATH` config overlay resolution.
 
 use std::path::{Path, PathBuf};
 
@@ -8,15 +8,9 @@ use crate::loader::{
 
 /// Inline config overlay: a JSON object.
 pub const SUPERCHARGE_CONFIG_ENV: &str = "SUPERCHARGE_CONFIG";
-/// Legacy inline overlay variable retained for compatibility.
-pub const GROK_CONFIG_ENV: &str = "GROK_CONFIG";
-
 /// Path to an additional JSON or TOML config-overlay file (read by extension).
 pub const SUPERCHARGE_CONFIG_PATH_ENV: &str = "SUPERCHARGE_CONFIG_PATH";
-/// Legacy config-overlay path variable retained for compatibility.
-pub const GROK_CONFIG_PATH_ENV: &str = "GROK_CONFIG_PATH";
-
-/// Hard cap on a `GROK_CONFIG_PATH` overlay read. Matches the untrusted-config
+/// Hard cap on a `SUPERCHARGE_CONFIG_PATH` overlay read. Matches the untrusted-config
 /// read cap in `managed_text` (`MAX_CONFIG_BYTES`, also 4 MiB): a huge file, or
 /// a special node like `/dev/zero`, must never stall or OOM the agent, so the
 /// read is bounded and an over-cap or non-regular file falls through to no
@@ -45,10 +39,10 @@ pub struct ResolvedOverlay {
 }
 
 fn env_overlay_inputs() -> (Option<String>, Option<PathBuf>) {
-    let inline_raw =
-        std::env::var_os(SUPERCHARGE_CONFIG_ENV).or_else(|| std::env::var_os(GROK_CONFIG_ENV));
+    let inline_raw = std::env::var_os(SUPERCHARGE_CONFIG_ENV)
+        .or_else(|| std::env::var_os(SUPERCHARGE_CONFIG_ENV));
     let path_raw = std::env::var_os(SUPERCHARGE_CONFIG_PATH_ENV)
-        .or_else(|| std::env::var_os(GROK_CONFIG_PATH_ENV));
+        .or_else(|| std::env::var_os(SUPERCHARGE_CONFIG_PATH_ENV));
     let inline = match inline_raw {
         Some(raw) => match raw.into_string() {
             Ok(s) => Some(s),
@@ -67,8 +61,8 @@ pub(crate) fn load_env_overlay() -> Option<toml::Value> {
     let (inline, path) = env_overlay_inputs();
     let (overlay, source, sections) = resolve_overlay_detailed(inline.as_deref(), path.as_deref())?;
     let source_label = match source {
-        OverlaySource::Inline => GROK_CONFIG_ENV,
-        OverlaySource::Path(_) => GROK_CONFIG_PATH_ENV,
+        OverlaySource::Inline => SUPERCHARGE_CONFIG_ENV,
+        OverlaySource::Path(_) => SUPERCHARGE_CONFIG_PATH_ENV,
     };
     tracing::trace!(
         source = source_label,
@@ -93,9 +87,9 @@ fn resolve_overlay_detailed(
     inline: Option<&str>,
     path: Option<&Path>,
 ) -> Option<(toml::Value, OverlaySource, Vec<String>)> {
-    // Inline (`GROK_CONFIG`) wins only when it fully succeeds. When it is
+    // Inline (`SUPERCHARGE_CONFIG`) wins only when it fully succeeds. When it is
     // absent, empty, or rejected at any stage (parse, `$VAR` expand,
-    // version_overrides, normalize), fall through to the `GROK_CONFIG_PATH`
+    // version_overrides, normalize), fall through to the `SUPERCHARGE_CONFIG_PATH`
     // candidate so a valid file is never skipped because of a bad inline value.
     if let Some(inline) = inline
         && let Some(resolved) = resolve_inline_overlay(inline)
@@ -122,26 +116,26 @@ fn resolve_inline_overlay(inline: &str) -> Option<(toml::Value, OverlaySource, V
     if trimmed.is_empty() {
         return None;
     }
-    let overlay = parse_overlay(trimmed, OverlayFormat::Json, GROK_CONFIG_ENV)?;
-    finalize_overlay(overlay, GROK_CONFIG_ENV, OverlaySource::Inline)
+    let overlay = parse_overlay(trimmed, OverlayFormat::Json, SUPERCHARGE_CONFIG_ENV)?;
+    finalize_overlay(overlay, SUPERCHARGE_CONFIG_ENV, OverlaySource::Inline)
 }
 
-/// Read, parse, and run the full pipeline for the `GROK_CONFIG_PATH` candidate.
+/// Read, parse, and run the full pipeline for the `SUPERCHARGE_CONFIG_PATH` candidate.
 fn resolve_path_overlay(path: &Path) -> Option<(toml::Value, OverlaySource, Vec<String>)> {
     let raw = read_capped_overlay_file(path)?;
     let format = match path.extension() {
         Some(ext) if ext.eq_ignore_ascii_case("json") => OverlayFormat::Json,
         _ => OverlayFormat::Toml,
     };
-    let overlay = parse_overlay(&raw, format, GROK_CONFIG_PATH_ENV)?;
+    let overlay = parse_overlay(&raw, format, SUPERCHARGE_CONFIG_PATH_ENV)?;
     finalize_overlay(
         overlay,
-        GROK_CONFIG_PATH_ENV,
+        SUPERCHARGE_CONFIG_PATH_ENV,
         OverlaySource::Path(path.to_path_buf()),
     )
 }
 
-/// Read `GROK_CONFIG_PATH` with a hard byte cap ([`MAX_OVERLAY_BYTES`]). Returns
+/// Read `SUPERCHARGE_CONFIG_PATH` with a hard byte cap ([`MAX_OVERLAY_BYTES`]). Returns
 /// `None` (fall through to no overlay, like an unreadable path) when the path is
 /// missing, unreadable, not a regular file (a fifo, `/dev/zero`), or over the
 /// cap. Never logs file content.
@@ -151,7 +145,7 @@ fn read_capped_overlay_file(path: &Path) -> Option<String> {
     let file = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(path = %path.display(), error = %e, "GROK_CONFIG_PATH is unreadable; ignoring the overlay");
+            tracing::warn!(path = %path.display(), error = %e, "SUPERCHARGE_CONFIG_PATH is unreadable; ignoring the overlay");
             return None;
         }
     };
@@ -159,12 +153,12 @@ fn read_capped_overlay_file(path: &Path) -> Option<String> {
     // reported length is meaningless and they can stream without end.
     match file.metadata() {
         Ok(meta) if !meta.file_type().is_file() => {
-            tracing::warn!(path = %path.display(), "GROK_CONFIG_PATH is not a regular file; ignoring the overlay");
+            tracing::warn!(path = %path.display(), "SUPERCHARGE_CONFIG_PATH is not a regular file; ignoring the overlay");
             return None;
         }
         Ok(_) => {}
         Err(e) => {
-            tracing::warn!(path = %path.display(), error = %e, "GROK_CONFIG_PATH is unreadable; ignoring the overlay");
+            tracing::warn!(path = %path.display(), error = %e, "SUPERCHARGE_CONFIG_PATH is unreadable; ignoring the overlay");
             return None;
         }
     }
@@ -173,11 +167,11 @@ fn read_capped_overlay_file(path: &Path) -> Option<String> {
     // that grows between the metadata check and the read.
     let mut raw = String::new();
     if let Err(e) = file.take(MAX_OVERLAY_BYTES + 1).read_to_string(&mut raw) {
-        tracing::warn!(path = %path.display(), error = %e, "GROK_CONFIG_PATH is unreadable; ignoring the overlay");
+        tracing::warn!(path = %path.display(), error = %e, "SUPERCHARGE_CONFIG_PATH is unreadable; ignoring the overlay");
         return None;
     }
     if raw.len() as u64 > MAX_OVERLAY_BYTES {
-        tracing::warn!(path = %path.display(), max = MAX_OVERLAY_BYTES, "GROK_CONFIG_PATH exceeds the max overlay size; ignoring the overlay");
+        tracing::warn!(path = %path.display(), max = MAX_OVERLAY_BYTES, "SUPERCHARGE_CONFIG_PATH exceeds the max overlay size; ignoring the overlay");
         return None;
     }
     Some(raw)

@@ -785,7 +785,7 @@ impl AgentView {
     /// absorb the double-press gesture itself, so it has to outlast one full
     /// arm-to-fire window or a mash could still arm-and-fire around it
     /// (invariant pinned by `esc_cancel_rewind_grace_outlives_double_press_ttl`).
-    /// The pty-only `GROK_ESC_DOUBLE_PRESS_MS` override can exceed this; no
+    /// The pty-only `SUPERCHARGE_ESC_DOUBLE_PRESS_MS` override can exceed this; no
     /// pty case mashes Esc across a cancel.
     pub(crate) const ESC_CANCEL_REWIND_GRACE: std::time::Duration =
         std::time::Duration::from_millis(1000);

@@ -1,7 +1,7 @@
-//! Tool infrastructure for xai-grok-shell.
+//! Tool infrastructure for xai-Supercharge AI-shell.
 //!
-//! All tool execution goes through `xai-grok-tools` via the `ToolBridge`.
-//! Types (ToolOutput, ToolInput, TodoState, etc.) come from `xai-grok-tools` directly.
+//! All tool execution goes through `xai-Supercharge AI-tools` via the `ToolBridge`.
+//! Types (ToolOutput, ToolInput, TodoState, etc.) come from `xai-Supercharge AI-tools` directly.
 
 pub mod bridge;
 pub mod config;
@@ -17,7 +17,7 @@ pub use self::{
     tool_context::ToolContext,
 };
 
-// Re-export key types from xai-grok-tools for convenience
+// Re-export key types from xai-Supercharge AI-tools for convenience
 pub use self::todo::{TodoId, TodoItem, TodoPriority, TodoStatus};
 pub use xai_grok_tools::types::output::ToolOutput;
 pub use xai_grok_tools::types::{MCPToolInput, ToolInput};

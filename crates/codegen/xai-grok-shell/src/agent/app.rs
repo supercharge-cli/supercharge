@@ -82,7 +82,7 @@ const LEADER_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(15);
 ///
 /// Idle means BOTH `agent_busy` is false (no IPC client request in flight)
 /// AND `activity.is_busy()` is false (no running turn, parked interaction,
-/// or live subagent). The second signal covers relay-driven (grok.com
+/// or live subagent). The second signal covers relay-driven (supercharge.ai
 /// WebSocket) leaders, whose traffic bypasses the IPC server and never sets
 /// `agent_busy`.
 ///
@@ -265,9 +265,9 @@ pub async fn run_stdio_agent(
         &grok_home::grok_home(),
         xai_file_utils::queue::DEFAULT_MAX_AGE,
     );
-    if let Ok(version) = std::env::var("GROK_CLIENT_VERSION") {
+    if let Ok(version) = std::env::var("SUPERCHARGE_CLIENT_VERSION") {
         crate::unified_log::info(
-            "GROK_CLIENT_VERSION",
+            "SUPERCHARGE_CLIENT_VERSION",
             None,
             Some(serde_json::json!({ "version": version })),
         );
@@ -332,8 +332,8 @@ pub async fn run_headless(
     crate::http::set_process_client_mode_headless();
     use crate::agent::relay::spawn_relay_connection_with_callback;
     use tokio_util::sync::CancellationToken;
-    const HEADLESS_NO_SESSION: &str = "Headless mode requires a grok.com session. \
-        Run `grok login` to sign in, or use `grok agent stdio` for API-key access.";
+    const HEADLESS_NO_SESSION: &str = "Headless mode requires a supercharge.ai session. \
+        Run `supercharge login` to sign in, or use `Supercharge AI agent stdio` for API-key access.";
     xai_file_utils::queue::cleanup_orphaned_uploads(
         &grok_home::grok_home(),
         xai_file_utils::queue::DEFAULT_MAX_AGE,
@@ -408,7 +408,7 @@ pub async fn run_headless(
         if !did_browser_flow {
             eprintln!();
             eprintln!(
-                "Open Grok Build: {} (press Enter to open in browser)",
+                "Open Supercharge AI: {} (press Enter to open in browser)",
                 grok_code_url
             );
             eprintln!();
@@ -572,11 +572,11 @@ fn relay_config_for_session(
         Some(shared_auth_manager.clone()),
     )
 }
-/// Start the leader's grok.com relay connection according to the start policy,
+/// Start the leader's supercharge.ai relay connection according to the start policy,
 /// parking the [`RelayHandle`](crate::agent::relay::RelayHandle) in `slot`
 /// once the connection task is running.
 ///
-/// * `relay_on_demand == false` (default — explicit `grok agent leader`
+/// * `relay_on_demand == false` (default — explicit `Supercharge AI agent leader`
 ///   invocation: devbox / systemd / nohup): connect **eagerly**, right now.
 ///   A bare leader has no local IPC clients; remote prompts arrive *through*
 ///   the relay, so it must be up before any demand signal could ever exist.
@@ -589,7 +589,7 @@ fn relay_config_for_session(
 ///   [`ClientMode::Headless`](crate::leader::ClientMode::Headless)
 ///   registration. A leader serving only TUI-dashboard / IDE clients never
 ///   opens the relay and never pays the per-message clone/parse/log/TLS
-///   duplication of mirroring every agent message to grok.com.
+///   duplication of mirroring every agent message to supercharge.ai.
 ///
 /// Until the relay starts, `agent_to_ws_tx` stays `None`, so the outbound
 /// bridge skips the relay clone entirely. Messages produced before the relay
@@ -642,7 +642,7 @@ fn spawn_leader_relay(
         *slot_for_task.borrow_mut() = Some(handle);
     });
 }
-/// Everything needed to arm the leader's grok.com relay *after* startup.
+/// Everything needed to arm the leader's supercharge.ai relay *after* startup.
 ///
 /// A leader that boots without auth used to disable the relay forever — the
 /// decision was made once in [`run_leader`] and never revisited. On devboxes
@@ -687,7 +687,7 @@ impl DeferredRelayArm {
         ) else {
             return Some(self);
         };
-        info!("Relay-eligible auth token appeared after startup — arming grok.com relay");
+        info!("Relay-eligible auth token appeared after startup — arming supercharge.ai relay");
         spawn_leader_relay(
             self.slot,
             relay_config,
@@ -720,7 +720,7 @@ pub fn apply_otel_config(auth_manager: &AuthManager, grok_com_config: &GrokComCo
     }
 }
 /// Run the agent in leader mode, accepting IPC connections from multiple clients.
-/// When a grok.com session is present, the leader connects to the websocket relay
+/// When a supercharge.ai session is present, the leader connects to the websocket relay
 /// after startup (post-auth, post-prefetch); BYOK / no-session leaders start
 /// serving clients over IPC only, then arm the relay if a relay-eligible token
 /// is hot-reloaded later (see [`DeferredRelayArm`]). See [`spawn_leader_relay`]
@@ -743,7 +743,7 @@ pub fn apply_otel_config(auth_manager: &AuthManager, grok_com_config: &GrokComCo
 ///
 /// * `agent_config` - The agent configuration
 /// * `no_exit_on_disconnect` - If true, the leader will not exit when all clients disconnect
-/// * `relay_on_demand` - If true, defer the grok.com relay WebSocket until the
+/// * `relay_on_demand` - If true, defer the supercharge.ai relay WebSocket until the
 ///   first headless IPC client registers; if false (default), connect eagerly at
 ///   startup; a session acquired later arms it via [`DeferredRelayArm`].
 pub async fn run_leader(
@@ -1083,7 +1083,7 @@ pub async fn run_leader(
                 );
             } else {
                 info!(
-                    "Relay not started: no grok.com session token \
+                    "Relay not started: no supercharge.ai session token \
                      (BYOK / local-only leader); will arm if an eligible \
                      token is hot-reloaded"
                 );
@@ -1472,7 +1472,9 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn embedded_otel_gate_keeps_a_session_user_fail_closed() {
-        use crate::agent::auth_method::{LEGACY_XAI_API_KEY_ENV_VAR, XAI_API_KEY_ENV_VAR};
+        use crate::agent::auth_method::{
+            LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, SUPERCHARGE_API_KEY_ENV_VAR,
+        };
         use xai_grok_telemetry::external::{
             is_settings_gate_open, mark_external_otel_settings_resolved,
         };
@@ -1491,23 +1493,23 @@ mod tests {
         impl Drop for Restore {
             fn drop(&mut self) {
                 unsafe {
-                    set_or_clear(XAI_API_KEY_ENV_VAR, self.key.take());
-                    set_or_clear(LEGACY_XAI_API_KEY_ENV_VAR, self.legacy.take());
+                    set_or_clear(SUPERCHARGE_API_KEY_ENV_VAR, self.key.take());
+                    set_or_clear(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, self.legacy.take());
                     set_or_clear(PROXY_ENV_VAR, self.proxy.take());
                 }
                 mark_external_otel_settings_resolved();
             }
         }
-        const PROXY_ENV_VAR: &str = "GROK_CLI_CHAT_PROXY_BASE_URL";
+        const PROXY_ENV_VAR: &str = "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL";
         let _restore = Restore {
-            key: std::env::var_os(XAI_API_KEY_ENV_VAR),
-            legacy: std::env::var_os(LEGACY_XAI_API_KEY_ENV_VAR),
+            key: std::env::var_os(SUPERCHARGE_API_KEY_ENV_VAR),
+            legacy: std::env::var_os(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR),
             proxy: std::env::var_os(PROXY_ENV_VAR),
         };
         let cfg = GrokComConfig::default();
         unsafe {
-            std::env::set_var(XAI_API_KEY_ENV_VAR, "test-key");
-            std::env::remove_var(LEGACY_XAI_API_KEY_ENV_VAR);
+            std::env::set_var(SUPERCHARGE_API_KEY_ENV_VAR, "test-key");
+            std::env::remove_var(LEGACY_SUPERCHARGE_API_KEY_ENV_VAR);
             std::env::remove_var(PROXY_ENV_VAR);
         }
         let session = GrokAuth {
@@ -1540,8 +1542,8 @@ mod tests {
         }
     }
     /// Regression test for the bare-leader relay gating bug: a bare
-    /// `grok agent leader` (devbox/systemd — no local IPC clients,
-    /// `relay_on_demand == false`) must connect the grok.com relay eagerly.
+    /// `Supercharge AI agent leader` (devbox/systemd — no local IPC clients,
+    /// `relay_on_demand == false`) must connect the supercharge.ai relay eagerly.
     /// Remote prompts arrive *through* the relay, so on such a leader no
     /// headless-registration demand signal can ever fire; gating the relay on
     /// it means the agent never registers with the backend ("No online

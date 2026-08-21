@@ -98,7 +98,7 @@ async fn make_actor_with_auth_and_credentials(
 /// Pin the ACP `auth_method_id` and credential `auth_type` independently. The
 /// gate keys off the stable `auth_method_id`, so this reproduces the regression:
 /// a session method whose `creds.auth_type` has transiently collapsed to
-/// `ApiKey` (session-token cache miss + `XAI_API_KEY`).
+/// `ApiKey` (session-token cache miss + `SUPERCHARGE_API_KEY`).
 async fn make_actor_with_method_and_credentials(
     auth_manager: Option<Arc<AuthManager>>,
     auth_method_id: &str,
@@ -214,7 +214,7 @@ async fn sampler_401_recovery_returns_refresh_and_retry() {
 }
 
 /// Regression: sampler 401 with API-key auth (BYOK `env_key` /
-/// `XAI_API_KEY`) must NOT attempt an OIDC session-token refresh. The
+/// `SUPERCHARGE_API_KEY`) must NOT attempt an OIDC session-token refresh. The
 /// bearer on the wire is the static API key, so refreshing the session
 /// token reports success but the retry re-sends the same rejected key —
 /// an invisible 401 loop that hangs the turn. Recovery is skipped and
@@ -530,7 +530,7 @@ async fn proactive_refresh_makes_per_turn_refresh_a_cache_hit() {
 fn model_not_found_error() -> xai_grok_sampler::SamplingErrorInfo {
     xai_grok_sampler::SamplingErrorInfo {
             kind: xai_grok_sampler::SamplingErrorKind::Api,
-            message: "API error (status 404 Not Found): The model grok-build does not exist or your team does not have access".into(),
+            message: "API error (status 404 Not Found): The model supercharge-core does not exist or your team does not have access".into(),
             status_code: Some(404),
             is_retryable: false,
             retry_after_secs: None,
@@ -610,7 +610,7 @@ async fn legacy_auth_hint_on_404_model_not_found() {
 fn unauthorized_401_error() -> xai_grok_sampler::SamplingErrorInfo {
     xai_grok_sampler::SamplingErrorInfo {
             kind: xai_grok_sampler::SamplingErrorKind::Api,
-            message: "Unauthorized (401) from https://cli-chat-proxy.grok.com/v1/responses: {\"error\":\"Invalid or expired credentials (auth_kind=bearer, x_xai_token_auth=xai-grok-cli, upstream=Unauthenticated, reason=no auth context)\"}".into(),
+            message: "Unauthorized (401) from https://cli-chat-proxy.supercharge.com/v1/responses: {\"error\":\"Invalid or expired credentials (auth_kind=bearer, x_xai_token_auth=xai-grok-cli, upstream=Unauthenticated, reason=no auth context)\"}".into(),
             status_code: Some(401),
             is_retryable: false,
             retry_after_secs: None,

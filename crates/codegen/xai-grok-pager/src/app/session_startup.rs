@@ -121,7 +121,7 @@ pub fn parent_session_is_worktree(session_id: &str, cwd: &Path) -> bool {
             return true;
         }
         if git.is_dir() {
-            return std::fs::read_to_string(git.join("grok-worktree-source"))
+            return std::fs::read_to_string(git.join("Supercharge AI-worktree-source"))
                 .is_ok_and(|s| !s.trim().is_empty());
         }
     }
@@ -312,42 +312,42 @@ pub fn chat_mode_flag_conflict(
     None
 }
 /// Env: enable local workspace without CLI flags (`1`). Mode defaults to `own`
-/// unless `GROK_CHAT_LOCAL_WORKSPACE_MODE` / attach server id is set.
+/// unless `SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE` / attach server id is set.
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ENV: &str = "SUPERCHARGE_CHAT_LOCAL_WORKSPACE";
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_CWD_ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE_CWD";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_CWD_ENV: &str = "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_CWD";
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_MODE_ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE_MODE";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE_ENV: &str = "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE";
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV: &str =
+    "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID";
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV: &str =
+    "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME";
 /// Skip interactive first-run confirm (still prints the banner).
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_ACK_ENV: &str = "GROK_CHAT_LOCAL_WORKSPACE_ACK";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV: &str = "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK";
 /// Startup banner / first-run copy.
 #[cfg(feature = "local-workspace")]
 pub const LOCAL_WORKSPACE_BANNER: &str =
     "Local workspace runs tools on this machine (FS confined to <cwd>).";
 #[cfg(feature = "local-workspace")]
 pub const LOCAL_WORKSPACE_ATTACH_NEEDS_SERVER_ID: &str = "local-workspace attach requires --local-workspace-attach=<server_id> \
-     (or GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID)";
+     (or SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID)";
 #[cfg(feature = "local-workspace")]
 pub const LOCAL_WORKSPACE_REQUIRES_CHAT: &str = "local-workspace flags/env require --chat";
 #[cfg(feature = "local-workspace")]
-pub const LOCAL_WORKSPACE_HOME_DENIED: &str =
-    "local-workspace cwd may not be / or $HOME unless GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME=1";
+pub const LOCAL_WORKSPACE_HOME_DENIED: &str = "local-workspace cwd may not be / or $HOME unless SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME=1";
 #[cfg(feature = "local-workspace")]
 pub const LOCAL_WORKSPACE_HITL_HINT: &str = "Permission prompts for local workspace tools apply to your machine. \
      Local workspace replaces the chat sandbox.";
 #[cfg(feature = "local-workspace")]
-pub const LOCAL_WORKSPACE_ACK_REQUIRED: &str =
-    "local-workspace requires interactive confirm, GROK_CHAT_LOCAL_WORKSPACE_ACK=1, or an ack file";
+pub const LOCAL_WORKSPACE_ACK_REQUIRED: &str = "local-workspace requires interactive confirm, SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK=1, or an ack file";
 /// Declared advertised tool ids for attach FS-only check (comma-separated).
 #[cfg(feature = "local-workspace")]
-pub const GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV: &str =
-    "GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS";
+pub const SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV: &str =
+    "SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS";
 #[cfg(feature = "local-workspace")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocalWorkspaceMode {
@@ -420,10 +420,11 @@ pub fn resolve_local_workspace_config(
     cli_attach: Option<&str>,
     cli_cwd: Option<&std::path::Path>,
 ) -> anyhow::Result<Option<LocalWorkspaceConfig>> {
-    let env_enable = env_truthy(GROK_CHAT_LOCAL_WORKSPACE_ENV);
-    let env_mode = env_nonempty(GROK_CHAT_LOCAL_WORKSPACE_MODE_ENV);
-    let env_server_id = env_nonempty(GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV);
-    let env_cwd = env_nonempty(GROK_CHAT_LOCAL_WORKSPACE_CWD_ENV).map(std::path::PathBuf::from);
+    let env_enable = env_truthy(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ENV);
+    let env_mode = env_nonempty(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE_ENV);
+    let env_server_id = env_nonempty(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV);
+    let env_cwd =
+        env_nonempty(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_CWD_ENV).map(std::path::PathBuf::from);
     let cli_attach = cli_attach.map(str::trim).filter(|s| !s.is_empty());
     let cli_requested = cli_own.is_some() || cli_attach.is_some();
     let env_requested = env_enable || env_mode.is_some() || env_server_id.is_some();
@@ -443,7 +444,7 @@ pub fn resolve_local_workspace_config(
             "own" => LocalWorkspaceMode::Own,
             other => {
                 anyhow::bail!(
-                    "invalid {GROK_CHAT_LOCAL_WORKSPACE_MODE_ENV}={other:?}; expected own|attach"
+                    "invalid {SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE_ENV}={other:?}; expected own|attach"
                 )
             }
         }
@@ -515,7 +516,7 @@ pub fn validate_local_workspace_cwd(path: &std::path::Path) -> anyhow::Result<st
             canon.display()
         );
     }
-    if env_truthy(GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV) {
+    if env_truthy(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV) {
         return Ok(canon);
     }
     if canon == std::path::Path::new("/") {
@@ -531,7 +532,7 @@ pub fn validate_local_workspace_cwd(path: &std::path::Path) -> anyhow::Result<st
 }
 /// Banner + first-run confirm for local-workspace own/attach.
 ///
-/// Skip confirm only with `GROK_CHAT_LOCAL_WORKSPACE_ACK=1` or a prior ack file.
+/// Skip confirm only with `SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK=1` or a prior ack file.
 /// Non-TTY without ACK refuses (fail closed).
 #[cfg(feature = "local-workspace")]
 pub fn emit_local_workspace_startup_ux(cfg: &LocalWorkspaceConfig) -> anyhow::Result<()> {
@@ -573,7 +574,7 @@ pub fn emit_local_workspace_startup_ux_with(
 /// True when ACK env or ack file already authorizes local workspace.
 #[cfg(feature = "local-workspace")]
 pub fn local_workspace_ack_satisfied() -> bool {
-    if env_truthy(GROK_CHAT_LOCAL_WORKSPACE_ACK_ENV) {
+    if env_truthy(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV) {
         return true;
     }
     local_workspace_ack_path().is_some_and(|p| p.is_file())
@@ -591,7 +592,7 @@ pub fn write_local_workspace_ack() {
 /// Fail closed unless advertised tools are FS-only.
 ///
 /// Until diag exposes a real tool catalog, attach trusts operator attestation
-/// via `GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS` (comma-separated ids).
+/// via `SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS` (comma-separated ids).
 /// Unset / empty → refuse.
 #[cfg(feature = "local-workspace")]
 pub fn ensure_attach_fs_only_toolset(_server_id: &str) -> anyhow::Result<()> {
@@ -605,7 +606,7 @@ pub fn ensure_attach_fs_only_toolset(_server_id: &str) -> anyhow::Result<()> {
 /// Operator-attested advertised tool ids for attach (env only; no fake diag probe).
 #[cfg(feature = "local-workspace")]
 pub fn probe_advertised_tool_ids() -> Option<Vec<String>> {
-    let raw = env_nonempty(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV)?;
+    let raw = env_nonempty(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV)?;
     let ids: Vec<String> = raw
         .split(',')
         .map(|s| s.trim().to_string())
@@ -615,14 +616,14 @@ pub fn probe_advertised_tool_ids() -> Option<Vec<String>> {
 }
 #[cfg(feature = "local-workspace")]
 fn local_workspace_ack_path() -> Option<std::path::PathBuf> {
-    let home = std::env::var("GROK_HOME")
+    let home = std::env::var("SUPERCHARGE_HOME")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .map(std::path::PathBuf::from)
         .or_else(|| {
             dirs::home_dir()
                 .or_else(|| std::env::var_os("HOME").map(Into::into))
-                .map(|h| h.join(".grok"))
+                .map(|h| h.join(".supercharge"))
         })?;
     Some(home.join("local_workspace_ack"))
 }
@@ -727,7 +728,7 @@ pub struct MaterializeCtx {
     pub has_worktree: bool,
     /// When true, attempt remote restore if the session is not on disk.
     pub allow_remote_restore: bool,
-    /// Process-wide flag: resume targets are grok.com conversations, not
+    /// Process-wide flag: resume targets are supercharge.ai conversations, not
     /// the local disk store. Always `false` without the optional feature;
     /// setting it anyway errors rather than silently falling back to disk.
     pub chat_mode: bool,
@@ -775,12 +776,12 @@ async fn most_recent_session_id(cwd: &str) -> anyhow::Result<(String, Option<Str
     let first = summaries.first().ok_or_else(|| {
         anyhow::anyhow!(
             "No session found for current directory. \
-             Use 'grok' to start a new session."
+             Use 'Supercharge AI' to start a new session."
         )
     })?;
     Ok((first.info.id.to_string(), first.display_title_opt()))
 }
-/// `AuthManager` for direct grok.com calls made outside the agent (pre-ACP
+/// `AuthManager` for direct supercharge.ai calls made outside the agent (pre-ACP
 /// `--continue` conversation listing, the GCS restore effect). Wires the
 /// auth-provider refresher before the first `auth()`: without it, environments
 /// that mint credentials via `auth_provider_command` report `NoOauth`.
@@ -1165,7 +1166,7 @@ async fn restore_session_from_remote(
         Some(auth_manager),
         None,
         None,
-        "grok-pager",
+        "Supercharge AI-pager",
     );
     let progress: xai_grok_shell::session::restore::ProgressCallback = Box::new(move |event| {
         emit_pre_tui_restore_line(progress_on_stdout, &format!("  {}", event.display_line()));
@@ -1374,7 +1375,7 @@ mod tests {
         assert!(git2::Repository::discover(&dir).is_err());
         assert!(parent_session_is_worktree("any-sid", &dir));
     }
-    #[serial_test::serial(GROK_HOME)]
+    #[serial_test::serial(SUPERCHARGE_HOME)]
     #[test]
     fn parent_session_is_worktree_summary_session_kind() {
         let mut fx = crate::test_util::GrokHomeFixture::new();
@@ -1387,7 +1388,7 @@ mod tests {
         );
         assert!(parent_session_is_worktree("sid-kind", &repo.path));
     }
-    #[serial_test::serial(GROK_HOME)]
+    #[serial_test::serial(SUPERCHARGE_HOME)]
     #[test]
     fn parent_session_is_worktree_summary_source_workspace_dir() {
         let mut fx = crate::test_util::GrokHomeFixture::new();
@@ -1406,7 +1407,7 @@ mod tests {
         );
         assert!(!parent_session_is_worktree("sid-src-empty", &repo.path));
     }
-    #[serial_test::serial(GROK_HOME)]
+    #[serial_test::serial(SUPERCHARGE_HOME)]
     #[test]
     fn parent_session_is_worktree_summary_worktree_label() {
         let mut fx = crate::test_util::GrokHomeFixture::new();
@@ -1453,14 +1454,14 @@ mod tests {
     #[test]
     fn intent_default_is_new_auto() {
         assert_eq!(
-            parse(&["grok"]).session_startup_intent().unwrap(),
+            parse(&["Supercharge AI"]).session_startup_intent().unwrap(),
             SessionStartupIntent::NewAuto
         );
     }
     #[test]
     fn intent_resume_id() {
         assert_eq!(
-            parse(&["grok", "--resume", "abc"])
+            parse(&["Supercharge AI", "--resume", "abc"])
                 .session_startup_intent()
                 .unwrap(),
             SessionStartupIntent::Resume {
@@ -1472,7 +1473,7 @@ mod tests {
     #[test]
     fn intent_resume_empty_is_most_recent() {
         assert_eq!(
-            parse(&["grok", "--resume"])
+            parse(&["Supercharge AI", "--resume"])
                 .session_startup_intent()
                 .unwrap(),
             SessionStartupIntent::Resume {
@@ -1484,7 +1485,9 @@ mod tests {
     #[test]
     fn intent_continue() {
         assert_eq!(
-            parse(&["grok", "-c"]).session_startup_intent().unwrap(),
+            parse(&["Supercharge AI", "-c"])
+                .session_startup_intent()
+                .unwrap(),
             SessionStartupIntent::Resume {
                 session_id: None,
                 most_recent_for_cwd: true,
@@ -1494,7 +1497,7 @@ mod tests {
     #[test]
     fn intent_session_id_alone_is_new_with_id() {
         assert_eq!(
-            parse(&["grok", "--session-id", "my-id"])
+            parse(&["Supercharge AI", "--session-id", "my-id"])
                 .session_startup_intent()
                 .unwrap(),
             SessionStartupIntent::NewWithId {
@@ -1504,7 +1507,7 @@ mod tests {
     }
     #[test]
     fn intent_session_id_with_resume_without_fork_errors() {
-        let err = parse(&["grok", "-r", "a", "-s", "b"])
+        let err = parse(&["Supercharge AI", "-r", "a", "-s", "b"])
             .session_startup_intent()
             .unwrap_err();
         assert_eq!(err, StartupFlagError::SessionIdRequiresFork);
@@ -1512,7 +1515,7 @@ mod tests {
     #[test]
     fn intent_fork_with_resume() {
         assert_eq!(
-            parse(&["grok", "-r", "old", "--fork-session"])
+            parse(&["Supercharge AI", "-r", "old", "--fork-session"])
                 .session_startup_intent()
                 .unwrap(),
             SessionStartupIntent::ForkFrom {
@@ -1525,7 +1528,7 @@ mod tests {
     #[test]
     fn intent_fork_with_resume_and_new_id() {
         assert_eq!(
-            parse(&["grok", "-r", "old", "--fork-session", "-s", "new"])
+            parse(&["Supercharge AI", "-r", "old", "--fork-session", "-s", "new"])
                 .session_startup_intent()
                 .unwrap(),
             SessionStartupIntent::ForkFrom {
@@ -1537,21 +1540,21 @@ mod tests {
     }
     #[test]
     fn intent_fork_alone_errors() {
-        let err = parse(&["grok", "--fork-session"])
+        let err = parse(&["Supercharge AI", "--fork-session"])
             .session_startup_intent()
             .unwrap_err();
         assert_eq!(err, StartupFlagError::ForkRequiresResumeOrContinue);
     }
     #[test]
     fn intent_fork_with_worktree_errors() {
-        let err = parse(&["grok", "-r", "a", "--fork-session", "-w"])
+        let err = parse(&["Supercharge AI", "-r", "a", "--fork-session", "-w"])
             .session_startup_intent()
             .unwrap_err();
         assert_eq!(err, StartupFlagError::ForkWithWorktree);
     }
     #[test]
     fn intent_from_flags_matches_pager_args() {
-        let args = parse(&["grok", "-r", "old", "--fork-session", "-s", "new"]);
+        let args = parse(&["Supercharge AI", "-r", "old", "--fork-session", "-s", "new"]);
         let from_flags = session_startup_intent_from_flags(SessionStartupFlags {
             session_id: Some("new"),
             resume_session_id: Some("old"),
@@ -1655,33 +1658,41 @@ mod tests {
     }
     #[test]
     fn materialize_ctx_chat_mode_from_args() {
-        assert!(!MaterializeCtx::from_pager_args(&parse(&["grok"])).chat_mode);
+        assert!(!MaterializeCtx::from_pager_args(&parse(&["Supercharge AI"])).chat_mode);
     }
     /// hardcoded `false` here once disabled it everywhere.
     #[test]
     fn remote_restore_follows_compiled_restore_stack() {
         assert_eq!(
-            MaterializeCtx::from_pager_args(&parse(&["grok"])).allow_remote_restore,
+            MaterializeCtx::from_pager_args(&parse(&["Supercharge AI"])).allow_remote_restore,
             false
         );
     }
     #[test]
     fn from_pager_args_does_not_probe_tty_for_progress() {
         assert!(
-            !MaterializeCtx::from_pager_args(&parse(&["grok"])).restore_progress_on_stdout,
+            !MaterializeCtx::from_pager_args(&parse(&["Supercharge AI"]))
+                .restore_progress_on_stdout,
             "stdout vs stderr is decided at the composition root, not from_pager_args"
         );
     }
     #[test]
     fn materialize_ctx_restore_code_follows_cli_flag() {
-        assert!(!MaterializeCtx::from_pager_args(&parse(&["grok"])).restore_code);
-        assert!(!MaterializeCtx::from_pager_args(&parse(&["grok", "-r", "abc"])).restore_code);
+        assert!(!MaterializeCtx::from_pager_args(&parse(&["Supercharge AI"])).restore_code);
         assert!(
-            MaterializeCtx::from_pager_args(&parse(&["grok", "-r", "abc", "--restore-code"]))
-                .restore_code
+            !MaterializeCtx::from_pager_args(&parse(&["Supercharge AI", "-r", "abc"])).restore_code
+        );
+        assert!(
+            MaterializeCtx::from_pager_args(&parse(&[
+                "Supercharge AI",
+                "-r",
+                "abc",
+                "--restore-code"
+            ]))
+            .restore_code
         );
         let wt = MaterializeCtx::from_pager_args(&parse(&[
-            "grok",
+            "Supercharge AI",
             "-r",
             "abc",
             "--restore-code",
@@ -2038,11 +2049,11 @@ mod tests {
     }
     /// The chat passthrough does not bypass the cwd-collision refusal that
     /// `app/mod.rs` runs on the materialized id.
-    #[serial_test::serial(GROK_HOME)]
+    #[serial_test::serial(SUPERCHARGE_HOME)]
     #[tokio::test]
     async fn chat_resume_passthrough_keeps_cwd_collision_refusal() {
         let home = tempfile::tempdir().expect("home tempdir");
-        unsafe { std::env::set_var("GROK_HOME", home.path()) };
+        unsafe { std::env::set_var("SUPERCHARGE_HOME", home.path()) };
         let cwd = tempfile::tempdir().expect("cwd tempdir");
         let cwd_str = cwd.path().to_string_lossy().to_string();
         let id = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -2107,7 +2118,7 @@ mod tests {
         }
         /// Also covers letter-case insensitivity: the query case differs from
         /// the stored title.
-        #[serial_test::serial(GROK_HOME)]
+        #[serial_test::serial(SUPERCHARGE_HOME)]
         #[tokio::test]
         async fn title_fallback_resumes_single_match_case_insensitively() {
             let mut fx = GrokHomeFixture::new();
@@ -2140,7 +2151,7 @@ mod tests {
         /// Id resolution stays authoritative: when the arg is an on-disk
         /// session id, the title fallback is never consulted even though
         /// another session carries that exact title.
-        #[serial_test::serial(GROK_HOME)]
+        #[serial_test::serial(SUPERCHARGE_HOME)]
         #[tokio::test]
         async fn id_hit_beats_title_fallback() {
             let mut fx = GrokHomeFixture::new();
@@ -2168,7 +2179,7 @@ mod tests {
         /// Provenance for the worktree failure hint: only the defer arm (a
         /// local id/title miss under `--worktree`) flags the target; a
         /// resolved local id — even a legacy non-UUID one — never does.
-        #[serial_test::serial(GROK_HOME)]
+        #[serial_test::serial(SUPERCHARGE_HOME)]
         #[tokio::test]
         async fn worktree_defer_flags_local_miss_and_local_hit_does_not() {
             let mut fx = GrokHomeFixture::new();
@@ -2239,12 +2250,12 @@ mod tests {
     #[cfg(feature = "local-workspace")]
     fn advertised_tools_env() -> xai_grok_test_support::EnvGuard {
         xai_grok_test_support::EnvGuard::set(
-            GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
             "workspace.fs_list,workspace.fs_read_file,workspace.fs_write_file,workspace.fs_exists,workspace.fs_delete_file,workspace.put_files,workspace.get_files",
         )
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
     #[test]
     fn resolve_local_workspace_attach_from_cli() {
         let _env = advertised_tools_env();
@@ -2258,13 +2269,13 @@ mod tests {
         assert_eq!(cfg.cwd.as_deref(), Some(canon.as_path()));
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID)]
     #[test]
     fn resolve_local_workspace_empty_cli_attach_falls_back_to_env() {
         let _env = advertised_tools_env();
         let _sid = xai_grok_test_support::EnvGuard::set(
-            GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV,
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV,
             "srv-from-env",
         );
         let tmp = tempfile::tempdir().unwrap();
@@ -2275,20 +2286,22 @@ mod tests {
         assert_eq!(cfg.server_id.as_deref(), Some("srv-from-env"));
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_CWD)]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE)]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_MODE)]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_CWD)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID)]
     #[test]
     fn resolve_local_workspace_cwd_only_is_not_a_request() {
         let tmp = tempfile::tempdir().unwrap();
         let _cwd = xai_grok_test_support::EnvGuard::set(
-            GROK_CHAT_LOCAL_WORKSPACE_CWD_ENV,
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_CWD_ENV,
             tmp.path().to_str().unwrap(),
         );
-        let _enable = xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_ENV);
-        let _mode = xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_MODE_ENV);
-        let _sid = xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV);
+        let _enable = xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ENV);
+        let _mode =
+            xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE_ENV);
+        let _sid =
+            xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV);
         let cfg = resolve_local_workspace_config(true, None, None, Some(tmp.path())).unwrap();
         assert!(
             cfg.is_none(),
@@ -2296,7 +2309,7 @@ mod tests {
         );
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
     #[test]
     fn resolve_local_workspace_own_from_cli() {
         let _env = advertised_tools_env();
@@ -2313,16 +2326,19 @@ mod tests {
         assert_eq!(cfg.cwd.as_deref(), Some(canon.as_path()));
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
     #[test]
     fn resolve_local_workspace_own_env_defaults() {
         let _env = advertised_tools_env();
-        let _enable = xai_grok_test_support::EnvGuard::set(GROK_CHAT_LOCAL_WORKSPACE_ENV, "1");
-        let _mode = xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_MODE_ENV);
-        let _sid = xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV);
+        let _enable =
+            xai_grok_test_support::EnvGuard::set(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ENV, "1");
+        let _mode =
+            xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_MODE_ENV);
+        let _sid =
+            xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_SERVER_ID_ENV);
         let cwd = tempfile::tempdir().unwrap();
         let _cwd = xai_grok_test_support::EnvGuard::set(
-            GROK_CHAT_LOCAL_WORKSPACE_CWD_ENV,
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_CWD_ENV,
             cwd.path().to_str().unwrap(),
         );
         let cfg = resolve_local_workspace_config(true, None, None, None)
@@ -2334,7 +2350,7 @@ mod tests {
         assert_eq!(cfg.cwd.as_deref(), Some(canon.as_path()));
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
     #[test]
     fn resolve_local_workspace_requires_chat() {
         let _env = advertised_tools_env();
@@ -2345,18 +2361,18 @@ mod tests {
         );
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME)]
     #[serial_test::serial(HOME)]
     #[serial_test::serial(USERPROFILE)]
     #[test]
     fn resolve_local_workspace_defaults_cwd_and_denies_home() {
         let _tools = xai_grok_test_support::EnvGuard::set(
-            GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
             "workspace.fs_list",
         );
         let _allow =
-            xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV);
+            xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV);
         let home = tempfile::tempdir().unwrap();
         let home_str = home.path().to_str().unwrap();
         let _home = xai_grok_test_support::EnvGuard::set("HOME", home_str);
@@ -2366,11 +2382,12 @@ mod tests {
         assert!(err.to_string().contains("ALLOW_HOME"), "unexpected: {err}");
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
     #[test]
     fn resolve_local_workspace_refuses_uncheckable_toolset() {
-        let _tools =
-            xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV);
+        let _tools = xai_grok_test_support::EnvGuard::unset(
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
+        );
         let tmp = tempfile::tempdir().unwrap();
         let err =
             resolve_local_workspace_config(true, None, Some("srv"), Some(tmp.path())).unwrap_err();
@@ -2380,11 +2397,11 @@ mod tests {
         );
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS)]
     #[test]
     fn resolve_local_workspace_refuses_non_fs_toolset() {
         let _tools = xai_grok_test_support::EnvGuard::set(
-            GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
+            SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS_ENV,
             "workspace.fs_list,workspace.bash",
         );
         let tmp = tempfile::tempdir().unwrap();
@@ -2404,14 +2421,14 @@ mod tests {
         assert!(LOCAL_WORKSPACE_HITL_HINT.contains("replaces the chat sandbox"));
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ACK)]
-    #[serial_test::serial(GROK_HOME)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK)]
+    #[serial_test::serial(SUPERCHARGE_HOME)]
     #[test]
     fn local_workspace_non_tty_requires_ack() {
-        let _ack = xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_ACK_ENV);
+        let _ack = xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV);
         let home = tempfile::tempdir().unwrap();
         let _home =
-            xai_grok_test_support::EnvGuard::set("GROK_HOME", home.path().to_str().unwrap());
+            xai_grok_test_support::EnvGuard::set("SUPERCHARGE_HOME", home.path().to_str().unwrap());
         let cfg = LocalWorkspaceConfig {
             mode: LocalWorkspaceMode::Attach,
             cwd: Some(std::path::PathBuf::from("/tmp/repo")),
@@ -2424,11 +2441,11 @@ mod tests {
         );
     }
     #[cfg(feature = "local-workspace")]
-    #[serial_test::serial(GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME)]
+    #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME)]
     #[test]
     fn validate_local_workspace_cwd_denies_root() {
         let _allow =
-            xai_grok_test_support::EnvGuard::unset(GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV);
+            xai_grok_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ALLOW_HOME_ENV);
         let err = validate_local_workspace_cwd(std::path::Path::new("/")).unwrap_err();
         assert!(err.to_string().contains("ALLOW_HOME"), "{err}");
     }

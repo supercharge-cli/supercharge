@@ -110,10 +110,10 @@ impl Default for ClientId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientMode {
-    /// Headless mode (grok agent, grok agent headless) - uses websocket relay.
+    /// Headless mode (Supercharge AI agent, Supercharge AI agent headless) - uses websocket relay.
     /// Leader connects to websocket relay once and forwards messages.
     Headless,
-    /// Stdio mode (grok agent stdio, grok -p) - uses local IPC.
+    /// Stdio mode (Supercharge AI agent stdio, Supercharge AI -p) - uses local IPC.
     /// Client sends/receives ACP messages directly via IPC.
     Stdio,
 }
@@ -184,7 +184,7 @@ pub struct LeaderCapabilities {
     pub workspace_exposure: bool,
     /// Whether the leader supports [`ControlCommand::RelaunchForUpdate`] — a
     /// disruptive, bounded-grace relaunch onto a freshly-installed binary
-    /// (driven by `grok update`). Old leaders default to `false`, so a new
+    /// (driven by `supercharge update`). Old leaders default to `false`, so a new
     /// client falls back to advising a manual restart (graceful degradation).
     #[serde(default)]
     pub relaunch_v1: bool,
@@ -212,12 +212,12 @@ pub enum ControlCommand {
     WorkspaceStop,
     WorkspaceStatus,
     /// Ask the leader to relaunch onto a freshly-installed binary (driven by
-    /// `grok update`). The leader stops admitting new turns, waits a bounded
+    /// `supercharge update`). The leader stops admitting new turns, waits a bounded
     /// grace period for in-flight turns to finish, flushes session state, then
     /// exits with [`ShutdownReason::AutoUpdate`] so connected clients reconnect
     /// onto the new binary and restore their sessions via `session/load`.
     ///
-    /// `to_version` is the version `grok update` just installed; the leader uses
+    /// `to_version` is the version `supercharge update` just installed; the leader uses
     /// it to decline if it is already running that version or newer.
     RelaunchForUpdate {
         to_version: String,
@@ -722,7 +722,7 @@ mod tests {
             cwd: Some("/home/u/proj".into()),
             uptime_ms: 4200,
             active_tool_calls: 2,
-            sessions: vec!["grok-a".into(), "grok-b".into()],
+            sessions: vec!["Supercharge AI-a".into(), "Supercharge AI-b".into()],
             pid: 4242,
         };
         let json = serde_json::to_string(&payload).unwrap();

@@ -120,7 +120,10 @@ fn is_figma_mcp_matches_name_and_host() {
     assert!(is_figma_mcp("figma", "https://example.com/mcp"));
     assert!(is_figma_mcp("Figma", "https://example.com/mcp"));
     assert!(is_figma_mcp("grok_com_figma", "https://example.com/mcp"));
-    assert!(is_figma_mcp("GROK_COM_FIGMA", "https://example.com/mcp"));
+    assert!(is_figma_mcp(
+        "SUPERCHARGE_COM_FIGMA",
+        "https://example.com/mcp"
+    ));
     assert!(is_figma_mcp("grok_com_FIGMA", "https://example.com/mcp"));
     assert!(is_figma_mcp("other", "https://mcp.figma.com/mcp"));
     assert!(is_figma_mcp("other", "https://figma.com/mcp"));
@@ -3266,13 +3269,13 @@ fn config_added_kind_carries_correct_server_name() {
 #[test]
 fn apply_stdio_env_session_id_cannot_be_shadowed() {
     let mut cmd = Command::new("true");
-    let env = vec![acp::EnvVariable::new("GROK_SESSION_ID", "spoofed")];
+    let env = vec![acp::EnvVariable::new("SUPERCHARGE_SESSION_ID", "spoofed")];
     apply_stdio_env(&mut cmd, &env, Some("sess-real"));
 
     let value = cmd
         .as_std()
         .get_envs()
-        .find(|(k, _)| *k == "GROK_SESSION_ID")
+        .find(|(k, _)| *k == "SUPERCHARGE_SESSION_ID")
         .and_then(|(_, v)| v)
         .map(|v| v.to_string_lossy().into_owned());
     assert_eq!(value.as_deref(), Some("sess-real"));

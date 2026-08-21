@@ -37,12 +37,14 @@ pub(crate) fn dir_named(p: &Path, name: &str) -> bool {
     p.file_name().is_some_and(|n| n == name)
 }
 
-/// Whether Sapling (`.sl`) support is enabled (default on; `GROK_FSNOTIFY_SAPLING=0`
+/// Whether Sapling (`.sl`) support is enabled (default on; `SUPERCHARGE_FSNOTIFY_SAPLING=0`
 /// or `false` disables it). Resolved once per watcher in `FsEventSource::start_on`
 /// and threaded down, so discovery, watching, and filtering can't disagree.
 pub(crate) fn sapling_enabled() -> bool {
     !matches!(
-        std::env::var("GROK_FSNOTIFY_SAPLING").ok().as_deref(),
+        std::env::var("SUPERCHARGE_FSNOTIFY_SAPLING")
+            .ok()
+            .as_deref(),
         Some("0") | Some("false")
     )
 }

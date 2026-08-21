@@ -356,7 +356,7 @@ pub fn write_runtime_config(
     );
     model.insert(
         "agent_type".to_owned(),
-        toml::Value::String("grok-build".to_owned()),
+        toml::Value::String("supercharge-core".to_owned()),
     );
     model.insert("context_window".to_owned(), toml::Value::Integer(128_000));
     let mut model_section = toml::map::Map::new();

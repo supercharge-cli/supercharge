@@ -98,7 +98,7 @@ fn resolve_device_flow(
     config: Option<bool>,
     remote: Option<bool>,
 ) -> crate::agent::config::Resolved<bool> {
-    crate::agent::config::BoolFlag::env("GROK_LOGIN_DEVICE_FLOW")
+    crate::agent::config::BoolFlag::env("SUPERCHARGE_LOGIN_DEVICE_FLOW")
         .cli(login_override.as_cli_bool())
         .config(config)
         .feature_flag(remote)
@@ -118,7 +118,7 @@ async fn cli_should_use_device(
 
 /// Whether interactive xAI OAuth2 login uses the RFC 8628 device flow (vs loopback).
 ///
-/// Precedence: CLI (`--oauth`/`--device-auth`) > `GROK_LOGIN_DEVICE_FLOW` env >
+/// Precedence: CLI (`--oauth`/`--device-auth`) > `SUPERCHARGE_LOGIN_DEVICE_FLOW` env >
 /// `[auth] login_device_flow` config > `grok_build_login_device_flow` remote feature flag > loopback.
 async fn should_use_device_flow(login_override: LoginTransportOverride) -> bool {
     // Already resolved (and logged) upstream — honor it without re-resolving or
@@ -131,7 +131,7 @@ async fn should_use_device_flow(login_override: LoginTransportOverride) -> bool 
         resolve_device_flow(login_override, None, None)
     } else {
         // Read once to gate the fetch; resolve_device_flow reads it again for the decision.
-        let env = crate::agent::config::env_bool("GROK_LOGIN_DEVICE_FLOW");
+        let env = crate::agent::config::env_bool("SUPERCHARGE_LOGIN_DEVICE_FLOW");
         // One config snapshot feeds both the `[auth]` tier and the proxy URL.
         let effective = crate::config::load_effective_config().ok();
         let config = config_login_device_flow(effective.as_ref());
@@ -203,7 +203,7 @@ pub struct AuthChannels {
     pub code_rx: mpsc::Receiver<String>,
 }
 
-/// Sets no `GROK_AUTH_EXPIRED`: operator binaries, which live outside this
+/// Sets no `SUPERCHARGE_AUTH_EXPIRED`: operator binaries, which live outside this
 /// repo, read that variable as "headless, don't prompt" and decline the run.
 async fn run_external_auth_provider(
     command: &str,
@@ -655,7 +655,7 @@ async fn run_auth_flow_steps(
     // browser and won't work on headless devboxes), try minting OIDC
     // credentials via the remote devbox login helper.
     // preferred_method=api_key: never auto-mint OIDC (fail-closed). Explicit
-    // `grok login --devbox` uses run_devbox_login and is not gated here.
+    // `supercharge login --devbox` uses run_devbox_login and is not gated here.
     if !grok_com_config.blocks_automatic_oidc()
         && crate::auth::devbox_login::is_devbox_environment()
     {
@@ -690,7 +690,7 @@ async fn run_auth_flow_steps(
     // Enterprise OIDC keeps loopback (customer IdPs may lack a device endpoint).
     // xAI OAuth2 also defaults to loopback; the device flow (robust on
     // remote/SSH where the loopback redirect can't reach the CLI) is opt-in via
-    // --device-auth / GROK_LOGIN_DEVICE_FLOW / [auth] login_device_flow.
+    // --device-auth / SUPERCHARGE_LOGIN_DEVICE_FLOW / [auth] login_device_flow.
     if crate::auth::oidc::is_configured(grok_com_config) {
         return crate::auth::oidc::run_login_flow(grok_com_config, auth_manager, channels).await;
     }
@@ -733,7 +733,7 @@ async fn run_auth_flow_steps(
         "auth: no OAuth2 configuration available (neither enterprise OIDC nor xAI OAuth2 configured)"
     );
     anyhow::bail!(
-        "No OAuth2 configuration available. Run `grok login` to authenticate, or contact your administrator if you use enterprise SSO."
+        "No OAuth2 configuration available. Run `supercharge login` to authenticate, or contact your administrator if you use enterprise SSO."
     )
 }
 
@@ -955,10 +955,10 @@ pub async fn ensure_authenticated_or_noninteractive(
     }
 }
 
-/// Unified `grok login` handler for CLI entry points (tui, pager).
+/// Unified `supercharge login` handler for CLI entry points (tui, pager).
 ///
 /// Precedence: `--oauth` forces loopback, `--device-auth` forces device,
-/// otherwise `GROK_LOGIN_DEVICE_FLOW` env / `[auth] login_device_flow` config /
+/// otherwise `SUPERCHARGE_LOGIN_DEVICE_FLOW` env / `[auth] login_device_flow` config /
 /// loopback default. Both transports run through `run_auth_flow_inner` so the
 /// external auth provider and devbox auto-migration are tried first.
 pub async fn run_cli_login(
@@ -976,7 +976,7 @@ pub async fn run_cli_login(
     }
 
     // Agent bootstrap is what normally initializes the product telemetry
-    // client, and `grok login` never boots an agent, so without this every
+    // client, and `supercharge login` never boots an agent, so without this every
     // event this process emits is dropped before reaching a sink. One manager
     // serves both the identity it reads and the login flow below.
     let auth_manager = Arc::new(AuthManager::new(
@@ -1003,13 +1003,15 @@ async fn run_cli_login_steps(
 
     // Mirror `run_auth_flow_inner`'s precedence: enterprise OIDC (oidc=Some,
     // oauth2=None) always uses the loopback flow; only the xAI OAuth2 provider
-    // supports the device flow. Without this guard, `grok login` on an
+    // supports the device flow. Without this guard, `supercharge login` on an
     // enterprise-OIDC deployment would wrongly enter the device branch (which
     // requires `oauth2`) and error.
     let authenticated = if cli_should_use_device(&config.grok_com_config, login_override).await {
         if config.grok_com_config.oauth2.is_none() {
             // No OIDC and no oauth2 here, so `--oauth` can't help.
-            anyhow::bail!("Sign-in is not available for this deployment. Set XAI_API_KEY instead.");
+            anyhow::bail!(
+                "Sign-in is not available for this deployment. Set SUPERCHARGE_API_KEY instead."
+            );
         }
         // Route through the shared inner flow (not `run_device_code_login`
         // directly) so the external auth provider and devbox auto-migration run
@@ -1066,7 +1068,7 @@ async fn run_cli_login_steps(
 
 /// Sync this principal's config now rather than waiting for the background
 /// tick. Stay quiet about absence/failure during login — confirm only when
-/// config was actually applied; `grok setup` reports the no-config case.
+/// config was actually applied; `Supercharge AI setup` reports the no-config case.
 async fn apply_post_login_config(authenticated: GrokAuth) -> anyhow::Result<()> {
     let outcome = crate::managed_config::post_login_sync(Some(authenticated)).await;
     match outcome {
@@ -1089,7 +1091,7 @@ pub struct LogoutResult {
     pub was_logged_in: bool,
     /// Email of the session that was cleared (if available).
     pub email: Option<String>,
-    /// `true` if `XAI_API_KEY` / `GROK_CODE_XAI_API_KEY` env var is set.
+    /// `true` if `SUPERCHARGE_API_KEY` / `SUPERCHARGE_CODE_API_KEY` env var is set.
     pub api_key_still_set: bool,
 }
 
@@ -1145,7 +1147,7 @@ pub fn perform_logout(
     })
 }
 
-/// `grok logout` CLI handler. Calls [`perform_logout`] and formats
+/// `Supercharge AI logout` CLI handler. Calls [`perform_logout`] and formats
 /// the result to stderr.
 pub fn run_cli_logout(config: &crate::agent::config::Config) -> anyhow::Result<()> {
     let grok_home = grok_home::grok_home();
@@ -1155,7 +1157,7 @@ pub fn run_cli_logout(config: &crate::agent::config::Config) -> anyhow::Result<(
     if !result.was_logged_in {
         eprintln!("No cached session to log out of.");
         if result.api_key_still_set {
-            eprintln!("You are authenticated via XAI_API_KEY (environment variable).");
+            eprintln!("You are authenticated via SUPERCHARGE_API_KEY (environment variable).");
         }
         return Ok(());
     }
@@ -1179,7 +1181,7 @@ mod tests {
     use chrono::Utc;
 
     /// `os_error` and the reqwest classification are covered in
-    /// `xai-grok-http`; what's local is which `LoginFailureKind` each maps to,
+    /// `xai-Supercharge AI-http`; what's local is which `LoginFailureKind` each maps to,
     /// and that a decode failure never reads as a transport one.
     #[test]
     fn failure_kinds_map_one_to_one() {
@@ -1204,7 +1206,7 @@ mod tests {
     /// A login that never reached the network is not a transport failure. The
     /// positive path needs a real `reqwest::Error`, and building a client here
     /// flips `jsonwebtoken` into its "no CryptoProvider" panic and breaks
-    /// unrelated auth tests, so classification is covered in `xai-grok-http`.
+    /// unrelated auth tests, so classification is covered in `xai-Supercharge AI-http`.
     #[test]
     fn non_http_login_failures_are_not_reported() {
         let abandoned = anyhow::anyhow!("Login timed out after 10 minutes. Please try again.");
@@ -1214,19 +1216,19 @@ mod tests {
         assert!(login_failure_event(&nested).is_none());
     }
 
-    /// Run `f` with `GROK_LOGIN_DEVICE_FLOW` set to `value` (unset for `None`).
+    /// Run `f` with `SUPERCHARGE_LOGIN_DEVICE_FLOW` set to `value` (unset for `None`).
     /// `EnvVarGuard` serializes the process env and restores it on drop, so
     /// `resolve_device_flow` reads the env tier from a known state.
     fn with_device_flow_env<T>(value: Option<bool>, f: impl FnOnce() -> T) -> T {
         let _guard = match value {
-            Some(true) => EnvVarGuard::set("GROK_LOGIN_DEVICE_FLOW", "true"),
-            Some(false) => EnvVarGuard::set("GROK_LOGIN_DEVICE_FLOW", "false"),
-            None => EnvVarGuard::remove("GROK_LOGIN_DEVICE_FLOW"),
+            Some(true) => EnvVarGuard::set("SUPERCHARGE_LOGIN_DEVICE_FLOW", "true"),
+            Some(false) => EnvVarGuard::set("SUPERCHARGE_LOGIN_DEVICE_FLOW", "false"),
+            None => EnvVarGuard::remove("SUPERCHARGE_LOGIN_DEVICE_FLOW"),
         };
         f()
     }
 
-    // A grok.com first-party (x.ai-issuer) OIDC session — `is_xai_auth()` true.
+    // A supercharge.ai first-party (x.ai-issuer) OIDC session — `is_xai_auth()` true.
     fn oidc_session(key: &str, refresh: Option<&str>) -> GrokAuth {
         GrokAuth {
             key: key.into(),
@@ -1340,7 +1342,7 @@ mod tests {
 
     #[tokio::test]
     async fn interactive_login_carries_no_expired_flag_even_over_a_stale_credential() {
-        let echo_env = "printf '%s' \"e=${GROK_AUTH_EXPIRED:-unset}\"";
+        let echo_env = "printf '%s' \"e=${SUPERCHARGE_AUTH_EXPIRED:-unset}\"";
         let dir = tempfile::tempdir().unwrap();
         let mgr = Arc::new(
             AuthManager::new(dir.path(), GrokComConfig::default())
@@ -1363,8 +1365,7 @@ mod tests {
     /// The script is the one published in `README.md`, which operators copy.
     #[tokio::test]
     async fn a_provider_written_to_the_published_contract_can_sign_in_after_an_expiry() {
-        let conforming =
-            r#"if [ "$GROK_AUTH_EXPIRED" = "1" ]; then exit 1; else printf '%s' sso-token; fi"#;
+        let conforming = r#"if [ "$SUPERCHARGE_AUTH_EXPIRED" = "1" ]; then exit 1; else printf '%s' sso-token; fi"#;
         let dir = tempfile::tempdir().unwrap();
         let mgr = Arc::new(
             AuthManager::new(dir.path(), GrokComConfig::default())
@@ -1548,14 +1549,14 @@ mod tests {
         // opposite env value, so a leak into the resolver would flip the result —
         // returning the carried value proves the early return (and no second log).
         {
-            let _guard = EnvVarGuard::set("GROK_LOGIN_DEVICE_FLOW", "false");
+            let _guard = EnvVarGuard::set("SUPERCHARGE_LOGIN_DEVICE_FLOW", "false");
             assert!(
                 should_use_device_flow(LoginTransportOverride::Preresolved(true)).await,
                 "Preresolved(true) honors device without re-resolving"
             );
         }
         {
-            let _guard = EnvVarGuard::set("GROK_LOGIN_DEVICE_FLOW", "true");
+            let _guard = EnvVarGuard::set("SUPERCHARGE_LOGIN_DEVICE_FLOW", "true");
             assert!(
                 !should_use_device_flow(LoginTransportOverride::Preresolved(false)).await,
                 "Preresolved(false) honors loopback without re-resolving"
@@ -1601,7 +1602,7 @@ mod tests {
 
     #[tokio::test]
     async fn enterprise_oidc_never_uses_device_flow() {
-        // oidc=Some, oauth2=None: `grok login` must use loopback, not device —
+        // oidc=Some, oauth2=None: `supercharge login` must use loopback, not device —
         // even when --device-auth forces device (which would otherwise be true).
         // ForceDevice short-circuits the remote settings fetch, so this stays hermetic.
         let cfg = GrokComConfig {
@@ -2052,7 +2053,7 @@ mod tests {
         mgr.set_refresher(std::sync::Arc::new(AlwaysTransientRefresher));
 
         // Force device explicitly so the assertion doesn't depend on ambient
-        // GROK_LOGIN_DEVICE_FLOW / the real config file (the CLI override
+        // SUPERCHARGE_LOGIN_DEVICE_FLOW / the real config file (the CLI override
         // short-circuits the config read).
         let result = run_auth_flow(
             &mgr,
@@ -2108,7 +2109,7 @@ mod tests {
         assert_eq!(extract("some opaque output"), "some opaque output");
     }
 
-    /// CLI `grok login` passes `on_stderr=None`; stderr must be inherited so
+    /// CLI `supercharge login` passes `on_stderr=None`; stderr must be inherited so
     /// sign-in URLs appear in real time. Piped stderr with no reader deadlocks
     /// once the child writes past the pipe buffer (~64 KiB).
     #[tokio::test]

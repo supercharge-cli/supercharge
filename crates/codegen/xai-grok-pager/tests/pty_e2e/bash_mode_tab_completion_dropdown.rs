@@ -18,14 +18,14 @@ const HISTORY_SENTINEL: &str = "SUGGESTHISTROW";
 const TYPED_PREFIX: &str = "!cat SUGGEST";
 
 /// Env: NO suggestion flag — Tab completion in bash mode is always on, and
-/// this test is the acceptance proof. `GROK_SUGGESTIONS=0` pins the
+/// this test is the acceptance proof. `SUPERCHARGE_SUGGESTIONS=0` pins the
 /// as-you-type pipeline OFF hermetically (the PTY child inherits the parent
 /// env, so a dev shell exporting the flag must not turn it on here); the
 /// shell-history tier is pinned to the seeded file.
 fn suggestions_env(histfile: &Path) -> Vec<(String, String)> {
     vec![
         ("SHELL".into(), "/bin/bash".into()),
-        ("GROK_SUGGESTIONS".into(), "0".into()),
+        ("SUPERCHARGE_SUGGESTIONS".into(), "0".into()),
         ("HISTFILE".into(), histfile.to_string_lossy().into_owned()),
     ]
 }

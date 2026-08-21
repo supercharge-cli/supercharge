@@ -123,7 +123,7 @@ impl WorkflowRegistry {
         {
             let root = project_root(cwd);
             let current = root.join(".supercharge").join("workflows");
-            let legacy = root.join(".grok").join("workflows");
+            let legacy = root.join(".supercharge").join("workflows");
             dirs.push((
                 if current.is_dir() || !legacy.is_dir() {
                     current
@@ -657,7 +657,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         git2::Repository::init(dir.path()).unwrap();
         let cwd = dir.path().join("nested");
-        let wf_dir = dir.path().join(".grok").join("workflows");
+        let wf_dir = dir.path().join(".supercharge").join("workflows");
         std::fs::create_dir_all(&cwd).unwrap();
         std::fs::create_dir_all(&wf_dir).unwrap();
         std::fs::write(wf_dir.join("alpha.rhai"), script("alpha")).unwrap();
@@ -702,7 +702,7 @@ mod tests {
     fn project_workflows_follow_folder_trust() {
         let dir = tempfile::tempdir().unwrap();
         git2::Repository::init(dir.path()).unwrap();
-        let workflows = dir.path().join(".grok/workflows");
+        let workflows = dir.path().join(".supercharge/workflows");
         std::fs::create_dir_all(&workflows).unwrap();
         std::fs::write(workflows.join("project-only.rhai"), script("project-only")).unwrap();
 
@@ -812,7 +812,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let project = dir.path().join("project");
-        let workflows = project.join(".grok/workflows");
+        let workflows = project.join(".supercharge/workflows");
         let target = dir.path().join("linked.rhai");
         std::fs::create_dir_all(&workflows).unwrap();
         std::fs::write(&target, script("linked")).unwrap();
@@ -858,7 +858,7 @@ mod tests {
         let path = save_project_workflow(&linked, "safe", &script("safe")).unwrap();
         assert_eq!(
             dunce::canonicalize(path).unwrap(),
-            project.join(".grok/workflows/safe.rhai")
+            project.join(".supercharge/workflows/safe.rhai")
         );
     }
 
@@ -870,9 +870,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let project = dir.path().join("project");
         let attacker = dir.path().join("attacker");
-        std::fs::create_dir_all(project.join(".grok")).unwrap();
+        std::fs::create_dir_all(project.join(".supercharge")).unwrap();
         std::fs::create_dir_all(&attacker).unwrap();
-        symlink(&attacker, project.join(".grok/workflows")).unwrap();
+        symlink(&attacker, project.join(".supercharge/workflows")).unwrap();
 
         assert!(matches!(
             save_project_workflow(&project, "safe", &script("safe")),

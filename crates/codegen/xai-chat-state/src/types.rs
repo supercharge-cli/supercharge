@@ -105,7 +105,7 @@ pub enum AuthType {
     /// From AuthManager (grok login, OIDC, external binary). Refreshable.
     #[default]
     SessionToken,
-    /// From user config ([model.*] api_key, env_key, XAI_API_KEY). Not refreshable.
+    /// From user config ([model.*] api_key, env_key, SUPERCHARGE_API_KEY). Not refreshable.
     ApiKey,
 }
 

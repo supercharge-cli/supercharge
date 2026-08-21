@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn ext_envelope_unwraps_success_result() {
-        let json = r#"{"result": {"path": "/home/user/.grok/worktrees.db"}, "error": null}"#;
+        let json = r#"{"result": {"path": "/home/user/.supercharge/worktrees.db"}, "error": null}"#;
         #[derive(serde::Deserialize)]
         struct PathResp {
             path: String,
@@ -397,7 +397,7 @@ mod tests {
         let envelope: ExtEnvelope<PathResp> = serde_json::from_str(json).unwrap();
         assert!(envelope.error.is_none());
         let inner = envelope.result.unwrap();
-        assert_eq!(inner.path, "/home/user/.grok/worktrees.db");
+        assert_eq!(inner.path, "/home/user/.supercharge/worktrees.db");
     }
 
     #[test]

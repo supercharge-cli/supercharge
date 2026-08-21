@@ -189,7 +189,7 @@ pub(crate) struct CompactionConfig {
     /// Auto-compaction suppression state (`SUPPRESS_*`) after a deterministic
     /// failure; the gates early-return unless `SUPPRESS_NONE`. Manual `/compact` ignores it.
     pub auto_compact_suppressed: AtomicU8,
-    /// Locks the context window when `GROK_DEBUG_CONTEXT_WINDOW` is set.
+    /// Locks the context window when `SUPERCHARGE_DEBUG_CONTEXT_WINDOW` is set.
     pub context_window_override: Option<std::num::NonZeroU64>,
     pub count: AtomicU64,
     /// Set at turn end; consumed at next turn start for model-switch compaction.
@@ -218,7 +218,7 @@ mod prefire_state_tests {
             note1: "NOTE1".to_string(),
             prefix_len: 3,
             fingerprint: 42,
-            model_slug: "grok".to_string(),
+            model_slug: "Supercharge AI".to_string(),
             pass1_latency_ms: 5,
         }
     }

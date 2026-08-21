@@ -937,7 +937,7 @@ fn render_rows_hit_rects_leave_no_dead_zones() {
     // rect. Use an unquantized theme: `Theme::current()` in the
     // test environment collapses `bg_hover` onto `bg_base`, which
     // (correctly) suppresses the halos.
-    let theme = Theme::groknight();
+    let theme = Theme::voltage_dark();
     assert_ne!(theme.bg_hover, theme.bg_base);
     let (id, rect) = state.row_rects[0].clone();
     state.hovered_row = Some(id);
@@ -1879,12 +1879,12 @@ fn feedback_badge_renders_verbatim_in_neutral_color() {
     let theme = Theme::current();
     let mut state = DashboardState::new();
     let check = crate::glyphs::check_mark();
-    state.error_toast = Some(format!("{check} Theme: Grok Day"));
+    state.error_toast = Some(format!("{check} Theme: Voltage Light"));
     let _ = render_dispatch(&mut buf, Rect::new(0, 0, 80, 3), &theme, &mut state, None);
 
     let top_row: String = (0..80).map(|x| buf[(x, 0)].symbol().to_string()).collect();
     assert!(
-        top_row.contains(&format!("{check} Theme: Grok Day")),
+        top_row.contains(&format!("{check} Theme: Voltage Light")),
         "badge must paint the message verbatim, got: {top_row:?}",
     );
     assert!(

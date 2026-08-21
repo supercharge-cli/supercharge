@@ -74,7 +74,7 @@ impl CheckpointStore {
         // `session_id` is RPC-controlled: never join it verbatim (a `../../etc`
         // would escape the store root). Map it to a safe, collision-free name first.
         let current_root = cwd.join(".supercharge").join(STORE_SUBDIR);
-        let legacy_root = cwd.join(".grok").join(STORE_SUBDIR);
+        let legacy_root = cwd.join(".supercharge").join(STORE_SUBDIR);
         let root = if current_root.exists() || !legacy_root.exists() {
             current_root
         } else {
@@ -490,7 +490,7 @@ mod tests {
         // ...and a `.gitignore` ignores the whole store so blobs are never committed.
         let gitignore = tmp
             .path()
-            .join(".grok")
+            .join(".supercharge")
             .join(STORE_SUBDIR)
             .join(".gitignore");
         let body = std::fs::read_to_string(&gitignore).expect("gitignore written");

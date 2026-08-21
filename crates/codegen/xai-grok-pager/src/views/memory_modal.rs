@@ -1176,9 +1176,12 @@ mod tests {
 
     #[test]
     fn file_label_extracts_filename() {
-        assert_eq!(file_label("/home/user/.grok/memory/MEMORY.md"), "MEMORY.md");
         assert_eq!(
-            file_label("/workspace/.grok/memory/sessions/2026-01-15-fix-bug.md"),
+            file_label("/home/user/.supercharge/memory/MEMORY.md"),
+            "MEMORY.md"
+        );
+        assert_eq!(
+            file_label("/workspace/.supercharge/memory/sessions/2026-01-15-fix-bug.md"),
             "2026-01-15-fix-bug.md"
         );
     }

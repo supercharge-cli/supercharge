@@ -4294,7 +4294,7 @@ pub(crate) fn execute(
                                 &scope,
                             )?;
                             let proxy_base = std::env::var(
-                                    "GROK_CLI_CHAT_PROXY_BASE_URL",
+                                    "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
                                 )
                                 .unwrap_or_else(|_| {
                                     xai_grok_shell::agent::config::CLI_CHAT_PROXY_BASE_URL_DEFAULT
@@ -4706,12 +4706,12 @@ fn format_session_info(
 fn format_auth_lines(is_api_key_auth: bool, api_key_env_set: bool) -> String {
     if is_api_key_auth {
         let method = if api_key_env_set {
-            "  Auth method: API key (XAI_API_KEY)\n"
+            "  Auth method: API key (SUPERCHARGE_API_KEY)\n"
         } else {
             "  Auth method: API key\n"
         };
         return format!(
-            "{method}  Run `grok login` to use your SuperGrok subscription instead.\n"
+            "{method}  Run `grok login` to use your Supercharge subscription instead.\n"
         );
     }
     String::from("  Auth method: OAuth\n")

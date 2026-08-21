@@ -1,6 +1,6 @@
 # Agent mode (ACP) and IDE integration
 
-Agent mode runs Grok as a long-lived server that clients talk to over [ACP](https://agentclientprotocol.com) (JSON-RPC). Use it from IDEs, SDKs, eval harnesses, and custom apps. For a one-shot prompt that prints and exits, use `grok -p` instead ([headless mode](14-headless-mode.md)).
+Agent mode runs Supercharge AI as a long-lived server that clients talk to over [ACP](https://agentclientprotocol.com) (JSON-RPC). Use it from IDEs, SDKs, eval harnesses, and custom apps. For a one-shot prompt that prints and exits, use `supercharge -p` instead ([headless mode](14-headless-mode.md)).
 
 ---
 
@@ -10,10 +10,10 @@ For scripts, CI, evals, and agent servers, start with always-approve so tools ru
 
 ```bash
 # stdio (local process / many SDKs)
-grok agent --always-approve stdio
+supercharge agent --always-approve stdio
 
 # WebSocket server
-grok agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
+supercharge agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 ```
 
 You can also set always-approve per session on `session/new`:
@@ -32,7 +32,7 @@ Interactive TUI users typically leave the default ask mode (or use auto). See [P
 
 ## What is ACP?
 
-The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) defines how clients talk to coding agents over JSON-RPC. With Grok it covers:
+The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) defines how clients talk to coding agents over JSON-RPC. With Supercharge AI it covers:
 
 - Sessions (create, load, resume)
 - Prompts and streamed replies
@@ -47,7 +47,7 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) defines how c
 stdio is the common local integration path. The agent speaks JSON-RPC on stdin and stdout:
 
 ```bash
-grok agent --always-approve stdio
+supercharge agent --always-approve stdio
 ```
 
 Typical clients: IDE extensions (Zed, Neovim, Emacs), custom tools, and ACP SDKs.
@@ -57,13 +57,13 @@ Typical clients: IDE extensions (Zed, Neovim, Emacs), custom tools, and ACP SDKs
 Agent options apply to every transport (`stdio`, `serve`, `headless`, `leader`). They go after `agent` and before the mode name. Mode-specific flags go after the mode (for example `serve --bind`).
 
 ```bash
-grok agent --always-approve --model grok-build stdio
-grok agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
+supercharge agent --always-approve --model supercharge-build stdio
+supercharge agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 ```
 
 | Flag | Description |
 | ---- | ----------- |
-| `-m, --model <MODEL>` | Model ID (for example `grok-build`). |
+| `-m, --model <MODEL>` | Model ID (for example `supercharge-build`). |
 | `--always-approve` | Run without interactive tool-permission prompts. Alias: `--yolo`. |
 | `--reauth` | Authenticate before the agent starts. |
 | `--agent-profile <PATH>` | Load an agent profile from a file. |
@@ -74,12 +74,12 @@ grok agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 ## Server mode
 
 ```bash
-grok agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
+supercharge agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 ```
 
-Clients connect over WebSocket and authenticate with the secret token. If you omit `--secret`, the agent prints a generated token at startup, or set `GROK_AGENT_SECRET`. The process keeps state across client reconnects. Permissions match other entry points; see [Permissions and safety](22-permissions-and-safety.md).
+Clients connect over WebSocket and authenticate with the secret token. If you omit `--secret`, the agent prints a generated token at startup, or set `SUPERCHARGE_AGENT_SECRET`. The process keeps state across client reconnects. Permissions match other entry points; see [Permissions and safety](22-permissions-and-safety.md).
 
-This is a server you run yourself — Grok's hosted cloud sandboxes do not run `grok agent serve`.
+This is a server you run yourself — Supercharge AI's hosted cloud sandboxes do not run `supercharge agent serve`.
 
 ---
 
@@ -88,7 +88,7 @@ This is a server you run yourself — Grok's hosted cloud sandboxes do not run `
 To reach the agent over the internet, connect the agent to a relay and point browsers at the same relay:
 
 ```bash
-grok agent --always-approve headless --grok-ws-url wss://your-relay.example.com/ws
+supercharge agent --always-approve headless --supercharge-ws-url wss://your-relay.example.com/ws
 ```
 
 ---
@@ -112,7 +112,7 @@ Communication follows the JSON-RPC 2.0 format. A typical session lifecycle:
 +-------------------+----------------------+
                     | JSON-RPC over stdio
 +-------------------v----------------------+
-|           grok agent stdio               |
+|           supercharge agent stdio               |
 |                                          |
 |  +---------+  +---------+  +---------+   |
 |  | Session |  |  Tools  |  |   MCP   |   |
@@ -141,21 +141,21 @@ Each update names its type, so a client can render distinct panels for reasoning
 
 ## Extension methods
 
-Beyond the base ACP protocol, Grok defines extension methods under the `x.ai/` prefix for SpaceXAI-specific functionality. These cover:
+Beyond the base ACP protocol, Supercharge AI defines extension methods under the `Voltage/` prefix for Voltage-specific functionality. These cover:
 
 | Category                   | Prefix               | Examples                                         |
 | -------------------------- | -------------------- | ------------------------------------------------ |
-| **Filesystem**             | `x.ai/fs/*`          | `list`, `exists`, `read_file`, `write_file`      |
-| **Git**                    | `x.ai/git/*`         | `status`, `stage`, `commit`, `diffs`, `discard`  |
-| **Git Worktree**           | `x.ai/git/worktree/*`| `create`, `remove`, `apply`, `list`, `gc`        |
-| **Search**                 | `x.ai/search/*`      | `fuzzy/open`, `fuzzy/change`, `content`          |
-| **Terminal**               | `x.ai/terminal/*`    | `create`, `kill`, `output`, `wait_for_exit`      |
-| **Session Management**     | `x.ai/session/*`     | `fork`, `resolve_local_for_worktree_resume`      |
-| **Conversation & History** | `x.ai/*`             | `prompt_history`, `rewind/*`, `compact_conversation` |
-| **Authentication**         | `x.ai/auth/*`        | `get_url`, `submit_code`                         |
-| **Feedback & Telemetry**   | `x.ai/*`             | `feedback`, `telemetry/*`                        |
+| **Filesystem**             | `Voltage/fs/*`          | `list`, `exists`, `read_file`, `write_file`      |
+| **Git**                    | `Voltage/git/*`         | `status`, `stage`, `commit`, `diffs`, `discard`  |
+| **Git Worktree**           | `Voltage/git/worktree/*`| `create`, `remove`, `apply`, `list`, `gc`        |
+| **Search**                 | `Voltage/search/*`      | `fuzzy/open`, `fuzzy/change`, `content`          |
+| **Terminal**               | `Voltage/terminal/*`    | `create`, `kill`, `output`, `wait_for_exit`      |
+| **Session Management**     | `Voltage/session/*`     | `fork`, `resolve_local_for_worktree_resume`      |
+| **Conversation & History** | `Voltage/*`             | `prompt_history`, `rewind/*`, `compact_conversation` |
+| **Authentication**         | `Voltage/auth/*`        | `get_url`, `submit_code`                         |
+| **Feedback & Telemetry**   | `Voltage/*`             | `feedback`, `telemetry/*`                        |
 
-The tables here show representative methods in each category. The `x.ai/*` set is SpaceXAI-specific and may expand across releases, so treat it as non-exhaustive and discover the available methods from the agent's `initialize` response.
+The tables here show representative methods in each category. The `Voltage/*` set is Voltage-specific and may expand across releases, so treat it as non-exhaustive and discover the available methods from the agent's `initialize` response.
 
 ### Notifications (agent to client)
 
@@ -163,13 +163,13 @@ The agent sends push notifications to clients for real-time updates:
 
 | Notification               | Description                          |
 | -------------------------- | ------------------------------------ |
-| `x.ai/search/fuzzy/status` | Fuzzy search results update          |
-| `x.ai/git/worktree/status` | Worktree creation progress           |
-| `x.ai/fs_notify`           | Filesystem change notification       |
-| `x.ai/fs/index`            | Full file index update               |
-| `x.ai/fs/index/delta`      | Incremental file index update        |
-| `x.ai/session_notification`| Session-specific updates (diff review, retry state, auto-compact) |
-| `x.ai/session/update`      | Session update (tool calls, content) |
+| `Voltage/search/fuzzy/status` | Fuzzy search results update          |
+| `Voltage/git/worktree/status` | Worktree creation progress           |
+| `Voltage/fs_notify`           | Filesystem change notification       |
+| `Voltage/fs/index`            | Full file index update               |
+| `Voltage/fs/index/delta`      | Incremental file index update        |
+| `Voltage/session_notification`| Session-specific updates (diff review, retry state, auto-compact) |
+| `Voltage/session/update`      | Session update (tool calls, content) |
 
 ---
 
@@ -227,7 +227,7 @@ Official SDK libraries are available for multiple languages:
 import { spawn, ChildProcess } from "child_process";
 import * as readline from "readline";
 
-class GrokACPChat {
+class Supercharge AIACPChat {
   private proc!: ChildProcess;
   private sessionId!: string;
   private rl!: readline.Interface;
@@ -235,7 +235,7 @@ class GrokACPChat {
   constructor(private cwd = ".") {}
 
   async init() {
-    this.proc = spawn("grok", ["agent", "--always-approve", "stdio"]);
+    this.proc = spawn("supercharge", ["agent", "--always-approve", "stdio"]);
     this.rl = readline.createInterface({ input: this.proc.stdout! });
 
     await this.request("initialize", {
@@ -292,7 +292,7 @@ class GrokACPChat {
 }
 
 // Usage
-const client = await new GrokACPChat(".").init();
+const client = await new Supercharge AIACPChat(".").init();
 
 for await (const update of client.streamPrompt("List the files in this project")) {
   switch (update.sessionUpdate) {

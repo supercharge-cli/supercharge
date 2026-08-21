@@ -117,14 +117,14 @@ fn credit_limit_retry_preserves_image_submission_state() {
 
 #[test]
 fn is_max_tier_positive_match() {
-    assert!(is_max_tier(Some("supergrok_heavy")));
-    assert!(is_max_tier(Some("SuperGrok Heavy")));
-    assert!(is_max_tier(Some("SUPERGROK_HEAVY")));
+    assert!(is_max_tier(Some("supercharge_heavy")));
+    assert!(is_max_tier(Some("Supercharge Heavy")));
+    assert!(is_max_tier(Some("SUPERSUPERCHARGE_HEAVY")));
 }
 
 #[test]
 fn is_max_tier_non_max_and_unknown() {
-    assert!(!is_max_tier(Some("supergrok")));
+    assert!(!is_max_tier(Some("supercharge")));
     assert!(!is_max_tier(Some("premium")));
     assert!(!is_max_tier(Some("free")));
     // Unknown defaults to non-max → Q&A shown.
@@ -133,15 +133,15 @@ fn is_max_tier_non_max_and_unknown() {
 
 #[test]
 fn is_max_tier_handles_mixed_case_and_whitespace() {
-    assert!(is_max_tier(Some("SuperGrok_Heavy")));
-    assert!(is_max_tier(Some("supergrok heavy")));
+    assert!(is_max_tier(Some("Supercharge_Heavy")));
+    assert!(is_max_tier(Some("supercharge heavy")));
     assert!(is_max_tier(Some("SUPERGROK HEAVY")));
 }
 
 #[test]
 fn is_max_tier_rejects_partial_matches() {
-    assert!(!is_max_tier(Some("supergrok_heav")));
-    assert!(!is_max_tier(Some("supergrok_heavy_plus")));
+    assert!(!is_max_tier(Some("supercharge_heav")));
+    assert!(!is_max_tier(Some("supercharge_heavy_plus")));
     assert!(!is_max_tier(Some("")));
 }
 
@@ -201,7 +201,7 @@ fn upsell_non_max_qa_heading_is_spending_cap_when_payg_on() {
 }
 
 #[test]
-fn upsell_non_max_upgrade_url_is_supergrok() {
+fn upsell_non_max_upgrade_url_is_supercharge() {
     let mut app = test_app_with_agent();
     open_upsell_qa(
         &mut app,
@@ -211,8 +211,8 @@ fn upsell_non_max_upgrade_url_is_supergrok() {
         .id
         .as_deref()
         .unwrap();
-    assert!(url.contains("supergrok"), "got: {url}");
-    assert!(url.contains("referrer=grok-build"), "got: {url}");
+    assert!(url.contains("supercharge"), "got: {url}");
+    assert!(url.contains("referrer=supercharge"), "got: {url}");
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn upsell_non_max_unified_shows_buy_credits() {
     assert_eq!(q.options[1].label, "Buy more credits");
     assert_eq!(
         q.options[1].description,
-        "Purchase credits to keep using Grok Build"
+        "Purchase credits to keep using Supercharge AI"
     );
 }
 
@@ -327,7 +327,7 @@ fn is_credit_limit_error_matches_legacy_403_and_pool_402() {
     assert!(is_credit_limit_error(Some(402), "anything"));
     assert!(is_credit_limit_error(
         None,
-        "API error (status 402 Payment Required): Grok Build usage balance exhausted"
+        "API error (status 402 Payment Required): Supercharge AI usage balance exhausted"
     ));
     assert!(is_credit_limit_error(
         None,
@@ -581,17 +581,17 @@ fn team_auth_disables_agent_billing_surface() {
     assert!(!app.agents.get(&AgentId(0)).unwrap().billing_surface_visible);
 }
 
-#[serial_test::serial(GROK_TEST_OPEN_URL_FILE)]
+#[serial_test::serial(SUPERCHARGE_TEST_OPEN_URL_FILE)]
 #[test]
 fn manage_billing_gates_on_consumer_billing_surface() {
     let out = std::env::temp_dir().join(format!("grok-manage-billing-{}.txt", std::process::id()));
     let _ = std::fs::remove_file(&out);
     // SAFETY: serialized via `serial_test` so no other test races the env var.
-    unsafe { std::env::set_var("GROK_TEST_OPEN_URL_FILE", &out) };
+    unsafe { std::env::set_var("SUPERCHARGE_TEST_OPEN_URL_FILE", &out) };
     let mut app = test_app_with_agent();
     dispatch(Action::ManageBilling, &mut app);
     let opened = std::fs::read_to_string(&out).unwrap_or_default();
-    assert!(opened.contains("grok.com/?_s=usage"), "got: {opened}");
+    assert!(opened.contains("supercharge.ai/?_s=usage"), "got: {opened}");
     let _ = std::fs::remove_file(&out);
 
     // Non-consumer: silent no-op (slash command never offers manage).
@@ -711,8 +711,8 @@ fn billing_fetched_updates_app_credit_balance() {
 #[test]
 fn billing_fetched_updates_subscription_tier() {
     let mut app = test_app_with_agent();
-    dispatch_billing(&mut app, None, true, Some("supergrok_heavy".into()));
-    assert_eq!(app.subscription_tier.as_deref(), Some("supergrok_heavy"));
+    dispatch_billing(&mut app, None, true, Some("supercharge_heavy".into()));
+    assert_eq!(app.subscription_tier.as_deref(), Some("supercharge_heavy"));
 }
 
 #[test]
@@ -1027,7 +1027,7 @@ fn free_usage_upsell_shows_three_options_with_exact_labels() {
         qv.local_kind,
         Some(
             crate::views::question_view::LocalQuestionKind::FreeUsageUpsell {
-                source: xai_grok_telemetry::events::SuperGrokUpsell::FreeUsagePaywall,
+                source: xai_grok_telemetry::events::SuperchargeUpsell::FreeUsagePaywall,
             }
         )
     ));
@@ -1035,18 +1035,18 @@ fn free_usage_upsell_shows_three_options_with_exact_labels() {
     assert_eq!(q.question, "You hit your free usage limit.");
     let expected = [
         (
-            "Upgrade to SuperGrok",
+            "Upgrade to Supercharge",
             "For everyday coding and productivity tasks",
             Some(UPSELL_URL_UPGRADE),
         ),
         (
-            "Upgrade to SuperGrok Plus",
+            "Upgrade to Supercharge Plus",
             "Significantly higher usage and rate limits",
             Some(UPSELL_URL_UPGRADE),
         ),
         (
-            "Upgrade to SuperGrok Heavy",
-            "Get the most out of Grok Build. Highest usage limits.",
+            "Upgrade to Supercharge Heavy",
+            "Get the most out of Supercharge AI. Highest usage limits.",
             Some(UPSELL_URL_UPGRADE),
         ),
     ];
@@ -1132,7 +1132,7 @@ fn free_usage_translate_local_submit_maps_options() {
     open_free_usage_upsell(agent, None);
     let mut qv = agent.question_view.take().unwrap();
     let kind = || LocalQuestionKind::FreeUsageUpsell {
-        source: xai_grok_telemetry::events::SuperGrokUpsell::FreeUsagePaywall,
+        source: xai_grok_telemetry::events::SuperchargeUpsell::FreeUsagePaywall,
     };
 
     for idx in [0, 1, 2] {
@@ -1146,7 +1146,7 @@ fn free_usage_translate_local_submit_maps_options() {
 
 // ── Restricted-command upsell tests ─────────────────────────────────
 
-/// Submitting a tier-restricted command opens the three-option SuperGrok
+/// Submitting a tier-restricted command opens the three-option Supercharge
 /// upsell and neither runs the command nor leaks the text to the model.
 #[test]
 fn restricted_command_submit_opens_three_option_upsell() {
@@ -1175,18 +1175,18 @@ fn restricted_command_submit_opens_three_option_upsell() {
         qv.local_kind,
         Some(
             crate::views::question_view::LocalQuestionKind::FreeUsageUpsell {
-                source: xai_grok_telemetry::events::SuperGrokUpsell::RestrictedCommand,
+                source: xai_grok_telemetry::events::SuperchargeUpsell::RestrictedCommand,
             }
         )
     ));
     let q = &qv.questions[0];
-    assert_eq!(q.question, "Unlock all features with SuperGrok.");
+    assert_eq!(q.question, "Unlock all features with Supercharge.");
     assert_eq!(q.options.len(), 3);
-    assert_eq!(q.options[0].label, "Upgrade to SuperGrok");
+    assert_eq!(q.options[0].label, "Upgrade to Supercharge");
     assert_eq!(q.options[0].id.as_deref(), Some(UPSELL_URL_UPGRADE));
-    assert_eq!(q.options[1].label, "Upgrade to SuperGrok Plus");
+    assert_eq!(q.options[1].label, "Upgrade to Supercharge Plus");
     assert_eq!(q.options[1].id.as_deref(), Some(UPSELL_URL_UPGRADE));
-    assert_eq!(q.options[2].label, "Upgrade to SuperGrok Heavy");
+    assert_eq!(q.options[2].label, "Upgrade to Supercharge Heavy");
     assert_eq!(q.options[2].id.as_deref(), Some(UPSELL_URL_UPGRADE));
 }
 
@@ -1278,10 +1278,10 @@ fn unknown_non_restricted_command_still_passes_through() {
 // ── Browser-unavailable URL fallback ────────────────────────────────
 
 /// When the OS browser opener cannot run (simulated via a broken
-/// `GROK_TEST_OPEN_URL_FILE` seam), `Action::OpenUrl` for a billing CTA
+/// `SUPERCHARGE_TEST_OPEN_URL_FILE` seam), `Action::OpenUrl` for a billing CTA
 /// must push a scrollback system message that includes the full URL —
 /// the headless-VM fix for silent Upgrade / Buy-more-credits no-ops.
-#[serial_test::serial(GROK_TEST_OPEN_URL_FILE)]
+#[serial_test::serial(SUPERCHARGE_TEST_OPEN_URL_FILE)]
 #[test]
 fn open_url_shows_manual_url_when_browser_unavailable() {
     // Point the test seam at a path whose parent dir does not exist so the
@@ -1291,7 +1291,7 @@ fn open_url_shows_manual_url_when_browser_unavailable() {
         std::process::id()
     ));
     // SAFETY: serialized via `serial_test` so no other test races the env var.
-    unsafe { std::env::set_var("GROK_TEST_OPEN_URL_FILE", &bad) };
+    unsafe { std::env::set_var("SUPERCHARGE_TEST_OPEN_URL_FILE", &bad) };
 
     let mut app = test_app_with_agent();
     let before = agent_scrollback_len(&app);
@@ -1316,18 +1316,18 @@ fn open_url_shows_manual_url_when_browser_unavailable() {
     assert_eq!(toast, Some("Browser unavailable - URL shown above"));
 
     // SAFETY: serialized via `serial_test`; restore the env for other tests.
-    unsafe { std::env::remove_var("GROK_TEST_OPEN_URL_FILE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TEST_OPEN_URL_FILE") };
 }
 
 /// Successful open (test seam write OK) must not spam a fallback system message.
-#[serial_test::serial(GROK_TEST_OPEN_URL_FILE)]
+#[serial_test::serial(SUPERCHARGE_TEST_OPEN_URL_FILE)]
 #[test]
 fn open_url_does_not_show_fallback_when_opener_succeeds() {
     let url_file =
         std::env::temp_dir().join(format!("grok-open-url-ok-{}.txt", std::process::id()));
     let _ = std::fs::remove_file(&url_file);
     // SAFETY: serialized via `serial_test`.
-    unsafe { std::env::set_var("GROK_TEST_OPEN_URL_FILE", &url_file) };
+    unsafe { std::env::set_var("SUPERCHARGE_TEST_OPEN_URL_FILE", &url_file) };
 
     let mut app = test_app_with_agent();
     let before = agent_scrollback_len(&app);
@@ -1346,14 +1346,14 @@ fn open_url_does_not_show_fallback_when_opener_succeeds() {
     );
 
     // SAFETY: serialized via `serial_test`.
-    unsafe { std::env::remove_var("GROK_TEST_OPEN_URL_FILE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TEST_OPEN_URL_FILE") };
     let _ = std::fs::remove_file(&url_file);
 }
 
 /// Welcome has no scrollback: browser-unavailable OpenUrl must put a
 /// single-line toast that includes the full URL (no `\n` — the welcome
 /// painter is one row). Privacy-banner Terms/Policy clicks hit this path.
-#[serial_test::serial(GROK_TEST_OPEN_URL_FILE)]
+#[serial_test::serial(SUPERCHARGE_TEST_OPEN_URL_FILE)]
 #[test]
 fn open_url_welcome_toasts_single_line_url_when_browser_unavailable() {
     let bad = std::env::temp_dir().join(format!(
@@ -1361,7 +1361,7 @@ fn open_url_welcome_toasts_single_line_url_when_browser_unavailable() {
         std::process::id()
     ));
     // SAFETY: serialized via `serial_test` so no other test races the env var.
-    unsafe { std::env::set_var("GROK_TEST_OPEN_URL_FILE", &bad) };
+    unsafe { std::env::set_var("SUPERCHARGE_TEST_OPEN_URL_FILE", &bad) };
 
     let mut app = test_app();
     assert!(
@@ -1406,12 +1406,12 @@ fn open_url_welcome_toasts_single_line_url_when_browser_unavailable() {
     );
 
     // SAFETY: serialized via `serial_test`; restore the env for other tests.
-    unsafe { std::env::remove_var("GROK_TEST_OPEN_URL_FILE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TEST_OPEN_URL_FILE") };
 }
 
 /// Credit-limit upsell Q&A submit routes through OpenUrl; when the browser
 /// is unavailable the full option URL must land in scrollback.
-#[serial_test::serial(GROK_TEST_OPEN_URL_FILE)]
+#[serial_test::serial(SUPERCHARGE_TEST_OPEN_URL_FILE)]
 #[test]
 fn credit_limit_upsell_submit_shows_url_when_browser_unavailable() {
     use crate::app::agent_view::translate_local_submit_for_test;
@@ -1423,7 +1423,7 @@ fn credit_limit_upsell_submit_shows_url_when_browser_unavailable() {
         std::process::id()
     ));
     // SAFETY: serialized via `serial_test`.
-    unsafe { std::env::set_var("GROK_TEST_OPEN_URL_FILE", &bad) };
+    unsafe { std::env::set_var("SUPERCHARGE_TEST_OPEN_URL_FILE", &bad) };
 
     let mut app = test_app_with_agent();
     open_upsell_qa(&mut app, CreditLimitUpsellMode::UnifiedCredits);
@@ -1459,7 +1459,7 @@ fn credit_limit_upsell_submit_shows_url_when_browser_unavailable() {
     );
 
     // SAFETY: serialized via `serial_test`.
-    unsafe { std::env::remove_var("GROK_TEST_OPEN_URL_FILE") };
+    unsafe { std::env::remove_var("SUPERCHARGE_TEST_OPEN_URL_FILE") };
 }
 
 #[test]
@@ -1470,7 +1470,7 @@ fn billing_fetched_clears_usage_modal_loading() {
         &mut app,
         Some(test_bal(50.0)),
         true,
-        Some("SuperGrok".into()),
+        Some("Supercharge".into()),
     );
     let agent = &app.agents[&AgentId(0)];
     let Some(crate::views::modal::ActiveModal::UsageInfo { state }) = agent.active_modal.as_ref()
@@ -1479,7 +1479,7 @@ fn billing_fetched_clears_usage_modal_loading() {
     };
     assert!(!state.billing_loading);
     assert!(state.billing_error.is_none());
-    assert_eq!(state.ctx.subscription_tier.as_deref(), Some("SuperGrok"));
+    assert_eq!(state.ctx.subscription_tier.as_deref(), Some("Supercharge"));
     // The modal renders from the agent's cached billing mirrors.
     assert_eq!(agent.credit_balance.as_ref().unwrap().usage_pct, 50.0);
 }

@@ -25,7 +25,7 @@ xai-grok-home = { workspace = true }
 xai-tty-utils = { workspace = true }
 xai-grok-version = { workspace = true }
 
-# core-foundation: read macOS MDM managed preferences (`ai.x.grok`) for the
+# core-foundation: read macOS MDM managed preferences (`ai.x.supercharge`) for the
 # admin-deployed requirements layer.
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = { workspace = true }

@@ -1,12 +1,12 @@
 [
   {
     "category": "features",
-    "description": "**GROK_CONFIG** and **GROK_CONFIG_PATH** environment variables now let launchers override selected config settings without editing config.toml.",
+    "description": "**SUPERCHARGE_CONFIG** and **SUPERCHARGE_CONFIG_PATH** environment variables now let launchers override selected config settings without editing config.toml.",
     "breaking_change": false
   },
   {
     "category": "features",
-    "description": "**Worktrees** under ~/.grok/worktrees are now automatically reclaimed when safe, with strong safeguards that never delete a user's last copy.",
+    "description": "**Worktrees** under ~/.supercharge/worktrees are now automatically reclaimed when safe, with strong safeguards that never delete a user's last copy.",
     "breaking_change": false
   },
   {
@@ -56,7 +56,7 @@
   },
   {
     "category": "features",
-    "description": "**GROK_FORCE_LOGIN_TEAM_ID** environment variable now lets launchers restrict interactive login to one or more teams.",
+    "description": "**SUPERCHARGE_FORCE_LOGIN_TEAM_ID** environment variable now lets launchers restrict interactive login to one or more teams.",
     "breaking_change": false
   },
   {

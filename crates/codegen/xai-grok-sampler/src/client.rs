@@ -3047,7 +3047,7 @@ mod tests {
                 "id": "resp_1",
                 "object": "response",
                 "created_at": 0,
-                "model": "grok-build",
+                "model": "supercharge-core",
                 "status": "completed",
                 "output": [],
                 "usage": {
@@ -3087,7 +3087,7 @@ mod tests {
                 "sequence_number": 0,
                 "response": {{
                     "id": "resp_1", "object": "response", "created_at": 0,
-                    "model": "grok-build", "status": "completed", "output": [],
+                    "model": "supercharge-core", "status": "completed", "output": [],
                     "usage": {{
                         "input_tokens": 10,
                         "input_tokens_details": {{ "cached_tokens": 0 }},
@@ -3133,7 +3133,7 @@ mod tests {
                 "id": "resp_1",
                 "object": "response",
                 "created_at": 0,
-                "model": "grok-build",
+                "model": "supercharge-core",
                 "status": "completed",
                 "output": [],
                 "usage": {
@@ -3167,7 +3167,7 @@ mod tests {
                 "id": "resp_1",
                 "object": "response",
                 "created_at": 0,
-                "model": "grok-build",
+                "model": "supercharge-core",
                 "status": "completed",
                 "output": [],
                 "usage": {

@@ -72,7 +72,7 @@ pub struct UsageInfoContext {
     pub chat_kind: bool,
     /// Remote-settings kill switch: link out instead of showing billing.
     pub billing_redirect_url: Option<String>,
-    /// Plan name for the allowance header (e.g. "SuperGrok").
+    /// Plan name for the allowance header (e.g. "Supercharge").
     pub subscription_tier: Option<String>,
 }
 
@@ -1016,7 +1016,7 @@ mod tests {
                 usage_visible: true,
                 chat_kind: false,
                 billing_redirect_url: None,
-                subscription_tier: Some("SuperGrok".to_string()),
+                subscription_tier: Some("Supercharge".to_string()),
             },
         )
     }
@@ -1068,7 +1068,7 @@ mod tests {
         let theme = Theme::current();
         let lines = usage_limit_lines(&state, Some(&bal), &theme);
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
-        assert_eq!(text[0], "Weekly limit (SuperGrok)");
+        assert_eq!(text[0], "Weekly limit (Supercharge)");
         assert!(text[2].ends_with("50%"), "bar row: {:?}", text[2]);
         assert!(text.iter().any(|l| l.contains("Resets: May 29, 00:00")));
         assert!(text.iter().any(|l| l == "Pay as you go: Enabled"));

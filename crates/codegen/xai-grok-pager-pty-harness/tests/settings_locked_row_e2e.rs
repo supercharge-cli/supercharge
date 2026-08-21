@@ -11,7 +11,7 @@
 //!   "Managed by your team admin."
 //!
 //! Both accounts also suppress the welcome privacy banner even with
-//! `GROK_PRIVACY_NOTICE_ROLLOUT=1` — asserted on the authenticated welcome
+//! `SUPERCHARGE_PRIVACY_NOTICE_ROLLOUT=1` — asserted on the authenticated welcome
 //! screen before opening settings. Row/input details are unit-tested in
 //! `xai-grok-pager` (`views/settings_modal/tests.rs`, `locked_coding_*`);
 //! this suite covers the auth-to-render pipeline.
@@ -57,15 +57,15 @@ async fn team_member_sees_admin_managed_row_and_no_banner() {
 }
 
 /// Rollout flag forced on (the banner would show for a plain opted-out user),
-/// the sandbox's fake `XAI_API_KEY` removed so the seeded team OAuth entry is
+/// the sandbox's fake `SUPERCHARGE_API_KEY` removed so the seeded team OAuth entry is
 /// the active auth, and ZDR product access enabled — without it a ZDR account
 /// gets the blocked welcome screen ("not yet available") and can never reach
 /// settings; the row lock and banner suppression key off `is_zdr` regardless.
 fn locked_row_env_ops() -> [EnvOp<'static>; 3] {
     [
-        EnvOp::set("GROK_PRIVACY_NOTICE_ROLLOUT", "1"),
-        EnvOp::set("GROK_ZDR_ACCESS_ENABLED", "1"),
-        EnvOp::remove("XAI_API_KEY"),
+        EnvOp::set("SUPERCHARGE_PRIVACY_NOTICE_ROLLOUT", "1"),
+        EnvOp::set("SUPERCHARGE_ZDR_ACCESS_ENABLED", "1"),
+        EnvOp::remove("SUPERCHARGE_API_KEY"),
     ]
 }
 

@@ -45,7 +45,7 @@ async fn minimal_transcript_pager_restore_no_artifacts() {
 
     let mut overrides: Vec<(String, String)> = vec![("PAGER".to_string(), "less".to_string())];
     overrides.push((
-        "GROK_TEST_FRAME_WRITE_DELAY_MS".to_string(),
+        "SUPERCHARGE_TEST_FRAME_WRITE_DELAY_MS".to_string(),
         FRAME_DELAY_MS.to_string(),
     ));
     let env_refs: Vec<(&str, &str)> = overrides

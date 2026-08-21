@@ -19,11 +19,11 @@ pub const DCS_PASSTHROUGH_ID: DiagnosticId = DiagnosticId::new("terminal", "dcs-
 pub const TMUX_EXTENDED_KEYS_ID: DiagnosticId = DiagnosticId::new("terminal", "tmux-extended-keys");
 pub const TMUX_TRUECOLOR_ID: DiagnosticId = DiagnosticId::new("terminal", "tmux-truecolor");
 pub const SSH_WRAP_FIX_COMMAND: &str = "grok doctor fix terminal.ssh-wrap";
-pub const SSH_WRAP_ONE_OFF: &str = "grok wrap ssh <host>";
+pub const SSH_WRAP_ONE_OFF: &str = "supercharge wrap ssh <host>";
 
 const MANAGED_NAMESPACE: &str = "grok doctor";
-const SSH_WRAP_ALIAS_POSIX: &str = "alias ssh='grok wrap ssh'";
-const SSH_WRAP_ALIAS_FISH: &str = "alias ssh 'grok wrap ssh'";
+const SSH_WRAP_ALIAS_POSIX: &str = "alias ssh='supercharge wrap ssh'";
+const SSH_WRAP_ALIAS_FISH: &str = "alias ssh 'supercharge wrap ssh'";
 const TMUX_SCANNER_CAVEAT: &str = "Grok checks this file for direct global assignments of this option. Review sourced files, conditionals, plugins, and generated tmux setup yourself.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -657,7 +657,7 @@ pub(crate) fn format_fix_preview(plan: &FixPlan) -> String {
     match &plan.payload {
         FixPayload::SshWrap(_) => {
             output.push_str(
-                "\nWhat this changes:\n  In new interactive shells, `ssh ...` runs as `grok wrap ssh ...`.\n",
+                "\nWhat this changes:\n  In new interactive shells, `ssh ...` runs as `supercharge wrap ssh ...`.\n",
             );
             let _ = writeln!(
                 output,
@@ -735,7 +735,7 @@ fn plan_ssh_wrap(
             "The alias loads only in new interactive shells.",
             "Use `command ssh ...` to bypass the alias.",
             "For manually entered `ssh -f`, ControlPersist workflows, or OpenSSH `~^Z` local suspend, use `command ssh ...`. Wrapping does not fully preserve those behaviors.",
-            "`grok wrap` starts the SSH process directly, so the alias does not loop.",
+            "`supercharge wrap` starts the SSH process directly, so the alias does not loop.",
             "Grok checks this file for direct SSH aliases and functions. Review sourced files, plugins, and generated shell setup yourself.",
         ],
         payload: FixPayload::SshWrap(SshWrapPlan { shell, managed }),

@@ -12,7 +12,7 @@
 //! never reaches the model, and — since user messages are only persisted when
 //! their turn starts — it is silently gone after a `--continue` resume.
 //!
-//! Set `GROK_PTY_CAST_DIR` to also dump asciinema casts of both pager runs
+//! Set `SUPERCHARGE_PTY_CAST_DIR` to also dump asciinema casts of both pager runs
 //! (written before the final asserts so a failing run still produces them).
 //!
 //! The scenario body is shared with the Esc and [stop]-click mirrors (see
@@ -294,7 +294,7 @@ pub(crate) async fn run_wake_cancel_scenario(gesture: WakeCancelGesture, cast_pr
 
 #[cfg(unix)]
 fn unified_log_diagnostics(content: &ContentController) -> String {
-    let path = content.home().join(".grok/logs/unified.jsonl");
+    let path = content.home().join(".supercharge/logs/unified.jsonl");
     let log = std::fs::read_to_string(path).unwrap_or_default();
     let mut tail: Vec<&str> = log.lines().rev().take(80).collect();
     tail.reverse();

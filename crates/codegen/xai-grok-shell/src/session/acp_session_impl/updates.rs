@@ -374,7 +374,7 @@ impl SessionActor {
             target: "acp_event",
             event = "xai_buffered_notification_sent",
             session_id = %self.session_info.id,
-            "Sending buffered xAI session notification"
+            "Sending buffered provider session notification"
         );
     }
     fn log_outbound_notification(&self, notification: &acp::SessionNotification) {
@@ -608,7 +608,7 @@ impl SessionActor {
             "agentTimestampMs": agent_timestamp_ms,
         })
     }
-    /// Handle xAI session notifications - store them in persistence
+    /// Handle provider session notifications - store them in persistence
     /// These are client-side events (like diff reviews) that should be part of session history.
     /// Exception: `SubagentProgress` ticks are transient and return before the store.
     pub(super) async fn handle_xai_session_notification(
@@ -619,7 +619,7 @@ impl SessionActor {
             notification.update,
             XaiSessionUpdate::SubagentProgress { .. }
         ) {
-            tracing::debug!("storing xAI session notification");
+            tracing::debug!("storing provider session notification");
         }
         {
             let mut meta_map = notification.meta.take().and_then(|v| match v {

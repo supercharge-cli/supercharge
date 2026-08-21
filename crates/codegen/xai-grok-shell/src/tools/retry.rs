@@ -1,4 +1,4 @@
-//! Retry utilities — re-exported from `xai-grok-tools`.
+//! Retry utilities — re-exported from `xai-Supercharge AI-tools`.
 //!
 //! The canonical implementation now lives in `xai_grok_tools::retry`.
 //! This module re-exports with backward-compatible aliases.

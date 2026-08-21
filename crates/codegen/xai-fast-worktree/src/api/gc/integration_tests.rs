@@ -22,12 +22,12 @@ fn register_kind(db: &WorktreeDb, id: &str, path: &std::path::Path, kind: Worktr
 
 #[test]
 fn register_worktree_writes_correct_fields() {
-    // Isolate GROK_HOME so register_worktree's open_default write lands
+    // Isolate SUPERCHARGE_HOME so register_worktree's open_default write lands
     // in our own DB (lock + private tmp + restore via the fixture).
     let fx = crate::db::GrokHomeFixture::new();
 
     // Unique basename → unique id, so a concurrent open_default writer
-    // (GROK_HOME is process-global) can't INSERT-OR-REPLACE our row.
+    // (SUPERCHARGE_HOME is process-global) can't INSERT-OR-REPLACE our row.
     let wt_path = fx.home.join("register-fields-wt");
     std::fs::create_dir(&wt_path).unwrap();
     // register_worktree stores the canonical path (/var → /private/var on macOS).
@@ -411,7 +411,7 @@ fn expired_path_that_will_not_remove_loses_its_record_and_keeps_its_bytes() {
 #[test]
 fn gc_removes_an_expired_path_with_no_repo_and_counts_it_apart() {
     // An overlay mount or btrfs snapshot needs no `.git`, and only
-    // `remove_worktree` reclaims either. GROK_HOME is the gc DB dir so
+    // `remove_worktree` reclaims either. SUPERCHARGE_HOME is the gc DB dir so
     // its unregister hits the DB holding the record.
     let fx = crate::db::GrokHomeFixture::new();
     let db = WorktreeDb::open(&fx.home).unwrap();
@@ -670,7 +670,7 @@ fn gc_with_delegate_removes_expired_and_unregisters() {
     // succeeds, so the mock's delete_snapshot is not called.)
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    // GROK_HOME == the gc DB dir so remove_worktree's open_default
+    // SUPERCHARGE_HOME == the gc DB dir so remove_worktree's open_default
     // unregister hits the same DB the gc record lives in.
     let fx = crate::db::GrokHomeFixture::new();
     let db = WorktreeDb::open(&fx.home).unwrap();

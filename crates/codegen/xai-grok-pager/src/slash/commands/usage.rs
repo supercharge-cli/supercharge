@@ -1,6 +1,6 @@
 //! `/usage` — session token/cost; consumer accounts can also manage billing.
 //!
-//! External-auth deployments (`auth_provider_command`) never reach grok.com
+//! External-auth deployments (`auth_provider_command`) never reach supercharge.ai
 //! billing, so the command is hidden and refused via
 //! [`AppCtx::usage_command_visible`].
 
@@ -27,7 +27,7 @@ fn auth_method_is_external_provider(method: &acp::AuthMethod) -> bool {
 }
 
 fn auth_provider_env_set() -> bool {
-    std::env::var("GROK_AUTH_PROVIDER_COMMAND")
+    std::env::var("SUPERCHARGE_AUTH_PROVIDER_COMMAND")
         .ok()
         .is_some_and(|s| !s.trim().is_empty())
 }

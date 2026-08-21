@@ -310,7 +310,7 @@ fn sentinel_session_harness() -> events::SessionHarness {
         session_id: "sess-1".into(),
         client_identifier: Some("grok-pager".into()),
         model_id: "grok-4".into(),
-        agent_name: "grok-build-plan".into(),
+        agent_name: "supercharge-core-plan".into(),
         permission_mode: crate::enums::PermissionMode::Ask,
         mcp_server_names: vec!["secret-server".into(), "other".into()],
         plugin_names: vec!["p1".into()],

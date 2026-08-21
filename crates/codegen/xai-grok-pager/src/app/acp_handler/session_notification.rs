@@ -1309,7 +1309,7 @@ pub(super) fn handle_session_notification_with_origin(
     }
     changed && is_active
 }
-/// Handle an xAI session notification that targets a child (subagent) session.
+/// Handle an provider session notification that targets a child (subagent) session.
 ///
 /// Events like compaction, retry, and memory flush are emitted by the child's
 /// `acp_session` with the *child's* `session_id`. This routes them to the

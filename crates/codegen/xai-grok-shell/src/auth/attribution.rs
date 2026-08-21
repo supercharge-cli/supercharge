@@ -9,7 +9,7 @@
 //! visible, since most 401s arrive exactly then). The two sinks are:
 //!
 //! 1. [`xai_grok_telemetry::unified_log::warn`] for the local
-//!    `~/.grok/logs/unified.jsonl` file (best-effort; ships to GCS
+//!    `~/.supercharge/logs/unified.jsonl` file (best-effort; ships to GCS
 //!    only on OIDC refresh failure via `auth/refresh.rs`).
 //! 2. A discrete `tracing::warn_span!("auth_401_attribution", ...)`
 //!    captured by the OTel layer in `util/otel_layer.rs` and shipped
@@ -159,7 +159,7 @@ impl Auth401AttributionCallback for ShellAttribution {
 }
 
 /// Tool-side hook: each tool client (image_gen, video_gen, web_search)
-/// in `xai-grok-tools` emits a 401 attribution event through this
+/// in `xai-Supercharge AI-tools` emits a 401 attribution event through this
 /// trait when its HTTP request returns UNAUTHORIZED. Same shape as
 /// the sampler-side impl above; routes to the same pair of sinks.
 ///
@@ -262,7 +262,7 @@ fn format_consumer(kind: ConsumerKind, op: &str) -> String {
 ///
 /// Wraps [`record_auth_401`] with the design-doc `consumer` formatting
 /// (e.g., `"StorageClient.upload"`, `"FeedbackClient.submit"`).
-/// All 401 emit sites in `xai-grok-shell` go through this helper -- the
+/// All 401 emit sites in `xai-Supercharge AI-shell` go through this helper -- the
 /// per-client `record_401_attribution` wrappers in
 /// `agent/feedback_client.rs`, `agent/session_registry_client.rs`,
 /// and `upload/storage_client.rs` each
@@ -314,7 +314,7 @@ pub(crate) fn record_auth_401(
 ) {
     let payload = compute_attribution_payload(auth_manager, consumer, sent_bearer);
 
-    // Sink 1 -- local file (~/.grok/logs/unified.jsonl) + scrubbed
+    // Sink 1 -- local file (~/.supercharge/logs/unified.jsonl) + scrubbed
     // tracing event. The local file is reliable but only ships to GCS
     // on OIDC refresh failure (auth/refresh.rs::spawn_diagnostic_upload),
     // so by itself it does not give visibility into the steady-state
@@ -450,7 +450,7 @@ mod tests {
     use super::*;
 
     /// Test helper: build a fresh `AuthManager` rooted at a tempdir so
-    /// nothing from a developer's actual `~/.grok/auth.json` leaks in.
+    /// nothing from a developer's actual `~/.supercharge/auth.json` leaks in.
     fn empty_auth_manager() -> (tempfile::TempDir, AuthManager) {
         let dir = tempfile::tempdir().expect("tempdir");
         let cfg = GrokComConfig::default();

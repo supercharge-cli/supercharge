@@ -9,5 +9,5 @@ base_url = "https://gen.pollinations.ai/v1"
 api_base_url = "https://gen.pollinations.ai/v1"
 env_key = "POLLINATIONS_API_KEY"
 api_backend = "chat_completions"
-agent_type = "grok-build"
+agent_type = "supercharge-core"
 context_window = 128000

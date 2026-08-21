@@ -13,7 +13,7 @@
 //! In-process capture ([`super::capture`]) remains the fallback when the
 //! helper cannot run at all — self-exec unavailable, or the spawned binary
 //! doesn't speak the helper protocol (e.g. it was replaced by an update mid
-//! run) — and can be forced with `GROK_VOICE_CAPTURE=inprocess`.
+//! run) — and can be forced with `SUPERCHARGE_VOICE_CAPTURE=inprocess`.
 
 use std::io::Read;
 use std::process::{Child, ChildStdout, Command, Stdio};
@@ -28,9 +28,9 @@ use super::pipe::{self, ChildCaptureHandle};
 use super::protocol;
 use crate::error::VoiceError;
 
-/// Env escape hatch: `GROK_VOICE_CAPTURE=inprocess` forces the legacy
+/// Env escape hatch: `SUPERCHARGE_VOICE_CAPTURE=inprocess` forces the legacy
 /// in-process cpal backend (accepting its permanent footprint cost).
-const CAPTURE_BACKEND_ENV: &str = "GROK_VOICE_CAPTURE";
+const CAPTURE_BACKEND_ENV: &str = "SUPERCHARGE_VOICE_CAPTURE";
 
 /// How long to wait for the helper's status header. Device open takes
 /// hundreds of ms; exec of the (usually page-cached) binary adds tens more.

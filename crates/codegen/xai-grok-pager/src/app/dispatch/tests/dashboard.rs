@@ -107,7 +107,7 @@ fn voice_final_discarded_when_peek_row_changed_after_stop() {
         "a final for a no-longer-peeked row must be discarded"
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn voice_dashboard_dispatch_submit_tears_down_voice() {
     let mut app = test_app();
@@ -147,7 +147,7 @@ fn voice_dashboard_dispatch_submit_tears_down_voice() {
         "a late final must not refill the submitted dispatch box"
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn submit_cancels_pending_voice_cold_start() {
     let mut app = test_app();
@@ -165,7 +165,7 @@ fn submit_cancels_pending_voice_cold_start() {
     );
     assert!(app.voice_recording_target().is_none());
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn voice_dashboard_peek_reply_submit_tears_down_voice() {
     let mut app = test_app_with_agent();
@@ -324,11 +324,11 @@ fn voice_off_target_surface_does_not_enable_or_record() {
     assert!(rx.try_recv().is_err(), "no PttPress without a target");
 }
 /// `grok dashboard` before login: the startup hook consumes the
-/// `GROK_OPEN_DASHBOARD_AT_STARTUP` env var and stashes
+/// `SUPERCHARGE_OPEN_DASHBOARD_AT_STARTUP` env var and stashes
 /// `deferred_startup.open_dashboard`; `AuthComplete` must then open the
 /// dashboard view. Regression test for the silent drop where the
 /// user landed on the welcome screen / agent view instead.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn auth_complete_opens_deferred_dashboard() {
     let mut app = test_app();
@@ -836,11 +836,11 @@ fn dashboard_confirm_worktree_without_git_repo_creates_nothing() {
 /// the `CreateWorktreeSession` effect, the effort is stashed as a deferred
 /// switch, and plan mode is deferred + optimistic. Regression — the worktree
 /// branch used to drop the staged config entirely.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_confirm_worktree_applies_pending_model_and_plan() {
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Grok 4.5");
+    seed_model(&mut app, "grok-4.5", "Supercharge Core");
     open_dashboard(&mut app);
     app.cwd_has_git_ancestor = true;
     let model_id = acp::ModelId::new(std::sync::Arc::from("grok-4.5"));
@@ -848,7 +848,7 @@ fn dashboard_confirm_worktree_applies_pending_model_and_plan() {
         d.pending_model = Some(crate::views::dashboard::PendingDispatchModel {
             id: model_id.clone(),
             effort: Some(xai_grok_shell::sampling::types::ReasoningEffort::High),
-            display: "Grok 4.5".to_string(),
+            display: "Supercharge Core".to_string(),
         });
         d.pending_mode = crate::views::dashboard::DashboardDispatchMode::Plan;
         d.dispatch.set_text("do the thing");
@@ -940,7 +940,7 @@ fn dashboard_confirm_worktree_replays_pasted_images() {
         "the image-bearing prompt stash must be consumed",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_image_dispatch_cancel_rewind_resends_attachment() {
     let mut app = test_app_with_agent();
@@ -1233,7 +1233,7 @@ fn apply_pending_dispatch_config_always_approve_blocked_by_policy_pin() {
 /// Dashboard per-agent toggle under the pin: refused, warning lands on
 /// the dashboard's OWN error slot (the user is looking at the
 /// dashboard, not the agent). OFF stays allowed.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_toggle_auto_approve_blocked_by_policy_pin() {
     let mut app = test_app_with_agent();
@@ -1265,7 +1265,7 @@ fn dashboard_toggle_auto_approve_blocked_by_policy_pin() {
 /// Shift+Tab in the peek cycles the PEEKED agent's live mode
 /// (Normal → Plan) and leaves the dashboard foregrounded — the same
 /// effect as Shift+Tab inside that agent's chat view.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_cycle_mode_cycles_peeked_agent() {
     let mut app = test_app_with_agent();
@@ -1298,7 +1298,7 @@ fn dashboard_peek_cycle_mode_cycles_peeked_agent() {
 /// NOT attribute a plan-nudge acceptance: the user is on the dashboard, not
 /// that agent's prompt, so the nudge (still within TTL) is left intact. This
 /// pins that the peek routes through the telemetry-free cycle body.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_cycle_does_not_retire_the_nudge() {
     let mut app = test_app_with_agent();
@@ -1404,7 +1404,7 @@ fn dashboard_open_detects_standalone_grok_worktree() {
 /// mode only adds the roster poll. Every entry point funnels through
 /// `Action::OpenDashboard`, so this covers `/dashboard`, `Ctrl+\`,
 /// `grok dashboard`, and the startup hook.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_works_without_leader() {
     let mut app = test_app_with_agent();
@@ -1439,7 +1439,7 @@ fn idle_roster_entry(session_id: &str, title: &str) -> crate::app::roster::Roste
 /// Without a leader there is no live roster to poll, so opening the
 /// dashboard must kick off a fetch of the local on-disk idle sessions so
 /// the view isn't empty.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_without_leader_fetches_local_sessions() {
     let mut app = test_app_with_agent();
@@ -1456,7 +1456,7 @@ fn dashboard_open_without_leader_fetches_local_sessions() {
 /// In leader mode the live FleetView roster is the source, so opening must
 /// fetch that roster immediately (not wait for the poll tick) and must NOT
 /// also fetch the local on-disk list.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_with_leader_fetches_roster_not_local_sessions() {
     let mut app = test_app_with_agent();
@@ -1544,11 +1544,11 @@ fn seed_model(app: &mut AppView, id: &str, name: &str) {
 }
 /// `/model <name>` on the dashboard stages the model for the next
 /// spawned agent instead of dispatching a (session-scoped) switch.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_model_stages_pending_model() {
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Grok 4.5");
+    seed_model(&mut app, "grok-4.5", "Supercharge Core");
     open_dashboard(&mut app);
     let effects = dispatch_dashboard_dispatch_slash(&mut app, "/model grok-4.5".into());
     assert!(
@@ -1564,7 +1564,7 @@ fn dashboard_slash_model_stages_pending_model() {
         .as_ref()
         .expect("pending_model must be set");
     assert_eq!(pending.id.0.as_ref(), "grok-4.5");
-    assert_eq!(pending.display, "Grok 4.5");
+    assert_eq!(pending.display, "Supercharge Core");
     assert!(pending.effort.is_none());
     assert_eq!(
         app.dashboard
@@ -1582,7 +1582,7 @@ fn dashboard_slash_model_stages_pending_model() {
 /// upsell via the feedback toast — not execute, and (crucially) not fall
 /// through the unknown-command path, which would spawn a session whose
 /// first prompt is the raw slash text.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_restricted_command_upsells_via_toast() {
     let mut app = test_app();
@@ -1602,7 +1602,7 @@ fn dashboard_slash_restricted_command_upsells_via_toast() {
         .as_deref()
         .expect("restricted command must set the upsell toast");
     assert!(
-        toast.contains("/imagine") && toast.contains("SuperGrok"),
+        toast.contains("/imagine") && toast.contains("Supercharge"),
         "toast must carry the upsell: {toast}"
     );
 }
@@ -1611,11 +1611,11 @@ fn dashboard_slash_restricted_command_upsells_via_toast() {
 /// carry no glyph of their own, and the feedback badge paints the
 /// toast verbatim in a neutral colour, so without the prefix an
 /// error would be indistinguishable from a success message.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_command_error_gets_error_glyph_prefix() {
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Grok 4.5");
+    seed_model(&mut app, "grok-4.5", "Supercharge Core");
     open_dashboard(&mut app);
     let effects = dispatch_dashboard_dispatch_slash(&mut app, "/model nonexistent".into());
     assert!(effects.is_empty(), "a failed command must not dispatch");
@@ -1637,7 +1637,7 @@ fn dashboard_slash_command_error_gets_error_glyph_prefix() {
     );
 }
 /// `/plan` on the dashboard toggles plan mode on/off.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_plan_toggles_pending_plan_mode() {
     use crate::views::dashboard::DashboardDispatchMode;
@@ -1656,7 +1656,7 @@ fn dashboard_slash_plan_toggles_pending_plan_mode() {
         "second /plan must toggle plan mode off"
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_plan_description_transforms_snapshot_and_chip_ranges() {
     let mut app = test_app();
@@ -1701,7 +1701,7 @@ fn dashboard_plan_description_transforms_snapshot_and_chip_ranges() {
 /// The sessions picker modal was removed; `/sessions` survives as an alias
 /// of `/dashboard`. It must resolve to the dashboard command and inherit
 /// the dashboard feature-flag gate (hidden by canonical name, fail-closed).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_sessions_aliases_dashboard() {
     let mut app = three_agent_app();
@@ -1723,7 +1723,7 @@ fn dashboard_slash_sessions_aliases_dashboard() {
         "/sessions must be an alias of the dashboard command"
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_does_not_advertise_or_dispatch_doctor() {
     let mut app = three_agent_app();
@@ -1757,7 +1757,7 @@ fn dashboard_does_not_advertise_or_dispatch_doctor() {
 /// External-auth hides `/usage` via `visible()`, not session-scope. Typed
 /// `/usage` on the dashboard must refuse with the command's message, not
 /// claim it only works in a session.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_usage_hidden_for_external_auth() {
     let mut app = three_agent_app();
@@ -1785,13 +1785,13 @@ fn dashboard_slash_usage_hidden_for_external_auth() {
         "must not mis-label /usage as session-scoped: {toast}"
     );
     assert!(
-        !toast.contains("SuperGrok"),
+        !toast.contains("Supercharge"),
         "must not upsell billing on external auth: {toast}"
     );
 }
 /// Session-scoped Action builtins must not spawn an agent whose first
 /// prompt is the slash text (registered + not offered → error toast).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_fork_does_not_spawn() {
     let mut app = three_agent_app();
@@ -1815,7 +1815,7 @@ fn dashboard_slash_fork_does_not_spawn() {
 }
 /// Session-scoped QueueCommand builtins must also error, not spawn
 /// with `/compact` as the first prompt.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_compact_does_not_spawn() {
     let mut app = three_agent_app();
@@ -1839,7 +1839,7 @@ fn dashboard_slash_compact_does_not_spawn() {
 }
 /// Extensions / config-agents modals only mount on an agent view. From the
 /// dashboard they must toast (not silently clear the dispatch input).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_session_modals_toast_instead_of_noop() {
     let mut app = three_agent_app();
@@ -1894,7 +1894,7 @@ fn dashboard_slash_session_modals_toast_instead_of_noop() {
 }
 /// Shift+Tab (`DashboardCycleMode`) rotates Normal → Plan →
 /// Always-Approve → Normal.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_cycle_mode_rotates_through_modes() {
     use crate::views::dashboard::DashboardDispatchMode;
@@ -1922,7 +1922,7 @@ fn dashboard_cycle_mode_rotates_through_modes() {
 }
 /// Under the managed-policy pin the staged-mode cycle skips
 /// Always-Approve (Normal → Plan → Normal) and explains why.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_cycle_mode_skips_always_approve_under_policy_pin() {
     use crate::views::dashboard::DashboardDispatchMode;
@@ -1949,18 +1949,18 @@ fn dashboard_cycle_mode_skips_always_approve_under_policy_pin() {
 /// Opening the dashboard re-seeds BOTH staged dispatch fields: a model
 /// staged in a previous session is cleared and the mode is reset from
 /// `app.default_yolo`, so a fresh open never inherits stale staging.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_reseeds_pending_model_and_mode() {
     use crate::views::dashboard::DashboardDispatchMode;
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Grok 4.5");
+    seed_model(&mut app, "grok-4.5", "Supercharge Core");
     open_dashboard(&mut app);
     if let Some(d) = app.dashboard.as_mut() {
         d.pending_model = Some(crate::views::dashboard::PendingDispatchModel {
             id: acp::ModelId::new(std::sync::Arc::from("grok-4.5")),
             effort: None,
-            display: "Grok 4.5".to_string(),
+            display: "Supercharge Core".to_string(),
         });
         d.pending_mode = DashboardDispatchMode::Plan;
     }
@@ -2055,7 +2055,7 @@ fn extract_response_type_tool_running_overrides_stale_response() {
     assert_eq!(extract_last_response_type(agent), "Working");
 }
 /// Always-Approve mode makes the next spawned agent auto-approve.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_always_approve_sets_yolo() {
     use crate::views::dashboard::DashboardDispatchMode;
@@ -2074,7 +2074,7 @@ fn dashboard_dispatch_always_approve_sets_yolo() {
 /// Always-Approve staged but pinned off: plain-Send (stays on the
 /// dashboard) must clamp yolo off AND surface the warning on the
 /// dashboard's OWN error slot — the new agent's toast is invisible here.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_always_approve_blocked_warns_on_dashboard() {
     use crate::views::dashboard::DashboardDispatchMode;
@@ -2100,7 +2100,7 @@ fn dashboard_dispatch_always_approve_blocked_warns_on_dashboard() {
 /// classifies as `Working` — so it lands in the Working group right away
 /// — and keeps the prompt preview as its title rather than a session-id
 /// fallback.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_new_agent_is_working_with_prompt_title() {
     use crate::views::dashboard::row::{build_rows, classify_top_level};
@@ -2133,18 +2133,18 @@ fn dashboard_dispatch_new_agent_is_working_with_prompt_title() {
 /// A staged model + plan mode are applied to the agent spawned by the
 /// next dispatch: the model id threads into `CreateSession`, the effort
 /// is stashed as a deferred switch, and plan mode is deferred + optimistic.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_applies_pending_model_and_plan() {
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Grok 4.5");
+    seed_model(&mut app, "grok-4.5", "Supercharge Core");
     open_dashboard(&mut app);
     let model_id = acp::ModelId::new(std::sync::Arc::from("grok-4.5"));
     if let Some(d) = app.dashboard.as_mut() {
         d.pending_model = Some(crate::views::dashboard::PendingDispatchModel {
             id: model_id.clone(),
             effort: Some(xai_grok_shell::sampling::types::ReasoningEffort::High),
-            display: "Grok 4.5".to_string(),
+            display: "Supercharge Core".to_string(),
         });
         d.pending_mode = crate::views::dashboard::DashboardDispatchMode::Plan;
     }
@@ -2175,18 +2175,18 @@ fn dashboard_dispatch_applies_pending_model_and_plan() {
 /// no queued prompt) applies the same staged model + mode as the dispatch
 /// path: the model id threads into `CreateSession`, the effort is stashed
 /// as a deferred switch, and plan mode is deferred + optimistic.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_new_agent_button_applies_pending_model_and_plan() {
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Grok 4.5");
+    seed_model(&mut app, "grok-4.5", "Supercharge Core");
     open_dashboard(&mut app);
     let model_id = acp::ModelId::new(std::sync::Arc::from("grok-4.5"));
     if let Some(d) = app.dashboard.as_mut() {
         d.pending_model = Some(crate::views::dashboard::PendingDispatchModel {
             id: model_id.clone(),
             effort: Some(xai_grok_shell::sampling::types::ReasoningEffort::High),
-            display: "Grok 4.5".to_string(),
+            display: "Supercharge Core".to_string(),
         });
         d.pending_mode = crate::views::dashboard::DashboardDispatchMode::Plan;
     }
@@ -2215,7 +2215,7 @@ fn dashboard_new_agent_button_applies_pending_model_and_plan() {
 }
 /// The deferred plan `SessionMode` is emitted (and cleared) once the
 /// session exists, mirroring the deferred model switch.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_deferred_plan_mode_applied_on_session_created() {
     let mut app = test_app_with_agent();
@@ -2246,7 +2246,7 @@ fn dashboard_deferred_plan_mode_applied_on_session_created() {
 }
 /// Any non-empty prompt — even a single character — dispatches a
 /// new session (the old 4-char floor was relaxed to 1 char).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_single_char_creates_session() {
     let mut app = test_app();
@@ -2270,7 +2270,7 @@ fn dashboard_dispatch_single_char_creates_session() {
 /// selection stays where the user left it (None in this empty-state
 /// test). Selection is the overview navigation cursor, kept distinct
 /// from the freshly-spawned agent.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_prompt_creates_session() {
     let mut app = test_app();
@@ -2288,7 +2288,7 @@ fn dashboard_dispatch_prompt_creates_session() {
 }
 /// An empty / whitespace-only prompt is rejected — there's no task
 /// to seed the new session, so no agent is created.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_empty_prompt_rejected() {
     let mut app = test_app();
@@ -2310,7 +2310,7 @@ fn dashboard_dispatch_empty_prompt_rejected() {
 /// trapped the user "stuck replying to the same agent". To talk to
 /// an existing agent the user opens it (navigate + Enter) and
 /// replies inside its own view.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_with_top_level_selection_creates_new_session() {
     let mut app = test_app_with_agent();
@@ -2340,7 +2340,7 @@ fn dashboard_dispatch_with_top_level_selection_creates_new_session() {
 }
 /// 2 — Button focused + non-empty + Enter → new session,
 /// STAY on the dashboard, no attached_agent.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_enter_button_focused_with_text_creates_and_stays() {
     let mut app = test_app();
@@ -2368,7 +2368,7 @@ fn dashboard_enter_button_focused_with_text_creates_and_stays() {
 /// session AND open detail AND set attached_agent so the
 /// overlay chrome paints. Was broken before the new-session
 /// attach path got the `attached_agent` write.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_ctrl_s_button_focused_with_text_creates_and_opens() {
     let mut app = test_app();
@@ -2402,7 +2402,7 @@ fn dashboard_ctrl_s_button_focused_with_text_creates_and_opens() {
 /// handler, which the dispatcher routes through
 /// `dispatch_dashboard_attach` (sets attached_agent +
 /// switches view).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_enter_row_selected_empty_prompt_opens_detail() {
     let mut app = test_app_with_agent();
@@ -2434,7 +2434,7 @@ fn dashboard_enter_row_selected_empty_prompt_opens_detail() {
 /// regression that broadened the reply target match to all
 /// `DashboardRowId` variants would hijack the new-session
 /// path here.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_with_subagent_selection_creates_new_session() {
     let mut app = test_app_with_agent();
@@ -2459,7 +2459,7 @@ fn dashboard_dispatch_with_subagent_selection_creates_new_session() {
 /// with `dashboard_dispatch_4_chars_creates_session` this
 /// pins the post-dispatch state contract: the user can
 /// immediately press Enter again to spawn another session.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_with_no_selection_creates_new_and_leaves_selection_empty() {
     let mut app = test_app();
@@ -2476,7 +2476,7 @@ fn dashboard_dispatch_with_no_selection_creates_new_and_leaves_selection_empty()
 /// view to the agent's fullscreen view AND sets
 /// `attached_agent` as the signal for the session-overlay
 /// chrome (bordered frame + Prev/Next/Close).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_attach_top_level_switches_to_agent_view() {
     let mut app = test_app_with_agent();
@@ -2506,7 +2506,7 @@ fn dashboard_attach_top_level_switches_to_agent_view() {
 /// section header is cleared — the row and section cursors stay
 /// mutually exclusive (a bare `selected` assignment used to leave
 /// both active).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_attach_clears_selected_section() {
     let mut app = test_app_with_agent();
@@ -2534,7 +2534,7 @@ fn dashboard_attach_clears_selected_section() {
 /// Attaching a subagent row switches to the
 /// parent agent's view AND sets the parent's `active_subagent`
 /// so the subagent's takeover is rendered immediately.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_attach_subagent_switches_to_parent_with_subagent_focused() {
     let mut app = test_app_with_agent();
@@ -2644,7 +2644,7 @@ fn dashboard_attach_subagent_switches_to_parent_with_subagent_focused() {
 }
 /// Regression: attaching to a subagent from the dashboard must lazily load
 /// its (resume-deferred) transcript, just like `open_subagent_fullscreen`.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_attach_subagent_lazily_replays_deferred_transcript() {
     let child_sid = "child-dash-defer".to_string();
@@ -2714,7 +2714,7 @@ fn dashboard_attach_subagent_lazily_replays_deferred_transcript() {
 /// Enter dispatches a brand new agent. Previously the dashboard
 /// pre-seeded `selected` to the came-from agent, which armed reply
 /// mode and trapped the user replying to that one agent.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_does_not_auto_attach_to_focused_agent() {
     let mut app = test_app_with_agent();
@@ -2744,7 +2744,7 @@ fn dashboard_open_does_not_auto_attach_to_focused_agent() {
 }
 /// Open with ≥1 agent → overview list focused (nav mode); `[+ New Agent]`
 /// stays the cursor target so no row is pre-selected (no silent reply mode).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_with_agents_list_focused() {
     let mut app = test_app_with_agent();
@@ -2772,7 +2772,7 @@ fn dashboard_open_with_agents_list_focused() {
     assert!(d.selected.is_none());
 }
 /// Open with 0 agents → input focused so "open and type to dispatch" works.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_empty_input_focused() {
     let mut app = test_app();
@@ -2797,7 +2797,7 @@ fn dashboard_open_empty_input_focused() {
 /// a prompt must DISPATCH A NEW agent, not reply to the agent we came
 /// from; and rapid back-to-back dispatches keep spawning new agents
 /// (no "stuck to the same agent" from a sticky reply selection).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_dispatch_after_open_from_agent_spawns_new_sessions() {
     let mut app = test_app_with_agent();
@@ -2823,7 +2823,7 @@ fn dashboard_dispatch_after_open_from_agent_spawns_new_sessions() {
 /// without navigating; with the button taking that role,
 /// selection stays empty and the button signals what Enter
 /// (on an empty prompt) will do.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_from_welcome_focuses_new_agent_button() {
     let mut app = test_app_with_agent();
@@ -2845,7 +2845,7 @@ fn dashboard_open_from_welcome_focuses_new_agent_button() {
         "the `[+ New Agent]` button must be focused as the default",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_arrow_keys_clear_manual_scroll_flag() {
     let mut app = three_agent_app();
@@ -2859,7 +2859,7 @@ fn dashboard_arrow_keys_clear_manual_scroll_flag() {
              re-engages the snap-to-selection on the next render",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_arrow_keys_clear_manual_scroll_flag_even_with_no_selection() {
     let mut app = three_agent_app();
@@ -2875,7 +2875,7 @@ fn dashboard_arrow_keys_clear_manual_scroll_flag_even_with_no_selection() {
 /// `dispatch_dashboard_select` is a no-op when the dashboard
 /// isn't open. The manual_scroll_active flag's clear must not
 /// run on a phantom dashboard.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_select_without_dashboard_is_noop() {
     let mut app = three_agent_app();
@@ -2886,7 +2886,7 @@ fn dashboard_select_without_dashboard_is_noop() {
 }
 /// Dashboard state is preserved across reopen; leftover exit-alias text
 /// must be cleared so the next Enter does not quit.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_exit_alias_clears_dispatch_text() {
     let mut app = test_app_with_agent();
@@ -2905,7 +2905,7 @@ fn dashboard_exit_alias_clears_dispatch_text() {
 }
 /// Bare exit aliases in the dashboard dispatch box quit the CLI (same as
 /// agent-prompt send) and must not spawn a session.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_bare_exit_quits_cli() {
     let mut app = test_app_with_agent();
@@ -2925,7 +2925,7 @@ fn dashboard_bare_exit_quits_cli() {
 }
 /// `/exit` / `/quit` on the dashboard also quit the CLI (not spawn, not
 /// merely leave the dashboard).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_exit_quits_cli() {
     let mut app = test_app_with_agent();
@@ -2947,7 +2947,7 @@ fn dashboard_slash_exit_quits_cli() {
 /// whichever agent view was active before. Since `/dashboard`
 /// no longer auto-attaches a popup, the previous "close popup,
 /// stay in dashboard" intermediate step is gone.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_ctrl_backslash_exits_dashboard() {
     let mut app = test_app_with_agent();
@@ -2971,7 +2971,7 @@ fn insert_second_agent(app: &mut AppView) -> AgentId {
 }
 /// Multi-agent: Ctrl+\ out of the dashboard restores the agent we left,
 /// not insertion-order first (empty older sessions under leader mode).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_ctrl_backslash_returns_to_same_agent() {
     let mut app = test_app_with_agent();
@@ -2985,7 +2985,7 @@ fn dashboard_ctrl_backslash_returns_to_same_agent() {
     assert_eq!(app.dashboard.as_ref().and_then(|d| d.attached_agent), None);
 }
 /// Open from Welcome replaces any leftover return target (e.g. after /home).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_from_welcome_clears_stale_return_agent() {
     use crate::app::app_view::DashboardReturn;
@@ -2999,7 +2999,7 @@ fn dashboard_open_from_welcome_clears_stale_return_agent() {
     assert_eq!(app.active_view, ActiveView::Agent(AgentId(0)));
 }
 /// Attach → overlay exit → dashboard exit restores agent + overlay chrome.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_exit_then_exit_returns_to_attached_agent() {
     let mut app = test_app_with_agent();
@@ -3019,7 +3019,7 @@ fn dashboard_overlay_exit_then_exit_returns_to_attached_agent() {
     );
 }
 /// Subagent attach round-trip keeps child takeover and Subagent row cursor.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_exit_then_exit_restores_subagent_row() {
     let mut app = test_app_with_agent();
@@ -3068,7 +3068,7 @@ fn dashboard_overlay_exit_then_exit_restores_subagent_row() {
     );
 }
 /// Dead overlay return target: fall back without painting overlay chrome.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_exit_does_not_overlay_fallback_when_return_agent_dead() {
     let mut app = test_app_with_agent();
@@ -3088,7 +3088,7 @@ fn dashboard_exit_does_not_overlay_fallback_when_return_agent_dead() {
 /// `DashboardOverlayExit` returns the user to
 /// the dashboard from an attached agent view and clears the
 /// overlay state.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_exit_returns_to_dashboard() {
     let mut app = test_app_with_agent();
@@ -3108,7 +3108,7 @@ fn dashboard_overlay_exit_returns_to_dashboard() {
 /// closes the attached session and lands on the DASHBOARD, not on
 /// the fallback agent the generic close path would pick while the
 /// closed agent is the active view.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_stop_closes_session_and_returns_to_dashboard() {
     let mut app = test_app_with_agent();
@@ -3151,7 +3151,7 @@ fn dashboard_overlay_stop_closes_session_and_returns_to_dashboard() {
 /// guard as session close), but the user still lands on the
 /// dashboard with the refusal toast surfaced there — the session
 /// itself survives.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_stop_only_session_refused_lands_on_dashboard() {
     let mut app = test_app_with_agent();
@@ -3183,7 +3183,7 @@ fn dashboard_overlay_stop_only_session_refused_lands_on_dashboard() {
 /// inside the 2s window (queue drain, a sent prompt). The
 /// confirmed press must then CANCEL the turn instead of closing
 /// the session — Ctrl+X only ever closes an idle session.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_stop_busy_agent_cancels_instead_of_closing() {
     let mut app = test_app_with_agent();
@@ -3223,7 +3223,7 @@ fn dashboard_overlay_stop_busy_agent_cancels_instead_of_closing() {
 }
 /// `/compact` in flight: overlay stop cancels compaction instead of
 /// closing the session (same as a running turn).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_stop_compact_running_cancels() {
     let mut app = test_app_with_agent();
@@ -3270,7 +3270,7 @@ fn dashboard_overlay_stop_compact_running_cancels() {
 /// key press (mouse clicks on `[Dashboard]` / `[‹]` / `[›]`) must
 /// disarm it, while an unrelated pending action (e.g. quit) is
 /// left alone.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_mouse_exit_and_cycle_disarm_pending_stop() {
     use crate::app::app_view::PendingAction;
@@ -3331,7 +3331,7 @@ fn dashboard_overlay_mouse_exit_and_cycle_disarm_pending_stop() {
 /// `DashboardOverlayPrev` / `DashboardOverlayNext`
 /// cycle through the agent map in insertion order, wrapping at
 /// either end.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_wraps_through_agents() {
     let mut app = test_app_with_agent();
@@ -3360,7 +3360,7 @@ fn dashboard_overlay_cycle_wraps_through_agents() {
 /// filter that hides one of two agents, the cycle becomes a
 /// no-op (only one visible row to walk through) — the user
 /// can clear the filter to reach the other agent.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_respects_filter() {
     let mut app = test_app_with_agent();
@@ -3395,7 +3395,7 @@ fn dashboard_overlay_cycle_respects_filter() {
 /// so freshly-created agents sort DESCENDING by creation
 /// (most-recent first), matching the dashboard's "Idle"
 /// group ordering.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_order_matches_visible_rows() {
     let mut app = test_app_with_agent();
@@ -3432,7 +3432,7 @@ fn dashboard_overlay_cycle_order_matches_visible_rows() {
         "pinned rows must lead the cycle order, just like the visible list",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 /// Regression: the cycle anchors on the viewed agent, not a stale
 /// `attached_agent` left behind by an external session switch.
 #[test]
@@ -3487,7 +3487,7 @@ fn dashboard_overlay_cycle_anchors_on_visible_agent_not_stale_attach() {
 }
 /// Cycling with only one agent is a no-op (no
 /// view switch, no state mutation).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_noop_with_single_agent() {
     let mut app = test_app_with_agent();
@@ -3501,7 +3501,7 @@ fn dashboard_overlay_cycle_noop_with_single_agent() {
     assert_eq!(app.dashboard.as_ref().unwrap().attached_agent, Some(id));
     assert!(matches!(app.active_view, ActiveView::Agent(a) if a == id));
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_from_non_overlay_agent_attaches_and_switches() {
     let mut app = test_app_with_agent();
@@ -3540,7 +3540,7 @@ fn dashboard_overlay_cycle_from_non_overlay_agent_attaches_and_switches() {
         "prev must keep the overlay chrome attached to the now-current agent",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_works_through_handle_input_after_dashboard_esc_exit() {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
@@ -3599,7 +3599,7 @@ fn dashboard_overlay_cycle_works_through_handle_input_after_dashboard_esc_exit()
 }
 /// A dashboard first materialized by cycling must be fully configured (not
 /// just seeded from persisted state), else it renders bare on back-out.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_from_unopened_dashboard_configures_state() {
     let mut app = test_app_with_agent();
@@ -3637,7 +3637,7 @@ fn dashboard_overlay_cycle_from_unopened_dashboard_configures_state() {
 }
 /// Cycling from a never-opened dashboard honors the auth gate, mirroring
 /// `dispatch_open_dashboard` — no ungated materialization.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_unopened_respects_auth_gate() {
     let mut app = test_app_with_agent();
@@ -3662,7 +3662,7 @@ fn dashboard_overlay_cycle_unopened_respects_auth_gate() {
         "unauthenticated cycle must not materialize the dashboard",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_non_overlay_single_agent_is_noop() {
     let mut app = test_app_with_agent();
@@ -3693,7 +3693,7 @@ fn dashboard_overlay_cycle_non_overlay_single_agent_is_noop() {
         "single-agent no-op must not materialize the dashboard (no load_persisted side effect)",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_non_agent_active_view_is_noop() {
     let mut app = test_app_with_agent();
@@ -3717,11 +3717,13 @@ fn dashboard_overlay_cycle_non_agent_active_view_is_noop() {
         "cycle with a non-agent active_view must not materialize the dashboard",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_non_overlay_noop_when_dashboard_disabled() {
-    let _guard =
-        crate::test_util::EnvVarGuard::set("GROK_AGENT_DASHBOARD", std::path::Path::new("0"));
+    let _guard = crate::test_util::EnvVarGuard::set(
+        "SUPERCHARGE_AGENT_DASHBOARD",
+        std::path::Path::new("0"),
+    );
     let mut app = test_app_with_agent();
     let id1 = AgentId(0);
     mark_agent_nonempty(&mut app, id1);
@@ -3743,7 +3745,7 @@ fn dashboard_overlay_cycle_non_overlay_noop_when_dashboard_disabled() {
         "a disabled dashboard must NOT be materialized by the cycle keys",
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_overlay_cycle_non_overlay_noop_when_current_agent_hidden() {
     let mut app = test_app_with_agent();
@@ -3783,7 +3785,7 @@ fn dashboard_overlay_cycle_non_overlay_noop_when_current_agent_hidden() {
 /// the selected row's owning agent. Reuses `set_yolo_mode` by
 /// temporarily switching `active_view`, so the existing toast
 /// / persist / queue-drain logic all apply.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_toggle_auto_approve_flips_yolo_on_selected_agent() {
     let mut app = test_app_with_agent();
@@ -3807,7 +3809,7 @@ fn dashboard_toggle_auto_approve_flips_yolo_on_selected_agent() {
     assert!(matches!(app.active_view, ActiveView::AgentDashboard));
 }
 /// No selection → toggle is a no-op + toast.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_toggle_auto_approve_with_no_selection_toasts() {
     let mut app = test_app();
@@ -3823,7 +3825,7 @@ fn dashboard_toggle_auto_approve_with_no_selection_toasts() {
 /// Untitled fixture agent has no display_name / generated title, so the
 /// draft prefills empty; typing then commit emit `RenameSession` and stamp
 /// `display_name`.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_rename_end_to_end_top_level_row() {
     let mut app = test_app_with_agent();
@@ -3890,7 +3892,7 @@ fn dashboard_rename_end_to_end_top_level_row() {
 }
 /// Dashboard rename of a chat-kind agent must stamp `kind: Chat` so the
 /// shell takes the conversations fork.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_rename_chat_kind_stamps_kind_chat() {
     let mut app = test_app_with_agent();
@@ -3927,7 +3929,7 @@ fn dashboard_rename_chat_kind_stamps_kind_chat() {
 /// actually dispatches `Action::DashboardCancelRename` directly.
 /// The Esc-keystroke routing is now pinned by the sibling test
 /// `dashboard_rename_esc_keystroke_routes_to_cancel`.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_rename_cancel_action_emits_no_effect() {
     let mut app = test_app_with_agent();
@@ -3961,7 +3963,7 @@ fn dashboard_rename_cancel_action_emits_no_effect() {
 /// future change that rewires Esc to a different action in
 /// rename mode would silently break user expectation; the
 /// action-level test wouldn't catch it.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_rename_esc_keystroke_routes_to_cancel() {
     use crate::actions::ActionRegistry;
@@ -3990,7 +3992,7 @@ fn dashboard_rename_esc_keystroke_routes_to_cancel() {
 /// `AnnouncementsOpenCta(Dashboard)`), and lights the `Ctrl+O` override; a
 /// dismissible promo shows the button but keeps Ctrl+O falling through and
 /// suppresses any caption; no promo shows nothing.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_upgrade_cta_paints_arms_rect_and_ctrl_o_override() {
     use crate::actions::ActionRegistry;
@@ -4144,7 +4146,7 @@ fn dashboard_upgrade_cta_paints_arms_rect_and_ctrl_o_override() {
     assert!(!state.pinned_upgrade_cta_live);
 }
 /// Empty rename draft cancels without emitting an Effect.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_commit_rename_empty_does_not_emit_effect() {
     let mut app = test_app_with_agent();
@@ -4166,7 +4168,7 @@ fn dashboard_commit_rename_empty_does_not_emit_effect() {
     assert!(app.dashboard.as_ref().unwrap().rename.is_none());
 }
 /// Rename on subagent row toasts and refuses.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_begin_rename_on_subagent_row_sets_error_toast() {
     let mut app = test_app_with_agent();
@@ -4183,7 +4185,7 @@ fn dashboard_begin_rename_on_subagent_row_sets_error_toast() {
     assert!(d.error_toast.is_some());
 }
 /// Begin-rename prefills the draft from the agent's `display_name`.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_begin_rename_prefills_display_name() {
     let mut app = test_app_with_agent();
@@ -4207,7 +4209,7 @@ fn dashboard_begin_rename_prefills_display_name() {
     );
 }
 /// Begin-rename falls back to `generated_session_title` when `display_name` is absent.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_begin_rename_prefills_generated_session_title() {
     let mut app = test_app_with_agent();
@@ -4235,7 +4237,7 @@ fn dashboard_begin_rename_prefills_generated_session_title() {
     );
 }
 /// Non-empty `display_name` wins over `generated_session_title`.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_begin_rename_prefers_display_name_over_generated() {
     let mut app = test_app_with_agent();
@@ -4263,7 +4265,7 @@ fn dashboard_begin_rename_prefers_display_name_over_generated() {
     );
 }
 /// Whitespace-only `display_name` falls through to `generated_session_title`.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_begin_rename_whitespace_display_name_falls_through() {
     let mut app = test_app_with_agent();
@@ -4293,7 +4295,7 @@ fn dashboard_begin_rename_whitespace_display_name_falls_through() {
 /// Dispatch text + filter survive a close
 /// and reopen of the dashboard. The contract is
 /// "in-memory state preserved across reopen"; this test pins it.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_state_preserved_across_reopen() {
     let mut app = test_app_with_agent();
@@ -4317,7 +4319,7 @@ fn dashboard_state_preserved_across_reopen() {
     );
 }
 /// Opening dashboard while it's already open closes it.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_then_open_again_closes() {
     let mut app = test_app_with_agent();
@@ -4327,7 +4329,7 @@ fn dashboard_open_then_open_again_closes() {
     assert!(!matches!(app.active_view, ActiveView::AgentDashboard));
 }
 /// Stale pinned ids are dropped at open.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_drops_pinned_ids_for_missing_agents() {
     let mut app = test_app_with_agent();
@@ -4343,7 +4345,7 @@ fn dashboard_open_drops_pinned_ids_for_missing_agents() {
     let d = app.dashboard.as_ref().unwrap();
     assert!(d.pinned.is_empty(), "stale pin should be gc'd at open");
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_row_stop_cancels_wake_turn_with_gesture_trigger() {
     let mut app = test_app();
@@ -4377,7 +4379,7 @@ fn dashboard_row_stop_cancels_wake_turn_with_gesture_trigger() {
         "the wake marker must record the cancelling phase"
     );
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_row_stop_during_send_over_wake_cancels_wake_not_local_turn() {
     let mut app = test_app();
@@ -4449,7 +4451,7 @@ fn dashboard_stop_double_press_deletes_top_level() {
 /// Closing the selected agent moves the cursor DOWN one row (onto the
 /// agent that shifts up into its place) instead of dropping it to
 /// `None`, which would bounce the next ↑/↓ back to the top of the list.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_moves_selection_down_one() {
     let mut app = test_app();
@@ -4499,7 +4501,7 @@ fn dashboard_stop_moves_selection_down_one() {
 }
 /// Closing the LAST row has no row below it, so the cursor falls back
 /// to the previous row rather than disappearing.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_last_row_falls_back_to_previous() {
     let mut app = test_app();
@@ -4551,7 +4553,7 @@ fn dashboard_stop_last_row_falls_back_to_previous() {
 /// hint via `delete_confirm` and is the canonical place for it.
 /// Two copies of the same hint in two different surfaces
 /// confused the user (the prompt one stole visual weight).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_does_not_plant_error_toast() {
     let mut app = test_app();
@@ -4580,7 +4582,7 @@ fn dashboard_stop_does_not_plant_error_toast() {
 /// `DashboardState`. Subsequent presses while the modal is
 /// open are no-ops (idempotent) so the user's search query
 /// and scroll position survive a stray Ctrl+. tap.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_open_shortcuts_help_builds_modal_idempotently() {
     let mut app = test_app();
@@ -4624,7 +4626,7 @@ fn dashboard_open_shortcuts_help_builds_modal_idempotently() {
 /// `DashboardCloseShortcutsHelp` clears the modal. Mirrors the
 /// modal-chrome `CloseRequested` outcome routed through the
 /// dashboard-state input handler.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_close_shortcuts_help_clears_modal() {
     let mut app = test_app();
@@ -4634,7 +4636,7 @@ fn dashboard_close_shortcuts_help_clears_modal() {
     let _ = dispatch(Action::DashboardCloseShortcutsHelp, &mut app);
     assert!(app.dashboard.as_ref().unwrap().shortcuts_modal.is_none());
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_new_agent_button_create_with_detail_switches_view() {
     let mut app = test_app();
@@ -4660,7 +4662,7 @@ fn dashboard_new_agent_button_create_with_detail_switches_view() {
     assert!(!app.dashboard.as_ref().unwrap().new_agent_button_focused);
     assert!(!effects.is_empty(), "session creation must emit effects");
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_focus_new_agent_button_action_clears_selection() {
     let mut app = test_app_with_agent();
@@ -4686,7 +4688,7 @@ fn dashboard_focus_new_agent_button_action_clears_selection() {
 /// `[+ New Agent]` button — the button behaves as a virtual
 /// row at index -1 so the user can walk straight off the top
 /// of the list onto it without an extra Esc.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_up_arrow_from_first_row_focuses_button() {
     let mut app = test_app_with_agent();
@@ -4706,7 +4708,7 @@ fn dashboard_up_arrow_from_first_row_focuses_button() {
 /// Up-arrow on the button is a no-op (no wrap). Mirrors the
 /// agents modal — the cursor sits on the button and stays
 /// there until you press Down or click a row.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_up_arrow_on_button_is_noop() {
     let mut app = test_app_with_agent();
@@ -4726,7 +4728,7 @@ fn dashboard_up_arrow_on_button_is_noop() {
 /// grouping ON (the default), that's the first section header; a
 /// second Down steps into the first row inside it. When there are no
 /// rows the cursor stays on the button.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_down_arrow_on_button_selects_first_focusable() {
     let mut app = test_app_with_agent();
@@ -4753,7 +4755,7 @@ fn dashboard_down_arrow_on_button_selects_first_focusable() {
     );
     assert!(d.selected_section.is_none());
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_down_arrow_on_button_with_no_rows_is_noop() {
     let mut app = test_app();
@@ -4768,7 +4770,7 @@ fn dashboard_down_arrow_on_button_with_no_rows_is_noop() {
     assert!(d.selected.is_none());
 }
 /// Filter parser plumbing: State known.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_filter_state_known_token_via_dispatch() {
     use crate::views::dashboard::{FilterValue, RowState};
@@ -4917,7 +4919,7 @@ fn extract_recent_lines_strips_ansi() {
     assert!(out[0].contains("evil"));
 }
 /// A press > 2s after the first re-arms (does NOT close).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_double_press_after_2s_rearms() {
     use std::time::{Duration, Instant};
@@ -4941,7 +4943,7 @@ fn dashboard_stop_double_press_after_2s_rearms() {
     assert!(app.dashboard.as_ref().unwrap().delete_confirm.is_some());
 }
 /// Subagent Ctrl+X bypasses confirm and emits KillSubagent.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_subagent_emits_kill_subagent_effect() {
     let mut app = test_app_with_agent();
@@ -4964,7 +4966,7 @@ fn dashboard_stop_subagent_emits_kill_subagent_effect() {
     ));
     assert!(app.dashboard.as_ref().unwrap().delete_confirm.is_none());
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_delete_complete_returns_from_foreground_agent() {
     let mut app = test_app_with_agent();
@@ -4983,7 +4985,7 @@ fn dashboard_delete_complete_returns_from_foreground_agent() {
     assert!(!app.agents.contains_key(&id));
     assert!(matches!(app.active_view, ActiveView::AgentDashboard));
 }
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_busy_roster_toasts_without_arming() {
     let mut app = test_app();
@@ -5005,7 +5007,7 @@ fn dashboard_stop_busy_roster_toasts_without_arming() {
     );
 }
 /// A busy top-level row: Ctrl+X cancels the turn and never arms delete.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_busy_top_level_cancels_without_arming() {
     let mut app = test_app();
@@ -5043,7 +5045,7 @@ fn dashboard_stop_busy_top_level_cancels_without_arming() {
 /// scheduled `/loop` live): Ctrl+X stops the background work rather than
 /// toasting, and never arms delete — so the row can settle to idle and
 /// then be deleted.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_bg_work_row_stops_without_arming() {
     let mut app = test_app();
@@ -5089,7 +5091,7 @@ fn dashboard_stop_bg_work_row_stops_without_arming() {
     assert!(d.error_toast.is_none(), "stopped work, so no toast");
 }
 /// Reverting stop-all to the wire default (`ClientUi`) would auto-wake.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_running_bg_task_emits_teardown_kill() {
     use xai_grok_shell::extensions::task::TaskKillSource;
@@ -5136,7 +5138,7 @@ fn dashboard_stop_running_bg_task_emits_teardown_kill() {
 /// A row that's `Working` only because of a queued (unsent) prompt: Ctrl+X
 /// drops the queue (local, no effect) rather than toasting, and never arms
 /// — so the row settles to idle and can then be deleted.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_queued_prompt_row_drops_queue_without_arming() {
     let mut app = test_app();
@@ -5170,7 +5172,7 @@ fn dashboard_stop_queued_prompt_row_drops_queue_without_arming() {
 }
 /// The `y` / second-`[✗]` confirm re-checks deletability: a row that
 /// became busy between arming and confirming must not be deleted.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_delete_confirm_rechecks_settled_row() {
     let mut app = test_app();
@@ -5203,7 +5205,7 @@ fn dashboard_delete_confirm_rechecks_settled_row() {
 }
 /// A settled chat-conversation roster row must not arm on Ctrl+X — delete
 /// isn't supported for conversations, so a confirm could never succeed.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_stop_conversation_row_does_not_arm() {
     let mut app = test_app();
@@ -5225,7 +5227,7 @@ fn dashboard_stop_conversation_row_does_not_arm() {
     );
 }
 /// A row with no session id toasts instead of emitting a delete.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_delete_top_level_without_session_id_toasts() {
     let mut app = test_app();
@@ -5254,7 +5256,7 @@ fn dashboard_delete_top_level_without_session_id_toasts() {
 /// Also assert the response was actually sent through
 /// the oneshot (not just popped). A regression that pops without
 /// sending the response would otherwise slip through this test.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_permission_select_happy_path() {
     let mut app = test_app_with_agent();
@@ -5287,7 +5289,7 @@ fn dashboard_permission_select_happy_path() {
     }
 }
 /// Stale request_id — refuses, sets toast, clears peek.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_permission_select_drops_stale_request() {
     let mut app = test_app_with_agent();
@@ -5321,7 +5323,7 @@ fn dashboard_permission_select_drops_stale_request() {
     assert!(d.error_toast.is_some(), "toast must surface the mismatch");
 }
 /// Missing row — toasts, closes peek, returns no effects.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_permission_select_for_missing_row_clears_peek() {
     let mut app = test_app_with_agent();
@@ -5355,7 +5357,7 @@ fn dashboard_permission_select_for_missing_row_clears_peek() {
 /// Peek reply to an IDLE agent sends immediately: the prompt drains
 /// (one `SendPrompt` effect), the turn starts, and the reply draft
 /// is cleared.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_reply_to_idle_agent_sends() {
     let mut app = test_app_with_agent();
@@ -5393,7 +5395,7 @@ fn dashboard_peek_reply_to_idle_agent_sends() {
 }
 /// Peek reply to a RUNNING agent queues the prompt (no effect) so it
 /// drains after the current turn; the draft is still cleared.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_reply_to_running_agent_queues() {
     let mut app = test_app_with_agent();
@@ -5456,7 +5458,7 @@ fn dashboard_peek_reply_to_running_agent_queues() {
 }
 /// Peek reply with an attached image drains into the queued
 /// prompt and idle agents send `SendPromptBlocks` (not text-only).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_reply_with_image_sends_blocks() {
     let mut app = test_app_with_agent();
@@ -5511,7 +5513,7 @@ fn dashboard_peek_reply_with_image_sends_blocks() {
 }
 /// Regression: whitespace around a peek-reply image chip must not
 /// desync chip ranges from the stored text (panicked on rewind restore).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_reply_image_with_whitespace_survives_rewind_restore() {
     let mut app = test_app_with_agent();
@@ -5580,7 +5582,7 @@ fn dashboard_peek_reply_image_with_whitespace_survives_rewind_restore() {
 }
 /// Image on peek reply is preserved on the queued entry when
 /// the agent is mid-turn.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_reply_with_image_queues_images() {
     let mut app = test_app_with_agent();
@@ -5640,7 +5642,7 @@ fn dashboard_peek_reply_with_image_queues_images() {
 }
 /// Replying to a subagent row is rejected with a toast (subagents are
 /// driven by their parent turn).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_reply_to_subagent_toasts() {
     let mut app = test_app_with_agent();
@@ -5661,7 +5663,7 @@ fn dashboard_peek_reply_to_subagent_toasts() {
 /// Peek "No, type to add feedback" path: resolves the front
 /// permission with the `RejectOnce` option and attaches the typed
 /// text as `followup_message` meta.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_permission_followup_rejects_with_message() {
     let mut app = test_app_with_agent();
@@ -5698,7 +5700,7 @@ fn dashboard_permission_followup_rejects_with_message() {
 }
 /// Peek answering of the Ask tool (`AskUserQuestion`): selecting an
 /// option sends the ext-response and clears the question view.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_question_answer_sends_and_clears() {
     use crate::views::prompt_widget::StashedPrompt;
@@ -5742,7 +5744,7 @@ fn dashboard_question_answer_sends_and_clears() {
 /// A multi-question Ask form is walked one question at a time in the
 /// peek: answering advances to the next question (no submit yet) and
 /// resets the panel's per-question draft; the last answer submits.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_question_answer_walks_multiple_questions() {
     use crate::views::dashboard::peek::{PeekPanelState, compute_peek_fields};
@@ -5811,7 +5813,7 @@ fn dashboard_question_answer_walks_multiple_questions() {
 /// The peek panel auto-opens when a row is selected (replacing the
 /// new-session input) and closes when the selection clears (e.g. the
 /// `[+ New Agent]` button is focused).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_auto_opens_for_selected_row() {
     use ratatui::buffer::Buffer;
@@ -5865,7 +5867,7 @@ fn dashboard_peek_auto_opens_for_selected_row() {
 /// the dashboard with a 3-line `peek_reply` draft produces a TALLER
 /// dispatch (peek) rect than the same dashboard with a single-line
 /// draft — the box sizes to the reply content (Shift+Enter newlines).
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_peek_box_grows_for_multiline_reply() {
     use ratatui::buffer::Buffer;

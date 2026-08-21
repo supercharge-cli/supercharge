@@ -1833,7 +1833,7 @@ fn translate_local_submit(
                 .and_then(|o| o.id.as_deref())
                 .unwrap_or(super::dispatch::UPSELL_URL_UPGRADE);
             xai_grok_telemetry::session_ctx::log_event(
-                xai_grok_telemetry::events::SuperGrokUpsellClicked {
+                xai_grok_telemetry::events::SuperchargeUpsellClicked {
                     source,
                     auth_method: None,
                 },

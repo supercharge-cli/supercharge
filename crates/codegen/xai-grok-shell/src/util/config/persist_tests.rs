@@ -757,7 +757,7 @@ mod resolve_auto_compact {
     use std::sync::Mutex;
     const TEST_MODEL: &str = "grok-4.5";
     const OTHER_MODEL: &str = "grok-4.3";
-    /// Serialize tests that mutate `GROK_AUTO_COMPACT_THRESHOLD_PERCENT`.
+    /// Serialize tests that mutate `SUPERCHARGE_AUTO_COMPACT_THRESHOLD_PERCENT`.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
     /// Build a `Config` populated with optional per-source values for the
     /// `TEST_MODEL`. Any `None` argument means "that source is unset".

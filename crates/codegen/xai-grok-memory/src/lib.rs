@@ -2,13 +2,13 @@
 //!
 //! This crate provides a markdown-based memory storage layer that allows
 //! Grok to persist important information across sessions. Memory files are
-//! stored under `~/.grok/memory/` with workspace-scoped subdirectories
+//! stored under `~/.supercharge/memory/` with workspace-scoped subdirectories
 //! keyed by a blake3 hash of the workspace path.
 //!
 //! ## Data Layout
 //!
 //! ```text
-//! ~/.grok/memory/
+//! ~/.supercharge/memory/
 //!   ├── MEMORY.md                         # Global curated knowledge
 //!   └── {workspace_hash}/                 # Per-workspace (blake3(cwd)[..16])
 //!       ├── MEMORY.md                     # Project-level curated knowledge
@@ -18,7 +18,7 @@
 //!
 //! ## Feature Flag
 //!
-//! Memory is enabled through `GROK_MEMORY`, `[memory] enabled`, or remote settings.
+//! Memory is enabled through `SUPERCHARGE_MEMORY`, `[memory] enabled`, or remote settings.
 //! When disabled, this crate is not initialized by the host.
 
 pub mod archive;

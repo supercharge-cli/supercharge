@@ -11,7 +11,7 @@
 //! no verdict behind — is a unit test (`auth::manager::remedy`); driving it here
 //! would buy the same assertions for two more timeout budgets of wall clock.
 //!
-//! One `#[test]`: the phases share one process-global `GROK_HOME` and env, so
+//! One `#[test]`: the phases share one process-global `SUPERCHARGE_HOME` and env, so
 //! nothing else may run concurrently.
 #![cfg(unix)]
 
@@ -290,15 +290,15 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
     // SAFETY: the only other live threads are the mock runtime's HTTP workers,
     // which never read the process environment.
     unsafe {
-        std::env::set_var("GROK_HOME", grok_home.path());
-        std::env::set_var("GROK_CLI_CHAT_PROXY_BASE_URL", server.url());
-        std::env::set_var("GROK_XAI_API_BASE_URL", server.url());
-        std::env::set_var("GROK_MODELS_BASE_URL", server.url());
-        std::env::set_var("GROK_AUTH_PROVIDER_COMMAND", &provider);
-        std::env::set_var("GROK_AUTH_PROVIDER_LABEL", PROVIDER_LABEL);
+        std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
+        std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_MODELS_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_AUTH_PROVIDER_COMMAND", &provider);
+        std::env::set_var("SUPERCHARGE_AUTH_PROVIDER_LABEL", PROVIDER_LABEL);
         // An API key would be advertised first and mask the session-auth path.
-        std::env::remove_var("XAI_API_KEY");
-        std::env::remove_var("GROK_CODE_XAI_API_KEY");
+        std::env::remove_var("SUPERCHARGE_API_KEY");
+        std::env::remove_var("SUPERCHARGE_CODE_API_KEY");
         // Last-resort 401 recovery can mint a credential from an endpoint
         // named in the ambient environment, which on a container-hosted
         // runner would rescue the session behind the test's back. Leave it
@@ -307,9 +307,9 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
         for name in ambient_mint_endpoints() {
             std::env::remove_var(&name);
         }
-        std::env::set_var("GROK_TELEMETRY_ENABLED", "false");
-        std::env::set_var("GROK_FEEDBACK_ENABLED", "false");
-        std::env::set_var("GROK_TRACE_UPLOAD", "false");
+        std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
+        std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");
+        std::env::set_var("SUPERCHARGE_TRACE_UPLOAD", "false");
     }
 
     let agent_rt = tokio::runtime::Builder::new_current_thread()
@@ -323,7 +323,7 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
         let methods = advertised(&init);
         assert_eq!(
             methods.first().map(|(id, _)| id.as_str()),
-            Some("grok.com"),
+            Some("supercharge.ai"),
             "an expired credential the provider cannot renew must advertise the \
              login method first, not `cached_token`; got {methods:?}"
         );

@@ -21,7 +21,7 @@
   },
   {
     "category": "fixes",
-    "description": "**File links and media** now work for worktree sessions under ~/.grok/worktrees/.",
+    "description": "**File links and media** now work for worktree sessions under ~/.supercharge/worktrees/.",
     "breaking_change": false
   },
   {
@@ -71,7 +71,7 @@
   },
   {
     "category": "fixes",
-    "description": "**Terminal command cards** on grok.com now correctly settle after foreground bash tasks.",
+    "description": "**Terminal command cards** on supercharge.ai now correctly settle after foreground bash tasks.",
     "breaking_change": false
   },
   {

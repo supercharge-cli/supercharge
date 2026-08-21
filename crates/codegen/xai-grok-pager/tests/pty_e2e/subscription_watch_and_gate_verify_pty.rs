@@ -9,10 +9,10 @@ use super::common::*;
 const GATE_MSG: &str = "ZZSUBGATEMSG";
 
 /// A tier in the shell's `QUALIFYING_TIERS` list.
-const PAID_TIER: &str = "SuperGrokPro";
+const PAID_TIER: &str = "SuperchargePro";
 
 /// Display name delivered via `/settings` `subscription_tier_display`.
-const PAID_TIER_DISPLAY: &str = "SuperGrok Pro";
+const PAID_TIER_DISPLAY: &str = "Supercharge Pro";
 
 /// Count of live subscription checks the client made against the mock
 /// (`GET /v1/user?include=subscription`). Plain `/v1/user` enrichment
@@ -51,8 +51,8 @@ const PAID_ONLY_MODEL: &str = "composer-paid-only";
 
 /// Minimal unsigned JWT with a `tier` claim matching [`PAID_TIER`].
 ///
-/// Proto `prod_auth.SubscriptionTier`: 5 = `supergrok_heavy` = live
-/// `/user` string `SuperGrokPro`. Must match
+/// Proto `prod_auth.SubscriptionTier`: 5 = `supercharge_heavy` = live
+/// `/user` string `SuperchargePro`. Must match
 /// `jwt_claim_matches_user_subscription_tier` or post-unblock catalog
 /// refresh treats the claim as stale and never re-fetches `/v1/models`
 /// within the test timeout.
@@ -143,17 +143,17 @@ fn pump_until(
     }
 }
 
-/// Like [`seed_fake_oauth`], but under the `GROK_LOCAL_AUTH` dev issuer
+/// Like [`seed_fake_oauth`], but under the `SUPERCHARGE_LOCAL_AUTH` dev issuer
 /// (`http://localhost:22255`). Two reasons: `is_xai_oauth2_issuer()` accepts
 /// the local issuer, so the subscription gate applies (an enterprise/unknown
 /// issuer bypasses it); and the qualifying-tier JWT refresh then hits
 /// `localhost:22255` — instant connection-refused instead of a real network
 /// call to auth.x.ai (hermetic, no CI-network flake). Pair with
-/// `GROK_LOCAL_AUTH=1` in the spawn env so the shell's scope-key lookup
+/// `SUPERCHARGE_LOCAL_AUTH=1` in the spawn env so the shell's scope-key lookup
 /// resolves this entry.
 fn seed_fake_oauth_local_issuer(content: &ContentController, user: &str) {
-    let grok_home = content.home().join(".grok");
-    std::fs::create_dir_all(&grok_home).expect("create temp .grok");
+    let grok_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&grok_home).expect("create temp .supercharge");
     std::fs::write(
         grok_home.join("auth.json"),
         format!(
@@ -185,7 +185,7 @@ fn spawn_subscription_pager(
 ) -> PtyHarness {
     seed_fake_oauth_local_issuer(content, oauth_user);
     let mut overrides = Vec::from(oauth_credential_ops());
-    overrides.push(EnvOp::set("GROK_LOCAL_AUTH", "1"));
+    overrides.push(EnvOp::set("SUPERCHARGE_LOCAL_AUTH", "1"));
     overrides.extend_from_slice(extra_env);
 
     let binary = pager_binary().expect("resolve pager binary");
@@ -240,7 +240,10 @@ async fn subscription_watch_polls_free_tier_then_goes_dormant_after_upgrade() {
     let mut harness = spawn_subscription_session(
         &content,
         "pty-subwatch",
-        &[EnvOp::set("GROK_SUBSCRIPTION_WATCH_INTERVAL_SECS", "1")],
+        &[EnvOp::set(
+            "SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS",
+            "1",
+        )],
     );
 
     // While free, the watch fires repeatedly at the (test-shrunk) cadence.
@@ -331,7 +334,7 @@ async fn startup_gate_shows_paywall_for_free_user_after_live_check() {
     content.server().set_settings(json!({
         "allow_access": false,
         "gate_message": GATE_MSG,
-        "gate_url": "https://grok.com/supergrok?referrer=grok-build",
+        "gate_url": "https://supercharge.ai/upgrade",
         "gate_label": "Subscribe",
     }));
 
@@ -388,7 +391,10 @@ async fn stale_gate_push_never_flashes_paywall_for_subscribed_user() {
     let mut harness = spawn_subscription_session(
         &content,
         "pty-subgate-paid",
-        &[EnvOp::set("GROK_SUBSCRIPTION_WATCH_INTERVAL_SECS", "0")],
+        &[EnvOp::set(
+            "SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS",
+            "0",
+        )],
     );
 
     // Let startup fetches fully settle so the scripted one-shot below can

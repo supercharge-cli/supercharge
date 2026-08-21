@@ -1262,7 +1262,7 @@ async fn same_session_monitor_event_is_injected() {
 
 #[tokio::test]
 async fn legacy_monitor_event_without_owner_is_injected() {
-    // Legacy / non-grok-build backends record no owner; such events must
+    // Legacy / non-Supercharge AI-build backends record no owner; such events must
     // pass through unchanged for backwards compatibility.
     let (config, mut cmd_rx) = make_test_config();
     let notification = make_monitor_event_notification("mon-legacy", None);
@@ -1618,7 +1618,7 @@ async fn plan_mode_exited_emits_current_mode_update_default() {
     ));
 }
 
-/// Default (grok) polarity: the exit_plan_mode tool result is the model's
+/// Default (Supercharge AI) polarity: the exit_plan_mode tool result is the model's
 /// only exit signal, so an approved `PlanModeExited` must NOT arm the
 /// deferred exit reminder — in memory or in the persisted snapshot.
 /// Sibling of `plan_mode_exited_arms_exit_reminder_when_gated`.
@@ -1633,7 +1633,7 @@ async fn plan_mode_exited_does_not_arm_exit_reminder_by_default() {
 
     let notification =
         ToolNotification::PlanModeExited(xai_grok_tools::notification::types::PlanModeExited {
-            tool_call_id: "tc-exit-grok".into(),
+            tool_call_id: "tc-exit-Supercharge AI".into(),
             plan_content: Some("- step 1".into()),
             plan_file_path: "/tmp/test-session/plan.md".into(),
         });

@@ -93,8 +93,8 @@ exit 0
 
 /// Seed a valid previous-good binary + symlink in the isolated home.
 fn seed_previous_good(home: &Path, platform: &str) -> PathBuf {
-    let downloads = home.join(".grok").join("downloads");
-    let bin = home.join(".grok").join("bin");
+    let downloads = home.join(".supercharge").join("downloads");
+    let bin = home.join(".supercharge").join("bin");
     std::fs::create_dir_all(&downloads).unwrap();
     std::fs::create_dir_all(&bin).unwrap();
     let prev = downloads.join(format!("grok-{platform}"));
@@ -109,7 +109,7 @@ fn seed_previous_good(home: &Path, platform: &str) -> PathBuf {
 /// Re-resolve `$BIN_DIR/grok` from disk and re-run it: the active grok must
 /// always execute, and never be a `.tmp`/partial file.
 fn assert_active_grok_runs(home: &Path) {
-    let link = home.join(".grok").join("bin").join("grok");
+    let link = home.join(".supercharge").join("bin").join("grok");
     assert!(link.is_symlink(), "grok must remain a symlink");
     let resolved =
         dunce::canonicalize(&link).unwrap_or_else(|e| panic!("grok symlink dangles: {e}"));
@@ -135,8 +135,8 @@ fn run_installer(install_sh: &Path, home: &Path, fakebin: &Path, mode: &str, she
         .env("HOME", home)
         .env("PATH", path_env)
         .env("SHELL", shell)
-        .env("GROK_BIN_DIR", home.join(".grok").join("bin"))
-        .env("GROK_CHANNEL", "stable")
+        .env("SUPERCHARGE_BIN_DIR", home.join(".supercharge").join("bin"))
+        .env("SUPERCHARGE_CHANNEL", "stable")
         .env("FAKE_MODE", mode)
         .status()
         .expect("spawn bash install.sh");
@@ -372,7 +372,7 @@ fn write_fake_macos_x86_host(dir: &Path, host: FakeHost) {
 
 /// Run an install script against a fake macOS/x86_64 host and return the
 /// artifact URLs it requested. The enterprise script requires auth, provided
-/// via a dummy `GROK_DEPLOYMENT_KEY`.
+/// via a dummy `SUPERCHARGE_DEPLOYMENT_KEY`.
 fn install_urls_on_fake_host(script: &str, host: FakeHost) -> Option<String> {
     let script_file = script_path(script)?;
     let fakedir = tempfile::tempdir().unwrap();
@@ -389,9 +389,12 @@ fn install_urls_on_fake_host(script: &str, host: FakeHost) -> Option<String> {
         .env("HOME", home.path())
         .env("PATH", path_env)
         .env("SHELL", "/bin/bash")
-        .env("GROK_BIN_DIR", home.path().join(".grok").join("bin"))
-        .env("GROK_CHANNEL", "stable")
-        .env("GROK_DEPLOYMENT_KEY", "test-deployment-key")
+        .env(
+            "SUPERCHARGE_BIN_DIR",
+            home.path().join(".supercharge").join("bin"),
+        )
+        .env("SUPERCHARGE_CHANNEL", "stable")
+        .env("SUPERCHARGE_DEPLOYMENT_KEY", "test-deployment-key")
         .env("FAKE_MODE", "full")
         .env("FAKE_URL_LOG", &url_log)
         .status()

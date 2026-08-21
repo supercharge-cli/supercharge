@@ -44,7 +44,7 @@ fn artifacts(directory: &Path) -> HashSet<String> {
     fs::read_dir(directory)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name.contains(".grok-"))
+        .filter(|name| name.contains(".supercharge-"))
         .collect()
 }
 

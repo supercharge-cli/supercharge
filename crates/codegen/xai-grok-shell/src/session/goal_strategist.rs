@@ -860,7 +860,7 @@ mod tests {
             attempt: 3,
             consecutive_failures: 5,
             every: 2,
-            model_id: "grok-test",
+            model_id: "Supercharge AI-test",
             tool_names: default_tool_names(),
             inherit_tool_names: default_tool_names(),
         }
@@ -1232,7 +1232,7 @@ mod tests {
     use crate::session::goal_role_tools::tests::assert_no_tool_placeholders;
 
     /// Default/inherit render: the tool placeholders resolve to the literal
-    /// parent (grok-build) names, with no placeholder left behind. Guards
+    /// parent (Supercharge AI-build) names, with no placeholder left behind. Guards
     /// against accidental wording drift in the strategist template.
     #[test]
     fn strategist_template_default_render_has_no_placeholders() {

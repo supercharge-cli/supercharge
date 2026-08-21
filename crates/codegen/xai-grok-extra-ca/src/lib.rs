@@ -1,4 +1,4 @@
-//! Opt-in extra TLS roots via `GROK_EXTRA_CA_BUNDLE` (PEM path).
+//! Opt-in extra TLS roots via `SUPERCHARGE_EXTRA_CA_BUNDLE` (PEM path).
 //!
 //! Default-off (unset/empty env → no I/O); parsed once into a process
 //! `OnceLock`; additive to webpki roots. Each DER is validated with
@@ -17,11 +17,11 @@ use rustls::RootCertStore;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
 
-/// Hard cap on `GROK_EXTRA_CA_BUNDLE` (1 MiB) — avoids unbounded startup reads.
+/// Hard cap on `SUPERCHARGE_EXTRA_CA_BUNDLE` (1 MiB) — avoids unbounded startup reads.
 pub const MAX_EXTRA_CA_BUNDLE_BYTES: u64 = 1024 * 1024;
 
 /// Env var name for the opt-in extra CA bundle (PEM path).
-pub const ENV_GROK_EXTRA_CA_BUNDLE: &str = "GROK_EXTRA_CA_BUNDLE";
+pub const ENV_SUPERCHARGE_EXTRA_CA_BUNDLE: &str = "SUPERCHARGE_EXTRA_CA_BUNDLE";
 
 /// Process-wide extra roots as validated DER, parsed once.
 ///
@@ -39,7 +39,7 @@ pub fn with_extra_root_certificates(mut builder: reqwest::ClientBuilder) -> reqw
             // WHY: rustls already accepted this DER; skip rather than poison build.
             Err(e) => tracing::warn!(
                 error = %e,
-                "GROK_EXTRA_CA_BUNDLE: validated DER rejected by reqwest; skipping cert"
+                "SUPERCHARGE_EXTRA_CA_BUNDLE: validated DER rejected by reqwest; skipping cert"
             ),
         }
     }
@@ -56,7 +56,7 @@ pub fn with_extra_root_certificates_blocking(
             // WHY: rustls already accepted this DER; skip rather than poison build.
             Err(e) => tracing::warn!(
                 error = %e,
-                "GROK_EXTRA_CA_BUNDLE: validated DER rejected by reqwest; skipping cert"
+                "SUPERCHARGE_EXTRA_CA_BUNDLE: validated DER rejected by reqwest; skipping cert"
             ),
         }
     }
@@ -64,7 +64,7 @@ pub fn with_extra_root_certificates_blocking(
 }
 
 fn load_extra_root_ders() -> Vec<Vec<u8>> {
-    let path = match std::env::var_os(ENV_GROK_EXTRA_CA_BUNDLE) {
+    let path = match std::env::var_os(ENV_SUPERCHARGE_EXTRA_CA_BUNDLE) {
         Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
         _ => return Vec::new(),
     };
@@ -76,7 +76,7 @@ fn load_extra_root_ders() -> Vec<Vec<u8>> {
             tracing::warn!(
                 path = %path.display(),
                 error = %e,
-                "GROK_EXTRA_CA_BUNDLE unreadable; continuing without extra roots"
+                "SUPERCHARGE_EXTRA_CA_BUNDLE unreadable; continuing without extra roots"
             );
             return Vec::new();
         }
@@ -84,7 +84,7 @@ fn load_extra_root_ders() -> Vec<Vec<u8>> {
             tracing::warn!(
                 path = %path.display(),
                 max_bytes = MAX_EXTRA_CA_BUNDLE_BYTES,
-                "GROK_EXTRA_CA_BUNDLE exceeds size cap; continuing without extra roots"
+                "SUPERCHARGE_EXTRA_CA_BUNDLE exceeds size cap; continuing without extra roots"
             );
             return Vec::new();
         }
@@ -94,7 +94,7 @@ fn load_extra_root_ders() -> Vec<Vec<u8>> {
     if outcome.no_pem_blocks {
         tracing::warn!(
             path = %path.display(),
-            "GROK_EXTRA_CA_BUNDLE contains no PEM certificate blocks; continuing without extra roots"
+            "SUPERCHARGE_EXTRA_CA_BUNDLE contains no PEM certificate blocks; continuing without extra roots"
         );
         return outcome.accepted;
     }
@@ -103,19 +103,19 @@ fn load_extra_root_ders() -> Vec<Vec<u8>> {
             path = %path.display(),
             accepted = outcome.accepted.len(),
             rejected = outcome.rejected,
-            "GROK_EXTRA_CA_BUNDLE: dropped unusable certificate block(s)"
+            "SUPERCHARGE_EXTRA_CA_BUNDLE: dropped unusable certificate block(s)"
         );
     }
     if outcome.accepted.is_empty() {
         tracing::warn!(
             path = %path.display(),
-            "GROK_EXTRA_CA_BUNDLE produced zero usable certificates; continuing without extra roots"
+            "SUPERCHARGE_EXTRA_CA_BUNDLE produced zero usable certificates; continuing without extra roots"
         );
     } else {
         tracing::info!(
             path = %path.display(),
             accepted = outcome.accepted.len(),
-            "GROK_EXTRA_CA_BUNDLE: loaded extra root certificate(s)"
+            "SUPERCHARGE_EXTRA_CA_BUNDLE: loaded extra root certificate(s)"
         );
     }
     outcome.accepted

@@ -24,7 +24,7 @@ pub struct HeadlessResult {
 }
 
 /// Timeout for one headless grok invocation: 60 seconds, multiplied by
-/// [`crate::scaled`]'s `GROK_TEST_TIMEOUT_SCALE`.
+/// [`crate::scaled`]'s `SUPERCHARGE_TEST_TIMEOUT_SCALE`.
 fn headless_timeout() -> Duration {
     crate::scaled(Duration::from_secs(60))
 }
@@ -334,16 +334,16 @@ mod tests {
         let mut cmd = tokio::process::Command::new("/bin/sh");
         cmd.args([
             "-c",
-            "printf '%s|%s|%s|%s' \"${AMBIENT_ONLY-unset}\" \"$GROK_PROMPT_SUGGESTIONS\" \"$FEATURE_TEST_VAR\" \"$HOME\"",
+            "printf '%s|%s|%s|%s' \"${AMBIENT_ONLY-unset}\" \"$SUPERCHARGE_PROMPT_SUGGESTIONS\" \"$FEATURE_TEST_VAR\" \"$HOME\"",
         ])
         .env("AMBIENT_ONLY", "discarded")
-        .env("GROK_PROMPT_SUGGESTIONS", "command-level-discarded");
+        .env("SUPERCHARGE_PROMPT_SUGGESTIONS", "command-level-discarded");
 
         let result = run_headless_in_sandbox_borrowed_with_env(
             cmd,
             &sandbox,
             &[
-                ("GROK_PROMPT_SUGGESTIONS", "explicit-override"),
+                ("SUPERCHARGE_PROMPT_SUGGESTIONS", "explicit-override"),
                 ("FEATURE_TEST_VAR", "enabled"),
             ],
         )

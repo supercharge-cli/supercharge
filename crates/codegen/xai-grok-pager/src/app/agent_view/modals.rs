@@ -410,7 +410,7 @@ impl AgentView {
             return self.handle_modal_input_key(key);
         }
 
-        // Ctrl+O opens grok.com connectors on the MCP servers tab.
+        // Ctrl+O opens supercharge.ai connectors on the MCP servers tab.
         if key.code == KeyCode::Char('o')
             && key.modifiers == KeyModifiers::CONTROL
             && self.extensions_modal.as_ref().is_some_and(|s| {

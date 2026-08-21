@@ -1,5 +1,5 @@
 //! Grok-owned direct global hook paths shared by shell discovery and sandbox
-//! write-deny: `$GROK_HOME/hooks`, `hooks-paths`, and absolute registry targets.
+//! write-deny: `$SUPERCHARGE_HOME/hooks`, `hooks-paths`, and absolute registry targets.
 //! Relative registry lines, project hooks, and vendor compat are out of scope.
 
 use std::io;
@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlobalHookSourceKind {
-    /// `$GROK_HOME/hooks/` (discovered + protected).
+    /// `$SUPERCHARGE_HOME/hooks/` (discovered + protected).
     HookDirectory,
-    /// `$GROK_HOME/hooks-paths` (protected; never loaded as hook JSON).
+    /// `$SUPERCHARGE_HOME/hooks-paths` (protected; never loaded as hook JSON).
     RegistryFile,
     /// Absolute registry target (must exist before sandbox apply).
     ConfiguredSource,
@@ -50,7 +50,7 @@ pub enum GlobalHookSourceError {
         #[source]
         source: io::Error,
     },
-    #[error("symlinked GROK_HOME is not allowed under sandbox write-deny: {path}")]
+    #[error("symlinked SUPERCHARGE_HOME is not allowed under sandbox write-deny: {path}")]
     SymlinkedGrokHome { path: PathBuf },
     #[error("hook source path contains a symlink component (retargetable): {path}")]
     SymlinkedSource { path: PathBuf },
@@ -271,7 +271,7 @@ fn require_real_file(path: &Path) -> Result<(), GlobalHookSourceError> {
     Ok(())
 }
 
-/// Ensure real `$GROK_HOME/hooks` dir + `hooks-paths` file (create if missing).
+/// Ensure real `$SUPERCHARGE_HOME/hooks` dir + `hooks-paths` file (create if missing).
 /// Race-resistant create (`create_dir` / `create_new`+`O_NOFOLLOW`); never
 /// truncates an existing registry; rejects symlinks/wrong types.
 pub fn ensure_grok_hook_slots(grok_home: &Path) -> Result<(), GlobalHookSourceError> {

@@ -16,7 +16,7 @@ struct IsolatedHome {
 
 fn isolate_grok_home() -> IsolatedHome {
     let dir = tempfile::tempdir().unwrap();
-    let env = EnvGuard::set("GROK_HOME", dir.path());
+    let env = EnvGuard::set("SUPERCHARGE_HOME", dir.path());
     IsolatedHome {
         _dir: dir,
         _env: env,

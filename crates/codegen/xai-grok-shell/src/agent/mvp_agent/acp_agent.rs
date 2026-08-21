@@ -232,7 +232,7 @@ impl acp::Agent for MvpAgent {
                 &crate::util::grok_home::grok_home(),
             )
         {
-            unsafe { std::env::set_var("XAI_API_KEY", &api_key) };
+            unsafe { std::env::set_var("SUPERCHARGE_API_KEY", &api_key) };
             tracing::info!("auth: loaded API key from auth.json (xai::api_key scope)");
             xai_grok_telemetry::unified_log::info(
                 "auth: loaded API key from auth.json (xai::api_key scope)",
@@ -342,7 +342,7 @@ impl acp::Agent for MvpAgent {
             tracing::info!(
                 label = ?login_label,
                 has_auth_provider,
-                "auth: advertising grok.com auth method",
+                "auth: advertising supercharge.ai auth method",
             );
         }
         let preferred_method = preferred_method_early;
@@ -477,7 +477,7 @@ impl acp::Agent for MvpAgent {
                 )
                 .auth_methods(auth_methods)
                 .meta({
-                    let metadata = parse_json_object_env("GROK_AGENT_METADATA");
+                    let metadata = parse_json_object_env("SUPERCHARGE_AGENT_METADATA");
                     serde_json::json!({
                     "grokShell": true,
                     // Re-deriving this precedence client-side has regressed OIDC
@@ -550,7 +550,7 @@ impl acp::Agent for MvpAgent {
             }
         }
         match arguments.method_id.0.as_ref() {
-            auth_method::XAI_API_KEY_METHOD_ID => {
+            auth_method::SUPERCHARGE_API_KEY_METHOD_ID => {
                 if self.cfg.borrow().grok_com_config.api_key_auth_disabled() {
                     emit_login_span(false, "api_key", None, Some("disabled_by_admin"));
                     return Err(
@@ -583,7 +583,7 @@ impl acp::Agent for MvpAgent {
                         return Err(
                             acp::Error::auth_required()
                                 .data(
-                                    "Set XAI_API_KEY or add api_key/env_key to config.toml.",
+                                    "Set SUPERCHARGE_API_KEY or add api_key/env_key to config.toml.",
                                 ),
                         );
                     }
@@ -758,7 +758,7 @@ impl acp::Agent for MvpAgent {
                 self.spawn_post_auth_settings(auth_for_settings);
                 Ok(self.auth_response_with_meta())
             }
-            auth_method::GROK_COM_METHOD_ID | auth_method::OIDC_METHOD_ID => {
+            auth_method::SUPERCHARGE_COM_METHOD_ID | auth_method::OIDC_METHOD_ID => {
                 let grok_ctx = self.auth_manager.grok_com_config();
                 let auth_meta = AuthRequestMeta::from_json(arguments.meta.as_ref());
                 tracing::info!(
@@ -871,9 +871,9 @@ impl acp::Agent for MvpAgent {
                 {
                     let mut sampling_config = self.sampling_config.borrow_mut();
                     sampling_config.api_key = Some(auth.key.clone());
-                    tracing::debug!("auth: grok.com/oidc handler set api_key (SessionToken)");
+                    tracing::debug!("auth: supercharge.ai/oidc handler set api_key (SessionToken)");
                     xai_grok_telemetry::unified_log::debug(
-                        "auth: grok.com/oidc handler set api_key (SessionToken)",
+                        "auth: supercharge.ai/oidc handler set api_key (SessionToken)",
                         None,
                         None,
                     );
@@ -2755,7 +2755,7 @@ impl acp::Agent for MvpAgent {
                 SessionNotification,
             >(args.params.get()) {
                 tracing::info!(
-                    "Storing xAI session notification: session_id={}",
+                    "Storing provider session notification: session_id={}",
                     notification.session_id.0
                 );
                 if let Some(handle) = self.resident_handle(&notification.session_id) {
@@ -2766,12 +2766,12 @@ impl acp::Agent for MvpAgent {
                         });
                 } else {
                     tracing::warn!(
-                        "Received xAI session notification for unknown session: {}",
+                        "Received provider session notification for unknown session: {}",
                         notification.session_id.0
                     );
                 }
             } else {
-                tracing::warn!("Failed to parse xAI session notification params");
+                tracing::warn!("Failed to parse provider session notification params");
             }
         }
         if args.method.as_ref() == "x.ai/telemetry/non_git_decision" {

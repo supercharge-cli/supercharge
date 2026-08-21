@@ -170,12 +170,12 @@ mod tests {
         let id_fast = acp::ModelId::new(Arc::from("grok-4.5"));
         models.available.insert(
             id_fast.clone(),
-            acp::ModelInfo::new(id_fast.clone(), "Grok 4.5".to_string()),
+            acp::ModelInfo::new(id_fast.clone(), "Supercharge Core".to_string()),
         );
         let id_pro = acp::ModelId::new(Arc::from("grok-4.3"));
         models.available.insert(
             id_pro.clone(),
-            acp::ModelInfo::new(id_pro.clone(), "Grok 4.3".to_string()),
+            acp::ModelInfo::new(id_pro.clone(), "Supercharge Fast".to_string()),
         );
         models.current = Some(id_fast);
         models
@@ -360,7 +360,7 @@ mod tests {
         let models = sample_models();
         let mut ctx = make_ctx(&models);
         let cmd = model::ModelCommand;
-        let result = cmd.run(&mut ctx, "Grok 4.5");
+        let result = cmd.run(&mut ctx, "Supercharge Core");
         match result {
             CommandResult::Action(Action::SetDefaultModel(id)) => {
                 assert_eq!(id.0.as_ref(), "grok-4.5");
@@ -445,12 +445,13 @@ mod tests {
         assert!(
             items
                 .iter()
-                .any(|i| i.display.starts_with("Grok 4.5") && i.insert_text == "Grok 4.5")
+                .any(|i| i.display.starts_with("Supercharge Core")
+                    && i.insert_text == "Supercharge Core")
         );
         assert!(
             items
                 .iter()
-                .any(|i| i.display == "Grok 4.3" && i.insert_text == "Grok 4.3")
+                .any(|i| i.display == "Supercharge Fast" && i.insert_text == "Supercharge Fast")
         );
     }
     #[test]

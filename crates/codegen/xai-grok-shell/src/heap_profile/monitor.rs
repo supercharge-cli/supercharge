@@ -622,7 +622,7 @@ struct PrivateTempDir {
 impl PrivateTempDir {
     fn create() -> std::io::Result<Self> {
         let path = std::env::temp_dir().join(format!(
-            "grok-jemalloc-{}-{}",
+            "Supercharge AI-jemalloc-{}-{}",
             std::process::id(),
             uuid::Uuid::new_v4()
         ));

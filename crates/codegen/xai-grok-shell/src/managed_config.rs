@@ -109,7 +109,7 @@ fn eligible_team_principal(auth: GrokAuth) -> Option<GrokAuth> {
 }
 
 /// The eligible team principal in `auth.json`, or `None`. Single-team: managed
-/// config is a grok.com feature with one grok.com auth.
+/// config is a supercharge.ai feature with one supercharge.ai auth.
 fn read_active_team_auth() -> Option<GrokAuth> {
     let home = crate::util::grok_home::grok_home();
     let store = crate::auth::read_auth_json(&home.join("auth.json")).ok()?;
@@ -169,7 +169,7 @@ pub fn clear_orphan() {
 }
 
 /// Best-effort cross-process lock serializing apply/remove of the managed-config
-/// files (TUI tick vs `grok login` vs prefetch). `None` on contention — the
+/// files (TUI tick vs `supercharge login` vs prefetch). `None` on contention — the
 /// caller skips and retries next cycle.
 fn try_lock_managed_config(home: &std::path::Path) -> Option<std::fs::File> {
     use fs2::FileExt;
@@ -187,7 +187,7 @@ fn try_lock_managed_config(home: &std::path::Path) -> Option<std::fs::File> {
 /// Retry budget for a sync, pairing the attempt count with a wall-clock cap.
 #[derive(Clone, Copy)]
 enum SyncBudget {
-    /// Background loop and explicit `grok setup`; runs retries to completion.
+    /// Background loop and explicit `Supercharge AI setup`; runs retries to completion.
     Standard,
     /// Post-login sync; capped because login latency is user-visible.
     Login,
@@ -223,9 +223,9 @@ const SESSION_START_AUTH_DEADLINE: std::time::Duration = std::time::Duration::fr
 const PURGE_LOCK_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Exponential backoff for retry `attempt` (caller guarantees `attempt >= 1`).
-/// Base is 1s; `GROK_DEPLOYMENT_CONFIG_BACKOFF_MS` overrides it for tests.
+/// Base is 1s; `SUPERCHARGE_DEPLOYMENT_CONFIG_BACKOFF_MS` overrides it for tests.
 fn retry_backoff(attempt: u32) -> std::time::Duration {
-    let base = std::env::var("GROK_DEPLOYMENT_CONFIG_BACKOFF_MS")
+    let base = std::env::var("SUPERCHARGE_DEPLOYMENT_CONFIG_BACKOFF_MS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(1000);
@@ -327,7 +327,7 @@ fn map_transport_failure(failure: crate::http::TransportFailure) -> ManagedConfi
     }
 }
 
-/// Map a `reqwest` send failure to a `ManagedConfigError` via the shared `xai-grok-http` classifier.
+/// Map a `reqwest` send failure to a `ManagedConfigError` via the shared `xai-Supercharge AI-http` classifier.
 fn map_send_error(e: &reqwest::Error) -> ManagedConfigError {
     map_transport_failure(crate::http::TransportFailure::classify(e))
 }
@@ -391,10 +391,10 @@ async fn fetch_managed_config_once(
         .map_err(|e| ManagedConfigError::InvalidResponse(e.to_string()))
 }
 
-/// Override with `GROK_DEPLOYMENT_CONFIG_REFRESH_INTERVAL_SECS`. Clamped to
+/// Override with `SUPERCHARGE_DEPLOYMENT_CONFIG_REFRESH_INTERVAL_SECS`. Clamped to
 /// >= 1s: `tokio::time::interval` panics on a zero period.
 fn managed_config_sync_interval() -> std::time::Duration {
-    if let Ok(s) = std::env::var("GROK_DEPLOYMENT_CONFIG_REFRESH_INTERVAL_SECS")
+    if let Ok(s) = std::env::var("SUPERCHARGE_DEPLOYMENT_CONFIG_REFRESH_INTERVAL_SECS")
         && let Ok(secs) = s.parse::<u64>()
     {
         return std::time::Duration::from_secs(secs.max(1));
@@ -466,7 +466,7 @@ pub fn resolve_deployment_key() -> Option<String> {
     let env_name = if std::env::var_os("SUPERCHARGE_DEPLOYMENT_KEY").is_some() {
         "SUPERCHARGE_DEPLOYMENT_KEY"
     } else {
-        "GROK_DEPLOYMENT_KEY"
+        "SUPERCHARGE_DEPLOYMENT_KEY"
     };
     crate::agent::config::resolve_string_flag(None, env_name, config_val.as_deref(), None)
         .map(|r| r.value)
@@ -479,16 +479,16 @@ fn deployment_key_fingerprint(key: &str) -> String {
 }
 
 /// Whether managed config fetching is enabled (env > config.toml > default true).
-/// Callers doing auto-fetch should check this; explicit user actions (grok setup) skip it.
+/// Callers doing auto-fetch should check this; explicit user actions (Supercharge AI setup) skip it.
 ///
 /// Overlay-free: reads the raw config layers via
 /// [`crate::config::ConfigLayers::effective_config_base_without_overlay`] rather
-/// than the overlay-inclusive effective config, so a `GROK_CONFIG` overlay cannot
+/// than the overlay-inclusive effective config, so a `SUPERCHARGE_CONFIG` overlay cannot
 /// suppress the requirements/managed-config sync (a policy-enforcement gate, like
 /// `remote_fetch`; see the overlay-free contract in `ConfigLayers::env_overlay`).
 /// Requirements/MDM still clamp through the base merge.
 pub fn is_fetch_enabled() -> bool {
-    if let Some(v) = crate::agent::config::env_bool("GROK_MANAGED_CONFIG") {
+    if let Some(v) = crate::agent::config::env_bool("SUPERCHARGE_MANAGED_CONFIG") {
         return v;
     }
     crate::config::ConfigLayers::load()
@@ -508,7 +508,7 @@ fn managed_config_enabled_from_layers(layers: &crate::config::ConfigLayers) -> O
         .as_bool()
 }
 
-/// Fetch managed config + requirements and write to `~/.grok/`, trying the
+/// Fetch managed config + requirements and write to `~/.supercharge/`, trying the
 /// deployment key first, then a signed-in team. `Ok(false)` when neither applies.
 pub async fn sync() -> Result<bool, ManagedConfigError> {
     Ok(sync_with_budget(SyncBudget::Standard, None).await?.wrote)
@@ -572,7 +572,7 @@ enum FetchedConfig {
 
 /// Fetches the configuration for the current principal without touching disk:
 /// the deployment key first, then a signed-in team. The installing sync and the
-/// read-only `grok setup --json` both build on this.
+/// read-only `Supercharge AI setup --json` both build on this.
 async fn fetch_for_principal(
     budget: SyncBudget,
     team_override: Option<GrokAuth>,
@@ -816,7 +816,7 @@ pub enum ManagedConfigSync {
     Failed,
 }
 
-/// Post-login hook for `grok login` and the ACP/TUI authenticate flow: clear any
+/// Post-login hook for `supercharge login` and the ACP/TUI authenticate flow: clear any
 /// orphaned files, then fetch the new principal's config immediately rather than
 /// waiting for the background tick. `authenticated` pins the just-logged-in
 /// principal (`None` = on-disk team). Latency-bounded by [`SyncBudget::Login`];
@@ -866,7 +866,7 @@ pub async fn post_login_sync(authenticated: Option<GrokAuth>) -> ManagedConfigSy
     }
 }
 
-/// Whether a credential exists that `grok setup` could install config for.
+/// Whether a credential exists that `Supercharge AI setup` could install config for.
 pub fn has_principal() -> bool {
     resolve_deployment_key().is_some() || read_active_team_auth().is_some()
 }
@@ -999,7 +999,7 @@ network access: reconnect and start again. If you can't reconnect, contact your 
 /// Fail-closed session-start gate for managed principals. On a confirmed offline team
 /// switch, first purges the prior team's artifacts ([`purge_prior_tenant_on_identity_change`]).
 /// Without a signing key the user-writable marker is best-effort; root/MDM/signed cache
-/// are the non-forgeable layers. Recovery: reconnect / `grok setup`; ceasing to serve
+/// are the non-forgeable layers. Recovery: reconnect / `Supercharge AI setup`; ceasing to serve
 /// `fail_closed` rolls back.
 pub fn managed_policy_gate() -> Result<(), String> {
     // Lib unit tests skip: bootstrap would hit the host's real marker/auth. Pure decision
@@ -1077,11 +1077,11 @@ fn managed_policy_gate_decision(
     Ok(())
 }
 
-/// Outcome of the `grok setup` sync. The caller renders it — CLI presentation
+/// Outcome of the `Supercharge AI setup` sync. The caller renders it — CLI presentation
 /// and exit codes stay out of the library.
 #[derive(Debug)]
 pub enum SetupOutcome {
-    /// Config was written to `~/.grok`.
+    /// Config was written to `~/.supercharge`.
     Installed,
     /// The principal is valid but the server has no config for it.
     NothingConfigured,
@@ -1092,9 +1092,9 @@ pub enum SetupOutcome {
     Failed(ManagedConfigError),
 }
 
-/// Result of `grok setup --json`: what the server serves for the current
+/// Result of `Supercharge AI setup --json`: what the server serves for the current
 /// principal, verbatim. `managed_config` may embed the enforced deployment key,
-/// exactly as `grok setup` would write it to disk.
+/// exactly as `Supercharge AI setup` would write it to disk.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetupReport {
@@ -1105,13 +1105,13 @@ pub struct SetupReport {
     pub configured: bool,
     pub deployment_id: Option<String>,
     pub team_id: Option<String>,
-    /// TOML documents exactly as `grok setup` would install them.
+    /// TOML documents exactly as `Supercharge AI setup` would install them.
     pub managed_config: Option<String>,
     pub requirements: Option<String>,
     pub fail_closed: bool,
 }
 
-/// Fetches the report behind `grok setup --json` without writing anything:
+/// Fetches the report behind `Supercharge AI setup --json` without writing anything:
 /// no artifacts, no signature sidecar, no sync marker.
 pub async fn fetch_setup_report() -> Result<SetupReport, ManagedConfigError> {
     let (source, body) = match fetch_for_principal(SyncBudget::Standard, None).await? {
@@ -1119,7 +1119,7 @@ pub async fn fetch_setup_report() -> Result<SetupReport, ManagedConfigError> {
         FetchedConfig::Team { body, .. } => (Some("teamOauth"), body),
         FetchedConfig::NoPrincipal => (None, ManagedConfigResponse::default()),
     };
-    // Match the installer's trust decision: a payload `grok setup` would refuse
+    // Match the installer's trust decision: a payload `Supercharge AI setup` would refuse
     // is reported as an error, not printed as installable config.
     if source.is_some()
         && xai_grok_config::signed_policy::verification_active()
@@ -1139,7 +1139,7 @@ pub async fn fetch_setup_report() -> Result<SetupReport, ManagedConfigError> {
     })
 }
 
-/// Run the `grok setup` sync for the current principal. The caller must check
+/// Run the `Supercharge AI setup` sync for the current principal. The caller must check
 /// [`has_principal`] first and render the no-principal guidance.
 pub async fn run_setup() -> SetupOutcome {
     match sync_with_budget(SyncBudget::Standard, None).await {

@@ -15,7 +15,7 @@ fn minimal_summary(head_commit: &str, head_branch: &str) -> String {
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
         "num_messages": 0,
-        "current_model_id": "grok-3",
+        "current_model_id": "Supercharge AI-3",
         "head_commit": head_commit,
         "head_branch": head_branch
     })

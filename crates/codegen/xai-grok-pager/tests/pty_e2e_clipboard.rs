@@ -51,8 +51,8 @@ async fn unknown_ssh_clipboard_delivery_is_unverified() {
             EnvOp::set("SSH_CONNECTION", "scripted-test 1 127.0.0.1 2"),
             // Model the no-wrap-sink path even when the parent test process was
             // launched under `grok wrap`.
-            EnvOp::remove("GROK_OSC52_SINK"),
-            EnvOp::remove("LC_GROK_OSC52_SINK"),
+            EnvOp::remove("SUPERCHARGE_OSC52_SINK"),
+            EnvOp::remove("LC_SUPERCHARGE_OSC52_SINK"),
         ],
         Some(content.home()),
     )

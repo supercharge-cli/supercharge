@@ -1,7 +1,7 @@
 //! Agent definition file discovery.
 //!
 //! Searches `.supercharge/agents/` and `.claude/agents/` from cwd to repo root,
-//! then `~/.supercharge/agents/`, then `~/.claude/agents/`. Legacy `.grok`
+//! then `~/.supercharge/agents/`, then `~/.claude/agents/`. Legacy `.supercharge`
 //! directories remain readable during migration. Name-based dedup keeps highest priority.
 
 use std::collections::HashMap;
@@ -14,11 +14,15 @@ use crate::config::{AgentDefinition, AgentScope, BuiltinAgentName};
 use crate::error::AgentBuildError;
 use crate::prompt::context::TemplateOverride;
 
-/// Project-level agent directories to scan. Supercharge is primary; `.grok`
+/// Project-level agent directories to scan. Supercharge is primary; `.supercharge`
 /// remains a guarded legacy fallback.
-const PROJECT_AGENT_SUBDIRS: &[&str] = &[".supercharge/agents", ".grok/agents", ".claude/agents"];
+const PROJECT_AGENT_SUBDIRS: &[&str] = &[
+    ".supercharge/agents",
+    ".supercharge/agents",
+    ".claude/agents",
+];
 
-/// Existing project-level agent dirs (`.supercharge/agents` / `.grok/agents` /
+/// Existing project-level agent dirs (`.supercharge/agents` / `.supercharge/agents` /
 /// `.claude/agents`), walked
 /// from `cwd` up to the git worktree root (inclusive). Returns
 /// `(existing dirs, git_root)`. Mirrors [`crate::plugins::project_plugin_dirs`].
@@ -30,7 +34,7 @@ pub fn project_agent_dirs(cwd: Option<&Path>) -> (Vec<PathBuf>, Option<PathBuf>)
     (project_agent_dirs_in(&chain.dirs), chain.git_root)
 }
 
-/// Existing project agent dirs (`.grok/agents` / `.claude/agents`) under each
+/// Existing project agent dirs (`.supercharge/agents` / `.claude/agents`) under each
 /// dir of a precomputed cwd→git-root chain ([`crate::repo::RepoDirChain`]).
 ///
 /// Single source of the `PROJECT_AGENT_SUBDIRS` walk: the folder-trust detector
@@ -189,21 +193,21 @@ fn merge_subagents(
 /// 2. `~/.supercharge/agents/` (user-level)
 /// 3. `~/.claude/agents/` (compat user-level)
 /// 4. `~/.supercharge/bundled/agents/` (bundled, lowest priority)
-/// Legacy `.grok` directories are checked only as fallbacks.
+/// Legacy `.supercharge` directories are checked only as fallbacks.
 ///
 /// Deduplicates by name — higher-priority definitions win.
 /// User-level agent directories in priority order: user grok agents, `.claude`
-/// compat agents, then bundled. `.grok` dirs resolve from `grok_home`
-/// (GROK_HOME-aware) plus the legacy literal `~/.grok` when GROK_HOME points
+/// compat agents, then bundled. `.supercharge` dirs resolve from `grok_home`
+/// (SUPERCHARGE_HOME-aware) plus the legacy literal `~/.supercharge` when SUPERCHARGE_HOME points
 /// elsewhere; `.claude` resolves from `home`.
 pub(crate) fn user_agent_dirs(
     home: Option<&Path>,
     grok_home: Option<&Path>,
 ) -> Vec<(std::path::PathBuf, AgentScope)> {
-    // Legacy literal ~/.grok, included only when it differs from the resolved
+    // Legacy literal ~/.supercharge, included only when it differs from the resolved
     // Supercharge home so agents left in the old location remain discoverable.
     let legacy_grok = home
-        .map(|h| h.join(".grok"))
+        .map(|h| h.join(".supercharge"))
         .filter(|legacy| grok_home != Some(legacy.as_path()));
 
     let mut dirs = Vec::new();
@@ -286,7 +290,7 @@ fn by_name_with_home(
 
 /// Find an agent definition by name, with project-level discovery.
 ///
-/// Project-level `.grok/agents/` has highest priority, then falls back
+/// Project-level `.supercharge/agents/` has highest priority, then falls back
 /// to built-ins, user-level, and finally bundled definitions.
 pub fn by_name_in_cwd(name: &str, cwd: &Path) -> Option<AgentDefinition> {
     let grok = xai_grok_config::user_grok_home();
@@ -573,7 +577,7 @@ fn substitute_plugin_vars(def: &mut AgentDefinition, plugin: &crate::plugins::Lo
     }
 }
 
-/// Load project agent definitions from every `.grok/agents` / `.claude/agents`
+/// Load project agent definitions from every `.supercharge/agents` / `.claude/agents`
 /// dir along the cwd→git-root walk, via the shared [`project_agent_dirs`] SSOT.
 fn load_project_definitions(
     cwd: &Path,
@@ -787,23 +791,23 @@ mod tests {
             .map(|(p, _)| p)
             .collect();
         assert!(paths.contains(&grok.join("agents")));
-        assert!(paths.contains(&home.join(".grok").join("agents")));
+        assert!(paths.contains(&home.join(".supercharge").join("agents")));
         assert!(paths.contains(&home.join(".claude").join("agents")));
         assert!(paths.contains(&grok.join("bundled").join("agents")));
-        assert!(paths.contains(&home.join(".grok").join("bundled").join("agents")));
+        assert!(paths.contains(&home.join(".supercharge").join("bundled").join("agents")));
     }
 
     #[test]
     fn user_agent_dirs_dedups_legacy_when_grok_home_is_dot_grok() {
         let home = Path::new("/home/u");
-        let grok = home.join(".grok");
+        let grok = home.join(".supercharge");
         let count = user_agent_dirs(Some(home), Some(&grok))
             .into_iter()
             .filter(|(p, _)| *p == grok.join("agents"))
             .count();
         assert_eq!(
             count, 1,
-            "no duplicate ~/.grok/agents when grok_home == ~/.grok"
+            "no duplicate ~/.supercharge/agents when grok_home == ~/.supercharge"
         );
     }
 
@@ -824,9 +828,9 @@ mod tests {
 
     #[test]
     fn test_by_name_builtin_grok_build() {
-        let def = by_name("grok-build");
+        let def = by_name("supercharge-core");
         assert!(def.is_some());
-        assert_eq!(def.unwrap().name, "grok-build");
+        assert_eq!(def.unwrap().name, "supercharge-core");
     }
 
     #[test]
@@ -845,7 +849,7 @@ mod tests {
     #[test]
     fn test_discover_finds_md_files() {
         let tmp = tempfile::tempdir().unwrap();
-        let agents_dir = tmp.path().join(".grok").join("agents");
+        let agents_dir = tmp.path().join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
 
         write_agent_file(&agents_dir, "test-agent.md", "test-agent", "A test");
@@ -861,7 +865,7 @@ mod tests {
     #[test]
     fn test_discover_ignores_non_md_files() {
         let tmp = tempfile::tempdir().unwrap();
-        let agents_dir = tmp.path().join(".grok").join("agents");
+        let agents_dir = tmp.path().join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
 
         write_agent_file(&agents_dir, "valid.md", "valid", "Valid agent");
@@ -876,7 +880,7 @@ mod tests {
     #[test]
     fn test_discover_invalid_md_logged_not_error() {
         let tmp = tempfile::tempdir().unwrap();
-        let agents_dir = tmp.path().join(".grok").join("agents");
+        let agents_dir = tmp.path().join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
 
         write_agent_file(&agents_dir, "good.md", "good", "Good agent");
@@ -897,8 +901,8 @@ mod tests {
         let inner_dir = tmp.path().join("subdir");
         fs::create_dir_all(&inner_dir).unwrap();
 
-        let agents_dir_1 = tmp.path().join(".grok").join("agents");
-        let agents_dir_2 = inner_dir.join(".grok").join("agents");
+        let agents_dir_1 = tmp.path().join(".supercharge").join("agents");
+        let agents_dir_2 = inner_dir.join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir_1).unwrap();
         fs::create_dir_all(&agents_dir_2).unwrap();
 
@@ -916,7 +920,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
 
@@ -927,7 +931,7 @@ mod tests {
             "Bundled agent",
         );
 
-        let defs = discover_with_home(&cwd, Some(&home), Some(&home.join(".grok")));
+        let defs = discover_with_home(&cwd, Some(&home), Some(&home.join(".supercharge")));
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].name, "bundled-agent");
         assert_eq!(defs[0].scope, AgentScope::Bundled);
@@ -938,7 +942,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
 
@@ -949,9 +953,13 @@ mod tests {
             "Bundled only",
         );
 
-        let def =
-            by_name_in_cwd_with_home("bundled-only", &cwd, Some(&home), Some(&home.join(".grok")))
-                .unwrap();
+        let def = by_name_in_cwd_with_home(
+            "bundled-only",
+            &cwd,
+            Some(&home),
+            Some(&home.join(".supercharge")),
+        )
+        .unwrap();
         assert_eq!(def.scope, AgentScope::Bundled);
         assert_eq!(def.description, "Bundled only");
     }
@@ -961,8 +969,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let user_dir = home.join(".grok").join("agents");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let user_dir = home.join(".supercharge").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&user_dir).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
@@ -970,9 +978,13 @@ mod tests {
         write_agent_file(&user_dir, "reviewer.md", "reviewer", "User reviewer");
         write_agent_file(&bundled_dir, "reviewer.md", "reviewer", "Bundled reviewer");
 
-        let def =
-            by_name_in_cwd_with_home("reviewer", &cwd, Some(&home), Some(&home.join(".grok")))
-                .unwrap();
+        let def = by_name_in_cwd_with_home(
+            "reviewer",
+            &cwd,
+            Some(&home),
+            Some(&home.join(".supercharge")),
+        )
+        .unwrap();
         assert_eq!(def.scope, AgentScope::User);
         assert_eq!(def.description, "User reviewer");
     }
@@ -982,14 +994,19 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
 
         write_agent_file(&bundled_dir, "explore.md", "explore", "Bundled explore");
 
-        let def = by_name_in_cwd_with_home("explore", &cwd, Some(&home), Some(&home.join(".grok")))
-            .unwrap();
+        let def = by_name_in_cwd_with_home(
+            "explore",
+            &cwd,
+            Some(&home),
+            Some(&home.join(".supercharge")),
+        )
+        .unwrap();
         assert_eq!(def.scope, AgentScope::BuiltIn);
         assert_ne!(def.description, "Bundled explore");
     }
@@ -999,17 +1016,21 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let project_dir = cwd.join(".grok").join("agents");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let project_dir = cwd.join(".supercharge").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&project_dir).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
 
         write_agent_file(&project_dir, "reviewer.md", "reviewer", "Project reviewer");
         write_agent_file(&bundled_dir, "reviewer.md", "reviewer", "Bundled reviewer");
 
-        let def =
-            by_name_in_cwd_with_home("reviewer", &cwd, Some(&home), Some(&home.join(".grok")))
-                .unwrap();
+        let def = by_name_in_cwd_with_home(
+            "reviewer",
+            &cwd,
+            Some(&home),
+            Some(&home.join(".supercharge")),
+        )
+        .unwrap();
         assert_eq!(def.scope, AgentScope::Project);
         assert_eq!(def.description, "Project reviewer");
     }
@@ -1017,33 +1038,33 @@ mod tests {
     #[test]
     fn test_by_name_in_cwd_project_shadows_builtin() {
         let tmp = tempfile::tempdir().unwrap();
-        let agents_dir = tmp.path().join(".grok").join("agents");
+        let agents_dir = tmp.path().join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
 
-        // Create a project-level "grok-build" that shadows the built-in
+        // Create a project-level "supercharge-core" that shadows the built-in
         write_agent_file(
             &agents_dir,
-            "grok-build.md",
-            "grok-build",
-            "Custom grok-build",
+            "supercharge-core.md",
+            "supercharge-core",
+            "Custom supercharge-core",
         );
 
-        let def = by_name_in_cwd("grok-build", tmp.path());
+        let def = by_name_in_cwd("supercharge-core", tmp.path());
         assert!(def.is_some());
         let def = def.unwrap();
-        assert_eq!(def.name, "grok-build");
-        assert_eq!(def.description, "Custom grok-build");
+        assert_eq!(def.name, "supercharge-core");
+        assert_eq!(def.description, "Custom supercharge-core");
     }
 
     #[test]
     fn test_by_name_in_cwd_falls_back_to_builtin() {
         let tmp = tempfile::tempdir().unwrap();
-        // No .grok/agents/ directory — should fall back to built-in
+        // No .supercharge/agents/ directory — should fall back to built-in
 
-        let def = by_name_in_cwd("grok-build", tmp.path());
+        let def = by_name_in_cwd("supercharge-core", tmp.path());
         assert!(def.is_some());
         let def = def.unwrap();
-        assert_eq!(def.name, "grok-build");
+        assert_eq!(def.name, "supercharge-core");
         // Should be the built-in, not a custom one
         assert_eq!(def.scope, AgentScope::BuiltIn);
     }
@@ -1064,11 +1085,11 @@ mod tests {
     #[test]
     fn test_orchestrator_from_str_resolves() {
         use std::str::FromStr;
-        let variant = BuiltinAgentName::from_str("grok-build-orchestrator")
-            .expect("from_str must resolve grok-build-orchestrator");
+        let variant = BuiltinAgentName::from_str("supercharge-core-orchestrator")
+            .expect("from_str must resolve supercharge-core-orchestrator");
         assert_eq!(variant, BuiltinAgentName::GrokBuildOrchestrator);
         let def = variant.definition();
-        assert_eq!(def.name, "grok-build-orchestrator");
+        assert_eq!(def.name, "supercharge-core-orchestrator");
         assert!(
             def.prompt_body.is_some(),
             "orchestrator must have prompt_body"
@@ -1083,9 +1104,9 @@ mod tests {
     #[test]
     fn test_orchestrator_by_name_in_cwd() {
         let tmp = tempfile::tempdir().unwrap();
-        let def = by_name_in_cwd("grok-build-orchestrator", tmp.path())
-            .expect("by_name_in_cwd must find grok-build-orchestrator");
-        assert_eq!(def.name, "grok-build-orchestrator");
+        let def = by_name_in_cwd("supercharge-core-orchestrator", tmp.path())
+            .expect("by_name_in_cwd must find supercharge-core-orchestrator");
+        assert_eq!(def.name, "supercharge-core-orchestrator");
         assert!(def.prompt_body.is_some());
     }
 
@@ -1189,7 +1210,7 @@ mod tests {
 
     #[test]
     fn test_merge_user_level_builtin_name_is_skipped() {
-        // A user-level (~/.grok/agents/) agent named "explore" should NOT shadow
+        // A user-level (~/.supercharge/agents/) agent named "explore" should NOT shadow
         // the built-in — only project-level can do that.
         let discovered = vec![synthetic_agent(
             "explore",
@@ -1326,7 +1347,7 @@ mod tests {
     #[test]
     fn test_all_subagents_with_project_agent_file() {
         let tmp = tempfile::tempdir().unwrap();
-        let agents_dir = tmp.path().join(".grok").join("agents");
+        let agents_dir = tmp.path().join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
 
         write_agent_file(
@@ -1350,8 +1371,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let user_dir = home.join(".grok").join("agents");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let user_dir = home.join(".supercharge").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&user_dir).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
@@ -1370,7 +1391,7 @@ mod tests {
             &HashMap::new(),
             Some(&registry),
             Some(&home),
-            Some(&home.join(".grok")),
+            Some(&home.join(".supercharge")),
         );
 
         let native = entries.iter().find(|e| e.name == "reviewer").unwrap();
@@ -1407,7 +1428,7 @@ mod tests {
             &HashMap::new(),
             Some(&registry),
             Some(&home),
-            Some(&home.join(".grok")),
+            Some(&home.join(".supercharge")),
         );
         assert!(entries.iter().any(|e| e.name == "plugin-one:painter"));
 
@@ -1416,7 +1437,7 @@ mod tests {
             &cwd,
             Some(&registry),
             Some(&home),
-            Some(&home.join(".grok")),
+            Some(&home.join(".supercharge")),
         )
         .expect("agent must resolve despite the unrecognized color");
         assert_eq!(def.color, None, "unrecognized color must be dropped");
@@ -1427,7 +1448,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cwd = tmp.path().join("workspace");
         let home = tmp.path().join("home");
-        let bundled_dir = home.join(".grok").join("bundled").join("agents");
+        let bundled_dir = home.join(".supercharge").join("bundled").join("agents");
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&bundled_dir).unwrap();
         write_agent_file(&bundled_dir, "reviewer.md", "reviewer", "Bundled reviewer");
@@ -1443,7 +1464,7 @@ mod tests {
             &cwd,
             Some(&registry),
             Some(&home),
-            Some(&home.join(".grok")),
+            Some(&home.join(".supercharge")),
         )
         .unwrap();
 
@@ -1478,7 +1499,7 @@ mod tests {
             &cwd,
             Some(&registry),
             Some(&home),
-            Some(&home.join(".grok")),
+            Some(&home.join(".supercharge")),
         )
         .unwrap();
         let bare_body = bare.prompt_body.as_deref().unwrap();
@@ -1497,7 +1518,7 @@ mod tests {
             &cwd,
             Some(&registry),
             Some(&home),
-            Some(&home.join(".grok")),
+            Some(&home.join(".supercharge")),
         )
         .unwrap();
         let qualified_body = qualified.prompt_body.as_deref().unwrap();
@@ -1537,7 +1558,7 @@ mod tests {
     #[test]
     fn test_all_subagents_toggle_filters_project_agent() {
         let tmp = tempfile::tempdir().unwrap();
-        let agents_dir = tmp.path().join(".grok").join("agents");
+        let agents_dir = tmp.path().join(".supercharge").join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
 
         write_agent_file(

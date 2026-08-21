@@ -1,14 +1,14 @@
 //! Syntax highlighting initialization.
 //!
 //! Provides lazily-initialized `Syntect` instances for code highlighting.
-//! Dark themes (GrokNight, TokyoNight) share `grok-night.tmTheme`;
-//! GrokDay uses `grok-day.tmTheme` with deepened colors for light backgrounds.
+//! Dark themes (VoltageDark, TokyoNight) share `voltage-dark.tmTheme`;
+//! VoltageLight uses `voltage-light.tmTheme` with deepened colors for light backgrounds.
 //!
 //! ## Minimal / terminal-native lock
 //!
 //! While [`crate::theme::cache::terminal_native_locked`] is set, chrome uses
 //! [`Theme::terminal_default`](crate::theme::Theme::terminal_default) and
-//! `current_kind()` is a nominal `GrokNight` (so leftover kind-keyed paths
+//! `current_kind()` is a nominal `VoltageDark` (so leftover kind-keyed paths
 //! still resolve). Syntect therefore loads the night `.tmTheme` whose pastel
 //! RGB tokens, after naive ANSI-16 quantization, collapse to **White** —
 //! invisible on light terminal profiles.
@@ -30,9 +30,9 @@ use ratatui::text::Span;
 
 use crate::theme::ThemeKind;
 
-static SYNTECT_GROKNIGHT: OnceLock<Syntect> = OnceLock::new();
+static SYNTECT_VOLTAGE_DARK: OnceLock<Syntect> = OnceLock::new();
 static SYNTECT_TOKYONIGHT: OnceLock<Syntect> = OnceLock::new();
-static SYNTECT_GROKDAY: OnceLock<Syntect> = OnceLock::new();
+static SYNTECT_VOLTAGE_LIGHT: OnceLock<Syntect> = OnceLock::new();
 
 /// Convert syntect style to ratatui foreground-only style, quantized for
 /// terminal color support (or polarity-safe under the terminal-native lock).
@@ -140,20 +140,20 @@ pub fn highlight_line(
 /// Returns the syntect instance matching the active theme.
 ///
 /// Note: while the terminal-native lock is engaged, [`Theme::current_kind`]
-/// reports a nominal `GrokNight`, so this returns the night theme. Token
+/// reports a nominal `VoltageDark`, so this returns the night theme. Token
 /// colors are remapped in [`syntect_to_ratatui_fg`] — do not load a day
 /// theme based on OS/terminal polarity detection.
 pub fn get_syntect() -> &'static Syntect {
     match crate::theme::Theme::current_kind() {
-        ThemeKind::GrokNight
+        ThemeKind::VoltageDark
         | ThemeKind::RosePineMoon
         | ThemeKind::OscuraMidnight
-        | ThemeKind::Auto => SYNTECT_GROKNIGHT
-            .get_or_init(|| Syntect::new(include_bytes!("../assets/grok-night.tmTheme"))),
+        | ThemeKind::Auto => SYNTECT_VOLTAGE_DARK
+            .get_or_init(|| Syntect::new(include_bytes!("../assets/voltage-dark.tmTheme"))),
         ThemeKind::TokyoNight => SYNTECT_TOKYONIGHT
             .get_or_init(|| Syntect::new(include_bytes!("../assets/tokyo-night.tmTheme"))),
-        ThemeKind::GrokDay => SYNTECT_GROKDAY
-            .get_or_init(|| Syntect::new(include_bytes!("../assets/grok-day.tmTheme"))),
+        ThemeKind::VoltageLight => SYNTECT_VOLTAGE_LIGHT
+            .get_or_init(|| Syntect::new(include_bytes!("../assets/voltage-light.tmTheme"))),
     }
 }
 

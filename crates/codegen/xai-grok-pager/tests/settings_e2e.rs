@@ -2061,9 +2061,9 @@ fn defaults_round_trip_through_registry() {
             "remember_tool_approvals" => SettingValue::Bool(false),
             "toolset.ask_user_question.timeout_enabled" => SettingValue::Bool(true),
             "keep_text_selection" => SettingValue::Enum("flash"),
-            "theme" => SettingValue::Enum("groknight"),
-            "auto_dark_theme" => SettingValue::Enum("groknight"),
-            "auto_light_theme" => SettingValue::Enum("grokday"),
+            "theme" => SettingValue::Enum("voltage-dark"),
+            "auto_dark_theme" => SettingValue::Enum("voltage-dark"),
+            "auto_light_theme" => SettingValue::Enum("voltage-light"),
             "render_mermaid" => SettingValue::Enum("auto"),
             "multiline_mode" => SettingValue::Bool(false),
             "permission_mode" => SettingValue::Enum("ask"),
@@ -3949,7 +3949,7 @@ fn docs_footer_renders_for_browse_and_picker() {
              {all_text}"
         );
         assert!(
-            all_text.contains("change theme to grokday"),
+            all_text.contains("change theme to voltage-light"),
             "[{fixture_label}] docs footer must include the example phrasing"
         );
     }
@@ -4353,7 +4353,7 @@ fn pr14_default_model_picker_commits_resolved_model_id() {
     let snapshot = PagerLocalSnapshot {
         available_models: vec![
             (
-                "Grok 4.5".to_string(),
+                "Supercharge Core".to_string(),
                 agent_client_protocol::ModelId::new(std::sync::Arc::from("grok-4.5")),
             ),
             (
@@ -4379,7 +4379,7 @@ fn pr14_default_model_picker_commits_resolved_model_id() {
         "Enter must transition to PickingEnum for default_model"
     );
 
-    // Walk down past row 0 ("(no override)") to row 1 ("Grok 4.5").
+    // Walk down past row 0 ("(no override)") to row 1 ("Supercharge Core").
     let outcome = handle_settings_key(&mut s, &press(KeyCode::Down));
     assert!(
         matches!(outcome, SettingsKeyOutcome::Changed),

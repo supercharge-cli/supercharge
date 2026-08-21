@@ -18,7 +18,7 @@ fn home() -> &'static std::path::Path {
     static HOME: OnceLock<(tempfile::TempDir, EnvGuard)> = OnceLock::new();
     HOME.get_or_init(|| {
         let dir = tempfile::TempDir::new().unwrap();
-        let guard = EnvGuard::set("GROK_HOME", dir.path());
+        let guard = EnvGuard::set("SUPERCHARGE_HOME", dir.path());
         (dir, guard)
     })
     .0
@@ -28,7 +28,7 @@ fn home() -> &'static std::path::Path {
 /// The feature is the only door to a manager, so the test walks through it with
 /// the switch left at its default rather than reaching past it.
 fn start_index() -> SearchIndexManager {
-    let _default_on = EnvGuard::unset("GROK_SESSION_SEARCH");
+    let _default_on = EnvGuard::unset("SUPERCHARGE_SESSION_SEARCH");
     match start_if_enabled(&xai_grok_shell::agent::config::Config::default()) {
         SearchIndex::Started(index) => index,
         SearchIndex::Off { reason } => {

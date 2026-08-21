@@ -12,8 +12,8 @@ use xai_grok_test_support::EnvGuard;
 async fn saved_session_is_neither_indexed_nor_found_with_search_off() {
     let dir = tempfile::TempDir::new().unwrap();
     let root = dir.path();
-    let _home = EnvGuard::set("GROK_HOME", root);
-    let _off = EnvGuard::set("GROK_SESSION_SEARCH", "0");
+    let _home = EnvGuard::set("SUPERCHARGE_HOME", root);
+    let _off = EnvGuard::set("SUPERCHARGE_SESSION_SEARCH", "0");
 
     let config = xai_grok_shell::config::load_agent_config_disk_only().expect("config loads");
     let search = xai_grok_shell::session::storage::search::start_if_enabled(&config);
@@ -23,7 +23,7 @@ async fn saved_session_is_neither_indexed_nor_found_with_search_off() {
     );
     assert_eq!(
         search.off_reason(),
-        Some("the GROK_SESSION_SEARCH environment variable"),
+        Some("the SUPERCHARGE_SESSION_SEARCH environment variable"),
         "the caller is told which setting to look at, not which enum arm"
     );
 

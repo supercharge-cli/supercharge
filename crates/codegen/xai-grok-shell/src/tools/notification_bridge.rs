@@ -1,5 +1,5 @@
-//! Notification bridge: translates `xai-grok-tools` `ToolNotification` events
-//! into `xai-grok-shell`'s native systems (ACP gateway, hunk tracker, file state tracker).
+//! Notification bridge: translates `xai-Supercharge AI-tools` `ToolNotification` events
+//! into `xai-Supercharge AI-shell`'s native systems (ACP gateway, hunk tracker, file state tracker).
 use crate::session::commands::SessionCommand;
 use crate::session::commands::{NotificationPriority, NotificationSource};
 use crate::session::persistence::{DurableAppendError, PersistenceHandle, PersistenceMsg};

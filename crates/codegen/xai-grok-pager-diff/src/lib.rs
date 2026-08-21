@@ -1,4 +1,4 @@
-//! Diff hunk construction for the Grok Build TUI.
+//! Diff hunk construction for the Supercharge AI TUI.
 //!
 //! Turns edit-tool output (structured `SearchReplaceEditDetail` records, ACP
 //! `ToolCall` payloads, or plain before/after text) into line-tagged

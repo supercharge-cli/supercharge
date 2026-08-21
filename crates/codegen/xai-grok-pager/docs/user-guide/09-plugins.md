@@ -1,6 +1,6 @@
 # Plugins
 
-A plugin bundles skills, slash commands, agents, hooks, and MCP servers into one installable unit. You get plugins from a marketplace, install the ones you want, and Grok loads what they add. To build and share your own, see [Create your own marketplace](#create-your-own-marketplace).
+A plugin bundles skills, slash commands, agents, hooks, and MCP servers into one installable unit. You get plugins from a marketplace, install the ones you want, and Supercharge AI loads what they add. To build and share your own, see [Create your own marketplace](#create-your-own-marketplace).
 
 ---
 
@@ -8,7 +8,7 @@ A plugin bundles skills, slash commands, agents, hooks, and MCP servers into one
 
 A marketplace is a catalog of plugins that someone has published and shared. Using one takes two steps, like adding an app store: adding the marketplace lets you browse its plugins, and you then choose which to install.
 
-1. **Add the marketplace** so Grok can show what it offers. Nothing installs yet.
+1. **Add the marketplace** so Supercharge AI can show what it offers. Nothing installs yet.
 2. **Install the plugins you want**, one at a time.
 
 Plugins stay off until you install and enable them, and a plugin's hooks and MCP servers stay inactive until you [trust](#trust-and-security) it.
@@ -20,12 +20,12 @@ Plugins stay off until you install and enable them, and a plugin's hooks and MCP
 A marketplace source is a GitHub repository, a git URL on any host, or a local folder. Add one from the command line:
 
 ```bash
-grok plugin marketplace add my-org/team-plugins                  # GitHub shorthand (owner/repo)
-grok plugin marketplace add https://gitlab.com/acme/plugins.git  # any git host, include https:// and .git
-grok plugin marketplace add ./my-marketplace                     # a local folder
+supercharge plugin marketplace add my-org/team-plugins                  # GitHub shorthand (owner/repo)
+supercharge plugin marketplace add https://gitlab.com/acme/plugins.git  # any git host, include https:// and .git
+supercharge plugin marketplace add ./my-marketplace                     # a local folder
 ```
 
-List, refresh, and remove sources with `grok plugin marketplace list`, `grok plugin marketplace update [<name>]`, and `grok plugin marketplace remove <url>`.
+List, refresh, and remove sources with `supercharge plugin marketplace list`, `supercharge plugin marketplace update [<name>]`, and `supercharge plugin marketplace remove <url>`.
 
 You can also declare sources in config so they are always present.
 
@@ -57,7 +57,7 @@ Add sources under `extraKnownMarketplaces`, keyed by name. Each entry's `source`
 }
 ```
 
-Place this file at `~/.grok/settings.json` or `~/.claude/settings.json`.
+Place this file at `~/.supercharge/settings.json` or `~/.claude/settings.json`.
 
 ---
 
@@ -66,7 +66,7 @@ Place this file at `~/.grok/settings.json` or `~/.claude/settings.json`.
 Once a marketplace is added, install a plugin by name. You can also install straight from a repository or a local path:
 
 ```bash
-grok plugin install deploy-tools --trust
+supercharge plugin install deploy-tools --trust
 ```
 
 The source you install accepts several forms:
@@ -75,9 +75,9 @@ The source you install accepts several forms:
 - a full git URL (`https://github.com/user/repo.git`) or SSH (`git@github.com:user/repo.git`)
 - a local path (`./local-dir` or `/absolute/path`)
 
-Run `grok plugin install <source>` without `--trust` and Grok shows the source, warns that installing activates the plugin's hooks, MCP servers, and skills, then stops. Add `--trust` to go ahead. Only install plugins from sources you trust (see [Trust and security](#trust-and-security)).
+Run `supercharge plugin install <source>` without `--trust` and Supercharge AI shows the source, warns that installing activates the plugin's hooks, MCP servers, and skills, then stops. Add `--trust` to go ahead. Only install plugins from sources you trust (see [Trust and security](#trust-and-security)).
 
-A plugin's skills appear in the slash menu. When a skill name is ambiguous, Grok shows the qualified form prefixed by the plugin name, for example `/deploy-tools:release`. To pick up a newly installed plugin, press `r` in the Plugins tab or start a new session.
+A plugin's skills appear in the slash menu. When a skill name is ambiguous, Supercharge AI shows the qualified form prefixed by the plugin name, for example `/deploy-tools:release`. To pick up a newly installed plugin, press `r` in the Plugins tab or start a new session.
 
 ---
 
@@ -86,12 +86,12 @@ A plugin's skills appear in the slash menu. When a skill name is ambiguous, Grok
 ### From the command line
 
 ```bash
-grok plugin list [--json] [--available]   # installed plugins (--available requires --json)
-grok plugin uninstall <name> [--confirm] [--keep-data]   # aliases: rm, remove
-grok plugin update [<name>]               # omit the name to update every plugin
-grok plugin enable <name>
-grok plugin disable <name>
-grok plugin details <name>                # show the plugin's component inventory
+supercharge plugin list [--json] [--available]   # installed plugins (--available requires --json)
+supercharge plugin uninstall <name> [--confirm] [--keep-data]   # aliases: rm, remove
+supercharge plugin update [<name>]               # omit the name to update every plugin
+supercharge plugin enable <name>
+supercharge plugin disable <name>
+supercharge plugin details <name>                # show the plugin's component inventory
 ```
 
 ### In the terminal UI
@@ -124,7 +124,7 @@ Component summaries in the Marketplace tab appear only for marketplaces that pub
 
 ### Turn plugins on or off in config
 
-Set these in `~/.grok/config.toml`:
+Set these in `~/.supercharge/config.toml`:
 
 ```toml
 [plugins]
@@ -133,9 +133,9 @@ disabled = ["user/a1b2c3d4/noisy-plugin"]    # names or IDs to skip
 enabled = ["project/9f8e7d6c/team-tools"]    # names or IDs to force on
 ```
 
-Plugins are off by default, so list one in `enabled` to turn it on, or in `disabled` to discover it but skip loading it. Each entry is a plain plugin name (from `grok plugin list`) or a full ID (`<scope>/<hash>/<name>`).
+Plugins are off by default, so list one in `enabled` to turn it on, or in `disabled` to discover it but skip loading it. Each entry is a plain plugin name (from `supercharge plugin list`) or a full ID (`<scope>/<hash>/<name>`).
 
-To hide the plugins and hooks interface entirely, set `disable_plugins = true` in `~/.grok/pager.toml`.
+To hide the plugins and hooks interface entirely, set `disable_plugins = true` in `~/.supercharge/pager.toml`.
 
 ---
 
@@ -143,13 +143,13 @@ To hide the plugins and hooks interface entirely, set `disable_plugins = true` i
 
 Plugins run with your privileges, so treat them like any software you install: only add marketplaces and install plugins from sources you trust.
 
-Enabling a plugin loads its skills, commands, and agents. Trust is separate and controls whether a plugin's code runs: even when enabled, its hooks, MCP servers, and LSP servers stay inactive until you trust it. Grok trusts plugins in `~/.grok/plugins/` automatically; project plugins in `.grok/plugins/` require trust. Install with `--trust` to grant it:
+Enabling a plugin loads its skills, commands, and agents. Trust is separate and controls whether a plugin's code runs: even when enabled, its hooks, MCP servers, and LSP servers stay inactive until you trust it. Supercharge AI trusts plugins in `~/.supercharge/plugins/` automatically; project plugins in `.supercharge/plugins/` require trust. Install with `--trust` to grant it:
 
 ```bash
-grok plugin install <source> --trust
+supercharge plugin install <source> --trust
 ```
 
-Trusted plugin `.mcp.json` servers attach to the session like other MCP config, and child agents inherit them. Plugin agents (`plugin-name:agent-name`) use the parent session's MCP servers by default, the same as user agents under `~/.grok/agents/`; restrict that with the `mcpInheritance` frontmatter (see [Subagents](16-subagents.md#mcp-inheritance)). For safety, plugin agent frontmatter cannot declare `mcpServers` or hooks, or set `permissionMode: bypassPermissions`.
+Trusted plugin `.mcp.json` servers attach to the session like other MCP config, and child agents inherit them. Plugin agents (`plugin-name:agent-name`) use the parent session's MCP servers by default, the same as user agents under `~/.supercharge/agents/`; restrict that with the `mcpInheritance` frontmatter (see [Subagents](16-subagents.md#mcp-inheritance)). For safety, plugin agent frontmatter cannot declare `mcpServers` or hooks, or set `permissionMode: bypassPermissions`.
 
 ---
 
@@ -163,15 +163,15 @@ You need three things: a git repository, one folder per plugin, and a single ind
 
 1. **Create a git repository.** A private repository is fine; access uses each person's own git credentials.
 2. **Add each plugin as a folder.** A plugin folder holds any of `skills/`, `commands/`, `agents/`, `hooks/hooks.json`, `.mcp.json`, and an optional `plugin.json` manifest (see [What a plugin contains](#what-a-plugin-contains)).
-3. **List the plugins in `.grok-plugin/marketplace.json`.** This is the index Grok reads.
+3. **List the plugins in `.supercharge-plugin/marketplace.json`.** This is the index Supercharge AI reads.
 4. **Push the repository.**
 
 A typical layout:
 
 ```
 my-org-plugins/
-  .grok-plugin/
-    marketplace.json      # the index Grok reads (required)
+  .supercharge-plugin/
+    marketplace.json      # the index Supercharge AI reads (required)
     plugin-index.json     # optional catalog for richer browsing
   plugins/
     gdrive/
@@ -180,7 +180,7 @@ my-org-plugins/
       .mcp.json           # MCP servers this plugin adds
 ```
 
-Grok reads the index from `.grok-plugin/marketplace.json`. It also accepts `.grok-plugin/plugin.json` and the `.claude-plugin/` equivalents.
+Supercharge AI reads the index from `.supercharge-plugin/marketplace.json`. It also accepts `.supercharge-plugin/plugin.json` and the `.claude-plugin/` equivalents.
 
 ### Write the index
 
@@ -228,11 +228,11 @@ A `plugin-index.json` catalog lets the marketplace browser show each plugin's sk
 
 ### Check and share it
 
-Validate a plugin before publishing with `grok plugin validate [<path>]`, and tag a release from the manifest version with `grok plugin tag [<path>] [--push]`. Then point people at the repository. They add it once and install the plugins they want:
+Validate a plugin before publishing with `supercharge plugin validate [<path>]`, and tag a release from the manifest version with `supercharge plugin tag [<path>] [--push]`. Then point people at the repository. They add it once and install the plugins they want:
 
 ```bash
-grok plugin marketplace add my-org/my-org-plugins   # GitHub shorthand, a git URL, or a local path
-grok plugin install gdrive --trust
+supercharge plugin marketplace add my-org/my-org-plugins   # GitHub shorthand, a git URL, or a local path
+supercharge plugin install gdrive --trust
 ```
 
 To install it for everyone automatically instead of person by person, see [Distribute across an organization](#distribute-across-an-organization).
@@ -255,13 +255,13 @@ Add the source, and turn on the plugins you want, in `managed_config.toml`:
 name = "My Org Plugins"
 git = "https://github.com/my-org/my-org-plugins.git"
 
-# Plugins stay off until enabled. List plugin names (from `grok plugin list`)
+# Plugins stay off until enabled. List plugin names (from `supercharge plugin list`)
 # or full IDs (`<scope>/<hash>/<name>`).
 [plugins]
 enabled = ["gdrive"]
 ```
 
-For a hands-off install with no per-person step, also place the plugin's files where Grok discovers and trusts them automatically: `~/.grok/plugins/`, or a directory your device-management tool manages that you point to with `[plugins].paths`. Then enable them with `[plugins].enabled`.
+For a hands-off install with no per-person step, also place the plugin's files where Supercharge AI discovers and trusts them automatically: `~/.supercharge/plugins/`, or a directory your device-management tool manages that you point to with `[plugins].paths`. Then enable them with `[plugins].enabled`.
 
 A managed workspace can also sync skills to users directly, without a plugin. Synced skills appear with the `server` scope and are administered by the workspace; a user's own skill of the same name shadows the synced one. See [Skills](08-skills.md).
 
@@ -301,7 +301,7 @@ Refuse any remote plugin install or update that is not pinned to a full commit s
 require_sha = true
 ```
 
-You can also set `GROK_MARKETPLACE_REQUIRE_SHA=1`. Both only tighten the policy; neither turns it back off. Publish `sha` values in your marketplace's `plugin-index.json` so installs from it satisfy the rule. Plugins vendored directly inside a marketplace repository are copied from that repository's checkout, so pin them the same way, with `sha` values in `plugin-index.json`.
+You can also set `SUPERCHARGE_MARKETPLACE_REQUIRE_SHA=1`. Both only tighten the policy; neither turns it back off. Publish `sha` values in your marketplace's `plugin-index.json` so installs from it satisfy the rule. Plugins vendored directly inside a marketplace repository are copied from that repository's checkout, so pin them the same way, with `sha` values in `plugin-index.json`.
 
 ### Turn off the plugins UI
 
@@ -313,21 +313,21 @@ disable_plugins = true
 
 ### What this does not cover
 
-Marketplaces distribute Grok content: skills, commands, agents, hooks, and MCP server configurations. They do not install a program onto a machine. A skill or MCP server that runs a helper binary (for example a custom sign-in tool) still needs that binary delivered separately, bundled with your deployment or pushed through your device-management tool.
+Marketplaces distribute Supercharge AI content: skills, commands, agents, hooks, and MCP server configurations. They do not install a program onto a machine. A skill or MCP server that runs a helper binary (for example a custom sign-in tool) still needs that binary delivered separately, bundled with your deployment or pushed through your device-management tool.
 
 ---
 
 ## Troubleshooting
 
-**A plugin you installed isn't showing up.** Plugins are off until enabled. Check `grok plugin list`, then add the plugin's name or ID to `[plugins].enabled`, or press `Space` on it in the Plugins tab. Reload with `r` in the Plugins tab or start a new session.
+**A plugin you installed isn't showing up.** Plugins are off until enabled. Check `supercharge plugin list`, then add the plugin's name or ID to `[plugins].enabled`, or press `Space` on it in the Plugins tab. Reload with `r` in the Plugins tab or start a new session.
 
-**A plugin's hooks or MCP servers don't run.** They stay inactive until the plugin is trusted. Reinstall with `--trust`, or place the plugin under `~/.grok/plugins/` (auto-trusted). See [Trust and security](#trust-and-security).
+**A plugin's hooks or MCP servers don't run.** They stay inactive until the plugin is trusted. Reinstall with `--trust`, or place the plugin under `~/.supercharge/plugins/` (auto-trusted). See [Trust and security](#trust-and-security).
 
-**A skill or MCP server from a marketplace is missing.** Refresh the source with `grok plugin marketplace update`, confirm the plugin is installed and enabled, and, if your organization restricts sources, check that the marketplace is still allowed (see [Distribute across an organization](#distribute-across-an-organization)). Some MCP servers require a sign-in and will not appear until you authenticate.
+**A skill or MCP server from a marketplace is missing.** Refresh the source with `supercharge plugin marketplace update`, confirm the plugin is installed and enabled, and, if your organization restricts sources, check that the marketplace is still allowed (see [Distribute across an organization](#distribute-across-an-organization)). Some MCP servers require a sign-in and will not appear until you authenticate.
 
 **An install is refused as unpinned.** Your deployment requires pinned commits. Install an exact commit (`owner/repo@<sha>`), or use a marketplace whose `plugin-index.json` publishes `sha` values. See [Require pinned versions](#require-pinned-versions).
 
-**See exactly what loaded.** Run `grok inspect` (add `--json` for machine-readable output) to list every discovered plugin and the skills, agents, hooks, and MCP servers it provides, each labeled with its `plugin: <name>` source.
+**See exactly what loaded.** Run `supercharge inspect` (add `--json` for machine-readable output) to list every discovered plugin and the skills, agents, hooks, and MCP servers it provides, each labeled with its `plugin: <name>` source.
 
 ---
 
@@ -344,23 +344,23 @@ A plugin is a directory with any combination of:
 - **MCP servers**: a `.mcp.json` file
 - **LSP servers**: a `.lsp.json` file
 
-An optional `plugin.json` manifest can override paths or add metadata; without one, Grok discovers components from these standard directories. For example, a `team-tools` plugin might bundle a deploy skill, a code-review agent, pre-commit hooks, and a Linear MCP server, installed together in one step.
+An optional `plugin.json` manifest can override paths or add metadata; without one, Supercharge AI discovers components from these standard directories. For example, a `team-tools` plugin might bundle a deploy skill, a code-review agent, pre-commit hooks, and a Linear MCP server, installed together in one step.
 
 A skill or command may ship a **helper script** next to its SKILL.md (for example a Python file it calls). Put the script in the plugin and have the skill run it by relative path; it is copied to the machine with the plugin. The script's runtime and any packages it imports must already be present, plugins deliver files, not runtimes or native binaries (see [What this does not cover](#what-this-does-not-cover)).
 
-### Where Grok looks for plugins
+### Where Supercharge AI looks for plugins
 
-Grok discovers plugins from these locations, in priority order. The `.claude/plugins/` equivalents also work, and when two plugins share a name the higher-priority one wins:
+Supercharge AI discovers plugins from these locations, in priority order. The `.claude/plugins/` equivalents also work, and when two plugins share a name the higher-priority one wins:
 
 | Location | Scope | Trust |
 |----------|-------|-------|
 | `_meta.pluginDirs` (`session/new` / `session/load`) | Session, that session only | Trusted automatically |
-| `--plugin-dir` (the `grok agent … stdio` flag) | Process, that agent process only | Trusted automatically |
-| `.grok/plugins/` | Project, shared through version control | Requires trust |
-| `~/.grok/plugins/` | User, every project | Trusted automatically |
+| `--plugin-dir` (the `supercharge agent … stdio` flag) | Process, that agent process only | Trusted automatically |
+| `.supercharge/plugins/` | Project, shared through version control | Requires trust |
+| `~/.supercharge/plugins/` | User, every project | Trusted automatically |
 | `[plugins].paths` (config) | Custom directories you add | Depends on location |
 
-The `_meta.pluginDirs` field on the `session/new` and `session/load` requests loads plugins for a single session; because the caller supplies the directory, those plugins are trusted automatically and do not persist after the session. `--plugin-dir` is the process-wide equivalent for a dedicated `grok agent … stdio` process, repeatable (`grok agent --no-leader --plugin-dir A --plugin-dir B stdio`), and ignored in leader mode, where the shared leader discovers its own plugins.
+The `_meta.pluginDirs` field on the `session/new` and `session/load` requests loads plugins for a single session; because the caller supplies the directory, those plugins are trusted automatically and do not persist after the session. `--plugin-dir` is the process-wide equivalent for a dedicated `supercharge agent … stdio` process, repeatable (`supercharge agent --no-leader --plugin-dir A --plugin-dir B stdio`), and ignored in leader mode, where the shared leader discovers its own plugins.
 
 ### Environment variables in plugin hooks
 
@@ -368,10 +368,10 @@ Plugin hooks receive two variables beyond the standard hook environment:
 
 | Variable | Description |
 |----------|-------------|
-| `GROK_PLUGIN_ROOT` | Absolute path to the plugin's installed directory. |
-| `GROK_PLUGIN_DATA` | Absolute path to the plugin's writable data directory, for state, caches, and logs. |
+| `SUPERCHARGE_PLUGIN_ROOT` | Absolute path to the plugin's installed directory. |
+| `SUPERCHARGE_PLUGIN_DATA` | Absolute path to the plugin's writable data directory, for state, caches, and logs. |
 
-Grok sets these and overrides any same-named value in the hook's `env` map (the `CLAUDE_PLUGIN_ROOT` and `CLAUDE_PLUGIN_DATA` aliases are set too). See the [Hooks guide](10-hooks.md) for every variable passed to hooks.
+Supercharge AI sets these and overrides any same-named value in the hook's `env` map (the `CLAUDE_PLUGIN_ROOT` and `CLAUDE_PLUGIN_DATA` aliases are set too). See the [Hooks guide](10-hooks.md) for every variable passed to hooks.
 
 ### Keyboard shortcuts
 

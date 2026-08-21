@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package xai.grok.tools.v1;
+package xai.supercharge.tools.v1;
 
 // ============================================================================
 // MAIN SERVICE

@@ -485,7 +485,7 @@ async fn handle_session_delete(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtR
     agent.teardown_live_session_before_delete(&session_id).await;
 
     // Shared delete: remote-first, then local disk + FTS eviction.
-    // Mirrored by the `grok sessions delete <id>` CLI path.
+    // Mirrored by the `Supercharge AI sessions delete <id>` CLI path.
     crate::session::persistence::delete_session_history(
         &req.session_id,
         req.cwd.as_deref(),
@@ -696,14 +696,14 @@ async fn handle_reload_all_mcp_servers(agent: &MvpAgent) -> ExtResult {
 
 /// Reload MCP servers for sessions whose `cwd` matches (or sits beneath)
 /// the project root passed in `params.cwd`. Called by the config
-/// hot-reload watcher when `<cwd>/.grok/config.toml`,
+/// hot-reload watcher when `<cwd>/.supercharge/config.toml`,
 /// `<cwd>/.mcp.json`, or `<cwd>/.claude.json` changes.
 ///
 /// Sessions in unrelated cwds are intentionally NOT touched — that is
 /// the whole point of [`crate::config::reloader::ConfigUpdate::
 /// ProjectMcpServersChanged`] being a per-cwd variant. The legacy
 /// [`handle_reload_all_mcp_servers`] is still the fan-out for global
-/// `~/.grok/config.toml` edits.
+/// `~/.supercharge/config.toml` edits.
 async fn handle_reload_project_mcp_servers(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     #[derive(Deserialize)]
     struct Params {
@@ -839,7 +839,7 @@ fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
 
 // internal/reload_models_cache
 
-/// Hot-reload the model catalog from `~/.grok/models_cache.json` after an
+/// Hot-reload the model catalog from `~/.supercharge/models_cache.json` after an
 /// external write detected by the config watcher.
 ///
 /// Routed through the agent's ACP stream (injected by the
@@ -939,7 +939,7 @@ async fn handle_commands_list(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtRe
     // For a given cwd, compute the plugin registry the same way a session would
     // at spawn time (via build_for_cwd) and the same way reload_plugins_impl does
     // (ancestor project config walk + vendor compat merge). This is required so
-    // that `x.ai/commands/list` (the pull used by grok-desktop after session
+    // that `x.ai/commands/list` (the pull used by Supercharge AI-desktop after session
     // start) returns plugin-provided slash commands for the target cwd.
     //
     // The shared snapshot is only populated at agent boot (using process CWD)
@@ -965,7 +965,7 @@ async fn handle_commands_list(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtRe
         // fan-out so the menu agrees with each session's registry for this cwd.
         let disk_cfg = crate::config::resolve_effective_plugins_config(cwd).to_discovery_config();
 
-        // Fresh discovery for *this* cwd (includes .grok/plugins under it, plus
+        // Fresh discovery for *this* cwd (includes .supercharge/plugins under it, plus
         // the cli --plugin-dir dirs). Does not mutate the shared snapshot.
         agent
             .plugin_registry_handle()

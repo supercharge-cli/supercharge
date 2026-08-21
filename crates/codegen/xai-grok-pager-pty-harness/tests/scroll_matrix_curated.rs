@@ -26,7 +26,7 @@ static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// isolated per test action) over the shared system temp dir: this target is
 /// `tags = ["local"]`, so concurrent executions on a CI host would otherwise
 /// share a stable `/tmp/scroll-matrix-curated/<cell_id>.jsonl` path — a
-/// second run's stale-capture `remove_file` (and its pager's `GROK_SCROLL_LOG`
+/// second run's stale-capture `remove_file` (and its pager's `SUPERCHARGE_SCROLL_LOG`
 /// writer) then corrupts the first run's in-flight capture, surfacing as a
 /// `parse capture: No such file or directory` or a mid-record parse error.
 /// Falls back to the system temp dir for plain `cargo test`.

@@ -453,7 +453,7 @@ async fn chat_completions_upgrade_folds_reconstructed_reasoning_into_request() {
     );
 }
 
-/// Upgrade path, grok-build / Responses API: a legacy session whose
+/// Upgrade path, supercharge-core / Responses API: a legacy session whose
 /// assistant carries inline `reasoning: {text, encrypted, id}` must, on
 /// load, reconstruct a sibling Reasoning item that round-trips back to
 /// the Responses API as a **typed** `reasoning` input item — `summary`,
@@ -462,7 +462,7 @@ async fn chat_completions_upgrade_folds_reconstructed_reasoning_into_request() {
 /// through `reasoning_item_text`.
 #[tokio::test]
 async fn responses_upgrade_roundtrips_reconstructed_reasoning_as_typed_input() {
-    // 1. Seed a legacy grok-build chat_history.jsonl (inline reasoning
+    // 1. Seed a legacy supercharge-core chat_history.jsonl (inline reasoning
     //    with encrypted_content + id — the older shape).
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
@@ -472,7 +472,7 @@ async fn responses_upgrade_roundtrips_reconstructed_reasoning_as_typed_input() {
             "\n",
             r#"{"type":"user","content":[{"type":"text","text":"q1"}]}"#,
             "\n",
-            r#"{"type":"assistant","content":"a1","reasoning":{"text":"legacy grok-build reasoning","encrypted":"ENC_BLOB_xyz","id":"rs_grokbuild_legacy"},"model_id":"grok-build"}"#,
+            r#"{"type":"assistant","content":"a1","reasoning":{"text":"legacy supercharge-core reasoning","encrypted":"ENC_BLOB_xyz","id":"rs_grokbuild_legacy"},"model_id":"supercharge-core"}"#,
             "\n",
         ),
     )
@@ -528,7 +528,7 @@ async fn responses_upgrade_roundtrips_reconstructed_reasoning_as_typed_input() {
     );
     assert_eq!(
         summary[0].get("text").and_then(Value::as_str),
-        Some("legacy grok-build reasoning")
+        Some("legacy supercharge-core reasoning")
     );
 }
 

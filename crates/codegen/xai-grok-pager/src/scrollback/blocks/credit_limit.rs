@@ -1,7 +1,7 @@
 //! CreditLimitBlock — scrollback card shown when a max-tier user exhausts credits.
 //!
 //! Replaces the Q&A question modal for users already at the highest tier
-//! (SuperGrok Heavy). Instead of offering "Upgrade tier" + PAYG / buy-credits
+//! (Supercharge Heavy). Instead of offering "Upgrade tier" + PAYG / buy-credits
 //! options in the question overlay, this block renders an inline card with a
 //! descriptive message and a link to the usage/billing page.
 
@@ -142,7 +142,7 @@ mod tests {
         let block = CreditLimitBlock::new(
             "You\u{2019}ve hit your credit limit.",
             CreditLimitCardAction::EnablePayg,
-            "https://grok.com?_s=usage",
+            "https://supercharge.ai?_s=usage",
         );
         let output = block.output(&ctx());
         let all_text: String = output
@@ -152,7 +152,7 @@ mod tests {
             .collect();
         assert!(all_text.contains("credit limit"));
         assert!(all_text.contains("enabling pay-as-you-go"));
-        assert!(all_text.contains("grok.com?_s=usage"));
+        assert!(all_text.contains("supercharge.ai?_s=usage"));
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
         let block = CreditLimitBlock::new(
             "You\u{2019}ve hit your spending cap.",
             CreditLimitCardAction::IncreasePaygLimit,
-            "https://grok.com?_s=usage",
+            "https://supercharge.ai?_s=usage",
         );
         let output = block.output(&ctx());
         let all_text: String = output
@@ -170,7 +170,7 @@ mod tests {
             .collect();
         assert!(all_text.contains("spending cap"));
         assert!(all_text.contains("increasing your spending limit"));
-        assert!(all_text.contains("grok.com?_s=usage"));
+        assert!(all_text.contains("supercharge.ai?_s=usage"));
     }
 
     #[test]
@@ -178,7 +178,7 @@ mod tests {
         let block = CreditLimitBlock::new(
             "You hit your weekly limit.",
             CreditLimitCardAction::PurchaseCredits,
-            "https://grok.com?_s=usage",
+            "https://supercharge.ai?_s=usage",
         );
         let output = block.output(&ctx());
         let all_text: String = output
@@ -187,7 +187,7 @@ mod tests {
             .flat_map(|l| l.content.spans.iter().map(|s| s.content.as_ref()))
             .collect();
         assert!(all_text.contains("purchasing more credits"));
-        assert!(all_text.contains("grok.com?_s=usage"));
+        assert!(all_text.contains("supercharge.ai?_s=usage"));
     }
 
     #[test]
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn output_structure_and_content() {
-        let url = "https://grok.com?_s=usage";
+        let url = "https://supercharge.ai?_s=usage";
         let block = CreditLimitBlock::new("Test heading", CreditLimitCardAction::EnablePayg, url);
         let output = block.output(&ctx());
 

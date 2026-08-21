@@ -17,7 +17,7 @@ async fn storage_upload_parks_on_401_and_drains_after_recovery() {
     content.set_storage_unauthorized(true);
 
     // Trace uploads are gated on first-party xAI OAuth (`is_xai_auth()`:
-    // AuthMode::Oidc + xAI issuer); the harness's XAI_API_KEY is ApiKey mode
+    // AuthMode::Oidc + xAI issuer); the harness's SUPERCHARGE_API_KEY is ApiKey mode
     // and never uploads. Seed a fake OAuth entry instead — the mock accepts
     // any bearer, and its failing refresh_token is exactly the parked state
     // under test.
@@ -27,9 +27,9 @@ async fn storage_upload_parks_on_401_and_drains_after_recovery() {
     // API-key credential so seeded OAuth remains active.
     let overrides = [
         oauth_credential_ops()[0],
-        EnvOp::set("GROK_TRACE_UPLOAD", "true"),
-        EnvOp::set("GROK_TELEMETRY_TRACE_UPLOAD", "true"),
-        EnvOp::set("GROK_UPLOAD_QUEUE_AUTH_PROBE_SECS", "2"),
+        EnvOp::set("SUPERCHARGE_TRACE_UPLOAD", "true"),
+        EnvOp::set("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD", "true"),
+        EnvOp::set("SUPERCHARGE_UPLOAD_QUEUE_AUTH_PROBE_SECS", "2"),
     ];
 
     let binary = pager_binary().expect("resolve pager binary");
@@ -75,7 +75,7 @@ async fn storage_upload_parks_on_401_and_drains_after_recovery() {
     // - each post-park wire attempt may do a probe + credential refresh retry
     //   → 2 storage requests per wake
     // - `AUTH_PARK_WAIT_INTERVAL` is 5s, so a single wait-slice timeout should
-    //   not fire inside this 3s window; with `GROK_UPLOAD_QUEUE_AUTH_PROBE_SECS=2`
+    //   not fire inside this 3s window; with `SUPERCHARGE_UPLOAD_QUEUE_AUTH_PROBE_SECS=2`
     //   and `has_usable_credential()` still true for a seeded OAuth entry that
     //   storage rejects, the probe path can still wake workers early.
     //

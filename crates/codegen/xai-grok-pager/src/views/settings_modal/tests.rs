@@ -2293,9 +2293,9 @@ fn int_editing_value_click_on_value_text_is_noop() {
 #[test]
 fn picking_enum_esc_dispatches_preview_revert_for_each_key() {
     let cases: &[(&str, &str)] = &[
-        ("theme", "groknight"),
-        ("auto_dark_theme", "groknight"),
-        ("auto_light_theme", "grokday"),
+        ("theme", "voltage-dark"),
+        ("auto_dark_theme", "voltage-dark"),
+        ("auto_light_theme", "voltage-light"),
     ];
     for &(key, original) in cases {
         let mut s = make_state();
@@ -2332,16 +2332,16 @@ fn picking_enum_esc_dispatches_preview_revert_for_each_key() {
 #[test]
 fn picking_enum_esc_returns_to_browse() {
     let mut s = make_state();
-    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("groknight"), true);
+    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage-dark"), true);
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     match outcome {
         SettingsKeyOutcome::Action(Action::PreviewTheme(name)) => {
             assert_eq!(
-                name, "groknight",
+                name, "voltage-dark",
                 "Esc revert must dispatch the original canonical"
             );
         }
-        other => panic!("expected Action::PreviewTheme(\"groknight\") on Esc, got {other:?}"),
+        other => panic!("expected Action::PreviewTheme(\"voltage-dark\") on Esc, got {other:?}"),
     }
     assert!(matches!(s.mode(), SettingsModalMode::Browse));
 }
@@ -2650,7 +2650,7 @@ fn browse_path_enter_commit_returns_to_browse() {
 #[test]
 fn deep_link_theme_commit_closes_with_set() {
     let mut s = make_state();
-    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("groknight"), true);
+    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage-dark"), true);
     s.close_on_picker_exit = true;
 
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -2667,13 +2667,13 @@ fn deep_link_theme_commit_closes_with_set() {
 #[test]
 fn deep_link_picker_esc_reverts_preview_and_closes() {
     let mut s = make_state();
-    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("groknight"), true);
+    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage-dark"), true);
     s.close_on_picker_exit = true;
 
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     match outcome {
         SettingsKeyOutcome::ActionThenClose(Action::PreviewTheme(name)) => {
-            assert_eq!(name, "groknight");
+            assert_eq!(name, "voltage-dark");
         }
         other => panic!("expected ActionThenClose(PreviewTheme), got {other:?}"),
     }
@@ -3120,7 +3120,7 @@ fn fork_secondary_model_picker_opens_on_persisted_model() {
         available_models: vec![
             ("Grok 3".to_string(), acp::ModelId::new(Arc::from("grok-3"))),
             (
-                "Grok 4.5 Fast".to_string(),
+                "Supercharge Core Fast".to_string(),
                 acp::ModelId::new(Arc::from(slug)),
             ),
         ],
@@ -3135,7 +3135,7 @@ fn fork_secondary_model_picker_opens_on_persisted_model() {
     // Row value shows the display name, matching the default_model row.
     assert_eq!(
         s.value_for("fork_secondary_model"),
-        Some(SettingValue::String("Grok 4.5 Fast".to_string())),
+        Some(SettingValue::String("Supercharge Core Fast".to_string())),
     );
 
     assert!(s.focus_key("fork_secondary_model"));
@@ -3148,14 +3148,14 @@ fn fork_secondary_model_picker_opens_on_persisted_model() {
             ..
         } => {
             assert_eq!(key, "fork_secondary_model");
-            // Choices: [(no override), Grok 3, Grok 4.5 Fast] → idx 2.
+            // Choices: [(no override), Grok 3, Supercharge Core Fast] → idx 2.
             assert_eq!(
                 choices_idx, 2,
                 "picker must open on the persisted model, not the stale fallback",
             );
             assert_eq!(
                 original_value,
-                &SettingValue::String("Grok 4.5 Fast".to_string()),
+                &SettingValue::String("Supercharge Core Fast".to_string()),
                 "original_value must carry the display name so Esc-revert round-trips",
             );
         }
@@ -4267,11 +4267,11 @@ fn editing_value_chars_mutate_buffer_and_invalid_enter_is_noop() {
     assert!(
         s.editing_validation_error().is_some(),
         "validation_error must be Some for unknown model 'a' \
-         (catalog has 'Grok 4 Fast' only)",
+         (catalog has 'Supercharge Core Fast' only)",
     );
 
     // Enter on a buffer that fails the KnownModel validator
-    // (catalog has 'Grok 4 Fast'; "a" doesn't match) is
+    // (catalog has 'Supercharge Core Fast'; "a" doesn't match) is
     // Unchanged — commit refused.
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(
@@ -6064,8 +6064,8 @@ fn docs_footer_tip_is_centered() {
         "width=40 must render SHORT path (contains `change a setting`): {row_short:?}",
     );
     assert!(
-        !row_short.contains("grokday"),
-        "width=40 must NOT render LONG path (no `grokday`): {row_short:?}",
+        !row_short.contains("voltage-light"),
+        "width=40 must NOT render LONG path (no `voltage-light`): {row_short:?}",
     );
     assert!(
         tip_start_short.abs_diff(trailing_short) <= 1,
@@ -6417,17 +6417,17 @@ fn click_settings_breadcrumb_collapses_picker_to_browse() {
     // For preview-supporting enums (theme), the breadcrumb-
     // click revert dispatches `Action::PreviewTheme(original)`.
     // The original canonical for the default theme is
-    // `"groknight"`. Tightened from the previous `Action(_) |
+    // `"voltage-dark"`. Tightened from the previous `Action(_) |
     // Changed` to lock in the revert contract.
     match outcome {
         SettingsKeyOutcome::Action(Action::PreviewTheme(orig)) => {
             assert_eq!(
-                orig, "groknight",
+                orig, "voltage-dark",
                 "breadcrumb-click revert must carry the original canonical",
             );
         }
         other => panic!(
-            "expected Action(PreviewTheme(\"groknight\")) — the keyboard \
+            "expected Action(PreviewTheme(\"voltage-dark\")) — the keyboard \
              Esc-equivalent revert — got {other:?}",
         ),
     }
@@ -6471,7 +6471,7 @@ fn click_settings_breadcrumb_ignores_close_on_picker_exit() {
     );
     match outcome {
         SettingsKeyOutcome::Action(Action::PreviewTheme(orig)) => {
-            assert_eq!(orig, "groknight");
+            assert_eq!(orig, "voltage-dark");
         }
         other => panic!("expected preview revert Action, got {other:?}"),
     }
@@ -6516,7 +6516,7 @@ fn click_settings_breadcrumb_after_nav_reverts_to_original() {
         }
         other => panic!("expected PickingEnum, got {other:?}"),
     };
-    // Pick a different index. The default theme is `groknight`
+    // Pick a different index. The default theme is `voltage-dark`
     // (index 1 per the registry); advance to index 0 to ensure
     // we're navigating to a different value.
     let target_idx = if advanced_idx == 0 { 1 } else { 0 };
@@ -6576,11 +6576,11 @@ fn d_key_in_picking_enum_dispatches_open_reset_confirm() {
                 key, "theme",
                 "OpenResetConfirm key must be the active picker setting",
             );
-            // Default theme is `groknight`; entering the picker
-            // captures `original_value = current value = groknight`,
+            // Default theme is `voltage-dark`; entering the picker
+            // captures `original_value = current value = voltage-dark`,
             // so the revert dispatches with that canonical.
             assert_eq!(
-                orig, "groknight",
+                orig, "voltage-dark",
                 "PreviewTheme revert must carry the original canonical",
             );
         }
@@ -7098,9 +7098,9 @@ fn max_thoughts_width_preview_content_is_italic() {
 /// regardless of how much the bg tokens differ in luma.
 ///
 /// The previous name `_title_bg_is_darker_than_content_bg` was
-/// misleading: on dark themes (GrokNight, TokyoNight, RosePine
+/// misleading: on dark themes (VoltageDark, TokyoNight, RosePine
 /// Moon) `bg_visual` is actually *lighter* than `bg_highlight`;
-/// only on the GrokDay light theme is title darker. The
+/// only on the VoltageLight light theme is title darker. The
 /// contract that the rendering code actually relies on is "title
 /// uses the heavier / more-saturated `bg_visual` token, content
 /// uses `bg_highlight`, plus an UNDERLINED title modifier for
@@ -7156,14 +7156,14 @@ fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
     // raw theme directly so this assertion survives `NO_COLOR`
     // / 256-color quantization.
     let raw_theme = match crate::theme::Theme::current_kind() {
-        crate::theme::ThemeKind::GrokNight => crate::theme::Theme::groknight(),
+        crate::theme::ThemeKind::VoltageDark => crate::theme::Theme::voltage_dark(),
         crate::theme::ThemeKind::TokyoNight => crate::theme::Theme::tokyonight(),
-        crate::theme::ThemeKind::GrokDay => crate::theme::Theme::grokday(),
+        crate::theme::ThemeKind::VoltageLight => crate::theme::Theme::voltage_light(),
         crate::theme::ThemeKind::RosePineMoon => crate::theme::Theme::rosepine_moon(),
         // Resolved via `Theme::current()` rather than a constructor
         // because `theme::oscura` is a private module.
         crate::theme::ThemeKind::OscuraMidnight => crate::theme::Theme::current(),
-        crate::theme::ThemeKind::Auto => crate::theme::Theme::groknight(),
+        crate::theme::ThemeKind::Auto => crate::theme::Theme::voltage_dark(),
     };
     assert_ne!(
         raw_theme.bg_visual, raw_theme.bg_highlight,

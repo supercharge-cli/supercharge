@@ -91,7 +91,7 @@ function cleanupOldVersions(canonicalDir, currentVersionedName) {
 
 /** Grok bin dir resolution (mirrors postinstall.js and bin/grok). */
 function resolveGrokBinDir(env, homedir) {
-    const grokHome = env.GROK_HOME ?? path.join(homedir, '.grok');
+    const grokHome = env.SUPERCHARGE_HOME ?? path.join(homedir, '.supercharge');
     return path.join(grokHome, 'bin');
 }
 
@@ -1029,16 +1029,16 @@ test('canonical pager from non-npm install is preserved on Linux', () => {
 
 console.log('\ngrok home + brotli install tests\n');
 
-test('resolveGrokBinDir honors $GROK_HOME, else falls back to <home>/.grok/bin', () => {
+test('resolveGrokBinDir honors $SUPERCHARGE_HOME, else falls back to <home>/.supercharge/bin', () => {
     assert.strictEqual(
-        resolveGrokBinDir({ GROK_HOME: '/fast/local/.grok' }, '/home/alice'),
-        path.join('/fast/local/.grok', 'bin'),
+        resolveGrokBinDir({ SUPERCHARGE_HOME: '/fast/local/.supercharge' }, '/home/alice'),
+        path.join('/fast/local/.supercharge', 'bin'),
     );
     assert.strictEqual(
         resolveGrokBinDir({}, '/home/alice'),
-        path.join('/home/alice', '.grok', 'bin'),
+        path.join('/home/alice', '.supercharge', 'bin'),
     );
-    assert.strictEqual(resolveGrokBinDir({ GROK_HOME: '' }, '/home/alice'), path.join('', 'bin'));
+    assert.strictEqual(resolveGrokBinDir({ SUPERCHARGE_HOME: '' }, '/home/alice'), path.join('', 'bin'));
 });
 
 test('writeVendorBinary returns false (not true) when the destination cannot be written', () => {
@@ -1067,7 +1067,7 @@ test('decompresses brotli into the canonical dir without duplicating into node_m
         const brPath = path.join(vendorBin, 'grok.br');
         fs.writeFileSync(brPath, zlib.brotliCompressSync(Buffer.from('native-binary-bytes')));
 
-        const binDir = path.join(dir, '.grok', 'bin');
+        const binDir = path.join(dir, '.supercharge', 'bin');
         const result = installBinaryFromBrotli(brPath, '0.1.220', binDir);
 
         assert.ok(fs.lstatSync(result.canonicalPath).isSymbolicLink());

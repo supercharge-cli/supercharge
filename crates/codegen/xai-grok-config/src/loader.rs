@@ -88,7 +88,7 @@ pub fn load_from_disk() -> std::io::Result<toml::Value> {
     load_user_config_layer(user_grok_home().as_deref(), USER_CONFIG_FILENAME)
 }
 
-/// User config filename (`$GROK_HOME/config.toml`), shared by the loaders here.
+/// User config filename (`$SUPERCHARGE_HOME/config.toml`), shared by the loaders here.
 pub const USER_CONFIG_FILENAME: &str = "config.toml";
 
 /// Managed config filename, shared by the loaders in this module.
@@ -103,8 +103,8 @@ pub fn load_managed_config() -> std::io::Result<toml::Value> {
 
 /// Load a user-tier config layer from `<home>/<filename>`. With no resolvable
 /// user home, returns an empty table rather than reading a cwd-relative
-/// `.grok/<filename>` (the cwd-fallback would silently promote an untrusted
-/// project `.grok` to the user tier).
+/// `.supercharge/<filename>` (the cwd-fallback would silently promote an untrusted
+/// project `.supercharge` to the user tier).
 fn load_user_config_layer(home: Option<&Path>, filename: &str) -> std::io::Result<toml::Value> {
     match home {
         Some(g) => load_config_file(&g.join(filename)),
@@ -173,11 +173,11 @@ pub fn managed_config_layers_at(
 pub enum HookProvenance {
     /// `/etc/grok/managed_config.toml`.
     SystemManaged,
-    /// `$GROK_HOME/managed_config.toml` (server-synced).
+    /// `$SUPERCHARGE_HOME/managed_config.toml` (server-synced).
     Managed,
     /// `requirements.toml` (user or system tier).
     Requirements,
-    /// `$GROK_HOME/config.toml`.
+    /// `$SUPERCHARGE_HOME/config.toml`.
     User,
     /// A JSON hook file (the hooks directory, a vendor settings file, or a
     /// configured hooks path).
@@ -389,7 +389,7 @@ pub fn hook_config_layers_at(
 
 /// Applies matching `[[version_overrides]]` patches against the running
 /// CLI version; strips the section either way. If the installed version
-/// can't be parsed (broken `GROK_TEST_VERSION` in dev), silently strips
+/// can't be parsed (broken `SUPERCHARGE_TEST_VERSION` in dev), silently strips
 /// without applying — keeps the CLI usable on a bad dev override.
 pub fn apply_version_overrides_with_registered(value: &mut toml::Value) -> std::io::Result<()> {
     match xai_grok_version::installed_semver() {
@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn load_user_config_layer_is_empty_without_user_home() {
         // No resolvable user home: no user layer, and crucially no
-        // cwd-relative .grok read.
+        // cwd-relative .supercharge read.
         let v = load_user_config_layer(None, "config.toml").unwrap();
         assert_eq!(v.as_table().map(|t| t.is_empty()), Some(true));
     }

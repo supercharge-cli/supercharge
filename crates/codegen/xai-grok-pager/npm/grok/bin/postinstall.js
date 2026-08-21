@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Runs once after npm install/update. Reads the grok binary from the
 // matching per-platform optional dependency (@xai-official/grok-<platform>)
-// and installs it to ~/.grok/bin/ using versioned filenames:
+// and installs it to ~/.supercharge/bin/ using versioned filenames:
 //
 //   Unix:    grok-<version>  +  grok  (symlink)
 //   Windows: grok-<version>.exe  +  grok.exe  (copy)
@@ -16,15 +16,15 @@ const zlib = require('zlib');
 const { execSync } = require('child_process');
 const TOML = require('@iarna/toml');
 
-// $GROK_HOME (else ~/.grok), matching the Rust grok_home() including its
+// $SUPERCHARGE_HOME (else ~/.supercharge), matching the Rust grok_home() including its
 // canonicalized-home default. Lets fleets relocate the binary off a slow $HOME
 // (NFS); old code hardcoded os.homedir().
 function defaultGrokHome() {
     const home = os.homedir();
-    try { return path.join(fs.realpathSync(home), '.grok'); } catch { return path.join(home, '.grok'); }
+    try { return path.join(fs.realpathSync(home), '.supercharge'); } catch { return path.join(home, '.supercharge'); }
 }
-const GROK_HOME = process.env.GROK_HOME ?? defaultGrokHome();
-const CANONICAL_DIR = path.join(GROK_HOME, 'bin');
+const SUPERCHARGE_HOME = process.env.SUPERCHARGE_HOME ?? defaultGrokHome();
+const CANONICAL_DIR = path.join(SUPERCHARGE_HOME, 'bin');
 
 const key = `${process.platform}-${process.arch}`;
 const SUPPORTED = new Set([
@@ -191,7 +191,7 @@ cleanupOldVersions('grok');
 cleanupOldVersions('grok-pager');
 
 // Write installer config
-const configDir = GROK_HOME;
+const configDir = SUPERCHARGE_HOME;
 const configPath = path.join(configDir, 'config.toml');
 let obj = {};
 try { obj = TOML.parse(fs.readFileSync(configPath, 'utf8')); } catch { }
@@ -199,7 +199,7 @@ obj.cli ??= {};
 obj.cli.installer = 'npm';
 
 // Persist the npm registry so `grok update` and the trampoline use the same one.
-const npmRegistry = process.env.GROK_NPM_REGISTRY
+const npmRegistry = process.env.SUPERCHARGE_NPM_REGISTRY
     || (() => {
         try {
             const resolved = execSync(
@@ -218,21 +218,21 @@ if (npmRegistry) {
 fs.writeFileSync(configPath, TOML.stringify(obj), 'utf8');
 
 // Shell completions: print setup hints (no silent shell config mutation).
-// Set GROK_INSTALL_COMPLETIONS=1 to auto-generate to ~/.grok/completions.
-const GROK_PATH = path.join(CANONICAL_DIR, `grok${EXE}`);
-if (process.env.GROK_INSTALL_COMPLETIONS === '1' && !IS_WINDOWS) {
+// Set SUPERCHARGE_INSTALL_COMPLETIONS=1 to auto-generate to ~/.supercharge/completions.
+const SUPERCHARGE_PATH = path.join(CANONICAL_DIR, `grok${EXE}`);
+if (process.env.SUPERCHARGE_INSTALL_COMPLETIONS === '1' && !IS_WINDOWS) {
     try {
         const { spawnSync } = require('child_process');
-        const completionsDir = path.join(GROK_HOME, 'completions');
+        const completionsDir = path.join(SUPERCHARGE_HOME, 'completions');
         const bashPath = path.join(completionsDir, 'bash', 'grok.bash');
         const zshPath = path.join(completionsDir, 'zsh', '_grok');
         fs.mkdirSync(path.dirname(bashPath), { recursive: true });
         fs.mkdirSync(path.dirname(zshPath), { recursive: true });
-        const bashRes = spawnSync(GROK_PATH, ['completions', 'bash'], { encoding: 'utf8' });
+        const bashRes = spawnSync(SUPERCHARGE_PATH, ['completions', 'bash'], { encoding: 'utf8' });
         if (bashRes.status === 0) fs.writeFileSync(bashPath, bashRes.stdout);
-        const zshRes = spawnSync(GROK_PATH, ['completions', 'zsh'], { encoding: 'utf8' });
+        const zshRes = spawnSync(SUPERCHARGE_PATH, ['completions', 'zsh'], { encoding: 'utf8' });
         if (zshRes.status === 0) fs.writeFileSync(zshPath, zshRes.stdout);
-        console.log('Completions generated to ~/.grok/completions (bash/zsh)');
+        console.log('Completions generated to ~/.supercharge/completions (bash/zsh)');
     } catch {}
 } else if (!IS_WINDOWS) {
     console.log('Tip: grok completions bash > ~/.local/share/bash-completion/completions/grok');

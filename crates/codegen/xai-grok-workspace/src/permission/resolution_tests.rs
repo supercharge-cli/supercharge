@@ -2,7 +2,7 @@ use super::*;
 
 // Crate-shared lock serializing tests that mutate the global process
 // environment so concurrent test threads can't race on shared env state.
-// Shared so `GROK_HOME`/`HOME` mutations here also serialize against the
+// Shared so `SUPERCHARGE_HOME`/`HOME` mutations here also serialize against the
 // other env-mutating test modules under single-process `cargo test --lib`.
 use crate::ENV_TEST_LOCK as ENV_LOCK;
 
@@ -535,14 +535,14 @@ fn load_settings_no_env_field() {
 
 #[test]
 fn load_claude_env_merges_with_precedence() {
-    // GROK_HOME-isolate so the claude-import marker reads clean (an imported
+    // SUPERCHARGE_HOME-isolate so the claude-import marker reads clean (an imported
     // dev machine would otherwise early-return an empty map and fail these
     // asserts); the project tier overrides any real `~/.claude`, so the
     // per-key assertions hold without isolating HOME.
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
-    let _home_guard = EnvVarGuard::set("GROK_HOME", home.path());
-    let _marker_guard = EnvVarGuard::unset("_GROK_CLAUDE_MARKER_OVERRIDE");
+    let _home_guard = EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
+    let _marker_guard = EnvVarGuard::unset("_SUPERCHARGE_CLAUDE_MARKER_OVERRIDE");
     let tmp = tempfile::tempdir().unwrap();
     let claude_dir = tmp.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
@@ -569,14 +569,14 @@ fn load_claude_env_merges_with_precedence() {
 
 #[test]
 fn load_claude_env_empty_when_no_settings() {
-    // Isolate GROK_HOME (claude-import marker) AND HOME (global `~/.claude`)
+    // Isolate SUPERCHARGE_HOME (claude-import marker) AND HOME (global `~/.claude`)
     // so neither a dev machine's import marker nor its real `~/.claude` env
     // can trip the empty-map assertion.
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
-    let _home_guard = EnvVarGuard::set("GROK_HOME", home.path());
+    let _home_guard = EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
     let _real_home_guard = EnvVarGuard::set("HOME", home.path());
-    let _marker_guard = EnvVarGuard::unset("_GROK_CLAUDE_MARKER_OVERRIDE");
+    let _marker_guard = EnvVarGuard::unset("_SUPERCHARGE_CLAUDE_MARKER_OVERRIDE");
     let tmp = tempfile::tempdir().unwrap();
     let env = load_claude_env_with_project(tmp.path(), true);
     assert!(env.is_empty());
@@ -586,13 +586,13 @@ fn load_claude_env_empty_when_no_settings() {
 fn load_claude_env_with_project_drops_repo_env_when_untrusted() {
     // The repo-tree `.claude/settings.json` env is injected into every spawned
     // subprocess (BASH_ENV / GIT_SSH_COMMAND / …), so an untrusted folder must
-    // drop it. Isolate GROK_HOME so the claude-import marker reads clean (an
+    // drop it. Isolate SUPERCHARGE_HOME so the claude-import marker reads clean (an
     // imported dev machine would otherwise early-return an empty map); the
     // unique key keeps it independent of the host's real `~/.claude`.
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
-    let _home_guard = EnvVarGuard::set("GROK_HOME", home.path());
-    let _marker_guard = EnvVarGuard::unset("_GROK_CLAUDE_MARKER_OVERRIDE");
+    let _home_guard = EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
+    let _marker_guard = EnvVarGuard::unset("_SUPERCHARGE_CLAUDE_MARKER_OVERRIDE");
     let tmp = tempfile::tempdir().unwrap();
     let claude_dir = tmp.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
@@ -2124,8 +2124,8 @@ fn untrusted_project_claude_permissions_are_not_honored() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let _home_guard = EnvVarGuard::set("HOME", home.path());
-    let _grok_guard = EnvVarGuard::set("GROK_HOME", home.path());
-    let _marker_guard = EnvVarGuard::unset("_GROK_CLAUDE_MARKER_OVERRIDE");
+    let _grok_guard = EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
+    let _marker_guard = EnvVarGuard::unset("_SUPERCHARGE_CLAUDE_MARKER_OVERRIDE");
 
     // Global user-tier allow (must survive untrusted project).
     let global_claude = home.path().join(".claude");
@@ -2175,23 +2175,23 @@ fn untrusted_project_claude_permissions_are_not_honored() {
     );
 }
 
-/// Untrusted clone must not contribute project `.grok/config.toml` [permission].
+/// Untrusted clone must not contribute project `.supercharge/config.toml` [permission].
 ///
 /// Sync + `block_on` so `ENV_LOCK` is not held across `.await` (clippy
 /// `await_holding_lock`). Does not assert exact global rule counts:
 /// `xai_grok_config::grok_home()` is a process-wide `OnceLock`, so under
 /// single-process `cargo test` an earlier test may have already pinned
-/// `GROK_HOME`. Project-rule filtering is independent of that; global
+/// `SUPERCHARGE_HOME`. Project-rule filtering is independent of that; global
 /// survival is checked only when our temp home is the live `user_grok_home()`.
 #[test]
 fn untrusted_project_config_toml_permissions_are_not_honored() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let _home_guard = EnvVarGuard::set("HOME", home.path());
-    let _grok_guard = EnvVarGuard::set("GROK_HOME", home.path());
-    let _marker_guard = EnvVarGuard::unset("_GROK_CLAUDE_MARKER_OVERRIDE");
+    let _grok_guard = EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
+    let _marker_guard = EnvVarGuard::unset("_SUPERCHARGE_CLAUDE_MARKER_OVERRIDE");
 
-    // Global allow (survives untrusted project when GROK_HOME resolves here).
+    // Global allow (survives untrusted project when SUPERCHARGE_HOME resolves here).
     std::fs::write(
         home.path().join("config.toml"),
         r#"[permission]
@@ -2203,7 +2203,7 @@ allow = ["Bash(git status)"]
     let tmp = tempfile::tempdir().unwrap();
     // Bound project discovery to this temp dir (canonical walker uses git root).
     git2::Repository::init(tmp.path()).expect("git init");
-    let grok = tmp.path().join(".grok");
+    let grok = tmp.path().join(".supercharge");
     std::fs::create_dir_all(&grok).unwrap();
     std::fs::write(
         grok.join("config.toml"),
@@ -2217,7 +2217,7 @@ allow = ["Bash(evil *)"]
         .enable_all()
         .build()
         .expect("test runtime");
-    // Untrusted may be None when no global rules load (GROK_HOME OnceLock
+    // Untrusted may be None when no global rules load (SUPERCHARGE_HOME OnceLock
     // already pinned by another test) — empty after dropping project is OK.
     let untrusted = rt.block_on(resolve_permissions_with_provenance_inner(
         tmp.path(),
@@ -2252,7 +2252,7 @@ allow = ["Bash(evil *)"]
     let global_live = xai_grok_config::user_grok_home()
         .is_some_and(|g| g == home.path() || g.starts_with(home.path()));
     if global_live {
-        let untrusted = untrusted.expect("global rules present when GROK_HOME is live");
+        let untrusted = untrusted.expect("global rules present when SUPERCHARGE_HOME is live");
         assert!(
             untrusted
                 .config
@@ -2687,7 +2687,7 @@ fn catchall_allow_covers_freeform_dimensions() {
 #[test]
 fn admin_source_trusts_only_root_owned_tiers() {
     // Only managed-settings and the system-dir requirements layer are admin;
-    // the user-writable `~/.grok/requirements.toml` is not, despite its path.
+    // the user-writable `~/.supercharge/requirements.toml` is not, despite its path.
     let p = std::path::PathBuf::from("x");
     assert!(is_admin_source(&RequirementSource::ManagedSettings {
         path: p.clone()
@@ -2696,7 +2696,7 @@ fn admin_source_trusts_only_root_owned_tiers() {
         path: "/etc/grok/requirements.toml".into(),
     }));
     assert!(!is_admin_source(&RequirementSource::Requirements {
-        path: "/home/u/.grok/requirements.toml".into(),
+        path: "/home/u/.supercharge/requirements.toml".into(),
     }));
     assert!(!is_admin_source(&RequirementSource::ManagedConfig {
         path: "/etc/grok/managed_config.toml".into(),
@@ -2730,7 +2730,7 @@ fn drop_untrusted_catchall_allows_is_source_aware() {
         sourced(
             allow_any(Some("**/*")),
             RequirementSource::Requirements {
-                path: "/home/u/.grok/requirements.toml".into(),
+                path: "/home/u/.supercharge/requirements.toml".into(),
             },
         ),
         // Managed config: defaults tier, untrusted even from /etc/grok.
@@ -2809,7 +2809,7 @@ fn drop_untrusted_catchall_allows_is_source_aware() {
 fn drop_untrusted_freeform_catchalls_respects_source_and_scope() {
     let sourced = |value, source| Sourced { value, source };
     let untrusted = || RequirementSource::Requirements {
-        path: "/home/u/.grok/requirements.toml".into(),
+        path: "/home/u/.supercharge/requirements.toml".into(),
     };
     let admin = || RequirementSource::SystemRequirements {
         path: "/etc/grok/requirements.toml".into(),

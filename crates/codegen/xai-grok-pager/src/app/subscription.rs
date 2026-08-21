@@ -27,7 +27,7 @@ pub(crate) const SUBSCRIPTION_WATCH_INTERVAL: std::time::Duration =
 /// special-cased before this clamp.
 pub(crate) const SUBSCRIPTION_WATCH_MIN_INTERVAL_SECS: u64 = 30;
 
-/// Floor for the `GROK_SUBSCRIPTION_WATCH_INTERVAL_SECS` env override
+/// Floor for the `SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS` env override
 /// (test seam / power user — deliberately below the server floor).
 const SUBSCRIPTION_WATCH_ENV_MIN_SECS: u64 = 1;
 
@@ -64,7 +64,7 @@ impl AppView {
     /// (`0` disables), server override (`0` disables, floor-clamped),
     /// default.
     pub fn subscription_watch_interval(&self) -> Option<std::time::Duration> {
-        if let Ok(v) = std::env::var("GROK_SUBSCRIPTION_WATCH_INTERVAL_SECS")
+        if let Ok(v) = std::env::var("SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS")
             && let Ok(secs) = v.trim().parse::<u64>()
         {
             return match secs {
@@ -259,7 +259,7 @@ mod tests {
         assert!(app.may_be_free_tier());
         app.subscription_tier = Some(" FREE ".into());
         assert!(app.may_be_free_tier(), "case/whitespace-insensitive");
-        app.subscription_tier = Some("SuperGrok Heavy".into());
+        app.subscription_tier = Some("Supercharge Heavy".into());
         assert!(!app.may_be_free_tier());
         app.subscription_tier = Some("X Premium".into());
         assert!(!app.may_be_free_tier());
@@ -276,7 +276,7 @@ mod tests {
         app.subscription_tier = Some("Free".into());
         assert!(app.subscription_watch_wanted(), "free tier watches");
 
-        app.subscription_tier = Some("SuperGrok".into());
+        app.subscription_tier = Some("Supercharge".into());
         assert!(!app.subscription_watch_wanted(), "paid tier is dormant");
 
         // Gated — watches regardless of the (stale) tier string.
@@ -361,7 +361,7 @@ mod tests {
         );
 
         let mut paid = test_app();
-        paid.subscription_tier = Some("SuperGrok".into());
+        paid.subscription_tier = Some("Supercharge".into());
         assert!(
             paid.fire_subscription_check("watch").is_empty(),
             "paid tier never fires"

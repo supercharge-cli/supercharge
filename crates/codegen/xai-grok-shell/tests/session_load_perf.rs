@@ -19,7 +19,7 @@
 //! Session data (both tests): a synthetic session from the shared
 //! [`synth`](xai_grok_shell::session::testkit::synth) generator (redundant
 //! `available_commands_update` + big rewind snapshots; size knobs via
-//! `GROK_PERF_*`), or a real session dir via `GROK_PERF_SESSION_SRC=<session-dir>`.
+//! `SUPERCHARGE_PERF_*`), or a real session dir via `SUPERCHARGE_PERF_SESSION_SRC=<session-dir>`.
 //!
 //! Run (needs the `test-support` feature; on by default under Bazel):
 //!   cargo test -p xai-grok-shell --features test-support --test session_load_perf -- --nocapture
@@ -44,11 +44,11 @@ use xai_grok_shell::session::testkit::synth::{self, SessionSpec};
 // ───────────────────────── session spec ─────────────────────────
 
 /// Perf-tool defaults over the shared [`SessionSpec`], tuned to the pathological
-/// real session; scale/override via `GROK_PERF_*` (e.g. `GROK_PERF_TURNS`,
-/// `GROK_PERF_SCALE`), or point `GROK_PERF_SESSION_SRC` at a real session dir.
+/// real session; scale/override via `SUPERCHARGE_PERF_*` (e.g. `SUPERCHARGE_PERF_TURNS`,
+/// `SUPERCHARGE_PERF_SCALE`), or point `SUPERCHARGE_PERF_SESSION_SRC` at a real session dir.
 fn perf_spec() -> SessionSpec {
     SessionSpec::from_env_prefixed(
-        "GROK_PERF",
+        "SUPERCHARGE_PERF",
         SessionSpec {
             turns: 80,
             rewind_points: 60,
@@ -76,11 +76,11 @@ fn copy_tree(src: &Path, dst: &Path) {
 }
 
 /// Prepare a session on disk under `root` for working dir `cwd`. With
-/// `GROK_PERF_SESSION_SRC` set, copy a real session over a registered stub
+/// `SUPERCHARGE_PERF_SESSION_SRC` set, copy a real session over a registered stub
 /// (keeping our `summary.json`); otherwise synthesize one via
 /// [`synth::prepare_session`].
 async fn prepare_session(root: &Path, cwd: &Path, spec: &SessionSpec) -> (Info, PathBuf) {
-    let Ok(src) = std::env::var("GROK_PERF_SESSION_SRC") else {
+    let Ok(src) = std::env::var("SUPERCHARGE_PERF_SESSION_SRC") else {
         return synth::prepare_session(root, cwd, spec).await;
     };
 
@@ -112,7 +112,7 @@ async fn prepare_session(root: &Path, cwd: &Path, spec: &SessionSpec) -> (Info, 
 /// Re-create the rewind file after the isolation step deletes it (synthetic
 /// case). For a real session copy we cannot regenerate; leave it absent.
 fn generate_or_restore_rewind(path: &Path, spec: &SessionSpec) {
-    if std::env::var("GROK_PERF_SESSION_SRC").is_ok() {
+    if std::env::var("SUPERCHARGE_PERF_SESSION_SRC").is_ok() {
         return;
     }
     synth::write_rewind_jsonl(path, spec);
@@ -206,7 +206,7 @@ fn print_kind_breakdown(label: &str, stats: &KindStats) {
 ///
 /// `#[ignore]`: this is a measurement tool (generates tens of MB, ~3 s), and its
 /// only correctness assertion is covered by the unit tests. Run explicitly with
-/// `--ignored` (optionally `GROK_PERF_SESSION_SRC=...`) to get the numbers.
+/// `--ignored` (optionally `SUPERCHARGE_PERF_SESSION_SRC=...`) to get the numbers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "perf measurement tool; run with --ignored"]
 async fn phase_breakdown_real_functions() {
@@ -428,15 +428,15 @@ async fn full_session_load_e2e() {
     // SAFETY: single-threaded current-thread runtime; set before any agent code
     // reads these process-globals (grok_home()/instrumentation mode are OnceLock).
     unsafe {
-        std::env::set_var("GROK_HOME", grok_home.path());
-        std::env::set_var("GROK_INSTRUMENTATION", "log");
-        std::env::set_var("GROK_INSTRUMENTATION_LOG", &instr_log);
-        std::env::set_var("GROK_CLI_CHAT_PROXY_BASE_URL", server.url());
-        std::env::set_var("GROK_XAI_API_BASE_URL", server.url());
-        std::env::set_var("XAI_API_KEY", "test-key-for-ci");
-        std::env::set_var("GROK_TELEMETRY_ENABLED", "false");
-        std::env::set_var("GROK_FEEDBACK_ENABLED", "false");
-        std::env::set_var("GROK_TRACE_UPLOAD", "false");
+        std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
+        std::env::set_var("SUPERCHARGE_INSTRUMENTATION", "log");
+        std::env::set_var("SUPERCHARGE_INSTRUMENTATION_LOG", &instr_log);
+        std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_API_KEY", "test-key-for-ci");
+        std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
+        std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");
+        std::env::set_var("SUPERCHARGE_TRACE_UPLOAD", "false");
     }
 
     // Install the production instrumentation layer so `instrumentation_timer!`

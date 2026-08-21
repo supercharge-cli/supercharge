@@ -1,5 +1,5 @@
 //! Re-exports of the crate-internal event types that live in
-//! `xai-grok-session-events`. The orphan-rule items (`From<&permission::Decision>`
+//! `xai-Supercharge AI-session-events`. The orphan-rule items (`From<&permission::Decision>`
 //! and the doom-loop categorizer) stay here since they need shell-local
 //! types.
 
@@ -569,7 +569,7 @@ pub(crate) const GOAL_ROLE_MODEL_FAIL_OPEN_SPAWN_FAILED: &str = "spawn_failed";
 
 /// Fail-open — the configured `agent_type` resolves as a STRICT harness whose
 /// subagent flavor `resolve_subagent_toolset` can't represent (e.g. `codex`):
-/// committing it would silently run grok-build flavor. Distinct from
+/// committing it would silently run Supercharge AI-build flavor. Distinct from
 /// `toolset_unknown` (a name that doesn't resolve at all).
 pub(crate) const GOAL_ROLE_MODEL_FAIL_OPEN_HARNESS_FLAVOR_UNSUPPORTED: &str =
     "harness_flavor_unsupported";

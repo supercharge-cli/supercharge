@@ -11,7 +11,7 @@ const DEFAULT_EARLY_INVALIDATION_SECS: u64 = 300; // 5 minutes
 /// Legacy auth.json scope key. Fallback for old devbox auth files.
 pub(super) const LEGACY_SCOPE: &str = "https://accounts.x.ai/sign-in";
 
-/// auth.json scope key for plain API key auth (desktop login, `grok login --api-key`).
+/// auth.json scope key for plain API key auth (desktop login, `supercharge login --api-key`).
 pub(super) const API_KEY_SCOPE: &str = "xai::api_key";
 
 const BLOCKED_REASON_NO_LOGS: &str = "BLOCKED_REASON_NO_LOGS";
@@ -29,14 +29,14 @@ pub(crate) fn default_coding_data_retention_opt_out() -> bool {
 #[serde(rename_all = "snake_case")]
 pub enum AuthMode {
     /// Deprecated. Kept for deserializing old auth.json files.
-    #[serde(alias = "grok")]
+    #[serde(alias = "Supercharge AI")]
     WebLogin,
     /// OIDC or OAuth2 interactive login via customer IdP
     #[serde(alias = "oidc")]
     Oidc,
     /// External auth provider binary
     External,
-    /// Plain API key (e.g. from grok-desktop login or `grok login --api-key`)
+    /// Plain API key (e.g. from Supercharge AI-desktop login or `supercharge login --api-key`)
     ApiKey,
 }
 
@@ -151,7 +151,7 @@ impl GrokAuth {
         }
     }
 
-    /// `true` when this auth can access grok.com managed MCP connectors.
+    /// `true` when this auth can access supercharge.ai managed MCP connectors.
     pub fn is_managed_mcp_eligible(&self) -> bool {
         self.is_xai_auth() || self.auth_mode == AuthMode::WebLogin
     }
@@ -302,7 +302,7 @@ pub(crate) struct UserInfo {
 
 /// Look up auth from the store by scope key.
 ///
-/// Legacy `WebLogin` tokens (from the pre-OIDC `grok login --legacy`
+/// Legacy `WebLogin` tokens (from the pre-OIDC `supercharge login --legacy`
 /// flow) are skipped — they are validated via a per-request DB lookup
 /// server-side which fails at high volume.  Skipping them here forces
 /// affected users to re-authenticate via OIDC on next launch.
@@ -321,10 +321,10 @@ pub fn lookup_auth(map: &AuthStore, scope: &str) -> Option<GrokAuth> {
     Some(auth)
 }
 
-/// Early-invalidation buffer. Override with `GROK_AUTH_EARLY_INVALIDATION_SECS`
+/// Early-invalidation buffer. Override with `SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS`
 /// for testing (e.g. `=5` to shrink the buffer to 5 seconds).
 pub(super) fn early_invalidation() -> Duration {
-    std::env::var("GROK_AUTH_EARLY_INVALIDATION_SECS")
+    std::env::var("SUPERCHARGE_AUTH_EARLY_INVALIDATION_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .map(|s| Duration::seconds(s as i64))
@@ -458,10 +458,10 @@ mod tests {
     fn user_info_subscription_tier_present() {
         let json = r#"{
             "userId": "u1",
-            "subscriptionTier": "SuperGrokPro"
+            "subscriptionTier": "SuperchargePro"
         }"#;
         let info: UserInfo = serde_json::from_str(json).unwrap();
-        assert_eq!(info.subscription_tier.as_deref(), Some("SuperGrokPro"));
+        assert_eq!(info.subscription_tier.as_deref(), Some("SuperchargePro"));
     }
 
     /// subscriptionTier absent → deserializes to None (backwards compat).

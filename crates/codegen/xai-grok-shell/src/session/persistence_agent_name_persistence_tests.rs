@@ -75,8 +75,8 @@ fn summary_includes_agent_name_when_set() {
 fn summary_round_trips_various_agent_names() {
     for name in [
         "cursor",
-        "grok-build",
-        "grok-build-plan",
+        "Supercharge AI-build",
+        "Supercharge AI-build-plan",
         "codex",
         "browser-use",
     ] {

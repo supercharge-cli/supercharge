@@ -4,14 +4,14 @@
 
 ## Features
 
-- **GROK_CONFIG** and **GROK_CONFIG_PATH** environment variables now let launchers override selected config settings without editing config.toml.
-- **Worktrees** under ~/.grok/worktrees are now automatically reclaimed when safe, with strong safeguards that never delete a user's last copy.
+- **SUPERCHARGE_CONFIG** and **SUPERCHARGE_CONFIG_PATH** environment variables now let launchers override selected config settings without editing config.toml.
+- **Worktrees** under ~/.supercharge/worktrees are now automatically reclaimed when safe, with strong safeguards that never delete a user's last copy.
 - **Hook policy blocks** now correctly report "Turn blocked by a hook" instead of "Turn cancelled by user."
 - **Image and video generation** now limits how many calls the model can request in one step to avoid overload.
 - **Arabic and Persian text** can now be reordered correctly in the terminal UI. Turn on in /settings.
 - **Reasoning effort** can now be supplied when an ACP client opens or resumes a session.
 - **Session titles** now refresh early in the conversation and stay stable; /resume shows a recap and last-turn summary when available.
-- **GROK_FORCE_LOGIN_TEAM_ID** environment variable now lets launchers restrict interactive login to one or more teams.
+- **SUPERCHARGE_FORCE_LOGIN_TEAM_ID** environment variable now lets launchers restrict interactive login to one or more teams.
 - **Preparing spinner** now shows readable labels such as "Writing file…" and "Writing edit…" for common tools.
 
 ## Bug Fixes
@@ -30,11 +30,11 @@
 - **New StopCancelled hook event** now reports when a turn ends without completing (interrupt, permission reject, max turns, etc.).
 - **Recurring /loop tasks** now show a one-line expiry notice in the transcript when they auto-expire after 7 days.
 - **Web search** can now be restricted to allowed or excluded domains via [toolset.web_search] in config.toml.
-- **Session search index** can now be disabled via GROK_SESSION_SEARCH or [features] session_search for hosts sharing $GROK_HOME.
+- **Session search index** can now be disabled via SUPERCHARGE_SESSION_SEARCH or [features] session_search for hosts sharing $SUPERCHARGE_HOME.
 - **Drag to select and copy** values on the /session-info tab; c and y shortcuts also work.
 - **Double-click now selects a word** by default and triple-click selects the whole paragraph.
 - **New follow-up behavior setting** lets queued messages send immediately as interjections instead of waiting for the turn to finish.
-- Tool commands and MCP servers now receive a GROK_SESSION_ID environment variable matching the current session.
+- Tool commands and MCP servers now receive a SUPERCHARGE_SESSION_ID environment variable matching the current session.
 - Relative markdown links can now open existing files in your current working directory when no matching generated media is found.
 - PreToolUse hooks can now rewrite a tool's input before it runs instead of only allowing or denying the call.
 
@@ -70,7 +70,7 @@
 
 ## Performance
 
-- **Subagent spawning** is dramatically faster when you have many sessions in ~/.grok.
+- **Subagent spawning** is dramatically faster when you have many sessions in ~/.supercharge.
 - **TUI rendering** now automatically matches high-refresh displays (120 Hz+) for smoother scrolling and painting.
 
 
@@ -102,7 +102,7 @@
 ## Features
 
 - **Subagent spawning** is now bounded; wide fan-outs queue instead of exhausting file descriptors.
-- New `grok du` command shows disk usage of ~/.grok including worktrees and sessions.
+- New `grok du` command shows disk usage of ~/.supercharge including worktrees and sessions.
 - **Tools** now report whether they only read data, enabling safer restricted agents and subagents.
 - **Sandbox workspace** sessions can now limit which bundled skills are advertised via caller config.
 - **Renaming a session** from the dashboard now starts with the current title prefilled for easy editing.
@@ -115,7 +115,7 @@
 ## Bug Fixes
 
 - **Sandbox config** entries ending in /** now correctly grant the parent directory instead of creating a literal ** subdirectory.
-- **Failed alpha/enterprise updates** now suggest the matching GROK_CHANNEL reinstall command.
+- **Failed alpha/enterprise updates** now suggest the matching SUPERCHARGE_CHANNEL reinstall command.
 - **On Apple Silicon**, grok now installs the native arm64 build even from a Rosetta shell or x86_64 updater.
 - **Skills** that share names with built-in commands now appear alongside them in the slash menu with qualified names.
 - **Notebook** permission rules imported from Claude configs are now ignored with a warning instead of applying broadly.
@@ -249,7 +249,7 @@
 
 ## Features
 
-- **GROK_EXTRA_CA_BUNDLE** env var allows adding custom TLS root certificates.
+- **SUPERCHARGE_EXTRA_CA_BUNDLE** env var allows adding custom TLS root certificates.
 
 ## Bug Fixes
 
@@ -316,7 +316,7 @@
 
 - **MCP servers** can now be enabled or disabled directly from the CLI with `grok mcp enable <name>` and `grok mcp disable <name>`.
 - **Full plan markdown** can now be copied to the clipboard with `y` during plan approval or preview.
-- **Added support for the new SuperGrok Plus subscription tier** in authentication and feature gating.
+- **Added support for the new Supercharge Plus subscription tier** in authentication and feature gating.
 - **Enabled automatic recovery** from repetitive loops in model output by default.
 
 ## Bug Fixes
@@ -407,7 +407,7 @@
 
 - **Plugin subagents** now inherit the parent session’s connected MCP servers (default `mcpInheritance: all`), so `search_tool` / `use_tool` work the same as for local agents. Plugin agents still cannot declare their own MCP servers, hooks, or elevated permission modes.
 - **`!cmd` commands** now allow up to one hour before timing out.
-- **npm package** now installs the native binary under `$GROK_HOME/bin` (honoring the same override as the Rust CLI).
+- **npm package** now installs the native binary under `$SUPERCHARGE_HOME/bin` (honoring the same override as the Rust CLI).
 - **Startup warnings** now point to `/doctor` for details and fixes.
 - **Dashboard hover and clicks** no longer miss the gaps between items in wide mode.
 - **Shift/Alt+Enter** now inserts a newline while editing a queued prompt.
@@ -500,7 +500,7 @@
 
 ## Features
 
-- **Added GROK_CLIPBOARD_NO_OSC52** env var to stop clipboard sequences from appearing as garbage in unsupported terminals.
+- **Added SUPERCHARGE_CLIPBOARD_NO_OSC52** env var to stop clipboard sequences from appearing as garbage in unsupported terminals.
 - **Scheduled tasks** can now be updated in place; one-time tasks are retired in favor of background commands.
 
 ## Bug Fixes
@@ -515,14 +515,14 @@
 
 - **/btw** now works inside `grok --minimal`, showing answers in the live area and committing them to scrollback on Esc.
 - **New Appearance setting** "Snap prompt to top on send" lets you keep the viewport where it is instead of jumping to the new prompt.
-- **Default model** is now Grok 4.5 with high/medium/low reasoning effort and improved compaction settings.
+- **Default model** is now Supercharge Core with high/medium/low reasoning effort and improved compaction settings.
 - **New `/summarize` slash command** is now available as an alias for `/recap` to request an on-demand session summary.
 
 ## Bug Fixes
 
 - **Local shell tools** now see the same environment variables, aliases, and functions as your login shell.
 - **Syntax highlighting** in diffs and the file viewer no longer miscolors strings or comments that span multiple lines.
-- **Global rules** from ~/.grok/rules and compatible vendor homes are now discovered correctly.
+- **Global rules** from ~/.supercharge/rules and compatible vendor homes are now discovered correctly.
 - **Background tasks** that finish after you press Ctrl+C no longer automatically resume the model.
 - **Ctrl+\** out of the dashboard now returns you to the agent you came from.
 - **MCP OAuth logins** now succeed against servers that require the RFC 9207 issuer parameter in the callback.
@@ -739,7 +739,7 @@
 - **Dashboard shortcuts** now advertise ? instead of Ctrl+. on terminals that cannot deliver the latter.
 - **Double-clicking** scrollback while Text selection is fold/nav now shows a tip offering Ctrl+Y to enable Word select.
 - **`grok worktree ls`** now works as a short alias for `grok worktree list`.
-- **MCP tool output truncation** can now be set per-repo in `.grok/config.toml`.
+- **MCP tool output truncation** can now be set per-repo in `.supercharge/config.toml`.
 - **Auto-send of queued follow-ups** during task waits can now be enabled fleet-wide via remote settings.
 - **Welcome screen** now offers one-click resume of a recent Claude Code session via ctrl+u.
 
@@ -749,7 +749,7 @@
 - **Terminal commands** with no args now run through a shell, matching the CLI.
 - **Agent teardown** no longer crashes on slim Linux images that lack the ps command.
 - **Esc** now dismisses an open /btw panel before backing out of a dashboard overlay.
-- **Resumed grok.com chats** now use the conversation's last model instead of the gateway default.
+- **Resumed supercharge.ai chats** now use the conversation's last model instead of the gateway default.
 - **JetBrains terminals on Windows** now default to minimal mode to avoid raw mouse-report leaks in the prompt.
 - **Skill token highlights** now survive line wraps and the slash menu opens when typing / before existing text.
 - **Truncated or tiny images** are now dropped before sending and previously poisoned sessions self-heal on restart.
@@ -780,7 +780,7 @@
 - **IME text input in Otty** no longer attaches unrelated clipboard images on every character.
 - **Rewind** now fully removes the selected turn from both scrollback and the model's conversation history.
 - **Queued prompts** now abort long blocking waits instead of waiting for the full timeout.
-- **File links and media** now work for worktree sessions under ~/.grok/worktrees/.
+- **File links and media** now work for worktree sessions under ~/.supercharge/worktrees/.
 - **Collapsed Read/Edit tool rows** now show only the filename instead of long absolute paths.
 - **Clipboard copies on Wayland** now succeed even when the terminal loses focus mid-copy.
 - **User messages queued** behind an auto-wake turn are no longer lost when the user presses Ctrl+C.
@@ -788,7 +788,7 @@
 - **Single tool calls** that belong to a verb group now collapse into an aggregated header row.
 - **Fixed sessions** that became permanently stuck after tool-use history corruption.
 - **/always-approve** and **/auto** now toggle their mode on and off when run repeatedly.
-- **Terminal command cards** on grok.com now correctly settle after foreground bash tasks.
+- **Terminal command cards** on supercharge.ai now correctly settle after foreground bash tasks.
 - **Copy failure** toast now recommends trying /minimal for native terminal rendering.
 
 ## Performance
@@ -829,7 +829,7 @@
 ## Features
 
 - MCP permission prompts now show the planned arguments so you can judge what the tool will actually do.
-- The "Managed by grok.com" link in the Extensions modal is now clickable and underlined.
+- The "Managed by supercharge.ai" link in the Extensions modal is now clickable and underlined.
 - Dragging inside rendered markdown tables now selects whole cells or rectangular ranges and copies as TSV.
 - Shift+Tab now goes straight to Plan mode when the plan-mode tip is showing.
 
@@ -918,7 +918,7 @@
 - **Try Again** on the free-usage paywall now correctly resubmits after rate-limit retries.
 - **Cursor** now respects your terminal's default blink style instead of always blinking.
 - **Skill commands** in scrollback now highlight only the command name, not the arguments.
-- **Plan files** now default to .grok/plan.md to match Grok conventions.
+- **Plan files** now default to .supercharge/plan.md to match Grok conventions.
 - **LaTeX math** renders correctly for display equations and complex subscripts.
 - **Queue hint** in the terminal no longer shows incorrect bold text on part of the message.
 
@@ -1124,7 +1124,7 @@
 
 ## Features
 
-- **Chat sessions show the grok.com model catalog** in the picker.
+- **Chat sessions show the supercharge.ai model catalog** in the picker.
 
 ## Bug Fixes
 
@@ -1256,7 +1256,7 @@
 ## Features
 
 - **MCP servers** from host integrations can now be added, replaced, or removed without restarting the session.
-- **Agent-run terminal commands** now set `GROK_AGENT=1` so host tools can tell them apart from interactive shells.
+- **Agent-run terminal commands** now set `SUPERCHARGE_AGENT=1` so host tools can tell them apart from interactive shells.
 
 ## Bug Fixes
 
@@ -1297,7 +1297,7 @@
 ## Bug Fixes
 
 - **Local MCP servers** now auto-recover after disconnects or session expiry.
-- **OIDC sessions** with XAI_API_KEY present no longer lose refresh on idle.
+- **OIDC sessions** with SUPERCHARGE_API_KEY present no longer lose refresh on idle.
 - **Inline video previews** now show an install command only when the package manager is on PATH.
 - **list_dir** now reliably shows all immediate child directories even inside large monorepos.
 - **Clicking a model** in the dashboard /model dropdown no longer opens the wrong session.
@@ -1491,7 +1491,7 @@
 
 ## Features
 
-- **Added option** to fully disable the hunk tracker via --hunk-tracker-mode, GROK_HUNK_TRACKER, or config.
+- **Added option** to fully disable the hunk tracker via --hunk-tracker-mode, SUPERCHARGE_HUNK_TRACKER, or config.
 
 ## Bug Fixes
 
@@ -1593,7 +1593,7 @@
 - **Dashboard empty state** is now a single hint line; dispatch and peek placeholders appear only when unfocused.
 - **Fixed memory leaks** that could cause the CLI to use tens of gigabytes during long sessions with many tool calls.
 - **Login on SSH or headless machines** now tells you when the browser cannot be opened automatically and shows the URL to visit manually.
-- **Fixed git clone failures** on Windows when the CLI tries to clone marketplace plugins into ~/.grok.
+- **Fixed git clone failures** on Windows when the CLI tries to clone marketplace plugins into ~/.supercharge.
 
 ## Performance
 
@@ -1736,7 +1736,7 @@
 
 ## Features
 
-- **`grok --debug`** now produces per-session log files under ~/.grok/debug/ even with a leader process.
+- **`grok --debug`** now produces per-session log files under ~/.supercharge/debug/ even with a leader process.
 
 ## Bug Fixes
 
@@ -1974,7 +1974,7 @@
 
 - **Image and video generation** tools now emit structured paths so the pager renders media without regex scraping.
 - **Compaction summaries** now use a more detailed structure that improves recovery after context reset.
-- **image_gen** can now be enabled via the harness model using [features] in config.toml or the GROK_IMAGE_GEN_HARNESS env var.
+- **image_gen** can now be enabled via the harness model using [features] in config.toml or the SUPERCHARGE_IMAGE_GEN_HARNESS env var.
 - **Improved config refresh** on new sessions from the shell.
 
 ## Bug Fixes
@@ -1989,7 +1989,7 @@
 - **New segments compaction mode** writes per-segment markdown files that the model can read to recover pre-compaction detail.
 - **Claude and Cursor compatibility scanning** (skills, rules, AGENTS.md) can now be toggled individually via env vars or config.toml.
 - **grok inspect** now shows the resolved on/off state and source for every Claude/Cursor compatibility toggle.
-- **Cursor MCP servers and hooks** are now discovered and can be disabled independently via GROK_CURSOR_MCPS_ENABLED / GROK_CURSOR_HOOKS_ENABLED.
+- **Cursor MCP servers and hooks** are now discovered and can be disabled independently via SUPERCHARGE_CURSOR_MCPS_ENABLED / SUPERCHARGE_CURSOR_HOOKS_ENABLED.
 
 ## Bug Fixes
 
@@ -2105,7 +2105,7 @@
 ## Bug Fixes
 
 - **Background tasks** started inside subagents now continue running after the subagent session ends.
-- **Image description** now reliably uses the grok-build model instead of falling back to the active session model.
+- **Image description** now reliably uses the supercharge-core model instead of falling back to the active session model.
 
 
 # 0.2.5

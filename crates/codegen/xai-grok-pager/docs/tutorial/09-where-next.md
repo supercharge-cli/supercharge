@@ -8,18 +8,18 @@ You know enough to be productive. When you want more:
 - **`/docs`** — the full How-to Guides inside the TUI (`/docs web` for the
   online docs). Covers sessions, headless mode, subagents, sandboxing,
   memory, and much more.
-- **Ask Grok itself** — it can read its own user guide and set itself up.
+- **Ask Supercharge AI itself** — it can read its own user guide and set itself up.
   Try: "How do I run you in CI?" or "add an MCP server for GitHub".
 
 ## Good habits
 
-- Sessions save automatically. Resume the latest with `grok -c`, or pick
+- Sessions save automatically. Resume the latest with `supercharge -c`, or pick
   one with `/resume` (`Ctrl+S`).
 - Long session getting slow? `/compact` frees context; `/context` shows
   where it's going.
-- Automate anything: `grok -p "summarize new TODOs" --output-format json`
+- Automate anything: `supercharge -p "summarize new TODOs" --output-format json`
   runs headless — great for scripts and CI.
-- Stay current with `grok update`; see what changed with `/release-notes`.
+- Stay current with `supercharge update`; see what changed with `/release-notes`.
 - Something feel off? `/feedback` goes straight to the team.
 
 ## Reopen this tutorial

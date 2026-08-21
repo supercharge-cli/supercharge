@@ -3,7 +3,7 @@ license = "Apache-2.0"
 name = "xai-grok-extra-ca"
 version = "0.1.0"
 edition.workspace = true
-description = "Opt-in extra TLS roots from GROK_EXTRA_CA_BUNDLE (validated DER cache + reqwest 0.12 adapters)"
+description = "Opt-in extra TLS roots from SUPERCHARGE_EXTRA_CA_BUNDLE (validated DER cache + reqwest 0.12 adapters)"
 
 [dependencies]
 reqwest = { workspace = true }

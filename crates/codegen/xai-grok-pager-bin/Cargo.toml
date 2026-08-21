@@ -6,7 +6,7 @@ license = "Apache-2.0"
 authors = ["xAI"]
 default-run = "xai-grok-pager"
 
-# Composition-root binary for the Grok Build TUI. The artifact is still named
+# Composition-root binary for the Supercharge AI TUI. The artifact is still named
 # `xai-grok-pager`. This package exists so the binary can link both the pager
 # library and the optional `xai-grok-pager-minimal` render mode: `minimal`
 # depends on `xai-grok-pager`, so the pager library cannot depend back on it

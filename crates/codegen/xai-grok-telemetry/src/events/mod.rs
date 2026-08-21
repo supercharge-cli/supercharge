@@ -1453,12 +1453,12 @@ pub struct PlanSubmit {
 }
 
 // ---------------------------------------------------------------------------
-// SuperGrok upsell
+// Supercharge upsell
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum SuperGrokUpsell {
+pub enum SuperchargeUpsell {
     WelcomeScreen,
     RateLimitError,
     /// Free-usage-exhausted paywall modal (free-tier 429 with the
@@ -1470,21 +1470,21 @@ pub enum SuperGrokUpsell {
 }
 
 #[derive(Serialize)]
-pub struct SuperGrokUpsellShown {
-    pub source: SuperGrokUpsell,
+pub struct SuperchargeUpsellShown {
+    pub source: SuperchargeUpsell,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_method: Option<String>,
 }
 
 #[derive(Serialize)]
-pub struct SuperGrokUpsellClicked {
-    pub source: SuperGrokUpsell,
+pub struct SuperchargeUpsellClicked {
+    pub source: SuperchargeUpsell,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_method: Option<String>,
 }
 
 /// Which surface a promo announcement's upgrade CTA was activated from.
-/// Modeled on [`SuperGrokUpsell`]; lets the funnel attribute the click to the
+/// Modeled on [`SuperchargeUpsell`]; lets the funnel attribute the click to the
 /// welcome hero vs the in-session header vs the banner vs the dashboard, and
 /// distinguish keyboard (`Ctrl+O`) activations from pointer/OSC 8 ones.
 /// Ord/Eq exist for the pager's per-(announcement, surface) impression latch.
@@ -1881,9 +1881,9 @@ pub struct CreditLimitUpsellClicked {
 // ---------------------------------------------------------------------------
 
 /// Emitted when a previously access-gated user re-authenticates and the gate
-/// is lifted — i.e. they subscribed (externally on grok.com) and came back.
-/// This is the actual conversion signal for SuperGrok Heavy subscriptions
-/// attributed to Grok Build: the user saw the gate in Grok Build, went and
+/// is lifted — i.e. they subscribed (externally on supercharge.ai) and came back.
+/// This is the actual conversion signal for Supercharge Heavy subscriptions
+/// attributed to Supercharge AI: the user saw the gate in Supercharge AI, went and
 /// paid, then returned with access.
 #[derive(Serialize)]
 pub struct SubscriptionActivated {
@@ -1891,7 +1891,7 @@ pub struct SubscriptionActivated {
     pub auth_method: Option<String>,
     /// Whether the subscribe CTA was shown in this session before the gate
     /// was lifted (`access_gate_shown_logged`). When `true`, the conversion
-    /// is strongly attributable to Grok Build's upsell surface.
+    /// is strongly attributable to Supercharge AI's upsell surface.
     pub upsell_shown_this_session: bool,
 }
 
@@ -2178,8 +2178,8 @@ telemetry_event!(
 );
 telemetry_event!(PagerSlashCommand, "pager_slash_command");
 telemetry_event!(PlanSubmit, "plan_submit");
-telemetry_event!(SuperGrokUpsellShown, "supergrok_upsell_shown");
-telemetry_event!(SuperGrokUpsellClicked, "supergrok_upsell_clicked");
+telemetry_event!(SuperchargeUpsellShown, "supercharge_upsell_shown");
+telemetry_event!(SuperchargeUpsellClicked, "supercharge_upsell_clicked");
 telemetry_event!(AnnouncementCtaShown, "announcement_cta_shown");
 telemetry_event!(AnnouncementCtaClicked, "announcement_cta_clicked");
 telemetry_event!(CodingDataConsentSelected, "coding_data_consent_selected");

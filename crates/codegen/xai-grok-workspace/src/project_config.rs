@@ -1,6 +1,6 @@
 //! Project config-file discovery: locating repo-local `.mcp.json` and
 //! `.supercharge/config.toml` files by walking from `cwd` up to the git root.
-//! Legacy `.grok/config.toml` files remain readable during migration.
+//! Legacy `.supercharge/config.toml` files remain readable during migration.
 //!
 //! These pure `git2` + filesystem walks are shared by the shell's config
 //! loaders and the folder-trust gate's `repo_configs_present`.
@@ -59,7 +59,7 @@ fn is_user_grok_config_file(config_path: &Path) -> bool {
 }
 
 /// Find all project config files from `cwd` upward to the git repo root.
-/// `.supercharge/config.toml` is preferred; `.grok/config.toml` is a legacy
+/// `.supercharge/config.toml` is preferred; `.supercharge/config.toml` is a legacy
 /// fallback when the Supercharge file is absent. Results are ordered from repo
 /// root (lowest priority) to cwd (highest priority).
 pub fn find_project_configs(cwd: &Path) -> Vec<PathBuf> {
@@ -68,7 +68,7 @@ pub fn find_project_configs(cwd: &Path) -> Vec<PathBuf> {
 
 /// [`find_project_configs`] over a precomputed cwd→git-root dir chain
 /// ([`RepoDirChain`]), repo-root-first. Excludes the user-global config so
-/// `cwd == $HOME` does not treat `~/.grok/config.toml` as a project overlay.
+/// `cwd == $HOME` does not treat `~/.supercharge/config.toml` as a project overlay.
 /// `pub(crate)` — the gate (`repo_configs_present`) reaches it within this crate.
 pub(crate) fn find_project_configs_in(chain_dirs: &[PathBuf]) -> Vec<PathBuf> {
     // `dirs` is cwd-first; reverse so repo root comes first (lowest priority)
@@ -78,7 +78,7 @@ pub(crate) fn find_project_configs_in(chain_dirs: &[PathBuf]) -> Vec<PathBuf> {
         .rev()
         .flat_map(|dir| {
             let current = dir.join(".supercharge").join("config.toml");
-            let legacy = dir.join(".grok").join("config.toml");
+            let legacy = dir.join(".supercharge").join("config.toml");
             let mut candidates = Vec::with_capacity(2);
             if current.is_file() {
                 candidates.push(current);
@@ -114,8 +114,8 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("repo");
-        std::fs::create_dir_all(project.join(".grok")).unwrap();
-        std::fs::write(project.join(".grok/config.toml"), "# project\n").unwrap();
+        std::fs::create_dir_all(project.join(".supercharge")).unwrap();
+        std::fs::write(project.join(".supercharge/config.toml"), "# project\n").unwrap();
         let found = find_project_configs(&project);
         assert_eq!(found.len(), 1);
         assert!(!is_user_grok_config_file(&found[0]));

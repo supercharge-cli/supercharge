@@ -112,14 +112,14 @@ pub enum LocalQuestionKind {
     CreditLimitUpsell {
         choices: Vec<xai_grok_telemetry::events::CreditLimitChoice>,
     },
-    /// SuperGrok upsell modal: the free-usage paywall (429 +
+    /// Supercharge upsell modal: the free-usage paywall (429 +
     /// `subscription:free-usage-exhausted`) or a tier-restricted slash
     /// command invocation. Upgrade options carry their URL in the option
     /// `id`.
     FreeUsageUpsell {
-        /// Telemetry source for `SuperGrokUpsellClicked` — distinguishes
+        /// Telemetry source for `SuperchargeUpsellClicked` — distinguishes
         /// the paywall from the restricted-command upsell.
-        source: xai_grok_telemetry::events::SuperGrokUpsell,
+        source: xai_grok_telemetry::events::SuperchargeUpsell,
     },
     /// Modal shown when the shell rejects a model switch due to agent
     /// type incompatibility. Carries the target model + effort so the
@@ -795,7 +795,7 @@ impl QuestionViewState {
     /// the current freeform text so the caller can load it into the prompt.
     ///
     /// No-op returning an empty string when `no_freeform` is set: such
-    /// questions (e.g. the SuperGrok upsell) have no freeform row, so
+    /// questions (e.g. the Supercharge upsell) have no freeform row, so
     /// `InputMode` must be unreachable. Callers gate on `no_freeform` /
     /// [`Self::is_on_freeform_row`] too; this is defense in depth.
     pub fn activate_freeform_input(&mut self) -> String {
@@ -2672,7 +2672,7 @@ mod tests {
 
     // ── no_freeform ────────────────────────────────────────────────────
 
-    /// `no_freeform` questions (e.g. the SuperGrok upsell) have no "Other"
+    /// `no_freeform` questions (e.g. the Supercharge upsell) have no "Other"
     /// row, so activating freeform input must be impossible: focus stays in
     /// Navigation and nothing gets marked selected. Regression test for the
     /// upsell modal letting the user type after clicking under the last
@@ -2786,7 +2786,7 @@ mod tests {
     #[test]
     fn chrome_height_option_less_question_drops_the_label_gap() {
         // Nothing under the label to separate it from, so the gap goes: vpad(1) + label(1) + gap(1) = 3. This is the bare `/feedback` card.
-        let q = make_question("How can we improve Grok Build?", &[], false);
+        let q = make_question("How can we improve Supercharge AI?", &[], false);
         assert_eq!(
             chrome_height(
                 &q,

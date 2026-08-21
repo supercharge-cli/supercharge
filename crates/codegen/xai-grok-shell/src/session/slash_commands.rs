@@ -533,7 +533,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "workflows",
     "yolo",
 ];
-/// Unconditional reservations for `grok inspect`. Live advertising still
+/// Unconditional reservations for `Supercharge AI inspect`. Live advertising still
 /// includes currently gated-on shell builtins plus [`PAGER_COMMAND_KEYS`].
 static RESERVED_SLASH_NAMES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut taken: HashSet<&'static str> = PAGER_COMMAND_KEYS.iter().copied().collect();
@@ -818,7 +818,7 @@ static PRODUCT_SKILLS_NEGATIVE_CACHE: parking_lot::Mutex<Option<ProductSkillsIde
 static PRODUCT_SKILLS_FETCH_GATE: std::sync::OnceLock<tokio::sync::Mutex<()>> =
     std::sync::OnceLock::new();
 /// Fresh successful catalog is reused without another REST round-trip so ACU,
-/// list, and per-turn resolve do not stampede grok.com.
+/// list, and per-turn resolve do not stampede supercharge.ai.
 const PRODUCT_SKILLS_SUCCESS_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 /// Bounded negative cache for user-list failure (bundled-only). Keeps consumers
 /// from re-paying the full retry ladder during a short outage.
@@ -947,7 +947,7 @@ pub(crate) fn clear_product_skills_cache_for_test() {
     *PRODUCT_SKILLS_DEGRADED_CACHE.lock() = None;
     *PRODUCT_SKILLS_NEGATIVE_CACHE.lock() = None;
 }
-/// Product (grok.com) Skills catalog as SkillInfo rows for slash advertising
+/// Product (supercharge.ai) Skills catalog as SkillInfo rows for slash advertising
 /// and chat-kind slash resolve / skill expansion.
 ///
 /// Shared by `list_commands(kind=chat)`, chat-session
@@ -1097,7 +1097,7 @@ pub(crate) fn acu_skill_source(is_chat_kind: bool) -> AcuSkillSource {
 /// - `Some(cwd)`: full skill discovery (Local + Repo + User) + builtins.
 /// - `None`: builtins + global (User-scoped) skills only.
 /// - `kind == Some("chat")` (feature `chat` only): **product Skills REST
-///   catalog** (same as grok-web) + builtins — not Build disk skills. Without
+///   catalog** (same as Supercharge AI-web) + builtins — not Build disk skills. Without
 ///   the feature, returns `Err` (invalid params). Product REST failure still
 ///   advertises builtins only (empty product skills).
 pub(crate) async fn list_commands(
@@ -1314,7 +1314,7 @@ impl BuiltinAction {
 /// How to rewrite the user's prompt when a slash command resolves to a skill.
 ///
 /// - `RewriteToRun` (default): replace `/foo args` with `"run /foo args"`,
-///   matching today's Grok Build flow that calls our dedicated `skill` tool.
+///   matching today's Supercharge AI flow that calls our dedicated `skill` tool.
 /// - `Passthrough`: leave the prompt verbatim. Some templates use this —
 ///   the model is trained to spot a leading `/<name>`, look it up in the
 ///   `<agent_skills>` listing, and call the Read tool on `fullPath`.
@@ -1595,7 +1595,7 @@ fn parse_slash_prefix(prompt_blocks: &[acp::ContentBlock]) -> Option<(&str, &str
 /// Build the `/loop` prompt blocks for the shell client.
 ///
 /// The wording (usage hint + scheduling instruction) is sourced from
-/// `xai-grok-tools` so it stays identical to the pager's `LoopCommand` and the
+/// `xai-Supercharge AI-tools` so it stays identical to the pager's `LoopCommand` and the
 /// two front-ends can't drift. Like the pager, there is no host-side interval
 /// default: the model derives the cadence from the request and asks when none
 /// is given.

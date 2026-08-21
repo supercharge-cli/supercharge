@@ -128,7 +128,7 @@ fn resolve_config(cfg: &AgentConfig, auth_manager: &AuthManager) -> AgentConfig 
     ensure_remote_settings_side_effects(&mut cfg, true);
     crate::util::config::sync_campaign_fields(&mut cfg);
 
-    // env var > remote settings > Local. Skip remote settings for Generic (grok -p, subagents).
+    // env var > remote settings > Local. Skip remote settings for Generic (Supercharge AI -p, subagents).
     let has_xai_auth = auth_manager.current().is_some_and(|a| a.is_xai_auth());
     if cfg.storage_mode == StorageMode::Local
         && cfg.mode != crate::agent::config::AgentMode::Generic
@@ -136,9 +136,9 @@ fn resolve_config(cfg: &AgentConfig, auth_manager: &AuthManager) -> AgentConfig 
         cfg.storage_mode =
             StorageMode::from_remote_gated(cfg.remote_settings.as_ref(), has_xai_auth);
     }
-    // A CLI/env-set Writeback still requires grok.com auth.
+    // A CLI/env-set Writeback still requires supercharge.ai auth.
     if cfg.storage_mode == StorageMode::Writeback && !has_xai_auth {
-        tracing::info!("Writeback is disabled: requires auth with grok.com");
+        tracing::info!("Writeback is disabled: requires auth with supercharge.ai");
         cfg.storage_mode = StorageMode::Local;
     }
 
@@ -220,12 +220,14 @@ fn init_process(cfg: &AgentConfig, auth_manager: &AuthManager) {
 /// when telemetry is disabled, so it's safe to call repeatedly.
 pub fn update_telemetry_config(config: &AgentConfig, auth_manager: &AuthManager) {
     // shared_client() aborts (panic = "abort") on an invalid user agent,
-    // and that string comes from the GROK_CLIENT_NAME env var. Telemetry
-    // init must never take down its caller — `grok update` is a repair
+    // and that string comes from the SUPERCHARGE_CLIENT_NAME env var. Telemetry
+    // init must never take down its caller — `supercharge update` is a repair
     // command — so validate the one user-controlled input first.
     let user_agent = crate::http::process_user_agent_string();
     if reqwest::header::HeaderValue::from_str(&user_agent).is_err() {
-        tracing::warn!("telemetry init skipped: GROK_CLIENT_NAME yields an invalid user agent");
+        tracing::warn!(
+            "telemetry init skipped: SUPERCHARGE_CLIENT_NAME yields an invalid user agent"
+        );
         return;
     }
     let grok_auth = auth_manager.current().filter(|a| a.is_xai_auth());
