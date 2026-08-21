@@ -2134,19 +2134,10 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                 )
                 .await;
             }
-            Command::Login {
-                legacy: _,
-                oauth,
-                device_auth,
-                devbox,
-            } => {
-                init_tracing_simple("cli");
-                let _otel_guard = xai_grok_telemetry::otel_layer::otel_guard();
-                let config = xai_grok_shell::config::load_agent_config_disk_only()
-                    .map_err(|e| anyhow::anyhow!("Failed to create agent config: {e}"))?;
-                xai_grok_shell::auth::run_cli_login(&config, oauth, device_auth, devbox).await?;
-                println!();
-                xai_grok_shell::instrumentation::finalize_and_exit(0);
+            Command::Login { .. } => {
+                println!(
+                    "Provider authentication is configured in the TUI. Start `supercharge`, then run `/setup`."
+                );
             }
             Command::Logout => {
                 init_tracing_simple("cli");

@@ -1,4 +1,4 @@
-//! `/login` -- log in or re-authenticate with your account.
+//! `/login` -- compatibility alias that opens the provider setup modal.
 
 use crate::app::actions::Action;
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand};
@@ -11,7 +11,7 @@ impl SlashCommand for LoginCommand {
     }
 
     fn description(&self) -> &str {
-        "Log in or re-authenticate with your account"
+        "Open `/setup` to configure the AI provider"
     }
 
     fn usage(&self) -> &str {
@@ -19,6 +19,6 @@ impl SlashCommand for LoginCommand {
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {
-        CommandResult::Action(Action::Login)
+        CommandResult::Action(Action::OpenSettings)
     }
 }

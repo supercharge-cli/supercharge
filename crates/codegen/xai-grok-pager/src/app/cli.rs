@@ -21,26 +21,23 @@ pub enum Command {
     Leader(LeaderMgmtArgs),
     /// Sign out and clear cached credentials
     Logout,
-    /// Sign in to Supercharge AI
+    /// Open the interactive provider setup flow; authentication is configured with `/setup`.
     Login {
-        /// Ignored (kept for backwards compatibility). OAuth2 is now the only auth method.
+        /// Legacy compatibility flag; provider setup is now handled by `/setup`.
         #[arg(long, hide = true)]
         legacy: bool,
-        /// Use the configured Supercharge identity provider.
-        #[arg(long = "oauth", alias = "oidc", conflicts_with_all = ["device_auth"])]
+        /// Legacy compatibility flag; provider setup is now handled by `/setup`.
+        #[arg(long = "oauth", alias = "oidc", hide = true, conflicts_with_all = ["device_auth"])]
         oauth: bool,
-        /// Use device-code authentication for headless/remote environments.
+        /// Legacy compatibility flag; provider setup is now handled by `/setup`.
         #[arg(
             long = "device-auth",
             visible_alias = "device-code",
+            hide = true,
             conflicts_with_all = ["oauth"]
         )]
         device_auth: bool,
-        /// Authenticate for remote development environments (hidden).
-        ///
-        /// Field is always present so match arms stay feature-unification-safe
-        /// across Bazel/cargo graphs; clap only registers `--devbox` when
-        /// `devbox-login` is enabled (`arg(skip)` otherwise → always false).
+        /// Legacy compatibility flag; provider setup is now handled by `/setup`.
         #[arg(skip)]
         devbox: bool,
     },
