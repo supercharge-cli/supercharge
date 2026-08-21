@@ -1166,11 +1166,11 @@ pub(crate) async fn run(
             Err(e) => tracing::warn!("failed to deserialize auth_meta: {e}"),
         }
     } else {
-        // No cached session — check if the API key is the active credential.
+        // No cached session — check if provider-key auth is the active credential.
         app.is_api_key_auth = app.auth_methods.iter().any(|m| {
-            m.id().0.as_ref() == xai_grok_shell::agent::auth_method::SUPERCHARGE_API_KEY_METHOD_ID
+            m.id().0.as_ref() == xai_grok_shell::agent::auth_method::PROVIDER_API_KEY_METHOD_ID
         });
-        // No AuthMeta on this path — API keys / external auth have no
+        // No AuthMeta on this path — provider-key / external auth have no
         // consumer billing surface. External auth also hides `/usage`.
         if app.is_api_key_auth || app.has_external_auth_provider {
             app.usage_visible = false;

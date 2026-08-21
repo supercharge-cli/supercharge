@@ -716,7 +716,7 @@ async fn eager_auth_or_login_fallback(
             // already preferred them — do not auto-open browser login.
             let has_api_key = auth_methods
                 .iter()
-                .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::XaiApiKey);
+                .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::ProviderApiKey);
             if has_api_key {
                 return (false, login_label, login_method_id, auth_start_mode, None);
             }

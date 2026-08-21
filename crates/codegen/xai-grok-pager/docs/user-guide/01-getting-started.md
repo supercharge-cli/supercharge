@@ -58,14 +58,9 @@ supercharge
 
 On first launch, Supercharge AI opens your browser to authenticate with your configured Supercharge identity provider. After you sign in, Supercharge AI stores your credentials in `~/.supercharge/auth.json`, where they persist across sessions. Supercharge AI refreshes your credentials automatically and prompts you to sign in again when they can no longer be renewed.
 
-If you prefer API key authentication (e.g., for CI/CD or environments without a browser), set the `SUPERCHARGE_API_KEY` environment variable instead:
+To configure an AI provider, run `/setup` inside the TUI. Enter the provider endpoint, model, and credentials in the setup form; Supercharge AI stores the validated configuration in `~/.supercharge/config.toml`.
 
-```bash
-export SUPERCHARGE_API_KEY="xai-..."
-supercharge
-```
-
-See [Authentication](02-authentication.md) for the full set of auth options including OIDC, external auth providers, and device code flow.
+See [Authentication](02-authentication.md) for the `/setup` provider flow and supported session-based enterprise integrations.
 
 ---
 

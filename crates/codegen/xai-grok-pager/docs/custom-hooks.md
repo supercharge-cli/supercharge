@@ -261,12 +261,12 @@ The full event envelope is POSTed as JSON. Useful for webhooks, analytics, or se
 
 ## More Examples
 
-See the built-in examples in the `xai-supercharge-hooks` crate:
+See the built-in Supercharge AI hook examples:
 
-- [Safe Shell Guard](../../../xai-supercharge-hooks/examples/hooks/safe-shell.json)
-- [No Recursive Grep](../../../xai-supercharge-hooks/examples/hooks/no-recursive-grep.json) — hard-blocks `grep -r`/`grep -R`/`rgrep` (OOM guard)
-- [Session Audit Log](../../../xai-supercharge-hooks/examples/hooks/session-log.json)
-- [Tool Activity Logger](../../../xai-supercharge-hooks/examples/hooks/tool-logger.json)
+- [Safe Shell Guard](../../../supercharge-hooks/examples/hooks/safe-shell.json)
+- [No Recursive Grep](../../../supercharge-hooks/examples/hooks/no-recursive-grep.json) — hard-blocks `grep -r`/`grep -R`/`rgrep` (OOM guard)
+- [Session Audit Log](../../../supercharge-hooks/examples/hooks/session-log.json)
+- [Tool Activity Logger](../../../supercharge-hooks/examples/hooks/tool-logger.json)
 
 Copy them to `~/.supercharge/hooks/` and customize.
 

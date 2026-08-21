@@ -132,17 +132,6 @@ pub(crate) fn map_sampling_err_to_acp(err: SamplingError) -> acp::Error {
             // explanation visible to the user without triggering the client's
             // re-auth flow on -32000.
             StatusCode::FORBIDDEN => {
-                let message = if message.contains("requires a Grok subscription")
-                    && crate::agent::auth_method::has_xai_api_key_env()
-                {
-                    format!(
-                        "{message}\n\nYou have an API key set (SUPERCHARGE_API_KEY). \
-                         Your cached OAuth session is being used instead. \
-                         To use your API key, run `Supercharge AI logout` or type /logout in the TUI."
-                    )
-                } else {
-                    message
-                };
                 // 403 is content-safety, never auth: on this setup path it stays
                 // `internal_error` → `server_error`.
                 acp::Error::internal_error().data(message)

@@ -3867,13 +3867,11 @@ pub struct ModelEntryConfig {
     pub temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
-    /// The API key for this model's provider.
-    /// If not set, falls back to env_key, then SUPERCHARGE_API_KEY.
+    /// The provider credential configured for this model through `/setup`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
-    /// Environment variable name(s) that hold the provider API key.
-    /// Accepts a string or an array (first set, non-empty value wins).
-    /// If not set, falls back to SUPERCHARGE_API_KEY.
+    /// Optional provider-specific environment names for compatibility with
+    /// custom model integrations. The global provider environment key is ignored.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env_key: Option<EnvKeys>,
     /// Which API backend to use for this model.
@@ -4800,8 +4798,8 @@ pub(crate) fn first_own_credential(
         .map(str::to_owned)
         .or_else(|| env_key.and_then(EnvKeys::resolve_value))
 }
-/// Priority: model api_key/env_key > cached auth-provider token > session
-/// token > SUPERCHARGE_API_KEY.
+/// Priority: setup-managed model credential > cached auth-provider token >
+/// session token. There is no global environment-key fallback.
 pub(crate) fn resolve_credentials(
     model: &ModelEntry,
     session_key: Option<&str>,
@@ -4826,12 +4824,6 @@ pub(crate) fn resolve_credentials(
             info.base_url.clone(),
             xai_chat_state::AuthType::SessionToken,
         )
-    } else if let Ok(key) = crate::agent::auth_method::read_xai_api_key_env() {
-        let url = model
-            .api_base_url
-            .clone()
-            .unwrap_or_else(|| info.base_url.clone());
-        (Some(key), url, xai_chat_state::AuthType::ApiKey)
     } else {
         if let Some(ref env_keys) = model.env_key
             && !env_keys.is_empty()
@@ -4839,8 +4831,8 @@ pub(crate) fn resolve_credentials(
             tracing::warn!(
                 model = %info.model,
                 env_key = %env_keys,
-                "model has env_key configured but none of the environment variables are set — \
-                 requests will have no API key",
+                "model has provider-specific env_key configured but none of the variables are set — \\
+                 requests will have no provider credential",
             );
         }
         (
@@ -5031,7 +5023,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
     }
     let xai_bearer = session_key
         .map(|s| s.to_owned())
-        .or_else(|| crate::agent::auth_method::read_xai_api_key_env().ok())
+        .or_else(|| crate::agent::auth_method::read_provider_api_key_env().ok())
         .or_else(|| endpoints.deployment_key.clone());
     if let Some(bearer) = xai_bearer {
         let entry = ModelEntry {

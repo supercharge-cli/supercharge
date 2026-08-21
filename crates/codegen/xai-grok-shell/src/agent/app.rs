@@ -355,12 +355,6 @@ pub async fn run_headless(
         .await?
     } else {
         let auth_manager = Arc::new(AuthManager::new(&grok_home::grok_home(), ctx.clone()));
-        if crate::agent::auth_method::has_xai_api_key_env()
-            && ctx.auth_provider_command.is_none()
-            && crate::auth::try_ensure_fresh_auth(ctx).await.is_none()
-        {
-            anyhow::bail!("{HEADLESS_NO_SESSION}");
-        }
         run_auth_flow(
             &auth_manager,
             ctx,

@@ -1373,7 +1373,7 @@ impl MvpAgent {
     ) -> Option<acp::AuthMethodId> {
         let preferred = self.cfg.borrow().grok_com_config.preferred_method;
         let id = auth_method::method_id_after_cached_token_unavailable(
-            auth_method::should_advertise_xai_api_key_with_env_ok(
+            auth_method::should_advertise_provider_api_key_with_env_ok(
                 self.cfg.borrow().grok_com_config.api_key_auth_disabled(),
                 self.models_manager.models().values(),
                 self.auth_manager.first_party_env_api_key_ok(),
@@ -2396,9 +2396,9 @@ impl MvpAgent {
             "WORKTREE_CONFIG_SHELL: resolved worktree type at agent startup"
         );
         if relay_sync_enabled {
-            tracing::info!("[grok] Relay sync: ENABLED");
+            tracing::info!("[Supercharge AI] Relay sync: ENABLED");
         } else if tui_mode && relay_config_enabled && !has_xai_auth {
-            tracing::info!("[grok] Relay sync: DISABLED (no auth - run 'grok login' first)");
+            tracing::info!("[Supercharge AI] Relay sync: DISABLED (no provider credentials - run `/setup`)");
         } else if tui_mode && !relay_config_enabled {
             tracing::debug!("Relay sync: DISABLED (not configured in config.toml or env)");
         } else {

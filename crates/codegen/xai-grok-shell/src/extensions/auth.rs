@@ -66,37 +66,11 @@ async fn handle_get_bearer_token(agent: &MvpAgent) -> ExtResult {
 }
 
 fn handle_get_api_key() -> ExtResult {
-    let key = crate::agent::auth_method::read_xai_api_key_env().ok();
-    ExtMethodResult::success(serde_json::json!({ "key": key }))
-        .to_ext_response()
-        .map_err(|e| acp::Error::internal_error().data(e.to_string()))
+    Err(acp::Error::method_not_found().data("Provider credentials are managed in `/setup`."))
 }
 
-fn handle_set_api_key(args: &acp::ExtRequest) -> ExtResult {
-    let params: serde_json::Value = parse_params(args)?;
-    let key = params.get("key").and_then(|v| v.as_str());
-    let grok_home = crate::util::grok_home::grok_home();
-    if let Some(k) = key {
-        if k.is_empty() {
-            crate::auth::clear_api_key(&grok_home)
-                .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
-            // SAFETY: ext_method is single-threaded per agent
-            unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
-        } else {
-            crate::auth::store_api_key(&grok_home, k)
-                .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
-            // SAFETY: ext_method is single-threaded per agent
-            unsafe { std::env::set_var("SUPERCHARGE_API_KEY", k) };
-        }
-    } else {
-        crate::auth::clear_api_key(&grok_home)
-            .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
-        // SAFETY: ext_method is single-threaded per agent
-        unsafe { std::env::remove_var("SUPERCHARGE_API_KEY") };
-    }
-    ExtMethodResult::success(serde_json::json!({ "ok": true }))
-        .to_ext_response()
-        .map_err(|e| acp::Error::internal_error().data(e.to_string()))
+fn handle_set_api_key(_args: &acp::ExtRequest) -> ExtResult {
+    Err(acp::Error::method_not_found().data("Provider credentials are managed in `/setup`."))
 }
 
 /// Handle auth code submission from TUI.

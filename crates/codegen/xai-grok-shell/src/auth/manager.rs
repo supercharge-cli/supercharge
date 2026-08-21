@@ -2666,7 +2666,7 @@ fn resolve_static_api_key(am: &AuthManager) -> Option<String> {
     ) {
         return None;
     }
-    non_empty_key(crate::agent::auth_method::read_xai_api_key_env().ok())
+    non_empty_key(crate::agent::auth_method::read_provider_api_key_env().ok())
         .or_else(|| non_empty_key(am.process_static_api_key.read().clone()))
         .or_else(|| am.cached_disk_api_key())
 }

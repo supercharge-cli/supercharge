@@ -30,7 +30,7 @@ const MIN_DEVICE_CODE_EXPIRY_FALLBACK_SECS: i64 = 10 * 60;
 pub(crate) enum DeviceCodeError {
     #[error(
         "Device-code login is not available for this deployment. \
-         Try `supercharge login` or set SUPERCHARGE_API_KEY instead."
+         Configure a supported provider through `/setup` instead."
     )]
     NotEnabled,
 }

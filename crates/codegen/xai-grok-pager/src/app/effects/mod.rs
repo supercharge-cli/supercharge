@@ -3238,7 +3238,7 @@ pub(crate) fn execute(
         }
         Effect::ShowSessionInfo { agent_id, session_id, show_resolved_model, nonce } => {
             let is_api_key_auth = session_flags.is_api_key_auth;
-            let api_key_env_set = xai_grok_shell::agent::auth_method::has_xai_api_key_env();
+            let api_key_env_set = xai_grok_shell::agent::auth_method::has_provider_api_key_env();
             let tx = acp_tx.clone();
             tasks
                 .spawn(async move {
@@ -4701,20 +4701,13 @@ fn format_session_info(
 }
 /// Auth section for `/session-info` — active login method.
 ///
-/// This reflects the process login / ACP auth method, not per-model sampling
-/// credentials (a model `api_key`/`env_key` can still own the turn).
-fn format_auth_lines(is_api_key_auth: bool, api_key_env_set: bool) -> String {
+/// This reflects the process login / ACP auth method. Provider credentials are
+/// configured through `/setup`, not through a global environment variable.
+fn format_auth_lines(is_api_key_auth: bool, _api_key_env_set: bool) -> String {
     if is_api_key_auth {
-        let method = if api_key_env_set {
-            "  Auth method: API key (SUPERCHARGE_API_KEY)\n"
-        } else {
-            "  Auth method: API key\n"
-        };
-        return format!(
-            "{method}  Run `grok login` to use your Supercharge subscription instead.\n"
-        );
+        return String::from("  Auth method: Provider credentials from `/setup`\n");
     }
-    String::from("  Auth method: OAuth\n")
+    String::from("  Auth method: Session provider\n")
 }
 /// Build the single text content block for a plain `Effect::SendPrompt`.
 ///

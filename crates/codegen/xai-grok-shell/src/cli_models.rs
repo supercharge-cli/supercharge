@@ -19,16 +19,12 @@ pub enum AuthStatus {
 }
 
 impl AuthStatus {
-    /// Banner status: env key → session → BYOK → deployment → none.
+    /// Banner status: session → setup-managed model credentials → deployment → none.
     ///
-    /// Differs from sampling (`resolve_credentials`: BYOK → session → env) so a
-    /// logged-in user sees the login host. BYOK uses
-    /// [`crate::agent::auth_method::should_advertise_xai_api_key`] so
-    /// `disable_api_key_auth` is honored.
+    /// Differs from sampling (`resolve_credentials`: model credentials → session)
+    /// so a logged-in user sees the provider host. Model credentials use the
+    /// setup-only advertisement policy.
     pub fn resolve(agent_config: &AgentConfig) -> Self {
-        if crate::agent::auth_method::has_xai_api_key_env() {
-            return Self::ApiKey;
-        }
         if agent_config.create_auth_manager().current().is_some() {
             let origin = &agent_config.grok_com_config.grok_ws_origin;
             let host = origin
@@ -38,7 +34,7 @@ impl AuthStatus {
             return Self::LoggedIn(host.to_owned());
         }
         let models = crate::agent::config::resolve_model_list(agent_config, None);
-        if crate::agent::auth_method::should_advertise_xai_api_key(
+        if crate::agent::auth_method::should_advertise_provider_api_key(
             agent_config.grok_com_config.api_key_auth_disabled(),
             models.values(),
         ) && let Some(name) = models

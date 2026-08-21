@@ -30,7 +30,7 @@ pub(crate) enum ModelFetchAuth {
 }
 
 impl ModelFetchAuth {
-    /// custom_endpoint > session > deployment > API key.
+    /// custom_endpoint > session > deployment.
     pub(crate) fn resolve(endpoints: &config::EndpointsConfig, has_cached_session: bool) -> Self {
         if endpoints.has_custom_endpoint() {
             Self::CustomEndpoint
@@ -38,8 +38,6 @@ impl ModelFetchAuth {
             Self::Session
         } else if endpoints.deployment_key.is_some() {
             Self::Deployment
-        } else if crate::agent::auth_method::has_xai_api_key_env() {
-            Self::ApiKey
         } else {
             Self::Session
         }

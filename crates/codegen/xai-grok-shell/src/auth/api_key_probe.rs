@@ -205,15 +205,12 @@ async fn probe_xai_api_key_at_url(key: &str, url: &str, timeout: Duration) -> Ap
 /// probe follows the same endpoint as turn traffic — and, in tests, the mock
 /// server fixtures already set via `SUPERCHARGE_XAI_API_BASE_URL`.
 pub(crate) async fn first_party_env_key_allows_advertise(
-    api_base_url: &str,
-    timeout: Duration,
+    _api_base_url: &str,
+    _timeout: Duration,
 ) -> bool {
-    let Ok(key) = crate::agent::auth_method::read_xai_api_key_env() else {
-        return false;
-    };
-    probe_xai_api_key(&key, api_base_url, timeout)
-        .await
-        .allows_advertise()
+    // Global environment-key authentication is intentionally disabled. Provider
+    // credentials are configured and validated through `/setup` instead.
+    false
 }
 
 #[cfg(test)]

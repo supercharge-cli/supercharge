@@ -2,7 +2,7 @@
 
 Type `/` in the prompt to open the command menu. It fuzzy-matches as you type, and picking a command runs it immediately.
 
-Commands come from two places: **shell builtins**, handled by the agent backend (xai-supercharge-shell), and **pager builtins**, handled by the pager frontend (xai-supercharge-pager). Both show up in the same menu, and any enabled skill with `user-invocable: true` appears there too. If a skill reuses a built-in name such as `login`, the built-in keeps `/login` and the skill stays available as `/plugin-name:login` — the menu badges both so the collision is visible.
+Commands come from two places: **shell builtins**, handled by the Supercharge AI agent backend, and **pager builtins**, handled by the Supercharge AI TUI frontend. Both show up in the same menu, and any enabled skill with `user-invocable: true` appears there too. If a skill reuses a built-in name such as `login`, the built-in keeps `/login` and the skill stays available as `/plugin-name:login` — the menu badges both so the collision is visible.
 
 Every command below lists its aliases where it has them. A few commands only appear when a feature or session state enables them; those cases are called out inline. The menu is also filtered by render mode — see [`/minimal` and `/fullscreen`](#minimal-and-fullscreen).
 

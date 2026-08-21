@@ -9,7 +9,7 @@ Supercharge AI reads settings from config files, environment variables, and CLI 
 Settings resolve highest-priority first:
 
 1. **CLI flags** (e.g. `--yolo`, `--model`, `--sandbox`)
-2. **Environment variables** (e.g. `SUPERCHARGE_API_KEY`, `SUPERCHARGE_MEMORY`)
+2. **Environment variables** (e.g. `SUPERCHARGE_MEMORY`, endpoint and runtime settings; provider credentials are excluded)
 3. **`requirements.toml` / MDM** (org-enforced; clamps every config layer below, including the overlay)
 4. **`SUPERCHARGE_CONFIG` / `SUPERCHARGE_CONFIG_PATH` overlay** (above `config.toml` and managed, below `requirements.toml` / MDM)
 5. **config.toml** (`~/.supercharge/config.toml`)
@@ -18,7 +18,7 @@ Settings resolve highest-priority first:
 
 Within the config-file tier, the layers merge lowest-to-highest: `managed_config.toml` → `config.toml` → `SUPERCHARGE_CONFIG` overlay → `requirements.toml` / MDM. So `requirements.toml` and MDM clamp **both** your `config.toml` and the overlay.
 
-`SUPERCHARGE_CONFIG` / `SUPERCHARGE_CONFIG_PATH` (tier 4) are config **overlays**: a merged config layer, not direct-setting environment variables like `SUPERCHARGE_API_KEY` (tier 2). They set config keys (subject to the allowlist below), so read them as part of the config-file tier rather than the env-var tier.
+`SUPERCHARGE_CONFIG` / `SUPERCHARGE_CONFIG_PATH` (tier 4) are config **overlays**: a merged config layer. Provider credentials should be entered through `/setup`, not supplied through a global environment variable.
 
 ### Injecting config with `SUPERCHARGE_CONFIG`
 
@@ -255,8 +255,7 @@ model = "model-id"                    # model identifier sent to API
 base_url = "https://api.example.com/v1"  # OpenAI-compatible endpoint
 name = "Display Name"                 # shown in model picker
 description = "Model description"      # optional
-api_key = "sk-..."                    # API key for this provider
-env_key = "SUPERCHARGE_API_KEY"               # env var(s) holding the API key; string or array (first set, non-empty wins)
+api_key = "sk-..."                    # Provider credential; enter through `/setup`
 temperature = 0.7                     # sampling temperature (0.0-2.0)
 top_p = 0.95                          # nucleus sampling parameter
 max_completion_tokens = 8192          # max tokens per response
@@ -265,7 +264,7 @@ query_params = { api-version = "2026-07-22" } # query params appended to every r
 env_http_headers = { "X-Tenant" = "TENANT_TOKEN" }    # request headers from env vars, resolved at client build
 ```
 
-Credential resolution: `api_key` > `env_key` > signed-in session token > `SUPERCHARGE_API_KEY`. See [Custom Models](11-custom-models.md#request-query-parameters) for `query_params` and `env_http_headers`, and [Sandbox Mode](18-sandbox.md#shell-environment-policy) for `[shell_environment_policy]`, which restricts the environment variables tool subprocesses inherit.
+Provider credentials are validated and stored through `/setup`; global environment-key authentication is not supported. See [Custom Models](11-custom-models.md#request-query-parameters) for `query_params` and `env_http_headers`, and [Sandbox Mode](18-sandbox.md#shell-environment-policy) for `[shell_environment_policy]`, which restricts the environment variables tool subprocesses inherit.
 
 To override a built-in model, use its name as the section key and set only the fields you need:
 
@@ -730,7 +729,7 @@ The key ones. See the README for the complete list.
 
 | Variable | Description |
 |----------|-------------|
-| `SUPERCHARGE_API_KEY` | API key from console.Voltage |
+| Provider configuration | Configure the endpoint, model, and credential through `/setup` |
 | `SUPERCHARGE_AUTH_PROVIDER_COMMAND` | External auth binary path |
 | `SUPERCHARGE_AUTH_PROVIDER_LABEL` | Display name on TUI login screen |
 | `SUPERCHARGE_AUTH_TOKEN_TTL` | Token lifetime in seconds |

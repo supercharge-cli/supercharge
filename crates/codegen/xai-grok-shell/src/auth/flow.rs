@@ -1010,7 +1010,7 @@ async fn run_cli_login_steps(
         if config.grok_com_config.oauth2.is_none() {
             // No OIDC and no oauth2 here, so `--oauth` can't help.
             anyhow::bail!(
-                "Sign-in is not available for this deployment. Set SUPERCHARGE_API_KEY instead."
+                "Provider setup is not available for this deployment. Configure a supported provider through `/setup`."
             );
         }
         // Route through the shared inner flow (not `run_device_code_login`
@@ -1143,7 +1143,7 @@ pub fn perform_logout(
     Ok(LogoutResult {
         was_logged_in,
         email,
-        api_key_still_set: crate::agent::auth_method::has_xai_api_key_env(),
+        api_key_still_set: crate::agent::auth_method::has_provider_api_key_env(),
     })
 }
 
@@ -1157,7 +1157,7 @@ pub fn run_cli_logout(config: &crate::agent::config::Config) -> anyhow::Result<(
     if !result.was_logged_in {
         eprintln!("No cached session to log out of.");
         if result.api_key_still_set {
-            eprintln!("You are authenticated via SUPERCHARGE_API_KEY (environment variable).");
+            eprintln!("Provider credentials are managed through `/setup`.");
         }
         return Ok(());
     }

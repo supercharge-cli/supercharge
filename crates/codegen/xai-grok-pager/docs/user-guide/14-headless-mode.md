@@ -211,7 +211,7 @@ failures may also include frozen spend fields when usage was recorded:
 
 ### streaming-json
 
-Newline-delimited JSON, one `type`-tagged object per line, derived from the agent's ACP session updates. Leaf field names (`toolCallId`, `kind`, `rawInput`, `rawOutput`) follow ACP; `toolName` and the `usage` line are xAI additions. Consume it by switching on `type`.
+Newline-delimited JSON, one `type`-tagged object per line, derived from the agent's ACP session updates. Leaf field names (`toolCallId`, `kind`, `rawInput`, `rawOutput`) follow ACP; `toolName` and the `usage` line are Supercharge AI additions. Consume it by switching on `type`.
 
 ```json
 {"type":"thought","data":"Analyzing the directory structure..."}
@@ -250,7 +250,7 @@ Supercharge AI may also emit `max_turns_reached` and `auto_compact_*` events; tr
 
 Newline-delimited JSON in the Messages API `stream-json` wire format. The data-bearing surface matches the Messages shape exactly. This includes the `assistant`/`user` message bodies, `usage`, `tool_use`/`tool_result`, inline web search, `stop_reason`, and the `--include-partial-messages` event framing. A consumer that reconstructs messages, reads spend, or detects errors works without changes.
 
-The `system`/`init` and terminal `result` lines carry metadata. Supercharge AI emits the fields it has real data for and omits pure-placeholder fields it cannot fill, rather than zero-filling them. As a result, those two lines may not pass strict `init`/`result` schema validation. The individual fields are listed below. Read the fidelity notes before treating any one field as authoritative. For a clean xAI-native stream with no placeholder shape, use `streaming-json`.
+The `system`/`init` and terminal `result` lines carry metadata. Supercharge AI emits the fields it has real data for and omits pure-placeholder fields it cannot fill, rather than zero-filling them. As a result, those two lines may not pass strict `init`/`result` schema validation. The individual fields are listed below. Read the fidelity notes before treating any one field as authoritative. For a clean Supercharge-native stream with no placeholder shape, use `streaming-json`.
 
 The stream opens with a `system`/`init` line, then `assistant` messages whose `message.content[]` holds `text`, `thinking`, and `tool_use` blocks, `user` messages carrying `tool_result` blocks, and a terminal `result`:
 
@@ -542,15 +542,14 @@ Key environment variables that affect headless mode:
 
 | Variable                        | Description                                                   |
 | ------------------------------- | ------------------------------------------------------------- |
-| `SUPERCHARGE_API_KEY`        | API key for authentication (required when no browser login)   |
+| Provider configuration | Credentials are configured through `/setup` and reused from `~/.supercharge/` |
 | `SUPERCHARGE_HOME`                    | Override config directory (default: `~/.supercharge`)                |
 | `SUPERCHARGE_LOG_FILE`                | Path to a log file (used verbatim as the path; works in headless and TUI, honors `RUST_LOG`) |
 | `RUST_LOG`                     | Log level filter (e.g. `debug`). Headless logs to stderr.     |
 
-For CI environments without browser access, set `SUPERCHARGE_API_KEY` with an API key from [console.Voltage](https://console.Voltage):
+For CI environments, configure the provider once with `/setup`, then run headless commands using the same `~/.supercharge/` configuration:
 
 ```bash
-export SUPERCHARGE_API_KEY="xai-..."
 supercharge -p "Run the test suite" --yolo
 ```
 
@@ -569,14 +568,7 @@ supercharge -p "Run the test suite" --yolo
 
 ## Authentication for Headless Environments
 
-For headless use, authenticate with one of:
-
-- **`SUPERCHARGE_API_KEY`**: simplest for CI. See [Environment Variables](#environment-variables-for-headless) above.
-- **`supercharge login --device-auth`** (or `--device-code`): no browser needed on the target machine.
-  See [Authentication > Device Code Flow](02-authentication.md#device-code-flow).
-- **`supercharge login`**: browser-based OAuth2 on machines with a GUI.
-
-If you've previously logged in, cached credentials are used automatically.
+For headless use, run `/setup` in the TUI first and configure the provider, model, endpoint, and credential. Headless commands then reuse the validated configuration from `~/.supercharge/`; no separate environment-key or legacy login path is required.
 
 ---
 
@@ -608,7 +600,7 @@ Supercharge AI stores data in `~/.supercharge` (override with `SUPERCHARGE_HOME`
 | Path                     | Contents                              |
 | ------------------------ | ------------------------------------- |
 | `config.toml`            | User configuration                    |
-| `auth.json`              | Cached OAuth2/API credentials         |
+| `auth.json`              | Cached session credentials             |
 | `version.json`           | Version cache for update checks       |
 | `sessions/`              | Session transcripts (SQLite)          |
 | `memory/`                | Cross-session memory store            |
@@ -624,12 +616,11 @@ Supercharge AI stores data in `~/.supercharge` (override with `SUPERCHARGE_HOME`
 
 For containers or CI, mount `~/.supercharge` read-only:
 
-- Pre-populate `auth.json` or use `SUPERCHARGE_API_KEY`
+- Pre-populate the setup-managed configuration under `~/.supercharge/`
 - Session persistence fails silently (ephemeral)
 - Update checks log a warning and skip
 
 ```bash
-export SUPERCHARGE_API_KEY="xai-..."
 export SUPERCHARGE_DISABLE_AUTOUPDATER=1
 supercharge -p "..." --no-auto-update
 ```

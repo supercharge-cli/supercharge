@@ -130,15 +130,15 @@ layers (`external_otel_disabled`, content-gate locks).
 
 ## Startup suppression (why nothing arrives for the first few seconds)
 
-Because xAI can force-disable this stream fleet-wide, the CLI holds emission
+Because the Supercharge fleet policy can force-disable this stream fleet-wide, the CLI holds emission
 closed at startup until it knows whether that switch is set — it fetches the
 fleet policy from `/v1/settings` and only then starts exporting. In a healthy
 setup that is well under a second and invisible.
 
-**The wait is bounded**, so a deployment that cannot reach xAI still exports:
+**The wait is bounded**, so a deployment that cannot reach the policy endpoint still exports:
 
 - If no fleet policy can apply at all — `[features] remote_fetch = false`, or
-  `[endpoints] cli_chat_proxy_base_url` points somewhere other than xAI — the
+  `[endpoints] cli_chat_proxy_base_url` points somewhere other than the configured policy service — the
   stream starts immediately, governed by your local configuration.
 - If the policy fetch fails or never completes (firewalled host, offline
   laptop), emission starts anyway once the attempt is exhausted, and in all
@@ -167,7 +167,7 @@ Identity attributes (`user.id`, and `organization.id` / `team.id` /
 once authentication completes. `prompt.id` (per-prompt UUID) appears on
 events only, never metrics.
 
-## Metrics (meter scope `ai.xai.supercharge_code`)
+## Metrics (meter scope `ai.supercharge.code`)
 
 | Metric | Unit | Attributes |
 |---|---|---|

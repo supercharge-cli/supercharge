@@ -41,16 +41,9 @@ To sign out, run `supercharge logout`. It takes no flags and clears your cached 
 
 ---
 
-## API Key
+## Provider Setup
 
-For CI/CD, automation, or environments without browser access, use an API key from [console.Voltage](https://console.Voltage):
-
-```bash
-export SUPERCHARGE_API_KEY="xai-..."
-supercharge
-```
-
-Supercharge AI uses the API key as a fallback when no session token is active. If you have already signed in interactively, the stored session token takes precedence. To fall back to the API key, run `supercharge logout` or delete `~/.supercharge/auth.json`.
+For interactive, headless, or automated use, start Supercharge AI and run `/setup` in the TUI. Enter the provider endpoint, model, and credential in the setup form. The validated configuration is stored under `~/.supercharge/` and is reused by subsequent sessions. Global API-key environment variables are not accepted at runtime.
 
 ---
 
@@ -152,7 +145,7 @@ JSON fields:
 
 | Field | Required | Meaning |
 |-------|----------|---------|
-| `access_token` | yes | Bearer token Supercharge AI sends to the xAI API |
+| `access_token` | yes | Bearer token Supercharge AI sends to the configured provider endpoint |
 | `refresh_token` | no | Stored for reference. Supercharge AI refreshes by re-running your binary, not with an OAuth refresh grant |
 | `expires_in` | no | Token lifetime in seconds; enables proactive refresh before expiry |
 | `issuer` | no | Identifies the token's issuer |
@@ -282,15 +275,11 @@ Supercharge AI picks up changes to `~/.supercharge/auth.json` automatically. If 
 
 ---
 
-## Auth Precedence
+## Provider Configuration
 
-Supercharge AI resolves credentials for each request in this order, highest to lowest:
+Supercharge AI configures and validates provider credentials through `/setup`. The setup form associates credentials with the selected model and endpoint and stores the resulting configuration under `~/.supercharge/`. Global API-key environment variables are not supported for runtime authentication.
 
-1. **Per-model `api_key` or `env_key`** -- set under `[model.<name>]` in `config.toml`. Wins whenever present.
-2. **Active session token** -- obtained through browser, OIDC/OAuth2, or external-provider login and stored in `~/.supercharge/auth.json`.
-3. **`SUPERCHARGE_API_KEY`** -- fallback when no session token is active.
-
-When more than one login flow is configured, Supercharge AI populates the session token from the first available source, highest to lowest:
+When more than one supported session integration is configured, Supercharge AI populates the session token from the first available source, highest to lowest:
 
 1. **External auth provider** (`auth_provider_command`)
 2. **Enterprise OIDC** -- when OIDC is configured, through `[supercharge_com_config.oidc]` in `config.toml` or the `SUPERCHARGE_OIDC_ISSUER` and `SUPERCHARGE_OIDC_CLIENT_ID` environment variables

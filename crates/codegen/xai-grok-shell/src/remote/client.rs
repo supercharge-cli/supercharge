@@ -765,14 +765,14 @@ pub(crate) fn fetch_models_blocking(
     let mut request = client.get(&source.url);
     match source.auth {
         EndpointAuth::ApiKey => {
-            let api_key = crate::agent::auth_method::read_xai_api_key_env()
+            let api_key = crate::agent::auth_method::read_provider_api_key_env()
                 .or_else(|_| {
                     auth.map(|a| a.key.clone())
                         .ok_or(std::env::VarError::NotPresent)
                 })
                 .map_err(|_| {
                     BackendError::Auth(
-                        "No API key for custom models endpoint. Set SUPERCHARGE_API_KEY.".into(),
+                        "No provider credentials are configured for the custom models endpoint. Run `/setup`.".into(),
                     )
                 })?;
             request = request.header("Authorization", format!("Bearer {}", api_key));
