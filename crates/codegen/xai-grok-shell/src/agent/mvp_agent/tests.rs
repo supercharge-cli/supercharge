@@ -2774,7 +2774,7 @@ async fn auth_type_session_based_no_current_returns_session_token() {
 async fn auth_type_xai_api_key_no_current_returns_api_key() {
     let agent = build_minimal_agent_for_tests();
     agent.set_auth_method(acp::AuthMethodId::new(
-        crate::agent::auth_method::SUPERCHARGE_API_KEY_METHOD_ID,
+        crate::agent::auth_method::PROVIDER_API_KEY_METHOD_ID,
     ));
     assert!(agent.auth_manager.current().is_none());
     assert_eq!(
@@ -2844,7 +2844,7 @@ fn build_agent_with_api_key_auth_disabled() -> MvpAgent {
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
 async fn cached_token_fallthrough_prefers_api_key_for_deployment_key() {
-    use crate::agent::auth_method::{SUPERCHARGE_API_KEY_ENV_VAR, SUPERCHARGE_API_KEY_METHOD_ID};
+    use crate::agent::auth_method::{PROVIDER_API_KEY_METHOD_ID, SUPERCHARGE_API_KEY_ENV_VAR};
     use xai_grok_test_support::EnvGuard;
     let _lockdown = EnvGuard::unset("SUPERCHARGE_DISABLE_API_KEY_AUTH");
     let _key = EnvGuard::set(SUPERCHARGE_API_KEY_ENV_VAR, "test-deployment-key");
@@ -2854,7 +2854,7 @@ async fn cached_token_fallthrough_prefers_api_key_for_deployment_key() {
             .cached_token_fallthrough_method_id()
             .as_ref()
             .map(|id| id.0.as_ref()),
-        Some(SUPERCHARGE_API_KEY_METHOD_ID),
+        Some(PROVIDER_API_KEY_METHOD_ID),
         "deployment-key user (XAI_API_KEY set, no kill switch) must fall \
          through to xai.api_key on a dead cached_token -- not interactive login",
     );

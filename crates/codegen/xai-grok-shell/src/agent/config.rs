@@ -997,6 +997,10 @@ pub struct CliConfig {
     pub installer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub npm_registry: Option<String>,
+    /// Supercharge CLI update feed base. Example: `https://cli.supercharge.com`
+    /// or a self-hosted mirror produced by `deploy/publish-cli-feed.sh`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_base_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

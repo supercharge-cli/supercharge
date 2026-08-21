@@ -90,9 +90,9 @@ use super::settings::setters::{
 };
 use super::settings::ui::{
     dispatch_confirm_reset_setting, dispatch_open_command_palette, dispatch_open_howto_guides,
-    dispatch_open_reset_confirm, dispatch_open_settings, dispatch_toggle_compact_mode,
-    dispatch_toggle_mouse_capture, dispatch_toggle_multiline, dispatch_toggle_timestamps,
-    dispatch_toggle_vim_mode,
+    dispatch_open_reset_confirm, dispatch_open_settings, dispatch_open_setup,
+    dispatch_toggle_compact_mode, dispatch_toggle_mouse_capture, dispatch_toggle_multiline,
+    dispatch_toggle_timestamps, dispatch_toggle_vim_mode,
 };
 use super::status::{
     dispatch_copy_session_id, dispatch_manage_billing, dispatch_open_gboom, dispatch_open_tutorial,
@@ -1099,6 +1099,23 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::PreviewAutoLightTheme(v) => preview_auto_light_theme(app, v),
         Action::OpenSettings => dispatch_open_settings(app, None),
         Action::OpenSettingsFocus { key } => dispatch_open_settings(app, Some(key)),
+        Action::OpenSetup => dispatch_open_setup(app),
+        Action::FetchProviderModels {
+            base_url,
+            api_key,
+            format,
+            provider_id,
+            generation,
+        } => vec![Effect::FetchProviderModels {
+            base_url,
+            api_key,
+            format,
+            provider_id,
+            generation,
+        }],
+        Action::PersistProviderSetup { setup, generation } => {
+            vec![Effect::PersistProviderSetup { setup, generation }]
+        }
         Action::PrivacyBannerOptIn => dispatch_privacy_banner_opt_in(app),
         Action::PrivacyBannerOptOut => dispatch_privacy_banner_opt_out(app),
         Action::OpenCommandPalette => dispatch_open_command_palette(app),

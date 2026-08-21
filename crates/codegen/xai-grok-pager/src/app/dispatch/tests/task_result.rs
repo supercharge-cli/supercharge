@@ -1472,6 +1472,123 @@ fn switch_model_pending_lifecycle() {
 }
 
 #[test]
+fn provider_setup_saved_switches_live_session() {
+    let mut app = test_app_with_agent();
+    let id = AgentId(0);
+    let grok_id = acp::ModelId::new(std::sync::Arc::from("grok-4.6"));
+    {
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.models.available.insert(
+            grok_id.clone(),
+            acp::ModelInfo::new(grok_id.clone(), "Grok".to_string()),
+        );
+        agent.session.models.current = Some(grok_id.clone());
+        agent.active_modal = Some(crate::views::modal::ActiveModal::ProviderSetup {
+            state: Box::new(crate::views::setup_modal::SetupModalState::new()),
+        });
+    }
+
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::ProviderSetupSaved {
+            generation: 0,
+            model_id: "deepseek-v4-flash".into(),
+            result: Ok(()),
+        }),
+        &mut app,
+    );
+
+    let setup_id = acp::ModelId::new(std::sync::Arc::from("deepseek-v4-flash"));
+    let agent = &app.agents[&id];
+    assert!(agent.active_modal.is_none());
+    assert!(agent.session.model_switch_pending);
+    assert_eq!(agent.session.models.current.as_ref(), Some(&setup_id));
+    assert!(agent.session.models.available.contains_key(&setup_id));
+    assert_eq!(effects.len(), 1);
+    assert!(
+        matches!(
+            &effects[0],
+            Effect::SwitchModel {
+                agent_id,
+                session_id,
+                model_id,
+                effort: None,
+                prev_model_id,
+            } if *agent_id == id
+                && session_id == agent.session.session_id.as_ref().unwrap()
+                && model_id == &setup_id
+                && prev_model_id.as_ref() == Some(&grok_id)
+        ),
+        "expected SwitchModel to the setup provider, got {effects:?}"
+    );
+    assert_eq!(
+        agent.toast.as_ref().map(|(msg, _)| msg.as_str()),
+        Some("Using deepseek-v4-flash")
+    );
+}
+
+#[test]
+fn provider_setup_saved_defers_switch_without_session() {
+    let mut app = test_app_with_agent();
+    let id = AgentId(0);
+    {
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.session_id = None;
+        agent.active_modal = Some(crate::views::modal::ActiveModal::ProviderSetup {
+            state: Box::new(crate::views::setup_modal::SetupModalState::new()),
+        });
+    }
+
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::ProviderSetupSaved {
+            generation: 0,
+            model_id: "deepseek-v4-flash".into(),
+            result: Ok(()),
+        }),
+        &mut app,
+    );
+
+    assert!(effects.is_empty());
+    let agent = &app.agents[&id];
+    let setup_id = acp::ModelId::new(std::sync::Arc::from("deepseek-v4-flash"));
+    assert_eq!(
+        agent.session.deferred_model_switch,
+        Some(crate::app::agent::DeferredModelSwitch {
+            model_id: setup_id.clone(),
+            effort: None,
+            prev_model_id: None,
+        })
+    );
+    assert_eq!(agent.session.models.current.as_ref(), Some(&setup_id));
+}
+
+#[test]
+fn provider_setup_saved_stays_open_on_error() {
+    let mut app = test_app_with_agent();
+    let id = AgentId(0);
+    {
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.active_modal = Some(crate::views::modal::ActiveModal::ProviderSetup {
+            state: Box::new(crate::views::setup_modal::SetupModalState::new()),
+        });
+    }
+
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::ProviderSetupSaved {
+            generation: 0,
+            model_id: "deepseek-v4-flash".into(),
+            result: Err("write failed".into()),
+        }),
+        &mut app,
+    );
+
+    assert!(effects.is_empty());
+    assert!(matches!(
+        app.agents[&id].active_modal,
+        Some(crate::views::modal::ActiveModal::ProviderSetup { .. })
+    ));
+}
+
+#[test]
 fn no_deferred_switch_means_no_extra_effect() {
     // When there is no deferred model switch, SessionCreated should
     // not produce a SwitchModel effect.

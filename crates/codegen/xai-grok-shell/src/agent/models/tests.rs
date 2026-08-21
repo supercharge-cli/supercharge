@@ -1655,6 +1655,48 @@ fn reload_from_disk_cache_ignores_legacy_cache_without_origin() {
     assert!(!mgr.models().contains_key("grok-legacy"));
 }
 
+#[test]
+fn sampling_config_prefers_byok_when_current_has_no_credentials() {
+    let mgr = test_manager();
+    let endpoints = config::EndpointsConfig::default();
+    let mut grok = ModelEntry::fallback("default", &endpoints);
+    grok.info.user_selectable = true;
+    mgr.insert_test_entry("default", grok);
+
+    let mut byok = ModelEntry::fallback("deepseek-v4-flash", &endpoints);
+    byok.info.user_selectable = true;
+    byok.info.base_url = "https://routing.run/v1".into();
+    byok.api_key = Some("sk-test".into());
+    mgr.insert_test_entry("deepseek-v4-flash", byok);
+
+    let sampling = mgr.sampling_config();
+    assert_eq!(sampling.model, "deepseek-v4-flash");
+    assert_eq!(sampling.base_url, "https://routing.run/v1");
+    assert_eq!(sampling.api_key.as_deref(), Some("sk-test"));
+}
+
+#[test]
+fn sampling_config_keeps_current_when_it_has_own_credentials() {
+    let mgr = test_manager();
+    let endpoints = config::EndpointsConfig::default();
+    let mut current = ModelEntry::fallback("default", &endpoints);
+    current.info.user_selectable = true;
+    current.info.base_url = "https://first.example/v1".into();
+    current.api_key = Some("sk-current".into());
+    mgr.insert_test_entry("default", current);
+
+    let mut other = ModelEntry::fallback("other-byok", &endpoints);
+    other.info.user_selectable = true;
+    other.info.base_url = "https://other.example/v1".into();
+    other.api_key = Some("sk-other".into());
+    mgr.insert_test_entry("other-byok", other);
+
+    let sampling = mgr.sampling_config();
+    assert_eq!(sampling.model, "default");
+    assert_eq!(sampling.base_url, "https://first.example/v1");
+    assert_eq!(sampling.api_key.as_deref(), Some("sk-current"));
+}
+
 // ── clear() resets has_fetched_real_catalog ──────────────────────
 
 #[test]

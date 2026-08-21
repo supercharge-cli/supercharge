@@ -140,6 +140,8 @@ pub(crate) struct AgentRebuildSpec {
         Option<xai_grok_tools::types::resources::ManagedGatewayToolClient>,
     pub is_non_interactive: bool,
     pub system_prompt_label: String,
+    /// Session model id (catalog key or routing slug) injected into the system prompt.
+    pub model_id: String,
     pub owner_session_id: Option<String>,
     pub parent_scheduler_handle:
         Option<xai_grok_tools::implementations::grok_build::scheduler::types::SchedulerHandle>,
@@ -239,6 +241,7 @@ impl AgentRebuildSpec {
             managed_gateway_tool_client,
             is_non_interactive,
             system_prompt_label,
+            model_id,
             owner_session_id,
             parent_scheduler_handle,
         } = self.as_ref();
@@ -270,6 +273,12 @@ impl AgentRebuildSpec {
         .with_memory_paths(memory_global_path.clone(), memory_workspace_path.clone())
         .with_is_non_interactive(*is_non_interactive)
         .with_system_prompt_label(system_prompt_label.clone())
+        .with_model_identity(
+            model_id.clone(),
+            model_prompt_name(models_manager, model_id),
+            model_prompt_backend(models_manager, model_id),
+            model_prompt_base_url(models_manager, model_id),
+        )
         .with_session_env(session_env.clone())
         .with_state_path(bridge_state_path.clone())
         .with_web_search_config(web_search_config.clone())
@@ -414,6 +423,52 @@ impl AgentRebuildSpec {
         Ok(agent)
     }
 }
+
+fn model_entry_for(
+    models_manager: &crate::agent::models::ModelsManager,
+    model_id: &str,
+) -> Option<crate::agent::config::ModelEntry> {
+    let models = models_manager.models();
+    crate::agent::config::find_model_by_id(&models, model_id).cloned()
+}
+
+fn model_prompt_name(
+    models_manager: &crate::agent::models::ModelsManager,
+    model_id: &str,
+) -> String {
+    model_entry_for(models_manager, model_id)
+        .and_then(|entry| entry.info.name.clone())
+        .filter(|name| !name.is_empty() && name != model_id)
+        .unwrap_or_default()
+}
+
+fn model_prompt_backend(
+    models_manager: &crate::agent::models::ModelsManager,
+    model_id: &str,
+) -> String {
+    model_entry_for(models_manager, model_id)
+        .map(|entry| match entry.info.api_backend {
+            xai_grok_sampling_types::ApiBackend::ChatCompletions => {
+                "chat_completions (/v1/chat/completions)".to_owned()
+            }
+            xai_grok_sampling_types::ApiBackend::Responses => {
+                "responses (/v1/responses)".to_owned()
+            }
+            xai_grok_sampling_types::ApiBackend::Messages => "messages (/v1/messages)".to_owned(),
+        })
+        .unwrap_or_default()
+}
+
+fn model_prompt_base_url(
+    models_manager: &crate::agent::models::ModelsManager,
+    model_id: &str,
+) -> String {
+    model_entry_for(models_manager, model_id)
+        .map(|entry| entry.info.base_url.clone())
+        .filter(|url| !url.is_empty())
+        .unwrap_or_default()
+}
+
 /// Build a stub [`AgentRebuildSpec`] for unit tests.
 ///
 /// Every field is set to a minimal default suitable for test `SessionActor`
@@ -481,6 +536,7 @@ pub(crate) fn test_rebuild_spec_default() -> Arc<AgentRebuildSpec> {
         managed_gateway_tool_client: None,
         is_non_interactive: false,
         system_prompt_label: xai_grok_agent::DEFAULT_SYSTEM_PROMPT_LABEL.to_string(),
+        model_id: String::new(),
         owner_session_id: Some("test-session".to_string()),
         parent_scheduler_handle: None,
     })

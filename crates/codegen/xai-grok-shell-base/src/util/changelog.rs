@@ -1,7 +1,7 @@
 //! Changelog fetching from CDN with local disk cache.
 //!
 //! Both markdown (`*.external.md`) and JSON (`*.external.json`) changelogs
-//! are published per-version to the CDN at `x.ai/cli/changelogs/`.
+//! are published per-version to the CDN at `cli.supercharge.com/changelogs/`.
 //!
 //! `ChangelogManager::fetch()` retrieves both formats in parallel and
 //! returns a `Changelog` with optional markdown + structured entries.
@@ -11,8 +11,9 @@
 
 use std::path::PathBuf;
 
-/// CDN base for all changelogs (proxies to GCS, cache-friendly).
-const CHANGELOG_BASE: &str = "https://x.ai/cli/changelogs";
+/// CDN base for all changelogs. Override with `SUPERCHARGE_UPDATE_BASE_URL`
+/// (appends `/changelogs`).
+const CHANGELOG_BASE: &str = "https://cli.supercharge.com/changelogs";
 const FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// A single structured changelog entry from the published JSON changelog.
@@ -101,7 +102,7 @@ impl ChangelogManager {
     pub fn fetch(&self) -> Changelog {
         // Always re-resolve from env so a caller holding an older manager
         // (or OnceLock lag) still reads the live harness home.
-        Self::from_env_home().fetch_with(changelog_offline(), CHANGELOG_BASE)
+        Self::from_env_home().fetch_with(changelog_offline(), &changelog_base())
     }
 
     /// Fetch using this manager's already-resolved cache paths, an explicit
@@ -204,6 +205,53 @@ fn changelog_offline() -> bool {
     std::env::var_os("SUPERCHARGE_CHANGELOG_OFFLINE").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
+/// CDN base for changelog fetches: [`CHANGELOG_BASE`] unless
+/// `SUPERCHARGE_UPDATE_BASE_URL` points the whole update feed elsewhere
+/// (self-hosted mirror or loopback test server), in which case changelogs are
+/// read from `<base>/changelogs` alongside the rest of the feed.
+fn changelog_base() -> String {
+    std::env::var("SUPERCHARGE_UPDATE_BASE_URL")
+        .ok()
+        .map(|base| base.trim().trim_end_matches('/').to_owned())
+        .filter(|base| !base.is_empty())
+        .and_then(|base| {
+            if is_allowed_changelog_base(&base) {
+                Some(format!("{base}/changelogs"))
+            } else {
+                tracing::warn!(
+                    "SUPERCHARGE_UPDATE_BASE_URL ignored for changelogs: must be https:// or loopback http://"
+                );
+                None
+            }
+        })
+        .unwrap_or_else(|| CHANGELOG_BASE.to_owned())
+}
+
+/// HTTPS (no credentials in the URL) or loopback HTTP. Mirrors the update
+/// crate's `is_allowed_update_base` so both read the env var the same way;
+/// duplicated rather than shared because `xai-grok-update` sits above this
+/// crate in the dependency graph.
+fn is_allowed_changelog_base(base: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(base) else {
+        return false;
+    };
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return false;
+    }
+    match parsed.scheme() {
+        "https" => parsed.host_str().is_some_and(|h| !h.is_empty()),
+        // Parsed, not prefix-matched: `http://127.0.0.1:9@evil.com` looks
+        // loopback but its host is `evil.com`.
+        "http" => match parsed.host() {
+            Some(url::Host::Domain(host)) => host == "localhost",
+            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+            None => false,
+        },
+        _ => false,
+    }
+}
+
 fn read_cache(path: &std::path::Path) -> Option<String> {
     std::fs::read_to_string(path)
         .ok()
@@ -295,6 +343,21 @@ mod tests {
             Some("# fallback md\n"),
             "CDN miss must fall back to the seeded CHANGELOG.md"
         );
+    }
+
+    #[test]
+    fn changelog_base_rejects_untrusted_overrides() {
+        // Only https:// and loopback http:// may redirect changelog fetches;
+        // anything else falls back to the compiled CDN base.
+        assert!(is_allowed_changelog_base("https://mirror.example.com/cli"));
+        assert!(is_allowed_changelog_base("http://127.0.0.1:8080"));
+        assert!(is_allowed_changelog_base("http://localhost:8080"));
+        assert!(!is_allowed_changelog_base("http://example.com"));
+        assert!(!is_allowed_changelog_base("https://user:pw@example.com"));
+        // Userinfo trick: loopback prefix, non-loopback host.
+        assert!(!is_allowed_changelog_base("http://127.0.0.1:9@evil.com"));
+        assert!(!is_allowed_changelog_base("ftp://example.com"));
+        assert!(!is_allowed_changelog_base("not a url"));
     }
 
     #[test]

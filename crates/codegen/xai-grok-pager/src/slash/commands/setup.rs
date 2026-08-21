@@ -1,24 +1,23 @@
-//! `/setup` -- open Supercharge AI's interactive setup and configuration modal.
+//! `/setup` -- open Supercharge AI's provider setup wizard.
 //!
-//! Setup intentionally reuses the mature settings surface so provider, model,
-//! terminal, privacy, and workspace preferences are edited through the same
-//! validated UI and persistence path as `/settings`.
+//! The wizard asks for an OpenAI-compatible base URL and API key, fetches
+//! `/models` from that endpoint, and lets the user pick the default model.
 use crate::app::actions::Action;
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand};
-/// Open the Supercharge AI setup modal.
+/// Open the Supercharge AI provider setup wizard.
 pub struct SetupCommand;
 impl SlashCommand for SetupCommand {
     fn name(&self) -> &str {
         "setup"
     }
     fn description(&self) -> &str {
-        "Configure Supercharge AI, providers, models, and workspace settings"
+        "Configure provider base URL, API key, and choose a model from that API"
     }
     fn usage(&self) -> &str {
         "/setup"
     }
     fn run(&self, _ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {
-        CommandResult::Action(Action::OpenSettings)
+        CommandResult::Action(Action::OpenSetup)
     }
 }
 #[cfg(test)]
@@ -50,7 +49,7 @@ mod tests {
         };
         assert!(matches!(
             SetupCommand.run(&mut ctx, ""),
-            CommandResult::Action(Action::OpenSettings)
+            CommandResult::Action(Action::OpenSetup)
         ));
     }
     #[test]
@@ -67,7 +66,7 @@ mod tests {
         };
         assert!(matches!(
             SetupCommand.run(&mut ctx, "provider pollinations"),
-            CommandResult::Action(Action::OpenSettings)
+            CommandResult::Action(Action::OpenSetup)
         ));
     }
 }

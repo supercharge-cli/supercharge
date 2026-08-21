@@ -56,7 +56,7 @@ use crate::app::actions::{
     DoctorFixTarget, DoctorPlanningOutcome, Effect, ProbedAttachment, SubagentKillOutcome,
     TaskResult,
 };
-use crate::app::agent::AgentId;
+use crate::app::agent::{AgentId, DeferredModelSwitch};
 use crate::app::app_view::{ActiveView, AppView, AuthState};
 use crate::scrollback::block::RenderBlock;
 use agent_client_protocol as acp;
@@ -1462,5 +1462,83 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             app.show_toast(&format!("\u{2717} Could not save {key}: {scrubbed}"));
             vec![]
         }
+        TaskResult::ProviderModelsFetched { generation, result } => {
+            if let Some(agent) = get_active_agent_mut(app)
+                && let Some(crate::views::modal::ActiveModal::ProviderSetup { state }) =
+                    agent.active_modal.as_mut()
+            {
+                state.apply_fetched_models(generation, result);
+            }
+            vec![]
+        }
+        TaskResult::ProviderSetupSaved {
+            generation,
+            model_id,
+            result,
+        } => {
+            let saved = get_active_agent_mut(app)
+                .and_then(|agent| match agent.active_modal.as_mut() {
+                    Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                        Some(state.apply_saved(generation, result.clone()))
+                    }
+                    _ => None,
+                })
+                .unwrap_or(false);
+            if !saved {
+                return vec![];
+            }
+            switch_session_to_setup_model(app, &model_id)
+        }
+    }
+}
+
+/// Insert the `/setup` model into the live catalog and switch the session onto
+/// it. Config persist already wrote `[models].default`; this is the in-session
+/// half so the next prompt does not keep using the previous Grok proxy model.
+fn switch_session_to_setup_model(app: &mut AppView, model_id: &str) -> Vec<Effect> {
+    let ActiveView::Agent(aid) = app.active_view else {
+        return vec![];
+    };
+    let id = acp::ModelId::new(std::sync::Arc::from(model_id));
+    let info = acp::ModelInfo::new(id.clone(), model_id.to_string());
+    let (session_id, prev_id) = {
+        let Some(agent) = app.agents.get_mut(&aid) else {
+            return vec![];
+        };
+        agent.active_modal = None;
+        agent
+            .session
+            .models
+            .available
+            .insert(id.clone(), info.clone());
+        let prev_id = agent.session.models.current.clone();
+        agent.session.models.set_current(id.clone(), None);
+        agent.session.user_model_preference = Some(id.clone());
+        (agent.session.session_id.clone(), prev_id)
+    };
+    app.models.available.insert(id.clone(), info);
+    app.models.set_current(id.clone(), None);
+    app.show_toast(&format!("Using {model_id}"));
+
+    if let Some(session_id) = session_id {
+        if let Some(agent) = app.agents.get_mut(&aid) {
+            agent.session.model_switch_pending = true;
+        }
+        vec![Effect::SwitchModel {
+            agent_id: aid,
+            session_id,
+            model_id: id,
+            effort: None,
+            prev_model_id: prev_id,
+        }]
+    } else if let Some(agent) = app.agents.get_mut(&aid) {
+        agent.session.deferred_model_switch = Some(DeferredModelSwitch {
+            model_id: id,
+            effort: None,
+            prev_model_id: prev_id,
+        });
+        vec![]
+    } else {
+        vec![]
     }
 }

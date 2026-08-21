@@ -431,13 +431,13 @@ This setting doesn't touch `[features] telemetry`, `trace_upload`, or your exter
 
 ### `/setup`
 
-Open Supercharge AI’s interactive setup modal. Use it to review and change provider, model, terminal, workspace, privacy, and other local configuration through the validated settings UI. The command never writes API keys into the configuration file; provider credentials are referenced by environment-variable name and must be supplied by the host secret store.
+Open Supercharge AI’s provider setup wizard. Pick a built-in provider (OpenAI, Anthropic, OpenRouter, Pollinations, Ollama, and others) or Custom. For Custom, enter an OpenAI-compatible base URL. Then enter the API key. Supercharge fetches `/models` from that API (Anthropic-compatible providers use `x-api-key`) and lists chat models so you can choose the default, or type a custom model id. The chosen model, endpoint, format, and credential are stored under `~/.supercharge/config.toml`, and the current session switches to that model immediately.
 
 ```
 /setup
 ```
 
-`/settings` remains available for the same configuration surface, with aliases `/config`, `/preferences`, and `/prefs`.
+`/login` opens the same wizard. `/settings` remains available for terminal, workspace, and other local configuration, with aliases `/config`, `/preferences`, and `/prefs`.
 
 ### `/timestamps`
 

@@ -43,7 +43,7 @@ To sign out, run `supercharge logout`. It takes no flags and clears your cached 
 
 ## Provider Setup
 
-For interactive, headless, or automated use, start Supercharge AI and run `/setup` in the TUI. Enter the provider endpoint, model, and credential in the setup form. The validated configuration is stored under `~/.supercharge/` and is reused by subsequent sessions. Global API-key environment variables are not accepted at runtime.
+For interactive, headless, or automated use, start Supercharge AI and run `/setup` in the TUI. Enter the provider base URL and API key. Supercharge fetches models from that API and lets you choose one. The validated configuration is stored under `~/.supercharge/` and is reused by subsequent sessions. Global API-key environment variables are not accepted at runtime.
 
 ---
 

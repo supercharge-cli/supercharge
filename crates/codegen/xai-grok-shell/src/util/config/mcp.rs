@@ -1817,12 +1817,23 @@ pub fn mcp_server_defined_at(path: &std::path::Path, server_name: &str) -> bool 
 
 /// Synchronously load `[cli] npm_registry` from config.toml.
 pub fn load_npm_registry_sync() -> Option<String> {
+    load_cli_string_sync("npm_registry")
+}
+
+/// Synchronously load `[cli] update_base_url` from config.toml.
+pub fn load_update_base_url_sync() -> Option<String> {
+    load_cli_string_sync("update_base_url")
+}
+
+fn load_cli_string_sync(key: &str) -> Option<String> {
     let root: TomlValue = crate::config::load_effective_config().ok()?;
     if let TomlValue::Table(table) = root
         && let Some(TomlValue::Table(cli)) = table.get("cli")
     {
-        cli.get("npm_registry")
+        cli.get(key)
             .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
     } else {
         None

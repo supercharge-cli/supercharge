@@ -1003,16 +1003,36 @@ impl ModelsManager {
     }
 
     /// Build a `SamplingConfig` from the current model + auth state.
+    ///
+    /// When the selected catalog model has no setup/BYOK credentials, prefer a
+    /// user-selectable catalog entry that does (configured default first). That
+    /// keeps `/setup` providers on their own endpoint instead of the bundled
+    /// Grok Responses proxy.
     pub fn sampling_config(&self) -> SamplingConfig {
         let config = self.inner.cfg.read().clone();
         let auth_manager = self.inner.auth_manager.as_ref();
         let current_model_id = self.current_model_id();
         let all_models = self.models();
         let fallback;
-        let current_model = match all_models
-            .get(current_model_id.0.as_ref())
-            .or_else(|| all_models.values().next())
-        {
+        let selected = all_models.get(current_model_id.0.as_ref());
+        let current_model = if selected.is_some_and(|model| model.has_own_credentials()) {
+            selected
+        } else {
+            let default_byok = config
+                .models
+                .default
+                .as_deref()
+                .and_then(|id| all_models.get(id))
+                .filter(|model| model.has_own_credentials());
+            default_byok
+                .or_else(|| {
+                    all_models
+                        .values()
+                        .find(|model| model.has_own_credentials() && model.info.user_selectable)
+                })
+                .or(selected)
+        };
+        let current_model = match current_model.or_else(|| all_models.values().next()) {
             Some(m) => m,
             None => {
                 tracing::warn!("no models available in catalog; defaulting to bundled model");

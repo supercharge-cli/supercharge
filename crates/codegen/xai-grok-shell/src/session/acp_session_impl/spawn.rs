@@ -942,6 +942,7 @@ pub(crate) async fn spawn_session_actor(
         managed_gateway_tool_client: managed_gateway_tool_client.clone(),
         is_non_interactive: startup_hints.non_interactive,
         system_prompt_label,
+        model_id: sampling_config.model.clone(),
         owner_session_id: Some(session_info.id.0.to_string()),
         parent_scheduler_handle: if startup_hints.is_subagent {
             parent_scheduler_handle

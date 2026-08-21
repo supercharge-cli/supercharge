@@ -151,9 +151,7 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
-        Line::from(
-            "I'm Supercharge AI, an interactive CLI agent built to help with software engineering tasks.",
-        ),
+        Line::from("I'm Supercharge AI, an interactive CLI agent built by R3AP3R Editz."),
         Line::from(
             "This sample is here so you can drag over real text while watching raw mouse events.",
         ),

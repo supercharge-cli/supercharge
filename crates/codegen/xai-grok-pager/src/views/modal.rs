@@ -288,6 +288,11 @@ pub enum ActiveModal {
     Settings {
         state: Box<crate::views::settings_modal::SettingsModalState>,
     },
+    /// Provider setup wizard (`/setup`). Boxed so the editor/model list
+    /// does not inflate every modal match.
+    ProviderSetup {
+        state: Box<crate::views::setup_modal::SetupModalState>,
+    },
     /// Tabbed usage / session-info modal (`/usage`, `/session-info`,
     /// `/context`, context-bar click). Boxed — holds fetched snapshots.
     UsageInfo {
@@ -364,6 +369,8 @@ pub enum PaletteCommand {
     OpenExtensionsTab(crate::views::extensions_modal::ExtensionsTab),
     /// Open the settings modal.
     OpenSettings,
+    /// Open the provider setup wizard.
+    OpenSetup,
     /// Open the Agents modal (listing all agent definitions).
     OpenAgentsModal,
 }
@@ -540,6 +547,11 @@ pub(crate) fn default_palette_entries(
             command: PaletteCommand::SlashCommand("/theme ".into()),
         },
         PaletteEntry {
+            label: "Provider setup".into(),
+            shortcut: "/setup".into(),
+            command: PaletteCommand::OpenSetup,
+        },
+        PaletteEntry {
             label: "Settings".into(),
             shortcut: "F2".into(),
             command: PaletteCommand::OpenSettings,
@@ -652,6 +664,7 @@ impl ActiveModal {
             | ActiveModal::ShortcutsHelp { .. }
             | ActiveModal::MemoryBrowser { .. }
             | ActiveModal::Settings { .. }
+            | ActiveModal::ProviderSetup { .. }
             | ActiveModal::UsageInfo { .. }
             | ActiveModal::RememberNoteReview { .. } => vec![],
         }
@@ -682,6 +695,7 @@ impl ActiveModal {
             ActiveModal::ShortcutsHelp { .. } => "Keyboard Shortcuts",
             ActiveModal::MemoryBrowser { .. } => "Memory",
             ActiveModal::Settings { .. } => crate::views::settings_modal::MODAL_TITLE,
+            ActiveModal::ProviderSetup { .. } => crate::views::setup_modal::MODAL_TITLE,
             ActiveModal::ResetSettingsConfirm { .. } => "Reset setting?",
             ActiveModal::RememberNoteReview { .. } => "Memory Note",
             ActiveModal::UsageInfo { .. } => "Usage",

@@ -485,6 +485,8 @@ pub enum FinishReason {
     ToolCalls,
     ContentFilter,
     FunctionCall,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

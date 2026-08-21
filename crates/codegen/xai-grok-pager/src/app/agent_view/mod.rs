@@ -2077,6 +2077,37 @@ pub(super) fn apply_settings_outcome(
         SettingsKeyOutcome::Unchanged => InputOutcome::Unchanged,
     }
 }
+
+pub(super) fn apply_setup_outcome(
+    agent: &mut AgentView,
+    outcome: crate::views::setup_modal::SetupOutcome,
+) -> InputOutcome {
+    use crate::views::setup_modal::SetupOutcome;
+    match outcome {
+        SetupOutcome::Close => {
+            agent.active_modal = None;
+            InputOutcome::Changed
+        }
+        SetupOutcome::Fetch {
+            base_url,
+            api_key,
+            format,
+            provider_id,
+            generation,
+        } => InputOutcome::Action(Action::FetchProviderModels {
+            base_url,
+            api_key,
+            format,
+            provider_id,
+            generation,
+        }),
+        SetupOutcome::Save { setup, generation } => {
+            InputOutcome::Action(Action::PersistProviderSetup { setup, generation })
+        }
+        SetupOutcome::Changed => InputOutcome::Changed,
+        SetupOutcome::Unchanged => InputOutcome::Unchanged,
+    }
+}
 /// Whether this key event represents `#` (hash).
 ///
 /// Most terminals report `KeyCode::Char('#')` directly. Under the Kitty

@@ -4448,6 +4448,62 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::FetchProviderModels { base_url, api_key, format, provider_id, generation } => {
+            tasks
+                .spawn(async move {
+                    let result = tokio::task::spawn_blocking(move || {
+                            xai_grok_shell::agent::provider_setup::fetch_provider_models(
+                                    &base_url,
+                                    &api_key,
+                                    format,
+                                    Some(provider_id.as_str()).filter(|id| !id.is_empty()),
+                                )
+                                .map_err(|error| error.to_string())
+                        })
+                        .await
+                        .map_err(|error| format!("task join error: {error}"))
+                        .and_then(|result| result);
+                    TaskResult::ProviderModelsFetched {
+                        generation,
+                        result,
+                    }
+                });
+        }
+        Effect::PersistProviderSetup { setup, generation } => {
+            let tx = acp_tx.clone();
+            tasks
+                .spawn(async move {
+                    let model_id = setup.model_id.clone();
+                    let result = tokio::task::spawn_blocking(move || {
+                            xai_grok_shell::agent::provider_setup::persist_provider_setup(
+                                    &setup,
+                                )
+                                .map_err(|error| error.to_string())
+                        })
+                        .await
+                        .map_err(|error| format!("task join error: {error}"))
+                        .and_then(|result| result);
+                    if result.is_ok() {
+                        let req = acp::ExtRequest::new(
+                            "x.ai/internal/reload_models",
+                            serde_json::value::to_raw_value(&serde_json::json!({}))
+                                .expect("serialize reload_models params")
+                                .into(),
+                        );
+                        if let Err(error) = acp_send(req, &tx).await {
+                            tracing::warn!(
+                                error = %error,
+                                "provider setup: model catalog reload failed"
+                            );
+                        }
+                    }
+                    TaskResult::ProviderSetupSaved {
+                        generation,
+                        model_id,
+                        result,
+                    }
+                });
+        }
         Effect::FetchPromptSuggestion { agent_id, generation, model, session_id } => {
             let tx = acp_tx.clone();
             tasks

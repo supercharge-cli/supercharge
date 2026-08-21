@@ -52,7 +52,7 @@ pub(crate) fn subagent_template() -> Zeroizing<String> {
 }
 
 /// The compact system prompt used after conversation compaction.
-pub const COMPACT_SYSTEM_PROMPT: &str = "You are an AI coding agent. You operate in a workspace with a provided codebase.\n\n\
+pub const COMPACT_SYSTEM_PROMPT: &str = "You are Supercharge AI, a coding agent built by R3AP3R Editz. You operate in a workspace with a provided codebase.\n\n\
      Your main goal is to complete the user's request, denoted within the <user_query> tag.";
 
 #[cfg(test)]
@@ -125,6 +125,10 @@ mod tests {
             "memory_enabled": false,
             "is_non_interactive": false,
             "system_prompt_label": crate::prompt::context::DEFAULT_SYSTEM_PROMPT_LABEL,
+            "model_id": "example-model",
+            "model_name": "Example Model",
+            "model_backend": "chat_completions (/v1/chat/completions)",
+            "model_base_url": "https://api.example.com/v1",
         })
     }
 
@@ -322,13 +326,26 @@ mod tests {
             prompt.contains("user_query"),
             "Must reference user_query tag"
         );
+        assert!(
+            prompt.contains("built by R3AP3R Editz"),
+            "Must identify R3AP3R Editz as the builder"
+        );
+        assert!(
+            prompt.contains("example-model"),
+            "Must include the original model id"
+        );
+        assert!(
+            !prompt.contains("released by xAI") && !prompt.contains("built by Voltage"),
+            "Must not claim xAI or Voltage identity"
+        );
+        assert!(!prompt.contains("Frank"), "Must not use a fake model name");
     }
 
     #[test]
     fn test_compact_prompt_matches_expected() {
         assert_eq!(
             COMPACT_SYSTEM_PROMPT,
-            "You are an AI coding agent. You operate in a workspace with a provided codebase.\n\n\
+            "You are Supercharge AI, a coding agent built by R3AP3R Editz. You operate in a workspace with a provided codebase.\n\n\
              Your main goal is to complete the user's request, denoted within the <user_query> tag.",
         );
     }

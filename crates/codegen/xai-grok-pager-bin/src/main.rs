@@ -2328,6 +2328,11 @@ fn build_update_config() -> UpdateConfig {
     config.npm_registry = std::env::var(obfstr::obfstr!("SUPERCHARGE_NPM_REGISTRY"))
         .ok()
         .or_else(xai_grok_shell::util::config::load_npm_registry_sync);
+    config.update_base_url = std::env::var("SUPERCHARGE_UPDATE_BASE_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(xai_grok_shell::util::config::load_update_base_url_sync);
     if let Ok(root) = xai_grok_shell::config::load_effective_config_disk_only()
         && let Some(ch) = xai_grok_shell::util::config::channel_from_toml_opt(&root)
     {

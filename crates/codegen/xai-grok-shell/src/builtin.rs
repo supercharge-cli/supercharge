@@ -1,9 +1,6 @@
 //! Built-in files extracted to `~/.supercharge/` on startup.
 
-const BUILTIN_FILES: &[(&str, &str)] = &[(
-    "README.md",
-    include_str!("../README-supercharge.md"),
-)];
+const BUILTIN_FILES: &[(&str, &str)] = &[("README.md", include_str!("../README-supercharge.md"))];
 
 /// Extract built-in metadata files to `~/.supercharge/` on startup.
 ///

@@ -152,8 +152,20 @@ pub struct PromptContext {
     /// Not the UI picker name. Defaults to [`DEFAULT_SYSTEM_PROMPT_LABEL`].
     #[serde(default = "default_system_prompt_label")]
     pub system_prompt_label: String,
+    /// Catalog / routing model id for this session (e.g. `deepseek-v4-flash`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub model_id: String,
+    /// Optional display name when it differs from [`Self::model_id`].
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub model_name: String,
+    /// Human-readable API backend, including the path (e.g. `chat_completions (/v1/chat/completions)`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub model_backend: String,
+    /// Inference base URL for this model. No credentials.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub model_base_url: String,
 }
-/// Default identity on the primary system prompt (`You are Supercharge AI`).
+/// Default identity on the primary system prompt (`You are Supercharge AI`, built by R3AP3R Editz).
 pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = "Supercharge AI";
 fn default_system_prompt_label() -> String {
     DEFAULT_SYSTEM_PROMPT_LABEL.to_string()
@@ -197,6 +209,10 @@ impl Default for PromptContext {
             current_date: None,
             is_non_interactive: false,
             system_prompt_label: default_system_prompt_label(),
+            model_id: String::new(),
+            model_name: String::new(),
+            model_backend: String::new(),
+            model_base_url: String::new(),
         }
     }
 }
@@ -255,6 +271,10 @@ impl PromptContext {
             "current_date": self.current_date.as_deref().unwrap_or(""),
             "is_non_interactive": self.is_non_interactive,
             "system_prompt_label": self.system_prompt_label.as_str(),
+            "model_id": self.model_id.as_str(),
+            "model_name": self.model_name.as_str(),
+            "model_backend": self.model_backend.as_str(),
+            "model_base_url": self.model_base_url.as_str(),
             "include_browser_verification": self.include_browser_verification,
         })
     }
@@ -335,6 +355,10 @@ mod tests {
             current_date: None,
             is_non_interactive: false,
             system_prompt_label: default_system_prompt_label(),
+            model_id: String::new(),
+            model_name: String::new(),
+            model_backend: String::new(),
+            model_base_url: String::new(),
         }
     }
     #[test]
@@ -659,6 +683,10 @@ mod tests {
             current_date: None,
             is_non_interactive: false,
             system_prompt_label: default_system_prompt_label(),
+            model_id: String::new(),
+            model_name: String::new(),
+            model_backend: String::new(),
+            model_base_url: String::new(),
         }
     }
     #[test]

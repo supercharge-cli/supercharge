@@ -52,6 +52,7 @@ fn make_config(channel: &str) -> UpdateConfig {
         alpha_test_key: None,
         channel: channel.to_string(),
         npm_registry: None,
+        update_base_url: None,
     }
 }
 

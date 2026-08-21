@@ -748,6 +748,7 @@ impl From<FinishReason> for StopReason {
             FinishReason::Length => StopReason::Length,
             FinishReason::ToolCalls | FinishReason::FunctionCall => StopReason::ToolCalls,
             FinishReason::ContentFilter => StopReason::ContentFilter,
+            FinishReason::Unknown => StopReason::Stop,
         }
     }
 }

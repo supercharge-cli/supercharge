@@ -53,22 +53,26 @@ fn manual_install_cmd(channel: &str) -> String {
     if channel == "enterprise" {
         // Enterprise has its own bootstrap script; it needs no channel env.
         return if cfg!(windows) {
-            "irm https://x.ai/cli/enterprise-install.ps1 | iex".to_string()
+            "irm https://cli.supercharge.com/enterprise-install.ps1 | iex".to_string()
         } else {
-            "curl -fsSL https://x.ai/cli/enterprise-install.sh | bash".to_string()
+            "curl -fsSL https://cli.supercharge.com/enterprise-install.sh | bash".to_string()
         };
     }
     if is_stable_channel(channel) || !safe {
         return if cfg!(windows) {
-            "irm https://x.ai/cli/install.ps1 | iex".to_string()
+            "irm https://cli.supercharge.com/install.ps1 | iex".to_string()
         } else {
-            "curl -fsSL https://x.ai/cli/install.sh | bash".to_string()
+            "curl -fsSL https://cli.supercharge.com/install.sh | bash".to_string()
         };
     }
     if cfg!(windows) {
-        format!("$env:SUPERCHARGE_CHANNEL='{channel}'; irm https://x.ai/cli/install.ps1 | iex")
+        format!(
+            "$env:SUPERCHARGE_CHANNEL='{channel}'; irm https://cli.supercharge.com/install.ps1 | iex"
+        )
     } else {
-        format!("curl -fsSL https://x.ai/cli/install.sh | SUPERCHARGE_CHANNEL='{channel}' bash")
+        format!(
+            "curl -fsSL https://cli.supercharge.com/install.sh | SUPERCHARGE_CHANNEL='{channel}' bash"
+        )
     }
 }
 
@@ -1375,7 +1379,8 @@ async fn download_cli_artifact_from_gcs(
 
 /// Returns the version that was actually activated.
 async fn install_internal(target: Option<&str>, update_config: &UpdateConfig) -> Result<String> {
-    let bases = crate::version::cli_base_urls();
+    let bases =
+        crate::version::cli_base_urls_with_override(update_config.update_base_url.as_deref());
     let base_refs: Vec<&str> = bases.iter().map(String::as_str).collect();
     install_internal_from_bases(target, update_config, &base_refs).await
 }

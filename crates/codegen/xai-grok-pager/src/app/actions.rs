@@ -623,6 +623,21 @@ pub enum Action {
     /// Open the settings modal (F2, `/settings`, command palette).
     /// If already open, closes it instead of stacking.
     OpenSettings,
+    /// Open the provider setup wizard (`/setup`, `/login`).
+    OpenSetup,
+    /// Fetch `/models` for the in-progress setup wizard.
+    FetchProviderModels {
+        base_url: String,
+        api_key: String,
+        format: xai_grok_shell::agent::provider_setup::SetupWireFormat,
+        provider_id: String,
+        generation: u64,
+    },
+    /// Persist the chosen provider + model from the setup wizard.
+    PersistProviderSetup {
+        setup: xai_grok_shell::agent::provider_setup::ProviderSetup,
+        generation: u64,
+    },
     /// Open settings on a registry key: its chooser, or the browse row when
     /// the setting is locked.
     OpenSettingsFocus {
@@ -2203,6 +2218,19 @@ pub enum Effect {
         target: DoctorFixTarget,
         plan: Box<crate::diagnostics::FixPlan>,
     },
+    /// Fetch `/models` from a user-supplied OpenAI-compatible endpoint.
+    FetchProviderModels {
+        base_url: String,
+        api_key: String,
+        format: xai_grok_shell::agent::provider_setup::SetupWireFormat,
+        provider_id: String,
+        generation: u64,
+    },
+    /// Persist the `/setup` provider + selected model to config.toml.
+    PersistProviderSetup {
+        setup: xai_grok_shell::agent::provider_setup::ProviderSetup,
+        generation: u64,
+    },
 }
 /// Wire params for `x.ai/session/rename`. Shared with the effect executor
 /// so dispatch tests can pin the exact camelCase payload.
@@ -3031,6 +3059,15 @@ pub enum TaskResult {
     DoctorFixApplied {
         target: DoctorFixTarget,
         result: Result<crate::diagnostics::FixOutcome, String>,
+    },
+    ProviderModelsFetched {
+        generation: u64,
+        result: Result<Vec<xai_grok_shell::agent::provider_setup::ProviderModel>, String>,
+    },
+    ProviderSetupSaved {
+        generation: u64,
+        model_id: String,
+        result: Result<(), String>,
     },
 }
 #[cfg(test)]

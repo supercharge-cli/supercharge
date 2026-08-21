@@ -92,7 +92,7 @@ env_http_headers = { "X-Tenant" = "TENANT_TOKEN" }    # Optional provider reques
 
 ### Credential Resolution
 
-Supercharge AI validates and stores provider credentials through `/setup`. The setup form associates each credential with its selected model and endpoint; global environment-key authentication is not supported. Signed-in session credentials may still be used for supported enterprise integrations configured through the same setup flow.
+Supercharge AI validates and stores provider credentials through `/setup`. The wizard asks for the provider base URL and API key, fetches the live model list from that API, and writes the selected model into `~/.supercharge/config.toml`. Global environment-key authentication is not used. Signed-in session credentials may still be used for supported enterprise integrations.
 
 ### Context Window
 

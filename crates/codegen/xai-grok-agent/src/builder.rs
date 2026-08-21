@@ -83,6 +83,10 @@ pub struct AgentBuilder {
     memory_workspace_path: Option<String>,
     is_non_interactive: bool,
     system_prompt_label: String,
+    model_id: String,
+    model_name: String,
+    model_backend: String,
+    model_base_url: String,
     session_env: Option<Arc<HashMap<String, String>>>,
     state_path: Option<PathBuf>,
     memory_backend: Option<Arc<dyn xai_grok_tools::types::memory_backend::MemoryBackend>>,
@@ -227,6 +231,10 @@ impl AgentBuilder {
             memory_workspace_path: None,
             is_non_interactive: false,
             system_prompt_label: crate::prompt::context::DEFAULT_SYSTEM_PROMPT_LABEL.to_string(),
+            model_id: String::new(),
+            model_name: String::new(),
+            model_backend: String::new(),
+            model_base_url: String::new(),
             session_env: None,
             state_path: None,
             memory_backend: None,
@@ -371,6 +379,19 @@ impl AgentBuilder {
     }
     pub fn with_system_prompt_label(mut self, label: impl Into<String>) -> Self {
         self.system_prompt_label = label.into();
+        self
+    }
+    pub fn with_model_identity(
+        mut self,
+        model_id: impl Into<String>,
+        model_name: impl Into<String>,
+        model_backend: impl Into<String>,
+        model_base_url: impl Into<String>,
+    ) -> Self {
+        self.model_id = model_id.into();
+        self.model_name = model_name.into();
+        self.model_backend = model_backend.into();
+        self.model_base_url = model_base_url.into();
         self
     }
     pub fn with_reminder_policy(mut self, policy: ReminderPolicy) -> Self {
@@ -1185,6 +1206,10 @@ impl AgentBuilder {
             ),
             is_non_interactive: self.is_non_interactive,
             system_prompt_label: self.system_prompt_label,
+            model_id: self.model_id,
+            model_name: self.model_name,
+            model_backend: self.model_backend,
+            model_base_url: self.model_base_url,
         };
         let system_prompt = prompt_context
             .render(&tool_bridge)

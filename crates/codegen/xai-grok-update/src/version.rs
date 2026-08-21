@@ -13,24 +13,30 @@ const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
 const NPM_PACKAGE: &str = "@xai-official/grok";
 pub const GH_RELEASE_REPO: &str = "xai-org-shared/supercharge-core";
 
-/// Primary CLI base URL: Cloudflare-fronted x.ai endpoint with edge caching
-/// for binaries and origin-respecting no-cache for channel pointers.
-pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://x.ai/cli";
+/// Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and binaries
+/// (`/grok-{version}-{os}-{arch}`). Host this layout yourself with
+/// `deploy/publish-cli-feed.sh`.
+pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://cli.supercharge.com";
 
-/// Fallback CLI base URL: direct GCS, used when the primary is unreachable
-/// (Cloudflare outage, regional CF egress issue, DNS hijack, etc.).
-pub(crate) const CLI_BASE_URL_FALLBACK: &str =
-    "https://storage.googleapis.com/supercharge-core-public-artifacts/cli";
+/// Fallback Supercharge artifact host when the primary feed is unreachable.
+pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://assets.supercharge.com/cli";
 
 /// CLI base URLs in preference order. Callers (channel-pointer fetch, binary
 /// download, in-app updater) try each in turn and stop at the first success.
 pub(crate) const CLI_BASE_URLS: &[&str] = &[CLI_BASE_URL_PRIMARY, CLI_BASE_URL_FALLBACK];
 
-/// [`CLI_BASE_URLS`] with a test seam: `SUPERCHARGE_CLI_BASE_URL` points fetches
-/// and downloads at one base (env-seam family of `SUPERCHARGE_INSTALLER`).
-/// Loopback-only: downloads are verified by a smoke test, not a checksum,
-/// so an arbitrary redirect base would be an install-hijack vector.
+/// [`CLI_BASE_URLS`] with override seams:
+/// - `SUPERCHARGE_CLI_BASE_URL` — loopback-only test harness
+/// - `SUPERCHARGE_UPDATE_BASE_URL` — Supercharge-owned or self-hosted HTTPS feed
+/// - `config_override` — `[cli].update_base_url` from config.toml
+///
+/// A configured Supercharge/self-host URL replaces the compiled defaults
+/// (no mixed xAI fallback). Loopback test seams stay single-base.
 pub(crate) fn cli_base_urls() -> Vec<String> {
+    cli_base_urls_with_override(None)
+}
+
+pub(crate) fn cli_base_urls_with_override(config_override: Option<&str>) -> Vec<String> {
     if let Ok(base) = std::env::var("SUPERCHARGE_CLI_BASE_URL") {
         let base = base.trim();
         if is_loopback_base(base) {
@@ -40,7 +46,39 @@ pub(crate) fn cli_base_urls() -> Vec<String> {
             tracing::warn!("SUPERCHARGE_CLI_BASE_URL ignored: only loopback bases are honored");
         }
     }
+    if let Ok(base) = std::env::var("SUPERCHARGE_UPDATE_BASE_URL") {
+        let base = base.trim();
+        if is_allowed_update_base(base) {
+            return vec![base.trim_end_matches('/').to_owned()];
+        }
+        if !base.is_empty() {
+            tracing::warn!(
+                "SUPERCHARGE_UPDATE_BASE_URL ignored: must be https:// or loopback http://"
+            );
+        }
+    }
+    if let Some(base) = config_override.map(str::trim).filter(|s| !s.is_empty()) {
+        if is_allowed_update_base(base) {
+            return vec![base.trim_end_matches('/').to_owned()];
+        }
+        tracing::warn!("cli.update_base_url ignored: must be https:// or loopback http://");
+    }
     CLI_BASE_URLS.iter().map(|s| (*s).to_owned()).collect()
+}
+
+/// HTTPS hosts (no userinfo) or loopback HTTP. Used for Supercharge's own
+/// update feed and self-hosted mirrors.
+pub(crate) fn is_allowed_update_base(base: &str) -> bool {
+    if is_loopback_base(base) {
+        return true;
+    }
+    let Ok(u) = url::Url::parse(base) else {
+        return false;
+    };
+    u.scheme() == "https"
+        && u.username().is_empty()
+        && u.password().is_none()
+        && u.host_str().is_some_and(|h| !h.is_empty())
 }
 
 /// Parsed, not prefix-matched: `http://127.0.0.1:9@evil.com` starts with a
@@ -79,6 +117,9 @@ pub struct UpdateConfig {
     pub channel: String,
     /// Custom npm registry URL. When set, passed as `--registry=` to npm CLI.
     pub npm_registry: Option<String>,
+    /// Self-hosted Supercharge CLI feed base (`https://host/cli`). When set,
+    /// channel pointers and binaries are fetched only from this host.
+    pub update_base_url: Option<String>,
 }
 
 impl UpdateConfig {
@@ -90,6 +131,7 @@ impl UpdateConfig {
             alpha_test_key: None,
             channel: "stable".to_string(),
             npm_registry: None,
+            update_base_url: None,
         }
     }
 }
@@ -258,7 +300,7 @@ async fn fetch_gh_release_latest(exclude_pre: bool) -> Result<String> {
     Ok(version)
 }
 
-/// Fetch the latest version from a public CLI channel pointer.
+/// Fetch the latest version from public CLI channel pointers.
 ///
 /// Reads `{base}/{channel}` which contains a plain-text semver string
 /// (e.g. `0.1.181`). No auth required — the upstream bucket is public.
@@ -267,13 +309,12 @@ async fn fetch_gh_release_latest(exclude_pre: bool) -> Result<String> {
 /// returns the semver-greater, matching the behavior of the npm and
 /// gh-release paths.
 ///
-/// Tries each base URL in [`CLI_BASE_URLS`] in order and stops at the first
-/// success. Each individual base also retries up to 3 times with exponential
-/// backoff (1s, 2s, 4s) on transient failures before falling through to the
-/// next base.
-pub(crate) async fn fetch_gcs_version(channel: &str) -> Result<String> {
+/// Tries each base in `bases` (see [`cli_base_urls_with_override`]) in order
+/// and stops at the first success. Each individual base also retries up to 3
+/// times with exponential backoff (1s, 2s, 4s) on transient failures before
+/// falling through to the next base.
+async fn fetch_gcs_version_from_bases(channel: &str, bases: &[String]) -> Result<String> {
     let mut last_err: Option<anyhow::Error> = None;
-    let bases = cli_base_urls();
     for (i, base) in bases.iter().enumerate() {
         match fetch_gcs_version_from_base(channel, base).await {
             Ok(v) => return Ok(v),
@@ -292,8 +333,8 @@ pub(crate) async fn fetch_gcs_version(channel: &str) -> Result<String> {
     Err(last_err.unwrap_or_else(|| anyhow::anyhow!("no CLI base URLs configured")))
 }
 
-/// Test-only entry point: same as [`fetch_gcs_version`] but reads from
-/// `base_url` instead of the hardcoded GCS bucket.
+/// Test-only entry point: same as [`fetch_gcs_version_from_bases`] but reads
+/// from a single `base_url` instead of the configured base list.
 #[doc(hidden)]
 pub async fn fetch_gcs_version_from_base(channel: &str, base_url: &str) -> Result<String> {
     if channel == "alpha" {
@@ -381,7 +422,10 @@ pub async fn fetch_latest_version(installer: &str, config: &UpdateConfig) -> Res
     match installer {
         "npm" => fetch_npm_version(&config.channel, config.npm_registry.as_deref()).await,
         "gh-release" => fetch_gh_release_version(&config.channel).await,
-        _ => fetch_gcs_version(&config.channel).await,
+        _ => {
+            let bases = cli_base_urls_with_override(config.update_base_url.as_deref());
+            fetch_gcs_version_from_bases(&config.channel, &bases).await
+        }
     }
 }
 
@@ -614,8 +658,23 @@ mod tests {
         assert!(!is_loopback_base("http://127.0.0.1:9@evil.com"));
         assert!(!is_loopback_base("http://localhost.evil.com:80"));
         assert!(!is_loopback_base("https://x.ai/cli"));
+        assert!(!is_loopback_base("https://cli.supercharge.com"));
         assert!(!is_loopback_base("http://192.168.1.1:80"));
         assert!(!is_loopback_base(""));
+    }
+
+    #[test]
+    fn allowed_update_base_accepts_https_and_loopback() {
+        use super::is_allowed_update_base;
+        assert!(is_allowed_update_base("https://cli.supercharge.com"));
+        assert!(is_allowed_update_base("https://assets.supercharge.com/cli"));
+        assert!(is_allowed_update_base("http://127.0.0.1:8971"));
+        assert!(!is_allowed_update_base("http://example.com/cli"));
+        assert!(!is_allowed_update_base(
+            "https://user:pass@evil.example/cli"
+        ));
+        assert!(!is_allowed_update_base("file:///tmp/cli"));
+        assert!(!is_allowed_update_base(""));
     }
 
     use super::*;

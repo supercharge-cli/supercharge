@@ -765,17 +765,18 @@ pub(crate) fn fetch_models_blocking(
     let mut request = client.get(&source.url);
     match source.auth {
         EndpointAuth::ApiKey => {
-            let api_key = crate::agent::auth_method::read_provider_api_key_env()
-                .or_else(|_| {
-                    auth.map(|a| a.key.clone())
-                        .ok_or(std::env::VarError::NotPresent)
+            let api_key = crate::config::load_effective_config()
+                .ok()
+                .and_then(|config| {
+                    crate::agent::provider_setup::provider_setup_api_key_from_toml(&config)
                 })
-                .map_err(|_| {
-                    BackendError::Auth(
-                        "No provider credentials are configured for the custom models endpoint. Run `/setup`.".into(),
-                    )
-                })?;
-            request = request.header("Authorization", format!("Bearer {}", api_key));
+                .or_else(|| {
+                    auth.map(|a| a.key.clone())
+                        .filter(|key| !key.trim().is_empty())
+                });
+            if let Some(api_key) = api_key {
+                request = request.header("Authorization", format!("Bearer {}", api_key));
+            }
         }
         EndpointAuth::Session => {
             let auth = auth.ok_or_else(|| {

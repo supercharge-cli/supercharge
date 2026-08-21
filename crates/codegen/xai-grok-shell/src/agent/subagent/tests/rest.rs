@@ -2293,7 +2293,7 @@ async fn read_parent_sampling_config_fallback_no_resolver_for_api_key_method() {
     let mut ctx = ctx_with_toggle(HashMap::new());
     ctx.parent_chat_state = None;
     ctx.auth_method_id = acp::AuthMethodId::new(
-        crate::agent::auth_method::SUPERCHARGE_API_KEY_METHOD_ID,
+        crate::agent::auth_method::PROVIDER_API_KEY_METHOD_ID,
     );
     ctx.sampling_config.model = "grok-4.5".to_string();
     ctx.sampling_config.base_url = "https://api.x.ai/v1".to_string();

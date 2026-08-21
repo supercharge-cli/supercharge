@@ -19,6 +19,6 @@ impl SlashCommand for LoginCommand {
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {
-        CommandResult::Action(Action::OpenSettings)
+        CommandResult::Action(Action::OpenSetup)
     }
 }

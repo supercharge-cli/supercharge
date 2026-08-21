@@ -12,7 +12,9 @@ use ratatui::text::Line;
 use ratatui::widgets::Widget;
 
 use super::actions::Action;
-use super::agent_view::{AgentView, active_contexts_for_pane, apply_settings_outcome};
+use super::agent_view::{
+    AgentView, active_contexts_for_pane, apply_settings_outcome, apply_setup_outcome,
+};
 use super::app_view::InputOutcome;
 
 use crate::theme::Theme;
@@ -400,6 +402,11 @@ impl AgentView {
             }
         }
 
+        if let ActiveModal::ProviderSetup { state } = modal {
+            let out = crate::views::setup_modal::handle_setup_key(state, key);
+            return apply_setup_outcome(self, out);
+        }
+
         // Settings: route through ModalWindow chrome, then delegate.
         if let ActiveModal::Settings { state } = modal {
             // Sub-mode short-circuit: FilterFocused, PickingEnum, PickingGroup,
@@ -518,6 +525,7 @@ impl AgentView {
             | ActiveModal::ShortcutsHelp { .. }
             | ActiveModal::MemoryBrowser { .. }
             | ActiveModal::Settings { .. }
+            | ActiveModal::ProviderSetup { .. }
             | ActiveModal::UsageInfo { .. }
             | ActiveModal::ResetSettingsConfirm { .. }
             | ActiveModal::RememberNoteReview { .. } => unreachable!(),
@@ -565,6 +573,15 @@ impl AgentView {
         };
         if let Some(outcome) = settings_outcome {
             return apply_settings_outcome(self, outcome);
+        }
+        let setup_outcome = match self.active_modal.as_mut() {
+            Some(ActiveModal::ProviderSetup { state }) => {
+                Some(crate::views::setup_modal::handle_setup_paste(state, text))
+            }
+            _ => None,
+        };
+        if let Some(outcome) = setup_outcome {
+            return apply_setup_outcome(self, outcome);
         }
         if self.active_modal.is_some() {
             InputOutcome::Changed
@@ -865,6 +882,10 @@ impl AgentView {
                             PaletteCommand::OpenSettings => {
                                 self.active_modal = None;
                                 InputOutcome::Action(Action::OpenSettings)
+                            }
+                            PaletteCommand::OpenSetup => {
+                                self.active_modal = None;
+                                InputOutcome::Action(Action::OpenSetup)
                             }
                             PaletteCommand::OpenAgentsModal => {
                                 self.active_modal = None;
@@ -1602,6 +1623,19 @@ impl AgentView {
                     );
                     return apply_settings_outcome(self, out);
                 }
+                _ => return InputOutcome::Changed,
+            }
+        }
+
+        if let Some(ActiveModal::ProviderSetup { state }) = &mut self.active_modal {
+            let outcome =
+                mw::handle_modal_mouse(&mut state.window, mouse.kind, mouse.column, mouse.row);
+            match outcome {
+                ModalWindowOutcome::CloseRequested => {
+                    self.active_modal = None;
+                    return InputOutcome::Changed;
+                }
+                ModalWindowOutcome::Unhandled => return InputOutcome::Unchanged,
                 _ => return InputOutcome::Changed,
             }
         }
@@ -2473,6 +2507,8 @@ impl AgentView {
                 );
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
+            } else if let modal::ActiveModal::ProviderSetup { state } = active_modal {
+                crate::views::setup_modal::render_setup_modal(buf, area, state);
             } else if let modal::ActiveModal::Settings {
                 state: settings_state,
             } = active_modal
