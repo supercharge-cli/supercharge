@@ -2501,6 +2501,14 @@ fn app_turn_completion_events() -> [Value; 2] {
     ]
 }
 
+fn app_reply_completion_events(text: &str) -> [Value; 3] {
+    [
+        json!({"type":"text", "text":text, "final":true}),
+        json!({"type":"status", "busy":false}),
+        json!({"type":"done"}),
+    ]
+}
+
 fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
     let Some(object) = payload.as_object_mut() else {
         return;
@@ -2562,25 +2570,25 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
                 app_record_message(&state, &session_id, "assistant", &prepared).await;
+                for event in app_reply_completion_events(&prepared) {
+                    app_emit(&state, &chat_id, event);
+                }
+            }
+            Ok(_) => {
+                for event in app_reply_completion_events("") {
+                    app_emit(&state, &chat_id, event);
+                }
+            }
+            Err(error) => {
                 app_emit(
                     &state,
                     &chat_id,
-                    json!({"type":"text", "text":prepared, "final":true}),
+                    json!({"type":"error", "text":error.to_string()}),
                 );
+                for event in app_turn_completion_events() {
+                    app_emit(&state, &chat_id, event);
+                }
             }
-            Ok(_) => app_emit(
-                &state,
-                &chat_id,
-                json!({"type":"text", "text":"", "final":true}),
-            ),
-            Err(error) => app_emit(
-                &state,
-                &chat_id,
-                json!({"type":"error", "text":error.to_string()}),
-            ),
-        }
-        for event in app_turn_completion_events() {
-            app_emit(&state, &chat_id, event);
         }
     });
 }
@@ -3067,8 +3075,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        DaemonSession, RateLimiter, app_chat_id, app_turn_completion_events, connection_readiness,
-        default_session_status, load_daemon_sessions, persist_daemon_sessions,
+        DaemonSession, RateLimiter, app_chat_id, app_reply_completion_events,
+        app_turn_completion_events, connection_readiness, default_session_status,
+        load_daemon_sessions, persist_daemon_sessions,
     };
     use std::collections::BTreeMap;
 
@@ -3098,6 +3107,17 @@ mod tests {
         assert_eq!(events[0]["type"], "status");
         assert_eq!(events[0]["busy"], false);
         assert_eq!(events[1]["type"], "done");
+    }
+
+    #[test]
+    fn app_reply_event_sequence_sends_final_text_before_completion() {
+        let events = app_reply_completion_events("mobile-visible answer");
+        assert_eq!(events[0]["type"], "text");
+        assert_eq!(events[0]["text"], "mobile-visible answer");
+        assert_eq!(events[0]["final"], true);
+        assert_eq!(events[1]["type"], "status");
+        assert_eq!(events[1]["busy"], false);
+        assert_eq!(events[2]["type"], "done");
     }
 
     #[test]
