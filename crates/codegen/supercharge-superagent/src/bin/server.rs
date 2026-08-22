@@ -643,10 +643,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/approval/check", get(check_approval))
         .route("/v1/exec", post(execute))
         .route("/v1/jobs", get(list_jobs).post(enqueue_job))
-        .route("/v1/jobs/:id", get(get_job))
+        .route("/v1/jobs/{id}", get(get_job))
         .route("/v1/schedules", get(list_schedules).post(create_schedule))
-        .route("/v1/schedules/:id", delete(delete_schedule))
-        .route("/v1/schedules/:id/enabled", post(toggle_schedule))
+        .route("/v1/schedules/{id}", delete(delete_schedule))
+        .route("/v1/schedules/{id}/enabled", post(toggle_schedule))
         .route("/v1/daemon/status", get(daemon_status))
         .route("/v1/emergency-stop", post(emergency_stop))
         .route("/v1/emergency-resume", post(emergency_resume))
@@ -675,11 +675,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memory/export", get(export_memory))
         .route("/v1/memory/restore", post(restore_memory))
         .route("/v1/memory/compact", post(compact_memory))
-        .route("/v1/memory/:id", delete(delete_memory))
+        .route("/v1/memory/{id}", delete(delete_memory))
         .route("/v1/media/parse", post(parse_media))
         .route("/v1/integrations/skills", get(list_skills))
-        .route("/v1/integrations/skills/:name", get(get_skill))
-        .route("/v1/integrations/skills/:name/run", post(run_skill))
+        .route("/v1/integrations/skills/{name}", get(get_skill))
+        .route("/v1/integrations/skills/{name}/run", post(run_skill))
         .route("/v1/integrations/mcp", get(list_mcp_servers))
         .route("/v1/integrations/mcp/tools", get(list_mcp_tools))
         .route("/v1/integrations/mcp/call", post(call_mcp_tool))
@@ -691,12 +691,12 @@ async fn main() -> anyhow::Result<()> {
             get(list_e2b_sessions).post(create_e2b_session),
         )
         .route(
-            "/v1/e2b/sessions/:id",
+            "/v1/e2b/sessions/{id}",
             get(get_e2b_session).delete(delete_e2b_session),
         )
-        .route("/v1/e2b/sessions/:id/exec", post(execute_e2b_session))
-        .route("/v1/e2b/sessions/:id/wake", post(wake_e2b_session))
-        .route("/v1/e2b/sessions/:id/pause", post(pause_e2b_session));
+        .route("/v1/e2b/sessions/{id}/exec", post(execute_e2b_session))
+        .route("/v1/e2b/sessions/{id}/wake", post(wake_e2b_session))
+        .route("/v1/e2b/sessions/{id}/pause", post(pause_e2b_session));
     let protected = protected
         .layer(RequestBodyLimitLayer::new(25 * 1024 * 1024))
         .layer(middleware::from_fn(add_security_headers))
