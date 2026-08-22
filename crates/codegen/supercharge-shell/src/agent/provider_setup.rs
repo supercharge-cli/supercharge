@@ -804,6 +804,31 @@ mod tests {
     }
 
     #[test]
+    fn model_list_is_sorted_and_deduplicated() {
+        let body = json!({
+            "data": [
+                {"id": "z-model"},
+                {"id": "a-model", "name": "A model"},
+                {"id": "z-model", "name": "Duplicate"},
+            ]
+        });
+        let models = parse_openai_models_list(&body);
+        assert_eq!(
+            models,
+            vec![
+                ProviderModel {
+                    id: "a-model".to_owned(),
+                    name: "A model".to_owned(),
+                },
+                ProviderModel {
+                    id: "z-model".to_owned(),
+                    name: "z-model".to_owned(),
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn persist_writes_provider_and_model_tables() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
@@ -833,5 +858,28 @@ mod tests {
             provider_setup_api_key_from_toml(&parsed).as_deref(),
             Some("sk-test")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn persist_restricts_config_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://api.example.com/v1".to_owned(),
+                api_key: "test-key".to_owned(),
+                model_id: "test-model".to_owned(),
+                model_name: "Test model".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: CUSTOM_PROVIDER_ID.to_owned(),
+            },
+        )
+        .unwrap();
+        let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "provider credentials must be owner-only");
     }
 }
