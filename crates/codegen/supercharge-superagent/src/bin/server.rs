@@ -127,6 +127,7 @@ struct AppState {
     app_events: broadcast::Sender<Value>,
     app_event_seq: Arc<AtomicU64>,
     sessions: Arc<Mutex<BTreeMap<String, DaemonSession>>>,
+    active_app_session: Arc<Mutex<String>>,
     session_state_path: String,
     metrics: Arc<RuntimeMetrics>,
     #[cfg(feature = "e2b")]
@@ -138,6 +139,22 @@ struct DaemonSession {
     id: String,
     created_at: u64,
     updated_at: u64,
+    #[serde(default)]
+    title: String,
+    #[serde(default = "default_session_status")]
+    status: String,
+    #[serde(default)]
+    messages: Vec<ConversationMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConversationMessage {
+    role: String,
+    content: String,
+}
+
+fn default_session_status() -> String {
+    "active".to_owned()
 }
 
 fn load_daemon_sessions(path: &str) -> anyhow::Result<BTreeMap<String, DaemonSession>> {
@@ -530,6 +547,15 @@ async fn main() -> anyhow::Result<()> {
     let session_state_path = env::var("SUPERAGENT_SESSION_STATE")
         .unwrap_or_else(|_| "./runtime/sessions.json".to_owned());
     let sessions = load_daemon_sessions(&session_state_path)?;
+    let active_app_session = if sessions.contains_key("owner") {
+        "owner".to_owned()
+    } else {
+        sessions
+            .keys()
+            .next_back()
+            .cloned()
+            .unwrap_or_else(|| "owner".to_owned())
+    };
     let state = AppState {
         config: SuperagentConfig::default(),
         started_at: unix_seconds(),
@@ -546,6 +572,7 @@ async fn main() -> anyhow::Result<()> {
         app_events,
         app_event_seq: Arc::new(AtomicU64::new(0)),
         sessions: Arc::new(Mutex::new(sessions)),
+        active_app_session: Arc::new(Mutex::new(active_app_session)),
         session_state_path,
         metrics: runtime_metrics(),
         #[cfg(feature = "e2b")]
@@ -655,6 +682,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/computer/browser", get(browser_stream))
         .route("/v1/computer/control", post(browser_control))
         .route("/v1/status", get(app_status))
+        .route("/v1/commands", get(app_commands))
+        .route(
+            "/v1/conversations",
+            get(list_app_conversations).post(create_app_conversation),
+        )
+        .route("/v1/conversations/new", post(create_app_conversation))
+        .route("/v1/conversations/switch", post(switch_app_conversation))
+        .route("/v1/conversations/{session_id}", get(get_app_conversation))
         .route("/v1/chat", post(app_chat))
         .route("/v1/chat/events", get(app_chat_events))
         .route("/v1/chat/stop", post(app_chat_stop))
@@ -2393,6 +2428,12 @@ struct AppChatRequest {
     files: Option<Vec<AppChatFile>>,
 }
 
+#[derive(Debug, Deserialize)]
+struct SwitchConversationRequest {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+}
+
 /// The cloud-infra mobile app listens on the owner conversation unless it
 /// explicitly supplies a chat id. Keep daemon defaults aligned with that
 /// contract so a submitted turn and its event stream use the same channel.
@@ -2400,6 +2441,64 @@ fn app_chat_id(chat_id: Option<String>) -> String {
     chat_id
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "owner".to_owned())
+}
+
+fn app_session_title(prompt: &str) -> String {
+    let compact = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut title = compact.chars().take(60).collect::<String>();
+    if compact.chars().count() > 60 {
+        title.push('…');
+    }
+    if title.is_empty() {
+        "Conversation".to_owned()
+    } else {
+        title
+    }
+}
+
+async fn app_active_session(state: &AppState) -> String {
+    state.active_app_session.lock().await.clone()
+}
+
+async fn app_record_message(state: &AppState, session_id: &str, role: &str, content: &str) {
+    let now = unix_seconds();
+    let mut sessions = state.sessions.lock().await;
+    let session = sessions
+        .entry(session_id.to_owned())
+        .or_insert_with(|| DaemonSession {
+            id: session_id.to_owned(),
+            created_at: now,
+            updated_at: now,
+            title: app_session_title(content),
+            status: default_session_status(),
+            messages: Vec::new(),
+        });
+    session.updated_at = now;
+    if session.title.is_empty() || session.title == "New conversation" {
+        session.title = app_session_title(content);
+    }
+    session.messages.push(ConversationMessage {
+        role: role.to_owned(),
+        content: content.to_owned(),
+    });
+    let _ = persist_daemon_sessions(&state.session_state_path, &sessions);
+}
+
+fn app_conversation_summary(session: &DaemonSession) -> Value {
+    json!({
+        "sessionId": session.id,
+        "title": if session.title.is_empty() { "Conversation" } else { &session.title },
+        "createdAt": session.created_at.saturating_mul(1000),
+        "updatedAt": session.updated_at.saturating_mul(1000),
+        "status": if session.status.is_empty() { "active" } else { &session.status },
+    })
+}
+
+fn app_turn_completion_events() -> [Value; 2] {
+    [
+        json!({"type":"status", "busy":false}),
+        json!({"type":"done"}),
+    ]
 }
 
 fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
@@ -2455,13 +2554,14 @@ fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
     Ok(paths)
 }
 
-fn spawn_app_turn(state: Arc<AppState>, chat_id: String, prompt: String) {
+fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) {
     app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
     tokio::spawn(async move {
-        let result = run_supercharge_prompt(format!("app:{chat_id}").as_str(), &prompt).await;
+        let result = run_supercharge_prompt(format!("app:{session_id}").as_str(), &prompt).await;
         match result {
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
+                app_record_message(&state, &session_id, "assistant", &prepared).await;
                 app_emit(
                     &state,
                     &chat_id,
@@ -2479,8 +2579,9 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, prompt: String) {
                 json!({"type":"error", "text":error.to_string()}),
             ),
         }
-        app_emit(&state, &chat_id, json!({"type":"status", "busy":false}));
-        app_emit(&state, &chat_id, json!({"type":"done"}));
+        for event in app_turn_completion_events() {
+            app_emit(&state, &chat_id, event);
+        }
     });
 }
 
@@ -2510,6 +2611,9 @@ async fn create_session(
         id: id.clone(),
         created_at: now,
         updated_at: now,
+        title: "Conversation".to_owned(),
+        status: default_session_status(),
+        messages: Vec::new(),
     };
     {
         let mut sessions = state.sessions.lock().await;
@@ -2532,11 +2636,152 @@ async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
     }))
 }
 
+async fn app_commands() -> Json<Value> {
+    Json(json!({"commands":[
+        {"command":"/new", "description":"Start a new conversation"},
+        {"command":"/start", "description":"Resume this conversation"},
+        {"command":"/stop", "description":"Pause agent turns"},
+        {"command":"/status", "description":"Show daemon control state"},
+        {"command":"/model", "description":"Inspect or set the requested model"},
+        {"command":"/help", "description":"Show available commands"}
+    ]}))
+}
+
+async fn list_app_conversations(State(state): State<Arc<AppState>>) -> Json<Value> {
+    let active = app_active_session(&state).await;
+    let sessions = state.sessions.lock().await;
+    let mut conversations = sessions
+        .values()
+        .map(app_conversation_summary)
+        .collect::<Vec<_>>();
+    conversations.sort_by(|left, right| {
+        right
+            .get("updatedAt")
+            .and_then(Value::as_u64)
+            .cmp(&left.get("updatedAt").and_then(Value::as_u64))
+    });
+    Json(json!({"active":active,"conversations":conversations}))
+}
+
+async fn get_app_conversation(
+    State(state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions.get(&session_id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "conversation not found".to_owned(),
+            }),
+        )
+    })?;
+    let messages = session
+        .messages
+        .iter()
+        .map(|message| json!({"role":message.role,"content":message.content}))
+        .collect::<Vec<_>>();
+    Ok(Json(json!({"sessionId":session.id,"messages":messages})))
+}
+
+async fn create_app_conversation(State(state): State<Arc<AppState>>) -> Json<Value> {
+    let now = unix_seconds();
+    let previous = app_active_session(&state).await;
+    let session_id = format!("chat-{}", uuid::Uuid::new_v4());
+    let conversations = {
+        let mut sessions = state.sessions.lock().await;
+        if let Some(current) = sessions.get_mut(&previous) {
+            current.status = "closed".to_owned();
+            current.updated_at = now;
+        }
+        sessions.insert(
+            session_id.clone(),
+            DaemonSession {
+                id: session_id.clone(),
+                created_at: now,
+                updated_at: now,
+                title: "New conversation".to_owned(),
+                status: default_session_status(),
+                messages: Vec::new(),
+            },
+        );
+        let _ = persist_daemon_sessions(&state.session_state_path, &sessions);
+        sessions
+            .values()
+            .map(app_conversation_summary)
+            .collect::<Vec<_>>()
+    };
+    *state.active_app_session.lock().await = session_id.clone();
+    app_emit(
+        &state,
+        "owner",
+        json!({"type":"conversation","sessionId":session_id,"previousSessionId":previous,"conversations":conversations}),
+    );
+    Json(json!({"active":app_active_session(&state).await,"conversations":conversations}))
+}
+
+async fn switch_app_conversation(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<SwitchConversationRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if request.session_id.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "sessionId is required".to_owned(),
+            }),
+        ));
+    }
+    let now = unix_seconds();
+    let previous = app_active_session(&state).await;
+    let conversations = {
+        let mut sessions = state.sessions.lock().await;
+        if !sessions.contains_key(&request.session_id) {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "conversation not found".to_owned(),
+                }),
+            ));
+        }
+        for (id, session) in sessions.iter_mut() {
+            session.status = if id == &request.session_id {
+                "active"
+            } else {
+                "closed"
+            }
+            .to_owned();
+            if id == &request.session_id {
+                session.updated_at = now;
+            }
+        }
+        let _ = persist_daemon_sessions(&state.session_state_path, &sessions);
+        sessions
+            .values()
+            .map(app_conversation_summary)
+            .collect::<Vec<_>>()
+    };
+    *state.active_app_session.lock().await = request.session_id.clone();
+    app_emit(
+        &state,
+        "owner",
+        json!({"type":"conversation","sessionId":request.session_id,"previousSessionId":previous,"conversations":conversations}),
+    );
+    Ok(Json(
+        json!({"active":app_active_session(&state).await,"conversations":conversations}),
+    ))
+}
+
 async fn app_chat(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AppChatRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<ErrorResponse>)> {
-    let chat_id = app_chat_id(request.chat_id);
+    let explicit_chat_id = request.chat_id.filter(|value| !value.trim().is_empty());
+    let chat_id = app_chat_id(explicit_chat_id.clone());
+    let session_id = match explicit_chat_id {
+        Some(value) => value,
+        None => app_active_session(&state).await,
+    };
     if chat_id.len() > 128 || chat_id.chars().any(char::is_control) {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2576,18 +2821,22 @@ async fn app_chat(
     {
         let now = unix_seconds();
         let mut sessions = state.sessions.lock().await;
-        let session = sessions.entry(chat_id.clone()).or_insert(DaemonSession {
-            id: chat_id.clone(),
+        let session = sessions.entry(session_id.clone()).or_insert(DaemonSession {
+            id: session_id.clone(),
             created_at: now,
             updated_at: now,
+            title: app_session_title(&prompt),
+            status: default_session_status(),
+            messages: Vec::new(),
         });
         session.updated_at = now;
         persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
     }
-    spawn_app_turn(state, chat_id.clone(), prompt);
+    app_record_message(&state, &session_id, "user", &prompt).await;
+    spawn_app_turn(state, chat_id.clone(), session_id.clone(), prompt);
     Ok((
         StatusCode::ACCEPTED,
-        Json(json!({"ok":true,"chatId":chat_id})),
+        Json(json!({"ok":true,"chatId":chat_id,"sessionId":session_id})),
     ))
 }
 
@@ -2818,8 +3067,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        DaemonSession, RateLimiter, app_chat_id, connection_readiness, load_daemon_sessions,
-        persist_daemon_sessions,
+        DaemonSession, RateLimiter, app_chat_id, app_turn_completion_events, connection_readiness,
+        default_session_status, load_daemon_sessions, persist_daemon_sessions,
     };
     use std::collections::BTreeMap;
 
@@ -2844,6 +3093,14 @@ mod tests {
     }
 
     #[test]
+    fn app_turn_completion_matches_mobile_terminal_event_semantics() {
+        let events = app_turn_completion_events();
+        assert_eq!(events[0]["type"], "status");
+        assert_eq!(events[0]["busy"], false);
+        assert_eq!(events[1]["type"], "done");
+    }
+
+    #[test]
     fn sessions_survive_restart_and_use_restrictive_permissions() {
         let directory = tempfile::tempdir().expect("temporary session directory");
         let path = directory.path().join("sessions.json");
@@ -2854,6 +3111,9 @@ mod tests {
                 id: "user-a".to_owned(),
                 created_at: 10,
                 updated_at: 20,
+                title: "Conversation".to_owned(),
+                status: default_session_status(),
+                messages: Vec::new(),
             },
         );
         persist_daemon_sessions(path.to_str().unwrap(), &sessions).unwrap();
