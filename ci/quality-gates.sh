@@ -2,7 +2,7 @@
 set -euo pipefail
 
 rust_toolchain="${RUST_TOOLCHAIN:-1.94.0}"
-package="${SUPERAGENT_PACKAGE:-xai-grok-superagent}"
+package="${SUPERAGENT_PACKAGE:-supercharge-superagent}"
 features="${SUPERAGENT_FEATURES:-e2b}"
 
 cargo "+${rust_toolchain}" fmt --all -- --check

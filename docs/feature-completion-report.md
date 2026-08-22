@@ -44,10 +44,10 @@ The final local quality gates were run with Rust **1.94.0**, the `e2b` feature e
 | Check | Result |
 | --- | --- |
 | `cargo +1.94.0 fmt --all -- --check` | Passed |
-| `cargo +1.94.0 clippy --locked -p xai-grok-superagent --features e2b -- -D warnings` | Passed |
-| Latest targeted `cargo +1.94.0 test -p xai-grok-superagent` | Passed: **49 library tests, 2 daemon tests** |
+| `cargo +1.94.0 clippy --locked -p supercharge-superagent --features e2b -- -D warnings` | Passed |
+| Latest targeted `cargo +1.94.0 test -p supercharge-superagent` | Passed: **49 library tests, 2 daemon tests** |
 | Previous E2B-enabled quality gate | Passed: **47 library tests, 2 daemon tests** before the latest non-E2B-only hardening increments |
-| Local fallback script `ci/quality-gates.sh` | Passed for `xai-grok-superagent (e2b)` |
+| Local fallback script `ci/quality-gates.sh` | Passed for `supercharge-superagent (e2b)` |
 | Upgrade and rollback shell syntax | Previously validated with `bash -n` |
 | Agent repository push | `79beac3` is on `origin/main` |
 | Cloud-infra push | `53013f1` is on `origin/main` |
@@ -74,7 +74,7 @@ For emergency shutdown of new turns, call authenticated `POST /v1/emergency-stop
 For binary upgrades, run:
 
 ```bash
-deploy/upgrade.sh /path/to/xai-grok-superagent-server
+deploy/upgrade.sh /path/to/supercharge-superagent-server
 ```
 
 The script creates a pre-upgrade runtime backup, stages a release, atomically replaces the configured binary, restarts an active systemd service, and requires `/healthz` to succeed. A failed health check restores the previous executable. To explicitly roll back the latest release, run:

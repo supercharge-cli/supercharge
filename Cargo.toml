@@ -6,94 +6,94 @@ async-openai = { git = "https://github.com/our-forks/async-openai.git", rev = "9
 [workspace]
 resolver = "2"
 members = [
-    "crates/build/xai-proto-build",
+    "crates/build/supercharge-proto-build",
     "crates/codegen/ptyctl",
     "crates/codegen/ptyctl-cli",
-    "crates/codegen/xai-acp-lib",
-    "crates/codegen/xai-agent-lifecycle",
-    "crates/codegen/xai-chat-state",
-    "crates/codegen/xai-codebase-graph",
-    "crates/codegen/xai-compaction-transcript",
-    "crates/codegen/xai-crash-handler",
-    "crates/codegen/xai-fast-worktree",
-    "crates/codegen/xai-file-utils",
-    "crates/codegen/xai-fsnotify",
-    "crates/codegen/xai-fuzzy-file-search",
-    "crates/codegen/xai-gix-status",
-    "crates/codegen/xai-grok-active-sessions",
-    "crates/codegen/xai-grok-agent",
-    "crates/codegen/xai-grok-announcements",
-    "crates/codegen/xai-grok-auth",
-    "crates/codegen/xai-grok-bundle",
-    "crates/codegen/xai-grok-config",
-    "crates/codegen/xai-grok-config-types",
-    "crates/codegen/xai-grok-diag-server",
-    "crates/codegen/xai-grok-env",
-    "crates/codegen/xai-grok-extra-ca",
-    "crates/codegen/xai-grok-foreign-sessions",
-    "crates/codegen/xai-grok-home",
-    "crates/codegen/xai-grok-hooks",
-    "crates/codegen/xai-grok-http",
-    "crates/codegen/xai-grok-markdown",
-    "crates/codegen/xai-grok-markdown-core",
-    "crates/codegen/xai-grok-mcp",
-    "crates/codegen/xai-grok-memory",
-    "crates/codegen/xai-grok-mermaid",
-    "crates/codegen/xai-grok-models",
-    "crates/codegen/xai-grok-pager",
-    "crates/codegen/xai-grok-pager-bin",
-    "crates/codegen/xai-grok-pager-diff",
-    "crates/codegen/xai-grok-pager-minimal",
-    "crates/codegen/xai-grok-pager-pty-harness",
-    "crates/codegen/xai-grok-pager-render",
-    "crates/codegen/xai-grok-paths",
-    "crates/codegen/xai-grok-plugin-marketplace",
-    "crates/codegen/xai-grok-sampler",
-    "crates/codegen/xai-grok-sampling-types",
-    "crates/codegen/xai-grok-sandbox",
-    "crates/codegen/xai-grok-secrets",
-    "crates/codegen/xai-grok-session-events",
-    "crates/codegen/xai-grok-session-search",
-    "crates/codegen/xai-grok-shared",
-    "crates/codegen/xai-grok-shell",
-    "crates/codegen/xai-grok-shell-base",
-    "crates/codegen/xai-grok-shell-session-support",
-    "crates/codegen/xai-grok-superagent",
-    "crates/codegen/xai-grok-subagent-resolution",
-    "crates/codegen/xai-grok-telemetry",
-    "crates/codegen/xai-grok-test-support",
-    "crates/codegen/xai-grok-tools",
-    "crates/codegen/xai-grok-tools-api",
-    "crates/codegen/xai-grok-update",
-    "crates/codegen/xai-grok-version",
-    "crates/codegen/xai-grok-voice",
-    "crates/codegen/xai-grok-workspace",
-    "crates/codegen/xai-grok-workspace-client",
-    "crates/codegen/xai-grok-workspace-daemon",
-    "crates/codegen/xai-grok-workspace-types",
-    "crates/codegen/xai-hooks-plugins-types",
-    "crates/codegen/xai-hunk-tracker",
-    "crates/codegen/xai-mixpanel",
-    "crates/codegen/xai-prompt-queue",
-    "crates/codegen/xai-ratatui-inline",
-    "crates/codegen/xai-ratatui-textarea",
-    "crates/codegen/xai-sqlite-journal",
-    "crates/codegen/xai-system-power",
-    "crates/codegen/xai-token-estimation",
-    "crates/codegen/xai-tracing-macros",
-    "crates/codegen/xai-tty-utils",
-    "crates/codegen/xai-workflow",
-    "crates/common/xai-circuit-breaker",
-    "crates/common/xai-computer-hub-core",
-    "crates/common/xai-computer-hub-mcp-adapter",
-    "crates/common/xai-computer-hub-sdk",
-    "crates/common/xai-grok-compaction",
-    "crates/common/xai-interjection-core",
-    "crates/common/xai-test-utils",
-    "crates/common/xai-tool-protocol",
-    "crates/common/xai-tool-runtime",
-    "crates/common/xai-tool-types",
-    "crates/common/xai-tracing",
+    "crates/codegen/supercharge-acp-lib",
+    "crates/codegen/supercharge-agent-lifecycle",
+    "crates/codegen/supercharge-chat-state",
+    "crates/codegen/supercharge-codebase-graph",
+    "crates/codegen/supercharge-compaction-transcript",
+    "crates/codegen/supercharge-crash-handler",
+    "crates/codegen/supercharge-fast-worktree",
+    "crates/codegen/supercharge-file-utils",
+    "crates/codegen/supercharge-fsnotify",
+    "crates/codegen/supercharge-fuzzy-file-search",
+    "crates/codegen/supercharge-gix-status",
+    "crates/codegen/supercharge-active-sessions",
+    "crates/codegen/supercharge-agent",
+    "crates/codegen/supercharge-announcements",
+    "crates/codegen/supercharge-auth",
+    "crates/codegen/supercharge-bundle",
+    "crates/codegen/supercharge-config",
+    "crates/codegen/supercharge-config-types",
+    "crates/codegen/supercharge-diag-server",
+    "crates/codegen/supercharge-env",
+    "crates/codegen/supercharge-extra-ca",
+    "crates/codegen/supercharge-foreign-sessions",
+    "crates/codegen/supercharge-home",
+    "crates/codegen/supercharge-hooks",
+    "crates/codegen/supercharge-http",
+    "crates/codegen/supercharge-markdown",
+    "crates/codegen/supercharge-markdown-core",
+    "crates/codegen/supercharge-mcp",
+    "crates/codegen/supercharge-memory",
+    "crates/codegen/supercharge-mermaid",
+    "crates/codegen/supercharge-models",
+    "crates/codegen/supercharge-pager",
+    "crates/codegen/supercharge-pager-bin",
+    "crates/codegen/supercharge-pager-diff",
+    "crates/codegen/supercharge-pager-minimal",
+    "crates/codegen/supercharge-pager-pty-harness",
+    "crates/codegen/supercharge-pager-render",
+    "crates/codegen/supercharge-paths",
+    "crates/codegen/supercharge-plugin-marketplace",
+    "crates/codegen/supercharge-sampler",
+    "crates/codegen/supercharge-sampling-types",
+    "crates/codegen/supercharge-sandbox",
+    "crates/codegen/supercharge-secrets",
+    "crates/codegen/supercharge-session-events",
+    "crates/codegen/supercharge-session-search",
+    "crates/codegen/supercharge-shared",
+    "crates/codegen/supercharge-shell",
+    "crates/codegen/supercharge-shell-base",
+    "crates/codegen/supercharge-shell-session-support",
+    "crates/codegen/supercharge-superagent",
+    "crates/codegen/supercharge-subagent-resolution",
+    "crates/codegen/supercharge-telemetry",
+    "crates/codegen/supercharge-test-support",
+    "crates/codegen/supercharge-tools",
+    "crates/codegen/supercharge-tools-api",
+    "crates/codegen/supercharge-update",
+    "crates/codegen/supercharge-version",
+    "crates/codegen/supercharge-voice",
+    "crates/codegen/supercharge-workspace",
+    "crates/codegen/supercharge-workspace-client",
+    "crates/codegen/supercharge-workspace-daemon",
+    "crates/codegen/supercharge-workspace-types",
+    "crates/codegen/supercharge-hooks-plugins-types",
+    "crates/codegen/supercharge-hunk-tracker",
+    "crates/codegen/supercharge-mixpanel",
+    "crates/codegen/supercharge-prompt-queue",
+    "crates/codegen/supercharge-ratatui-inline",
+    "crates/codegen/supercharge-ratatui-textarea",
+    "crates/codegen/supercharge-sqlite-journal",
+    "crates/codegen/supercharge-system-power",
+    "crates/codegen/supercharge-token-estimation",
+    "crates/codegen/supercharge-tracing-macros",
+    "crates/codegen/supercharge-tty-utils",
+    "crates/codegen/supercharge-workflow",
+    "crates/common/supercharge-circuit-breaker",
+    "crates/common/supercharge-computer-hub-core",
+    "crates/common/supercharge-computer-hub-mcp-adapter",
+    "crates/common/supercharge-computer-hub-sdk",
+    "crates/common/supercharge-compaction",
+    "crates/common/supercharge-interjection-core",
+    "crates/common/supercharge-test-utils",
+    "crates/common/supercharge-tool-protocol",
+    "crates/common/supercharge-tool-runtime",
+    "crates/common/supercharge-tool-types",
+    "crates/common/supercharge-tracing",
     "prod/mc/cli-chat-proxy-types",
     "third_party/dagre_rust",
     "third_party/graphlib_rust",
@@ -302,64 +302,64 @@ wildmatch = "2"
 windows = { version = "0.61", features = ["Win32_Security", "Win32_Security_Authorization", "Win32_Foundation", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Console", "Win32_System_Pipes"] }
 wiremock = "0.6"
 wl-clipboard-rs = "0.9"
-xai-acp-lib = { path = "crates/codegen/xai-acp-lib" }
-xai-agent-lifecycle = { path = "crates/codegen/xai-agent-lifecycle" }
-xai-circuit-breaker = { path = "crates/common/xai-circuit-breaker" }
-xai-compaction-transcript = { path = "crates/codegen/xai-compaction-transcript" }
-xai-computer-hub-core = { path = "crates/common/xai-computer-hub-core" }
-xai-computer-hub-sdk = { path = "crates/common/xai-computer-hub-sdk" }
-xai-fuzzy-file-search = { path = "crates/codegen/xai-fuzzy-file-search" }
-xai-gix-status = { path = "crates/codegen/xai-gix-status" }
-xai-grok-active-sessions = { path = "crates/codegen/xai-grok-active-sessions" }
-xai-grok-agent = { path = "crates/codegen/xai-grok-agent" }
-xai-grok-announcements = { path = "crates/codegen/xai-grok-announcements" }
-xai-grok-auth = { path = "crates/codegen/xai-grok-auth" }
-xai-grok-bundle = { path = "crates/codegen/xai-grok-bundle" }
-xai-grok-config = { path = "crates/codegen/xai-grok-config" }
-xai-grok-config-types = { path = "crates/codegen/xai-grok-config-types" }
-xai-grok-diag-server = { path = "crates/codegen/xai-grok-diag-server" }
-xai-grok-env = { path = "crates/codegen/xai-grok-env" }
-xai-grok-extra-ca = { path = "crates/codegen/xai-grok-extra-ca" }
-xai-grok-foreign-sessions = { path = "crates/codegen/xai-grok-foreign-sessions" }
-xai-grok-home = { path = "crates/codegen/xai-grok-home" }
-xai-grok-http = { path = "crates/codegen/xai-grok-http" }
-xai-grok-markdown = { path = "crates/codegen/xai-grok-markdown" }
-xai-grok-markdown-core = { path = "crates/codegen/xai-grok-markdown-core" }
-xai-grok-mcp = { path = "crates/codegen/xai-grok-mcp" }
-xai-grok-memory = { path = "crates/codegen/xai-grok-memory" }
-xai-grok-mermaid = { path = "crates/codegen/xai-grok-mermaid" }
-xai-grok-models = { path = "crates/codegen/xai-grok-models" }
-xai-grok-sampler = { path = "crates/codegen/xai-grok-sampler" }
-xai-grok-secrets = { path = "crates/codegen/xai-grok-secrets" }
-xai-grok-session-events = { path = "crates/codegen/xai-grok-session-events" }
-xai-grok-session-search = { path = "crates/codegen/xai-grok-session-search" }
-xai-grok-shared = { path = "crates/codegen/xai-grok-shared" }
-xai-grok-shell = { path = "crates/codegen/xai-grok-shell" }
-xai-grok-shell-base = { path = "crates/codegen/xai-grok-shell-base" }
-xai-grok-shell-session-support = { path = "crates/codegen/xai-grok-shell-session-support" }
-xai-grok-telemetry = { path = "crates/codegen/xai-grok-telemetry" }
-xai-grok-test-support = { path = "crates/codegen/xai-grok-test-support" }
-xai-grok-tools = { path = "crates/codegen/xai-grok-tools" }
-xai-grok-tools-api = { path = "crates/codegen/xai-grok-tools-api" }
-xai-grok-version = { path = "crates/codegen/xai-grok-version" }
-xai-grok-workspace = { path = "crates/codegen/xai-grok-workspace" }
-xai-grok-workspace-types = { path = "crates/codegen/xai-grok-workspace-types" }
-xai-hooks-plugins-types = { path = "crates/codegen/xai-hooks-plugins-types" }
-xai-interjection-core = { path = "crates/common/xai-interjection-core" }
-xai-mixpanel = { path = "crates/codegen/xai-mixpanel" }
-xai-prompt-queue = { path = "crates/codegen/xai-prompt-queue" }
-xai-proto-build = { path = "crates/build/xai-proto-build" }
-xai-ratatui-inline = { path = "crates/codegen/xai-ratatui-inline" }
-xai-ratatui-textarea = { path = "crates/codegen/xai-ratatui-textarea" }
-xai-sqlite-journal = { path = "crates/codegen/xai-sqlite-journal" }
-xai-system-power = { path = "crates/codegen/xai-system-power" }
-xai-test-utils = { path = "crates/common/xai-test-utils" }
-xai-token-estimation = { path = "crates/codegen/xai-token-estimation" }
-xai-tool-protocol = { path = "crates/common/xai-tool-protocol" }
-xai-tool-runtime = { path = "crates/common/xai-tool-runtime" }
-xai-tool-types = { path = "crates/common/xai-tool-types" }
-xai-tracing = { path = "crates/common/xai-tracing" }
-xai-tty-utils = { path = "crates/codegen/xai-tty-utils" }
+supercharge-acp-lib = { path = "crates/codegen/supercharge-acp-lib" }
+supercharge-agent-lifecycle = { path = "crates/codegen/supercharge-agent-lifecycle" }
+supercharge-circuit-breaker = { path = "crates/common/supercharge-circuit-breaker" }
+supercharge-compaction-transcript = { path = "crates/codegen/supercharge-compaction-transcript" }
+supercharge-computer-hub-core = { path = "crates/common/supercharge-computer-hub-core" }
+supercharge-computer-hub-sdk = { path = "crates/common/supercharge-computer-hub-sdk" }
+supercharge-fuzzy-file-search = { path = "crates/codegen/supercharge-fuzzy-file-search" }
+supercharge-gix-status = { path = "crates/codegen/supercharge-gix-status" }
+supercharge-active-sessions = { path = "crates/codegen/supercharge-active-sessions" }
+supercharge-agent = { path = "crates/codegen/supercharge-agent" }
+supercharge-announcements = { path = "crates/codegen/supercharge-announcements" }
+supercharge-auth = { path = "crates/codegen/supercharge-auth" }
+supercharge-bundle = { path = "crates/codegen/supercharge-bundle" }
+supercharge-config = { path = "crates/codegen/supercharge-config" }
+supercharge-config-types = { path = "crates/codegen/supercharge-config-types" }
+supercharge-diag-server = { path = "crates/codegen/supercharge-diag-server" }
+supercharge-env = { path = "crates/codegen/supercharge-env" }
+supercharge-extra-ca = { path = "crates/codegen/supercharge-extra-ca" }
+supercharge-foreign-sessions = { path = "crates/codegen/supercharge-foreign-sessions" }
+supercharge-home = { path = "crates/codegen/supercharge-home" }
+supercharge-http = { path = "crates/codegen/supercharge-http" }
+supercharge-markdown = { path = "crates/codegen/supercharge-markdown" }
+supercharge-markdown-core = { path = "crates/codegen/supercharge-markdown-core" }
+supercharge-mcp = { path = "crates/codegen/supercharge-mcp" }
+supercharge-memory = { path = "crates/codegen/supercharge-memory" }
+supercharge-mermaid = { path = "crates/codegen/supercharge-mermaid" }
+supercharge-models = { path = "crates/codegen/supercharge-models" }
+supercharge-sampler = { path = "crates/codegen/supercharge-sampler" }
+supercharge-secrets = { path = "crates/codegen/supercharge-secrets" }
+supercharge-session-events = { path = "crates/codegen/supercharge-session-events" }
+supercharge-session-search = { path = "crates/codegen/supercharge-session-search" }
+supercharge-shared = { path = "crates/codegen/supercharge-shared" }
+supercharge-shell = { path = "crates/codegen/supercharge-shell" }
+supercharge-shell-base = { path = "crates/codegen/supercharge-shell-base" }
+supercharge-shell-session-support = { path = "crates/codegen/supercharge-shell-session-support" }
+supercharge-telemetry = { path = "crates/codegen/supercharge-telemetry" }
+supercharge-test-support = { path = "crates/codegen/supercharge-test-support" }
+supercharge-tools = { path = "crates/codegen/supercharge-tools" }
+supercharge-tools-api = { path = "crates/codegen/supercharge-tools-api" }
+supercharge-version = { path = "crates/codegen/supercharge-version" }
+supercharge-workspace = { path = "crates/codegen/supercharge-workspace" }
+supercharge-workspace-types = { path = "crates/codegen/supercharge-workspace-types" }
+supercharge-hooks-plugins-types = { path = "crates/codegen/supercharge-hooks-plugins-types" }
+supercharge-interjection-core = { path = "crates/common/supercharge-interjection-core" }
+supercharge-mixpanel = { path = "crates/codegen/supercharge-mixpanel" }
+supercharge-prompt-queue = { path = "crates/codegen/supercharge-prompt-queue" }
+supercharge-proto-build = { path = "crates/build/supercharge-proto-build" }
+supercharge-ratatui-inline = { path = "crates/codegen/supercharge-ratatui-inline" }
+supercharge-ratatui-textarea = { path = "crates/codegen/supercharge-ratatui-textarea" }
+supercharge-sqlite-journal = { path = "crates/codegen/supercharge-sqlite-journal" }
+supercharge-system-power = { path = "crates/codegen/supercharge-system-power" }
+supercharge-test-utils = { path = "crates/common/supercharge-test-utils" }
+supercharge-token-estimation = { path = "crates/codegen/supercharge-token-estimation" }
+supercharge-tool-protocol = { path = "crates/common/supercharge-tool-protocol" }
+supercharge-tool-runtime = { path = "crates/common/supercharge-tool-runtime" }
+supercharge-tool-types = { path = "crates/common/supercharge-tool-types" }
+supercharge-tracing = { path = "crates/common/supercharge-tracing" }
+supercharge-tty-utils = { path = "crates/codegen/supercharge-tty-utils" }
 zbus = { version = "5" }
 zip = "3"
 zstd = "0.13"

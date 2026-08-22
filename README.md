@@ -19,8 +19,8 @@ This is an active engineering build, not a claim that every planned feature is a
 The upstream instructions require the pinned Rust toolchain, DotSlash, and `protoc`. The primary binary is assembled by the upstream pager package; the agent runtime and headless entry points live in the upstream shell package, while tools and workspace execution are separated into their own crates. Use targeted Cargo checks first because the full workspace is large.
 
 ```bash
-cargo check -p xai-grok-pager-bin
-cargo test -p xai-grok-config
+cargo check -p supercharge-pager-bin
+cargo test -p supercharge-config
 cargo fmt --all -- --check
 ```
 

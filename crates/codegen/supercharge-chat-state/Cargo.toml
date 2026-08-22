@@ -1,0 +1,29 @@
+[package]
+license = "Apache-2.0"
+name = "supercharge-chat-state"
+version = "0.1.0"
+edition.workspace = true
+description = "Actor-based chat state management for xAI agents"
+
+[features]
+default-bazel = []
+
+[dependencies]
+indexmap = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+# `CompactionDetail`, embedded in `CompactionMode::Segments`.
+supercharge-compaction-transcript = { workspace = true }
+supercharge-compaction = { path = "../../common/supercharge-compaction" }
+supercharge-sampling-types = { path = "../supercharge-sampling-types" }
+supercharge-token-estimation = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true
