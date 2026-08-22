@@ -34,7 +34,10 @@ e2b_cli() {
   if command -v e2b >/dev/null 2>&1; then
     e2b "$@"
   else
-    pnpm dlx "@e2b/cli@${e2b_cli_version}" "$@"
+    npm exec --yes \
+      --package="@e2b/cli@${e2b_cli_version}" \
+      --package=glob \
+      e2b -- "$@"
   fi
 }
 
