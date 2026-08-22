@@ -143,7 +143,10 @@ pub(crate) async fn request_device_code(
         client
             .post(&url)
             // Lets oauth2-provider segment device-flow success by client version.
-            .header("x-Supercharge AI-client-version", supercharge_version::VERSION)
+            .header(
+                "x-Supercharge AI-client-version",
+                supercharge_version::VERSION,
+            )
             // Lets oauth2-provider separate human-completable logins from
             // headless automation in the device-flow funnel metrics.
             .header("x-Supercharge AI-client-surface", surface.as_str())
@@ -232,7 +235,10 @@ pub(crate) async fn complete_device_code_login(
         let resp = with_alpha_test_key(
             client
                 .post(&token_url)
-                .header("x-Supercharge AI-client-version", supercharge_version::VERSION)
+                .header(
+                    "x-Supercharge AI-client-version",
+                    supercharge_version::VERSION,
+                )
                 .header("x-Supercharge AI-client-surface", surface.as_str())
                 .form(&[
                     ("grant_type", DEVICE_GRANT_TYPE),
@@ -591,7 +597,7 @@ pub(crate) mod tests {
     /// jsonwebtoken needs a process-level CryptoProvider; tests that encode
     /// JWTs can't rely on another test having installed it first.
     fn ensure_crypto_provider() {
-        let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
+        let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
     }
 
     #[test]

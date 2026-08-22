@@ -14,18 +14,60 @@ pub(super) const TEST_NONCE: &str = "test-nonce-value";
 pub(super) const TEST_CLIENT_ID: &str = "test-client-id";
 pub(super) fn ensure_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
+    let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
 }
+fn take_der_tlv<'a>(input: &'a [u8], offset: &mut usize, tag: u8) -> &'a [u8] {
+    assert_eq!(input.get(*offset), Some(&tag), "unexpected DER tag");
+    *offset += 1;
+    let first_len = *input.get(*offset).expect("missing DER length");
+    *offset += 1;
+    let length = if first_len & 0x80 == 0 {
+        first_len as usize
+    } else {
+        let count = (first_len & 0x7f) as usize;
+        assert!(count > 0 && count <= 4, "unsupported DER length");
+        let mut length = 0usize;
+        for _ in 0..count {
+            length = (length << 8) | (*input.get(*offset).expect("truncated DER length") as usize);
+            *offset += 1;
+        }
+        length
+    };
+    let end = offset.checked_add(length).expect("DER length overflow");
+    let value = input.get(*offset..end).expect("truncated DER value");
+    *offset = end;
+    value
+}
+
+fn rsa_public_components(public_key_der: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    // SubjectPublicKeyInfo ::= SEQUENCE { algorithm, subjectPublicKey BIT STRING }
+    let mut outer_offset = 0;
+    let outer = take_der_tlv(public_key_der, &mut outer_offset, 0x30);
+    let mut outer_contents_offset = 0;
+    let _algorithm = take_der_tlv(outer, &mut outer_contents_offset, 0x30);
+    let bit_string = take_der_tlv(outer, &mut outer_contents_offset, 0x03);
+    assert_eq!(
+        bit_string.first(),
+        Some(&0),
+        "RSA bit string must be byte-aligned"
+    );
+
+    // RSAPublicKey ::= SEQUENCE { modulus INTEGER, publicExponent INTEGER }
+    let mut rsa_offset = 0;
+    let rsa_public_key = take_der_tlv(&bit_string[1..], &mut rsa_offset, 0x30);
+    let mut rsa_contents_offset = 0;
+    let modulus = take_der_tlv(rsa_public_key, &mut rsa_contents_offset, 0x02);
+    let exponent = take_der_tlv(rsa_public_key, &mut rsa_contents_offset, 0x02);
+    let modulus = modulus.strip_prefix(&[0]).unwrap_or(modulus).to_vec();
+    (modulus, exponent.to_vec())
+}
+
 pub(super) fn generate_test_rsa_key() -> (String, String, String) {
-    use rsa::pkcs8::EncodePrivateKey;
-    use rsa::traits::PublicKeyParts;
-    let private_key = rsa::RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).unwrap();
-    let pem = private_key
-        .to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
-        .unwrap()
-        .to_string();
-    let jwk_n = URL_SAFE_NO_PAD.encode(private_key.n().to_bytes_be());
-    let jwk_e = URL_SAFE_NO_PAD.encode(private_key.e().to_bytes_be());
+    let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
+    let (modulus, exponent) = rsa_public_components(&key_pair.public_key_der());
+    let pem = key_pair.serialize_pem();
+    let jwk_n = URL_SAFE_NO_PAD.encode(modulus);
+    let jwk_e = URL_SAFE_NO_PAD.encode(exponent);
     (pem, jwk_n, jwk_e)
 }
 pub(super) async fn mock_idp_token() -> (String, String, Discovery, tokio::task::JoinHandle<()>) {

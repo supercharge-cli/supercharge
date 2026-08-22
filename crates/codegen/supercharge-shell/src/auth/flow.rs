@@ -988,8 +988,10 @@ pub async fn run_cli_login(
     let result = run_cli_login_steps(config, &auth_manager, oauth, device_auth).await;
 
     // Posts run on a spawned task and this process exits as soon as we return.
-    supercharge_telemetry::session_ctx::drain_pending(supercharge_telemetry::session_ctx::CLI_DRAIN)
-        .await;
+    supercharge_telemetry::session_ctx::drain_pending(
+        supercharge_telemetry::session_ctx::CLI_DRAIN,
+    )
+    .await;
     result
 }
 
@@ -1842,7 +1844,7 @@ mod tests {
     }
 
     fn ensure_crypto_provider() {
-        let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
+        let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
     }
 
     fn team_jwt(principal_id: &str) -> String {

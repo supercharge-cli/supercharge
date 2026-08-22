@@ -60,29 +60,29 @@ jobs:
       - name: Run quality gates
         run: |
           cargo fmt --all -- --check
-          cargo clippy --locked -p xai-grok-superagent -- -D warnings
-          cargo test --locked -p xai-grok-superagent
+          cargo clippy --locked -p supercharge-superagent -- -D warnings
+          cargo test --locked -p supercharge-superagent
 
       - name: Build daemon release binary
-        run: cargo build --locked --release -p xai-grok-superagent --bin xai-grok-superagent-server
+        run: cargo build --locked --release -p supercharge-superagent --bin supercharge-superagent-server
 
       - name: Optionally build provider bridge
         if: ${{ inputs.build_provider_bridge }}
-        run: cargo build --locked --release -p xai-grok-pager-bin --bin xai-grok-pager
+        run: cargo build --locked --release -p supercharge-pager-bin --bin supercharge-pager
 
       - name: Package artifacts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
-          cp target/release/xai-grok-superagent-server release/superagent-server-linux-x86_64
+          cp target/release/supercharge-superagent-server release/superagent-server-linux-x86_64
           cp deploy/install-supercharge.sh release/install-supercharge.sh
           chmod +x release/install-supercharge.sh
           tar -C sandbox -czf release/superagent-e2b-template-source.tar.gz e2b-agent-template
-          if [[ -f target/release/xai-grok-pager ]]; then
-            cp target/release/xai-grok-pager release/superagent-provider-bridge-linux-x86_64
-            cp target/release/xai-grok-pager release/supercharge-linux-x86_64
-            cp target/release/xai-grok-pager release/sc-linux-x86_64
+          if [[ -f target/release/supercharge-pager ]]; then
+            cp target/release/supercharge-pager release/superagent-provider-bridge-linux-x86_64
+            cp target/release/supercharge-pager release/supercharge-linux-x86_64
+            cp target/release/supercharge-pager release/sc-linux-x86_64
           fi
           sha256sum release/* > release/SHA256SUMS
           cat release/SHA256SUMS

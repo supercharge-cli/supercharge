@@ -230,8 +230,8 @@ impl GatewayPayload {
                 "token": "redacted-at-wire-serialization",
                 "properties": {
                     "os": "linux",
-                    "browser": "grok-superagent",
-                    "device": "grok-superagent"
+                    "browser": "supercharge-superagent",
+                    "device": "supercharge-superagent"
                 },
                 "intents": intents
             }),

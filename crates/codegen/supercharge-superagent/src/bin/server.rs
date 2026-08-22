@@ -26,7 +26,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tower_http::limit::RequestBodyLimitLayer;
 use supercharge_superagent::{
     ApprovalPolicy, ScheduledJob, SuperagentConfig,
     browser::{self, StreamStatus},
@@ -65,6 +64,7 @@ use supercharge_superagent::{
 };
 #[cfg(feature = "e2b")]
 use supercharge_superagent::{E2bExecutor, PersistentExecutionRequest, SandboxPlan};
+use tower_http::limit::RequestBodyLimitLayer;
 
 #[derive(Clone)]
 struct RateLimiter {
@@ -127,16 +127,45 @@ struct AppState {
     app_events: broadcast::Sender<Value>,
     app_event_seq: Arc<AtomicU64>,
     sessions: Arc<Mutex<BTreeMap<String, DaemonSession>>>,
+    session_state_path: String,
     metrics: Arc<RuntimeMetrics>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct DaemonSession {
     id: String,
     created_at: u64,
     updated_at: u64,
+}
+
+fn load_daemon_sessions(path: &str) -> anyhow::Result<BTreeMap<String, DaemonSession>> {
+    match std::fs::read_to_string(path) {
+        Ok(content) if !content.trim().is_empty() => Ok(serde_json::from_str(&content)?),
+        Ok(_) => Ok(BTreeMap::new()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn persist_daemon_sessions(
+    path: &str,
+    sessions: &BTreeMap<String, DaemonSession>,
+) -> anyhow::Result<()> {
+    let path = std::path::Path::new(path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, serde_json::to_vec_pretty(sessions)?)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))?;
+    }
+    std::fs::rename(temporary, path)?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -498,6 +527,9 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "./runtime/schedules.json".to_owned());
     let schedule_store = Arc::new(Mutex::new(ScheduleStore::load(schedule_state_path)?));
     let (app_events, _) = broadcast::channel(256);
+    let session_state_path = env::var("SUPERAGENT_SESSION_STATE")
+        .unwrap_or_else(|_| "./runtime/sessions.json".to_owned());
+    let sessions = load_daemon_sessions(&session_state_path)?;
     let state = AppState {
         config: SuperagentConfig::default(),
         started_at: unix_seconds(),
@@ -513,7 +545,8 @@ async fn main() -> anyhow::Result<()> {
         schedule_store,
         app_events,
         app_event_seq: Arc::new(AtomicU64::new(0)),
-        sessions: Arc::new(Mutex::new(BTreeMap::new())),
+        sessions: Arc::new(Mutex::new(sessions)),
+        session_state_path,
         metrics: runtime_metrics(),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
@@ -576,7 +609,7 @@ async fn main() -> anyhow::Result<()> {
             let Some(job) = job else {
                 continue;
             };
-            let outcome = run_grok_prompt(&job.session_key, &job.prompt).await;
+            let outcome = run_supercharge_prompt(&job.session_key, &job.prompt).await;
             let mut jobs = worker_state.job_store.lock().await;
             match outcome {
                 Ok(reply) => {
@@ -757,7 +790,7 @@ async fn run_email_daemon(
         match client.fetch_unseen(&config).await {
             Ok(messages) => {
                 for message in messages {
-                    match run_grok_prompt(&message.session_key(), &message.text).await {
+                    match run_supercharge_prompt(&message.session_key(), &message.text).await {
                         Ok(Some(reply)) if !reply.trim().is_empty() => {
                             let subject = if message.subject.starts_with("Re:") {
                                 message.subject.clone()
@@ -823,7 +856,7 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
                         )
                         .await?;
                     } else if configured_agent_binary().is_some() {
-                        match run_grok_turn(&message).await {
+                        match run_supercharge_turn(&message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 let prepared = prepare_reply_for_delivery(&reply).await;
                                 send_chunked(&client, message.chat_id, &prepared).await?;
@@ -863,7 +896,7 @@ async fn run_signal_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                     );
                     if configured_agent_binary().is_some()
                         && let Ok(Some(reply)) =
-                            run_grok_prompt(&message.session_key(), &message.text).await
+                            run_supercharge_prompt(&message.session_key(), &message.text).await
                     {
                         client.send_message(&message.sender, &reply).await?;
                     }
@@ -905,7 +938,7 @@ async fn run_matrix_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                     );
                     if configured_agent_binary().is_some()
                         && let Ok(Some(reply)) =
-                            run_grok_prompt(&message.session_key(), &message.text).await
+                            run_supercharge_prompt(&message.session_key(), &message.text).await
                     {
                         let prepared = prepare_reply_for_delivery(&reply).await;
                         client.send_message(&message.room_id, &prepared).await?;
@@ -934,7 +967,7 @@ async fn run_slack_daemon() -> Result<(), Box<dyn std::error::Error + Send + Syn
                     );
                     if configured_agent_binary().is_some()
                         && let Ok(Some(reply)) =
-                            run_grok_prompt(&message.session_key(), &message.text).await
+                            run_supercharge_prompt(&message.session_key(), &message.text).await
                     {
                         let prepared = prepare_reply_for_delivery(&reply).await;
                         client
@@ -969,7 +1002,7 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                         message.session_key().as_str()
                     );
                     if let Some(binary) = configured_agent_binary() {
-                        match run_grok_turn(&message).await {
+                        match run_supercharge_turn(&message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 let prepared = prepare_reply_for_delivery(&reply).await;
                                 send_discord_chunked(&client, message.chat_id, &prepared).await?;
@@ -1011,10 +1044,10 @@ async fn send_discord_chunked(
     Ok(())
 }
 
-async fn run_grok_turn(
+async fn run_supercharge_turn(
     message: &supercharge_superagent::gateway::GatewayMessage,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-    run_grok_prompt(message.session_key().as_str(), &message.text).await
+    run_supercharge_prompt(message.session_key().as_str(), &message.text).await
 }
 
 async fn prepare_reply_for_delivery(reply: &str) -> String {
@@ -1075,7 +1108,7 @@ fn record_provider_usage(
     }
 }
 
-async fn run_grok_prompt(
+async fn run_supercharge_prompt(
     session_key: &str,
     prompt: &str,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
@@ -1273,7 +1306,7 @@ async fn generic_webhook(
             let session = event.session_key();
             let prompt = event.text.clone();
             tokio::spawn(async move {
-                if let Err(error) = run_grok_prompt(&session, &prompt).await {
+                if let Err(error) = run_supercharge_prompt(&session, &prompt).await {
                     eprintln!("generic webhook agent turn failed: {error}");
                 }
             });
@@ -1318,7 +1351,7 @@ async fn telegram_webhook(
         return Ok(StatusCode::NO_CONTENT);
     };
     if configured_agent_binary().is_some()
-        && let Some(reply) = run_grok_turn(&message).await.map_err(|error| {
+        && let Some(reply) = run_supercharge_turn(&message).await.map_err(|error| {
             (
                 StatusCode::BAD_GATEWAY,
                 Json(ErrorResponse {
@@ -1398,7 +1431,9 @@ async fn whatsapp_webhook(
     for message in client.parse_messages(&payload) {
         let client = client.clone();
         tokio::spawn(async move {
-            if let Ok(Some(reply)) = run_grok_prompt(&message.session_key(), &message.text).await {
+            if let Ok(Some(reply)) =
+                run_supercharge_prompt(&message.session_key(), &message.text).await
+            {
                 let _ = client.send_text(&message.user_id, &reply).await;
             }
         });
@@ -1586,7 +1621,7 @@ async fn run_skill(
             }),
         ));
     }
-    let reply = run_grok_prompt(&request.session_key, &composed)
+    let reply = run_supercharge_prompt(&request.session_key, &composed)
         .await
         .map_err(|error| {
             (
@@ -1676,8 +1711,10 @@ async fn call_mcp_tool(
 
 async fn run_subagent(
     Json(request): Json<SubagentRequest>,
-) -> Result<Json<supercharge_superagent::subagents::SubagentResult>, (StatusCode, Json<ErrorResponse>)>
-{
+) -> Result<
+    Json<supercharge_superagent::subagents::SubagentResult>,
+    (StatusCode, Json<ErrorResponse>),
+> {
     let coordinator = global_subagents().ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -2410,7 +2447,7 @@ fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
 fn spawn_app_turn(state: Arc<AppState>, chat_id: String, prompt: String) {
     app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
     tokio::spawn(async move {
-        let result = run_grok_prompt(format!("app:{chat_id}").as_str(), &prompt).await;
+        let result = run_supercharge_prompt(format!("app:{chat_id}").as_str(), &prompt).await;
         match result {
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
@@ -2462,8 +2499,15 @@ async fn create_session(
         created_at: now,
         updated_at: now,
     };
-    state.sessions.lock().await.insert(id, session.clone());
-    Ok((StatusCode::CREATED, Json(json!({"ok": true, "session": session}))))
+    {
+        let mut sessions = state.sessions.lock().await;
+        sessions.insert(id, session.clone());
+        persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
+    }
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"ok": true, "session": session})),
+    ))
 }
 
 async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -2526,6 +2570,7 @@ async fn app_chat(
             updated_at: now,
         });
         session.updated_at = now;
+        persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
     }
     spawn_app_turn(state, chat_id.clone(), prompt);
     Ok((
@@ -2726,7 +2771,8 @@ async fn execute(
     #[cfg(feature = "e2b")]
     {
         let api_key = env::var("E2B_API_KEY").ok();
-        let executor = supercharge_superagent::E2bExecutor::new(state.sandbox_plan.clone(), api_key);
+        let executor =
+            supercharge_superagent::E2bExecutor::new(state.sandbox_plan.clone(), api_key);
         let result = executor.execute(&payload.command).await.map_err(|error| {
             (
                 StatusCode::BAD_GATEWAY,
@@ -2759,7 +2805,11 @@ fn _infallible(_: Infallible) {}
 mod tests {
     use std::collections::HashMap;
 
-    use super::{RateLimiter, connection_readiness};
+    use super::{
+        DaemonSession, RateLimiter, connection_readiness, load_daemon_sessions,
+        persist_daemon_sessions,
+    };
+    use std::collections::BTreeMap;
 
     #[test]
     fn rate_limiter_scopes_requests_by_session_and_resets_window() {
@@ -2772,6 +2822,31 @@ mod tests {
         assert!(!limiter.allow("alpha", 102));
         assert!(limiter.allow("beta", 102));
         assert!(limiter.allow("alpha", 160));
+    }
+
+    #[test]
+    fn sessions_survive_restart_and_use_restrictive_permissions() {
+        let directory = tempfile::tempdir().expect("temporary session directory");
+        let path = directory.path().join("sessions.json");
+        let mut sessions = BTreeMap::new();
+        sessions.insert(
+            "user-a".to_owned(),
+            DaemonSession {
+                id: "user-a".to_owned(),
+                created_at: 10,
+                updated_at: 20,
+            },
+        );
+        persist_daemon_sessions(path.to_str().unwrap(), &sessions).unwrap();
+        let restored = load_daemon_sessions(path.to_str().unwrap()).unwrap();
+        assert_eq!(restored.get("user-a").unwrap().updated_at, 20);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
     }
 
     #[test]

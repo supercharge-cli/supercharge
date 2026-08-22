@@ -1869,13 +1869,13 @@ fn resolve_cached_session_wins_over_api_key() {
 
 #[test]
 #[serial]
-fn resolve_api_key_used_when_no_session() {
+fn resolve_ambient_api_key_is_ignored_without_setup() {
     let _key = EnvGuard::set("SUPERCHARGE_API_KEY", "test-key");
     let endpoints = config::EndpointsConfig::default();
     assert_eq!(
         ModelFetchAuth::resolve(&endpoints, false),
-        ModelFetchAuth::ApiKey,
-        "API key should be used when no cached session exists",
+        ModelFetchAuth::Session,
+        "ambient API keys must not bypass the setup-only provider flow",
     );
 }
 
