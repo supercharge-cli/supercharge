@@ -708,6 +708,8 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/healthz", get(healthz))
+        // Vectra app inbox probes GET /health (XibeCode-compatible).
+        .route("/health", get(healthz))
         .route("/v1/capabilities", get(capabilities))
         .route(
             "/webhooks/whatsapp",

@@ -147,6 +147,24 @@ def delete_webhook_async() -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+def inbox_healthy() -> bool:
+    port = int(
+        os.environ.get("SUPERAGENT_APP_INBOX_PORT")
+        or os.environ.get("XIBECODE_APP_INBOX_PORT")
+        or "8790"
+    )
+    for path in ("/health", "/healthz"):
+        try:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}{path}", timeout=2
+            ) as res:
+                if res.status == 200:
+                    return True
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            continue
+    return False
+
+
 def daemon_pid() -> int | None:
     try:
         with open(PIDFILE, encoding="utf-8") as f:
@@ -187,6 +205,8 @@ set -a
 [ -f /home/user/.superagent/daemon.env ] && . /home/user/.superagent/daemon.env
 [ -f /home/user/.superagent/gateway.env ] && . /home/user/.superagent/gateway.env
 set +a
+export SUPERAGENT_BIND="${SUPERAGENT_BIND:-0.0.0.0:8790}"
+export SUPERAGENT_APP_INBOX_PORT="${SUPERAGENT_APP_INBOX_PORT:-8790}"
 # Clear webhook (short timeout) so long-poll can bind
 if [ -n "${TELEGRAM_BOT_TOKEN:-}${SUPERAGENT_TELEGRAM_BOT_TOKEN:-}" ]; then
   TOK="${TELEGRAM_BOT_TOKEN:-$SUPERAGENT_TELEGRAM_BOT_TOKEN}"
@@ -201,13 +221,17 @@ fi
 nohup ${SUPERAGENT_DAEMON_COMMAND:-/usr/local/bin/supercharge-superagent-server} >/tmp/supercharge-daemon.log 2>&1 &
 echo $! > /tmp/supercharge-daemon.pid
 OK=0
-# ~2s max (20 × 0.1s) — pid existence is enough; agent warms in background
-for i in $(seq 1 20); do
+INBOX="${SUPERAGENT_APP_INBOX_PORT:-8790}"
+for i in $(seq 1 30); do
+  if curl -sf -m 2 "http://127.0.0.1:${INBOX}/health" >/dev/null 2>&1 || curl -sf -m 2 "http://127.0.0.1:${INBOX}/healthz" >/dev/null 2>&1; then
+    OK=1
+    break
+  fi
   if [ -f /tmp/supercharge-daemon.pid ] && kill -0 "$(cat /tmp/supercharge-daemon.pid)" 2>/dev/null; then
     OK=1
     break
   fi
-  sleep 0.1
+  sleep 0.2
 done
 if [ "$OK" = "1" ]; then echo DAEMON_OK; else echo DAEMON_FAIL; fi
 """
@@ -517,7 +541,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True,
                     "service": "superagent-wake-http",
                     "port": PORT,
-                    "daemon_alive": daemon_pid() is not None,
+                    "daemon_alive": inbox_healthy() or daemon_pid() is not None,
                     "note": "E2B template doorbell — soft-wake when possible",
                     "shares": True,
                 },
@@ -571,7 +595,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True,
                     "service": "superagent-wake-http",
                     "woke": True,
-                    "daemon_alive": daemon_pid() is not None,
+                    "daemon_alive": inbox_healthy() or daemon_pid() is not None,
                 },
             )
             return
