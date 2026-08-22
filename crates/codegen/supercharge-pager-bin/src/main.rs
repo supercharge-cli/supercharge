@@ -1789,7 +1789,7 @@ fn install_heap_profile_hooks() {
 }
 fn version_text(channel_label: &str) -> String {
     format!(
-        "grok {}\n",
+        "supercharge {}\n",
         supercharge_version::display_version_with_commit(
             supercharge_version::full_version(),
             channel_label,
@@ -2174,7 +2174,7 @@ async fn async_main(args: PagerArgs) -> Result<()> {
             None,
         );
         if let Some(warning) = launch_yolo.blocked_warning {
-            eprintln!("grok: {warning}");
+        eprintln!("supercharge: {warning}");
         }
         let json_schema = args
             .json_schema

@@ -80,8 +80,8 @@ fn notification_sequence(
         // Body-only protocols fold the title (session name) into the body.
         // OSC 777 already uses the tab title as subtitle, so keep "Grok".
         NotificationProtocol::Osc9 => format!("\x1b]9;{body} \u{b7} {title}\x07").into(),
-        NotificationProtocol::Osc99 => format!("\x1b]99;i=grok;{body} \u{b7} {title}\x1b\\").into(),
-        NotificationProtocol::Osc777 => format!("\x1b]777;notify;Grok;{body}\x1b\\").into(),
+        NotificationProtocol::Osc99 => format!("\x1b]99;i=supercharge;{body} \u{b7} {title}\x1b\\").into(),
+        NotificationProtocol::Osc777 => format!("\x1b]777;notify;Supercharge;{body}\x1b\\").into(),
         NotificationProtocol::Bel => Cow::Borrowed("\x07"),
         NotificationProtocol::None => return None,
     })

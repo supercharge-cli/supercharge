@@ -93,8 +93,8 @@ pub enum TerminalName {
     /// indistinguishable. All capabilities are conservative/Unknown.
     #[strum(to_string = "JetBrains")]
     JetBrains,
-    /// Grok Desktop (Electron app).
-    #[strum(to_string = "Grok Desktop")]
+    /// Supercharge Desktop (Electron app).
+    #[strum(to_string = "Supercharge Desktop")]
     GrokDesktop,
     /// VTE-based terminal (GNOME Terminal, kgx/GNOME Console, Tilix, etc.).
     #[strum(to_string = "VTE")]
@@ -1031,7 +1031,7 @@ fn terminal_name_from_term_program(value: &str) -> Option<TerminalName> {
         "rio" => Some(TerminalName::Rio),
         "terminator" => Some(TerminalName::Terminator),
         "zed" => Some(TerminalName::Zed),
-        "grokdesktop" => Some(TerminalName::GrokDesktop),
+            "grokdesktop" | "superchargedesktop" => Some(TerminalName::GrokDesktop),
         "windowsterminal" => Some(TerminalName::WindowsTerminal),
         "otty" => Some(TerminalName::Otty),
         _ => None,
