@@ -220,7 +220,34 @@ pub fn conversation_to_chat_messages(items: Vec<ConversationItem>) -> Vec<ChatRe
         }
     }
 
+    // Ponytail: some providers (e.g. deepseek via routing.run) reject
+    // Role::System messages. Fold leading system content into the first
+    // user message so the prompt still reaches the model.
+    fold_system_into_first_user(&mut out);
+
     out
+}
+
+/// If the first message is a System, prepend its content to the next User
+/// message. If there is no following User message, drop the system entirely.
+fn fold_system_into_first_user(msgs: &mut Vec<ChatRequestMessage>) {
+    let first_is_system = msgs.first().is_some_and(|m| m.role == Role::System);
+    if !first_is_system {
+        return;
+    }
+    let system_text = match msgs.remove(0).text_content() {
+        t if t.is_empty() => return,
+        t => t,
+    };
+    // Find the first user message and prepend.
+    for msg in msgs.iter_mut() {
+        if msg.role == Role::User {
+            let merged = format!("{system_text}\n\n{}", msg.text_content());
+            msg.content = MessageContent::Text(merged);
+            return;
+        }
+    }
+    // No user message found — system content is orphaned, already removed.
 }
 
 impl From<ChatResponseMessage> for ConversationItem {
