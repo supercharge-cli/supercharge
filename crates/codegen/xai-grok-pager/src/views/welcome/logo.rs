@@ -1,7 +1,7 @@
-//! Logo component — renders the braille art logo.
+//! Logo component — renders the ASCII Voltage lightning mark.
 //!
-//! Hidden entirely on legacy Windows consoles: the U+2800 braille block is
-//! not covered by the ConHost raster fonts and would render as tofu.
+//! The logo deliberately uses only ASCII characters so it renders reliably on
+//! legacy terminals and remote shell sessions.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
@@ -12,8 +12,24 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::render::color::blend_color;
 use crate::theme::Theme;
 
-const LOGO: &str = include_str!("../../../assets/logo/logo07.txt");
-const LOGO_SMALL: &str = include_str!("../../../assets/logo/logo05.txt");
+const LOGO: &str = include_str!("../../../assets/logo/logo07_ascii.txt");
+const LOGO_SMALL: &str = include_str!("../../../assets/logo/logo05_ascii.txt");
+
+const FULL_LOGO_FRAMES: [&str; 4] = [
+    "       .  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
+    "       +  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
+    "       *  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
+    "       #  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
+];
+
+const SMALL_LOGO_FRAMES: [&str; 4] = [
+    "     . /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
+    "     + /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
+    "     * /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
+    "     # /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
+];
+
+const STARTUP_ANIMATION_FRAMES: u64 = 36;
 
 /// Height at or above which the small logo is shown (below it, no logo).
 const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
@@ -22,6 +38,19 @@ const FULL_LOGO_MIN_HEIGHT: u16 = 26;
 
 fn pick_logo(window_height: u16) -> Option<&'static str> {
     pick_logo_for(window_height, logo_hidden())
+}
+
+fn animated_logo(logo: &str, frame: u64) -> &'static str {
+    let index = if frame < STARTUP_ANIMATION_FRAMES {
+        ((frame / 3) as usize).min(3)
+    } else {
+        3
+    };
+    if std::ptr::eq(logo, LOGO) {
+        FULL_LOGO_FRAMES[index]
+    } else {
+        SMALL_LOGO_FRAMES[index]
+    }
 }
 
 /// Pure tier selection so tests can drive the legacy-console flag directly.
@@ -35,9 +64,9 @@ fn pick_logo_for(window_height: u16, hidden: bool) -> Option<&'static str> {
     }
 }
 
-/// The braille art has no ASCII stand-in; see the module doc.
+/// ASCII logos work on every supported terminal, including legacy consoles.
 fn logo_hidden() -> bool {
-    crate::glyphs::is_legacy_windows_console()
+    false
 }
 
 fn non_empty_lines(logo: &str) -> impl Iterator<Item = &str> {
@@ -107,7 +136,8 @@ fn shine_opacity(diag: f32, secs: f32) -> f32 {
     (pulse + SHINE * shine).clamp(0.0, 1.0)
 }
 
-fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str) {
+fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str, frame: u64) {
+    let logo = animated_logo(logo, frame);
     let lines: Vec<&str> = non_empty_lines(logo).collect();
     let rows = lines.len().max(1) as f32;
     let cols = lines
@@ -166,7 +196,7 @@ pub fn logo_visual_width(window_height: u16) -> u16 {
 
 pub fn render_logo(area: Rect, buf: &mut Buffer, theme: &Theme, window_height: u16) {
     if let Some(logo) = pick_logo(window_height) {
-        render_into(area, buf, theme, logo);
+        render_into(area, buf, theme, logo, shimmer_frame());
     }
 }
 
@@ -192,12 +222,11 @@ fn full_logo_visual_width_for(hidden: bool) -> u16 {
 
 pub fn render_full_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
-        render_into(area, buf, theme, LOGO);
+        render_into(area, buf, theme, LOGO, shimmer_frame());
     }
 }
 
-/// Line count of the small logo used in minimal's committed welcome card
-/// (0 on a legacy Windows console, where the braille art is suppressed).
+/// Line count of the small logo used in minimal's committed welcome card.
 pub fn compact_logo_line_count() -> u16 {
     if logo_hidden() {
         0
@@ -206,11 +235,11 @@ pub fn compact_logo_line_count() -> u16 {
     }
 }
 
-/// Render the small braille logo (centered) into `area` for minimal's welcome
-/// card. No-op when the logo is hidden.
+/// Render the small ASCII lightning logo (centered) into `area` for minimal's
+/// welcome card.
 pub fn render_compact_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
-        render_into(area, buf, theme, LOGO_SMALL);
+        render_into(area, buf, theme, LOGO_SMALL, shimmer_frame());
     }
 }
 
@@ -232,8 +261,8 @@ mod tests {
         assert_eq!(pick_logo_for(FULL_LOGO_MIN_HEIGHT, false), Some(LOGO));
     }
 
-    // The braille art has no legacy-safe stand-in, so every height tier must
-    // collapse to no logo when the legacy-console flag is set.
+    // The explicit hidden parameter remains covered for layout callers that
+    // intentionally suppress the logo.
     #[test]
     fn logo_hidden_on_legacy_console_at_every_height() {
         for h in [0, SMALL_LOGO_MIN_HEIGHT, FULL_LOGO_MIN_HEIGHT, u16::MAX] {
