@@ -463,11 +463,7 @@ pub fn resolve_deployment_key() -> Option<String> {
                 .as_str()
                 .map(|s| s.to_owned())
         });
-    let env_name = if std::env::var_os("SUPERCHARGE_DEPLOYMENT_KEY").is_some() {
-        "SUPERCHARGE_DEPLOYMENT_KEY"
-    } else {
-        "SUPERCHARGE_DEPLOYMENT_KEY"
-    };
+    let env_name = "SUPERCHARGE_DEPLOYMENT_KEY";
     crate::agent::config::resolve_string_flag(None, env_name, config_val.as_deref(), None)
         .map(|r| r.value)
 }

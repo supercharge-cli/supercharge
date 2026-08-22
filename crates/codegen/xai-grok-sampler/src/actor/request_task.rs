@@ -18,8 +18,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use xai_grok_sampling_types::{
-    ApiErrorCode, ConversationRequest, ConversationResponse, EmptyResponseContext, SamplingError,
-    SentCredential, error::Result as SamplingResult,
+    ApiErrorCode, AssistantItem, ChatCompletionResponse, ConversationItem, ConversationRequest,
+    ConversationResponse, EmptyResponseContext, SamplingError, SentCredential, ToolCall,
+    error::Result as SamplingResult, reported_cost_ticks, synthesized_reasoning_item,
 };
 
 use crate::client::{ApiBackend, SamplingClient};
@@ -530,22 +531,41 @@ async fn run_one_attempt(
 ) -> AttemptOutcome {
     match client.api_backend() {
         ApiBackend::ChatCompletions => {
+            // Keep a clone for the compatibility fallback. A few OpenAI-compatible
+            // providers return only empty `tool_calls` deltas while their normal
+            // non-streaming response contains the actual text.
+            let fallback_request = request.clone();
             let (raw, metadata) = match client.conversation_stream(request).await {
                 Ok(pair) => pair,
                 Err(e) => return AttemptOutcome::InitFailed { error: e },
             };
             let (teed, captured) = tee_errors(raw);
             let l2 = stream_chat_completions(teed, metadata, request_id.clone(), idle_timeout);
-            drive_l2(
+            let outcome = drive_l2(
                 l2,
-                request_id,
+                request_id.clone(),
                 event_tx,
                 cancel_token,
                 captured,
                 None,
-                output_observed,
+                Arc::clone(&output_observed),
             )
-            .await
+            .await;
+            if matches!(outcome, AttemptOutcome::Empty { .. }) {
+                if let Some(fallback) = non_streaming_chat_fallback(
+                    client,
+                    fallback_request,
+                    request_id,
+                    event_tx,
+                    cancel_token,
+                    output_observed,
+                )
+                .await
+                {
+                    return fallback;
+                }
+            }
+            outcome
         }
         ApiBackend::Responses => {
             let (raw, metadata, doom_loop) =
@@ -597,6 +617,161 @@ async fn run_one_attempt(
             .await
         }
     }
+}
+
+/// Retry a completed-but-empty Chat Completions stream with one non-streaming
+/// request. This is intentionally limited to the empty-response case: transport
+/// and authentication failures must continue through the normal retry classifier.
+async fn non_streaming_chat_fallback(
+    client: &SamplingClient,
+    request: ConversationRequest,
+    request_id: RequestId,
+    event_tx: &mpsc::UnboundedSender<SamplingEvent>,
+    cancel_token: &CancellationToken,
+    output_observed: Arc<AtomicBool>,
+) -> Option<AttemptOutcome> {
+    let started = std::time::Instant::now();
+    let response = tokio::select! {
+        biased;
+        _ = cancel_token.cancelled() => return Some(AttemptOutcome::Cancelled),
+        result = client.chat_completion(request.into()) => match result {
+            Ok(response) => response,
+            Err(error) => {
+                tracing::warn!(target: crate::sampling_log::TARGET, %error, "non-streaming fallback failed");
+                return None;
+            }
+        },
+    };
+
+    let (conversation, text, reasoning, tool_calls) =
+        chat_completion_to_conversation(response);
+    let mut chunk_index = 0u64;
+    if !text.is_empty() || !reasoning.is_empty() {
+        output_observed.store(true, Ordering::Relaxed);
+        let _ = event_tx.send(SamplingEvent::FirstToken {
+            request_id: request_id.clone(),
+        });
+    }
+    if !reasoning.is_empty() {
+        chunk_index += 1;
+        let _ = event_tx.send(SamplingEvent::ChannelToken {
+            request_id: request_id.clone(),
+            channel: crate::events::SamplingChannel::Reasoning,
+            text: reasoning,
+            chunk_index,
+        });
+    }
+    if !text.is_empty() {
+        chunk_index += 1;
+        let _ = event_tx.send(SamplingEvent::ChannelToken {
+            request_id: request_id.clone(),
+            channel: crate::events::SamplingChannel::Text,
+            text,
+            chunk_index,
+        });
+    }
+    for (index, tool_call) in tool_calls.iter().enumerate() {
+        let _ = event_tx.send(SamplingEvent::ToolCallDelta {
+            request_id: request_id.clone(),
+            tool_index: index as u32,
+            id: Some(tool_call.id.to_string()),
+            name: Some(tool_call.name.clone()),
+            arguments_delta: Some(tool_call.arguments.to_string()),
+        });
+    }
+
+    let ended = std::time::Instant::now();
+    let timestamps = if chunk_index == 0 {
+        Vec::new()
+    } else {
+        vec![ended]
+    };
+    Some(AttemptOutcome::Completed {
+        response: Box::new(conversation),
+        metrics: InferenceLatencyStats::from_timestamps(started, &timestamps, ended),
+    })
+}
+
+/// Convert a non-streaming Chat Completions response into the sampler's
+/// backend-neutral response while retaining the text used for event replay.
+fn chat_completion_to_conversation(
+    response: ChatCompletionResponse,
+) -> (ConversationResponse, String, String, Vec<ToolCall>) {
+    let cost_usd_ticks = response
+        .usage
+        .as_ref()
+        .and_then(|u| reported_cost_ticks(u.cost_in_usd_ticks));
+    let usage = response.usage.map(Into::into);
+    let model = response.model;
+    let Some(choice) = response.choices.into_iter().next() else {
+        return (
+            ConversationResponse {
+                items: vec![ConversationItem::assistant("")],
+                stop_reason: None,
+                usage,
+                cost_usd_ticks,
+                message_chunks_emitted: 0,
+                doom_loop_signals: Vec::new(),
+                stop_message: None,
+                message_id: None,
+                raw_stop_reason: None,
+                stop_sequence: None,
+            },
+            String::new(),
+            String::new(),
+            Vec::new(),
+        );
+    };
+    let finish_reason = choice.finish_reason.map(Into::into);
+    let message = choice.message;
+    let text = message.content.unwrap_or_default();
+    let reasoning = message.reasoning_content.unwrap_or_default();
+    let tool_calls: Vec<ToolCall> = message
+        .tool_calls
+        .into_iter()
+        .map(|call| ToolCall {
+            id: Arc::<str>::from(call.id),
+            name: call.function.name,
+            arguments: Arc::<str>::from(call.function.arguments),
+        })
+        .collect();
+
+    let mut items = Vec::new();
+    if !reasoning.is_empty() {
+        items.push(ConversationItem::Reasoning(synthesized_reasoning_item(
+            reasoning.clone(),
+        )));
+    }
+    items.push(ConversationItem::Assistant(AssistantItem {
+        content: Arc::<str>::from(text.clone()),
+        tool_calls: tool_calls.clone(),
+        model_id: Some(model),
+        model_fingerprint: None,
+        reasoning_effort: None,
+    }));
+    let stop_reason = if tool_calls.is_empty() {
+        finish_reason
+    } else {
+        Some(xai_grok_sampling_types::StopReason::ToolCalls)
+    };
+    let message_chunks_emitted = u64::from(!text.is_empty() || !reasoning.is_empty());
+    (
+        ConversationResponse {
+            items,
+            stop_reason,
+            usage,
+            cost_usd_ticks,
+            message_chunks_emitted,
+            doom_loop_signals: Vec::new(),
+            stop_message: None,
+            message_id: None,
+            raw_stop_reason: None,
+            stop_sequence: None,
+        },
+        text,
+        reasoning,
+        tool_calls,
+    )
 }
 
 /// Captured-error cell shared between the tee adapter and the

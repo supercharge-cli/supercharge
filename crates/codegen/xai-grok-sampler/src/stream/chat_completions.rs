@@ -74,6 +74,10 @@ pub fn stream_chat_completions<'a>(
         // carries id+name and starts the arguments buffer, subsequent
         // chunks append to arguments only.
         let mut tool_call_acc: BTreeMap<u32, (String, String, String)> = BTreeMap::new();
+        // Some OpenAI-compatible providers emit the legacy `function_call`
+        // object instead of `tool_calls`. Accumulate it separately and normalize
+        // it into the same backend-neutral tool-call representation at the end.
+        let mut function_call_acc: Option<(String, String)> = None;
 
         // Index counter spanning text + reasoning chunks (matches the
         // shell's chunk_index used for notification correlation).
@@ -228,6 +232,35 @@ pub fn stream_chat_completions<'a>(
                         arguments_delta: args_for_event,
                     };
                 }
+
+                if let Some(function_call) = delta.function_call {
+                    let name = function_call
+                        .get("name")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default();
+                    let arguments = function_call
+                        .get("arguments")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default();
+                    if !name.is_empty() || !arguments.is_empty() {
+                        chunk_has_content = true;
+                        let acc = function_call_acc
+                            .get_or_insert_with(|| (String::new(), String::new()));
+                        if !name.is_empty() {
+                            acc.0 = name.to_owned();
+                        }
+                        if !arguments.is_empty() {
+                            acc.1.push_str(arguments);
+                        }
+                        yield SamplingEvent::ToolCallDelta {
+                            request_id: request_id.clone(),
+                            tool_index: 0,
+                            id: None,
+                            name: (!name.is_empty()).then(|| name.to_owned()),
+                            arguments_delta: (!arguments.is_empty()).then(|| arguments.to_owned()),
+                        };
+                    }
+                }
             }
 
             if chunk_has_content {
@@ -245,7 +278,7 @@ pub fn stream_chat_completions<'a>(
         }
 
         // ── Build the final response ─────────────────────────────────
-        let tool_calls: Vec<ToolCall> = tool_call_acc
+        let mut tool_calls: Vec<ToolCall> = tool_call_acc
             .into_values()
             .map(|(id, name, arguments)| ToolCall {
                 id: std::sync::Arc::<str>::from(id),
@@ -253,6 +286,15 @@ pub fn stream_chat_completions<'a>(
                 arguments: std::sync::Arc::<str>::from(arguments),
             })
             .collect();
+        if let Some((name, arguments)) = function_call_acc
+            && (!name.is_empty() || !arguments.is_empty())
+        {
+            tool_calls.push(ToolCall {
+                id: std::sync::Arc::<str>::from("function_call"),
+                name,
+                arguments: std::sync::Arc::<str>::from(arguments),
+            });
+        }
 
         // Honor tool calls by overriding the stop reason if the model
         // forgot to set it (mirrors the shell's behavior).
@@ -346,6 +388,7 @@ mod tests {
             reasoning_content: None,
             tool_calls: vec![],
             tool_call_id: None,
+            function_call: None,
         }])
     }
 
@@ -438,6 +481,7 @@ mod tests {
             reasoning_content: Some("thinking...".into()),
             tool_calls: vec![],
             tool_call_id: None,
+            function_call: None,
         }]);
         reasoning_chunk.choices[0].finish_reason = None;
 
@@ -510,6 +554,7 @@ mod tests {
                 }),
             }],
             tool_call_id: None,
+            function_call: None,
         }]);
         // Second chunk has only argument fragment.
         let chunk2 = make_chunk(vec![ChatChunkDelta {
@@ -526,6 +571,7 @@ mod tests {
                 }),
             }],
             tool_call_id: None,
+            function_call: None,
         }]);
 
         let raw = stream::iter::<Vec<Result<ChatCompletionChunk, SamplingError>>>(vec![
@@ -577,6 +623,45 @@ mod tests {
                 assert_eq!(calls[0].name, "do_thing");
                 assert_eq!(calls[0].arguments.as_ref(), "{\"x\":1}");
                 // Tool calls force ToolCalls stop reason.
+                assert_eq!(response.stop_reason, Some(StopReason::ToolCalls));
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_function_call_stream_is_normalized() {
+        let call_chunk = make_chunk(vec![ChatChunkDelta {
+            role: Some(Role::Assistant),
+            content: None,
+            reasoning_content: None,
+            tool_calls: vec![],
+            tool_call_id: None,
+            function_call: Some(serde_json::json!({
+                "name": "lookup",
+                "arguments": r#"{"q":"rust"}"#,
+            })),
+        }]);
+        let raw = stream::iter(vec![
+            Ok(call_chunk),
+            Ok(final_chunk(FinishReason::FunctionCall)),
+        ])
+        .boxed();
+        let events = collect(stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            Duration::from_secs(60),
+        ))
+        .await;
+
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                let calls = response.tool_calls();
+                assert_eq!(calls.len(), 1);
+                assert_eq!(calls[0].id.as_ref(), "function_call");
+                assert_eq!(calls[0].name, "lookup");
+                assert_eq!(calls[0].arguments.as_ref(), r#"{"q":"rust"}"#);
                 assert_eq!(response.stop_reason, Some(StopReason::ToolCalls));
             }
             other => panic!("expected Completed, got {other:?}"),

@@ -89,6 +89,7 @@ fn test_chat_response_message_to_conversation_item() {
         reasoning_content: None,
         tool_calls: vec![],
         tool_call_id: None,
+        function_call: None,
         citations: None,
     };
 
@@ -103,6 +104,7 @@ fn test_chat_response_message_to_conversation_item() {
         reasoning_content: Some("Let me think step by step...".to_string()),
         tool_calls: vec![],
         tool_call_id: None,
+        function_call: None,
         citations: None,
     };
 
@@ -130,6 +132,7 @@ fn test_chat_response_message_to_conversation_item() {
             },
         }],
         tool_call_id: None,
+        function_call: None,
         citations: None,
     };
 

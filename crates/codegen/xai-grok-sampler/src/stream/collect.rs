@@ -91,6 +91,7 @@ mod tests {
                     reasoning_content: None,
                     tool_calls: vec![],
                     tool_call_id: None,
+                    function_call: None,
                 },
                 finish_reason: None,
             }],

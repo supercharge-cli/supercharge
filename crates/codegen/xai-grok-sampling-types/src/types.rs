@@ -501,6 +501,8 @@ pub struct ChatResponseMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub function_call: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub citations: Option<Vec<String>>,
 }
 
@@ -649,6 +651,8 @@ pub struct ChatChunkDelta {
     pub tool_calls: Vec<ToolCallDelta>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function_call: Option<serde_json::Value>,
 }
 
 /// Parameters to control realtime data.

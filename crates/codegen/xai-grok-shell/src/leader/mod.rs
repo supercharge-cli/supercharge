@@ -1692,9 +1692,9 @@ fn spawn_leader_subprocess(env_urls: &LeaderEnvUrls) -> Result<u32, ConnectionEr
     cmd.arg("agent").arg("leader");
     cmd.arg("--no-exit-on-disconnect");
     cmd.arg("--relay-on-demand");
-    cmd.arg("--Supercharge AI-ws-url")
+    cmd.arg("--supercharge-ws-url")
         .arg(&env_urls.grok_ws_url);
-    cmd.arg("--Supercharge AI-ws-origin")
+    cmd.arg("--supercharge-ws-origin")
         .arg(&env_urls.grok_ws_origin);
     if let Some(socket) = std::env::var_os(crate::leader::LEADER_SOCKET_ENV) {
         cmd.env(crate::leader::LEADER_SOCKET_ENV, socket);
