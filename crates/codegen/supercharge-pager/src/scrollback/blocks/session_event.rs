@@ -246,8 +246,8 @@ impl SessionEvent {
                 headline, detail, ..
             } => crate::app::error_display::banner_message(headline, detail),
             SessionEvent::ReAuthRequired => {
-                "Authentication required \u{2014} your session has expired or your \
-                 credentials were rejected. Run /login to re-authenticate, then resend \
+                "Authentication required \u{2014} provider credentials were rejected or are \
+                 missing. Run /setup to configure your AI provider and API key, then resend \
                  your message."
                     .to_string()
             }
@@ -804,9 +804,9 @@ mod tests {
     }
 
     #[test]
-    fn reauth_required_message_points_at_login() {
+    fn reauth_required_message_points_at_setup() {
         let msg = SessionEvent::ReAuthRequired.message();
-        assert!(msg.contains("/login"), "must tell the user to run /login");
+        assert!(msg.contains("/setup"), "must tell the user to run /setup");
         assert!(
             msg.to_lowercase().contains("authentication")
                 || msg.to_lowercase().contains("credentials"),

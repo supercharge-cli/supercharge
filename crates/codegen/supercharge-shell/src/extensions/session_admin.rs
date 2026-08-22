@@ -815,6 +815,7 @@ fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
         agent_config.models = toml_config.models.clone();
         agent_config.config_models = toml_config.config_models.clone();
         agent_config.model_providers = toml_config.model_providers.clone();
+        agent_config.endpoints = toml_config.endpoints.clone();
         agent_config.web_search_model = overrides.web_search;
         agent_config.session_summary_model = overrides.session_summary;
         agent_config.image_description_model = overrides.image_description;
@@ -828,8 +829,19 @@ fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
     }
     let merged_config = agent.cfg.borrow().clone();
 
-    agent.models_manager.apply_config(merged_config);
+    agent.models_manager.on_setup_config_reloaded(merged_config.clone());
     agent.sync_process_static_api_key(None);
+    if merged_config.endpoints.has_custom_endpoint()
+        && agent
+            .models_manager
+            .models()
+            .values()
+            .any(crate::agent::config::ModelEntry::has_own_credentials)
+    {
+        agent.set_auth_method(acp::AuthMethodId::new(
+            crate::agent::auth_method::PROVIDER_API_KEY_METHOD_ID,
+        ));
+    }
 
     let count = agent.models_manager.models().len();
     tracing::info!(count, "model list reloaded from config.toml");

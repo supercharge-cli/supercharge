@@ -4797,10 +4797,14 @@ pub(crate) fn first_own_credential(
     api_key: Option<&str>,
     env_key: Option<&EnvKeys>,
 ) -> Option<String> {
-    api_key
-        .filter(|k| !k.trim().is_empty())
-        .map(str::to_owned)
-        .or_else(|| env_key.and_then(EnvKeys::resolve_value))
+    if let Some(key) = api_key
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .filter(|key| crate::agent::provider_setup::is_plausible_provider_api_key(key))
+    {
+        return Some(key.to_owned());
+    }
+    env_key.and_then(EnvKeys::resolve_value)
 }
 /// Priority: setup-managed model credential > cached auth-provider token >
 /// session token. There is no global environment-key fallback.

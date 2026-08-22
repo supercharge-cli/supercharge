@@ -983,6 +983,8 @@ mod tests {
             // enterprise-style: model has `env_key` set and the env var resolves,
             // so the shell-side predicate returns true.
             has_external_api_key: true,
+            prefer_provider_api_key_default: false,
+            suppress_interactive_login: false,
             // Realistic enterprise user: no cached session token, default `supercharge.ai`
             // login (no enterprise OIDC).
             has_cached_token: false,

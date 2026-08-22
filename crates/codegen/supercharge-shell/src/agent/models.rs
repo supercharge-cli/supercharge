@@ -694,6 +694,34 @@ impl ModelsManager {
         self.spawn_fetch(Some(etag));
     }
 
+    /// After `/setup` saves provider config, drop any stale prefetched Grok
+    /// catalog and rebuild from config before refetching the custom endpoint.
+    pub(crate) fn on_setup_config_reloaded(&self, new_config: config::Config) {
+        if let Err(error) = new_config.validate_model_filters() {
+            tracing::error!(error = %error, "ignoring setup reload: invalid model filters");
+            return;
+        }
+        self.inner.cache.invalidate();
+        {
+            let mut cat = self.inner.catalog.write();
+            cat.generation = cat.generation.saturating_add(1);
+            cat.etag = None;
+            cat.prefetched = None;
+            cat.has_fetched_real_catalog = false;
+            cat.models = resolve_model_catalog(&new_config, None);
+            cat.allowlist_excludes_all = allowlist_matches_nothing(&new_config, &cat.models);
+        }
+        let has_session = self.inner.auth_manager.current_or_expired().is_some();
+        *self.inner.fetch_auth.write() =
+            ModelFetchAuth::resolve(&new_config.endpoints, has_session);
+        *self.inner.cfg.write() = new_config.clone();
+        if new_config.endpoints.has_custom_endpoint() {
+            self.spawn_fetch(None);
+        }
+        self.reselect_default_model(&new_config);
+        self.notify_models_updated();
+    }
+
     /// Auth identity changed: invalidate the disk cache and refresh the catalog.
     pub(crate) async fn on_auth_changed(&self) {
         let config = self.inner.cfg.read().clone();

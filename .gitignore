@@ -9,3 +9,6 @@
 runtime/
 *.sqlite
 *.db
+
+# Local cloud deployment workspace (separate infra repo)
+cloud-infra/

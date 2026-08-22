@@ -102,6 +102,13 @@ pub struct AuthMethodsBuildInputs<'a> {
     /// [`should_advertise_provider_api_key`]. When `preferred_method` is `Oidc`,
     /// this is ignored (API key is never advertised under that pin).
     pub has_external_api_key: bool,
+    /// When true, `provider.api_key` stays the default even if a cached Grok
+    /// session token exists. Set for `/setup` custom endpoints so an expired
+    /// `auth.json` token does not preempt the configured provider credential.
+    pub prefer_provider_api_key_default: bool,
+    /// When true, do not advertise interactive Grok/OIDC login methods.
+    /// Used when a custom inference endpoint is configured through `/setup`.
+    pub suppress_interactive_login: bool,
     /// True if a cached session token is available (either present at startup
     /// or recovered via silent refresh).
     pub has_cached_token: bool,
@@ -160,6 +167,8 @@ pub struct BuiltAuthMethods {
 pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethods {
     let AuthMethodsBuildInputs {
         has_external_api_key,
+        prefer_provider_api_key_default,
+        suppress_interactive_login,
         has_cached_token,
         has_enterprise_oidc,
         enterprise_oidc_issuer,
@@ -176,9 +185,12 @@ pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethod
             enterprise_oidc_issuer,
             login_label,
             has_auth_provider_command,
+            suppress_interactive_login,
         ),
         None => build_unpinned(
             has_external_api_key,
+            prefer_provider_api_key_default,
+            suppress_interactive_login,
             has_cached_token,
             has_enterprise_oidc,
             enterprise_oidc_issuer,
@@ -212,6 +224,7 @@ fn build_pinned_oidc(
     enterprise_oidc_issuer: Option<&str>,
     login_label: Option<&str>,
     has_auth_provider_command: bool,
+    suppress_interactive_login: bool,
 ) -> BuiltAuthMethods {
     let mut methods: Vec<acp::AuthMethod> = Vec::new();
     let mut default_auth_method_id: Option<acp::AuthMethodId> = None;
@@ -221,13 +234,15 @@ fn build_pinned_oidc(
         default_auth_method_id = Some(acp::AuthMethodId::new(CACHED_TOKEN_AUTH_METHOD_ID));
     }
 
-    push_interactive_login(
-        &mut methods,
-        has_enterprise_oidc,
-        enterprise_oidc_issuer,
-        login_label,
-        has_auth_provider_command,
-    );
+    if !suppress_interactive_login {
+        push_interactive_login(
+            &mut methods,
+            has_enterprise_oidc,
+            enterprise_oidc_issuer,
+            login_label,
+            has_auth_provider_command,
+        );
+    }
 
     BuiltAuthMethods {
         methods,
@@ -237,6 +252,8 @@ fn build_pinned_oidc(
 
 fn build_unpinned(
     has_external_api_key: bool,
+    prefer_provider_api_key_default: bool,
+    suppress_interactive_login: bool,
     has_cached_token: bool,
     has_enterprise_oidc: bool,
     enterprise_oidc_issuer: Option<&str>,
@@ -253,29 +270,33 @@ fn build_unpinned(
 
     if has_cached_token {
         methods.push(cached_token_auth_method());
-        // cached_token wins over provider.api_key for default_auth_method_id so
-        // is_session_based_auth() returns true and OIDC refresh stays alive.
-        let overrode_api_key = default_auth_method_id.is_some();
-        default_auth_method_id = Some(acp::AuthMethodId::new(CACHED_TOKEN_AUTH_METHOD_ID));
-        if overrode_api_key {
-            supercharge_telemetry::unified_log::info(
-                "auth method priority: cached_token overrides provider.api_key for default_auth_method_id",
-                None,
-                Some(serde_json::json!({
-                    "has_external_api_key": has_external_api_key,
-                    "has_cached_token": has_cached_token,
-                })),
-            );
+        if !prefer_provider_api_key_default {
+            // cached_token wins over provider.api_key for default_auth_method_id so
+            // is_session_based_auth() returns true and OIDC refresh stays alive.
+            let overrode_api_key = default_auth_method_id.is_some();
+            default_auth_method_id = Some(acp::AuthMethodId::new(CACHED_TOKEN_AUTH_METHOD_ID));
+            if overrode_api_key {
+                supercharge_telemetry::unified_log::info(
+                    "auth method priority: cached_token overrides provider.api_key for default_auth_method_id",
+                    None,
+                    Some(serde_json::json!({
+                        "has_external_api_key": has_external_api_key,
+                        "has_cached_token": has_cached_token,
+                    })),
+                );
+            }
         }
     }
 
-    push_interactive_login(
-        &mut methods,
-        has_enterprise_oidc,
-        enterprise_oidc_issuer,
-        login_label,
-        has_auth_provider_command,
-    );
+    if !suppress_interactive_login {
+        push_interactive_login(
+            &mut methods,
+            has_enterprise_oidc,
+            enterprise_oidc_issuer,
+            login_label,
+            has_auth_provider_command,
+        );
+    }
 
     BuiltAuthMethods {
         methods,
@@ -582,6 +603,8 @@ mod tests {
     fn default_inputs() -> AuthMethodsBuildInputs<'static> {
         AuthMethodsBuildInputs {
             has_external_api_key: false,
+            prefer_provider_api_key_default: false,
+            suppress_interactive_login: false,
             has_cached_token: false,
             has_enterprise_oidc: false,
             enterprise_oidc_issuer: None,
@@ -643,7 +666,7 @@ mod tests {
 
     /// BYOK + cached session token: provider.api_key stays first in the methods
     /// list (skips login screen), but `default_auth_method_id` is
-    /// `cached_token` (keeps OIDC refresh alive).
+    /// `cached_token` (keeps OIDC refresh alive) unless setup mode prefers BYOK.
     #[test]
     fn byok_with_cached_token_keeps_xai_api_key_first() {
         let inputs = AuthMethodsBuildInputs {
@@ -673,6 +696,31 @@ mod tests {
                 .as_ref()
                 .map(|id| id.0.as_ref()),
             Some(CACHED_TOKEN_AUTH_METHOD_ID),
+        );
+    }
+
+    /// `/setup` custom endpoint: provider credentials must stay default even when
+    /// an expired Grok session token is still on disk.
+    #[test]
+    fn setup_provider_prefers_api_key_over_cached_token() {
+        let built = build_auth_methods(AuthMethodsBuildInputs {
+            has_external_api_key: true,
+            prefer_provider_api_key_default: true,
+            suppress_interactive_login: true,
+            has_cached_token: true,
+            ..default_inputs()
+        });
+        assert_eq!(
+            default_id(&built),
+            Some(PROVIDER_API_KEY_METHOD_ID),
+            "setup mode must not route turns through expired Grok session auth",
+        );
+        assert!(
+            !built
+                .methods
+                .iter()
+                .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::GrokCom),
+            "setup mode must not advertise Grok login",
         );
     }
 

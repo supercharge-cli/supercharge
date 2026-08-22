@@ -148,7 +148,7 @@ impl MvpAgent {
     }
     /// Publish the current ACP auth method into the shared live handle so every
     /// running session's per-turn auth gate observes it on its next turn.
-    pub(super) fn set_auth_method(&self, id: acp::AuthMethodId) {
+    pub(crate) fn set_auth_method(&self, id: acp::AuthMethodId) {
         self.auth_method_id.store(Some(std::sync::Arc::new(id)));
     }
     /// Publish model-owned credentials for voice/tools static fallthrough.

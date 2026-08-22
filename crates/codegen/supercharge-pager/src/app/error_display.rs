@@ -96,6 +96,12 @@ pub(crate) fn format_request_failure(
     raw: &str,
 ) -> FormattedRequestFailure {
     let wire = WireErrorType::parse(error_type);
+    if looks_like_provider_api_key_error(raw)
+        || matches!(wire, WireErrorType::AuthTransient | WireErrorType::Auth)
+        || status == Some(401)
+    {
+        return format_provider_api_key_failure(status);
+    }
     // Text-sniffed status must not demote a dedicated wire-type headline to
     // generic status copy (an `auth_transient` message contains
     // "Unauthorized (401)"); only the untyped rails recover it from the text.
@@ -138,6 +144,7 @@ fn classify(status: Option<u16>, wire: WireErrorType) -> Classified {
                 None,
                 Some("You don't have permission to do this."),
             ),
+            401 => provider_api_key_failure_class(),
             404 => (
                 "Not found",
                 Some("Run /model to pick another."),
@@ -226,11 +233,7 @@ fn classify(status: Option<u16>, wire: WireErrorType) -> Classified {
             Some("Something went wrong on our side. Wait a minute and send again."),
             None,
         ),
-        WireErrorType::AuthTransient => (
-            "Authentication temporarily unavailable",
-            Some("Try sending again in a moment."),
-            None,
-        ),
+        WireErrorType::AuthTransient => provider_api_key_failure_class(),
         _ => (
             "Request failed",
             Some("Try sending again."),
@@ -242,6 +245,37 @@ fn classify(status: Option<u16>, wire: WireErrorType) -> Classified {
         action,
         default_why,
     }
+}
+
+fn provider_api_key_failure_class() -> (&'static str, Option<&'static str>, Option<&'static str>) {
+    (
+        "Provider API key rejected",
+        Some("Run /setup and enter a valid API key for your provider."),
+        Some("The API key in your configuration is missing, wrong, or expired."),
+    )
+}
+
+fn format_provider_api_key_failure(status: Option<u16>) -> FormattedRequestFailure {
+    let (headline, action, default_why) = provider_api_key_failure_class();
+    let headline = match status {
+        Some(code) => format!("{headline} ({code})"),
+        None => headline.to_string(),
+    };
+    let detail = compose_detail(default_why, action);
+    FormattedRequestFailure {
+        status,
+        headline,
+        detail,
+    }
+}
+
+fn looks_like_provider_api_key_error(raw: &str) -> bool {
+    let lower = raw.to_ascii_lowercase();
+    lower.contains("api key")
+        || lower.contains("api_key")
+        || lower.contains("invalid credentials")
+        || lower.contains("invalid or expired credentials")
+        || lower.contains("bad credentials")
 }
 
 /// `why. action`, deduplicating (ignoring case/punctuation) when one already
@@ -672,16 +706,17 @@ mod tests {
 
     #[test]
     fn typed_headline_survives_status_in_message_text() {
-        // `auth_transient` copy routinely embeds "Unauthorized (401)"; the
-        // sniffed status must not demote the dedicated headline to generic
-        // "Request failed (401)" copy.
+        // Provider credential failures keep a dedicated headline even when the
+        // raw dump embeds "Unauthorized (401)".
         let formatted = format_request_failure(
             None,
             Some("auth_transient"),
-            "Unauthorized (401): token refresh already in progress",
+            "Unauthorized (401): A valid API key is required. Get one at.",
         );
         assert_eq!(formatted.status, None);
-        assert_eq!(formatted.headline, "Authentication temporarily unavailable");
+        assert_eq!(formatted.headline, "Provider API key rejected");
+        assert!(formatted.detail.contains("/setup"));
+        assert!(!formatted.detail.contains("Get one at"));
 
         // An explicit caller-parsed status still wins over the wire type.
         let formatted = format_request_failure(Some(503), Some("idle_timeout"), "whatever");

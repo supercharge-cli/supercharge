@@ -340,8 +340,12 @@ impl acp::Agent for MvpAgent {
             Some(crate::auth::PreferredAuthMethod::ApiKey) => false,
             _ => has_cached_token,
         };
+        let has_custom_endpoint = self.cfg.borrow().endpoints.has_custom_endpoint();
+        let setup_provider_auth = has_custom_endpoint && has_external_api_key;
         let built = auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
             has_external_api_key,
+            prefer_provider_api_key_default: setup_provider_auth,
+            suppress_interactive_login: setup_provider_auth,
             has_cached_token,
             has_enterprise_oidc,
             enterprise_oidc_issuer: enterprise_oidc_issuer.as_deref(),

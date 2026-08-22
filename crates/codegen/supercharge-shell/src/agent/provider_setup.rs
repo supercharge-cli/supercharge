@@ -13,6 +13,32 @@ const MAX_MODELS: usize = 500;
 const MAX_BASE_URL_LEN: usize = 500;
 const MAX_API_KEY_LEN: usize = 8192;
 const MAX_MODEL_ID_LEN: usize = 200;
+
+/// Reject values that are clearly UI/auth error text rather than credentials.
+pub fn is_plausible_provider_api_key(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    if trimmed.len() > MAX_API_KEY_LEN {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    !lower.contains("authentication required")
+        && !lower.contains("credentials were rejected")
+        && !lower.contains("run /login")
+        && !lower.contains("run `/login`")
+        && !lower.contains("re-authenticate")
+        && !lower.contains("session has expired")
+}
+
+fn sanitize_provider_api_key(raw: &str) -> String {
+    if is_plausible_provider_api_key(raw) {
+        raw.trim().to_owned()
+    } else {
+        String::new()
+    }
+}
 pub const SETUP_PROVIDER_ID: &str = "setup";
 pub const CUSTOM_PROVIDER_ID: &str = "custom";
 pub const CUSTOM_MODEL_ID: &str = "__custom__";
@@ -309,6 +335,8 @@ pub enum ProviderSetupError {
     InsecureHttp,
     #[error("provider base URL is invalid")]
     InvalidUrl,
+    #[error("provider API key looks like an error message, not a credential")]
+    InvalidApiKey,
     #[error("provider API key is too long")]
     ApiKeyTooLong,
     #[error("model identifier is empty or too long")]
@@ -594,7 +622,11 @@ pub fn persist_provider_setup_at(
     setup: &ProviderSetup,
 ) -> Result<(), ProviderSetupError> {
     let base_url = normalize_provider_base_url(&setup.base_url)?;
-    if setup.api_key.len() > MAX_API_KEY_LEN {
+    let api_key = sanitize_provider_api_key(&setup.api_key);
+    if !setup.api_key.trim().is_empty() && api_key.is_empty() {
+        return Err(ProviderSetupError::InvalidApiKey);
+    }
+    if api_key.len() > MAX_API_KEY_LEN {
         return Err(ProviderSetupError::ApiKeyTooLong);
     }
     let model_id = setup.model_id.trim();
@@ -622,7 +654,7 @@ pub fn persist_provider_setup_at(
     apply_provider_setup_to_document(
         &mut document,
         &base_url,
-        setup.api_key.trim(),
+        api_key.as_str(),
         model_id,
         model_name,
         setup.format,
@@ -691,7 +723,7 @@ pub fn provider_setup_api_key_from_toml(config: &toml::Value) -> Option<String> 
         .and_then(|provider| provider.get("api_key"))
         .and_then(toml::Value::as_str)
         .map(str::trim)
-        .filter(|key| !key.is_empty())
+        .filter(|key| !key.is_empty() && is_plausible_provider_api_key(key))
         .map(str::to_owned)
         .or_else(|| {
             config
@@ -703,7 +735,7 @@ pub fn provider_setup_api_key_from_toml(config: &toml::Value) -> Option<String> 
                             .get("api_key")
                             .and_then(toml::Value::as_str)
                             .map(str::trim)
-                            .filter(|key| !key.is_empty())
+                            .filter(|key| !key.is_empty() && is_plausible_provider_api_key(key))
                             .map(str::to_owned)
                     })
                 })
@@ -728,7 +760,10 @@ pub fn load_existing_provider_setup() -> Option<(String, String)> {
         .map(str::trim)
         .filter(|url| !url.is_empty())
         .map(str::to_owned)?;
-    let api_key = provider_setup_api_key_from_toml(&parsed).unwrap_or_default();
+    let api_key = provider_setup_api_key_from_toml(&parsed)
+        .map(|key| sanitize_provider_api_key(&key))
+        .filter(|key| !key.is_empty())
+        .unwrap_or_default();
     Some((base_url, api_key))
 }
 
@@ -825,6 +860,30 @@ mod tests {
                     name: "z-model".to_owned(),
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn rejects_auth_error_text_as_api_key() {
+        assert!(!is_plausible_provider_api_key(
+            "Authentication required — your session has expired"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        assert_eq!(
+            persist_provider_setup_at(
+                &path,
+                &ProviderSetup {
+                    base_url: "https://api.example.com/v1".to_owned(),
+                    api_key: "Authentication required".to_owned(),
+                    model_id: "test-model".to_owned(),
+                    model_name: "Test model".to_owned(),
+                    format: SetupWireFormat::Openai,
+                    provider_id: CUSTOM_PROVIDER_ID.to_owned(),
+                },
+            )
+            .unwrap_err(),
+            ProviderSetupError::InvalidApiKey
         );
     }
 
