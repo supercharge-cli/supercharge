@@ -2393,6 +2393,15 @@ struct AppChatRequest {
     files: Option<Vec<AppChatFile>>,
 }
 
+/// The cloud-infra mobile app listens on the owner conversation unless it
+/// explicitly supplies a chat id. Keep daemon defaults aligned with that
+/// contract so a submitted turn and its event stream use the same channel.
+fn app_chat_id(chat_id: Option<String>) -> String {
+    chat_id
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "owner".to_owned())
+}
+
 fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
     let Some(object) = payload.as_object_mut() else {
         return;
@@ -2471,6 +2480,7 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, prompt: String) {
             ),
         }
         app_emit(&state, &chat_id, json!({"type":"status", "busy":false}));
+        app_emit(&state, &chat_id, json!({"type":"done"}));
     });
 }
 
@@ -2526,7 +2536,7 @@ async fn app_chat(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AppChatRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<ErrorResponse>)> {
-    let chat_id = request.chat_id.unwrap_or_else(|| "default".to_owned());
+    let chat_id = app_chat_id(request.chat_id);
     if chat_id.len() > 128 || chat_id.chars().any(char::is_control) {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2585,7 +2595,7 @@ async fn app_chat_events(
     State(state): State<Arc<AppState>>,
     Query(query): Query<AppChatQuery>,
 ) -> Response {
-    let chat_id = query.chat_id.unwrap_or_else(|| "default".to_owned());
+    let chat_id = app_chat_id(query.chat_id);
     let since = query.since.unwrap_or(0);
     let mut receiver = state.app_events.subscribe();
     let stream = async_stream::stream! {
@@ -2627,7 +2637,7 @@ async fn api_stream(
     State(state): State<Arc<AppState>>,
     Query(query): Query<AppChatQuery>,
 ) -> impl IntoResponse {
-    let chat_id = query.chat_id.unwrap_or_else(|| "default".to_owned());
+    let chat_id = app_chat_id(query.chat_id);
     ws.on_upgrade(move |mut socket| async move {
         let mut receiver = state.app_events.subscribe();
         let ready = json!({"type": "ready", "id": 0, "chatId": chat_id});
@@ -2808,7 +2818,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        DaemonSession, RateLimiter, connection_readiness, load_daemon_sessions,
+        DaemonSession, RateLimiter, app_chat_id, connection_readiness, load_daemon_sessions,
         persist_daemon_sessions,
     };
     use std::collections::BTreeMap;
@@ -2824,6 +2834,13 @@ mod tests {
         assert!(!limiter.allow("alpha", 102));
         assert!(limiter.allow("beta", 102));
         assert!(limiter.allow("alpha", 160));
+    }
+
+    #[test]
+    fn app_chat_default_matches_the_cloud_infra_owner_conversation() {
+        assert_eq!(app_chat_id(None), "owner");
+        assert_eq!(app_chat_id(Some("  ".to_owned())), "owner");
+        assert_eq!(app_chat_id(Some("project-42".to_owned())), "project-42");
     }
 
     #[test]
