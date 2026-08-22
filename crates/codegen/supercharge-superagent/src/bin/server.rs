@@ -18,10 +18,10 @@ use base64::Engine as _;
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, WebSocketUpgrade, ws::Message},
     http::{HeaderMap, HeaderValue, Request, StatusCode, header},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -126,9 +126,22 @@ struct AppState {
     schedule_store: Arc<Mutex<ScheduleStore>>,
     app_events: broadcast::Sender<Value>,
     app_event_seq: Arc<AtomicU64>,
+    sessions: Arc<Mutex<BTreeMap<String, DaemonSession>>>,
     metrics: Arc<RuntimeMetrics>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct DaemonSession {
+    id: String,
+    created_at: u64,
+    updated_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateSessionRequest {
+    id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -500,6 +513,7 @@ async fn main() -> anyhow::Result<()> {
         schedule_store,
         app_events,
         app_event_seq: Arc::new(AtomicU64::new(0)),
+        sessions: Arc::new(Mutex::new(BTreeMap::new())),
         metrics: runtime_metrics(),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
@@ -614,6 +628,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/chat/approve", post(app_chat_approve))
         .route("/v1/chat/answer", post(app_chat_answer))
         .route("/v1/chat/pick", post(app_chat_pick))
+        .route("/api/v1/chat", post(app_chat))
+        .route("/api/v1/sessions", get(list_sessions).post(create_session))
+        .route("/api/v1/stream", get(api_stream))
         .route("/v1/connections", get(connection_status))
         .route(
             "/v1/providers",
@@ -2418,6 +2435,37 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, prompt: String) {
     });
 }
 
+async fn list_sessions(State(state): State<Arc<AppState>>) -> Json<Vec<DaemonSession>> {
+    let sessions = state.sessions.lock().await;
+    Json(sessions.values().cloned().collect())
+}
+
+async fn create_session(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateSessionRequest>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<ErrorResponse>)> {
+    let id = request
+        .id
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| format!("session-{}", uuid::Uuid::new_v4()));
+    if id.len() > 128 || id.chars().any(char::is_control) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid session id".to_owned(),
+            }),
+        ));
+    }
+    let now = unix_seconds();
+    let session = DaemonSession {
+        id: id.clone(),
+        created_at: now,
+        updated_at: now,
+    };
+    state.sessions.lock().await.insert(id, session.clone());
+    Ok((StatusCode::CREATED, Json(json!({"ok": true, "session": session}))))
+}
+
 async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
     Json(json!({
         "ok": true,
@@ -2469,6 +2517,16 @@ async fn app_chat(
                 .join("\\n"),
         );
     }
+    {
+        let now = unix_seconds();
+        let mut sessions = state.sessions.lock().await;
+        let session = sessions.entry(chat_id.clone()).or_insert(DaemonSession {
+            id: chat_id.clone(),
+            created_at: now,
+            updated_at: now,
+        });
+        session.updated_at = now;
+    }
     spawn_app_turn(state, chat_id.clone(), prompt);
     Ok((
         StatusCode::ACCEPTED,
@@ -2515,6 +2573,43 @@ async fn app_chat_events(
         .headers_mut()
         .insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
     response
+}
+
+async fn api_stream(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<AppChatQuery>,
+) -> impl IntoResponse {
+    let chat_id = query.chat_id.unwrap_or_else(|| "default".to_owned());
+    ws.on_upgrade(move |mut socket| async move {
+        let mut receiver = state.app_events.subscribe();
+        let ready = json!({"type": "ready", "id": 0, "chatId": chat_id});
+        if socket.send(Message::Text(ready.to_string().into())).await.is_err() {
+            return;
+        }
+        loop {
+            tokio::select! {
+                incoming = socket.recv() => {
+                    match incoming {
+                        Some(Ok(Message::Close(_))) | None => break,
+                        Some(Ok(_)) => {}
+                        Some(Err(_)) => break,
+                    }
+                }
+                event = receiver.recv() => {
+                    match event {
+                        Ok(event) if event.get("chatId").and_then(Value::as_str) == Some(chat_id.as_str()) => {
+                            if socket.send(Message::Text(event.to_string().into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            }
+        }
+    })
 }
 
 async fn app_chat_stop(
