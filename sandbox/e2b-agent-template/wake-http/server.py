@@ -52,10 +52,13 @@ PUBLIC_URL = (
 
 WORKDIR = os.environ.get("SUPERAGENT_DAEMON_WORKDIR") or "/home/user/workspace"
 DAEMON_ENV = "/home/user/.superagent/daemon.env"
-PIDFILE = "/tmp/superagent-daemon.pid"
-LOG = "/tmp/superagent-wake-http.log"
+PIDFILE = "/tmp/supercharge-daemon.pid"
+LOG = "/tmp/supercharge-wake-http.log"
 SHARES_PATH = os.environ.get("SUPERAGENT_SHARES_PATH") or "/home/user/.superagent/shares.json"
-DAEMON_COMMAND = os.environ.get("SUPERAGENT_DAEMON_COMMAND") or "/usr/local/bin/superagent-server"
+DAEMON_COMMAND = (
+    os.environ.get("SUPERAGENT_DAEMON_COMMAND")
+    or "/usr/local/bin/supercharge-superagent-server"
+)
 MAX_SHARE_BYTES = 50 * 1024 * 1024
 
 PENDING_PATHS = (
@@ -190,17 +193,17 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}${SUPERAGENT_TELEGRAM_BOT_TOKEN:-}" ]; then
   curl -sS -m 3 -X POST "https://api.telegram.org/bot${TOK}/deleteWebhook" \
     -d "drop_pending_updates=false" >/dev/null 2>&1 || true
 fi
-if [ -f /tmp/superagent-daemon.pid ]; then
-  OLD="$(cat /tmp/superagent-daemon.pid 2>/dev/null)"
+if [ -f /tmp/supercharge-daemon.pid ]; then
+  OLD="$(cat /tmp/supercharge-daemon.pid 2>/dev/null)"
   if [ -n "$OLD" ]; then kill "$OLD" 2>/dev/null || true; kill -9 "$OLD" 2>/dev/null || true; fi
-  rm -f /tmp/superagent-daemon.pid
+  rm -f /tmp/supercharge-daemon.pid
 fi
-nohup ${SUPERAGENT_DAEMON_COMMAND:-/usr/local/bin/superagent-server} >/tmp/superagent-daemon.log 2>&1 &
-echo $! > /tmp/superagent-daemon.pid
+nohup ${SUPERAGENT_DAEMON_COMMAND:-/usr/local/bin/supercharge-superagent-server} >/tmp/supercharge-daemon.log 2>&1 &
+echo $! > /tmp/supercharge-daemon.pid
 OK=0
 # ~2s max (20 × 0.1s) — pid existence is enough; agent warms in background
 for i in $(seq 1 20); do
-  if [ -f /tmp/superagent-daemon.pid ] && kill -0 "$(cat /tmp/superagent-daemon.pid)" 2>/dev/null; then
+  if [ -f /tmp/supercharge-daemon.pid ] && kill -0 "$(cat /tmp/supercharge-daemon.pid)" 2>/dev/null; then
     OK=1
     break
   fi

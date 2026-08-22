@@ -3,17 +3,24 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 template_dir="$repo_root/sandbox/e2b-agent-template"
+bin_dir="$template_dir/bin"
+mkdir -p "$bin_dir"
+
+cargo_bin="${CARGO:-cargo}"
+if ! command -v "$cargo_bin" >/dev/null 2>&1 && command -v rustup >/dev/null 2>&1; then
+  cargo_bin="$(rustup which cargo)"
+fi
 
 cd "$repo_root"
-cargo +1.94.0 build --locked --release \
+"$cargo_bin" build --locked --release \
   -p supercharge-superagent --features e2b --bin supercharge-superagent-server
-cargo +1.94.0 build --locked --release -p supercharge-pager-bin
+"$cargo_bin" build --locked --release -p supercharge-pager-bin --bin supercharge-pager
 
 install -Dm755 \
   "$repo_root/target/release/supercharge-superagent-server" \
-  "$template_dir/bin/superagent-server"
+  "$bin_dir/supercharge-superagent-server"
 install -Dm755 \
-  "$repo_root/target/release/supercharge-pager-bin" \
-  "$template_dir/bin/superagent-provider-bridge"
+  "$repo_root/target/release/supercharge-pager" \
+  "$bin_dir/supercharge"
 
-printf 'staged Rust agent assets in %s/bin\n' "$template_dir"
+printf 'staged Supercharge E2B assets in %s/bin\n' "$template_dir"

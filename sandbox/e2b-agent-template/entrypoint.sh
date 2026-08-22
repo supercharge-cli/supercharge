@@ -1,11 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p /var/lib/superagent /home/user/workspace/media
+mkdir -p \
+  /home/user/workspace \
+  /home/user/.superagent \
+  /home/user/workspace/.superagent-media \
+  /var/lib/superagent
 
-# The wake service is the E2B auto-resume doorbell and file-share endpoint.
-/opt/superagent/wake-http/start.sh || true
+/opt/vectra/wake-http/start.sh || true
 
-# Keep the Rust daemon in the foreground so E2B reports the sandbox as healthy
-# and an external supervisor can restart the sandbox if it exits.
-exec /usr/local/bin/superagent-server
+set -a
+[ -f /home/user/.superagent/daemon.env ] && . /home/user/.superagent/daemon.env
+[ -f /home/user/.superagent/gateway.env ] && . /home/user/.superagent/gateway.env
+set +a
+
+export SUPERAGENT_BIND="${SUPERAGENT_BIND:-0.0.0.0:8790}"
+export SUPERAGENT_AGENT_BINARY="${SUPERAGENT_AGENT_BINARY:-/usr/local/bin/supercharge}"
+export SUPERAGENT_DAEMON_WORKDIR="${SUPERAGENT_DAEMON_WORKDIR:-/home/user/workspace}"
+export SUPERAGENT_SHARE_WORKSPACE_ROOT="${SUPERAGENT_SHARE_WORKSPACE_ROOT:-/home/user/workspace}"
+export SUPERAGENT_MEDIA_ROOT="${SUPERAGENT_MEDIA_ROOT:-/home/user/workspace/.superagent-media}"
+export SUPERAGENT_BROWSER_CONTROL_ENABLED="${SUPERAGENT_BROWSER_CONTROL_ENABLED:-true}"
+export SUPERAGENT_WAKE_PORT="${SUPERAGENT_WAKE_PORT:-8788}"
+export SUPERAGENT_DAEMON_COMMAND="${SUPERAGENT_DAEMON_COMMAND:-/usr/local/bin/supercharge-superagent-server}"
+
+PIDFILE=/tmp/supercharge-daemon.pid
+LOGFILE=/tmp/supercharge-daemon.log
+
+if [ -f "$PIDFILE" ]; then
+  OLD="$(cat "$PIDFILE" 2>/dev/null || true)"
+  if [ -n "$OLD" ]; then
+    kill "$OLD" 2>/dev/null || true
+    sleep 1
+    kill -9 "$OLD" 2>/dev/null || true
+  fi
+  rm -f "$PIDFILE"
+fi
+
+/usr/local/bin/supercharge-superagent-server >>"$LOGFILE" 2>&1 &
+echo $! >"$PIDFILE"
+wait "$(cat "$PIDFILE")"

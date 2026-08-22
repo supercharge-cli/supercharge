@@ -1,6 +1,5 @@
-# E2B template configuration for the Rust-first interactive agent.
+# E2B template configuration for the Supercharge interactive agent.
 dockerfile = "Dockerfile"
-template_name = "superagent-interactive-sandbox"
-# The concrete template_id is filled by E2B after publishing.
-# template_id = "..."
+template_name = "supercharge-full-sandbox"
+template_id = "i555ld3tcet21gyd3mry"
 # Recommended hosted tier: --cpu-count 4 --memory-mb 8192

@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
-# Rust-first interactive agent template.
-# Build context: the repository root. Before building, populate bin/ with
-# The Rust daemon and provider bridge are staged by the asset script.
+# Supercharge interactive agent template for Vectra Cloud / E2B.
+# Build context: sandbox/e2b-agent-template (binaries staged by prepare-e2b-agent-assets.sh).
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -36,7 +35,6 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-# agent-browser provides Chromium automation and its localhost screencast server.
 RUN npm install -g agent-browser \
     && (agent-browser install --with-deps || agent-browser install)
 
@@ -54,20 +52,23 @@ RUN set -e; \
     cp -a /root/.agent-browser/. /home/user/.agent-browser/ 2>/dev/null || true; \
     chown -R 1000:1000 /home/user /var/lib/superagent
 
-COPY bin/superagent-server /usr/local/bin/superagent-server
-COPY bin/superagent-provider-bridge /usr/local/bin/superagent-provider-bridge
-COPY wake-http /opt/superagent/wake-http
-COPY entrypoint.sh /opt/superagent/entrypoint.sh
-RUN chmod +x /usr/local/bin/superagent-server /usr/local/bin/superagent-provider-bridge \
-    /opt/superagent/entrypoint.sh /opt/superagent/wake-http/start.sh \
-    /opt/superagent/wake-http/server.py \
-    && chown -R 1000:1000 /opt/superagent
+COPY bin/supercharge-superagent-server /usr/local/bin/supercharge-superagent-server
+COPY bin/supercharge /usr/local/bin/supercharge
+RUN ln -sf /usr/local/bin/supercharge /usr/local/bin/sc
+COPY wake-http /opt/vectra/wake-http
+COPY entrypoint.sh /opt/vectra/entrypoint.sh
+RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/supercharge \
+    /opt/vectra/entrypoint.sh /opt/vectra/wake-http/start.sh \
+    /opt/vectra/wake-http/server.py \
+    && chown -R 1000:1000 /opt/vectra
 
 USER user
 WORKDIR /home/user
 ENV PATH="/usr/local/bin:${PATH}"
 ENV SUPERAGENT_BIND=0.0.0.0:8790
-ENV SUPERAGENT_MEDIA_ROOT=/home/user/workspace/media
+ENV SUPERAGENT_DAEMON_WORKDIR=/home/user/workspace
+ENV SUPERAGENT_SHARE_WORKSPACE_ROOT=/home/user/workspace
+ENV SUPERAGENT_MEDIA_ROOT=/home/user/workspace/.superagent-media
 ENV SUPERAGENT_MEMORY_STATE=/var/lib/superagent/memory.json
 ENV SUPERAGENT_JOB_STATE=/var/lib/superagent/jobs.json
 ENV SUPERAGENT_SCHEDULE_STATE=/var/lib/superagent/schedules.json
@@ -75,7 +76,8 @@ ENV SUPERAGENT_CONTROL_STATE=/var/lib/superagent/controls.json
 ENV SUPERAGENT_GATEWAY_STATE=/var/lib/superagent/gateway-state.json
 ENV SUPERAGENT_E2B_SESSION_STATE=/var/lib/superagent/e2b-sessions.json
 ENV SUPERAGENT_E2B_WORKSPACE_ROOT=/home/user/workspace
-ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/superagent-provider-bridge
+ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/supercharge
+ENV SUPERAGENT_DAEMON_COMMAND=/usr/local/bin/supercharge-superagent-server
 ENV SUPERAGENT_PROVIDER=pollinations
 ENV SUPERAGENT_MODEL=kimi-code
 ENV SUPERAGENT_PROVIDER_BASE_URL=https://gen.pollinations.ai/v1
@@ -83,6 +85,7 @@ ENV SUPERAGENT_PROVIDER_FORMAT=openai
 ENV SUPERAGENT_PROVIDER_API_KEY_ENV=POLLINATIONS_API_KEY
 ENV SUPERAGENT_PROVIDER_CONFIG_PATH=/var/lib/superagent/provider-config.toml
 ENV SUPERAGENT_WAKE_PORT=8788
+ENV SUPERAGENT_BROWSER_CONTROL_ENABLED=true
 
 EXPOSE 8788 8790 9223
-ENTRYPOINT ["/opt/superagent/entrypoint.sh"]
+ENTRYPOINT ["/opt/vectra/entrypoint.sh"]
