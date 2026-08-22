@@ -33,7 +33,7 @@ tokio-tungstenite = { workspace = true, features = ["rustls-tls-native-roots"] }
 tower-http = { workspace = true, features = ["limit"] }
 urlencoding = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "signal", "sync", "time"] }
-uuid = { workspace = true, features = ["v4", "serde"] }
+uuid = { workspace = true, features = ["v4", "v5", "serde"] }
 
 [dev-dependencies]
 httpmock = "0.7"

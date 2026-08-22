@@ -36,6 +36,6 @@ if [ -f "$PIDFILE" ]; then
   rm -f "$PIDFILE"
 fi
 
-/usr/local/bin/supercharge-superagent-server >>"$LOGFILE" 2>&1 &
+"$SUPERAGENT_DAEMON_COMMAND" >>"$LOGFILE" 2>&1 &
 echo $! >"$PIDFILE"
 wait "$(cat "$PIDFILE")"

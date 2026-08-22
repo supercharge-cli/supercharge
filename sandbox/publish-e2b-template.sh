@@ -20,6 +20,7 @@ fi
 template_name="${SUPERCHARGE_E2B_TEMPLATE:-supercharge-full-sandbox}"
 cpu_count="${SUPERCHARGE_E2B_CPU_COUNT:-16}"
 memory_mb="${SUPERCHARGE_E2B_MEMORY_MB:-16384}"
+e2b_cli_version="${SUPERCHARGE_E2B_CLI_VERSION:-2.16.1}"
 
 if [ -z "${E2B_API_KEY:-}" ]; then
   echo "E2B_API_KEY is required to publish the template" >&2
@@ -33,7 +34,7 @@ e2b_cli() {
   if command -v e2b >/dev/null 2>&1; then
     e2b "$@"
   else
-    pnpm dlx @e2b/cli@latest "$@"
+    pnpm dlx "@e2b/cli@${e2b_cli_version}" "$@"
   fi
 }
 

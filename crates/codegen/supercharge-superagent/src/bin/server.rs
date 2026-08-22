@@ -3,6 +3,7 @@ use std::{
     convert::Infallible,
     env,
     net::SocketAddr,
+    path::{Path as FsPath, PathBuf},
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -1184,13 +1185,9 @@ async fn run_supercharge_prompt(
         let mut last_error = String::from("all provider attempts failed");
         for profile in provider_profiles_for_turn() {
             let attempt_started = Instant::now();
-            let safe_id = profile
-                .id
-                .chars()
-                .map(|character| if character.is_ascii_alphanumeric() { character } else { '_' })
-                .collect::<String>();
-            let attempt_config = format!("{base_config}.{trace_id}.{safe_id}.toml");
-            if let Err(error) = write_runtime_config(&attempt_config, &profile) {
+            let agent_home = agent_runtime_home(&base_config, &profile);
+            let agent_config = agent_home.join("config.toml");
+            if let Err(error) = write_runtime_config(&agent_config, &profile) {
                 last_error = redact_secrets(&error.to_string());
                 record_provider_usage(
                     &metrics,
@@ -1202,20 +1199,37 @@ async fn run_supercharge_prompt(
                 );
                 continue;
             }
-            let output = tokio::process::Command::new(&binary)
-                .env("SUPERCHARGE_CONFIG_PATH", &attempt_config)
-                .env("SUPERAGENT_PROVIDER_CONFIG_PATH", &attempt_config)
+            let cli_session_id = agent_session_id(session_key);
+            let session_marker = agent_session_marker_path(&agent_home, &cli_session_id);
+            let mut command = tokio::process::Command::new(&binary);
+            command
+                .env("SUPERCHARGE_HOME", &agent_home)
+                .arg("--model")
+                .arg(&profile.id)
                 .arg("--single")
-                .arg(prompt)
-                .arg("--session-id")
-                .arg(session_key)
-                .output()
-                .await;
-            let _ = std::fs::remove_file(&attempt_config);
+                .arg(prompt);
+            if session_marker.exists() {
+                command.arg("--resume").arg(&cli_session_id);
+            } else {
+                command.arg("--session-id").arg(&cli_session_id);
+            }
+            let output = command.output().await;
             let elapsed_ms = attempt_started.elapsed().as_millis().min(u64::MAX as u128) as u64;
             match output {
                 Ok(output) if output.status.success() => {
                     let reply = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                    if let Some(parent) = session_marker.parent() {
+                        if let Err(error) = std::fs::create_dir_all(parent)
+                            .and_then(|_| std::fs::write(&session_marker, "initialized\n"))
+                        {
+                            tracing::warn!(
+                                session = %session_key,
+                                path = %session_marker.display(),
+                                %error,
+                                "agent response succeeded but its resume marker could not be persisted"
+                            );
+                        }
+                    }
                     record_provider_usage(
                         &metrics,
                         &profile.id,
@@ -1227,7 +1241,17 @@ async fn run_supercharge_prompt(
                     return Ok(Some(reply));
                 }
                 Ok(output) => {
-                    last_error = format!("{} exited with status {}", profile.id, output.status);
+                    let stderr = redact_secrets(&String::from_utf8_lossy(&output.stderr));
+                    last_error = if stderr.trim().is_empty() {
+                        format!("{} exited with status {}", profile.id, output.status)
+                    } else {
+                        format!(
+                            "{} exited with status {}: {}",
+                            profile.id,
+                            output.status,
+                            stderr.trim().chars().take(1_000).collect::<String>()
+                        )
+                    };
                     record_provider_usage(
                         &metrics,
                         &profile.id,
@@ -1997,6 +2021,31 @@ fn e2b_error(error: supercharge_superagent::E2bError) -> (StatusCode, Json<Error
 
 fn configured_agent_binary() -> Option<std::ffi::OsString> {
     env::var_os("SUPERAGENT_AGENT_BINARY").or_else(|| env::var_os("SUPERCHARGE_AGENT_BINARY"))
+}
+
+fn agent_runtime_home(base_config: &str, profile: &ProviderProfile) -> PathBuf {
+    let profile_id = profile
+        .id
+        .chars()
+        .map(|character| if character.is_ascii_alphanumeric() { character } else { '_' })
+        .collect::<String>();
+    PathBuf::from(base_config)
+        .parent()
+        .unwrap_or_else(|| FsPath::new("."))
+        .join("agent-runtime")
+        .join(profile_id)
+}
+
+fn agent_session_id(session_key: &str) -> String {
+    uuid::Uuid::new_v5(
+        &uuid::Uuid::NAMESPACE_URL,
+        format!("supercharge-superagent-session:{session_key}").as_bytes(),
+    )
+    .to_string()
+}
+
+fn agent_session_marker_path(agent_home: &FsPath, session_id: &str) -> PathBuf {
+    agent_home.join("daemon-sessions").join(session_id)
 }
 
 fn unix_seconds() -> u64 {
@@ -2856,21 +2905,21 @@ async fn app_chat_events(
     let since = query.since.unwrap_or(0);
     let mut receiver = state.app_events.subscribe();
     let stream = async_stream::stream! {
-        yield Ok::<Bytes, Infallible>(Bytes::from(format!("data: {}\\n\\n", json!({"type":"ready","id":0,"chatId":chat_id}))));
+        yield Ok::<Bytes, Infallible>(app_sse_data_frame(&json!({"type":"ready","id":0,"chatId":chat_id})));
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(15), receiver.recv()).await {
                 Ok(Ok(event)) => {
                     let same_chat = event.get("chatId").and_then(Value::as_str) == Some(chat_id.as_str());
                     let newer = event.get("id").and_then(Value::as_u64).unwrap_or(0) > since;
                     if same_chat && newer {
-                        yield Ok::<Bytes, Infallible>(Bytes::from(format!("data: {event}\\n\\n")));
+                        yield Ok::<Bytes, Infallible>(app_sse_data_frame(&event));
                     }
                 }
                 Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
-                    yield Ok::<Bytes, Infallible>(Bytes::from(": lagged\\n\\n"));
+                    yield Ok::<Bytes, Infallible>(Bytes::from(": lagged\n\n"));
                 }
                 Ok(Err(broadcast::error::RecvError::Closed)) => break,
-                Err(_) => yield Ok::<Bytes, Infallible>(Bytes::from(": ping\\n\\n")),
+                Err(_) => yield Ok::<Bytes, Infallible>(Bytes::from(": ping\n\n")),
             }
         }
     };
@@ -2887,6 +2936,10 @@ async fn app_chat_events(
         .headers_mut()
         .insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
     response
+}
+
+fn app_sse_data_frame(event: &Value) -> Bytes {
+    Bytes::from(format!("data: {event}\n\n"))
 }
 
 async fn api_stream(
@@ -3075,7 +3128,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        DaemonSession, RateLimiter, app_chat_id, app_reply_completion_events,
+        DaemonSession, RateLimiter, agent_session_id, app_chat_id, app_reply_completion_events,
+        app_sse_data_frame,
         app_turn_completion_events, connection_readiness, default_session_status,
         load_daemon_sessions, persist_daemon_sessions,
     };
@@ -3118,6 +3172,21 @@ mod tests {
         assert_eq!(events[1]["type"], "status");
         assert_eq!(events[1]["busy"], false);
         assert_eq!(events[2]["type"], "done");
+    }
+
+    #[test]
+    fn daemon_session_keys_map_to_stable_cli_compatible_uuids() {
+        let owner = agent_session_id("app:owner");
+        assert!(uuid::Uuid::try_parse(&owner).is_ok());
+        assert_eq!(owner, agent_session_id("app:owner"));
+        assert_ne!(owner, agent_session_id("app:another-conversation"));
+    }
+
+    #[test]
+    fn app_sse_frames_use_eventsource_newline_delimiters() {
+        let frame = app_sse_data_frame(&serde_json::json!({"type":"ready"}));
+        assert_eq!(frame.as_ref(), b"data: {\"type\":\"ready\"}\n\n");
+        assert!(!frame.as_ref().windows(2).any(|window| window == b"\\n"));
     }
 
     #[test]
