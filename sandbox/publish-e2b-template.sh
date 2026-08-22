@@ -18,8 +18,8 @@ if [ -z "${E2B_API_KEY:-}" ] && [ -f "$repo_root/cloud-infra/apps/gateway/.env" 
 fi
 
 template_name="${SUPERCHARGE_E2B_TEMPLATE:-supercharge-full-sandbox}"
-cpu_count="${SUPERCHARGE_E2B_CPU_COUNT:-4}"
-memory_mb="${SUPERCHARGE_E2B_MEMORY_MB:-8192}"
+cpu_count="${SUPERCHARGE_E2B_CPU_COUNT:-16}"
+memory_mb="${SUPERCHARGE_E2B_MEMORY_MB:-16384}"
 
 if [ -z "${E2B_API_KEY:-}" ]; then
   echo "E2B_API_KEY is required to publish the template" >&2

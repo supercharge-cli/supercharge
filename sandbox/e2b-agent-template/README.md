@@ -41,7 +41,7 @@ export E2B_API_KEY=...
 Or manually from this directory:
 
 ```bash
-e2b template create supercharge-full-sandbox -d Dockerfile --cpu-count 4 --memory-mb 8192
+e2b template create supercharge-full-sandbox -d Dockerfile --cpu-count 16 --memory-mb 16384
 e2b template publish supercharge-full-sandbox -y
 ```
 

@@ -2,4 +2,4 @@
 dockerfile = "Dockerfile"
 template_name = "supercharge-full-sandbox"
 template_id = "i555ld3tcet21gyd3mry"
-# Recommended hosted tier: --cpu-count 4 --memory-mb 8192
+# Recommended hosted tier: --cpu-count 16 --memory-mb 16384
