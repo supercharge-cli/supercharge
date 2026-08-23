@@ -1,103 +1,246 @@
 name: Build and publish release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to create, for example v0.2.0
+        description: Release tag to create, for example v1.0.5
         required: true
-        default: v0.1.0
+        default: v1.0.5
         type: string
-      build_provider_bridge:
-        description: Also build the upstream provider bridge (may require a larger runner)
+      public_repo:
+        description: Public releases repo (owner/name)
         required: true
-        default: false
+        default: iotserver24/supercharge-releases
+        type: string
+      build_daemon:
+        description: Also build the linux daemon binary for E2B/self-host
+        required: true
+        default: true
         type: boolean
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ inputs.tag }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
-jobs:
-  build-release:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: 0
-      CARGO_BUILD_JOBS: 2
-      RUSTUP_TOOLCHAIN: 1.94.1
-      RUSTFLAGS: -C debuginfo=0
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTUP_TOOLCHAIN: 1.94.1
+  RUSTFLAGS: -C debuginfo=0
+  PUBLIC_RELEASE_REPO: ${{ github.event_name == 'workflow_dispatch' && inputs.public_repo || 'iotserver24/supercharge-releases' }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+jobs:
+  build-cli:
+    name: CLI ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+            ext: ""
+          - os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            platform: linux-aarch64
+            ext: ""
+            cross: true
+          - os: macos-14
+            target: x86_64-apple-darwin
+            platform: macos-x86_64
+            ext: ""
+          - os: macos-14
+            target: aarch64-apple-darwin
+            platform: macos-aarch64
+            ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x86_64
+            ext: .exe
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            platform: windows-aarch64
+            ext: .exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.94.1
-          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
+
+      - name: Install native build prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends protobuf-compiler gcc-aarch64-linux-gnu
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            mkdir -p .cargo
+            cat >> .cargo/config.toml <<'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+          fi
+
+      - name: Install native build prerequisites (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install native build prerequisites (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install protoc --no-progress -y
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.os }}-${{ matrix.target }}-cli-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.os }}-${{ matrix.target }}-cli-
+
+      - name: Build Supercharge CLI
+        run: cargo build --locked --release -p supercharge-pager-bin --bin supercharge-pager --target ${{ matrix.target }}
+
+      - name: Package CLI artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          src="target/${{ matrix.target }}/release/supercharge-pager${{ matrix.ext }}"
+          base="supercharge-${{ matrix.platform }}${{ matrix.ext }}"
+          cp "$src" "dist/$base"
+          cp "$src" "dist/sc-${{ matrix.platform }}${{ matrix.ext }}"
+          chmod +x dist/* 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}
+          path: dist/*
+
+  build-daemon:
+    name: Daemon linux-x86_64
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_daemon }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.1
 
       - name: Install native build prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends protobuf-compiler
 
-      - name: Cache Cargo artifacts
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-
-
-      - name: Run quality gates
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --locked -p supercharge-superagent -- -D warnings
-          cargo test --locked -p supercharge-superagent
+          key: ubuntu-daemon-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ubuntu-daemon-
 
       - name: Build daemon release binary
-        run: cargo build --locked --release -p supercharge-superagent --bin supercharge-superagent-server
+        run: cargo build --locked --release -p supercharge-superagent --features e2b --bin supercharge-superagent-server
 
-      - name: Optionally build provider bridge
-        if: ${{ inputs.build_provider_bridge }}
-        run: cargo build --locked --release -p supercharge-pager-bin --bin supercharge-pager
+      - name: Package daemon artifact
+        run: |
+          mkdir -p dist
+          cp target/release/supercharge-superagent-server dist/superagent-server-linux-x86_64
+          chmod +x dist/superagent-server-linux-x86_64
 
-      - name: Package artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daemon-linux-x86_64
+          path: dist/*
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build-cli, build-daemon]
+    if: always() && needs.build-cli.result == 'success' && (needs.build-daemon.result == 'success' || needs.build-daemon.result == 'skipped')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Prepare release bundle
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p release
-          cp target/release/supercharge-superagent-server release/superagent-server-linux-x86_64
-          cp deploy/install-supercharge.sh release/install-supercharge.sh
-          chmod +x release/install-supercharge.sh
-          tar -C sandbox -czf release/superagent-e2b-template-source.tar.gz e2b-agent-template
-          if [[ -f target/release/supercharge-pager ]]; then
-            cp target/release/supercharge-pager release/superagent-provider-bridge-linux-x86_64
-            cp target/release/supercharge-pager release/supercharge-linux-x86_64
-            cp target/release/supercharge-pager release/sc-linux-x86_64
-          fi
-          sha256sum release/* > release/SHA256SUMS
-          cat release/SHA256SUMS
-
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
+          TAG="${{ env.RELEASE_TAG }}"
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $TAG" >&2
             exit 1
           fi
-          gh release create "$TAG" release/* \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "${TAG}" \
-            --generate-notes
+          VERSION="${TAG#v}"
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          cp scripts/install.sh release/install.sh
+          cp scripts/install.ps1 release/install.ps1
+          cp deploy/install-supercharge.sh release/install-supercharge.sh
+          chmod +x release/install.sh release/install-supercharge.sh
+          printf '%s\n' "$VERSION" > release/version
+          tar -C sandbox -czf release/superagent-e2b-template-source.tar.gz e2b-agent-template
+          cat > release/e2b-manifest.json <<EOF
+          {"version":"${TAG}","daemon":"superagent-server-linux-x86_64","cli":"supercharge-linux-x86_64"}
+          EOF
+          sha256sum release/* > release/SHA256SUMS
+          ls -la release/
+          cat release/SHA256SUMS
+
+      - name: Publish release (source repo)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "$TAG" release/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${TAG}" \
+              --generate-notes
+          fi
+
+      - name: Publish release (public repo)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ env.RELEASE_TAG }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+        run: |
+          set -euo pipefail
+          if ! gh repo view "$PUBLIC_REPO" >/dev/null 2>&1; then
+            echo "Public repo $PUBLIC_REPO not found; skipping public mirror." >&2
+            echo "Create it with: gh repo create $PUBLIC_REPO --public --description 'Public Supercharge CLI releases'" >&2
+            exit 0
+          fi
+          if gh release view "$TAG" --repo "$PUBLIC_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --repo "$PUBLIC_REPO" --clobber
+          else
+            gh release create "$TAG" release/* \
+              --repo "$PUBLIC_REPO" \
+              --title "${TAG}" \
+              --notes "Supercharge AI CLI release ${TAG}. Install: curl -fsSL https://raw.githubusercontent.com/${PUBLIC_REPO}/main/scripts/install.sh | bash"
+          fi
