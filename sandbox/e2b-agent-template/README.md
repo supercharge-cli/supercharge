@@ -27,7 +27,15 @@ From the repository root:
 ./sandbox/prepare-e2b-agent-assets.sh
 ```
 
-This stages `bin/supercharge-superagent-server` and `bin/supercharge`. The binaries are build outputs and should not be committed to Git.
+This uses the cached Docker image `supercharge-e2b-builder:24.04` (`sandbox/e2b-builder/Dockerfile`): Ubuntu 24.04, `rustc`, `protoc`, and C build deps. The first `docker build` of that image is slow; later compiles skip apt/rustup and reuse `target/` plus `.cargo-docker/`.
+
+Daemon-only (skip the large CLI binary):
+
+```bash
+SUPERCHARGE_E2B_DAEMON_ONLY=1 ./sandbox/prepare-e2b-agent-assets.sh
+```
+
+Do not put the Rust toolchain in the **runtime** E2B template — every customer sandbox would pay for rustc. Tools live in the builder image; the template only gets the two binaries.
 
 ## Build and publish
 

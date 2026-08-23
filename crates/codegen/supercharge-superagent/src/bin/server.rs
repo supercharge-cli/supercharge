@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     convert::Infallible,
     env,
     net::SocketAddr,
@@ -126,6 +126,7 @@ struct AppState {
     memory_store: Arc<Mutex<MemoryStore>>,
     schedule_store: Arc<Mutex<ScheduleStore>>,
     app_events: broadcast::Sender<Value>,
+    app_event_log: Arc<StdMutex<VecDeque<Value>>>,
     app_event_seq: Arc<AtomicU64>,
     sessions: Arc<Mutex<BTreeMap<String, DaemonSession>>>,
     active_app_session: Arc<Mutex<String>>,
@@ -545,6 +546,7 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "./runtime/schedules.json".to_owned());
     let schedule_store = Arc::new(Mutex::new(ScheduleStore::load(schedule_state_path)?));
     let (app_events, _) = broadcast::channel(256);
+    let app_event_log = Arc::new(StdMutex::new(VecDeque::with_capacity(APP_EVENT_LOG_LIMIT)));
     let session_state_path = env::var("SUPERAGENT_SESSION_STATE")
         .unwrap_or_else(|_| "./runtime/sessions.json".to_owned());
     let sessions = load_daemon_sessions(&session_state_path)?;
@@ -571,6 +573,7 @@ async fn main() -> anyhow::Result<()> {
         memory_store,
         schedule_store,
         app_events,
+        app_event_log,
         app_event_seq: Arc::new(AtomicU64::new(0)),
         sessions: Arc::new(Mutex::new(sessions)),
         active_app_session: Arc::new(Mutex::new(active_app_session)),
@@ -2459,6 +2462,7 @@ async fn browser_control(
 
 #[derive(Debug, Deserialize)]
 struct AppChatQuery {
+    #[serde(alias = "chatId")]
     chat_id: Option<String>,
     since: Option<u64>,
 }
@@ -2473,6 +2477,7 @@ struct AppChatFile {
 #[derive(Debug, Deserialize)]
 struct AppChatRequest {
     text: Option<String>,
+    #[serde(alias = "chatId")]
     chat_id: Option<String>,
     files: Option<Vec<AppChatFile>>,
 }
@@ -2490,6 +2495,34 @@ fn app_chat_id(chat_id: Option<String>) -> String {
     chat_id
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "owner".to_owned())
+}
+
+const APP_EVENT_LOG_LIMIT: usize = 512;
+
+fn app_event_id(event: &Value) -> u64 {
+    event.get("id").and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn app_events_for_replay<'a>(
+    events: impl IntoIterator<Item = &'a Value>,
+    chat_id: &str,
+    since: u64,
+) -> Vec<Value> {
+    events
+        .into_iter()
+        .filter(|event| {
+            event.get("chatId").and_then(Value::as_str) == Some(chat_id)
+                && app_event_id(event) > since
+        })
+        .cloned()
+        .collect()
+}
+
+fn retain_app_event(log: &mut VecDeque<Value>, event: Value) {
+    if log.len() >= APP_EVENT_LOG_LIMIT {
+        log.pop_front();
+    }
+    log.push_back(event);
 }
 
 fn app_session_title(prompt: &str) -> String {
@@ -2566,6 +2599,9 @@ fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
     object.insert("id".to_owned(), json!(id));
     object.insert("ts".to_owned(), json!(unix_seconds()));
     object.insert("chatId".to_owned(), json!(chat_id));
+    if let Ok(mut log) = state.app_event_log.lock() {
+        retain_app_event(&mut log, payload.clone());
+    }
     let _ = state.app_events.send(payload);
 }
 
@@ -2903,15 +2939,30 @@ async fn app_chat_events(
 ) -> Response {
     let chat_id = app_chat_id(query.chat_id);
     let since = query.since.unwrap_or(0);
+    // Subscribe before snapshot so live events cannot slip between replay and
+    // the broadcast receiver. The Vectra app reconnects after Vercel's ~55s
+    // SSE cap; without replay those turns look like “no reply”.
     let mut receiver = state.app_events.subscribe();
+    let replay = {
+        let log = state
+            .app_event_log
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        app_events_for_replay(log.iter(), &chat_id, since)
+    };
+    let replayed_ids: HashSet<u64> = replay.iter().map(app_event_id).collect();
     let stream = async_stream::stream! {
         yield Ok::<Bytes, Infallible>(app_sse_data_frame(&json!({"type":"ready","id":0,"chatId":chat_id})));
+        for event in replay {
+            yield Ok::<Bytes, Infallible>(app_sse_data_frame(&event));
+        }
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(15), receiver.recv()).await {
                 Ok(Ok(event)) => {
                     let same_chat = event.get("chatId").and_then(Value::as_str) == Some(chat_id.as_str());
-                    let newer = event.get("id").and_then(Value::as_u64).unwrap_or(0) > since;
-                    if same_chat && newer {
+                    let event_id = app_event_id(&event);
+                    let newer = event_id > since;
+                    if same_chat && newer && !replayed_ids.contains(&event_id) {
                         yield Ok::<Bytes, Infallible>(app_sse_data_frame(&event));
                     }
                 }
@@ -2986,7 +3037,7 @@ async fn app_chat_stop(
     let chat_id = request
         .get("chatId")
         .and_then(Value::as_str)
-        .unwrap_or("default");
+        .unwrap_or("owner");
     app_emit(
         &state,
         chat_id,
@@ -3128,9 +3179,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        DaemonSession, RateLimiter, agent_session_id, app_chat_id, app_reply_completion_events,
-        app_sse_data_frame,
-        app_turn_completion_events, connection_readiness, default_session_status,
+        DaemonSession, RateLimiter, agent_session_id, app_chat_id, app_events_for_replay,
+        app_reply_completion_events, app_sse_data_frame, app_turn_completion_events,
+        connection_readiness, default_session_status,
         load_daemon_sessions, persist_daemon_sessions,
     };
     use std::collections::BTreeMap;
@@ -3180,6 +3231,20 @@ mod tests {
         assert!(uuid::Uuid::try_parse(&owner).is_ok());
         assert_eq!(owner, agent_session_id("app:owner"));
         assert_ne!(owner, agent_session_id("app:another-conversation"));
+    }
+
+    #[test]
+    fn app_event_replay_returns_later_events_for_the_same_chat() {
+        let events = vec![
+            serde_json::json!({"id":1,"chatId":"owner","type":"status","busy":true}),
+            serde_json::json!({"id":2,"chatId":"other","type":"text","text":"nope"}),
+            serde_json::json!({"id":3,"chatId":"owner","type":"text","text":"hello"}),
+            serde_json::json!({"id":4,"chatId":"owner","type":"done"}),
+        ];
+        let replay = app_events_for_replay(&events, "owner", 1);
+        assert_eq!(replay.len(), 2);
+        assert_eq!(replay[0]["type"], "text");
+        assert_eq!(replay[1]["type"], "done");
     }
 
     #[test]

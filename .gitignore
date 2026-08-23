@@ -12,3 +12,7 @@ runtime/
 
 # Local cloud deployment workspace (separate infra repo)
 cloud-infra/
+
+# Ubuntu builder caches (rustup/cargo inside Docker)
+.cargo-docker/
+.rustup-docker/
