@@ -308,10 +308,28 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let bytes: Vec<u8> = {
-        let resp = reqwest::blocking::get(&url).map_err(|e| {
+        let mut last_err = None;
+        let mut resp = None;
+        for attempt in 1..=8 {
+            match reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_secs(60))
+                .build()
+                .and_then(|client| client.get(&url).send())
+            {
+                Ok(r) => {
+                    resp = Some(r);
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    std::thread::sleep(std::time::Duration::from_secs(attempt));
+                }
+            }
+        }
+        let resp = resp.ok_or_else(|| {
             format!(
                 "Failed to download ripgrep: {}\nSet SUPERCHARGE_TOOLS_BUNDLE_RG_PATH to a local rg for offline builds.",
-                e
+                last_err.map(|e| e.to_string()).unwrap_or_else(|| "unknown error".to_owned())
             )
         })?;
         if !resp.status().is_success() {

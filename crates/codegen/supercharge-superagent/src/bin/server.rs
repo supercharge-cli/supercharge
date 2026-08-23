@@ -4,6 +4,7 @@ use std::{
     env,
     net::SocketAddr,
     path::{Path as FsPath, PathBuf},
+    process::Stdio,
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -11,7 +12,10 @@ use std::{
     time::Instant,
 };
 
-use tokio::sync::{Mutex, broadcast};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    sync::{Mutex, broadcast},
+};
 use tracing::Instrument;
 
 use base64::Engine as _;
@@ -44,8 +48,12 @@ use supercharge_superagent::{
         invoke_stdio_tool, parse_mcp_servers,
     },
     jobs::{AgentJob, JobStatus, JobStore},
+    live::{
+        LiveEvent, app_events_for, e2b_agent_rules_for, next_messenger_progress, parse_cli_stream_line,
+        rewrite_localhost_for_user,
+    },
     matrix::{MatrixClient, MatrixConfig},
-    media::extract_media,
+    media::{MediaAttachment, extract_media},
     memory::{MemoryEntry, MemoryStore},
     provider::{
         ProviderConfigRequest, ProviderProfile, builtin_profiles, configured_profile, health_check,
@@ -53,7 +61,7 @@ use supercharge_superagent::{
     },
     redaction::redact_secrets,
     schedule_store::ScheduleStore,
-    sharing::rewrite_media_links,
+    sharing::{create_share, rewrite_media_links},
     signal::{SignalClient, SignalConfig},
     slack::{SlackClient, SlackConfig},
     subagents::{
@@ -815,6 +823,22 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    tokio::spawn(async {
+        let status = browser::ensure_stream(browser::stream_port()).await;
+        if status.enabled {
+            eprintln!(
+                "agent-browser stream ready on port {}",
+                if status.port == 0 {
+                    browser::stream_port()
+                } else {
+                    status.port
+                }
+            );
+        } else if let Some(error) = status.error {
+            eprintln!("agent-browser stream not ready: {error}");
+        }
+    });
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("superagent server listening on {addr}");
     axum::serve(listener, app)
@@ -897,7 +921,7 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
                         )
                         .await?;
                     } else if configured_agent_binary().is_some() {
-                        match run_supercharge_turn(&message).await {
+                        match run_telegram_live_turn(&client, &message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 let prepared = prepare_reply_for_delivery(&reply).await;
                                 send_chunked(&client, message.chat_id, &prepared).await?;
@@ -935,11 +959,14 @@ async fn run_signal_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         message.sender,
                         message.session_key()
                     );
-                    if configured_agent_binary().is_some()
-                        && let Ok(Some(reply)) =
+                    if configured_agent_binary().is_some() {
+                        let _ = client.send_message(&message.sender, "Working…").await;
+                        if let Ok(Some(reply)) =
                             run_supercharge_prompt(&message.session_key(), &message.text).await
-                    {
-                        client.send_message(&message.sender, &reply).await?;
+                        {
+                            let prepared = prepare_reply_for_delivery(&reply).await;
+                            client.send_message(&message.sender, &prepared).await?;
+                        }
                     }
                 }
             }
@@ -977,12 +1004,14 @@ async fn run_matrix_daemon() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         message.sender,
                         message.session_key()
                     );
-                    if configured_agent_binary().is_some()
-                        && let Ok(Some(reply)) =
+                    if configured_agent_binary().is_some() {
+                        let _ = client.send_message(&message.room_id, "Working…").await;
+                        if let Ok(Some(reply)) =
                             run_supercharge_prompt(&message.session_key(), &message.text).await
-                    {
-                        let prepared = prepare_reply_for_delivery(&reply).await;
-                        client.send_message(&message.room_id, &prepared).await?;
+                        {
+                            let prepared = prepare_reply_for_delivery(&reply).await;
+                            client.send_message(&message.room_id, &prepared).await?;
+                        }
                     }
                 }
             }
@@ -1006,18 +1035,21 @@ async fn run_slack_daemon() -> Result<(), Box<dyn std::error::Error + Send + Syn
                         message.user_id,
                         message.session_key()
                     );
-                    if configured_agent_binary().is_some()
-                        && let Ok(Some(reply)) =
-                            run_supercharge_prompt(&message.session_key(), &message.text).await
-                    {
-                        let prepared = prepare_reply_for_delivery(&reply).await;
-                        client
-                            .send_message(
-                                &message.channel_id,
-                                &prepared,
-                                message.thread_ts.as_deref(),
-                            )
-                            .await?;
+                    if configured_agent_binary().is_some() {
+                        match run_slack_live_turn(&client, &message).await {
+                            Ok(Some(reply)) if !reply.is_empty() => {
+                                let prepared = prepare_reply_for_delivery(&reply).await;
+                                client
+                                    .send_message(
+                                        &message.channel_id,
+                                        &prepared,
+                                        message.thread_ts.as_deref(),
+                                    )
+                                    .await?;
+                            }
+                            Ok(_) => {}
+                            Err(error) => eprintln!("agent headless Slack turn failed: {error}"),
+                        }
                     }
                 }
             }
@@ -1042,8 +1074,8 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                         message.user_id,
                         message.session_key().as_str()
                     );
-                    if let Some(binary) = configured_agent_binary() {
-                        match run_supercharge_turn(&message).await {
+                    if configured_agent_binary().is_some() {
+                        match run_discord_live_turn(&client, &message).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 let prepared = prepare_reply_for_delivery(&reply).await;
                                 send_discord_chunked(&client, message.chat_id, &prepared).await?;
@@ -1051,7 +1083,6 @@ async fn run_discord_daemon() -> Result<(), Box<dyn std::error::Error + Send + S
                             Ok(_) => {}
                             Err(error) => {
                                 eprintln!("agent headless Discord turn failed: {error}");
-                                let _ = binary;
                                 let _ = client
                                     .send_message(
                                         &message.chat_id.to_string(),
@@ -1085,10 +1116,113 @@ async fn send_discord_chunked(
     Ok(())
 }
 
-async fn run_supercharge_turn(
+fn live_progress_callback(
+    on_progress: impl Fn(String) + Send + Sync + 'static,
+) -> Box<dyn FnMut(Value) + Send> {
+    let on_progress = Arc::new(on_progress);
+    let mut tool_count = 0_u32;
+    let mut thought = String::new();
+    Box::new(move |line: Value| {
+        if let Some(text) = next_messenger_progress(&line, &mut tool_count, &mut thought) {
+            on_progress(text);
+        }
+    })
+}
+
+async fn run_telegram_live_turn(
+    client: &TelegramClient,
     message: &supercharge_superagent::gateway::GatewayMessage,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-    run_supercharge_prompt(message.session_key().as_str(), &message.text).await
+    let progress_id = match client.send_message(message.chat_id, "Working…").await {
+        Ok(id) => Some(id),
+        Err(error) => {
+            eprintln!("telegram progress send failed: {error}");
+            None
+        }
+    };
+    let progress_id = Arc::new(StdMutex::new(progress_id));
+    let client = client.clone();
+    let chat_id = message.chat_id;
+    let on_event = live_progress_callback(move |text| {
+        let client = client.clone();
+        let progress_id = progress_id.clone();
+        tokio::spawn(async move {
+            let id = progress_id.lock().ok().and_then(|guard| *guard);
+            if let Some(id) = id {
+                let _ = client.edit_message(chat_id, id, &text).await;
+            }
+        });
+    });
+    run_supercharge_prompt_with_events(
+        message.session_key().as_str(),
+        &message.text,
+        Some(on_event),
+    )
+    .await
+}
+
+async fn run_slack_live_turn(
+    client: &SlackClient,
+    message: &supercharge_superagent::slack::SlackMessage,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let progress_ts = match client
+        .send_message(&message.channel_id, "Working…", message.thread_ts.as_deref())
+        .await
+    {
+        Ok(ts) => Some(ts),
+        Err(error) => {
+            eprintln!("slack progress send failed: {error}");
+            None
+        }
+    };
+    let progress_ts = Arc::new(StdMutex::new(progress_ts));
+    let client = client.clone();
+    let channel_id = message.channel_id.clone();
+    let on_event = live_progress_callback(move |text| {
+        let client = client.clone();
+        let progress_ts = progress_ts.clone();
+        let channel_id = channel_id.clone();
+        tokio::spawn(async move {
+            let ts = progress_ts.lock().ok().and_then(|guard| guard.clone());
+            if let Some(ts) = ts {
+                let _ = client.update_message(&channel_id, &ts, &text).await;
+            }
+        });
+    });
+    run_supercharge_prompt_with_events(&message.session_key(), &message.text, Some(on_event)).await
+}
+
+async fn run_discord_live_turn(
+    client: &DiscordClient,
+    message: &supercharge_superagent::gateway::GatewayMessage,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let channel_id = message.chat_id.to_string();
+    let progress_id = match client.send_message(&channel_id, "Working…").await {
+        Ok(id) => Some(id),
+        Err(error) => {
+            eprintln!("discord progress send failed: {error}");
+            None
+        }
+    };
+    let progress_id = Arc::new(StdMutex::new(progress_id));
+    let client = client.clone();
+    let on_event = live_progress_callback(move |text| {
+        let client = client.clone();
+        let progress_id = progress_id.clone();
+        let channel_id = channel_id.clone();
+        tokio::spawn(async move {
+            let id = progress_id.lock().ok().and_then(|guard| guard.clone());
+            if let Some(id) = id {
+                let _ = client.edit_message(&channel_id, &id, &text).await;
+            }
+        });
+    });
+    run_supercharge_prompt_with_events(
+        message.session_key().as_str(),
+        &message.text,
+        Some(on_event),
+    )
+    .await
 }
 
 async fn prepare_reply_for_delivery(reply: &str) -> String {
@@ -1100,8 +1234,8 @@ async fn prepare_reply_for_delivery(reply: &str) -> String {
         .and_then(|value| value.parse().ok())
         .unwrap_or(25 * 1024 * 1024);
     match rewrite_media_links(reply, root, max_bytes).await {
-        Ok(text) => text,
-        Err(error) => format!("{reply}\n\nFile sharing failed: {error}"),
+        Ok(text) => rewrite_localhost_for_user(&text),
+        Err(error) => rewrite_localhost_for_user(&format!("{reply}\n\nFile sharing failed: {error}")),
     }
 }
 
@@ -1152,6 +1286,100 @@ fn record_provider_usage(
 async fn run_supercharge_prompt(
     session_key: &str,
     prompt: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    run_supercharge_prompt_with_events(session_key, prompt, None).await
+}
+
+struct CliTurnOutput {
+    status: std::process::ExitStatus,
+    reply: String,
+    stderr: String,
+}
+
+fn consume_cli_stream_line(
+    line: &str,
+    reply: &mut String,
+    on_event: &mut Option<Box<dyn FnMut(Value) + Send>>,
+) {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        if value.get("type").and_then(Value::as_str) == Some("text") {
+            if let Some(data) = value.get("data").and_then(Value::as_str) {
+                reply.push_str(data);
+            }
+        }
+        if let Some(callback) = on_event {
+            callback(value);
+        }
+        return;
+    }
+    reply.push_str(trimmed);
+    reply.push('\n');
+}
+
+async fn run_cli_turn_streaming(
+    command: &mut tokio::process::Command,
+    on_event: &mut Option<Box<dyn FnMut(Value) + Send>>,
+) -> Result<CliTurnOutput, Box<dyn std::error::Error + Send + Sync>> {
+    command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    let mut child = command.spawn()?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("cli stdout missing"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("cli stderr missing"))?;
+    let mut stdout_lines = BufReader::new(stdout).lines();
+    let mut stderr_lines = BufReader::new(stderr).lines();
+    let mut reply = String::new();
+    let mut stderr_buf = String::new();
+    loop {
+        tokio::select! {
+            line = stdout_lines.next_line() => {
+                match line? {
+                    Some(line) => consume_cli_stream_line(&line, &mut reply, on_event),
+                    None => break,
+                }
+            }
+            line = stderr_lines.next_line() => {
+                if let Some(line) = line? {
+                    if !stderr_buf.is_empty() {
+                        stderr_buf.push('\n');
+                    }
+                    stderr_buf.push_str(&line);
+                }
+            }
+        }
+    }
+    while let Some(line) = stdout_lines.next_line().await? {
+        consume_cli_stream_line(&line, &mut reply, on_event);
+    }
+    while let Some(line) = stderr_lines.next_line().await? {
+        if !stderr_buf.is_empty() {
+            stderr_buf.push('\n');
+        }
+        stderr_buf.push_str(&line);
+    }
+    let status = child.wait().await?;
+    Ok(CliTurnOutput {
+        status,
+        reply,
+        stderr: stderr_buf,
+    })
+}
+
+async fn run_supercharge_prompt_with_events(
+    session_key: &str,
+    prompt: &str,
+    mut on_event: Option<Box<dyn FnMut(Value) + Send>>,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
     let metrics = runtime_metrics();
     let started = Instant::now();
@@ -1207,8 +1435,15 @@ async fn run_supercharge_prompt(
             let mut command = tokio::process::Command::new(&binary);
             command
                 .env("SUPERCHARGE_HOME", &agent_home)
+                .env("AGENT_BROWSER_STREAM_PORT", browser::stream_port().to_string())
+                .current_dir(app_workspace_root())
                 .arg("--model")
                 .arg(&profile.id)
+                .arg("--always-approve")
+                .arg("--rules")
+                .arg(e2b_agent_rules_for(session_key))
+                .arg("--output-format")
+                .arg("streaming-json")
                 .arg("--single")
                 .arg(prompt);
             if session_marker.exists() {
@@ -1216,11 +1451,11 @@ async fn run_supercharge_prompt(
             } else {
                 command.arg("--session-id").arg(&cli_session_id);
             }
-            let output = command.output().await;
+            let output = run_cli_turn_streaming(&mut command, &mut on_event).await;
             let elapsed_ms = attempt_started.elapsed().as_millis().min(u64::MAX as u128) as u64;
             match output {
                 Ok(output) if output.status.success() => {
-                    let reply = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                    let reply = output.reply.trim().to_owned();
                     if let Some(parent) = session_marker.parent() {
                         if let Err(error) = std::fs::create_dir_all(parent)
                             .and_then(|_| std::fs::write(&session_marker, "initialized\n"))
@@ -1244,7 +1479,7 @@ async fn run_supercharge_prompt(
                     return Ok(Some(reply));
                 }
                 Ok(output) => {
-                    let stderr = redact_secrets(&String::from_utf8_lossy(&output.stderr));
+                    let stderr = redact_secrets(&output.stderr);
                     last_error = if stderr.trim().is_empty() {
                         format!("{} exited with status {}", profile.id, output.status)
                     } else {
@@ -1415,7 +1650,7 @@ async fn telegram_webhook(
         return Ok(StatusCode::NO_CONTENT);
     };
     if configured_agent_binary().is_some()
-        && let Some(reply) = run_supercharge_turn(&message).await.map_err(|error| {
+        && let Some(reply) = run_telegram_live_turn(&client, &message).await.map_err(|error| {
             (
                 StatusCode::BAD_GATEWAY,
                 Json(ErrorResponse {
@@ -1495,6 +1730,7 @@ async fn whatsapp_webhook(
     for message in client.parse_messages(&payload) {
         let client = client.clone();
         tokio::spawn(async move {
+            let _ = client.send_text(&message.user_id, "Working…").await;
             if let Ok(Some(reply)) =
                 run_supercharge_prompt(&message.session_key(), &message.text).await
             {
@@ -2585,7 +2821,7 @@ fn app_turn_completion_events() -> [Value; 2] {
 
 fn app_reply_completion_events(text: &str) -> [Value; 3] {
     [
-        json!({"type":"text", "text":text, "final":true}),
+        json!({"type":"text", "text":text, "final":true, "format":"markdown"}),
         json!({"type":"status", "busy":false}),
         json!({"type":"done"}),
     ]
@@ -2603,6 +2839,99 @@ fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
         retain_app_event(&mut log, payload.clone());
     }
     let _ = state.app_events.send(payload);
+}
+
+fn mime_for_name(name: &str) -> &'static str {
+    match std::path::Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "application/octet-stream",
+    }
+}
+
+fn emit_live_app_event(state: &Arc<AppState>, chat_id: &str, payload: Value) {
+    if payload.get("type").and_then(Value::as_str) == Some("file")
+        && payload.get("url").and_then(Value::as_str).is_none()
+    {
+        let path = payload
+            .get("text")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned();
+        let name = payload
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("file")
+            .to_owned();
+        if !path.is_empty() {
+            let state = state.clone();
+            let chat_id = chat_id.to_owned();
+            tokio::spawn(async move {
+                match share_workspace_file(&path, &name).await {
+                    Ok(link) => app_emit(
+                        &state,
+                        &chat_id,
+                        json!({
+                            "type": "file",
+                            "kind": "photo",
+                            "name": link.name,
+                            "url": link.url,
+                            "mime": link.mime_type,
+                            "caption": name,
+                            "text": link.name
+                        }),
+                    ),
+                    Err(error) => {
+                        tracing::warn!(%error, path = %path, "screenshot share failed");
+                        app_emit(
+                            &state,
+                            &chat_id,
+                            json!({
+                                "type": "file",
+                                "kind": "photo",
+                                "name": name,
+                                "text": path,
+                                "mime": mime_for_name(&name)
+                            }),
+                        );
+                    }
+                }
+            });
+            return;
+        }
+    }
+    app_emit(state, chat_id, payload);
+}
+
+async fn share_workspace_file(
+    path: &str,
+    name: &str,
+) -> Result<supercharge_superagent::sharing::ShareLink, String> {
+    let root = app_workspace_root();
+    let candidate = std::path::Path::new(path);
+    let resolved = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        root.join(candidate)
+    };
+    let metadata = std::fs::metadata(&resolved).map_err(|error| error.to_string())?;
+    let attachment = MediaAttachment {
+        path: resolved,
+        file_name: name.to_owned(),
+        mime_type: mime_for_name(name).to_owned(),
+        size_bytes: metadata.len(),
+    };
+    create_share(&attachment, root)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 fn app_workspace_root() -> std::path::PathBuf {
@@ -2647,20 +2976,116 @@ fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
     Ok(paths)
 }
 
+fn apply_live_cli_line(
+    line: &Value,
+    tool_count: &mut u32,
+    live_text: &mut String,
+    live_thought: &mut String,
+    pending_commands: &mut HashMap<String, (String, String)>,
+    mut emit: impl FnMut(Value),
+) {
+    for mut event in parse_cli_stream_line(line) {
+        if let LiveEvent::ToolStart { id, name, title, .. } = &event {
+            *tool_count = tool_count.saturating_add(1);
+            pending_commands.insert(id.clone(), (name.clone(), title.clone()));
+        }
+        if let LiveEvent::TextDelta(chunk) = &event {
+            live_text.push_str(chunk);
+        }
+        if let LiveEvent::Thought(chunk) = &event {
+            live_thought.push_str(chunk);
+        }
+        if let LiveEvent::ToolDone {
+            id,
+            name,
+            command,
+            ..
+        } = &mut event
+        {
+            if let Some((known_name, known_cmd)) = pending_commands.remove(id) {
+                if name == id || name == "tool" {
+                    *name = known_name;
+                }
+                if command.is_empty() {
+                    *command = known_cmd;
+                }
+            }
+        }
+        for payload in app_events_for(&event, *tool_count, live_text, live_thought) {
+            emit(payload);
+        }
+    }
+}
+
 fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) {
     app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
+    app_emit(
+        &state,
+        &chat_id,
+        json!({"type":"progress","kind":"thinking","text":"Working…","tools":0}),
+    );
     tokio::spawn(async move {
-        let result = run_supercharge_prompt(format!("app:{session_id}").as_str(), &prompt).await;
+        let tool_count = Arc::new(StdMutex::new(0_u32));
+        let streamed_text = Arc::new(StdMutex::new(String::new()));
+        let streamed_thought = Arc::new(StdMutex::new(String::new()));
+        let pending_commands =
+            Arc::new(StdMutex::new(HashMap::<String, (String, String)>::new()));
+        let on_state = state.clone();
+        let on_chat = chat_id.clone();
+        let on_tools = tool_count.clone();
+        let on_text = streamed_text.clone();
+        let on_thought = streamed_thought.clone();
+        let on_pending = pending_commands.clone();
+        let on_event = move |line: Value| {
+            let mut tools = on_tools.lock().unwrap_or_else(|error| error.into_inner());
+            let mut text = on_text.lock().unwrap_or_else(|error| error.into_inner());
+            let mut thought = on_thought.lock().unwrap_or_else(|error| error.into_inner());
+            let mut pending = on_pending.lock().unwrap_or_else(|error| error.into_inner());
+            apply_live_cli_line(
+                &line,
+                &mut tools,
+                &mut text,
+                &mut thought,
+                &mut pending,
+                |payload| {
+                    emit_live_app_event(&on_state, &on_chat, payload);
+                },
+            );
+        };
+        let result = run_supercharge_prompt_with_events(
+            format!("app:{session_id}").as_str(),
+            &prompt,
+            Some(Box::new(on_event)),
+        )
+        .await;
+        let streamed = streamed_text
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
         match result {
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
                 app_record_message(&state, &session_id, "assistant", &prepared).await;
-                for event in app_reply_completion_events(&prepared) {
+                app_emit(
+                    &state,
+                    &chat_id,
+                    json!({"type":"text","text":prepared,"final":true,"format":"markdown"}),
+                );
+                for event in app_turn_completion_events() {
                     app_emit(&state, &chat_id, event);
                 }
             }
             Ok(_) => {
-                for event in app_reply_completion_events("") {
+                if !streamed.trim().is_empty() {
+                    let prepared = prepare_reply_for_delivery(&streamed).await;
+                    app_record_message(&state, &session_id, "assistant", &prepared).await;
+                    app_emit(
+                        &state,
+                        &chat_id,
+                        json!({"type":"text","text":prepared,"final":true,"format":"markdown"}),
+                    );
+                }
+                for event in app_turn_completion_events() {
                     app_emit(&state, &chat_id, event);
                 }
             }
@@ -2736,6 +3161,8 @@ async fn app_commands() -> Json<Value> {
         {"command":"/stop", "description":"Pause agent turns"},
         {"command":"/status", "description":"Show daemon control state"},
         {"command":"/model", "description":"Inspect or set the requested model"},
+        {"command":"/update", "description":"Check Supercharge E2B update (no template rebuild)"},
+        {"command":"/update yes", "description":"Install Supercharge daemon+CLI and restart (chats kept)"},
         {"command":"/help", "description":"Show available commands"}
     ]}))
 }
@@ -3220,6 +3647,7 @@ mod tests {
         assert_eq!(events[0]["type"], "text");
         assert_eq!(events[0]["text"], "mobile-visible answer");
         assert_eq!(events[0]["final"], true);
+        assert_eq!(events[0]["format"], "markdown");
         assert_eq!(events[1]["type"], "status");
         assert_eq!(events[1]["busy"], false);
         assert_eq!(events[2]["type"], "done");
