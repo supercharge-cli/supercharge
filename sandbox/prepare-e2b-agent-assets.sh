@@ -7,10 +7,18 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 template_dir="$repo_root/sandbox/e2b-agent-template"
 builder_dir="$repo_root/sandbox/e2b-builder"
 bin_dir="$template_dir/bin"
+browser_runtime_dir="$repo_root/sandbox/browser-runtime"
+browser_runtime_stage_dir="$template_dir/browser-runtime"
 mkdir -p "$bin_dir"
 
 builder_tag="${SUPERCHARGE_E2B_BUILDER_TAG:-supercharge-e2b-builder:24.04}"
 daemon_only="${SUPERCHARGE_E2B_DAEMON_ONLY:-0}"
+# E2B builds from the template directory alone, so stage the source-controlled
+# localhost browser sidecar into that context beside the generated binaries.
+# Keep dependencies out of the context: the Dockerfile installs them there.
+rm -rf "$browser_runtime_stage_dir"
+mkdir -p "$browser_runtime_stage_dir"
+cp "$browser_runtime_dir/package.json" "$browser_runtime_dir/server.mjs" "$browser_runtime_dir/start.sh" "$browser_runtime_stage_dir/"
 
 build_in_docker() {
   if ! command -v docker >/dev/null 2>&1; then
@@ -80,5 +88,5 @@ else
   exit 1
 fi
 
-printf 'staged Supercharge E2B assets in %s/bin\n' "$template_dir"
-ls -la "$bin_dir"
+printf 'staged Supercharge E2B assets in %s\n' "$template_dir"
+ls -la "$bin_dir" "$browser_runtime_stage_dir"

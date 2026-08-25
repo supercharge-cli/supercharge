@@ -21,6 +21,17 @@ pub struct CapabilityProfile {
 
 impl Default for CapabilityProfile {
     fn default() -> Self {
+        Self::for_e2b_runtime(
+            std::env::var("SUPERCHARGE_RUNTIME_MODE")
+                .is_ok_and(|value| value.eq_ignore_ascii_case("e2b")),
+        )
+    }
+}
+
+impl CapabilityProfile {
+    /// Browser control is deliberately exposed only by the E2B template, where
+    /// the localhost Playwright sidecar and explicit authenticated handoff exist.
+    pub fn for_e2b_runtime(is_e2b_runtime: bool) -> Self {
         Self {
             memory: true,
             skills: true,
@@ -29,15 +40,13 @@ impl Default for CapabilityProfile {
             scheduler: true,
             messaging: false,
             voice: false,
-            browser: false,
+            browser: is_e2b_runtime,
             e2b: true,
             approvals: true,
             observability: true,
         }
     }
-}
 
-impl CapabilityProfile {
     pub fn enabled_names(&self) -> Vec<&'static str> {
         [
             (self.memory, "memory"),
@@ -64,11 +73,18 @@ mod tests {
 
     #[test]
     fn default_profile_exposes_safe_core_capabilities() {
-        let profile = CapabilityProfile::default();
+        let profile = CapabilityProfile::for_e2b_runtime(false);
         assert!(profile.memory);
         assert!(profile.e2b);
         assert!(profile.approvals);
         assert!(!profile.messaging);
         assert!(profile.enabled_names().contains(&"subagents"));
+        assert!(!profile.browser);
+    }
+
+    #[test]
+    fn e2b_profile_exposes_browser_but_local_profile_does_not() {
+        assert!(CapabilityProfile::for_e2b_runtime(true).browser);
+        assert!(!CapabilityProfile::for_e2b_runtime(false).browser);
     }
 }

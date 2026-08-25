@@ -141,7 +141,7 @@ Authenticated `GET /v1/providers` returns the built-in profiles and active selec
 
 ## Interactive browser workspace
 
-The Rust daemon’s browser adapter supervises the template’s `agent-browser stream` service on localhost port `9223`. `GET /v1/computer/status` reports stream readiness, while authenticated `GET /v1/computer/browser` emits the same SSE framing consumed by the existing app Computer pane: `status` events, base64 JPEG `frame` events, and keepalive comments. The adapter acknowledges frames for backpressure but deliberately ignores browser input events, making the observer stream view-only. Browser interaction remains an agent-side operation through the headless tool bridge; user input controls should be added only through a separately authorized action endpoint.
+The E2B template starts a headed Chromium instance behind a localhost-only Playwright sidecar on port `9224`. `GET /v1/computer/status` reports sidecar readiness, while authenticated `GET /v1/computer/browser` emits passive base64 JPEG frames for the app Computer pane. The agent uses native Playwright-backed browser tools and accessibility snapshots; local Supercharge does not expose browser tools or start browser processes. For login, MFA, OAuth, CAPTCHA, or another user-only action, the agent or app calls `POST /v1/computer/handoff`. Only during this explicit, expiring handoff can the authenticated gateway relay a one-time capability ticket to the daemon’s VNC websocket endpoint. Xvfb, x11vnc, noVNC, the sidecar, and CDP remain private to the E2B sandbox and must never be linked directly from the public app.
 
 ## E2B sessions
  lifecycle

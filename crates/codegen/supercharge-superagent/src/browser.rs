@@ -1,14 +1,14 @@
 use std::convert::Infallible;
 
-use futures_util::{SinkExt, Stream, StreamExt};
-use reqwest::Url;
+use futures_util::Stream;
 use serde::{Deserialize, Serialize};
-use tokio::process::Command;
-use tokio::time::{Duration, timeout};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
+use tokio::time::Duration;
 
-pub const DEFAULT_STREAM_PORT: u16 = 9223;
+/// Browser frames are produced by the daemon from the localhost sidecar rather
+/// than a separate public stream process.
+pub const DEFAULT_STREAM_PORT: u16 = 9224;
 pub const DEFAULT_MAX_FPS: u32 = 8;
+pub const DEFAULT_SIDECAR_PORT: u16 = 9224;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StreamStatus {
@@ -21,6 +21,8 @@ pub struct StreamStatus {
     #[serde(default)]
     pub screencasting: bool,
     #[serde(default)]
+    pub handoff: bool,
+    #[serde(default)]
     pub error: Option<String>,
 }
 
@@ -31,106 +33,91 @@ impl StreamStatus {
             port,
             connected: false,
             screencasting: false,
+            handoff: false,
             error: Some(error.into()),
         }
     }
 }
 
+pub fn is_e2b_runtime() -> bool {
+    std::env::var("SUPERCHARGE_RUNTIME_MODE")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("e2b"))
+}
+
 pub fn stream_port() -> u16 {
-    std::env::var("AGENT_BROWSER_STREAM_PORT")
+    sidecar_port()
+}
+
+fn sidecar_port() -> u16 {
+    std::env::var("SUPERAGENT_BROWSER_SIDECAR_PORT")
         .ok()
         .and_then(|value| value.parse().ok())
         .filter(|port: &u16| *port > 0)
-        .unwrap_or(DEFAULT_STREAM_PORT)
+        .unwrap_or(DEFAULT_SIDECAR_PORT)
 }
 
-async fn run_agent_browser(args: &[&str]) -> Result<std::process::Output, String> {
-    Command::new("agent-browser")
-        .args(args)
-        .output()
+fn sidecar_url(path: &str) -> String {
+    format!("http://127.0.0.1:{}{path}", sidecar_port())
+}
+
+async fn sidecar_json(
+    method: reqwest::Method,
+    path: &str,
+    payload: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    if !is_e2b_runtime() {
+        return Err("browser runtime is available only in E2B mode".to_owned());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let request = client.request(method, sidecar_url(path));
+    let response = match payload {
+        Some(value) => request.json(&value).send().await,
+        None => request.send().await,
+    }
+    .map_err(|error| format!("browser sidecar unavailable: {error}"))?;
+    let status = response.status();
+    let value = response
+        .json::<serde_json::Value>()
         .await
-        .map_err(|error| format!("agent-browser unavailable: {error}"))
+        .map_err(|error| format!("browser sidecar returned invalid JSON: {error}"))?;
+    if !status.is_success() || value.get("ok").and_then(serde_json::Value::as_bool) == Some(false) {
+        return Err(value
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("browser sidecar request failed")
+            .to_owned());
+    }
+    Ok(value)
 }
 
 pub async fn read_stream_status(port: u16) -> StreamStatus {
-    let output = match run_agent_browser(&["stream", "status", "--json"]).await {
-        Ok(output) => output,
-        Err(error) => return StreamStatus::unavailable(port, error),
-    };
-    if !output.status.success() {
-        return StreamStatus::unavailable(
+    match sidecar_json(reqwest::Method::GET, "/status", None).await {
+        Ok(value) => StreamStatus {
+            enabled: true,
             port,
-            String::from_utf8_lossy(&output.stderr)
-                .trim()
-                .chars()
-                .take(200)
-                .collect::<String>(),
-        );
+            connected: true,
+            screencasting: true,
+            handoff: value
+                .get("handoff")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            error: None,
+        },
+        Err(error) => StreamStatus::unavailable(port, error),
     }
-    serde_json::from_slice::<StreamStatus>(&output.stdout)
-        .map(|mut status| {
-            if status.port == 0 {
-                status.port = port;
-            }
-            status
-        })
-        .unwrap_or_else(|_| {
-            StreamStatus::unavailable(port, "agent-browser returned invalid status JSON")
-        })
 }
 
 pub async fn ensure_stream(port: u16) -> StreamStatus {
-    let current = read_stream_status(port).await;
-    if current.enabled && (current.port == 0 || current.port == port) {
-        return current;
-    }
-    let output = match run_agent_browser(&["stream", "enable", "--port", &port.to_string()]).await {
-        Ok(output) => output,
-        Err(error) => return StreamStatus::unavailable(port, error),
-    };
-    if !output.status.success() {
-        return StreamStatus::unavailable(
-            port,
-            String::from_utf8_lossy(&output.stderr)
-                .trim()
-                .chars()
-                .take(200)
-                .collect::<String>(),
-        );
-    }
     read_stream_status(port).await
-}
-
-type BrowserSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
-
-pub async fn connect_browser_stream(port: u16) -> Result<(BrowserSocket, StreamStatus), String> {
-    let status = ensure_stream(port).await;
-    let url = Url::parse(&format!(
-        "ws://127.0.0.1:{port}/?pacing=ack&maxFps={DEFAULT_MAX_FPS}"
-    ))
-    .map_err(|error| format!("invalid browser stream URL: {error}"))?;
-    let (mut socket, _) = connect_async(url.as_str())
-        .await
-        .map_err(|error| format!("browser stream connection failed: {error}"))?;
-    socket
-        .send(Message::Text(
-            format!(r#"{{"type":"config","pacing":"ack","maxFps":{DEFAULT_MAX_FPS}}}"#).into(),
-        ))
-        .await
-        .map_err(|error| format!("browser stream configuration failed: {error}"))?;
-    Ok((socket, status))
-}
-
-struct SseState {
-    socket: BrowserSocket,
-    first: Option<BytesEvent>,
 }
 
 type BytesEvent = Result<bytes::Bytes, Infallible>;
 
 fn sse(value: &impl Serialize) -> BytesEvent {
-    let encoded =
-        serde_json::to_string(value).unwrap_or_else(|_| "{\"type\":\"error\"}".to_owned());
+    let encoded = serde_json::to_string(value).unwrap_or_else(|_| "{\"type\":\"error\"}".to_owned());
     Ok(bytes::Bytes::from(format!("data: {encoded}\n\n")))
 }
 
@@ -145,109 +132,51 @@ struct StatusEvent<'a> {
     error: Option<String>,
 }
 
-pub fn sse_stream(
-    socket: BrowserSocket,
-    initial: StreamStatus,
-) -> impl Stream<Item = BytesEvent> + Send + 'static {
-    let state = SseState {
-        socket,
-        first: Some(sse(&StatusEvent {
+/// Passive daemon-owned JPEG observer stream. noVNC interaction is never
+/// exposed through this stream; it is available only through the handoff route.
+pub fn sse_stream(initial: StreamStatus) -> impl Stream<Item = BytesEvent> + Send + 'static {
+    async_stream::stream! {
+        yield sse(&StatusEvent {
             kind: "status",
-            connected: false,
-            screencasting: false,
+            connected: initial.connected,
+            screencasting: initial.screencasting,
             port: initial.port,
             error: initial.error,
-        })),
-    };
-    futures_util::stream::unfold(state, |mut state| async move {
-        if let Some(first) = state.first.take() {
-            return Some((first, state));
-        }
-        match timeout(Duration::from_secs(15), state.socket.next()).await {
-            Ok(Some(Ok(Message::Text(text)))) => {
-                let raw = text.to_string();
-                let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok();
-                let Some(object) = parsed.as_ref().and_then(serde_json::Value::as_object) else {
-                    return Some((
-                        Ok(bytes::Bytes::from(": malformed browser event\n\n")),
-                        state,
-                    ));
-                };
-                if object
-                    .get("type")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(|kind| kind.starts_with("input_"))
-                {
-                    return Some((
-                        Ok(bytes::Bytes::from(": ignored browser input event\n\n")),
-                        state,
-                    ));
+        });
+        loop {
+            match sidecar_json(reqwest::Method::GET, "/screenshot", None).await {
+                Ok(value) => {
+                    if let Some(jpeg) = value.get("jpeg").and_then(serde_json::Value::as_str) {
+                        yield sse(&serde_json::json!({"type": "frame", "data": jpeg}));
+                    }
                 }
-                if object.get("type").and_then(serde_json::Value::as_str) == Some("frame")
-                    && let Some(seq) = object.get("seq").and_then(serde_json::Value::as_u64)
-                {
-                    let _ = state
-                        .socket
-                        .send(Message::Text(
-                            format!(r#"{{"type":"ack","seq":{seq}}}"#).into(),
-                        ))
-                        .await;
+                Err(error) => {
+                    yield sse(&StatusEvent {
+                        kind: "status",
+                        connected: false,
+                        screencasting: false,
+                        port: stream_port(),
+                        error: Some(error),
+                    });
+                    break;
                 }
-                let event = Ok(bytes::Bytes::from(format!("data: {raw}\n\n")));
-                Some((event, state))
             }
-            Ok(Some(Ok(Message::Ping(payload)))) => {
-                let _ = state.socket.send(Message::Pong(payload)).await;
-                Some((Ok(bytes::Bytes::from(": ping\n\n")), state))
-            }
-            Ok(Some(Ok(Message::Close(_)))) | Ok(None) => None,
-            Ok(Some(Err(error))) => Some((
-                sse(&StatusEvent {
-                    kind: "status",
-                    connected: false,
-                    screencasting: false,
-                    port: stream_port(),
-                    error: Some(error.to_string()),
-                }),
-                state,
-            )),
-            Err(_) => Some((Ok(bytes::Bytes::from(": ping\n\n")), state)),
-            _ => None,
+            tokio::time::sleep(Duration::from_millis(1_000 / DEFAULT_MAX_FPS as u64)).await;
         }
-    })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum BrowserAction {
-    Navigate {
-        url: String,
-    },
-    Click {
-        selector: String,
-    },
-    Fill {
-        selector: String,
-        text: String,
-    },
-    Type {
-        selector: String,
-        text: String,
-    },
-    Press {
-        key: String,
-    },
-    Select {
-        selector: String,
-        value: String,
-    },
-    Scroll {
-        direction: String,
-        pixels: Option<u32>,
-    },
-    Wait {
-        milliseconds: Option<u64>,
-    },
+    Navigate { url: String },
+    Click { selector: String },
+    Fill { selector: String, text: String },
+    Type { selector: String, text: String },
+    Press { key: String },
+    Select { selector: String, value: String },
+    Scroll { direction: String, pixels: Option<u32> },
+    Wait { milliseconds: Option<u64> },
     Back,
     Forward,
     Reload,
@@ -264,19 +193,12 @@ pub struct BrowserActionResult {
 const MAX_SELECTOR_CHARS: usize = 512;
 const MAX_TEXT_CHARS: usize = 16_000;
 const MAX_URL_CHARS: usize = 2_048;
-const MAX_OUTPUT_CHARS: usize = 20_000;
 
 fn validate_text(value: &str, label: &str, max: usize) -> Result<(), String> {
-    if value.is_empty() || value.chars().count() > max || value.contains('\0') {
-        return Err(format!(
-            "{label} is empty, too long, or contains a null byte"
-        ));
+    if value.trim().is_empty() || value.chars().count() > max || value.contains('\0') {
+        return Err(format!("{label} is empty, too long, or contains a null byte"));
     }
     Ok(())
-}
-
-fn validate_selector(selector: &str) -> Result<(), String> {
-    validate_text(selector, "selector", MAX_SELECTOR_CHARS)
 }
 
 fn validate_url(url: &str) -> Result<(), String> {
@@ -288,108 +210,102 @@ fn validate_url(url: &str) -> Result<(), String> {
     }
 }
 
-fn cap_output(value: &[u8]) -> String {
-    String::from_utf8_lossy(value)
-        .chars()
-        .take(MAX_OUTPUT_CHARS)
-        .collect()
-}
-
-fn action_args(action: &BrowserAction) -> Result<(String, Vec<String>), String> {
+fn action_payload(action: &BrowserAction) -> Result<(String, serde_json::Value), String> {
     match action {
         BrowserAction::Navigate { url } => {
             validate_url(url)?;
-            Ok(("navigate".to_owned(), vec!["open".to_owned(), url.clone()]))
+            Ok(("navigate".to_owned(), serde_json::json!({"action":"navigate", "url":url})))
         }
         BrowserAction::Click { selector } => {
-            validate_selector(selector)?;
-            Ok((
-                "click".to_owned(),
-                vec!["click".to_owned(), selector.clone()],
-            ))
+            validate_text(selector, "selector", MAX_SELECTOR_CHARS)?;
+            Ok(("click".to_owned(), serde_json::json!({"action":"click", "selector":selector})))
         }
-        BrowserAction::Fill { selector, text } => {
-            validate_selector(selector)?;
+        BrowserAction::Fill { selector, text } | BrowserAction::Type { selector, text } => {
+            validate_text(selector, "selector", MAX_SELECTOR_CHARS)?;
             validate_text(text, "text", MAX_TEXT_CHARS)?;
-            Ok((
-                "fill".to_owned(),
-                vec!["fill".to_owned(), selector.clone(), text.clone()],
-            ))
-        }
-        BrowserAction::Type { selector, text } => {
-            validate_selector(selector)?;
-            validate_text(text, "text", MAX_TEXT_CHARS)?;
-            Ok((
-                "type".to_owned(),
-                vec!["type".to_owned(), selector.clone(), text.clone()],
-            ))
+            let name = if matches!(action, BrowserAction::Fill { .. }) { "fill" } else { "type" };
+            Ok((name.to_owned(), serde_json::json!({"action":name, "selector":selector, "text":text})))
         }
         BrowserAction::Press { key } => {
             validate_text(key, "key", 80)?;
-            if key.chars().any(char::is_control) {
-                return Err("key contains control characters".to_owned());
-            }
-            Ok(("press".to_owned(), vec!["press".to_owned(), key.clone()]))
+            Ok(("press".to_owned(), serde_json::json!({"action":"press", "key":key})))
         }
         BrowserAction::Select { selector, value } => {
-            validate_selector(selector)?;
+            validate_text(selector, "selector", MAX_SELECTOR_CHARS)?;
             validate_text(value, "value", MAX_TEXT_CHARS)?;
-            Ok((
-                "select".to_owned(),
-                vec!["select".to_owned(), selector.clone(), value.clone()],
-            ))
+            Ok(("select".to_owned(), serde_json::json!({"action":"select", "selector":selector, "value":value})))
         }
         BrowserAction::Scroll { direction, pixels } => {
             let direction = direction.to_ascii_lowercase();
             if !matches!(direction.as_str(), "up" | "down" | "left" | "right") {
                 return Err("scroll direction must be up, down, left, or right".to_owned());
             }
-            let pixels = pixels.unwrap_or(700).clamp(1, 3_000);
-            Ok((
-                "scroll".to_owned(),
-                vec!["scroll".to_owned(), direction, pixels.to_string()],
-            ))
+            Ok(("scroll".to_owned(), serde_json::json!({"action":"scroll", "direction":direction, "pixels":pixels.unwrap_or(700).clamp(1,3000)})))
         }
-        BrowserAction::Wait { milliseconds } => {
-            let milliseconds = milliseconds.unwrap_or(500).clamp(0, 30_000);
-            Ok((
-                "wait".to_owned(),
-                vec!["wait".to_owned(), milliseconds.to_string()],
-            ))
-        }
-        BrowserAction::Back => Ok(("back".to_owned(), vec!["back".to_owned()])),
-        BrowserAction::Forward => Ok(("forward".to_owned(), vec!["forward".to_owned()])),
-        BrowserAction::Reload => Ok(("reload".to_owned(), vec!["reload".to_owned()])),
+        BrowserAction::Wait { milliseconds } => Ok(("wait".to_owned(), serde_json::json!({"action":"wait", "milliseconds":milliseconds.unwrap_or(500).clamp(0,30000)}))),
+        BrowserAction::Back => Ok(("back".to_owned(), serde_json::json!({"action":"back"}))),
+        BrowserAction::Forward => Ok(("forward".to_owned(), serde_json::json!({"action":"forward"}))),
+        BrowserAction::Reload => Ok(("reload".to_owned(), serde_json::json!({"action":"reload"}))),
     }
 }
 
 pub async fn execute_action(action: BrowserAction) -> Result<BrowserActionResult, String> {
-    let (name, args) = action_args(&action)?;
-    let output = Command::new("agent-browser")
-        .args(&args)
-        .output()
-        .await
-        .map_err(|error| format!("agent-browser unavailable: {error}"))?;
-    Ok(BrowserActionResult {
-        ok: output.status.success(),
-        action: name,
-        stdout: cap_output(&output.stdout),
-        stderr: cap_output(&output.stderr),
-    })
+    let (name, payload) = action_payload(&action)?;
+    let response = sidecar_json(reqwest::Method::POST, "/control", Some(payload)).await;
+    match response {
+        Ok(value) => Ok(BrowserActionResult {
+            ok: true,
+            action: name,
+            stdout: value.to_string(),
+            stderr: String::new(),
+        }),
+        Err(error) => Ok(BrowserActionResult {
+            ok: false,
+            action: name,
+            stdout: String::new(),
+            stderr: error,
+        }),
+    }
+}
+
+pub async fn handoff(start: bool, minutes: Option<u8>) -> Result<serde_json::Value, String> {
+    let path = if start { "/handoff/start" } else { "/handoff/stop" };
+    let payload = start.then(|| serde_json::json!({"minutes": minutes.unwrap_or(10).clamp(1, 30)}));
+    sidecar_json(reqwest::Method::POST, path, payload).await
+}
+
+pub async fn handoff_active() -> Result<bool, String> {
+    let value = sidecar_json(reqwest::Method::GET, "/status", None).await?;
+    Ok(value.get("handoff").and_then(serde_json::Value::as_bool).unwrap_or(false))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_MAX_FPS, DEFAULT_STREAM_PORT, StreamStatus, stream_port};
+    use super::{BrowserAction, DEFAULT_MAX_FPS, DEFAULT_SIDECAR_PORT, DEFAULT_STREAM_PORT, StreamStatus, action_payload, stream_port};
 
     #[test]
     fn defaults_match_the_computer_pane_contract() {
-        assert_eq!(DEFAULT_STREAM_PORT, 9223);
+        assert_eq!(DEFAULT_STREAM_PORT, 9224);
         assert_eq!(DEFAULT_MAX_FPS, 8);
-        assert_eq!(stream_port(), 9223);
-        assert_eq!(
-            StreamStatus::unavailable(9223, "offline").error.as_deref(),
-            Some("offline")
-        );
+        assert_eq!(DEFAULT_SIDECAR_PORT, 9224);
+        assert_eq!(stream_port(), 9224);
+    }
+
+    #[test]
+    fn browser_actions_reject_invalid_urls() {
+        assert!(action_payload(&BrowserAction::Navigate { url: "file:///etc/passwd".to_owned() }).is_err());
+        assert!(action_payload(&BrowserAction::Navigate { url: "https://example.com".to_owned() }).is_ok());
+    }
+
+    #[test]
+    fn stream_status_accepts_sidecar_handoff_state() {
+        let status: StreamStatus = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "connected": true,
+            "screencasting": true,
+            "handoff": true
+        }))
+        .expect("sidecar status must deserialize");
+        assert!(status.handoff);
     }
 }

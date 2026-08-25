@@ -4,8 +4,9 @@ set -euo pipefail
 mkdir -p \
   /home/user/workspace \
   /home/user/.superagent \
+  /home/user/.supercharge/state \
   /home/user/workspace/.superagent-media \
-  /var/lib/superagent
+  /home/user/.supercharge/browser-profile
 
 /opt/vectra/wake-http/start.sh || true
 
@@ -22,6 +23,10 @@ export SUPERAGENT_MEDIA_ROOT="${SUPERAGENT_MEDIA_ROOT:-/home/user/workspace/.sup
 export SUPERAGENT_BROWSER_CONTROL_ENABLED="${SUPERAGENT_BROWSER_CONTROL_ENABLED:-true}"
 export SUPERAGENT_WAKE_PORT="${SUPERAGENT_WAKE_PORT:-8788}"
 export SUPERAGENT_DAEMON_COMMAND="${SUPERAGENT_DAEMON_COMMAND:-/usr/local/bin/supercharge-superagent-server}"
+
+if [ "${SUPERCHARGE_RUNTIME_MODE:-}" = "e2b" ]; then
+  /opt/vectra/browser-runtime/start.sh
+fi
 
 PIDFILE=/tmp/supercharge-daemon.pid
 LOGFILE=/tmp/supercharge-daemon.log

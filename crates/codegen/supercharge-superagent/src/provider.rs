@@ -354,9 +354,13 @@ pub fn write_runtime_config(
             ProviderFormat::Anthropic => "messages".to_owned(),
         }),
     );
+    let agent_type = std::env::var("SUPERCHARGE_RUNTIME_MODE")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("e2b"))
+        .then_some("supercharge-e2b")
+        .unwrap_or("supercharge-core");
     model.insert(
         "agent_type".to_owned(),
-        toml::Value::String("supercharge-core".to_owned()),
+        toml::Value::String(agent_type.to_owned()),
     );
     model.insert("context_window".to_owned(), toml::Value::Integer(128_000));
     let mut model_section = toml::map::Map::new();

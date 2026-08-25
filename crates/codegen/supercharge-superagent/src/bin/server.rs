@@ -17,6 +17,8 @@ use tokio::{
     sync::{Mutex, broadcast},
 };
 use tracing::Instrument;
+use futures_util::{SinkExt, StreamExt};
+use tokio_tungstenite::{connect_async, tungstenite::Message as TungsteniteMessage};
 
 use base64::Engine as _;
 
@@ -692,7 +694,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/observability", get(observability))
         .route("/v1/computer/status", get(browser_status))
         .route("/v1/computer/browser", get(browser_stream))
+        .route("/v1/computer/browser/vnc", get(browser_vnc))
         .route("/v1/computer/control", post(browser_control))
+        .route("/v1/computer/handoff", post(browser_handoff))
         .route("/v1/status", get(app_status))
         .route("/v1/commands", get(app_commands))
         .route(
@@ -2593,16 +2597,23 @@ async fn enqueue_job(
     Ok(Json(job))
 }
 
-async fn browser_status() -> Json<StreamStatus> {
-    Json(browser::read_stream_status(browser::stream_port()).await)
+async fn browser_status() -> Result<Json<StreamStatus>, StatusCode> {
+    if !browser::is_e2b_runtime() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(Json(browser::read_stream_status(browser::stream_port()).await))
 }
 
 async fn browser_stream() -> Result<Response, StatusCode> {
+    if !browser::is_e2b_runtime() {
+        return Err(StatusCode::NOT_FOUND);
+    }
     let port = browser::stream_port();
-    let (socket, status) = browser::connect_browser_stream(port)
-        .await
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    let mut response = Response::new(Body::from_stream(browser::sse_stream(socket, status)));
+    let status = browser::ensure_stream(port).await;
+    if !status.connected {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    let mut response = Response::new(Body::from_stream(browser::sse_stream(status)));
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/event-stream; charset=utf-8"),
@@ -2628,6 +2639,12 @@ struct BrowserControlRequest {
 async fn browser_control(
     Json(request): Json<BrowserControlRequest>,
 ) -> Result<Json<browser::BrowserActionResult>, (StatusCode, Json<ErrorResponse>)> {
+    if !browser::is_e2b_runtime() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse { error: "browser control is available only in E2B mode".to_owned() }),
+        ));
+    }
     let enabled = env::var("SUPERAGENT_BROWSER_CONTROL_ENABLED")
         .map(|value| value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -2652,6 +2669,79 @@ async fn browser_control(
         .await
         .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
     Ok(Json(result))
+}
+
+#[derive(Debug, Deserialize)]
+struct BrowserHandoffRequest {
+    action: String,
+    #[serde(default)]
+    minutes: Option<u8>,
+}
+
+async fn browser_handoff(
+    Json(request): Json<BrowserHandoffRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if !browser::is_e2b_runtime() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "browser handoff is available only in E2B mode".to_owned() })));
+    }
+    let start = match request.action.as_str() {
+        "start" => true,
+        "stop" => false,
+        _ => return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "action must be start or stop".to_owned() }))),
+    };
+    let value = browser::handoff(start, request.minutes)
+        .await
+        .map_err(|error| (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error })))?;
+    Ok(Json(value))
+}
+
+async fn browser_vnc(ws: WebSocketUpgrade) -> Result<Response, StatusCode> {
+    if !browser::is_e2b_runtime() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    if !browser::handoff_active().await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)? {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(ws.on_upgrade(browser_vnc_relay).into_response())
+}
+
+async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket) {
+    let Ok((upstream, _)) = connect_async("ws://127.0.0.1:6080/websockify").await else {
+        return;
+    };
+    let (mut client_send, mut client_recv) = socket.split();
+    let (mut vnc_send, mut vnc_recv) = upstream.split();
+    let client_to_vnc = async {
+        while let Some(message) = client_recv.next().await {
+            let Ok(message) = message else { break };
+            let converted = match message {
+                Message::Text(value) => TungsteniteMessage::Text(value.to_string().into()),
+                Message::Binary(value) => TungsteniteMessage::Binary(value),
+                Message::Ping(value) => TungsteniteMessage::Ping(value),
+                Message::Pong(value) => TungsteniteMessage::Pong(value),
+                Message::Close(_) => TungsteniteMessage::Close(None),
+            };
+            if vnc_send.send(converted).await.is_err() { break; }
+        }
+    };
+    let vnc_to_client = async {
+        while let Some(message) = vnc_recv.next().await {
+            let Ok(message) = message else { break };
+            let converted = match message {
+                TungsteniteMessage::Text(value) => Message::Text(value.to_string().into()),
+                TungsteniteMessage::Binary(value) => Message::Binary(value),
+                TungsteniteMessage::Ping(value) => Message::Ping(value),
+                TungsteniteMessage::Pong(value) => Message::Pong(value),
+                TungsteniteMessage::Close(_) => Message::Close(None),
+                TungsteniteMessage::Frame(_) => continue,
+            };
+            if client_send.send(converted).await.is_err() { break; }
+        }
+    };
+    tokio::select! {
+        _ = client_to_vnc => {},
+        _ = vnc_to_client => {},
+    }
 }
 
 #[derive(Debug, Deserialize)]

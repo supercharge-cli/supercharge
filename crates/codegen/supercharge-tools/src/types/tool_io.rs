@@ -16,6 +16,10 @@ use crate::implementations::codex::grep_files::tool::CodexGrepFilesInput;
 use crate::implementations::codex::list_dir::tool::CodexListDirInput;
 use crate::implementations::codex::read_file::tool::CodexReadFileInput;
 use crate::implementations::grok_build::ask_user_question::AskUserQuestionInput;
+use crate::implementations::grok_build::e2b_browser::{
+    BrowserClickInput, BrowserFillInput, BrowserHandoffInput, BrowserNavigateInput,
+    BrowserPressInput, BrowserScreenshotInput, BrowserSnapshotInput,
+};
 use crate::implementations::grok_build::enter_plan_mode::EnterPlanModeInput;
 use crate::implementations::grok_build::exit_plan_mode::ExitPlanModeInput;
 use crate::implementations::grok_build::grep::GrepSearchInput;
@@ -76,6 +80,13 @@ pub enum ToolInput {
     ImageToVideo(ImageToVideoInput),
     ReferenceToVideo(ReferenceToVideoInput),
     WebFetch(WebFetchInput),
+    BrowserNavigate(BrowserNavigateInput),
+    BrowserSnapshot(BrowserSnapshotInput),
+    BrowserClick(BrowserClickInput),
+    BrowserFill(BrowserFillInput),
+    BrowserPress(BrowserPressInput),
+    BrowserScreenshot(BrowserScreenshotInput),
+    BrowserHandoff(BrowserHandoffInput),
     Write(WriteInput),
     ApplyPatch(ApplyPatchInput),
     HashlineEdit(crate::implementations::grok_build_hashline::edit::types::HashlineEditInput),

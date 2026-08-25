@@ -4,7 +4,7 @@ This is the **Supercharge** E2B template for Vectra Cloud. It keeps the proven i
 
 ## Included runtime
 
-The image contains `supercharge-superagent-server`, the `supercharge` / `sc` CLI, E2B session support, durable memory and job state, interval scheduling, messaging adapters, `agent-browser` with Chromium, Node.js 20, Bun, pnpm, Python 3 with `uv`, Git, Git LFS, GitHub CLI, and common shell utilities.
+The image contains `supercharge-superagent-server`, the `supercharge` / `sc` CLI, E2B session support, durable memory and job state, interval scheduling, messaging adapters, a persistent headed Chromium browser controlled through a localhost-only Playwright sidecar, Node.js 20, Bun, pnpm, Python 3 with `uv`, Git, Git LFS, GitHub CLI, and common shell utilities.
 
 Installed paths match the Vectra contract:
 
@@ -17,7 +17,7 @@ Installed paths match the Vectra contract:
 
 Provider configuration follows the app contract: choose a built-in profile with `SUPERAGENT_PROVIDER`, `SUPERAGENT_MODEL`, and `SUPERAGENT_PROVIDER_API_KEY_ENV`, or use `SUPERAGENT_PROVIDER=custom` with an HTTPS `SUPERAGENT_PROVIDER_BASE_URL`, `SUPERAGENT_PROVIDER_FORMAT=openai`, and a model ID.
 
-The browser screencast service uses port `9223`. Durable state is stored under `/var/lib/superagent`. The default workspace boundary is `/home/user/workspace`.
+The browser sidecar uses port `9224`; Xvfb, x11vnc, and the noVNC websocket proxy remain loopback-only on ports `5900` and `6080`. The app reaches noVNC only through the authenticated gateway relay after a short-lived explicit browser handoff. Neither CDP nor the sidecar nor VNC is exposed publicly. Browser processes start only when `SUPERCHARGE_RUNTIME_MODE=e2b`; normal local Supercharge has no Playwright/noVNC process or browser tools. Durable state and the generated provider configuration are stored under `/home/user/.supercharge`, which remains writable after E2B’s runtime ownership mapping. The default workspace boundary is `/home/user/workspace`.
 
 ## Prepare binaries
 
@@ -70,6 +70,8 @@ Use `onTimeout=pause` and `autoResume=true`. Gateway wake, execution, file acces
 | `GET /healthz` | Rust daemon health |
 | `GET /v1/computer/status` | Browser stream readiness |
 | `GET /v1/computer/browser` | SSE live JPEG frame stream |
+| `POST /v1/computer/handoff` | Start or stop an explicit E2B browser handoff |
+| `GET /v1/computer/browser/vnc` | Authenticated loopback VNC relay; gateway access only |
 | `GET /health` on port `8788` | Wake/file-share service health |
 | `POST /wake` on port `8788` | Soft-wake or fast-restart after idle pause |
 | `POST /share` on port `8788` | Mint a capability-scoped public workspace file URL |

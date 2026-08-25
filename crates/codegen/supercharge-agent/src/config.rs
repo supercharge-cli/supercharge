@@ -210,6 +210,23 @@ fn grok_computer_toolset() -> ToolServerConfig {
         behavior_preset: None,
     }
 }
+/// E2B-only Supercharge agent. Native browser tools are visible only when the
+/// E2B daemon selects this profile; ordinary local CLI sessions keep the core
+/// toolset and do not acquire a browser runtime dependency.
+fn supercharge_e2b_toolset() -> ToolServerConfig {
+    let mut tools = default_grok_build_toolset().tools;
+    tools.push((&grok_build::BrowserNavigateTool).into());
+    tools.push((&grok_build::BrowserSnapshotTool).into());
+    tools.push((&grok_build::BrowserClickTool).into());
+    tools.push((&grok_build::BrowserFillTool).into());
+    tools.push((&grok_build::BrowserPressTool).into());
+    tools.push((&grok_build::BrowserScreenshotTool).into());
+    tools.push((&grok_build::BrowserHandoffTool).into());
+    ToolServerConfig {
+        tools,
+        behavior_preset: None,
+    }
+}
 /// Every named toolset preset, as `(normalized_name, config)` pairs.
 ///
 /// Single source of truth: [`toolset_for_preset`] resolves through this
@@ -219,6 +236,8 @@ fn grok_computer_toolset() -> ToolServerConfig {
 fn native_toolset_presets() -> Vec<(&'static str, ToolServerConfig)> {
     vec![
         ("supercharge-core", workspace_grok_build_toolset()),
+        ("grok-build", workspace_grok_build_toolset()),
+        ("supercharge-e2b", supercharge_e2b_toolset()),
         ("supercharge-core-concise", grok_build_concise_toolset()),
         ("supercharge-core-plan", grok_build_plan_toolset()),
         ("codex", codex_toolset()),
@@ -1736,6 +1755,7 @@ mod tests {
         for name in [
             "supercharge-core",
             "grok_build",
+            "supercharge-e2b",
             "supercharge-core-concise",
             "supercharge-core-plan",
             "codex",
@@ -1750,6 +1770,8 @@ mod tests {
             );
         }
         assert!(toolset_for_preset("does-not-exist").is_none());
+        let e2b = toolset_for_preset("supercharge-e2b").expect("E2B preset resolves");
+        assert!(e2b.tools.iter().any(|tool| tool.id.ends_with(":browser_snapshot")));
     }
     #[test]
     fn presets_select_distinct_toolsets_by_size() {

@@ -13,6 +13,7 @@ pub mod bash;
 #[path = "deploy_app_stub.rs"]
 pub mod deploy_app;
 pub mod enter_plan_mode;
+pub mod e2b_browser;
 pub mod exit_plan_mode;
 pub mod grep;
 pub mod image_edit;
@@ -37,6 +38,10 @@ pub use ask_user_question::AskUserQuestionTool;
 pub use bash::BashTool;
 pub use deploy_app::{AppBuilderDeployerConfig, DEPLOY_APP_TOOL_NAME};
 pub use enter_plan_mode::EnterPlanModeTool;
+pub use e2b_browser::{
+    BrowserClickTool, BrowserFillTool, BrowserHandoffTool, BrowserNavigateTool, BrowserPressTool,
+    BrowserScreenshotTool, BrowserSnapshotTool,
+};
 pub use exit_plan_mode::ExitPlanModeTool;
 pub use grep::GrepTool;
 pub use image_edit::{IMAGE_EDIT_TOOL_NAME, ImageEditTool};
