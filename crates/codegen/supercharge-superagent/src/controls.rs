@@ -125,6 +125,7 @@ impl ControlStore {
                     ));
                 }
             }
+            AgentCommand::Update(_) => unreachable!("update is handled in handle_text"),
         };
         self.save()?;
         Ok(response.to_owned())
@@ -145,6 +146,9 @@ pub async fn handle_text(session_key: &str, text: &str) -> Result<Option<String>
     let Some(command) = parse_command(text) else {
         return Ok(None);
     };
+    if let AgentCommand::Update(action) = command {
+        return Ok(Some(crate::self_update::handle(action).await));
+    }
     let Some(store) = global() else {
         return Ok(Some("Control store is not initialized.".to_owned()));
     };

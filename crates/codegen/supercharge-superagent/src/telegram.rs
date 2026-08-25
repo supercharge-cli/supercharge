@@ -120,10 +120,39 @@ impl TelegramClient {
     }
 
     pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<(), TelegramError> {
-        let response: TelegramResponse<serde_json::Value> = self
+        self.send_message_with_id(chat_id, text).await.map(|_| ())
+    }
+
+    pub async fn send_message_with_id(
+        &self,
+        chat_id: i64,
+        text: &str,
+    ) -> Result<i64, TelegramError> {
+        let response: TelegramResponse<SendMessageResult> = self
             .http
             .post(self.config.endpoint("sendMessage"))
             .json(&SendMessageRequest { chat_id, text })
+            .send()
+            .await?
+            .json()
+            .await?;
+        response.into_result().map(|value| value.message_id)
+    }
+
+    pub async fn edit_message(
+        &self,
+        chat_id: i64,
+        message_id: i64,
+        text: &str,
+    ) -> Result<(), TelegramError> {
+        let response: TelegramResponse<serde_json::Value> = self
+            .http
+            .post(self.config.endpoint("editMessageText"))
+            .json(&EditMessageRequest {
+                chat_id,
+                message_id,
+                text,
+            })
             .send()
             .await?
             .json()
@@ -247,6 +276,18 @@ struct SetWebhookRequest<'a> {
 #[derive(Debug, Serialize)]
 struct SendMessageRequest<'a> {
     chat_id: i64,
+    text: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+struct SendMessageResult {
+    message_id: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct EditMessageRequest<'a> {
+    chat_id: i64,
+    message_id: i64,
     text: &'a str,
 }
 

@@ -8,6 +8,7 @@ pub enum AgentCommand {
     Status,
     Help,
     Model(Option<String>),
+    Update(crate::self_update::UpdateAction),
 }
 
 pub fn parse_command(input: &str) -> Option<AgentCommand> {
@@ -20,12 +21,21 @@ pub fn parse_command(input: &str) -> Option<AgentCommand> {
         "status" => Some(AgentCommand::Status),
         "help" => Some(AgentCommand::Help),
         "model" => Some(AgentCommand::Model(parts.next().map(str::to_owned))),
+        "update" => {
+            let arg = parts.next().map(str::to_ascii_lowercase);
+            let action = match arg.as_deref() {
+                Some("yes") | Some("apply") => crate::self_update::UpdateAction::Apply,
+                Some("no") | Some("dismiss") => crate::self_update::UpdateAction::Dismiss,
+                _ => crate::self_update::UpdateAction::Check,
+            };
+            Some(AgentCommand::Update(action))
+        }
         _ => None,
     }
 }
 
 pub fn help_text() -> &'static str {
-    "/new — clear the stopped state for this session\n/start — resume this session\n/stop — pause agent turns for this session\n/status — show daemon control state\n/model [id] — inspect or set the requested model\n/help — show this help"
+    "/new — clear the stopped state for this session\n/start — resume this session\n/stop — pause agent turns for this session\n/status — show daemon control state\n/model [id] — inspect or set the requested model\n/update — check for a Supercharge binary update (E2B)\n/help — show this help"
 }
 
 #[cfg(test)]

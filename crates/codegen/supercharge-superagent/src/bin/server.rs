@@ -4,6 +4,7 @@ use std::{
     env,
     net::SocketAddr,
     path::{Path as FsPath, PathBuf},
+    process::Stdio,
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -11,7 +12,10 @@ use std::{
     time::Instant,
 };
 
-use tokio::sync::{Mutex, broadcast};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    sync::{Mutex, broadcast},
+};
 use tracing::Instrument;
 
 use base64::Engine as _;
@@ -44,6 +48,10 @@ use supercharge_superagent::{
         invoke_stdio_tool, parse_mcp_servers,
     },
     jobs::{AgentJob, JobStatus, JobStore},
+    live::{
+        self, LiveEvent, app_events_for, e2b_agent_rules_for, next_messenger_progress,
+        parse_cli_stream_line,
+    },
     matrix::{MatrixClient, MatrixConfig},
     media::extract_media,
     memory::{MemoryEntry, MemoryStore},
@@ -897,10 +905,31 @@ async fn run_telegram_daemon() -> Result<(), Box<dyn std::error::Error + Send + 
                         )
                         .await?;
                     } else if configured_agent_binary().is_some() {
-                        match run_supercharge_turn(&message).await {
+                        let chat_id = message.chat_id;
+                        let progress_id = client
+                            .send_message_with_id(chat_id, "Working…")
+                            .await
+                            .ok();
+                        let progress_client = client.clone();
+                        let on_progress: Arc<dyn Fn(String) + Send + Sync> =
+                            Arc::new(move |text: String| {
+                                if let Some(message_id) = progress_id {
+                                    let client = progress_client.clone();
+                                    tokio::spawn(async move {
+                                        let _ = client.edit_message(chat_id, message_id, &text).await;
+                                    });
+                                }
+                            });
+                        match run_supercharge_turn_live(&message, on_progress).await {
                             Ok(Some(reply)) if !reply.is_empty() => {
                                 let prepared = prepare_reply_for_delivery(&reply).await;
-                                send_chunked(&client, message.chat_id, &prepared).await?;
+                                if let Some(message_id) = progress_id {
+                                    let _ = client
+                                        .edit_message(chat_id, message_id, &prepared)
+                                        .await;
+                                } else {
+                                    send_chunked(&client, chat_id, &prepared).await?;
+                                }
                             }
                             Ok(_) => {}
                             Err(error) => {
@@ -1085,6 +1114,20 @@ async fn send_discord_chunked(
     Ok(())
 }
 
+async fn run_supercharge_turn_live(
+    message: &supercharge_superagent::gateway::GatewayMessage,
+    on_progress: Arc<dyn Fn(String) + Send + Sync>,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    run_supercharge_prompt_inner(
+        message.session_key().as_str(),
+        &message.text,
+        Some(PromptStreamSink::MessengerProgress(Box::new(move |text| {
+            on_progress(text.to_owned());
+        }))),
+    )
+    .await
+}
+
 async fn run_supercharge_turn(
     message: &supercharge_superagent::gateway::GatewayMessage,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
@@ -1149,9 +1192,186 @@ fn record_provider_usage(
     }
 }
 
-async fn run_supercharge_prompt(
+#[derive(Default)]
+struct CliStreamState {
+    live_text: String,
+    live_thought: String,
+    tool_count: u32,
+}
+
+enum PromptStreamSink {
+    App {
+        state: Arc<AppState>,
+        chat_id: String,
+    },
+    MessengerProgress(Box<dyn Fn(&str) + Send + Sync>),
+}
+
+fn turn_rules_for(session_key: &str) -> Option<String> {
+    if live::sandbox_id().is_some() {
+        Some(e2b_agent_rules_for(session_key))
+    } else {
+        None
+    }
+}
+
+fn ingest_cli_stream_line(line: &Value, stream: &mut CliStreamState, sink: Option<&PromptStreamSink>) {
+    if line.get("type").and_then(Value::as_str) == Some("error") {
+        return;
+    }
+    let events = parse_cli_stream_line(line);
+    for event in &events {
+        if let LiveEvent::TextDelta(chunk) = event {
+            stream.live_text.push_str(chunk);
+        }
+    }
+    match sink {
+        Some(PromptStreamSink::App { state, chat_id }) => {
+            for event in events {
+                match &event {
+                    LiveEvent::Thought(chunk) => stream.live_thought.push_str(&chunk),
+                    LiveEvent::ToolStart { .. } => {
+                        stream.tool_count = stream.tool_count.saturating_add(1);
+                    }
+                    _ => {}
+                }
+                for payload in app_events_for(
+                    &event,
+                    stream.tool_count,
+                    &stream.live_text,
+                    &stream.live_thought,
+                ) {
+                    app_emit(state, chat_id, payload);
+                }
+            }
+        }
+        Some(PromptStreamSink::MessengerProgress(callback)) => {
+            if let Some(text) =
+                next_messenger_progress(line, &mut stream.tool_count, &mut stream.live_thought)
+            {
+                callback(&text);
+            }
+        }
+        None => {
+            for event in events {
+                match event {
+                    LiveEvent::Thought(chunk) => stream.live_thought.push_str(&chunk),
+                    LiveEvent::ToolStart { .. } => {
+                        stream.tool_count = stream.tool_count.saturating_add(1);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+async fn read_cli_stream(
+    stdout: tokio::process::ChildStdout,
+    sink: Option<&PromptStreamSink>,
+) -> Result<CliStreamState, String> {
+    let mut reader = BufReader::new(stdout).lines();
+    let mut stream = CliStreamState::default();
+    while let Some(line) = reader
+        .next_line()
+        .await
+        .map_err(|error| redact_secrets(&error.to_string()))?
+    {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+            if sink.is_none() {
+                stream.live_text.push_str(trimmed);
+                stream.live_text.push('\n');
+            }
+            continue;
+        };
+        ingest_cli_stream_line(&value, &mut stream, sink);
+    }
+    Ok(stream)
+}
+
+async fn execute_headless_cli_turn(
+    binary: &FsPath,
+    agent_home: &FsPath,
+    agent_config: &FsPath,
+    profile: &ProviderProfile,
+    session_key: &str,
+    cli_session_id: &str,
+    session_marker: &FsPath,
+    prompt: &str,
+    sink: Option<&PromptStreamSink>,
+) -> Result<CliStreamState, String> {
+    let mut command = tokio::process::Command::new(binary);
+    command
+        .env("SUPERCHARGE_HOME", agent_home)
+        .arg("--model")
+        .arg(&profile.id)
+        .arg("--output-format")
+        .arg("streaming-json")
+        .arg("--single")
+        .arg(prompt);
+    if session_marker.exists() {
+        command.arg("--resume").arg(cli_session_id);
+    } else {
+        command.arg("--session-id").arg(cli_session_id);
+    }
+    if let Some(rules) = turn_rules_for(session_key) {
+        command.arg("--rules").arg(rules);
+    }
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| redact_secrets(&error.to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "agent stdout pipe missing".to_owned())?;
+    let stderr = child.stderr.take();
+    let stream = read_cli_stream(stdout, sink).await?;
+    let status = child
+        .wait()
+        .await
+        .map_err(|error| redact_secrets(&error.to_string()))?;
+    if !status.success() {
+        let mut stderr_text = String::new();
+        if let Some(mut pipe) = stderr {
+            let _ = tokio::io::AsyncReadExt::read_to_string(&mut pipe, &mut stderr_text).await;
+        }
+        let stderr = redact_secrets(&stderr_text);
+        return Err(if stderr.trim().is_empty() {
+            format!("{} exited with status {}", profile.id, status)
+        } else {
+            format!(
+                "{} exited with status {}: {}",
+                profile.id,
+                status,
+                stderr.trim().chars().take(1_000).collect::<String>()
+            )
+        });
+    }
+    if let Some(parent) = session_marker.parent() {
+        if let Err(error) = std::fs::create_dir_all(parent)
+            .and_then(|_| std::fs::write(session_marker, "initialized\n"))
+        {
+            tracing::warn!(
+                session = %session_key,
+                path = %session_marker.display(),
+                %error,
+                "agent response succeeded but its resume marker could not be persisted"
+            );
+        }
+    }
+    let _ = agent_config;
+    Ok(stream)
+}
+
+async fn run_supercharge_prompt_inner(
     session_key: &str,
     prompt: &str,
+    sink: Option<PromptStreamSink>,
 ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
     let metrics = runtime_metrics();
     let started = Instant::now();
@@ -1204,35 +1424,23 @@ async fn run_supercharge_prompt(
             }
             let cli_session_id = agent_session_id(session_key);
             let session_marker = agent_session_marker_path(&agent_home, &cli_session_id);
-            let mut command = tokio::process::Command::new(&binary);
-            command
-                .env("SUPERCHARGE_HOME", &agent_home)
-                .arg("--model")
-                .arg(&profile.id)
-                .arg("--single")
-                .arg(prompt);
-            if session_marker.exists() {
-                command.arg("--resume").arg(&cli_session_id);
-            } else {
-                command.arg("--session-id").arg(&cli_session_id);
-            }
-            let output = command.output().await;
+            let sink_ref = sink.as_ref();
+            let attempt = execute_headless_cli_turn(
+                FsPath::new(&binary),
+                &agent_home,
+                &agent_config,
+                &profile,
+                session_key,
+                &cli_session_id,
+                &session_marker,
+                prompt,
+                sink_ref,
+            )
+            .await;
             let elapsed_ms = attempt_started.elapsed().as_millis().min(u64::MAX as u128) as u64;
-            match output {
-                Ok(output) if output.status.success() => {
-                    let reply = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-                    if let Some(parent) = session_marker.parent() {
-                        if let Err(error) = std::fs::create_dir_all(parent)
-                            .and_then(|_| std::fs::write(&session_marker, "initialized\n"))
-                        {
-                            tracing::warn!(
-                                session = %session_key,
-                                path = %session_marker.display(),
-                                %error,
-                                "agent response succeeded but its resume marker could not be persisted"
-                            );
-                        }
-                    }
+            match attempt {
+                Ok(stream) => {
+                    let reply = stream.live_text.trim().to_owned();
                     record_provider_usage(
                         &metrics,
                         &profile.id,
@@ -1241,31 +1449,10 @@ async fn run_supercharge_prompt(
                         elapsed_ms,
                         true,
                     );
-                    return Ok(Some(reply));
+                    return Ok(if reply.is_empty() { None } else { Some(reply) });
                 }
-                Ok(output) => {
-                    let stderr = redact_secrets(&String::from_utf8_lossy(&output.stderr));
-                    last_error = if stderr.trim().is_empty() {
-                        format!("{} exited with status {}", profile.id, output.status)
-                    } else {
-                        format!(
-                            "{} exited with status {}: {}",
-                            profile.id,
-                            output.status,
-                            stderr.trim().chars().take(1_000).collect::<String>()
-                        )
-                    };
-                    record_provider_usage(
-                        &metrics,
-                        &profile.id,
-                        prompt.chars().count() as u64,
-                        0,
-                        elapsed_ms,
-                        false,
-                    );
-                }
-                Err(error) => {
-                    last_error = format!("{} execution failed: {}", profile.id, redact_secrets(&error.to_string()));
+                Err(last_error_msg) => {
+                    last_error = last_error_msg;
                     record_provider_usage(
                         &metrics,
                         &profile.id,
@@ -1299,6 +1486,13 @@ async fn run_supercharge_prompt(
         }
     }
     result
+}
+
+async fn run_supercharge_prompt(
+    session_key: &str,
+    prompt: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    run_supercharge_prompt_inner(session_key, prompt, None).await
 }
 
 async fn send_chunked(
@@ -2650,7 +2844,16 @@ fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
 fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) {
     app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
     tokio::spawn(async move {
-        let result = run_supercharge_prompt(format!("app:{session_id}").as_str(), &prompt).await;
+        let session_key = format!("app:{session_id}");
+        let result = run_supercharge_prompt_inner(
+            &session_key,
+            &prompt,
+            Some(PromptStreamSink::App {
+                state: state.clone(),
+                chat_id: chat_id.clone(),
+            }),
+        )
+        .await;
         match result {
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
