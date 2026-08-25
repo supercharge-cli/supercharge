@@ -2939,6 +2939,7 @@ async fn app_commands() -> Json<Value> {
         {"command":"/stop", "description":"Pause agent turns"},
         {"command":"/status", "description":"Show daemon control state"},
         {"command":"/model", "description":"Inspect or set the requested model"},
+        {"command":"/update", "description":"Check for a Supercharge binary update (E2B)"},
         {"command":"/help", "description":"Show available commands"}
     ]}))
 }
