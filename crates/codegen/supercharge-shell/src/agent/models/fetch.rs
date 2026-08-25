@@ -83,6 +83,19 @@ fn prefetch_models_blocking_gated(
     }
 
     let _timer = crate::instrumentation_timer!("startup.fetch_models_blocking");
+    if endpoints.has_custom_endpoint() {
+        match crate::agent::provider_setup::fetch_setup_provider_catalog(endpoints) {
+            Ok(map) if !map.is_empty() => {
+                tracing::info!(count = map.len(), "Prefetched setup provider models");
+                cache.persist(&map, None, cache_auth, &cache_origin);
+                return Some(map);
+            }
+            Ok(_) => tracing::warn!("setup provider catalog fetch returned empty list"),
+            Err(error) => tracing::warn!("setup provider catalog fetch failed: {error}"),
+        }
+        return None;
+    }
+
     match fetch_models_blocking(endpoints, auth, fetch_auth) {
         Ok(FetchModelsResult { models, etag }) if !models.is_empty() => {
             let api_base_url_override = match fetch_auth {

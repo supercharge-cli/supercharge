@@ -19,7 +19,7 @@ impl SlashCommand for ModelCommand {
     }
 
     fn aliases(&self) -> &[&str] {
-        &["m"]
+        &["m", "models"]
     }
 
     fn description(&self) -> &str {

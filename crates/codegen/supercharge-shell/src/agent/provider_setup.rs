@@ -4,10 +4,17 @@
 //! that endpoint, and writes the chosen model into `config.toml`.
 
 use std::net::IpAddr;
+use std::num::NonZeroU64;
 use std::path::Path;
 
+use indexmap::IndexMap;
 use serde_json::Value;
 use thiserror::Error;
+
+use crate::agent::config::{self, ModelEntry, ModelEntryConfig};
+use crate::remote::client::DEFAULT_CONTEXT_WINDOW;
+use crate::sampling::ApiBackend;
+use supercharge_sampler::AuthScheme;
 
 const MAX_MODELS: usize = 500;
 const MAX_BASE_URL_LEN: usize = 500;
@@ -83,6 +90,10 @@ impl SetupWireFormat {
         } else {
             Self::Openai
         }
+    }
+
+    pub fn from_api_backend(raw: &str) -> Self {
+        Self::parse(raw)
     }
 }
 
@@ -388,6 +399,122 @@ pub fn normalize_provider_base_url(raw: &str) -> Result<String, ProviderSetupErr
         return Err(ProviderSetupError::InvalidUrl);
     }
     Ok(normalized)
+}
+
+fn setup_wire_format_from_config(config: &toml::Value) -> SetupWireFormat {
+    config
+        .get("model_providers")
+        .and_then(|providers| providers.get(SETUP_PROVIDER_ID))
+        .and_then(|provider| provider.get("api_backend"))
+        .and_then(toml::Value::as_str)
+        .map(SetupWireFormat::from_api_backend)
+        .unwrap_or(SetupWireFormat::Openai)
+}
+
+fn setup_profile_id_from_config(config: &toml::Value) -> Option<String> {
+    config
+        .get("model_providers")
+        .and_then(|providers| providers.get(SETUP_PROVIDER_ID))
+        .and_then(|provider| provider.get("id"))
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+}
+
+/// Convert `/setup` model rows into catalog entries for `/model` and chat routing.
+pub fn provider_models_to_catalog(
+    models: Vec<ProviderModel>,
+    base_url: &str,
+    api_key: &str,
+    format: SetupWireFormat,
+) -> IndexMap<String, ModelEntry> {
+    let api_backend = match format {
+        SetupWireFormat::Openai => ApiBackend::ChatCompletions,
+        SetupWireFormat::Anthropic => ApiBackend::Messages,
+    };
+    let auth_scheme = match format {
+        SetupWireFormat::Openai => AuthScheme::Bearer,
+        SetupWireFormat::Anthropic => AuthScheme::XApiKey,
+    };
+    let mut extra_headers = IndexMap::new();
+    if format == SetupWireFormat::Anthropic {
+        extra_headers.insert("anthropic-version".to_owned(), "2023-06-01".to_owned());
+    }
+    let api_key = api_key.trim();
+    let stored_key = if api_key.is_empty() {
+        None
+    } else {
+        Some(api_key.to_owned())
+    };
+    let context_window =
+        NonZeroU64::new(DEFAULT_CONTEXT_WINDOW).expect("default context window is non-zero");
+
+    let mut catalog = IndexMap::with_capacity(models.len());
+    for model in models {
+        let entry_config = ModelEntryConfig {
+            id: Some(model.id.clone()),
+            model_family: None,
+            model: model.id.clone(),
+            base_url: base_url.to_owned(),
+            name: Some(model.name.clone()),
+            description: None,
+            max_completion_tokens: None,
+            temperature: None,
+            top_p: None,
+            api_key: stored_key.clone(),
+            env_key: None,
+            api_backend: api_backend.clone(),
+            auth_scheme: Some(auth_scheme),
+            reasoning_effort: None,
+            supports_reasoning_effort: false,
+            reasoning_efforts: Vec::new(),
+            extra_headers: extra_headers.clone(),
+            context_window,
+            auto_compact_threshold_percent: None,
+            system_prompt_label: None,
+            api_base_url: None,
+            use_concise: false,
+            agent_type: config::default_agent_type(),
+            inference_idle_timeout_secs: None,
+            max_retries: None,
+            hidden: false,
+            supported_in_api: true,
+            supports_backend_search: false,
+            compactions_remaining: None,
+            compaction_at_tokens: None,
+            show_model_fingerprint: false,
+            stream_tool_calls: None,
+            laziness_detector: config::LazinessDetectorPerModelConfig::default(),
+        };
+        catalog.insert(model.id.clone(), ModelEntry::from_config_entry(&entry_config));
+    }
+    catalog
+}
+
+/// Fetch the provider catalog the same way `/setup` does and shape it for `/model`.
+pub fn fetch_setup_provider_catalog(
+    endpoints: &config::EndpointsConfig,
+) -> Result<IndexMap<String, ModelEntry>, ProviderSetupError> {
+    let toml_config = crate::config::load_effective_config()
+        .map_err(|error| ProviderSetupError::Io(error.to_string()))?;
+    let base_url = endpoints
+        .models_base_url
+        .as_deref()
+        .filter(|url| !url.trim().is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| endpoints.xai_api_base_url.clone());
+    let normalized = normalize_provider_base_url(base_url.as_str())?;
+    let api_key = provider_setup_api_key_from_toml(&toml_config).unwrap_or_default();
+    let format = setup_wire_format_from_config(&toml_config);
+    let provider_id = setup_profile_id_from_config(&toml_config);
+    let models = fetch_provider_models(
+        &normalized,
+        &api_key,
+        format,
+        provider_id.as_deref(),
+    )?;
+    Ok(provider_models_to_catalog(models, &normalized, &api_key, format))
 }
 
 pub fn provider_models_list_url(base_url: &str) -> String {
@@ -771,6 +898,32 @@ pub fn load_existing_provider_setup() -> Option<(String, String)> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn provider_models_to_catalog_uses_setup_auth_and_backend() {
+        let models = vec![
+            ProviderModel {
+                id: "kimi-code".to_owned(),
+                name: "Kimi Code".to_owned(),
+            },
+            ProviderModel {
+                id: "openai".to_owned(),
+                name: "openai".to_owned(),
+            },
+        ];
+        let catalog = provider_models_to_catalog(
+            models,
+            "https://gen.pollinations.ai/v1",
+            "test-key",
+            SetupWireFormat::Openai,
+        );
+        assert_eq!(catalog.len(), 2);
+        let entry = catalog.get("kimi-code").expect("kimi-code");
+        assert_eq!(entry.name.as_deref(), Some("Kimi Code"));
+        assert_eq!(entry.info.api_backend, ApiBackend::ChatCompletions);
+        assert_eq!(entry.info.auth_scheme, AuthScheme::Bearer);
+        assert_eq!(entry.api_key.as_deref(), Some("test-key"));
+    }
 
     #[test]
     fn normalizes_https_and_strips_models_suffix() {
