@@ -98,6 +98,11 @@ pub struct PromptContext {
     /// Persists plan-agent verification policy across prompt reconstruction.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_browser_verification: bool,
+    /// Whether this session has the E2B-only Playwright browser toolset.
+    /// This is separate from browser verification, which applies to web work
+    /// in any definition that opts into it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub e2b_browser_control_enabled: bool,
     /// Which base template to use for `Extend` mode.
     /// `TemplateOverride::None` = standard base/subagent template.
     /// `TemplateOverride::Codex` = apply-patch profile template (decrypted on demand).
@@ -194,6 +199,7 @@ impl Default for PromptContext {
             audience: PromptAudience::default(),
             prompt_body: None,
             include_browser_verification: false,
+            e2b_browser_control_enabled: false,
             system_prompt: TemplateOverride::None,
             agents_md_files: vec![],
             persona_summaries: vec![],
@@ -276,6 +282,7 @@ impl PromptContext {
             "model_backend": self.model_backend.as_str(),
             "model_base_url": self.model_base_url.as_str(),
             "include_browser_verification": self.include_browser_verification,
+            "e2b_browser_control_enabled": self.e2b_browser_control_enabled,
         })
     }
     /// Render the full system prompt via `ToolBridge`.
@@ -340,6 +347,7 @@ mod tests {
             audience: PromptAudience::Primary,
             prompt_body: None,
             include_browser_verification: false,
+            e2b_browser_control_enabled: false,
             system_prompt: TemplateOverride::None,
             agents_md_files: vec![],
             persona_summaries: vec![],
@@ -665,6 +673,7 @@ mod tests {
             audience: PromptAudience::Subagent,
             prompt_body: Some(subagent_prompts::GENERAL_PURPOSE_PROMPT.to_string()),
             include_browser_verification: false,
+            e2b_browser_control_enabled: false,
             system_prompt: TemplateOverride::None,
             agents_md_files: vec![],
             persona_summaries: vec![

@@ -1187,6 +1187,8 @@ impl AgentBuilder {
             audience: self.prompt_audience,
             prompt_body: definition.prompt_body.clone(),
             include_browser_verification: definition.include_browser_verification(),
+            e2b_browser_control_enabled: std::env::var("SUPERCHARGE_RUNTIME_MODE")
+                .is_ok_and(|value| value.eq_ignore_ascii_case("e2b")),
             system_prompt: definition.system_prompt.clone(),
             agents_md_files,
             persona_summaries: self.persona_summaries,

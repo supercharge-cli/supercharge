@@ -254,6 +254,25 @@ mod tests {
     }
 
     #[test]
+    fn e2b_browser_control_policy_is_runtime_gated() {
+        let renderer = default_renderer();
+        let local = render_base(&renderer, &default_placeholders());
+        assert!(
+            !local.contains("<e2b_browser_control>"),
+            "local sessions must not advertise E2B-only browser tools"
+        );
+
+        let mut e2b = default_placeholders();
+        e2b["e2b_browser_control_enabled"] = serde_json::json!(true);
+        let prompt = render_base(&renderer, &e2b);
+        assert!(prompt.contains("<e2b_browser_control>"));
+        assert!(prompt.contains("browser_snapshot"));
+        assert!(prompt.contains("browser_handoff"));
+        assert!(prompt.contains("passwords, passkeys, MFA"));
+        assert!(prompt.contains("private noVNC"));
+    }
+
+    #[test]
     fn test_base_template_with_overridden_tool_names() {
         let tools: HashMap<ToolKind, String> = [
             (ToolKind::Read, "view_file".to_string()),
