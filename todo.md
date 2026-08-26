@@ -6,4 +6,4 @@
 - [x] Run focused regression checks, then commit and push the codebase-only refinements.
 - [x] Reproduce and diagnose the app-driven terminal command flow being reported as a user cancellation: daemon app turns omitted the headless auto-approval flag, leaving tool permission prompts unanswerable.
 - [x] Ensure an app turn runs with headless tool approval so terminal actions execute instead of becoming unanswerable cancellation prompts; update daemon E2B rules to the native browser and secure handoff model.
-- [ ] Verify the command-recovery fix through focused daemon and app-flow regressions, then commit and push it.
+- [x] Verify the command-recovery fix through focused daemon and app-flow regressions, then commit and push it.
