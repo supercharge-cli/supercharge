@@ -59,7 +59,9 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     /opt/vectra/entrypoint.sh /opt/vectra/wake-http/start.sh \
     /opt/vectra/wake-http/server.py \
     /opt/vectra/browser-runtime/start.sh \
-    && chown -R 1000:1000 /opt/vectra
+    && mkdir -p /var/lib/superagent \
+    && echo "1.1.0" > /var/lib/superagent/e2b-version \
+    && chown -R 1000:1000 /opt/vectra /var/lib/superagent
 
 USER user
 WORKDIR /home/user
@@ -75,6 +77,7 @@ ENV SUPERAGENT_CONTROL_STATE=/home/user/.supercharge/state/controls.json
 ENV SUPERAGENT_GATEWAY_STATE=/home/user/.supercharge/state/gateway-state.json
 ENV SUPERAGENT_E2B_SESSION_STATE=/home/user/.supercharge/state/e2b-sessions.json
 ENV SUPERAGENT_E2B_WORKSPACE_ROOT=/home/user/workspace
+ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.1.0
 ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/supercharge
 ENV SUPERAGENT_DAEMON_COMMAND=/usr/local/bin/supercharge-superagent-server
 ENV SUPERAGENT_PROVIDER=pollinations

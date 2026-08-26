@@ -1,5 +1,13 @@
 # Changelog
 
+# 1.1.0 — 2026-08-26
+
+## Features
+
+- Live `/model` catalog from the configured provider (same fetch as `/setup`).
+- Supercharge sandbox `/cmd` for workspace shell.
+- App live thought/text streaming, turn ETA, and E2B browser handoff detection.
+
 # 1.0.5 — 2026-08-15
 
 ## Features

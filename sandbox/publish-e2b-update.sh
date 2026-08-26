@@ -6,7 +6,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 template_dir="$repo_root/sandbox/e2b-agent-template"
 bin_dir="$template_dir/bin"
-tag="${SUPERCHARGE_E2B_UPDATE_TAG:-e2b-$(date -u +%Y%m%d%H%M)}"
+tag="${SUPERCHARGE_E2B_UPDATE_TAG:-1.1.0}"
 
 "$repo_root/sandbox/prepare-e2b-agent-assets.sh"
 
