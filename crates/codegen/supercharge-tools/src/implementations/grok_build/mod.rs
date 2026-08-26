@@ -46,8 +46,8 @@ pub use exit_plan_mode::ExitPlanModeTool;
 pub use grep::GrepTool;
 pub use image_edit::{IMAGE_EDIT_TOOL_NAME, ImageEditTool};
 pub use image_gen::{
-    IMAGE_GEN_TOOL_NAME, IMAGINE_COMMAND_NAME, ImageGenTool, imagine_instruction,
-    imagine_usage_message,
+    IMAGE_GEN_TOOL_NAME, IMAGINE_COMMAND_NAME, ImageGenTool, ImageProviderFormat,
+    imagine_instruction, imagine_usage_message, size_from_aspect_ratio,
 };
 pub use kill_task::{KillTaskTool, KillTerminalCommandTool};
 pub use list_dir::ListDirTool;

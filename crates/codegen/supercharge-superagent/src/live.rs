@@ -176,21 +176,54 @@ fn screenshot_path(command: &str, stdout: &str) -> Option<String> {
     })
 }
 
+fn json_text(value: &Value) -> Option<String> {
+    match value {
+        Value::String(text) => {
+            if text.trim().is_empty() {
+                None
+            } else {
+                Some(text.clone())
+            }
+        }
+        Value::Array(items) => {
+            let mut out = String::new();
+            for item in items {
+                if let Some(part) = json_text(item) {
+                    out.push_str(&part);
+                }
+            }
+            if out.trim().is_empty() {
+                None
+            } else {
+                Some(out)
+            }
+        }
+        Value::Object(map) => map
+            .get("text")
+            .or_else(|| map.get("data"))
+            .or_else(|| map.get("content"))
+            .or_else(|| map.get("message"))
+            .and_then(json_text),
+        _ => None,
+    }
+}
+
+fn stream_text(line: &Value) -> Option<String> {
+    line.get("data")
+        .and_then(json_text)
+        .or_else(|| line.get("text").and_then(json_text))
+        .or_else(|| line.get("content").and_then(json_text))
+        .or_else(|| line.get("message").and_then(json_text))
+}
+
 pub fn parse_cli_stream_line(line: &Value) -> Vec<LiveEvent> {
     let kind = line.get("type").and_then(Value::as_str).unwrap_or_default();
     match kind {
-        "text" => line
-            .get("data")
-            .and_then(Value::as_str)
-            .filter(|text| !text.is_empty())
-            .map(|text| vec![LiveEvent::TextDelta(text.to_owned())])
+        "text" | "assistant" | "agent_message" | "message" => stream_text(line)
+            .map(|text| vec![LiveEvent::TextDelta(text)])
             .unwrap_or_default(),
-        "thought" => line
-            .get("data")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-            .map(|text| vec![LiveEvent::Thought(text.to_owned())])
+        "thought" | "thinking" | "agent_thought" | "reasoning" => stream_text(line)
+            .map(|text| vec![LiveEvent::Thought(text)])
             .unwrap_or_default(),
         "tool_call" => {
             let id = line
@@ -754,6 +787,12 @@ mod tests {
         assert_eq!(shown[0]["type"], "progress");
         assert_eq!(shown[0]["kind"], "thinking");
         assert_eq!(shown[0]["text"], "plan the fix");
+
+        let nested = parse_cli_stream_line(&json!({
+            "type": "thinking",
+            "content": [{"type": "text", "text": "consider the tests"}]
+        }));
+        assert_eq!(nested, vec![LiveEvent::Thought("consider the tests".into())]);
 
         let browser = parse_cli_stream_line(&json!({
             "type": "tool_call",

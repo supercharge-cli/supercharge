@@ -1463,6 +1463,9 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             vec![]
         }
         TaskResult::ProviderModelsFetched { generation, result } => {
+            if let Ok(models) = &result {
+                merge_provider_models_into_catalog(app, models);
+            }
             if let Some(agent) = get_active_agent_mut(app)
                 && let Some(crate::views::modal::ActiveModal::ProviderSetup { state }) =
                     agent.active_modal.as_mut()
@@ -1488,6 +1491,53 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                 return vec![];
             }
             switch_session_to_setup_model(app, &model_id)
+        }
+        TaskResult::ImageProviderSetupSaved {
+            generation,
+            model_id,
+            result,
+        } => {
+            let saved = get_active_agent_mut(app)
+                .and_then(|agent| match agent.active_modal.as_mut() {
+                    Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                        Some(state.apply_saved(generation, result.clone()))
+                    }
+                    _ => None,
+                })
+                .unwrap_or(false);
+            if !saved {
+                return vec![];
+            }
+            if let Some(agent) = get_active_agent_mut(app) {
+                agent.active_modal = None;
+            }
+            app.show_toast(&format!(
+                "Image model set to {model_id}. Open a new session to use it."
+            ));
+            vec![]
+        }
+    }
+}
+
+fn merge_provider_models_into_catalog(
+    app: &mut AppView,
+    models: &[supercharge_shell::agent::provider_setup::ProviderModel],
+) {
+    use supercharge_shell::agent::provider_setup::CUSTOM_MODEL_ID;
+    for model in models {
+        if model.id.is_empty() || model.id == CUSTOM_MODEL_ID {
+            continue;
+        }
+        let id = acp::ModelId::new(std::sync::Arc::from(model.id.as_str()));
+        let name = if model.name.trim().is_empty() {
+            model.id.clone()
+        } else {
+            model.name.clone()
+        };
+        let info = acp::ModelInfo::new(id.clone(), name);
+        app.models.available.insert(id.clone(), info.clone());
+        if let Some(agent) = get_active_agent_mut(app) {
+            agent.session.models.available.insert(id, info);
         }
     }
 }

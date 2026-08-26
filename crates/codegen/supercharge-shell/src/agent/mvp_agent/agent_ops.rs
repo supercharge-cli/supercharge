@@ -2179,45 +2179,56 @@ impl MvpAgent {
             .or_else(|| jwt_tier_claim(&auth.key));
         tier.as_deref().is_some_and(crate::tier::is_restricted_tier_name)
     }
-    /// Build image generation config.
+    /// Build image generation config from `[image_provider]` (`/isetup`).
     ///
-    /// Both BYOK and session (OAuth) users go direct to `xai_api_base_url`.
-    /// `sampling_config.api_key` carries the OAuth bearer for session users (the
-    /// `api_key_provider` refreshes it per request), so IC authenticates and
-    /// meters Imagine usage per-user.
+    /// Independent of chat `/setup` and of `xai_api_base_url`. Missing
+    /// `base_url` leaves the tools unregistered.
     pub(super) fn prepare_image_gen_config(
         &self,
     ) -> supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig {
-        use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
-        let sampling_config = self.sampling_config.borrow();
-        let Some(ref api_key) = sampling_config.api_key else {
+        use supercharge_tools::implementations::grok_build::image_gen::{
+            ImageGenConfig, ImageProviderFormat,
+        };
+        let cfg = self.cfg.borrow();
+        let Some(base_url) = cfg
+            .image_provider
+            .configured_base_url()
+            .map(str::to_owned)
+        else {
             return ImageGenConfig::Disabled;
         };
-        let tier_restricted = self.is_tier_restricted_capability();
-        let cfg = self.cfg.borrow();
-        let base_url = cfg.endpoints.xai_api_base_url.clone();
+        let api_key = cfg
+            .image_provider
+            .api_key
+            .clone()
+            .unwrap_or_default();
+        let format = ImageProviderFormat::parse(
+            cfg.image_provider.format.as_deref().unwrap_or(""),
+        );
+        let model_override = cfg
+            .image_provider
+            .model
+            .clone()
+            .filter(|m| !m.trim().is_empty())
+            .or_else(|| cfg.resolve_image_gen_model_override());
         let version = cfg
             .client_version
             .clone()
             .unwrap_or_else(|| supercharge_version::VERSION.to_string());
-        let alpha_test_key = cfg.endpoints.alpha_test_key.clone();
         let mut headers = indexmap::IndexMap::new();
-        headers.insert("user-agent".to_string(), format!("xai-supercharge-core/{version}"));
-        inject_proxy_headers(
-            &mut headers,
-            cfg.client_version.as_deref(),
-            alpha_test_key.as_deref(),
-            &base_url,
+        headers.insert(
+            "user-agent".to_string(),
+            format!("supercharge/{version}"),
         );
         ImageGenConfig::Enabled {
-            api_key: api_key.clone(),
+            api_key,
             base_url,
             extra_headers: headers,
             image_gen_enabled: cfg.resolve_image_gen().value,
             image_edit_enabled: cfg.resolve_image_edit().value,
-            model_override: cfg.resolve_image_gen_model_override(),
+            model_override,
             edit_model_override: cfg.resolve_image_edit_model_override(),
-            tier_restricted,
+            format,
         }
     }
     /// Build deploy-service config. The tool talks directly to the deployer service.

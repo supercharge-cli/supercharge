@@ -869,7 +869,18 @@ pub fn provider_setup_api_key_from_toml(config: &toml::Value) -> Option<String> 
         })
 }
 
+pub struct ExistingProviderSetup {
+    pub base_url: String,
+    pub api_key: String,
+    pub format: SetupWireFormat,
+    pub provider_id: String,
+}
+
 pub fn load_existing_provider_setup() -> Option<(String, String)> {
+    load_existing_provider_setup_details().map(|setup| (setup.base_url, setup.api_key))
+}
+
+pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
     let path = crate::util::config::user_config_path();
     let content = crate::util::config::read_to_string_or_empty(&path).ok()?;
     if content.trim().is_empty() {
@@ -891,7 +902,13 @@ pub fn load_existing_provider_setup() -> Option<(String, String)> {
         .map(|key| sanitize_provider_api_key(&key))
         .filter(|key| !key.is_empty())
         .unwrap_or_default();
-    Some((base_url, api_key))
+    Some(ExistingProviderSetup {
+        base_url,
+        api_key,
+        format: setup_wire_format_from_config(&parsed),
+        provider_id: setup_profile_id_from_config(&parsed)
+            .unwrap_or_else(|| CUSTOM_PROVIDER_ID.to_owned()),
+    })
 }
 
 #[cfg(test)]

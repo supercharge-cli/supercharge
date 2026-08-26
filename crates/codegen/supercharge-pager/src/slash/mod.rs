@@ -1670,9 +1670,10 @@ mod tests {
     #[test]
     fn required_arg_command_blocks_without_args() {
         let reg = test_registry();
-        // /model has takes_args=true, args_required=true.
-        assert!(!is_command_complete("/model", &reg));
-        assert!(!is_command_complete("/model ", &reg));
+        assert!(!is_command_complete("/btw", &reg));
+        assert!(!is_command_complete("/btw ", &reg));
+        assert!(is_command_complete("/btw hi", &reg));
+        assert!(is_command_complete("/model", &reg));
         assert!(is_command_complete("/model grok-4", &reg));
     }
 

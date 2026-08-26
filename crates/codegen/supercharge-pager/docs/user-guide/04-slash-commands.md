@@ -107,11 +107,12 @@ Rename the current session. Alias: `/title`.
 
 ## Model and Mode
 
-### `/model <name>`
+### `/model [name]`
 
-Switch models. Accepts a model ID or display name (case-insensitive), and for reasoning models you can add an effort level as a second argument. Alias: `/m`.
+Switch models. With no arguments, Supercharge live-fetches `/models` from the provider you configured in `/setup` (saved base URL and API key) and lists every chat model from that API so you can pick one. With an argument, it accepts a model ID or display name (case-insensitive), and for reasoning models you can add an effort level as a second argument. Aliases: `/m`, `/models`.
 
 ```
+/model
 /model supercharge-build
 /model Supercharge AI
 /model Reasoning X high
@@ -233,9 +234,25 @@ Open the extensions modal on the Skills tab to view installed skills.
 
 ## Media Generation
 
+### `/isetup`
+
+Open the **image** provider wizard (independent of chat `/setup`). Pick Pollinations, OpenAI, OpenRouter, or Custom; enter a base URL and optional API key; then pick a listed model or type any custom model id. Saved under `[image_provider]` in `~/.supercharge/config.toml`. Aliases: `/imagine-setup`, `/image-setup`.
+
+```
+/isetup
+```
+
+### `/imodels [model-id]`
+
+Switch the image-generation model. With no argument, opens `/isetup`. With an id, writes `[image_provider].model` (any custom slug is allowed). Aliases: `/imagine-model`, `/image-model`, `/imodel`.
+
+```
+/imodels flux
+```
+
 ### `/imagine <description>`
 
-Generate an image from a text description.
+Generate an image from a text description. Requires `/isetup` first.
 
 ```
 /imagine a golden sunset over a calm ocean with silhouetted palm trees

@@ -2102,7 +2102,16 @@ pub(super) fn apply_setup_outcome(
             generation,
         }),
         SetupOutcome::Save { setup, generation } => {
-            InputOutcome::Action(Action::PersistProviderSetup { setup, generation })
+            let image = matches!(
+                &agent.active_modal,
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state })
+                    if state.kind == crate::views::setup_modal::SetupKind::Image
+            );
+            if image {
+                InputOutcome::Action(Action::PersistImageProviderSetup { setup, generation })
+            } else {
+                InputOutcome::Action(Action::PersistProviderSetup { setup, generation })
+            }
         }
         SetupOutcome::Changed => InputOutcome::Changed,
         SetupOutcome::Unchanged => InputOutcome::Unchanged,

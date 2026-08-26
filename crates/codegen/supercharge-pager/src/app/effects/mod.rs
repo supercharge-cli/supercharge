@@ -4469,6 +4469,23 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::PersistImageProviderSetup { setup, generation } => {
+            tasks.spawn(async move {
+                let model_id = setup.model_id.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    supercharge_shell::agent::image_provider::persist_image_provider_setup(&setup)
+                        .map_err(|error| error.to_string())
+                })
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|result| result);
+                TaskResult::ImageProviderSetupSaved {
+                    generation,
+                    model_id,
+                    result,
+                }
+            });
+        }
         Effect::PersistProviderSetup { setup, generation } => {
             let tx = acp_tx.clone();
             tasks

@@ -7,7 +7,7 @@ use std::{
     process::Stdio,
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Instant,
 };
@@ -1196,6 +1196,27 @@ fn record_provider_usage(
     }
 }
 
+fn estimated_turn_ms() -> u64 {
+    let metrics = runtime_metrics();
+    let succeeded = metrics.turns_succeeded.load(Ordering::Relaxed);
+    let total = metrics.total_duration_ms.load(Ordering::Relaxed);
+    if succeeded == 0 {
+        return 28_000;
+    }
+    (total / succeeded).clamp(8_000, 180_000)
+}
+
+fn format_clock_ms(ms: u64) -> String {
+    let secs = ms / 1000;
+    if secs >= 3600 {
+        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+    } else if secs >= 60 {
+        format!("{}m {:02}s", secs / 60, secs % 60)
+    } else {
+        format!("{secs}s")
+    }
+}
+
 #[derive(Default)]
 struct CliStreamState {
     live_text: String,
@@ -1328,7 +1349,43 @@ async fn execute_headless_cli_turn(
         .take()
         .ok_or_else(|| "agent stdout pipe missing".to_owned())?;
     let stderr = child.stderr.take();
+    let clock_stop = Arc::new(AtomicBool::new(false));
+    if let Some(PromptStreamSink::App { state, chat_id }) = sink {
+        let state = state.clone();
+        let chat_id = chat_id.clone();
+        let stop = clock_stop.clone();
+        let started = Instant::now();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.tick().await;
+            while !stop.load(Ordering::Relaxed) {
+                interval.tick().await;
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+                let eta_ms = estimated_turn_ms().saturating_sub(elapsed_ms);
+                app_emit(
+                    &state,
+                    &chat_id,
+                    json!({
+                        "type": "status",
+                        "busy": true,
+                        "elapsedMs": elapsed_ms,
+                        "etaMs": eta_ms,
+                        "label": format!(
+                            "{} · ~{} left",
+                            format_clock_ms(elapsed_ms),
+                            format_clock_ms(eta_ms.max(1_000))
+                        )
+                    }),
+                );
+            }
+        });
+    }
     let stream = read_cli_stream(stdout, sink).await?;
+    clock_stop.store(true, Ordering::Relaxed);
     let status = child
         .wait()
         .await
@@ -2708,8 +2765,14 @@ async fn browser_handoff(
     Json(request): Json<BrowserHandoffRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
     if !browser::is_e2b_runtime() {
-        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "browser handoff is available only in E2B mode".to_owned() })));
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Take control needs the Supercharge E2B browser sidecar. Update the sandbox CLI and retry.".to_owned(),
+            }),
+        ));
     }
+    let _ = browser::ensure_stream(browser::stream_port()).await;
     let start = match request.action.as_str() {
         "start" => true,
         "stop" => false,
@@ -3055,6 +3118,7 @@ async fn app_commands() -> Json<Value> {
         {"command":"/stop", "description":"Pause agent turns"},
         {"command":"/status", "description":"Show daemon control state"},
         {"command":"/model", "description":"Inspect or set the requested model"},
+        {"command":"/cmd", "description":"Run a shell command in the sandbox workspace"},
         {"command":"/update", "description":"Check for a Supercharge binary update (E2B)"},
         {"command":"/help", "description":"Show available commands"}
     ]}))
@@ -3246,6 +3310,17 @@ async fn app_chat(
         persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
     }
     app_record_message(&state, &session_id, "user", &prompt).await;
+    app_emit(
+        &state,
+        &chat_id,
+        json!({
+            "type": "user",
+            "role": "user",
+            "text": prompt,
+            "format": "markdown",
+            "sessionId": session_id,
+        }),
+    );
     spawn_app_turn(state, chat_id.clone(), session_id.clone(), prompt);
     Ok((
         StatusCode::ACCEPTED,

@@ -552,6 +552,11 @@ pub(crate) fn default_palette_entries(
             command: PaletteCommand::OpenSetup,
         },
         PaletteEntry {
+            label: "Image provider setup".into(),
+            shortcut: "/isetup".into(),
+            command: PaletteCommand::SlashCommand("/isetup".into()),
+        },
+        PaletteEntry {
             label: "Settings".into(),
             shortcut: "F2".into(),
             command: PaletteCommand::OpenSettings,

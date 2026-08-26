@@ -108,6 +108,44 @@ impl ControlStore {
                 ));
             }
             AgentCommand::Help => return Ok(help_text().to_owned()),
+            AgentCommand::Setup => {
+                return Ok(
+                    "Chat provider is configured in Vectra instance settings \
+(provider, model, API key, base URL). In the Supercharge TUI use /setup."
+                        .to_owned(),
+                );
+            }
+            AgentCommand::ISetup => {
+                return Ok(
+                    "Image generation is configured in Vectra instance settings \
+(Image generation: provider, model, format, optional key). \
+In the Supercharge TUI use /isetup and /imodels. \
+Then send /imagine <description>."
+                        .to_owned(),
+                );
+            }
+            AgentCommand::IModels(model) => {
+                if let Some(model) = model {
+                    if model.len() > 200 || model.chars().any(char::is_whitespace) {
+                        return Ok(
+                            "Image model IDs must be a single value of at most 200 characters."
+                                .to_owned(),
+                        );
+                    }
+                    if let Err(error) = persist_image_model(&model) {
+                        return Ok(format!(
+                            "Could not write [image_provider].model: {error}. Set it in instance settings."
+                        ));
+                    }
+                    return Ok(format!(
+                        "Image model set to `{model}`. Restart the daemon or start a new session so /imagine uses it."
+                    ));
+                }
+                return Ok(
+                    "Set an image model with /imodels <id> (any custom slug), or configure Image generation in Vectra instance settings / TUI /isetup."
+                        .to_owned(),
+                );
+            }
             AgentCommand::Model(model) => {
                 if let Some(model) = model {
                     if model.len() > 128 || model.chars().any(char::is_whitespace) {
@@ -125,7 +163,9 @@ impl ControlStore {
                     ));
                 }
             }
-            AgentCommand::Update(_) => unreachable!("update is handled in handle_text"),
+            AgentCommand::Update(_) | AgentCommand::Cmd(_) => {
+                unreachable!("update and cmd are handled in handle_text")
+            }
         };
         self.save()?;
         Ok(response.to_owned())
@@ -148,6 +188,9 @@ pub async fn handle_text(session_key: &str, text: &str) -> Result<Option<String>
     };
     if let AgentCommand::Update(action) = command {
         return Ok(Some(crate::self_update::handle(action).await));
+    }
+    if let AgentCommand::Cmd(command) = command {
+        return Ok(Some(run_workspace_command(&command).await));
     }
     let Some(store) = global() else {
         return Ok(Some("Control store is not initialized.".to_owned()));
@@ -175,6 +218,76 @@ pub async fn set_emergency_stopped(stopped: bool) -> Result<(), std::io::Error> 
         return Err(std::io::Error::other("control store is not initialized"));
     };
     store.lock().await.set_emergency_stopped(stopped)
+}
+
+async fn run_workspace_command(command: &str) -> String {
+    let command = command.trim();
+    if command.is_empty() {
+        return "Usage: /cmd <command>  (runs in /home/user/workspace)".to_owned();
+    }
+    if command.len() > 4000 {
+        return "Command is too long (max 4000 characters).".to_owned();
+    }
+    let cwd = if std::path::Path::new("/home/user/workspace").is_dir() {
+        "/home/user/workspace"
+    } else {
+        "/home/user"
+    };
+    let mut shell = tokio::process::Command::new("bash");
+    shell
+        .arg("-lc")
+        .arg(command)
+        .current_dir(cwd)
+        .kill_on_drop(true)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    match tokio::time::timeout(std::time::Duration::from_secs(120), shell.output()).await {
+        Ok(Ok(output)) => {
+            let mut text = String::new();
+            if !output.stdout.is_empty() {
+                text.push_str(&String::from_utf8_lossy(&output.stdout));
+            }
+            if !output.stderr.is_empty() {
+                if !text.is_empty() {
+                    text.push('\n');
+                }
+                text.push_str(&String::from_utf8_lossy(&output.stderr));
+            }
+            let code = output.status.code().unwrap_or(-1);
+            if text.trim().is_empty() {
+                format!("exit {code} (no output)")
+            } else {
+                let clipped: String = text.chars().take(8000).collect();
+                format!("exit {code}\n{clipped}")
+            }
+        }
+        Ok(Err(error)) => format!("Command failed: {error}"),
+        Err(_) => "Command timed out after 120s.".to_owned(),
+    }
+}
+
+fn persist_image_model(model: &str) -> Result<(), String> {
+    let path = PathBuf::from("/home/user/.supercharge/config.toml");
+    let mut value = if path.exists() {
+        let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        raw.parse::<toml::Value>().unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()))
+    } else {
+        toml::Value::Table(toml::map::Map::new())
+    };
+    let table = value.as_table_mut().ok_or_else(|| "config.toml is not a table".to_owned())?;
+    let image = table
+        .entry("image_provider".to_owned())
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+    let image_table = image
+        .as_table_mut()
+        .ok_or_else(|| "image_provider is not a table".to_owned())?;
+    image_table.insert("model".to_owned(), toml::Value::String(model.to_owned()));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, toml::to_string_pretty(&value).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn now_seconds() -> u64 {

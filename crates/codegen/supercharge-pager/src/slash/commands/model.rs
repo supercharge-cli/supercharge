@@ -23,7 +23,7 @@ impl SlashCommand for ModelCommand {
     }
 
     fn description(&self) -> &str {
-        "Switch the active model"
+        "Switch the active model (live list from the configured provider)"
     }
 
     fn session_scoped(&self) -> bool {
@@ -45,7 +45,7 @@ impl SlashCommand for ModelCommand {
     }
 
     fn args_required(&self) -> bool {
-        true
+        false
     }
 
     fn arg_placeholder(&self) -> Option<&str> {
@@ -67,7 +67,7 @@ impl SlashCommand for ModelCommand {
     fn run(&self, ctx: &mut CommandExecCtx, args: &str) -> CommandResult {
         let trimmed = args.trim();
         if trimmed.is_empty() {
-            return CommandResult::Error("Usage: /model <name> [effort]".into());
+            return CommandResult::Action(Action::OpenLiveModelPicker);
         }
 
         // Prefer an exact full-string catalog match first. Model display names
@@ -488,6 +488,14 @@ mod tests {
 
     /// Case-insensitive matching against the catalog: `/model grok 4.5`
     /// resolves to the same `ModelId` as `/model Supercharge Core`.
+    #[test]
+    fn run_empty_opens_live_model_picker() {
+        let state = ModelState::default();
+        let mut ctx = dummy_exec_ctx(&state);
+        let result = ModelCommand.run(&mut ctx, "");
+        assert!(matches!(result, CommandResult::Action(Action::OpenLiveModelPicker)));
+    }
+
     #[test]
     fn run_set_default_model_resolves_case_insensitively() {
         let mut state = ModelState::default();

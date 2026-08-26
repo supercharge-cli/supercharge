@@ -2983,46 +2983,49 @@ async fn prepare_video_gen_config_respects_feature_flag() {
         VideoGenConfig::Disabled
     ));
 }
-/// The imagine tier gate fails **open**: with no resolved auth we can't confirm
-/// a restricted personal tier, so the tools stay advertised and un-flagged (the
-/// server 429 remains the authoritative backstop). Guards against accidentally
-/// disabling a paid feature when tier info hasn't loaded.
+/// Image gen stays disabled until `/isetup` writes `[image_provider]`.
 #[tokio::test(flavor = "current_thread")]
-async fn prepare_image_gen_config_fails_open_without_auth() {
+async fn prepare_image_gen_config_disabled_without_image_provider() {
     use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
+    assert!(matches!(
+        agent.prepare_image_gen_config(),
+        ImageGenConfig::Disabled
+    ));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn prepare_image_gen_config_uses_image_provider_table() {
+    use supercharge_tools::implementations::grok_build::image_gen::{
+        ImageGenConfig, ImageProviderFormat,
+    };
+    let agent = build_minimal_agent_for_tests();
+    {
+        let mut cfg = agent.cfg.borrow_mut();
+        cfg.image_provider.base_url = Some("https://gen.pollinations.ai/v1".into());
+        cfg.image_provider.model = Some("flux".into());
+        cfg.image_provider.format = Some("pollinations".into());
+        cfg.image_provider.api_key = None;
+    }
     let ImageGenConfig::Enabled {
-        tier_restricted, ..
+        base_url,
+        api_key,
+        format,
+        model_override,
+        extra_headers,
+        ..
     } = agent.prepare_image_gen_config()
     else {
         panic!("expected Enabled");
     };
-    assert!(
-        !tier_restricted,
-        "no resolved auth ⇒ fail open (tools not tier-restricted)"
-    );
-}
-/// The imagine tools bypass cli-chat-proxy (direct API calls), so the server
-/// can only scope the coding data-retention opt-out (`/privacy opt-out`) to
-/// Build traffic via the `x-grok-client-identifier` header. If this header is
-/// dropped, opted-out users' imagine prompts are logged/retained server-side.
-#[tokio::test(flavor = "current_thread")]
-async fn prepare_image_gen_config_sends_client_identifier_header() {
-    use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
-    let agent = build_minimal_agent_for_tests();
-    agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
-    let ImageGenConfig::Enabled { extra_headers, .. } = agent.prepare_image_gen_config() else {
-        panic!("expected Enabled");
-    };
-    assert_eq!(
-        extra_headers
-            .get("x-grok-client-identifier")
-            .map(String::as_str),
-        Some(crate::http::process_client_identifier().as_str()),
-        "imagine API calls must carry the client identifier so the server \
-         applies the coding ZDR opt-out to Build traffic"
-    );
+    assert_eq!(base_url, "https://gen.pollinations.ai/v1");
+    assert!(api_key.is_empty());
+    assert_eq!(format, ImageProviderFormat::Pollinations);
+    assert_eq!(model_override.as_deref(), Some("flux"));
+    assert!(extra_headers
+        .get("user-agent")
+        .is_some_and(|ua| ua.starts_with("supercharge/")));
 }
 /// Same contract for video generation (also a direct API call).
 #[tokio::test(flavor = "current_thread")]

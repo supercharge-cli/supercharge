@@ -625,6 +625,10 @@ pub enum Action {
     OpenSettings,
     /// Open the provider setup wizard (`/setup`, `/login`).
     OpenSetup,
+    /// Open the image-generation provider wizard (`/isetup`).
+    OpenImageSetup,
+    /// Live-fetch `/models` with the saved `/setup` URL + key and pick a model.
+    OpenLiveModelPicker,
     /// Fetch `/models` for the in-progress setup wizard.
     FetchProviderModels {
         base_url: String,
@@ -635,6 +639,11 @@ pub enum Action {
     },
     /// Persist the chosen provider + model from the setup wizard.
     PersistProviderSetup {
+        setup: supercharge_shell::agent::provider_setup::ProviderSetup,
+        generation: u64,
+    },
+    /// Persist `[image_provider]` from `/isetup`.
+    PersistImageProviderSetup {
         setup: supercharge_shell::agent::provider_setup::ProviderSetup,
         generation: u64,
     },
@@ -2231,6 +2240,10 @@ pub enum Effect {
         setup: supercharge_shell::agent::provider_setup::ProviderSetup,
         generation: u64,
     },
+    PersistImageProviderSetup {
+        setup: supercharge_shell::agent::provider_setup::ProviderSetup,
+        generation: u64,
+    },
 }
 /// Wire params for `x.ai/session/rename`. Shared with the effect executor
 /// so dispatch tests can pin the exact camelCase payload.
@@ -3065,6 +3078,11 @@ pub enum TaskResult {
         result: Result<Vec<supercharge_shell::agent::provider_setup::ProviderModel>, String>,
     },
     ProviderSetupSaved {
+        generation: u64,
+        model_id: String,
+        result: Result<(), String>,
+    },
+    ImageProviderSetupSaved {
         generation: u64,
         model_id: String,
         result: Result<(), String>,

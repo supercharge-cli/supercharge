@@ -267,8 +267,21 @@ pub(in crate::app::dispatch) fn dispatch_open_settings(
 }
 
 pub(in crate::app::dispatch) fn dispatch_open_setup(app: &mut AppView) -> Vec<Effect> {
+    dispatch_open_setup_kind(app, crate::views::setup_modal::SetupKind::Chat)
+}
+
+pub(in crate::app::dispatch) fn dispatch_open_image_setup(app: &mut AppView) -> Vec<Effect> {
+    dispatch_open_setup_kind(app, crate::views::setup_modal::SetupKind::Image)
+}
+
+pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppView) -> Vec<Effect> {
     use crate::views::modal::ActiveModal;
     use crate::views::setup_modal::SetupModalState;
+
+    if supercharge_shell::agent::provider_setup::load_existing_provider_setup_details().is_none()
+    {
+        return dispatch_open_setup(app);
+    }
 
     let mut effects = vec![];
     let id = match app.active_view {
@@ -298,8 +311,70 @@ pub(in crate::app::dispatch) fn dispatch_open_setup(app: &mut AppView) -> Vec<Ef
         agent.active_modal = None;
         return effects;
     }
+    let (state, fetch) = SetupModalState::live_model_picker();
     agent.active_modal = Some(ActiveModal::ProviderSetup {
-        state: Box::new(SetupModalState::new()),
+        state: Box::new(state),
+    });
+    if let Some(crate::views::setup_modal::SetupOutcome::Fetch {
+        base_url,
+        api_key,
+        format,
+        provider_id,
+        generation,
+    }) = fetch
+    {
+        effects.push(Effect::FetchProviderModels {
+            base_url,
+            api_key,
+            format,
+            provider_id,
+            generation,
+        });
+    }
+    effects
+}
+
+fn dispatch_open_setup_kind(
+    app: &mut AppView,
+    kind: crate::views::setup_modal::SetupKind,
+) -> Vec<Effect> {
+    use crate::views::modal::ActiveModal;
+    use crate::views::setup_modal::{SetupKind, SetupModalState};
+
+    let mut effects = vec![];
+    let id = match app.active_view {
+        ActiveView::Agent(id) => id,
+        _ => {
+            if let Some(existing) = app.agents.keys().next().copied() {
+                crate::app::dispatch::ctx::switch_to_agent(
+                    app,
+                    existing,
+                    crate::app::dispatch::ctx::SwitchCause::Picker,
+                );
+                existing
+            } else {
+                let (new_id, create_effects) =
+                    crate::app::dispatch::session::lifecycle::dispatch_new_session_inner_with_id(
+                        app, None,
+                    );
+                effects.extend(create_effects);
+                new_id
+            }
+        }
+    };
+    let Some(agent) = app.agents.get_mut(&id) else {
+        return effects;
+    };
+    if matches!(&agent.active_modal, Some(ActiveModal::ProviderSetup { .. })) {
+        agent.active_modal = None;
+        return effects;
+    }
+    let state = match kind {
+        SetupKind::Chat => SetupModalState::new(),
+        SetupKind::Image => SetupModalState::image(),
+    };
+    agent.active_modal = Some(ActiveModal::ProviderSetup {
+        state: Box::new(state),
     });
     effects
 }

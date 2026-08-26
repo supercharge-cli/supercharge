@@ -221,7 +221,7 @@ pub trait SlashCommand: Send + Sync {
     /// |-------------|----------------|------------------|-------------------|
     /// | `false`     | `false`        | `/exit`          | Executes          |
     /// | `true`      | `false`        | `/compact [ctx]` | Executes          |
-    /// | `true`      | `true`         | `/model <id>`    | Blocks            |
+    /// | `true`      | `true`         | `/btw <q>`       | Blocks            |
     fn args_required(&self) -> bool {
         false
     }

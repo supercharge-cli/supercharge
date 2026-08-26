@@ -33,6 +33,8 @@ pub mod history;
 pub mod home;
 pub mod imagine;
 pub mod imagine_video;
+pub mod imodels;
+pub mod isetup;
 pub mod import_claude;
 pub mod jump;
 pub mod login;
@@ -130,6 +132,8 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(loop_cmd::LoopCommand),
         Arc::new(imagine::ImagineCommand),
         Arc::new(imagine_video::ImagineVideoCommand),
+        Arc::new(isetup::ISetupCommand),
+        Arc::new(imodels::IModelsCommand),
         Arc::new(timestamps::TimestampsCommand),
         Arc::new(timeline::TimelineCommand),
         Arc::new(toggle_mouse_reporting::ToggleMouseReportingCommand),
@@ -214,6 +218,9 @@ mod tests {
         assert!(reg.get("compact").is_some());
         assert!(reg.get("model").is_some());
         assert!(reg.get("setup").is_some());
+        assert!(reg.get("isetup").is_some());
+        assert!(reg.get("imagine-setup").is_some());
+        assert!(reg.get("imodels").is_some());
         assert!(reg.get("home").is_some());
         assert!(reg.get("view-plan").is_some());
         reg.set_available_tools(std::collections::HashSet::from([

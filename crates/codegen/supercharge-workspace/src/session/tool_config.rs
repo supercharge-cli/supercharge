@@ -418,16 +418,7 @@ impl SessionContextFactory for WorkspaceSessionContextFactory {
                     supercharge_computer_hub_sdk::AuthCredential::Bearer { token, .. } => {
                         let headers = build_proxy_headers(url);
                         (
-                            ImageGenConfig::Enabled {
-                                api_key: token.clone(),
-                                base_url: url.clone(),
-                                extra_headers: headers.clone(),
-                                image_gen_enabled: true,
-                                image_edit_enabled: true,
-                                model_override: None,
-                                edit_model_override: None,
-                                tier_restricted: false,
-                            },
+                            ImageGenConfig::default(),
                             VideoGenConfig::Enabled {
                                 api_key: token.clone(),
                                 base_url: url.clone(),

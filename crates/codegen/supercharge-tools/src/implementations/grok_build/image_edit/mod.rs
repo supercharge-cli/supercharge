@@ -1,4 +1,4 @@
-//! `image_edit` tool — edits or transforms images via the xAI Imagine
+//! `image_edit` tool — edits or transforms images via an OpenAI-compatible
 //! `/images/edits` endpoint using one or more reference images.
 //!
 //! Use cases include likeness preservation, style transfer, subject lock,
@@ -25,8 +25,6 @@ use crate::types::requirements::{Expr, ToolRequirement};
 use crate::types::resources::SessionFolder;
 use crate::types::tool::{ToolKind, ToolNamespace};
 use crate::util::image_compress::{FilterType, ReEncodeParams, re_encode_under_limit};
-
-pub(crate) const XAI_IMAGINE_EDIT_MODEL: &str = "grok-imagine-image-quality";
 
 /// Size/dimension limits for reference images sent to the Imagine API.
 /// Tighter than the vision path; the backend returns 400 when exceeded.
@@ -323,15 +321,6 @@ impl supercharge_tool_runtime::Tool for ImageEditTool {
             let res = resources.lock().await;
             res.require::<ImageGenClient>()?.clone()
         };
-
-        // Free / X Basic users are zero-limited on Imagine server-side; return
-        // the upsell prose instead of a doomed request (shares `image_gen`'s
-        // message and short-circuits before resolving any attachments).
-        if client.is_tier_restricted() {
-            return Ok(ToolOutput::Text(
-                super::image_gen::TIER_RESTRICTED_UPSELL.into(),
-            ));
-        }
 
         // Snapshot the per-turn attachment registry so `[Image #N]` tokens
         // resolve to the real attachment (see `resolve_attachment_reference`).

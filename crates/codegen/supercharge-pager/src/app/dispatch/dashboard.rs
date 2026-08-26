@@ -1449,7 +1449,7 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
             if let Some(d) = app.dashboard.as_mut() {
                 d.dispatch.set_text("");
                 // Command errors are plain strings ("Unknown model: …",
-                // "Usage: /model <name> [effort]") with no glyph of their
+                // "Unknown model: …") with no glyph of their
                 // own — route through `set_error_toast` so the verbatim
                 // badge shows the `✗` error marker. `Message` results
                 // below stay verbatim: they carry their own glyph

@@ -9,8 +9,7 @@ use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthStr;
 use supercharge_shell::agent::provider_setup::{
     CUSTOM_MODEL_ID, CUSTOM_PROVIDER_ID, ProviderModel, ProviderSetup, SetupProviderProfile,
-    SetupWireFormat, find_setup_provider, load_existing_provider_setup,
-    normalize_provider_base_url, setup_provider_profiles,
+    SetupWireFormat, find_setup_provider, normalize_provider_base_url, setup_provider_profiles,
 };
 
 use crate::input::line_editor::{LineEditOutcome, LineEditor};
@@ -20,6 +19,13 @@ use crate::views::modal_window::{
 };
 
 pub const MODAL_TITLE: &str = "Provider setup";
+pub const IMAGE_MODAL_TITLE: &str = "Image provider setup";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupKind {
+    Chat,
+    Image,
+}
 
 #[derive(Debug)]
 pub enum SetupStep {
@@ -47,6 +53,9 @@ pub struct SetupModalState {
     pub(crate) generation: u64,
     pub(crate) provider_id: String,
     pub(crate) format: SetupWireFormat,
+    pub kind: SetupKind,
+    /// `/model` live picker: skip the URL/key wizard and close on Esc.
+    pub(crate) picker_only: bool,
 }
 
 #[derive(Debug)]
@@ -75,25 +84,79 @@ enum ProviderRow {
 
 impl SetupModalState {
     pub fn new() -> Self {
+        Self::with_kind(SetupKind::Chat)
+    }
+
+    pub fn image() -> Self {
+        Self::with_kind(SetupKind::Image)
+    }
+
+    fn with_kind(kind: SetupKind) -> Self {
         let mut base_url = LineEditor::default();
         let mut api_key = LineEditor::default();
-        if let Some((existing_url, existing_key)) = load_existing_provider_setup() {
-            base_url.set_text(existing_url);
-            api_key.set_text(existing_key);
+        let mut custom_model = LineEditor::default();
+        let mut format = SetupWireFormat::Openai;
+        let mut provider_id = CUSTOM_PROVIDER_ID.to_owned();
+        match kind {
+            SetupKind::Chat => {
+                if let Some(existing) = supercharge_shell::agent::provider_setup::load_existing_provider_setup_details()
+                {
+                    base_url.set_text(existing.base_url);
+                    api_key.set_text(existing.api_key);
+                    format = existing.format;
+                    provider_id = existing.provider_id;
+                }
+            }
+            SetupKind::Image => {
+                if let Some((existing_url, existing_key, model)) =
+                    supercharge_shell::agent::image_provider::load_existing_image_provider_setup()
+                {
+                    base_url.set_text(existing_url);
+                    api_key.set_text(existing_key);
+                    custom_model.set_text(model);
+                }
+            }
         }
         Self {
             window: ModalWindowState::default(),
             step: SetupStep::PickProvider,
             base_url,
             api_key,
-            custom_model: LineEditor::default(),
+            custom_model,
             reveal_api_key: false,
             filter: LineEditor::default(),
             models: Vec::new(),
             selected: 0,
             generation: 0,
-            provider_id: CUSTOM_PROVIDER_ID.to_owned(),
-            format: SetupWireFormat::Openai,
+            provider_id,
+            format,
+            kind,
+            picker_only: false,
+        }
+    }
+
+    /// `/model` picker: live-fetch `/models` with the saved URL + key.
+    pub fn live_model_picker() -> (Self, Option<SetupOutcome>) {
+        let mut state = Self::with_kind(SetupKind::Chat);
+        state.picker_only = true;
+        let outcome = state.begin_live_fetch();
+        (state, outcome)
+    }
+
+    pub fn begin_live_fetch(&mut self) -> Option<SetupOutcome> {
+        match normalize_provider_base_url(self.base_url.text()) {
+            Ok(base_url) => {
+                self.generation = self.generation.saturating_add(1);
+                self.step = SetupStep::Fetching;
+                Some(SetupOutcome::Fetch {
+                    base_url,
+                    api_key: self.api_key.text().trim().to_owned(),
+                    format: self.format,
+                    provider_id: self.provider_id.clone(),
+                    generation: self.generation,
+                })
+            }
+            Err(_) => None,
         }
     }
 
@@ -102,6 +165,12 @@ impl SetupModalState {
         let mut rows: Vec<ProviderRow> = setup_provider_profiles()
             .iter()
             .filter(|profile| {
+                if self.kind == SetupKind::Image
+                    && profile.format
+                        != supercharge_shell::agent::provider_setup::SetupWireFormat::Openai
+                {
+                    return false;
+                }
                 query.is_empty()
                     || profile.id.contains(&query)
                     || profile.name.to_ascii_lowercase().contains(&query)
@@ -168,7 +237,15 @@ impl SetupModalState {
                 self.step = SetupStep::PickModel;
             }
             Err(message) => {
-                self.step = SetupStep::FetchError { message };
+                if self.kind == SetupKind::Image {
+                    self.models.clear();
+                    self.filter.reset();
+                    self.selected = 0;
+                    self.step = SetupStep::PickModel;
+                    let _ = message;
+                } else {
+                    self.step = SetupStep::FetchError { message };
+                }
             }
         }
     }
@@ -208,6 +285,9 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 SetupOutcome::Changed
             }
             SetupStep::ApiKey | SetupStep::FetchError { .. } => {
+                if state.picker_only {
+                    return SetupOutcome::Close;
+                }
                 state.step = if state.provider_id == CUSTOM_PROVIDER_ID {
                     SetupStep::BaseUrl
                 } else {
@@ -216,6 +296,9 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 SetupOutcome::Changed
             }
             SetupStep::PickModel => {
+                if state.picker_only {
+                    return SetupOutcome::Close;
+                }
                 state.step = SetupStep::ApiKey;
                 SetupOutcome::Changed
             }
@@ -233,6 +316,11 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
         SetupStep::ApiKey => handle_api_key(state, key),
         SetupStep::FetchError { .. } => {
             if matches!(key.code, KeyCode::Enter) {
+                if state.picker_only
+                    && let Some(fetch) = state.begin_live_fetch()
+                {
+                    return fetch;
+                }
                 state.step = SetupStep::ApiKey;
                 SetupOutcome::Changed
             } else {
@@ -468,16 +556,25 @@ fn save_selected_model(
 pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalState) {
     let theme = Theme::current();
     let shortcuts = shortcuts_for(&state.step);
-    let title = match &state.step {
-        SetupStep::PickProvider => "Provider setup  ·  choose provider",
-        SetupStep::BaseUrl => "Provider setup  ·  base URL",
-        SetupStep::ApiKey => "Provider setup  ·  API key",
-        SetupStep::Fetching => "Provider setup  ·  fetching models",
-        SetupStep::FetchError { .. } => "Provider setup  ·  error",
-        SetupStep::PickModel => "Provider setup  ·  choose model",
-        SetupStep::CustomModel => "Provider setup  ·  custom model id",
-        SetupStep::Saving => "Provider setup  ·  saving",
+    let prefix = if state.picker_only {
+        "Switch model"
+    } else {
+        match state.kind {
+            SetupKind::Chat => "Provider setup",
+            SetupKind::Image => "Image provider setup",
+        }
     };
+    let title = match &state.step {
+        SetupStep::PickProvider => format!("{prefix}  ·  choose provider"),
+        SetupStep::BaseUrl => format!("{prefix}  ·  base URL"),
+        SetupStep::ApiKey => format!("{prefix}  ·  API key"),
+        SetupStep::Fetching => format!("{prefix}  ·  fetching models"),
+        SetupStep::FetchError { .. } => format!("{prefix}  ·  error"),
+        SetupStep::PickModel => format!("{prefix}  ·  choose model"),
+        SetupStep::CustomModel => format!("{prefix}  ·  custom model id"),
+        SetupStep::Saving => format!("{prefix}  ·  saving"),
+    };
+    let title = title.as_str();
     let config = ModalWindowConfig {
         title,
         tabs: None,

@@ -1,4 +1,5 @@
-//! `image_gen` tool — generates images via the xAI Imagine API and saves
+//! `image_gen` tool — generates images via an OpenAI-compatible
+//! `/images/generations` endpoint (or a custom compatible host) and saves
 //! them to the local filesystem so the model can reference them in code
 //! (e.g. `<img src="images/hero.jpg">`).
 //!
@@ -26,11 +27,7 @@ use crate::types::requirements::{Expr, ToolRequirement};
 use crate::types::resources::SessionFolder;
 use crate::types::tool::{ToolKind, ToolNamespace};
 
-/// Default Imagine model for `image_gen`. Used unless an explicit
-/// `model_override` is supplied via `ImageGenConfig::Enabled`.
-const XAI_IMAGINE_MODEL: &str = "grok-imagine-image-quality";
-// Some Imagine models (e.g. `grok-imagine-image`, selectable via `model_override`)
-// expand the prompt then generate, and the proxy buffers
+// Some hosts expand the prompt then generate, and the proxy buffers
 // the whole image before sending any bytes — so the client may receive nothing
 // for well over a minute. Keep these generous so a slow-but-progressing
 // generation isn't cut off.
@@ -38,17 +35,50 @@ const IMAGE_GEN_TIMEOUT_SECS: u64 = 300;
 const IMAGE_GEN_READ_TIMEOUT_SECS: u64 = 240;
 const DEFAULT_IMAGE_DIR: &str = "images";
 
+/// Wire format for `POST {base}/images/generations`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ImageProviderFormat {
+    #[default]
+    OpenaiImages,
+    Pollinations,
+    Custom,
+}
+
+impl ImageProviderFormat {
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "pollinations" => Self::Pollinations,
+            "custom" => Self::Custom,
+            _ => Self::OpenaiImages,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenaiImages => "openai_images",
+            Self::Pollinations => "pollinations",
+            Self::Custom => "custom",
+        }
+    }
+}
+
+/// Map a tool `aspect_ratio` onto an OpenAI Images `size` string.
+pub fn size_from_aspect_ratio(aspect: &str) -> Option<&'static str> {
+    match aspect.trim() {
+        "1:1" => Some("1024x1024"),
+        "16:9" | "3:2" => Some("1792x1024"),
+        "9:16" | "2:3" => Some("1024x1792"),
+        "4:3" => Some("1024x768"),
+        "3:4" => Some("768x1024"),
+        _ => None,
+    }
+}
+
 pub use supercharge_tools_api::slash_commands::{
     IMAGE_GEN_TOOL_NAME, IMAGINE_COMMAND_NAME, imagine_instruction, imagine_usage_message,
 };
 
-/// Prose returned to the model (as a normal, successful tool result) when a
-/// free / X Basic user calls `image_gen` or `image_edit`. The model relays it
-/// to the user. The deliberate `/imagine` slash command shows the richer
-/// Supercharge upsell modal instead; this covers the natural-language path.
-pub(crate) const TIER_RESTRICTED_UPSELL: &str = "Image generation is a Supercharge feature and isn't available on the free or X Basic tier. Let the user know they can unlock image and video generation by upgrading to Supercharge: https://supercharge.ai/supercharge?referrer=supercharge-core. Do not retry this tool.";
-
-/// HTTP client for xAI Imagine API. Cloned per-request; shares `Arc` state.
+/// HTTP client for an OpenAI-compatible image API. Cloned per-request; shares `Arc` state.
 #[derive(Clone)]
 pub struct ImageGenClient {
     http: reqwest::Client,
@@ -59,17 +89,13 @@ pub struct ImageGenClient {
     /// unaffected.
     model: String,
     edit_model: String,
+    format: ImageProviderFormat,
     writer: super::storage::SessionFileWriter,
     api_key_provider: Option<SharedApiKeyProvider>,
     /// Optional 401-attribution hook. Hosts wire this so a 401 from the
-    /// Imagine API emits an `auth_401_attribution` event with
+    /// image API emits an `auth_401_attribution` event with
     /// `consumer == "ImageGen"` for unified auth-failure telemetry.
     attribution_callback: Option<SharedAttributionCallback>,
-    /// When `true`, the user is on a tier the Imagine server zero-limits
-    /// (free / X Basic). `image_gen` / `image_edit` short-circuit before any
-    /// HTTP call and return the Supercharge upsell prose instead. See
-    /// [`ImageGenClient::is_tier_restricted`].
-    tier_restricted: bool,
 }
 
 impl ImageGenClient {
@@ -83,7 +109,7 @@ impl ImageGenClient {
             extra_headers,
             model_override,
             edit_model_override,
-            tier_restricted,
+            format,
             ..
         } = config
         else {
@@ -94,11 +120,11 @@ impl ImageGenClient {
         let model = model_override
             .clone()
             .filter(|m| !m.trim().is_empty())
-            .unwrap_or_else(|| XAI_IMAGINE_MODEL.to_owned());
+            .unwrap_or_default();
         let edit_model = edit_model_override
             .clone()
             .filter(|m| !m.trim().is_empty())
-            .unwrap_or_else(|| super::image_edit::XAI_IMAGINE_EDIT_MODEL.to_owned());
+            .unwrap_or_else(|| model.clone());
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -147,18 +173,11 @@ impl ImageGenClient {
             base_url: base_url.clone(),
             model,
             edit_model,
+            format: *format,
             writer: super::storage::SessionFileWriter::new(DEFAULT_IMAGE_DIR, "jpg"),
             api_key_provider,
             attribution_callback: None,
-            tier_restricted: *tier_restricted,
         })
-    }
-
-    /// Whether the current user's tier (free / X Basic) is zero-limited on
-    /// Imagine server-side. `image_gen` / `image_edit` use this to short-circuit
-    /// with the Supercharge upsell instead of issuing a doomed request.
-    pub(crate) fn is_tier_restricted(&self) -> bool {
-        self.tier_restricted
     }
 
     /// Wire a 401-attribution callback into this client. Idempotent;
@@ -201,16 +220,26 @@ impl ImageGenClient {
         prompt: &str,
         aspect_ratio: &str,
     ) -> Result<Vec<u8>, supercharge_tool_runtime::ToolError> {
+        if self.model.trim().is_empty() {
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                "No image model configured. Run /isetup or /imodels to pick a model.",
+            ));
+        }
+
         let url = format!("{}/images/generations", self.base_url.trim_end_matches('/'));
 
-        let payload = serde_json::json!({
+        let mut payload = serde_json::json!({
             "model": self.model,
             "prompt": prompt,
             "n": 1,
-            "aspect_ratio": aspect_ratio,
-            "resolution": "1k",
             "response_format": "b64_json",
         });
+        if let Some(size) = size_from_aspect_ratio(aspect_ratio) {
+            payload["size"] = serde_json::Value::String(size.to_owned());
+        }
+        if self.format == ImageProviderFormat::Custom && !aspect_ratio.trim().is_empty() {
+            payload["aspect_ratio"] = serde_json::Value::String(aspect_ratio.to_owned());
+        }
 
         // Capture the bearer once so the request and the 401-attribution
         // emit see the same value (even if the provider rotates between
@@ -234,7 +263,7 @@ impl ImageGenClient {
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
             let truncated: String = body.chars().take(200).collect();
-            tracing::warn!(http_status = %status, "Imagine API error: {truncated}");
+            tracing::warn!(http_status = %status, "Image generation API error: {truncated}");
             return Err(supercharge_tool_runtime::ToolError::new(
                 supercharge_tool_runtime::ToolErrorKind::Custom,
                 format!("Image generation failed with HTTP {status}: {truncated}"),
@@ -250,27 +279,47 @@ impl ImageGenClient {
 
         let resp_json: ImageGenResponse = serde_json::from_str(&body).map_err(|e| {
             let preview: String = body.chars().take(500).collect();
-            tracing::warn!("Imagine API returned unparseable body: {preview}");
+            tracing::warn!("Image generation API returned unparseable body: {preview}");
             supercharge_tool_runtime::ToolError::invalid_arguments(format!(
                 "Failed to parse image generation response: {e} — body preview: {preview}"
             ))
         })?;
 
-        let b64_data = resp_json.b64_data().unwrap_or("");
-
-        if b64_data.is_empty() {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
-                "Image generation returned no image data.",
-            ));
+        if let Some(b64_data) = resp_json.b64_data().filter(|s| !s.is_empty()) {
+            return base64::engine::general_purpose::STANDARD
+                .decode(b64_data)
+                .map_err(|e| {
+                    supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+                        "Failed to decode base64 image data: {e}"
+                    ))
+                });
         }
 
-        base64::engine::general_purpose::STANDARD
-            .decode(b64_data)
-            .map_err(|e| {
+        if let Some(image_url) = resp_json.url().filter(|s| !s.is_empty()) {
+            let response = self.http.get(image_url).send().await.map_err(|e| {
                 supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "Failed to decode base64 image data: {e}"
+                    "Failed to download generated image: {e}"
                 ))
-            })
+            })?;
+            if !response.status().is_success() {
+                return Err(supercharge_tool_runtime::ToolError::new(
+                    supercharge_tool_runtime::ToolErrorKind::Custom,
+                    format!(
+                        "Image download failed with HTTP {}",
+                        response.status()
+                    ),
+                ));
+            }
+            return response.bytes().await.map(|b| b.to_vec()).map_err(|e| {
+                supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+                    "Failed to read generated image bytes: {e}"
+                ))
+            });
+        }
+
+        Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+            "Image generation returned no image data.",
+        ))
     }
 }
 
@@ -285,25 +334,15 @@ pub enum ImageGenConfig {
         extra_headers: indexmap::IndexMap<String, String>,
         image_gen_enabled: bool,
         image_edit_enabled: bool,
-        /// Optional Imagine model override for `image_gen`. When `Some(non-empty)`,
-        /// `image_gen` calls that model instead of the default quality model
-        /// ([`XAI_IMAGINE_MODEL`]). Driven by the remote
-        /// `image_gen_model_override` config flag. `image_edit` is unaffected.
+        /// Image model slug. Empty until `/isetup` or `/imodels` sets one.
         model_override: Option<String>,
         edit_model_override: Option<String>,
-        /// `true` when the user is on a tier the Imagine server zero-limits
-        /// (free / X Basic). The tools stay advertised to the model, but
-        /// `image_gen` / `image_edit` short-circuit at call time with the
-        /// Supercharge upsell prose instead of a doomed request. Set by the
-        /// host from the subscription tier; always `false` for team /
-        /// API-key / workspace callers.
-        tier_restricted: bool,
+        format: ImageProviderFormat,
     },
 }
 
-/// Session-id header attached to imagine API requests; matches the header
-/// chat requests already carry.
-pub const SESSION_ID_HEADER: &str = "x-grok-session-id";
+/// Optional session-id header some gateways still accept.
+pub const SESSION_ID_HEADER: &str = "x-supercharge-session-id";
 
 impl ImageGenConfig {
     /// Credentials present — required to construct any of the clients.
@@ -341,8 +380,7 @@ impl ImageGenConfig {
         )
     }
 
-    /// The configured `image_gen` model override, if any. `None` means the
-    /// default quality model ([`XAI_IMAGINE_MODEL`]) is used.
+    /// The configured `image_gen` model, if any.
     pub fn model_override(&self) -> Option<&str> {
         match self {
             Self::Enabled { model_override, .. } => {
@@ -379,11 +417,16 @@ impl ImageGenResponse {
     pub fn b64_data(&self) -> Option<&str> {
         self.data.first().and_then(|d| d.b64_json.as_deref())
     }
+
+    pub fn url(&self) -> Option<&str> {
+        self.data.first().and_then(|d| d.url.as_deref())
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
 struct ImageGenData {
     b64_json: Option<String>,
+    url: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -399,7 +442,7 @@ impl crate::types::tool_metadata::ToolMetadata for ImageGenTool {
     }
 
     fn description_template(&self) -> &str {
-        "Generate a new image from a text description using Imagine; returns the saved image's absolute path. When telling the user where it was saved, refer to it by its short session-relative path (e.g. `images/1.jpg`) rather than the absolute path, so it renders as a clickable link that opens the image. To produce multiple images, emit multiple tool calls with distinct prompts."
+        "Generate a new image from a text description; returns the saved image's absolute path. When telling the user where it was saved, refer to it by its short session-relative path (e.g. `images/1.jpg`) rather than the absolute path, so it renders as a clickable link that opens the image. To produce multiple images, emit multiple tool calls with distinct prompts."
     }
 
     fn requires_expr(&self) -> Expr<ToolRequirement> {
@@ -450,13 +493,6 @@ impl supercharge_tool_runtime::Tool for ImageGenTool {
             let res = resources.lock().await;
             res.require::<ImageGenClient>()?.clone()
         };
-
-        // Free / X Basic users are zero-limited on Imagine server-side; return
-        // the upsell prose instead of a doomed request (the tool stays
-        // advertised so the model can surface the nudge in-conversation).
-        if client.is_tier_restricted() {
-            return Ok(ToolOutput::Text(TIER_RESTRICTED_UPSELL.into()));
-        }
 
         let image_bytes = client.generate(&input.prompt, &input.aspect_ratio).await?;
 
@@ -510,14 +546,14 @@ mod tests {
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: false,
             image_edit_enabled: true,
-            model_override: Some("grok-imagine-image".into()),
+            model_override: Some("flux".into()),
             edit_model_override: None,
-            tier_restricted: false,
+            format: ImageProviderFormat::OpenaiImages,
         };
         assert!(cfg.has_credentials());
         assert!(!cfg.image_gen_enabled());
         assert!(cfg.image_edit_enabled());
-        assert_eq!(cfg.model_override(), Some("grok-imagine-image"));
+        assert_eq!(cfg.model_override(), Some("flux"));
 
         assert!(!ImageGenConfig::Disabled.has_credentials());
     }
@@ -532,7 +568,7 @@ mod tests {
             image_edit_enabled: true,
             model_override: None,
             edit_model_override: None,
-            tier_restricted: false,
+            format: ImageProviderFormat::OpenaiImages,
         };
         let hdrs = |cfg: &ImageGenConfig| match cfg {
             ImageGenConfig::Enabled { extra_headers, .. } => extra_headers.clone(),
@@ -570,24 +606,13 @@ mod tests {
             image_edit_enabled: true,
             model_override: model_override.map(String::from),
             edit_model_override: None,
-            tier_restricted: false,
+            format: ImageProviderFormat::OpenaiImages,
         };
-        // No override → default quality model.
+        assert_eq!(ImageGenClient::new(&mk(None), None).unwrap().model, "");
+        assert_eq!(ImageGenClient::new(&mk(Some("")), None).unwrap().model, "");
         assert_eq!(
-            ImageGenClient::new(&mk(None), None).unwrap().model,
-            XAI_IMAGINE_MODEL
-        );
-        // Empty override → treated as no override.
-        assert_eq!(
-            ImageGenClient::new(&mk(Some("")), None).unwrap().model,
-            XAI_IMAGINE_MODEL
-        );
-        // Override → that exact model slug.
-        assert_eq!(
-            ImageGenClient::new(&mk(Some("grok-imagine-image")), None)
-                .unwrap()
-                .model,
-            "grok-imagine-image"
+            ImageGenClient::new(&mk(Some("flux")), None).unwrap().model,
+            "flux"
         );
     }
 
@@ -599,23 +624,23 @@ mod tests {
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: true,
             image_edit_enabled: true,
-            model_override: None,
+            model_override: Some("flux".into()),
             edit_model_override: edit_model_override.map(String::from),
-            tier_restricted: false,
+            format: ImageProviderFormat::OpenaiImages,
         };
         assert_eq!(
             ImageGenClient::new(&mk(None), None).unwrap().edit_model(),
-            super::super::image_edit::XAI_IMAGINE_EDIT_MODEL
+            "flux"
         );
         assert_eq!(
             ImageGenClient::new(&mk(Some("  ")), None)
                 .unwrap()
                 .edit_model(),
-            super::super::image_edit::XAI_IMAGINE_EDIT_MODEL
+            "flux"
         );
-        let client = ImageGenClient::new(&mk(Some("grok-imagine-image-v2")), None).unwrap();
-        assert_eq!(client.edit_model(), "grok-imagine-image-v2");
-        assert_eq!(client.model, XAI_IMAGINE_MODEL);
+        let client = ImageGenClient::new(&mk(Some("edit-v2")), None).unwrap();
+        assert_eq!(client.edit_model(), "edit-v2");
+        assert_eq!(client.model, "flux");
     }
 
     #[tokio::test]
@@ -640,42 +665,27 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn tier_restricted_short_circuits_with_upsell() {
-        // A free / X Basic user's image_gen call returns the Supercharge upsell
-        // prose as a normal result (no HTTP, no error card) so the model can
-        // relay it. Only the client is inserted — the short-circuit returns
-        // before any other resource (e.g. SessionFolder) is required.
-        let cfg = ImageGenConfig::Enabled {
-            api_key: "k".into(),
-            base_url: "https://api.x.ai/v1".into(),
-            extra_headers: indexmap::IndexMap::new(),
-            image_gen_enabled: true,
-            image_edit_enabled: true,
-            model_override: None,
-            edit_model_override: None,
-            tier_restricted: true,
-        };
-        let mut resources = crate::types::resources::Resources::new();
-        resources.insert(ImageGenClient::new(&cfg, None).unwrap());
+    #[test]
+    fn size_from_aspect_ratio_maps_common_ratios() {
+        assert_eq!(size_from_aspect_ratio("1:1"), Some("1024x1024"));
+        assert_eq!(size_from_aspect_ratio("16:9"), Some("1792x1024"));
+        assert_eq!(size_from_aspect_ratio("9:16"), Some("1024x1792"));
+        assert_eq!(size_from_aspect_ratio("auto"), None);
+    }
 
-        let result = supercharge_tool_runtime::Tool::run(
-            &ImageGenTool,
-            test_ctx_with_call_id(resources.into_shared(), "test-call"),
-            ImageGenInput {
-                prompt: "a cat".into(),
-                aspect_ratio: "auto".into(),
-            },
-        )
-        .await
-        .expect("tier-restricted call must succeed with upsell prose");
-
-        match result {
-            ToolOutput::Text(t) => {
-                assert!(t.text.contains("Supercharge"), "got: {}", t.text);
-                assert!(t.text.contains("supercharge?referrer=supercharge-core"));
-            }
-            other => panic!("expected Text upsell, got {other:?}"),
-        }
+    #[test]
+    fn image_provider_format_parses_custom_ids() {
+        assert_eq!(
+            ImageProviderFormat::parse("pollinations"),
+            ImageProviderFormat::Pollinations
+        );
+        assert_eq!(
+            ImageProviderFormat::parse("custom"),
+            ImageProviderFormat::Custom
+        );
+        assert_eq!(
+            ImageProviderFormat::parse("openai_images"),
+            ImageProviderFormat::OpenaiImages
+        );
     }
 }

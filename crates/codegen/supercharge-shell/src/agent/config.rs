@@ -1293,9 +1293,34 @@ pub struct ShellEnvironmentPolicyKnownKeys {
     pub set: Option<toml::Value>,
     pub include_only: Option<toml::Value>,
 }
+/// `[image_provider]` — independent image-generation endpoint, key, and model.
+/// Written by `/isetup` / `/imodels`. Not the chat `/setup` provider.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ImageProviderConfig {
+    pub id: Option<String>,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model: Option<String>,
+    /// `openai_images` | `pollinations` | `custom`
+    pub format: Option<String>,
+}
+
+impl ImageProviderConfig {
+    pub fn configured_base_url(&self) -> Option<&str> {
+        self.base_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub features: Features,
+    /// Image-generation provider, independent of chat `/setup`.
+    #[serde(default)]
+    pub image_provider: ImageProviderConfig,
     /// `[goal]` section: canonical `/goal` configuration. See [`GoalConfig`].
     #[serde(default)]
     pub goal: GoalConfig,
@@ -1752,6 +1777,7 @@ impl Default for Config {
         let endpoints = EndpointsConfig::default();
         let mut cfg = Self {
             features: Features::default(),
+            image_provider: ImageProviderConfig::default(),
             goal: GoalConfig::default(),
             workflows: WorkflowsConfig::default(),
             doom_loop_recovery: crate::util::config::DoomLoopRecoverySettings::default(),

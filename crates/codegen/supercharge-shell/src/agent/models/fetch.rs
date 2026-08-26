@@ -73,13 +73,17 @@ fn prefetch_models_blocking_gated(
     let cache_auth = fetch_auth.cache_auth_method();
     let cache_origin = crate::remote::models_list_url(endpoints, fetch_auth);
     let cache = ModelsCacheManager::new();
-    if let Some(cached) = cache.load_fresh(&cache_auth, &cache_origin) {
+    if !endpoints.has_custom_endpoint()
+        && let Some(cached) = cache.load_fresh(&cache_auth, &cache_origin)
+    {
         return Some(cached.models);
     }
 
     if !remote_fetch_enabled {
         tracing::info!("models fetch skipped: remote_fetch disabled");
-        return None;
+        return cache
+            .load_fresh(&cache_auth, &cache_origin)
+            .map(|cached| cached.models);
     }
 
     let _timer = crate::instrumentation_timer!("startup.fetch_models_blocking");
@@ -92,6 +96,13 @@ fn prefetch_models_blocking_gated(
             }
             Ok(_) => tracing::warn!("setup provider catalog fetch returned empty list"),
             Err(error) => tracing::warn!("setup provider catalog fetch failed: {error}"),
+        }
+        if let Some(cached) = cache.load_fresh(&cache_auth, &cache_origin) {
+            tracing::info!(
+                count = cached.models.len(),
+                "using cached setup provider models after live fetch miss"
+            );
+            return Some(cached.models);
         }
         return None;
     }
