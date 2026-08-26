@@ -1309,22 +1309,16 @@ async fn execute_headless_cli_turn(
     sink: Option<&PromptStreamSink>,
 ) -> Result<CliStreamState, String> {
     let mut command = tokio::process::Command::new(binary);
+    let rules = turn_rules_for(session_key);
     command
         .env("SUPERCHARGE_HOME", agent_home)
-        .arg("--model")
-        .arg(&profile.id)
-        .arg("--output-format")
-        .arg("streaming-json")
-        .arg("--single")
-        .arg(prompt);
-    if session_marker.exists() {
-        command.arg("--resume").arg(cli_session_id);
-    } else {
-        command.arg("--session-id").arg(cli_session_id);
-    }
-    if let Some(rules) = turn_rules_for(session_key) {
-        command.arg("--rules").arg(rules);
-    }
+        .args(headless_cli_args(
+            profile,
+            cli_session_id,
+            session_marker.exists(),
+            prompt,
+            rules.as_deref(),
+        ));
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = command
         .spawn()
@@ -1370,6 +1364,38 @@ async fn execute_headless_cli_turn(
     }
     let _ = agent_config;
     Ok(stream)
+}
+
+/// Build the noninteractive command line used by app and messenger turns.
+/// These sessions cannot answer interactive permission prompts, so the
+/// sandboxed headless CLI must auto-approve its own tool executions.
+fn headless_cli_args(
+    profile: &ProviderProfile,
+    cli_session_id: &str,
+    resume: bool,
+    prompt: &str,
+    rules: Option<&str>,
+) -> Vec<std::ffi::OsString> {
+    let mut args = vec![
+        "--model".into(),
+        profile.id.clone().into(),
+        "--output-format".into(),
+        "streaming-json".into(),
+        "--yolo".into(),
+        "--single".into(),
+        prompt.into(),
+    ];
+    if resume {
+        args.push("--resume".into());
+    } else {
+        args.push("--session-id".into());
+    }
+    args.push(cli_session_id.into());
+    if let Some(rules) = rules {
+        args.push("--rules".into());
+        args.push(rules.into());
+    }
+    args
 }
 
 async fn run_supercharge_prompt_inner(
@@ -3475,7 +3501,7 @@ mod tests {
     use super::{
         DaemonSession, RateLimiter, agent_session_id, app_chat_id, app_events_for_replay,
         app_reply_completion_events, app_sse_data_frame, app_turn_completion_events,
-        connection_readiness, default_session_status,
+        connection_readiness, default_session_status, headless_cli_args,
         load_daemon_sessions, persist_daemon_sessions,
     };
     use std::collections::BTreeMap;
@@ -3506,6 +3532,32 @@ mod tests {
         assert_eq!(events[0]["type"], "status");
         assert_eq!(events[0]["busy"], false);
         assert_eq!(events[1]["type"], "done");
+    }
+
+    #[test]
+    fn app_headless_turns_auto_approve_tools_and_keep_session_identity() {
+        let profile = super::ProviderProfile {
+            id: "test-provider".to_owned(),
+            name: "Test Provider".to_owned(),
+            base_url: "https://example.test/v1".to_owned(),
+            model: "test-model".to_owned(),
+            format: supercharge_superagent::provider::ProviderFormat::Openai,
+            api_key_env: "TEST_PROVIDER_KEY".to_owned(),
+            configured: true,
+        };
+        let args = headless_cli_args(&profile, "session-id", false, "run a command", None)
+            .into_iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--output-format" && pair[1] == "streaming-json")
+        );
+        assert!(args.iter().any(|arg| arg == "--yolo"));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--session-id" && pair[1] == "session-id")
+        );
     }
 
     #[test]

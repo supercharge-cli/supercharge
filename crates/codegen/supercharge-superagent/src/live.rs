@@ -247,8 +247,7 @@ pub fn parse_cli_stream_line(line: &Value) -> Vec<LiveEvent> {
 
 pub fn tool_computer_kind(name: &str) -> &'static str {
     let name = name.to_ascii_lowercase();
-    if name.contains("agent-browser")
-        || name.contains("browser")
+    if name.contains("browser")
         || name.contains("navigate")
         || name.contains("screenshot")
     {
@@ -266,14 +265,14 @@ pub fn tool_computer_kind(name: &str) -> &'static str {
     }
 }
 
-/// Injected on every daemon turn so Supercharge uses the same agent-browser
-/// loop as XibeCode (CLI via shell, live Computer pane on port 9223).
-pub const AGENT_BROWSER_RULES: &str = r#"Browser (Vectra / agent-browser):
-- `agent-browser` is installed. It is a CLI, not a native tool name. Drive it with the shell tool (`run_command` / bash / shell). Do not only say you will use it — call the tool in the same turn.
-- Typical loop: `agent-browser open <url>` then `agent-browser snapshot -i` (refs like @e1) then `agent-browser click @e2` / `fill @e3 "..."` / `screenshot screenshots/page.png`.
-- Put screenshots under the workspace (e.g. screenshots/), not /tmp. After a screenshot, put `MEDIA:screenshots/page.png` in your final reply so the app shows the image.
-- Write a line `Computer: browser` before the first agent-browser command of a browse sequence, and `Computer: terminal` when the user should watch the shell.
-- The user Computer pane is a view-only screencast on localhost port 9223 (`AGENT_BROWSER_STREAM_PORT`). Never try to bind that port yourself.
+/// Injected on every daemon turn so E2B app sessions use the native browser
+/// tools and the same secure browser-tab handoff contract as the runtime.
+pub const E2B_BROWSER_RULES: &str = r#"Browser (E2B / native Playwright):
+- Use `browser_navigate`, then `browser_snapshot` for current accessible element references. Use `browser_click`, `browser_fill`, and `browser_press` only with current snapshot references. Prefer snapshots to screenshots.
+- The agent controls ordinary browsing and non-sensitive forms. Do not ask the user to take control merely because a page is complex.
+- For passwords, passkeys, MFA/OTP, CAPTCHA, OAuth/consent, payments, private messages, or other sensitive user-only input, do not enter or request the value. Call `browser_handoff` with `action: "start"`, explain the step, and wait for the authenticated user to complete it in the Browser tab.
+- Browser handoff is private, ticketed noVNC in the Browser tab only. It does not expose VNC, CDP, sidecar, gateway credentials, or a general remote desktop. Call `browser_handoff` with `action: "stop"` after the step, then resume from a fresh snapshot.
+- Never ask the user to paste passwords, MFA codes, cookies, or other secrets into chat.
 "#;
 
 fn read_trimmed_file(path: &str) -> Option<String> {
@@ -389,7 +388,7 @@ pub fn e2b_agent_rules_for(session_key: &str) -> String {
     let channel = channel_from_session_key(session_key);
     let channel_name = channel_label(channel);
     format!(
-        r#"{AGENT_BROWSER_RULES}
+        r#"{E2B_BROWSER_RULES}
 
 ## Platform (read this first)
 - Stack: **Vectra Cloud** (product the user is talking in) → **Supercharge** (this agent) → **E2B** (the Linux VM you are inside). You are not on the user's phone or laptop.
@@ -420,9 +419,9 @@ pub fn e2b_agent_rules_for(session_key: &str) -> String {
   - Generic 8080 → `{preview_8080}`
   - File shares (wake-http) 8788 → `{preview_8788}` and `{share}`
 - After you start a server, curl `http://127.0.0.1:PORT` **inside** the VM to confirm it is up, then send the user the matching `https://PORT-{sandbox}.{domain}` link. Never send localhost.
-- Installed: Node 20, npm/pnpm/bun, Python 3 + uv, git, GitHub CLI, ripgrep, fd, tmux, Chromium, `agent-browser`.
-- Services in this VM: app inbox `:8790` (phone/Telegram), wake-http `:8788`, Chromium JPEG stream `:9223` (Computer pane, view-only — do not bind it).
-- Tools: shell (`run_command` / bash), file read/write/edit, `agent-browser` via shell. Call tools in the same turn; do not only describe them.{id_hint}
+- Installed: Node 20, npm/pnpm/bun, Python 3 + uv, git, GitHub CLI, ripgrep, fd, tmux, and Chromium managed by the private E2B browser sidecar.
+- Services in this VM: app inbox `:8790` (phone/Telegram), wake-http `:8788`, and private loopback browser-sidecar/VNC services. Do not bind or expose those browser services.
+- Tools: shell (`run_command` / bash), file read/write/edit, and native `browser_*` tools. Call tools in the same turn; do not only describe them.{id_hint}
 
 ## Files and links for the user
 - The user **cannot** open sandbox disk paths. Never say a file is “at /home/user/workspace/…”.
@@ -543,7 +542,7 @@ pub fn app_events_for(
                 "terminal"
             };
             let focus = computer_kind == "browser"
-                && title.to_ascii_lowercase().contains("agent-browser open");
+                && title.to_ascii_lowercase().contains("browser_navigate");
             vec![
                 json!({
                     "type": "tool",
@@ -758,8 +757,8 @@ mod tests {
 
         let browser = parse_cli_stream_line(&json!({
             "type": "tool_call",
-            "toolName": "shell",
-            "rawInput": {"command": "agent-browser open https://example.com"}
+            "toolName": "browser_navigate",
+            "rawInput": {"url": "https://example.com"}
         }));
         let pane = app_events_for(&browser[0], 1, "", "");
         assert_eq!(pane[1]["type"], "computer");
@@ -809,7 +808,10 @@ mod tests {
         assert!(block.contains("allowedHosts"));
         assert!(block.contains("sudo -n"));
         assert!(block.contains("0.0.0.0"));
-        assert!(block.contains("agent-browser"));
+        assert!(block.contains("browser_snapshot"));
+        assert!(block.contains("browser_handoff"));
+        assert!(block.contains("private, ticketed noVNC"));
+        assert!(!block.contains("agent-browser"));
         assert!(block.contains("https://N-"));
         assert!(block.contains("https://3000-"));
         assert!(block.contains("https://5173-"));
