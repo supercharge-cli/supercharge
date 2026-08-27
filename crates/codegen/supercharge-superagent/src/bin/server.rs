@@ -9,7 +9,7 @@ use std::{
         Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    time::Instant,
+    time::{Duration as StdDuration, Instant},
 };
 
 use tokio::{
@@ -694,7 +694,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/observability", get(observability))
         .route("/v1/computer/status", get(browser_status))
         .route("/v1/computer/browser", get(browser_stream))
-        .route("/v1/computer/browser/vnc", get(browser_vnc))
+        .route("/v1/computer/vnc-ticket", get(issue_browser_vnc_ticket))
         .route("/v1/computer/control", post(browser_control))
         .route("/v1/computer/handoff", post(browser_handoff))
         .route("/v1/status", get(app_status))
@@ -761,6 +761,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/healthz", get(healthz))
         // Vectra app inbox probes GET /health (XibeCode-compatible).
         .route("/health", get(healthz))
+        .route("/v1/computer/browser/vnc", get(browser_vnc))
         .route("/v1/capabilities", get(capabilities))
         .route(
             "/webhooks/whatsapp",
@@ -2761,6 +2762,44 @@ struct BrowserHandoffRequest {
     minutes: Option<u8>,
 }
 
+fn vnc_tickets() -> &'static StdMutex<HashMap<String, Instant>> {
+    static TICKETS: OnceLock<StdMutex<HashMap<String, Instant>>> = OnceLock::new();
+    TICKETS.get_or_init(|| StdMutex::new(HashMap::new()))
+}
+
+fn mint_vnc_ticket() -> String {
+    let ticket = uuid::Uuid::new_v4().to_string();
+    let mut map = vnc_tickets().lock().unwrap_or_else(|error| error.into_inner());
+    let now = Instant::now();
+    map.retain(|_, expires| *expires > now);
+    map.insert(ticket.clone(), now + StdDuration::from_secs(300));
+    ticket
+}
+
+fn vnc_ticket_ok(ticket: &str) -> bool {
+    let mut map = vnc_tickets().lock().unwrap_or_else(|error| error.into_inner());
+    let now = Instant::now();
+    map.retain(|_, expires| *expires > now);
+    map.get(ticket).is_some_and(|expires| *expires > now)
+}
+
+#[derive(Debug, Deserialize)]
+struct BrowserVncQuery {
+    ticket: Option<String>,
+}
+
+async fn issue_browser_vnc_ticket() -> Result<Json<Value>, StatusCode> {
+    if !browser::is_e2b_runtime() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let _ = browser::ensure_stream(browser::stream_port()).await;
+    Ok(Json(json!({
+        "ticket": mint_vnc_ticket(),
+        "expiresInSeconds": 300,
+        "display": "playwright",
+    })))
+}
+
 async fn browser_handoff(
     Json(request): Json<BrowserHandoffRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
@@ -2784,13 +2823,18 @@ async fn browser_handoff(
     Ok(Json(value))
 }
 
-async fn browser_vnc(ws: WebSocketUpgrade) -> Result<Response, StatusCode> {
+async fn browser_vnc(
+    Query(query): Query<BrowserVncQuery>,
+    ws: WebSocketUpgrade,
+) -> Result<Response, StatusCode> {
     if !browser::is_e2b_runtime() {
         return Err(StatusCode::NOT_FOUND);
     }
-    if !browser::handoff_active().await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)? {
-        return Err(StatusCode::FORBIDDEN);
+    let ticket = query.ticket.unwrap_or_default();
+    if ticket.is_empty() || !vnc_ticket_ok(&ticket) {
+        return Err(StatusCode::UNAUTHORIZED);
     }
+    let _ = browser::ensure_stream(browser::stream_port()).await;
     Ok(ws.on_upgrade(browser_vnc_relay).into_response())
 }
 
