@@ -711,6 +711,8 @@ pub enum BuiltinAgentName {
     Explore,
     Plan,
     BrowserUse,
+    #[strum(serialize = "supercharge-e2b")]
+    SuperchargeE2b,
     #[strum(serialize = "supercharge-core-orchestrator")]
     GrokBuildOrchestrator,
 }
@@ -740,6 +742,7 @@ impl BuiltinAgentName {
             Self::Explore => AgentDefinition::explore(),
             Self::Plan => AgentDefinition::plan(),
             Self::BrowserUse => AgentDefinition::browser_use(),
+            Self::SuperchargeE2b => AgentDefinition::supercharge_e2b(),
             Self::GrokBuildOrchestrator => AgentDefinition::grok_build_orchestrator(),
         }
     }
@@ -1559,6 +1562,16 @@ impl AgentDefinition {
             "Supercharge AI agent for software engineering tasks.",
         )
     }
+    /// E2B sandbox agent: full GrokBuild tools plus native Playwright browser_*.
+    pub fn supercharge_e2b() -> Self {
+        Self {
+            tool_config: supercharge_e2b_toolset(),
+            ..Self::base(
+                BuiltinAgentName::SuperchargeE2b,
+                "Supercharge E2B agent with native Playwright browser tools.",
+            )
+        }
+    }
     /// Supercharge AI Concise agent definition — concise output format for SFT/RL.
     pub fn grok_build_concise() -> Self {
         Self {
@@ -1772,6 +1785,13 @@ mod tests {
         assert!(toolset_for_preset("does-not-exist").is_none());
         let e2b = toolset_for_preset("supercharge-e2b").expect("E2B preset resolves");
         assert!(e2b.tools.iter().any(|tool| tool.id.ends_with(":browser_snapshot")));
+        let def = AgentDefinition::supercharge_e2b();
+        assert_eq!(def.name, "supercharge-e2b");
+        assert!(def
+            .tool_config
+            .tools
+            .iter()
+            .any(|tool| tool.id.ends_with(":browser_navigate")));
     }
     #[test]
     fn presets_select_distinct_toolsets_by_size() {
@@ -2599,6 +2619,7 @@ description: Test default tool config
             ("explore", BuiltinAgentName::Explore),
             ("plan", BuiltinAgentName::Plan),
             ("browser-use", BuiltinAgentName::BrowserUse),
+            ("supercharge-e2b", BuiltinAgentName::SuperchargeE2b),
         ] {
             let parsed = BuiltinAgentName::from_str(s).unwrap();
             assert_eq!(parsed, expected, "from_str failed for: {s}");

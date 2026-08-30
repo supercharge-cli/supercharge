@@ -82,7 +82,18 @@ impl supercharge_tool_runtime::ToolOutput for BrowserToolOutput {}
 
 fn e2b_enabled() -> bool {
     std::env::var("SUPERCHARGE_RUNTIME_MODE")
-        .is_ok_and(|value| value.eq_ignore_ascii_case("e2b"))
+        .ok()
+        .or_else(|| std::env::var("SUPERAGENT_RUNTIME_MODE").ok())
+        .or_else(|| std::env::var("SUPERCHARGE_RUNTIME").ok())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("e2b"))
+        || std::path::Path::new("/run/e2b/.E2B_SANDBOX_ID").exists()
+        || std::path::Path::new("/run/e2b/E2B_SANDBOX_ID").exists()
+        || std::env::var("E2B_SANDBOX_ID")
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+        || std::env::var("SUPERCHARGE_SANDBOX_ID")
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
 }
 
 fn sidecar_base_url() -> Result<String, supercharge_tool_runtime::ToolError> {

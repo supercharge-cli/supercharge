@@ -21,10 +21,7 @@ pub struct CapabilityProfile {
 
 impl Default for CapabilityProfile {
     fn default() -> Self {
-        Self::for_e2b_runtime(
-            std::env::var("SUPERCHARGE_RUNTIME_MODE")
-                .is_ok_and(|value| value.eq_ignore_ascii_case("e2b")),
-        )
+        Self::for_e2b_runtime(crate::browser::is_e2b_runtime())
     }
 }
 

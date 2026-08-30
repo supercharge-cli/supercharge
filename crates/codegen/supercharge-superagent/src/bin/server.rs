@@ -142,6 +142,9 @@ struct AppState {
     active_app_session: Arc<Mutex<String>>,
     session_state_path: String,
     metrics: Arc<RuntimeMetrics>,
+    app_turn_busy: Arc<AtomicBool>,
+    app_turn_started_ms: Arc<AtomicU64>,
+    app_turn_tools: Arc<AtomicU64>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
@@ -528,6 +531,9 @@ async fn main() -> anyhow::Result<()> {
     let provider_config_path = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
         .or_else(|_| env::var("SUPERCHARGE_CONFIG_PATH"))
         .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
+    if browser::is_e2b_runtime() {
+        ensure_e2b_browser_sidecar();
+    }
     if let Err(error) = write_runtime_config(&provider_config_path, &provider_profile) {
         eprintln!("provider profile initialization failed: {error}");
     }
@@ -589,6 +595,9 @@ async fn main() -> anyhow::Result<()> {
         active_app_session: Arc::new(Mutex::new(active_app_session)),
         session_state_path,
         metrics: runtime_metrics(),
+        app_turn_busy: Arc::new(AtomicBool::new(false)),
+        app_turn_started_ms: Arc::new(AtomicU64::new(0)),
+        app_turn_tools: Arc::new(AtomicU64::new(0)),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
             env::var("SUPERAGENT_E2B_SESSION_STATE")
@@ -1234,7 +1243,7 @@ enum PromptStreamSink {
 }
 
 fn turn_rules_for(session_key: &str) -> Option<String> {
-    if live::sandbox_id().is_some() {
+    if live::sandbox_id().is_some() || browser::is_e2b_runtime() {
         Some(e2b_agent_rules_for(session_key))
     } else {
         None
@@ -1258,6 +1267,9 @@ fn ingest_cli_stream_line(line: &Value, stream: &mut CliStreamState, sink: Optio
                     LiveEvent::Thought(chunk) => stream.live_thought.push_str(&chunk),
                     LiveEvent::ToolStart { .. } => {
                         stream.tool_count = stream.tool_count.saturating_add(1);
+                        state
+                            .app_turn_tools
+                            .store(u64::from(stream.tool_count), Ordering::Relaxed);
                     }
                     _ => {}
                 }
@@ -1341,6 +1353,11 @@ async fn execute_headless_cli_turn(
             prompt,
             rules.as_deref(),
         ));
+    if browser::is_e2b_runtime() {
+        command
+            .env("SUPERCHARGE_RUNTIME_MODE", "e2b")
+            .env("SUPERCHARGE_AGENT", "supercharge-e2b");
+    }
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = command
         .spawn()
@@ -2333,10 +2350,35 @@ fn agent_session_marker_path(agent_home: &FsPath, session_id: &str) -> PathBuf {
     agent_home.join("daemon-sessions").join(session_id)
 }
 
+fn ensure_e2b_browser_sidecar() {
+    let script = std::path::Path::new("/opt/vectra/browser-runtime/start.sh");
+    if !script.is_file() {
+        return;
+    }
+    match std::process::Command::new("bash")
+        .arg(script)
+        .env("SUPERCHARGE_RUNTIME_MODE", "e2b")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(_) => eprintln!("e2b browser sidecar start requested"),
+        Err(error) => eprintln!("e2b browser sidecar start failed: {error}"),
+    }
+}
+
 fn unix_seconds() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_secs())
+        .unwrap_or_default()
+}
+
+fn unix_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_millis() as u64)
         .unwrap_or_default()
 }
 
@@ -2881,7 +2923,7 @@ async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket) {
 struct AppChatQuery {
     #[serde(alias = "chatId")]
     chat_id: Option<String>,
-    since: Option<u64>,
+    since: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -3064,7 +3106,19 @@ fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
     Ok(paths)
 }
 
+fn app_mark_turn(state: &AppState, busy: bool) {
+    state.app_turn_busy.store(busy, Ordering::Relaxed);
+    if busy {
+        state.app_turn_started_ms.store(unix_millis(), Ordering::Relaxed);
+        state.app_turn_tools.store(0, Ordering::Relaxed);
+    } else {
+        state.app_turn_started_ms.store(0, Ordering::Relaxed);
+        state.app_turn_tools.store(0, Ordering::Relaxed);
+    }
+}
+
 fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) {
+    app_mark_turn(&state, true);
     app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
     tokio::spawn(async move {
         let session_key = format!("app:{session_id}");
@@ -3081,11 +3135,13 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
                 app_record_message(&state, &session_id, "assistant", &prepared).await;
+                app_mark_turn(&state, false);
                 for event in app_reply_completion_events(&prepared) {
                     app_emit(&state, &chat_id, event);
                 }
             }
             Ok(_) => {
+                app_mark_turn(&state, false);
                 for event in app_reply_completion_events("") {
                     app_emit(&state, &chat_id, event);
                 }
@@ -3096,6 +3152,7 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
                     &chat_id,
                     json!({"type":"error", "text":error.to_string()}),
                 );
+                app_mark_turn(&state, false);
                 for event in app_turn_completion_events() {
                     app_emit(&state, &chat_id, event);
                 }
@@ -3146,10 +3203,17 @@ async fn create_session(
 }
 
 async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
+    let busy = state.app_turn_busy.load(Ordering::Relaxed);
+    let started = state.app_turn_started_ms.load(Ordering::Relaxed);
+    let tools = state.app_turn_tools.load(Ordering::Relaxed);
     Json(json!({
         "ok": true,
         "usage": {},
-        "turn": {"busy": false},
+        "turn": {
+            "busy": busy,
+            "startedAt": if busy && started > 0 { Value::from(started) } else { Value::Null },
+            "tools": tools,
+        },
         "daemon": "running",
         "uptimeSeconds": unix_seconds().saturating_sub(state.started_at),
     }))
@@ -3377,7 +3441,11 @@ async fn app_chat_events(
     Query(query): Query<AppChatQuery>,
 ) -> Response {
     let chat_id = app_chat_id(query.chat_id);
-    let since = query.since.unwrap_or(0);
+    let since = query
+        .since
+        .as_deref()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(0);
     // Subscribe before snapshot so live events cannot slip between replay and
     // the broadcast receiver. The Vectra app reconnects after Vercel's ~55s
     // SSE cap; without replay those turns look like “no reply”.
@@ -3477,6 +3545,7 @@ async fn app_chat_stop(
         .get("chatId")
         .and_then(Value::as_str)
         .unwrap_or("owner");
+    app_mark_turn(&state, false);
     app_emit(
         &state,
         chat_id,

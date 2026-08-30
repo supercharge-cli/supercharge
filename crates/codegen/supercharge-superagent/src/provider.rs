@@ -354,10 +354,11 @@ pub fn write_runtime_config(
             ProviderFormat::Anthropic => "messages".to_owned(),
         }),
     );
-    let agent_type = std::env::var("SUPERCHARGE_RUNTIME_MODE")
-        .is_ok_and(|value| value.eq_ignore_ascii_case("e2b"))
-        .then_some("supercharge-e2b")
-        .unwrap_or("supercharge-core");
+    let agent_type = if crate::browser::is_e2b_runtime() {
+        "supercharge-e2b"
+    } else {
+        "supercharge-core"
+    };
     model.insert(
         "agent_type".to_owned(),
         toml::Value::String(agent_type.to_owned()),
@@ -367,6 +368,11 @@ pub fn write_runtime_config(
     model_section.insert(profile.id.clone(), toml::Value::Table(model));
     let mut document = toml::map::Map::new();
     document.insert("model".to_owned(), toml::Value::Table(model_section));
+    if agent_type == "supercharge-e2b" {
+        let mut agent = toml::map::Map::new();
+        agent.insert("name".to_owned(), toml::Value::String(agent_type.to_owned()));
+        document.insert("agent".to_owned(), toml::Value::Table(agent));
+    }
     let rendered = toml::to_string_pretty(&toml::Value::Table(document))?;
     let path = path.as_ref();
     if let Some(parent) = path.parent() {

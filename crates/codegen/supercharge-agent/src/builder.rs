@@ -1188,7 +1188,14 @@ impl AgentBuilder {
             prompt_body: definition.prompt_body.clone(),
             include_browser_verification: definition.include_browser_verification(),
             e2b_browser_control_enabled: std::env::var("SUPERCHARGE_RUNTIME_MODE")
-                .is_ok_and(|value| value.eq_ignore_ascii_case("e2b")),
+                .ok()
+                .or_else(|| std::env::var("SUPERAGENT_RUNTIME_MODE").ok())
+                .or_else(|| std::env::var("SUPERCHARGE_RUNTIME").ok())
+                .is_some_and(|value| value.trim().eq_ignore_ascii_case("e2b"))
+                || std::path::Path::new("/run/e2b/.E2B_SANDBOX_ID").exists()
+                || std::env::var("E2B_SANDBOX_ID")
+                    .ok()
+                    .is_some_and(|value| !value.trim().is_empty()),
             system_prompt: definition.system_prompt.clone(),
             agents_md_files,
             persona_summaries: self.persona_summaries,

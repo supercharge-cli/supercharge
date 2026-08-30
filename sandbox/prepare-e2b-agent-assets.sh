@@ -20,6 +20,32 @@ rm -rf "$browser_runtime_stage_dir"
 mkdir -p "$browser_runtime_stage_dir"
 cp "$browser_runtime_dir/package.json" "$browser_runtime_dir/server.mjs" "$browser_runtime_dir/start.sh" "$browser_runtime_stage_dir/"
 
+# Pre-fetch the musl ripgrep the CLI build embeds. cargo's 60s GitHub download
+# times out on this host; curl retries here and we pass the binary into cargo.
+rg_ver="15.0.0"
+rg_triple="x86_64-unknown-linux-musl"
+vendor_dir="$repo_root/.cache/e2b-vendor"
+rg_bin="$vendor_dir/rg-${rg_ver}-${rg_triple}"
+mkdir -p "$vendor_dir"
+if [ ! -s "$rg_bin" ]; then
+  echo "Downloading ripgrep ${rg_ver} (${rg_triple}) for CLI embed…"
+  rg_tgz="$vendor_dir/ripgrep-${rg_ver}-${rg_triple}.tar.gz"
+  curl -fL --retry 8 --retry-all-errors --retry-delay 2 --connect-timeout 30 --max-time 300 \
+    -o "$rg_tgz" \
+    "https://github.com/BurntSushi/ripgrep/releases/download/${rg_ver}/ripgrep-${rg_ver}-${rg_triple}.tar.gz"
+  unpack="$vendor_dir/unpack-rg"
+  rm -rf "$unpack"
+  mkdir -p "$unpack"
+  tar -xzf "$rg_tgz" -C "$unpack"
+  found="$(find "$unpack" -type f -name rg | head -n 1)"
+  if [ -z "$found" ]; then
+    echo "ripgrep archive did not contain rg" >&2
+    exit 1
+  fi
+  cp "$found" "$rg_bin"
+  chmod +x "$rg_bin"
+fi
+
 build_in_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     return 1
@@ -43,6 +69,9 @@ build_in_docker() {
     -w /work \
     -e CARGO_HOME=/work/.cargo-docker \
     -e RUSTUP_HOME=/work/.rustup-docker \
+    -e CARGO_NET_RETRY=8 \
+    -e SUPERCHARGE_TOOLS_BUNDLE_RG_PATH="/work/.cache/e2b-vendor/rg-${rg_ver}-${rg_triple}" \
+    -e SUPERCHARGE_SHELL_BUNDLE_RG_PATH="/work/.cache/e2b-vendor/rg-${rg_ver}-${rg_triple}" \
     -e PATH="/work/.cargo-docker/bin:/opt/cargo/bin:/usr/bin:/bin" \
     "$builder_tag" \
     bash -lc "

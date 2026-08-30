@@ -23,10 +23,9 @@ export SUPERAGENT_MEDIA_ROOT="${SUPERAGENT_MEDIA_ROOT:-/home/user/workspace/.sup
 export SUPERAGENT_BROWSER_CONTROL_ENABLED="${SUPERAGENT_BROWSER_CONTROL_ENABLED:-true}"
 export SUPERAGENT_WAKE_PORT="${SUPERAGENT_WAKE_PORT:-8788}"
 export SUPERAGENT_DAEMON_COMMAND="${SUPERAGENT_DAEMON_COMMAND:-/usr/local/bin/supercharge-superagent-server}"
+export SUPERCHARGE_RUNTIME_MODE="${SUPERCHARGE_RUNTIME_MODE:-e2b}"
 
-if [ "${SUPERCHARGE_RUNTIME_MODE:-}" = "e2b" ]; then
-  /opt/vectra/browser-runtime/start.sh
-fi
+/opt/vectra/browser-runtime/start.sh || true
 
 PIDFILE=/tmp/supercharge-daemon.pid
 LOGFILE=/tmp/supercharge-daemon.log

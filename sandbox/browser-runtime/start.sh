@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${SUPERCHARGE_RUNTIME_MODE:-}" != "e2b" ]; then
+e2b=0
+case "${SUPERCHARGE_RUNTIME_MODE:-}${SUPERAGENT_RUNTIME_MODE:-}${SUPERCHARGE_RUNTIME:-}" in
+  *[eE]2[bB]*) e2b=1 ;;
+esac
+if [ -n "${E2B_SANDBOX_ID:-}" ] || [ -f /run/e2b/.E2B_SANDBOX_ID ] || [ -f /run/e2b/E2B_SANDBOX_ID ]; then
+  e2b=1
+fi
+if [ "$e2b" != 1 ]; then
   exit 0
 fi
+export SUPERCHARGE_RUNTIME_MODE=e2b
 
 runtime_dir=/tmp/supercharge-browser
 mkdir -p "$runtime_dir" "${SUPERAGENT_BROWSER_PROFILE_DIR:-/home/user/.supercharge/browser-profile}" "${SUPERAGENT_MEDIA_ROOT:-/home/user/workspace/.superagent-media}"

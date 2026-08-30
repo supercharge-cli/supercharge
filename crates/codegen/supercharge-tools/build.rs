@@ -181,6 +181,35 @@ fn bundle_fd() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn download_release_bytes(
+    url: &str,
+    label: &str,
+    override_env: &str,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(300))
+        .build()?;
+    let mut last_err = None;
+    for attempt in 1..=8 {
+        match client.get(url).send() {
+            Ok(resp) if resp.status().is_success() => match resp.bytes() {
+                Ok(bytes) if !bytes.is_empty() => return Ok(bytes.to_vec()),
+                Ok(_) => last_err = Some(format!("{label} download was empty")),
+                Err(e) => last_err = Some(e.to_string()),
+            },
+            Ok(resp) => last_err = Some(format!("HTTP {}", resp.status())),
+            Err(e) => last_err = Some(e.to_string()),
+        }
+        std::thread::sleep(std::time::Duration::from_secs(attempt));
+    }
+    Err(format!(
+        "Failed to download {label} from {url}: {}\nSet {override_env} to a local binary for offline builds.",
+        last_err.unwrap_or_else(|| "unknown error".to_owned())
+    )
+    .into())
+}
+
 fn hex_encode(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
@@ -307,40 +336,11 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
         t = asset_triple
     );
 
-    let bytes: Vec<u8> = {
-        let mut last_err = None;
-        let mut resp = None;
-        for attempt in 1..=8 {
-            match reqwest::blocking::Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
-                .build()
-                .and_then(|client| client.get(&url).send())
-            {
-                Ok(r) => {
-                    resp = Some(r);
-                    break;
-                }
-                Err(e) => {
-                    last_err = Some(e);
-                    std::thread::sleep(std::time::Duration::from_secs(attempt));
-                }
-            }
-        }
-        let resp = resp.ok_or_else(|| {
-            format!(
-                "Failed to download ripgrep: {}\nSet SUPERCHARGE_TOOLS_BUNDLE_RG_PATH to a local rg for offline builds.",
-                last_err.map(|e| e.to_string()).unwrap_or_else(|| "unknown error".to_owned())
-            )
-        })?;
-        if !resp.status().is_success() {
-            return Err(format!(
-                "HTTP {} downloading ripgrep. Set SUPERCHARGE_TOOLS_BUNDLE_RG_PATH for offline builds.",
-                resp.status()
-            )
-            .into());
-        }
-        resp.bytes()?.to_vec()
-    };
+    let bytes = download_release_bytes(
+        &url,
+        "ripgrep",
+        "SUPERCHARGE_TOOLS_BUNDLE_RG_PATH",
+    )?;
 
     let gz = flate2::read::GzDecoder::new(&bytes[..]);
     let mut ar = tar::Archive::new(gz);
