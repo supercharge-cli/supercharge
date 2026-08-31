@@ -362,6 +362,13 @@ impl acp::Agent for MvpAgent {
             preferred_method,
         });
         let auth_methods = built.methods;
+        if no_credentials_yet {
+            // Keep session creation usable so the normal prompt can open and
+            // `/setup` can be entered before any provider is configured.
+            self.set_auth_method(acp::AuthMethodId::new(
+                auth_method::SETUP_PENDING_METHOD_ID,
+            ));
+        }
         supercharge_telemetry::unified_log::info(
             "auth: initialize() built auth_methods for ACP response",
             None,
@@ -429,7 +436,11 @@ impl acp::Agent for MvpAgent {
         }
         self.spawn_announcements_refresh();
         self.spawn_heap_profile_monitor();
-        let init_model_state = if crate::agent::chat_modes::process_chat_mode_enabled() {
+        let init_model_state = if no_credentials_yet {
+            // Do not expose bundled Supercharge models before `/setup` adds a
+            // provider/model configuration.
+            acp::SessionModelState::new(acp::ModelId::new(""), Vec::new())
+        } else if crate::agent::chat_modes::process_chat_mode_enabled() {
             self.chat_modes.model_state().await
         } else {
             self.model_state(None)

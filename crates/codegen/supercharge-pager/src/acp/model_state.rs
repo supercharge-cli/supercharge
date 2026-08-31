@@ -67,6 +67,9 @@ impl ModelState {
     /// Display name for the current model.
     pub fn current_model_name(&self) -> Option<String> {
         let current = self.current.as_ref()?;
+        if current.0.is_empty() {
+            return None;
+        }
         if let Some(model_info) = self.available.get(current) {
             Some(model_info.name.clone())
         } else {

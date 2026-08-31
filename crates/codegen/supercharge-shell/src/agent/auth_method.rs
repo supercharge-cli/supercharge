@@ -458,6 +458,11 @@ pub const PREFERRED_API_KEY_UNAVAILABLE: &str =
 pub const PREFERRED_OIDC_UNAVAILABLE: &str =
     "No provider session is available. Run `/setup` to configure the AI provider.";
 
+/// Internal marker used while a fresh installation is waiting for `/setup`.
+/// It is never advertised or accepted by `authenticate`; it only allows the
+/// normal prompt/session shell to start before credentials are configured.
+pub const SETUP_PENDING_METHOD_ID: &str = "setup.pending";
+
 pub const PROVIDER_API_KEY_METHOD_ID: &str = "provider.api_key";
 pub(crate) fn provider_api_key_auth_method() -> acp::AuthMethod {
     acp::AuthMethod::Agent(
