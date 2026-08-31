@@ -1084,9 +1084,12 @@ pub(crate) async fn run(
     app.auth_methods = connection.auth_methods.clone();
 
     // Seed auth state from ACP connection metadata.
-    // --force-login overrides: show the login screen even when credentials exist.
+    // Startup must always land on the normal prompt. Provider setup is the
+    // supported entry point; the legacy account-login gate prevents users from
+    // typing `/setup` on a fresh installation. `--force-login` remains an
+    // explicit escape hatch for deployments that still need interactive auth.
     let force_login = args.force_login && !connection.auth_methods.is_empty();
-    let needs_interactive_login = connection.needs_login || force_login;
+    let needs_interactive_login = force_login;
     if needs_interactive_login {
         app.welcome_prompt_focused = false;
 
@@ -1143,12 +1146,7 @@ pub(crate) async fn run(
     // welcome/auth UI right away.
     let mut post_render_effects = if needs_interactive_login {
         if connection.auth_methods.is_empty() {
-            // preferred_method pin unavailable — no advertised method to start.
-            app.auth_state = super::app_view::AuthState::Pending {
-                error: Some(
-                    supercharge_shell::agent::auth_method::PREFERRED_API_KEY_UNAVAILABLE.to_string(),
-                ),
-            };
+            // No credentials yet: keep the normal prompt available for `/setup`.
             vec![]
         } else {
             dispatch::dispatch(Action::Login, &mut app)

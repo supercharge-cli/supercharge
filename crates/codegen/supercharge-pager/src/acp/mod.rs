@@ -671,8 +671,8 @@ pub fn find_interactive_login_method(
 /// unpinned fallthrough; a failed api_key must not open a browser). Otherwise
 /// hand the interactive method for the login screen.
 ///
-/// Empty `auth_methods` (e.g. `preferred_method=api_key` with no key) is
-/// fail-closed: needs_login without an interactive method.
+/// Empty `auth_methods` means no credentials have been configured yet; the
+/// normal prompt remains available so `/setup` can be entered.
 ///
 /// Returns `(needs_login, login_label, login_method_id, auth_start_mode, auth_meta)`.
 async fn eager_auth_or_login_fallback(
@@ -691,8 +691,10 @@ async fn eager_auth_or_login_fallback(
     Option<serde_json::Value>,
 ) {
     if auth_methods.is_empty() {
-        // preferred_method pin unavailable — fail closed, no invented method.
-        return (true, None, None, AuthStartMode::Pending, None);
+        // A fresh installation has no credentials yet. Keep the normal prompt
+        // available so the user can run `/setup`; prompt auth reports the setup
+        // guidance when they try to send a request.
+        return (false, None, None, AuthStartMode::Pending, None);
     }
     if needs_login {
         return (
