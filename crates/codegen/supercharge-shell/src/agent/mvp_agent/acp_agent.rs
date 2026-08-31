@@ -340,8 +340,10 @@ impl acp::Agent for MvpAgent {
             Some(crate::auth::PreferredAuthMethod::ApiKey) => false,
             _ => has_cached_token,
         };
-        let has_custom_endpoint = self.cfg.borrow().endpoints.has_custom_endpoint();
-        let setup_provider_auth = has_custom_endpoint && has_external_api_key;
+        // A configured provider key is sufficient for startup. Do not offer the
+        // legacy interactive account login when `/setup` has already supplied
+        // credentials, even if the endpoint remains first-party-shaped.
+        let setup_provider_auth = has_external_api_key;
         let built = auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
             has_external_api_key,
             prefer_provider_api_key_default: setup_provider_auth,
