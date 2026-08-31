@@ -172,6 +172,7 @@ impl XaiProtoBuilder {
                 command.arg(format!("-I{}", include.to_str().context("path not UTF-8")?));
             }
 
+            command.arg("--experimental_allow_proto3_optional");
             command.arg(proto);
 
             command.stdin(Stdio::null());
