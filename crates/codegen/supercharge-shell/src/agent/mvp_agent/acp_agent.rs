@@ -343,11 +343,17 @@ impl acp::Agent for MvpAgent {
         // A configured provider key is sufficient for startup. Do not offer the
         // legacy interactive account login when `/setup` has already supplied
         // credentials, even if the endpoint remains first-party-shaped.
+        // A fresh installation also starts without an account login screen so
+        // the user can enter `/setup` from the normal interface.
         let setup_provider_auth = has_external_api_key;
+        let no_credentials_yet = !has_external_api_key
+            && !has_cached_token
+            && !has_enterprise_oidc
+            && !matches!(preferred_method, Some(crate::auth::PreferredAuthMethod::Oidc));
         let built = auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
             has_external_api_key,
             prefer_provider_api_key_default: setup_provider_auth,
-            suppress_interactive_login: setup_provider_auth,
+            suppress_interactive_login: setup_provider_auth || no_credentials_yet,
             has_cached_token,
             has_enterprise_oidc,
             enterprise_oidc_issuer: enterprise_oidc_issuer.as_deref(),

@@ -749,17 +749,17 @@ mod tests {
         );
     }
 
-    /// Brand-new user (no API key, no cached token): only `supercharge.ai` is
-    /// advertised, and the pager will (correctly) show the login screen.
-    /// `default_auth_method_id` is None so the pager falls back to the
-    /// advertised login method.
+    /// A fresh installation can enter `/setup` from the normal interface
+    /// without being sent to the legacy account login flow.
     #[test]
-    fn fresh_user_only_advertises_grok_com_and_requires_login() {
-        let built = build_auth_methods(default_inputs());
+    fn fresh_user_can_suppress_interactive_login() {
+        let built = build_auth_methods(AuthMethodsBuildInputs {
+            suppress_interactive_login: true,
+            ..default_inputs()
+        });
 
-        assert_eq!(first_kind(&built.methods), Some(AuthMethodKind::GrokCom));
+        assert!(built.methods.is_empty());
         assert!(built.default_auth_method_id.is_none());
-        assert_eq!(built.methods.len(), 1);
     }
 
     /// Enterprise OIDC replaces `supercharge.ai` (mutually exclusive). provider.api_key,

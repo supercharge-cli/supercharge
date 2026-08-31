@@ -925,6 +925,14 @@ mod tests {
     }
 
     #[test]
+    fn startup_auth_no_methods_leaves_fresh_install_in_normal_ui() {
+        let (needs, _, method_id, mode) = startup_auth_metadata(&[]);
+        assert!(!needs);
+        assert!(method_id.is_none());
+        assert_eq!(mode, AuthStartMode::Pending);
+    }
+
+    #[test]
     fn startup_auth_grok_com_no_provider_needs_login_pending() {
         let methods = vec![make_auth_method("supercharge.ai", "supercharge.ai", None)];
         let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
