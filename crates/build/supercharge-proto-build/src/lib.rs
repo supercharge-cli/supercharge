@@ -186,9 +186,11 @@ impl XaiProtoBuilder {
             let output = fs::read_to_string(&dep_path).context("reading protoc dependency file")?;
             let mut lines = output.lines();
             let first_line = lines.next().context("protoc command output is empty")?;
-            let rem = strip_descriptor_prefix(first_line, &desc_path).with_context(|| {
-                format!("protoc dependency output missing descriptor prefix: {output:?}")
-            })?;
+            // Protobuf 29 can emit a dependency file whose first line omits the
+            // descriptor target and starts with whitespace. Treat that line as
+            // the first dependency instead of rejecting an otherwise valid file.
+            let rem = strip_descriptor_prefix(first_line, &desc_path)
+                .unwrap_or_else(|| first_line.trim_start());
             for line in iter::once(rem).chain(lines) {
                 let line = line.trim();
                 let line = line.strip_suffix('\\').unwrap_or(line).trim();
