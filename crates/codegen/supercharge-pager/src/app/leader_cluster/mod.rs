@@ -296,7 +296,7 @@ impl PagerLeaderCluster {
         let env = vec![
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_HOME", grok_home.path()),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url()),
-            crate::test_util::EnvVarGuard::set("SUPERCHARGE_XAI_API_BASE_URL", server.url()),
+            crate::test_util::EnvVarGuard::set("SUPERCHARGE_API_BASE_URL", server.url()),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_API_KEY", "test-key-for-ci"),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_TELEMETRY_ENABLED", "false"),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_FEEDBACK_ENABLED", "false"),

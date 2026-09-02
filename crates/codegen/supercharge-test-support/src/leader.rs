@@ -252,7 +252,7 @@ impl LeaderFixture {
         sandbox.apply_to_std_command(&mut cmd);
         cmd.envs(supercharge_tty_utils::pager_env())
             .env("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", base_url)
-            .env("SUPERCHARGE_XAI_API_BASE_URL", base_url)
+            .env("SUPERCHARGE_API_BASE_URL", base_url)
             .env("SUPERCHARGE_MODELS_BASE_URL", base_url)
             .env("SUPERCHARGE_FEEDBACK_BASE_URL", base_url)
             .env("SUPERCHARGE_TRACE_UPLOAD_URL", base_url)
@@ -638,7 +638,7 @@ impl LeaderStdioClient {
                 .stdin(TestStdin::Piped)
                 .stdout(TestOutput::Piped)
                 .env("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", base_url)
-                .env("SUPERCHARGE_XAI_API_BASE_URL", base_url)
+                .env("SUPERCHARGE_API_BASE_URL", base_url)
                 .env("SUPERCHARGE_MODELS_BASE_URL", base_url)
                 .env("SUPERCHARGE_FEEDBACK_BASE_URL", base_url)
                 .env("SUPERCHARGE_TRACE_UPLOAD_URL", base_url)

@@ -10,7 +10,7 @@ pub const DEFAULT_SAMPLE_RATE: u32 = 16_000;
 ///
 /// Prefer **https** `api_base` (same shape as chat). [`Self::stt_ws_url`] derives
 /// `wss://`. When `[voice].api_base` is unset, inherits
-/// `[endpoints].xai_api_base_url` so enterprise proxies need no second knob.
+/// `[endpoints].api_base_url` so enterprise proxies need no second knob.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct VoiceConfig {
@@ -53,7 +53,7 @@ impl VoiceConfig {
         ws_url(&self.api_base, &self.stt_ws_path)
     }
 
-    /// `api_base`: non-empty `[voice].api_base`, else `[endpoints].xai_api_base_url`
+    /// `api_base`: non-empty `[voice].api_base`, else `[endpoints].api_base_url`
     /// from `root`, else `resolved_endpoints_base`, else `https://api.x.ai`.
     ///
     /// `resolved_endpoints_base` carries the caller's env / CLI overrides; it
@@ -74,7 +74,11 @@ impl VoiceConfig {
         .or_else(|| {
             non_empty_str(
                 root.get("endpoints")
-                    .and_then(|e| e.get("xai_api_base_url"))
+                    .and_then(|e| e.get("api_base_url"))
+                    .or_else(|| {
+                        root.get("endpoints")
+                            .and_then(|e| e.get("xai_api_base_url"))
+                    })
                     .and_then(|v| v.as_str()),
             )
         })
@@ -183,7 +187,7 @@ mod tests {
         let table: toml::Table = toml::from_str(
             r#"
 [endpoints]
-xai_api_base_url = "https://proxy.example.com/xai/v1"
+api_base_url = "https://proxy.example.com/xai/v1"
 "#,
         )
         .unwrap();
@@ -200,7 +204,7 @@ xai_api_base_url = "https://proxy.example.com/xai/v1"
         let table: toml::Table = toml::from_str(
             r#"
 [endpoints]
-xai_api_base_url = "https://proxy.example.com/xai/v1"
+api_base_url = "https://proxy.example.com/xai/v1"
 [voice]
 api_base = "  "
 language = "fr"
@@ -246,7 +250,7 @@ api_base = "  "
         let table: toml::Table = toml::from_str(
             r#"
 [endpoints]
-xai_api_base_url = "https://config.example.com"
+api_base_url = "https://config.example.com"
 "#,
         )
         .unwrap();
@@ -259,7 +263,7 @@ xai_api_base_url = "https://config.example.com"
         let table: toml::Table = toml::from_str(
             r#"
 [endpoints]
-xai_api_base_url = "https://proxy.example.com/xai/v1"
+api_base_url = "https://proxy.example.com/xai/v1"
 [voice]
 api_base = "https://api.x.ai"
 language = "es"

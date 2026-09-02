@@ -1213,7 +1213,7 @@ fn default_models_dual_endpoint_routing() {
             auth_scheme: AuthScheme::Bearer,
         };
         assert_eq!(
-            api_key_creds.base_url, endpoints.xai_api_base_url,
+            api_key_creds.base_url, endpoints.api_base_url,
             "{model_id}: ExternalApiKey must route to api.x.ai"
         );
     }
@@ -3397,7 +3397,7 @@ fn e2e_enterprise_endpoints_plus_partial_model_override() {
             r#"
             [endpoints]
             cli_chat_proxy_base_url = "https://enterprise-proxy.acme.com/v1"
-            xai_api_base_url = "https://enterprise-api.acme.com/v1"
+            api_base_url = "https://enterprise-api.acme.com/v1"
 
             [model."{dm}"]
             api_key = "acme-api-key"
@@ -3432,7 +3432,7 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
         r#"
             [endpoints]
             cli_chat_proxy_base_url = "https://enterprise-proxy.acme.com/v1"
-            xai_api_base_url = "https://enterprise-api.acme.com/v1"
+            api_base_url = "https://enterprise-api.acme.com/v1"
             "#,
         None,
     );
@@ -3446,7 +3446,7 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
     assert_eq!(
         model.api_base_url.as_deref(),
         Some("https://enterprise-api.acme.com/v1"),
-        "default model should use enterprise xai_api_base_url"
+        "default model should use enterprise api_base_url"
     );
 }
 /// Unset every env var that `EndpointsConfig::default()` reads for endpoints,
@@ -3455,7 +3455,7 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
 fn unset_endpoint_env_vars() {
     for k in [
         "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
-        "SUPERCHARGE_XAI_API_BASE_URL",
+        "SUPERCHARGE_API_BASE_URL",
         "SUPERCHARGE_FEEDBACK_BASE_URL",
         "SUPERCHARGE_TRACE_UPLOAD_URL",
         "SUPERCHARGE_MANAGED_CONFIG_URL",
@@ -3472,7 +3472,7 @@ fn unset_endpoint_env_vars() {
     }
 }
 /// INVARIANT: auxiliary-service resolvers resolve to the cli-chat-proxy, never
-/// `xai_api_base_url` — overriding ONLY inference keeps every aux endpoint on
+/// `api_base_url` — overriding ONLY inference keeps every aux endpoint on
 /// the proxy; explicit per-service overrides win verbatim.
 #[test]
 #[serial]
@@ -3480,7 +3480,7 @@ fn aux_endpoints_resolve_to_proxy_never_inference() {
     unset_endpoint_env_vars();
     let inference = "https://inference.acme-corp.example/xai/v1";
     let cfg = EndpointsConfig {
-        xai_api_base_url: inference.to_string(),
+        api_base_url: inference.to_string(),
         cli_chat_proxy_base_url: None,
         ..Default::default()
     };
@@ -3498,7 +3498,7 @@ fn aux_endpoints_resolve_to_proxy_never_inference() {
         cfg.resolve_otlp_traces_endpoint(),
         format!("{proxy}/traces")
     );
-    assert_eq!(cfg.xai_api_base_url, inference);
+    assert_eq!(cfg.api_base_url, inference);
     let overridden = EndpointsConfig {
         cli_chat_proxy_base_url: Some("https://proxy.enterprise.example/v1".to_string()),
         managed_config_url: Some(
@@ -3529,7 +3529,7 @@ fn aux_endpoints_resolve_to_proxy_never_inference() {
         "https://trace.enterprise.example"
     );
 }
-/// REGRESSION: the managed-config URL never follows `xai_api_base_url`
+/// REGRESSION: the managed-config URL never follows `api_base_url`
 /// through the full loader `Config::new_from_toml_cfg` — a distinct construction
 /// path from `from_config_value`, so the deployment key never reaches the
 /// inference host on either.
@@ -3540,7 +3540,7 @@ fn loader_managed_config_url_never_follows_inference_endpoint() {
     let cfg = Config::new_from_toml_cfg(
         &toml::from_str(
             r#"[endpoints]
-                xai_api_base_url = "https://inference.acme-corp.example/xai/v1""#,
+                api_base_url = "https://inference.acme-corp.example/xai/v1""#,
         )
         .unwrap(),
     )

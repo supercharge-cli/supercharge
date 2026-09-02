@@ -736,7 +736,7 @@ impl ListModelsEndpoint {
             }
         } else if fetch_auth == crate::agent::models::ModelFetchAuth::ApiKey {
             Self {
-                url: format!("{}/models", endpoints.xai_api_base_url),
+                url: format!("{}/models", endpoints.api_base_url),
                 auth: EndpointAuth::ApiKey,
             }
         } else {

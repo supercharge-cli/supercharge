@@ -281,7 +281,7 @@ fn run_git(sandbox: &TestSandbox, args: &[&str]) {
 fn apply_mock_url(env: &mut BTreeMap<OsString, OsString>, url: String) {
     for key in [
         "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
-        "SUPERCHARGE_XAI_API_BASE_URL",
+        "SUPERCHARGE_API_BASE_URL",
         "SUPERCHARGE_MODELS_BASE_URL",
         "SUPERCHARGE_FEEDBACK_BASE_URL",
         "SUPERCHARGE_TRACE_UPLOAD_URL",

@@ -909,7 +909,7 @@ fn list_url_explicit_overrides_derivation() {
 }
 /// INVARIANT: the `/models` fetch URL + auth scheme match the auth mode —
 /// Session/Deployment → cli-chat-proxy (Session auth), never the inference host;
-/// ApiKey → `xai_api_base_url` (ApiKey, public default when unset); a custom
+/// ApiKey → `api_base_url` (ApiKey, public default when unset); a custom
 /// models endpoint → that URL verbatim.
 #[test]
 #[serial_test::serial]
@@ -918,7 +918,7 @@ fn models_fetch_endpoint_matches_auth_mode() {
     use crate::agent::models::ModelFetchAuth;
     for k in [
         "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
-        "SUPERCHARGE_XAI_API_BASE_URL",
+        "SUPERCHARGE_API_BASE_URL",
         "SUPERCHARGE_MODELS_LIST_URL",
     ] {
         unsafe { std::env::remove_var(k) };
@@ -926,7 +926,7 @@ fn models_fetch_endpoint_matches_auth_mode() {
     let cfg = EndpointsConfig::from_config_value(
         &toml::from_str(
             r#"[endpoints]
-                xai_api_base_url = "https://inference.acme-corp.example/xai/v1""#,
+                api_base_url = "https://inference.acme-corp.example/xai/v1""#,
         )
         .unwrap(),
     );
@@ -970,7 +970,7 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     for k in [
         "SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL",
         "SUPERCHARGE_MANAGED_CONFIG_URL",
-        "SUPERCHARGE_XAI_API_BASE_URL",
+        "SUPERCHARGE_API_BASE_URL",
     ] {
         unsafe { std::env::remove_var(k) };
     }
@@ -978,7 +978,7 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     let managed: toml::Value = toml::from_str(
         r#"[endpoints]
             deployment_key = "xai-token-ENTERPRISE"
-            xai_api_base_url = "https://inference.acme-corp.example/xai/v1""#,
+            api_base_url = "https://inference.acme-corp.example/xai/v1""#,
     )
     .unwrap();
     let url = EndpointsConfig::from_config_value(&managed).resolve_managed_config_url();
@@ -992,7 +992,7 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     );
     let pinned: toml::Value = toml::from_str(
         r#"[endpoints]
-            xai_api_base_url = "https://inference.acme-corp.example/xai/v1"
+            api_base_url = "https://inference.acme-corp.example/xai/v1"
             cli_chat_proxy_base_url = "https://proxy.acme-corp.example/v1""#,
     )
     .unwrap();

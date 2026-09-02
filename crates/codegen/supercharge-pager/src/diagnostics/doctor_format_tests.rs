@@ -540,7 +540,7 @@ fn runtime_startup_findings_are_visible_with_useful_doctor_content() {
         },
     );
 
-    assert!(output.contains("Grok is using the terminal bell"));
+    assert!(output.contains("Supercharge is using the terminal bell"));
     assert!(output.contains("If the bell works for you"));
     assert!(output.contains("may not report focus changes"));
     assert!(output.contains(&crate::util::display_user_grok_path("config.toml")));
@@ -584,7 +584,7 @@ fn runtime_findings_merge_before_single_formatter_orders_issues_before_recommend
         },
     );
 
-    let issue = output.find("Grok is using the terminal bell").unwrap();
+    let issue = output.find("Supercharge is using the terminal bell").unwrap();
     let recommendation = output.find("Recommendations").unwrap();
     assert!(issue < recommendation);
     assert!(!output.contains("No issues found."));

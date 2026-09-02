@@ -2181,7 +2181,7 @@ impl MvpAgent {
     }
     /// Build image generation config from `[image_provider]` (`/isetup`).
     ///
-    /// Independent of chat `/setup` and of `xai_api_base_url`. Missing
+    /// Independent of chat `/setup` and of `api_base_url`. Missing
     /// `base_url` leaves the tools unregistered.
     pub(super) fn prepare_image_gen_config(
         &self,
@@ -2261,7 +2261,7 @@ impl MvpAgent {
         if zdr_restricted {
             tracing::info!("video_gen zdr-restricted by tools.disable_zdr_incompatible_tools");
         }
-        let base_url = cfg.endpoints.xai_api_base_url.clone();
+        let base_url = cfg.endpoints.api_base_url.clone();
         let version = cfg
             .client_version
             .clone()

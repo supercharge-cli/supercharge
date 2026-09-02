@@ -97,7 +97,7 @@ async fn a_provider_that_declines_the_headless_run_can_still_sign_the_user_in() 
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", home.path());
         std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", &dead);
-        std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", &dead);
+        std::env::set_var("SUPERCHARGE_API_BASE_URL", &dead);
         std::env::remove_var("SUPERCHARGE_API_KEY");
         std::env::remove_var("SUPERCHARGE_CODE_API_KEY");
         std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");

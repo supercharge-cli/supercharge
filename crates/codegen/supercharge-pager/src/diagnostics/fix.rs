@@ -18,13 +18,13 @@ pub const TMUX_CLIPBOARD_ID: DiagnosticId = DiagnosticId::new("terminal", "tmux-
 pub const DCS_PASSTHROUGH_ID: DiagnosticId = DiagnosticId::new("terminal", "dcs-passthrough");
 pub const TMUX_EXTENDED_KEYS_ID: DiagnosticId = DiagnosticId::new("terminal", "tmux-extended-keys");
 pub const TMUX_TRUECOLOR_ID: DiagnosticId = DiagnosticId::new("terminal", "tmux-truecolor");
-pub const SSH_WRAP_FIX_COMMAND: &str = "grok doctor fix terminal.ssh-wrap";
+pub const SSH_WRAP_FIX_COMMAND: &str = "supercharge doctor fix terminal.ssh-wrap";
 pub const SSH_WRAP_ONE_OFF: &str = "supercharge wrap ssh <host>";
 
-const MANAGED_NAMESPACE: &str = "grok doctor";
+const MANAGED_NAMESPACE: &str = "supercharge doctor";
 const SSH_WRAP_ALIAS_POSIX: &str = "alias ssh='supercharge wrap ssh'";
 const SSH_WRAP_ALIAS_FISH: &str = "alias ssh 'supercharge wrap ssh'";
-const TMUX_SCANNER_CAVEAT: &str = "Grok checks this file for direct global assignments of this option. Review sourced files, conditionals, plugins, and generated tmux setup yourself.";
+const TMUX_SCANNER_CAVEAT: &str = "Supercharge checks this file for direct global assignments of this option. Review sourced files, conditionals, plugins, and generated tmux setup yourself.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AutomaticRemediation {
@@ -317,7 +317,7 @@ impl std::fmt::Display for FixError {
                 formatter,
                 "Automatic SSH setup is not available on Windows. Run `{SSH_WRAP_ONE_OFF}` when needed."
             ),
-            Self::HomeUnavailable => formatter.write_str("Grok could not find your home directory."),
+            Self::HomeUnavailable => formatter.write_str("Supercharge could not find your home directory."),
             Self::NotApplicable => formatter
                 .write_str("This fix does not apply to VS Code Remote sessions."),
             Self::TmuxNotApplicable => formatter
@@ -329,7 +329,7 @@ impl std::fmt::Display for FixError {
                 "Automatic setup supports Bash, zsh, and fish. For another shell, run `{SSH_WRAP_ONE_OFF}` when needed."
             ),
             Self::ByobuConfigUnavailable => formatter.write_str(
-                "Grok could not determine Byobu's effective config directory. Keep `BYOBU_CONFIG_DIR` set in this session, then run the fix again.",
+                "Supercharge could not determine Byobu's effective config directory. Keep `BYOBU_CONFIG_DIR` set in this session, then run the fix again.",
             ),
             Self::UnsafeDirectory { label, path } => write!(
                 formatter,
@@ -342,13 +342,13 @@ impl std::fmt::Display for FixError {
             {
                 write!(
                     formatter,
-                    "Grok found an existing SSH alias or function in {} and did not change it: {detail}",
+                    "Supercharge found an existing SSH alias or function in {} and did not change it: {detail}",
                     path.display()
                 )
             }
             Self::ExistingCustomization { path, detail } => write!(
                 formatter,
-                "Grok found an existing customization in {} and did not change it: {detail}",
+                "Supercharge found an existing customization in {} and did not change it: {detail}",
                 path.display()
             ),
             Self::Managed(error) => write!(
@@ -359,9 +359,9 @@ impl std::fmt::Display for FixError {
                 write!(formatter, "Could not update your tmux configuration: {error}")
             }
             Self::PostconditionFailed => formatter
-                .write_str("The configuration changed, but Grok could not verify the SSH alias."),
+                .write_str("The configuration changed, but Supercharge could not verify the SSH alias."),
             Self::TmuxPostconditionFailed => formatter.write_str(
-                "The configuration changed, but Grok could not verify the managed tmux option.",
+                "The configuration changed, but Supercharge could not verify the managed tmux option.",
             ),
         }
     }
@@ -669,7 +669,7 @@ pub(crate) fn format_fix_preview(plan: &FixPlan) -> String {
                 tmux_activation_instruction(payload.spec, &plan.change.requested_path);
             let _ = writeln!(
                 output,
-                "\nWhat this changes:\n  Persists `{}`.\n  Grok does not reload or modify the live tmux server.\n  After applying, {instruction}\n  Run /doctor again to verify the live setting.",
+                "\nWhat this changes:\n  Persists `{}`.\n  Supercharge does not reload or modify the live tmux server.\n  After applying, {instruction}\n  Run /doctor again to verify the live setting.",
                 payload.spec.line,
             );
         }
@@ -736,7 +736,7 @@ fn plan_ssh_wrap(
             "Use `command ssh ...` to bypass the alias.",
             "For manually entered `ssh -f`, ControlPersist workflows, or OpenSSH `~^Z` local suspend, use `command ssh ...`. Wrapping does not fully preserve those behaviors.",
             "`supercharge wrap` starts the SSH process directly, so the alias does not loop.",
-            "Grok checks this file for direct SSH aliases and functions. Review sourced files, plugins, and generated shell setup yourself.",
+            "Supercharge checks this file for direct SSH aliases and functions. Review sourced files, plugins, and generated shell setup yourself.",
         ],
         payload: FixPayload::SshWrap(SshWrapPlan { shell, managed }),
     })

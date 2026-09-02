@@ -34,7 +34,7 @@ async fn embedded_mode_boots_without_hanging_on_blocked_backend() {
         ("SUPERCHARGE_HOME", grok_home.to_str().unwrap()),
         ("SUPERCHARGE_API_KEY", "test-key-for-ci"),
         ("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", base.as_str()),
-        ("SUPERCHARGE_XAI_API_BASE_URL", base.as_str()),
+        ("SUPERCHARGE_API_BASE_URL", base.as_str()),
         ("SUPERCHARGE_TELEMETRY_ENABLED", "false"),
         ("SUPERCHARGE_FEEDBACK_ENABLED", "false"),
         ("SUPERCHARGE_TRACE_UPLOAD", "false"),

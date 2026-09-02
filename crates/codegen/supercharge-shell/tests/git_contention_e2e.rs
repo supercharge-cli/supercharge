@@ -432,7 +432,7 @@ fn git_rebase_refresh_storm_e2e() {
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
         std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url());
-        std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_API_BASE_URL", server.url());
         std::env::set_var("SUPERCHARGE_API_KEY", "test-key-for-ci");
         std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
         std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");

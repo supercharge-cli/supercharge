@@ -1235,10 +1235,10 @@ pub(crate) async fn run(
         );
         if let Some(table) = raw.as_table() {
             // Voice inherits the same resolved endpoints base as chat
-            // (config > SUPERCHARGE_XAI_API_BASE_URL env > default).
+            // (config > SUPERCHARGE_API_BASE_URL env > default).
             let endpoints_base =
                 supercharge_shell::agent::config::EndpointsConfig::from_config_value(raw)
-                    .xai_api_base_url;
+                    .api_base_url;
             app.voice_config =
                 supercharge_voice::VoiceConfig::from_config_table(table, Some(&endpoints_base));
         }

@@ -292,7 +292,7 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
         std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url());
-        std::env::set_var("SUPERCHARGE_XAI_API_BASE_URL", server.url());
+        std::env::set_var("SUPERCHARGE_API_BASE_URL", server.url());
         std::env::set_var("SUPERCHARGE_MODELS_BASE_URL", server.url());
         std::env::set_var("SUPERCHARGE_AUTH_PROVIDER_COMMAND", &provider);
         std::env::set_var("SUPERCHARGE_AUTH_PROVIDER_LABEL", PROVIDER_LABEL);

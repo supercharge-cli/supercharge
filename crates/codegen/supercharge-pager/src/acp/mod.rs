@@ -1034,7 +1034,7 @@ mod tests {
         };
 
         let methods = vec![
-            make_auth_method(SUPERCHARGE_COM_METHOD_ID, "Grok", None),
+            make_auth_method(SUPERCHARGE_COM_METHOD_ID, "Supercharge", None),
             make_auth_method(PROVIDER_API_KEY_METHOD_ID, "provider.api_key", None),
         ];
         let (needs, _, _, _) = startup_auth_metadata(&methods);

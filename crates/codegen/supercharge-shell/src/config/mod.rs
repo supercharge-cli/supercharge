@@ -1263,11 +1263,12 @@ fn apply_requirements_inner(
         "required_maximum_version",
         config.cli.required_maximum_version
     );
-    if let Some(val) = req_str(req, "endpoints", "xai_api_base_url")
-        && config.endpoints.xai_api_base_url != val
+    if let Some(val) = req_str(req, "endpoints", "api_base_url")
+        .or_else(|| req_str(req, "endpoints", "xai_api_base_url"))
+        && config.endpoints.api_base_url != val
     {
-        config.endpoints.xai_api_base_url = val.to_owned();
-        push("endpoints.xai_api_base_url", val.to_owned());
+        config.endpoints.api_base_url = val.to_owned();
+        push("endpoints.api_base_url", val.to_owned());
     }
     if let Some(val) = req_str(req, "endpoints", "cli_chat_proxy_base_url")
         && config.endpoints.cli_chat_proxy_base_url.as_deref() != Some(val)

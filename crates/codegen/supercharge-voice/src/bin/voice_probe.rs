@@ -130,7 +130,9 @@ fn parse_args(argv: Vec<String>) -> Args {
 fn load_config(path: Option<&std::path::Path>) -> VoiceConfig {
     // The probe has no shell config stack; env is the resolved fallback
     // (config table still beats it, matching the pager's precedence).
-    let env_base = std::env::var("SUPERCHARGE_XAI_API_BASE_URL").ok();
+    let env_base = std::env::var("SUPERCHARGE_API_BASE_URL")
+        .ok()
+        .or_else(|| std::env::var("SUPERCHARGE_XAI_API_BASE_URL").ok());
     if let Some(path) = path
         && let Ok(raw) = std::fs::read_to_string(path)
         && let Ok(table) = toml::from_str::<toml::Table>(&raw)

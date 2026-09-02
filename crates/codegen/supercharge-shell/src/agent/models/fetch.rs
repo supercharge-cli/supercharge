@@ -110,7 +110,7 @@ fn prefetch_models_blocking_gated(
     match fetch_models_blocking(endpoints, auth, fetch_auth) {
         Ok(FetchModelsResult { models, etag }) if !models.is_empty() => {
             let api_base_url_override = match fetch_auth {
-                ModelFetchAuth::ApiKey => Some(endpoints.xai_api_base_url.clone()),
+                ModelFetchAuth::ApiKey => Some(endpoints.api_base_url.clone()),
                 _ => None,
             };
             let map = build_prefetched_map(models, api_base_url_override);

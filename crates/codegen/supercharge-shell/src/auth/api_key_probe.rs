@@ -1,9 +1,9 @@
-//! First-party env key probe (`GET {xai_api_base_url}/api-key`) before
-//! advertising `xai.api_key`. BYOK is not probed.
+//! First-party env key probe (`GET {api_base_url}/api-key`) before
+//! advertising `supercharge.api_key`. BYOK is not probed.
 //!
-//! The base URL is the caller's effective `endpoints.xai_api_base_url` so the
-//! probe hits the same host turn traffic uses (`SUPERCHARGE_XAI_API_BASE_URL` /
-//! `[endpoints] xai_api_base_url`), not a hardcoded production host.
+//! The base URL is the caller's effective `endpoints.api_base_url` so the
+//! probe hits the same host turn traffic uses (`SUPERCHARGE_API_BASE_URL` /
+//! `[endpoints] api_base_url`), not a hardcoded production host.
 //!
 //! Unusable (auth error / blocked/disabled/team_blocked) → do not advertise.
 //! Unknown (timeout / network / exhausted retries) → fail open.
@@ -122,7 +122,7 @@ fn classify_probe_response(status: u16, body: &[u8]) -> ApiKeyProbeVerdict {
 /// Fail open on timeout/transport error after retries. Never logs the raw key.
 ///
 /// `api_base_url` must be the endpoint the env key is actually sent to
-/// (`endpoints.xai_api_base_url`), not a hardcoded public default.
+/// (`endpoints.api_base_url`), not a hardcoded public default.
 async fn probe_xai_api_key(key: &str, api_base_url: &str, timeout: Duration) -> ApiKeyProbeVerdict {
     let url = api_key_info_url(api_base_url);
     probe_xai_api_key_at_url(key, &url, timeout).await
@@ -201,9 +201,9 @@ async fn probe_xai_api_key_at_url(key: &str, url: &str, timeout: Duration) -> Ap
 
 /// Probe env key if set; no env key → false (caller ORs with BYOK).
 ///
-/// `api_base_url` is the caller's effective `endpoints.xai_api_base_url`, so the
+/// `api_base_url` is the caller's effective `endpoints.api_base_url`, so the
 /// probe follows the same endpoint as turn traffic — and, in tests, the mock
-/// server fixtures already set via `SUPERCHARGE_XAI_API_BASE_URL`.
+/// server fixtures already set via `SUPERCHARGE_API_BASE_URL`.
 pub(crate) async fn first_party_env_key_allows_advertise(
     _api_base_url: &str,
     _timeout: Duration,

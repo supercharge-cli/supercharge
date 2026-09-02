@@ -48,8 +48,8 @@ pub(crate) fn default_agent_type() -> String {
 }
 /// Default base URL for the cli chat proxy.
 pub const CLI_CHAT_PROXY_BASE_URL_DEFAULT: &str = "https://cli-chat-proxy.supercharge.com/v1";
-/// Default base URL for the public xAI API.
-pub const XAI_API_BASE_URL_DEFAULT: &str = "https://api.x.ai/v1";
+/// Default base URL for the public API.
+pub const API_BASE_URL_DEFAULT: &str = "https://api.x.ai/v1";
 const NO_INLINE_CITATIONS_RESPONSE_INCLUDE: &str = "no_inline_citations";
 /// One or more environment variable names that may hold a model API key.
 ///
@@ -149,8 +149,9 @@ pub struct EndpointsConfig {
     /// default value) lets an org pin the proxy to the default on purpose.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli_chat_proxy_base_url: Option<String>,
-    /// Base URL for the public xAI API.
-    pub xai_api_base_url: String,
+    /// Base URL for the public API. Legacy configs use `xai_api_base_url`.
+    #[serde(rename = "api_base_url", alias = "xai_api_base_url")]
+    pub api_base_url: String,
     /// Optional extra access-header value (applied only with the optional
     /// non-production feature, and only for matching first-party hosts).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -298,7 +299,7 @@ impl EndpointsConfig {
     }
     /// The cli-chat-proxy base URL through which all auxiliary services (and
     /// OAuth/session inference) resolve: explicit `cli_chat_proxy_base_url`, else
-    /// the public default. NEVER falls back to `xai_api_base_url` — that is the
+    /// the public default. NEVER falls back to `api_base_url` — that is the
     /// inference endpoint (API-key auth) only.
     pub fn proxy_url(&self) -> String {
         blank_as_unset(&self.cli_chat_proxy_base_url)
@@ -310,17 +311,17 @@ impl EndpointsConfig {
             .unwrap_or_else(|| self.proxy_url())
     }
     /// Feedback endpoint — an auxiliary service, so it defaults to the
-    /// cli-chat-proxy, never `xai_api_base_url`.
+    /// cli-chat-proxy, never `api_base_url`.
     pub(crate) fn resolve_feedback_base_url(&self) -> String {
         blank_as_unset(&self.feedback_base_url).unwrap_or_else(|| self.proxy_url())
     }
     /// Trace upload endpoint — an auxiliary service, so it defaults to the
-    /// cli-chat-proxy, never `xai_api_base_url`.
+    /// cli-chat-proxy, never `api_base_url`.
     pub(crate) fn resolve_trace_upload_url(&self) -> String {
         blank_as_unset(&self.trace_upload_url).unwrap_or_else(|| self.proxy_url())
     }
     /// Managed deployment-config URL (`Supercharge AI setup`): explicit `managed_config_url`,
-    /// else `proxy_url` + `/deployment/config`. Never `xai_api_base_url`, so the
+    /// else `proxy_url` + `/deployment/config`. Never `api_base_url`, so the
     /// deployment key reaches the proxy, not the inference host.
     pub(crate) fn resolve_managed_config_url(&self) -> String {
         blank_as_unset(&self.managed_config_url).unwrap_or_else(|| {
@@ -336,7 +337,7 @@ impl EndpointsConfig {
     ///    `otel_exporter_otlp_endpoint` + `/v1/traces` — ONLY when the
     ///    external-OTEL master switch is unset (back-compat; deprecated)
     /// 3. `proxy_url` + `/traces`.
-    /// Uses the proxy default (not the `xai_api_base_url` fallback) so
+    /// Uses the proxy default (not the `api_base_url` fallback) so
     /// telemetry reports to xAI even when inference is overridden. When the
     /// master switch IS set, the standard `OTEL_EXPORTER_OTLP_*` values are
     /// completely ignored here so the internally-authed firehose never lands
@@ -539,8 +540,9 @@ impl Default for EndpointsConfig {
     fn default() -> Self {
         Self {
             cli_chat_proxy_base_url: std::env::var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL").ok(),
-            xai_api_base_url: std::env::var("SUPERCHARGE_XAI_API_BASE_URL")
-                .unwrap_or_else(|_| XAI_API_BASE_URL_DEFAULT.to_owned()),
+            api_base_url: env_string("SUPERCHARGE_API_BASE_URL")
+                .or_else(|| env_string("SUPERCHARGE_XAI_API_BASE_URL"))
+                .unwrap_or_else(|| API_BASE_URL_DEFAULT.to_owned()),
             alpha_test_key: None,
             models_base_url: env_string("SUPERCHARGE_MODELS_BASE_URL"),
             models_list_url: env_string("SUPERCHARGE_MODELS_LIST_URL"),
@@ -3839,7 +3841,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 model: m.model,
                 model_family: m.model_family,
                 base_url: endpoints.resolve_inference_base_url(),
-                api_base_url: Some(endpoints.xai_api_base_url.clone()),
+                api_base_url: Some(endpoints.api_base_url.clone()),
                 name: m.name,
                 description: m.description,
                 context_window,

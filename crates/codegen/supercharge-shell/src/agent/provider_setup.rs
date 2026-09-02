@@ -503,7 +503,7 @@ pub fn fetch_setup_provider_catalog(
         .as_deref()
         .filter(|url| !url.trim().is_empty())
         .map(str::to_owned)
-        .unwrap_or_else(|| endpoints.xai_api_base_url.clone());
+        .unwrap_or_else(|| endpoints.api_base_url.clone());
     let normalized = normalize_provider_base_url(base_url.as_str())?;
     let api_key = provider_setup_api_key_from_toml(&toml_config).unwrap_or_default();
     let format = setup_wire_format_from_config(&toml_config);
@@ -800,7 +800,7 @@ fn apply_provider_setup_to_document(
     format: SetupWireFormat,
     provider_id: &str,
 ) {
-    document["endpoints"]["xai_api_base_url"] = toml_edit::value(base_url);
+    document["endpoints"]["api_base_url"] = toml_edit::value(base_url);
     document["endpoints"]["models_base_url"] = toml_edit::value(base_url);
     document["endpoints"]["models_list_url"] = toml_edit::value(provider_models_list_url(base_url));
 
@@ -892,6 +892,7 @@ pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
         .and_then(|endpoints| {
             endpoints
                 .get("models_base_url")
+                .or_else(|| endpoints.get("api_base_url"))
                 .or_else(|| endpoints.get("xai_api_base_url"))
         })
         .and_then(toml::Value::as_str)

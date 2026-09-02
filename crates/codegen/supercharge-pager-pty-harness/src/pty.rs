@@ -1051,7 +1051,7 @@ mod tests {
 
         assert_eq!(cmd.get_env("SUPERCHARGE_API_KEY"), None);
         assert_eq!(
-            cmd.get_env("SUPERCHARGE_XAI_API_BASE_URL")
+            cmd.get_env("SUPERCHARGE_API_BASE_URL")
                 .and_then(|v| v.to_str()),
             Some("http://127.0.0.1:43123/v1")
         );
