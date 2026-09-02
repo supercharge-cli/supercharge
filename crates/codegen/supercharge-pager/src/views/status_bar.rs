@@ -64,6 +64,14 @@ impl Widget for StatusBar<'_> {
         }
 
         let style = Style::default().fg(theme.gray).bg(theme.bg_base);
+        if area.width >= 3 {
+            buf.set_span(
+                area.x,
+                area.y,
+                &Span::styled("▌", Style::default().fg(theme.accent_assistant)),
+                1,
+            );
+        }
 
         // Fill background (the whole row)
         buf.set_style(area, Style::default().bg(theme.bg_base));

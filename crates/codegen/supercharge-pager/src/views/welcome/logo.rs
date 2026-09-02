@@ -12,8 +12,8 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::render::color::blend_color;
 use crate::theme::Theme;
 
-const LOGO: &str = include_str!("../../../assets/logo/logo07_ascii.txt");
-const LOGO_SMALL: &str = include_str!("../../../assets/logo/logo05_ascii.txt");
+const LOGO: &str = "  SSSS  U   U  PPPP  EEEEE  RRRR\n S      U   U  P   P  E      R   R\n  SSS   U   U  PPPP   EEEE   RRRR\n     S  U   U  P      E      R R\n  SSS    UUU   P      EEEEE  R  RR\n";
+const LOGO_SMALL: &str = " SSS  U U  PPP  EEEE RRR\nS     U U  P P  E    R R\n SSS  U U  PPP  EEE  RRR\n   S  U U  P    E    R R\n SSS   U   P    EEEE R  R\n";
 
 const FULL_LOGO_FRAMES: [&str; 4] = [
     "       .  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",

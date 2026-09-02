@@ -11,7 +11,8 @@ use crate::theme::Theme;
 use super::WelcomeLayout;
 
 /// Minimum terminal width for the side-by-side hero box layout.
-pub(super) const HERO_BOX_MIN_WIDTH: u16 = 90;
+/// Supercharge keeps the legacy framed composition for extra-wide terminals only.
+pub(super) const HERO_BOX_MIN_WIDTH: u16 = 140;
 
 /// Vertical padding (rows) between the box border and its inner content.
 const V_PAD: u16 = 1;
