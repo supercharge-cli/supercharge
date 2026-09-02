@@ -728,7 +728,7 @@ fn tick_demand_welcome_is_slow_unless_loading() {
 }
 /// An open modal session picker that is still fetching keeps fast ticks
 /// alive on an otherwise-idle agent (its loading spinner must animate) —
-/// including after the fast foreign scan lands rows the default Grok
+/// including after the fast foreign scan lands rows the default Supercharge
 /// filter hides; once the native list settles the demand parks again.
 #[test]
 fn tick_demand_fast_while_modal_session_picker_loads() {
@@ -781,7 +781,7 @@ fn tick_demand_fast_while_modal_session_picker_loads() {
     assert_eq!(
         app.tick_demand(),
         TickDemand::Fast,
-        "foreign rows hidden by the Grok filter must not end the loading spinner"
+        "foreign rows hidden by the Supercharge filter must not end the loading spinner"
     );
     if let Some(crate::views::modal::ActiveModal::SessionPicker { loading, .. }) =
         app.agents.get_mut(&id).unwrap().active_modal.as_mut()
@@ -6513,7 +6513,7 @@ fn welcome_picker_f_cycle_disabled_under_chat_mode() {
     let _ = app.handle_input(&f_key);
     assert_eq!(
         app.session_picker_source_filter,
-        crate::views::session_picker::SourceFilter::Grok,
+        crate::views::session_picker::SourceFilter::Supercharge,
         "f must not cycle the hidden source filter under chat mode"
     );
     assert_eq!(

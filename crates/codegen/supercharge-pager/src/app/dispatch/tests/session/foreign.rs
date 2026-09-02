@@ -486,8 +486,8 @@ fn external_filter_clears_and_suppresses_native_content_state() {
     app.session_picker_content_results = Some(vec![content_hit("native-hit")]);
     app.session_picker_content_loading = true;
     app.session_picker_state.expanded.insert(0);
-    // Grok cycles straight into External.
-    app.session_picker_source_filter = SourceFilter::Grok;
+    // Supercharge cycles straight into External.
+    app.session_picker_source_filter = SourceFilter::Supercharge;
     let old_detail_generation = app.session_picker_detail_generation;
 
     let effects = dispatch(Action::CycleSessionSourceFilter, &mut app);
@@ -581,8 +581,8 @@ fn modal_external_filter_clears_native_content_and_blocks_forced_search() {
         .active_modal
         .as_mut()
     {
-        // Grok cycles straight into External.
-        *source_filter = SourceFilter::Grok;
+        // Supercharge cycles straight into External.
+        *source_filter = SourceFilter::Supercharge;
         *content_results = Some(vec![content_hit("native-hit")]);
         *content_loading = true;
         state.set_query("native");
@@ -622,7 +622,7 @@ fn cycle_reaches_every_filter_with_foreign_present() {
         SourceFilter::All,
         SourceFilter::Local,
         SourceFilter::Remote,
-        SourceFilter::Grok,
+        SourceFilter::Supercharge,
     ] {
         let _ = dispatch(Action::CycleSessionSourceFilter, &mut app);
         assert_eq!(app.session_picker_source_filter, expected);

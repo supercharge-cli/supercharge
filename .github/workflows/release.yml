@@ -15,9 +15,9 @@ on:
         default: v1.0.5
         type: string
       source_ref:
-        description: Git ref to build from (defaults to the tag)
+        description: Git ref in supercharge-releases to build from (defaults to main)
         required: false
-        default: ""
+        default: main
         type: string
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
             REF="${GITHUB_REF_NAME}"
           fi
-          if [ -z "$REF" ]; then REF="$TAG"; fi
+          if [ -z "$REF" ]; then REF="main"; fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "source_ref=$REF" >> "$GITHUB_OUTPUT"
 

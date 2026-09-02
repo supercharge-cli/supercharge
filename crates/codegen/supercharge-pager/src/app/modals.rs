@@ -2729,7 +2729,7 @@ mod session_picker_delete_tests {
         };
         assert_eq!(
             filter,
-            crate::views::session_picker::SourceFilter::Grok,
+            crate::views::session_picker::SourceFilter::Supercharge,
             "f must not cycle the hidden source filter under chat mode"
         );
     }
