@@ -7,11 +7,13 @@ use ratatui::text::Span;
 
 use crate::theme::Theme;
 
-use super::logo::logo_visual_width;
-
 fn cols(text: &str) -> u16 {
     unicode_width::UnicodeWidthStr::width(text) as u16
 }
+
+const ROW_MARKER: &str = "› ";
+const ROW_MARKER_WIDTH: u16 = 2;
+const SHORTCUT_GAP: u16 = 2;
 
 /// Render the welcome menu rows as `label … shortcut`, padded within each row.
 /// Returns the Rect for each item row (for hit-testing clicks and hover).
@@ -24,29 +26,32 @@ pub fn render_menu(
     mouse_pos: Option<(u16, u16)>,
     min_width_hint: u16,
 ) -> Vec<Rect> {
-    let label_style = Style::default()
-        .fg(theme.text_primary)
-        .add_modifier(Modifier::BOLD);
+    let label_style = Style::default().fg(theme.text_secondary);
     let label_selected_style = Style::default()
         .fg(theme.text_primary)
         .bg(theme.bg_highlight)
         .add_modifier(Modifier::BOLD);
-    let key_style = Style::default().fg(theme.gray_bright);
+    let key_style = Style::default().fg(theme.accent_user);
     let key_selected_style = Style::default()
         .fg(theme.gray_bright)
         .bg(theme.bg_highlight);
 
-    // Width: label + gap + key. Keep a 4-col gap between label and key for
-    // readability.
+    // Keep the actions as a compact palette. The old logo-driven width could
+    // leave a huge, empty canyon between an action and its shortcut.
     let content_min: u16 = items
         .iter()
-        .map(|(key, label)| cols(key) + cols(label) + 4)
+        .map(|(key, label)| {
+            ROW_MARKER_WIDTH
+                + cols(label)
+                + if key.is_empty() {
+                    0
+                } else {
+                    SHORTCUT_GAP + cols(key)
+                }
+        })
         .max()
         .unwrap_or(0);
-    let menu_width = logo_visual_width(area.height)
-        .max(30)
-        .max(content_min)
-        .max(min_width_hint);
+    let menu_width = area.width.min(30.max(content_min).max(min_width_hint));
 
     let [_, menu_centered, _] = Layout::horizontal([
         Constraint::Min(0),
@@ -65,11 +70,17 @@ pub fn render_menu(
 
         let is_selected = selected == Some(i);
         let key_width = cols(key);
-        // The key sits at the right edge, so the label is cut to leave room for it.
-        let label = crate::render::line_utils::truncate_str(
-            label,
-            menu_centered.width.saturating_sub(key_width + 1) as usize,
+        let label_width = menu_centered.width.saturating_sub(
+            ROW_MARKER_WIDTH
+                + if key.is_empty() {
+                    0
+                } else {
+                    SHORTCUT_GAP + key_width
+                },
         );
+        // The shortcut sits at the right edge; leave a modest, fixed gap so
+        // actions remain easy to scan without looking like a split table.
+        let label = crate::render::line_utils::truncate_str(label, label_width as usize);
         let label_len = cols(&label);
 
         let row_rect = Rect {
@@ -90,31 +101,48 @@ pub fn render_menu(
             }
         }
 
-        // Label, flush with the left edge of the menu column.
+        let marker_style = if is_selected {
+            Style::default()
+                .fg(theme.accent_user)
+                .bg(theme.bg_highlight)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.accent_assistant)
+        };
+        buf.set_span(
+            menu_centered.x,
+            y,
+            &Span::styled(ROW_MARKER, marker_style),
+            ROW_MARKER_WIDTH,
+        );
+
+        // Label, just after the action marker.
         let lstyle = if is_selected {
             label_selected_style
         } else {
             label_style
         };
         buf.set_span(
-            menu_centered.x,
+            menu_centered.x + ROW_MARKER_WIDTH,
             y,
             &Span::styled(&*label, lstyle),
             label_len,
         );
 
-        // Key shortcut flush with the right edge of the menu column.
-        let kstyle = if is_selected {
-            key_selected_style
-        } else {
-            key_style
-        };
-        buf.set_span(
-            menu_centered.x + menu_centered.width - key_width,
-            y,
-            &Span::styled(*key, kstyle),
-            key_width,
-        );
+        if !key.is_empty() {
+            // Key shortcut flush with the right edge of the compact palette.
+            let kstyle = if is_selected {
+                key_selected_style
+            } else {
+                key_style
+            };
+            buf.set_span(
+                menu_centered.x + menu_centered.width - key_width,
+                y,
+                &Span::styled(*key, kstyle),
+                key_width,
+            );
+        }
 
         // [x] dismiss affordance restyling (for the import row)
         if let Some(x_offset) = key.rfind("[x]") {
@@ -151,4 +179,30 @@ pub fn render_menu(
     }
 
     rects
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn action_palette_is_compact_and_keeps_shortcuts_visible() {
+        let area = Rect::new(0, 0, 100, 3);
+        let mut buf = Buffer::empty(area);
+        let items = [
+            ("ctrl+w", "New worktree"),
+            ("ctrl+s", "Resume session"),
+            ("", "Changelog"),
+        ];
+
+        let rows = render_menu(area, &mut buf, &Theme::tokyonight(), &items, None, None, 44);
+
+        assert_eq!(rows.len(), items.len());
+        assert_eq!(rows[0].width, 44);
+        let first_row: String = (rows[0].x..rows[0].x + rows[0].width)
+            .flat_map(|x| buf[(x, rows[0].y)].symbol().chars())
+            .collect();
+        assert!(first_row.contains("› New worktree"), "row: {first_row:?}");
+        assert!(first_row.contains("ctrl+w"), "row: {first_row:?}");
+    }
 }

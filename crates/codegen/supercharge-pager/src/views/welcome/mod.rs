@@ -99,10 +99,10 @@ const H_MARGIN: u16 = 2;
 /// Horizontal margin in compact mode.
 const H_MARGIN_COMPACT: u16 = 1;
 
-/// Minimum width for menu + changelog sections so they don't resize when the import row toggles.
-/// Derivation: "[ " (2) + import-claude label (22) + gap (4) + "ctrl+i  [x]" (11) + " ]" (2) = 41.
-/// Bumped to 51 for comfortable breathing room.
-const MENU_MIN_WIDTH: u16 = 51;
+/// Minimum width for the welcome action palette and its information sections.
+/// It fits the longest import action and leaves enough room to scan labels and
+/// shortcuts without stretching them across the terminal.
+const MENU_MIN_WIDTH: u16 = 44;
 
 /// Whether the welcome prompt is currently focused (accepting text input).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1562,9 +1562,7 @@ fn render_changelog_section(
     clickable: bool,
     mouse_pos: Option<(u16, u16)>,
 ) -> Option<Rect> {
-    let menu_width = logo::logo_visual_width(content_height)
-        .max(30)
-        .max(min_width_hint);
+    let menu_width = stacked_info_width(area.width, content_height, min_width_hint);
     let [_, centered, _] = Layout::horizontal([
         Constraint::Min(0),
         Constraint::Length(menu_width),
@@ -1615,15 +1613,11 @@ fn render_changelog_section(
     clickable.then_some(centered)
 }
 
-/// Wrap width of the stacked info slot, centered at the menu width inside the
-/// inset. Both `compute`'s height measurement and `render_announcement_section`
-/// go through here — same width, no drift. `logo_height` selects the min menu
-/// width.
-fn stacked_info_width(avail_width: u16, logo_height: u16, min_width_hint: u16) -> u16 {
-    logo::logo_visual_width(logo_height)
-        .max(30)
-        .max(min_width_hint)
-        .min(avail_width)
+/// Wrap width of the stacked info slot, centered with the action palette inside
+/// the inset. Both measurement and rendering use this helper so they cannot
+/// drift. It is intentionally independent of the wordmark width.
+fn stacked_info_width(avail_width: u16, _logo_height: u16, min_width_hint: u16) -> u16 {
+    30.max(min_width_hint).min(avail_width)
 }
 
 /// Largest info-slot height the stacked column can allocate, mirroring
@@ -1926,9 +1920,8 @@ fn render_welcome_done(
         }
         (rects.menu_rects, None)
     } else {
-        // Narrow layout: stacked logo above, menu below. Inset the menu the
-        // same as the input bar (`prompt_inset`) so it keeps side spacing
-        // instead of touching the window edge on narrow terminals.
+        // Supercharge's open layout: logo above, then a compact action list.
+        // Keep it aligned with the prompt while preserving side spacing.
         render_logo(layout.logo, buf, theme, content_area.height);
         let menu_area = inset_horizontal(layout.menu, prompt::prompt_inset(p.compact));
         #[cfg(feature = "local-workspace")]
@@ -3529,14 +3522,13 @@ mod tests {
 
     #[test]
     fn hero_box_active_on_wide_tall_terminal() {
-        // 90 cols, 50 rows: meets the minimum for the hero box.
-        let area = Rect::new(0, 0, 90, 50);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 4,
             ..Default::default()
         });
-        assert!(layout.has_hero_box(), "hero box should be active at 90x50");
+        assert!(layout.has_hero_box(), "hero box should be active at the width threshold");
         assert!(layout.hero_box.width > 0);
         assert!(layout.hero_box.height > 0);
         // Logo and menu slots are zero in hero box mode (content is inside the box).
@@ -3550,7 +3542,7 @@ mod tests {
 
     #[test]
     fn hero_box_inactive_on_narrow_terminal() {
-        // 80 cols is below the 90-col threshold.
+        // 80 cols stays in the open layout below the framed-hero threshold.
         let area = Rect::new(0, 0, 80, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -3566,7 +3558,7 @@ mod tests {
 
     #[test]
     fn hero_box_boundary_at_min_width() {
-        let just_below = Rect::new(0, 0, 89, 50);
+        let just_below = Rect::new(0, 0, HERO_BOX_MIN_WIDTH - 1, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: just_below,
             menu_height: 4,
@@ -3574,10 +3566,10 @@ mod tests {
         });
         assert!(
             !layout.has_hero_box(),
-            "hero box should be inactive at 89 cols"
+            "hero box should be inactive just below its width threshold"
         );
 
-        let at_threshold = Rect::new(0, 0, 90, 50);
+        let at_threshold = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: at_threshold,
             menu_height: 4,
@@ -3585,7 +3577,7 @@ mod tests {
         });
         assert!(
             layout.has_hero_box(),
-            "hero box should be active at 90 cols"
+            "hero box should be active at its width threshold"
         );
     }
 
@@ -3611,7 +3603,7 @@ mod tests {
     fn hero_box_inactive_on_short_terminal() {
         // 16 rows is one short of the 17 the box needs (11 box + 1 flex gap +
         // 5 fixed-below), so it falls back to the stacked layout.
-        let area = Rect::new(0, 0, 90, 16);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 16);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 4,
@@ -3619,17 +3611,15 @@ mod tests {
         });
         assert!(
             !layout.has_hero_box(),
-            "hero box should be inactive at 90x16 (needs 17 rows)"
+            "hero box should be inactive at the height boundary"
         );
     }
 
     #[test]
     fn hero_box_inactive_when_warning_would_overflow() {
-        // Regression: the box is forced to the full 7-row logo, so even a
-        // 3-item menu needs 11 box rows. A startup warning (error_height = 2)
-        // pushes the total past height 19, so the gate must fall back to the
-        // stacked layout instead of overflowing by a row.
-        let area = Rect::new(0, 0, 90, 19);
+        // A startup warning (error_height = 2) needs 19 rows with the framed
+        // layout. One row less must fall back to the open layout.
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 18);
         let with_warning = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             error_height: 2,
@@ -3652,7 +3642,7 @@ mod tests {
         // only paints the stacked logo/menu rects. compute_stacked must never
         // hand them a hero-box layout (which zeroes those rects), even on a
         // wide, tall terminal where the normal path picks the hero box.
-        let area = Rect::new(0, 0, 120, 40);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 40);
         assert!(
             WelcomeLayout::compute(WelcomeLayoutInput {
                 content_area: area,
@@ -3660,7 +3650,7 @@ mod tests {
                 ..Default::default()
             })
             .has_hero_box(),
-            "sanity: the normal path should pick the hero box at 120x40"
+            "sanity: the normal path should pick the hero box at the width threshold"
         );
         let blocked = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
             content_area: area,
@@ -3685,7 +3675,7 @@ mod tests {
         // the box gets pushed down and the version row clips at exactly
         // min_content_height. 19 == min_content_height(0, 6, 0, 0): a 13-row box
         // + 1 flex gap + 5 fixed-below.
-        let area = Rect::new(0, 0, 100, 19);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 19);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 6,
@@ -3711,22 +3701,22 @@ mod tests {
 
     #[test]
     fn hero_box_height_accounts_for_borders_and_padding() {
-        // At h >= 26, logo07 is used (7 lines). With menu_height=3:
-        // right_col = 2 + 0 + 0 + 1 + 3 = 6, inner = max(7, 6) = 7.
-        // hero_box_height = 2 (borders) + 2 (v_pad) + 7 = 11.
-        let area = Rect::new(0, 0, 100, 50);
+        // With menu_height=3, the right column needs 6 rows while the compact
+        // wordmark needs 2. The box therefore uses 6 inner rows plus borders
+        // and padding: 2 + 2 + 6 = 10.
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 3,
             ..Default::default()
         });
         assert!(layout.has_hero_box());
-        assert_eq!(layout.hero_box.height, 11);
+        assert_eq!(layout.hero_box.height, 10);
     }
 
     #[test]
     fn hero_box_logo_top_aligned() {
-        let area = Rect::new(0, 0, 100, 50);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 3,
@@ -3740,7 +3730,7 @@ mod tests {
     fn hero_box_with_changelog() {
         // With no announcement, the changelog renders inside the box (info
         // slot), not in a separate area below it.
-        let area = Rect::new(0, 0, 100, 50);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 3,
@@ -3757,7 +3747,7 @@ mod tests {
 
     #[test]
     fn hero_box_with_announcement() {
-        let area = Rect::new(0, 0, 100, 50);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let a = long_ann();
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -3782,7 +3772,7 @@ mod tests {
     fn hero_box_announcement_takes_priority_over_changelog() {
         // When both are present, the info slot is sized for the announcement
         // and the changelog is suppressed (never shown outside the box).
-        let area = Rect::new(0, 0, 100, 50);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let a = long_ann();
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -3801,7 +3791,7 @@ mod tests {
         // A real announcement can't disable the hero box: the slot is clamped to
         // whatever still fits (the renderer trails a `…`), so the box stays
         // active rather than falling back to the stacked layout.
-        let area = Rect::new(0, 0, 100, 17);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 17);
         let a = long_ann();
         let without = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -3831,7 +3821,7 @@ mod tests {
         // With a changelog/announcement the subtitle is hidden, but there's
         // still exactly one padding row between the actions and the bottom
         // border. (menu=4 + info=3 fills the inner, so the menu reaches the pad.)
-        let area = Rect::new(0, 0, 100, 50);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let a = long_ann();
         let no_info = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -4115,7 +4105,7 @@ the usual channels. "
     #[test]
     fn announcement_expands_for_long_message() {
         // Wide + tall → hero box; the measured info slot grows when expanded.
-        let area = Rect::new(0, 0, 120, 60);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 60);
         let a = long_ann();
         let collapsed = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -4143,7 +4133,7 @@ the usual channels. "
 
     #[test]
     fn announcement_equal_for_short_message() {
-        let area = Rect::new(0, 0, 120, 60);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 60);
         let a = supercharge_announcements::RemoteAnnouncement {
             title: Some("FYI".into()),
             message: Some("All good.".into()),
@@ -4169,8 +4159,8 @@ the usual channels. "
 
     #[test]
     fn announcement_clamped_in_short_box() {
-        let tall = Rect::new(0, 0, 120, 60);
-        let short = Rect::new(0, 0, 120, 30);
+        let tall = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 60);
+        let short = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 30);
         let a = long_ann();
         let tall_expanded = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: tall,
@@ -4204,7 +4194,7 @@ the usual channels. "
     fn no_announcement_uses_changelog_for_info_slot() {
         // Without an announcement the info slot falls back to the changelog
         // height (0 here → empty slot).
-        let area = Rect::new(0, 0, 120, 60);
+        let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 60);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 4,
@@ -4216,7 +4206,7 @@ the usual channels. "
     #[test]
     fn stacked_info_width_clamps_to_available() {
         // Min menu width is MENU_MIN_WIDTH, capped at the available (inset) slot.
-        let unclamped = logo::logo_visual_width(50).max(30).max(MENU_MIN_WIDTH);
+        let unclamped = 30.max(MENU_MIN_WIDTH);
         assert_eq!(stacked_info_width(200, 50, MENU_MIN_WIDTH), unclamped);
         assert_eq!(stacked_info_width(40, 50, MENU_MIN_WIDTH), 40);
     }

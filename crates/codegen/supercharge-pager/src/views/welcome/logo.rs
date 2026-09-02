@@ -1,35 +1,21 @@
-//! Logo component — renders the ASCII Voltage lightning mark.
+//! Supercharge wordmark for the welcome screen.
 //!
-//! The logo deliberately uses only ASCII characters so it renders reliably on
-//! legacy terminals and remote shell sessions.
+//! This deliberately stays compact and text-first. A terminal welcome screen
+//! should identify the product without consuming the workspace with ASCII art
+//! or an idle animation.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
-use crate::render::color::blend_color;
 use crate::theme::Theme;
 
-const LOGO: &str = "  SSSS  U   U  PPPP  EEEEE  RRRR\n S      U   U  P   P  E      R   R\n  SSS   U   U  PPPP   EEEE   RRRR\n     S  U   U  P      E      R R\n  SSS    UUU   P      EEEEE  R  RR\n";
-const LOGO_SMALL: &str = " SSS  U U  PPP  EEEE RRR\nS     U U  P P  E    R R\n SSS  U U  PPP  EEE  RRR\n   S  U U  P    E    R R\n SSS   U   P    EEEE R  R\n";
-
-const FULL_LOGO_FRAMES: [&str; 4] = [
-    "       .  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
-    "       +  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
-    "       *  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
-    "       #  /\\\n      /  \\\n     / /\\ \\\n    /_/    \\_\\\n    \\ \\    / /\n     \\ \\  / /\n      \\ \\/ /\n       \\  /\n        \\/\n",
-];
-
-const SMALL_LOGO_FRAMES: [&str; 4] = [
-    "     . /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
-    "     + /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
-    "     * /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
-    "     # /\\\n      / /\\ \\\n     /_/  \\_\\\n     \\ \\  / /\n      \\ \\/ /\n       \\/\n",
-];
-
-const STARTUP_ANIMATION_FRAMES: u64 = 36;
+const WORDMARK: &str = "SUPERCHARGE";
+const TAGLINE: &str = "AI coding workspace";
+const LOGO: &str = "✦  SUPERCHARGE\nAI coding workspace\n";
+const LOGO_SMALL: &str = "✦  SUPERCHARGE\n";
 
 /// Height at or above which the small logo is shown (below it, no logo).
 const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
@@ -40,20 +26,7 @@ fn pick_logo(window_height: u16) -> Option<&'static str> {
     pick_logo_for(window_height, logo_hidden())
 }
 
-fn animated_logo(logo: &str, frame: u64) -> &'static str {
-    let index = if frame < STARTUP_ANIMATION_FRAMES {
-        ((frame / 3) as usize).min(3)
-    } else {
-        3
-    };
-    if std::ptr::eq(logo, LOGO) {
-        FULL_LOGO_FRAMES[index]
-    } else {
-        SMALL_LOGO_FRAMES[index]
-    }
-}
-
-/// Pure tier selection so tests can drive the legacy-console flag directly.
+/// Pure tier selection so tests can drive the visibility flag directly.
 fn pick_logo_for(window_height: u16, hidden: bool) -> Option<&'static str> {
     if hidden || window_height < SMALL_LOGO_MIN_HEIGHT {
         None
@@ -64,7 +37,7 @@ fn pick_logo_for(window_height: u16, hidden: bool) -> Option<&'static str> {
     }
 }
 
-/// ASCII logos work on every supported terminal, including legacy consoles.
+/// The wordmark is safe for the terminals Supercharge supports.
 fn logo_hidden() -> bool {
     false
 }
@@ -84,103 +57,44 @@ fn visual_width(logo: &str) -> u16 {
         .unwrap_or(24) as u16
 }
 
-/// Animation phase in seconds since the first render. Wall-clock based so the
-/// shimmer speed is independent of the frame rate.
-fn anim_phase_secs() -> f32 {
-    use std::sync::OnceLock;
-    use std::time::Instant;
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f32()
-}
-
-/// Shimmer redraw cadence in frames per second. The sweep is slow, so a few fps
-/// looks smooth while sparing the long-lived welcome screen from full-rate
-/// repaints.
-const SHIMMER_FPS: f32 = 12.0;
-
-/// Quantized shimmer frame for the current wall-clock phase. The welcome screen
-/// redraws only when this advances, throttling the animation to ~`SHIMMER_FPS`
-/// rather than the full event-loop tick rate. Pinned to 0 when the logo is
-/// hidden.
+/// Compatibility hook for the welcome renderer's low-frequency animation
+/// scheduler. The wordmark is intentionally static, so it never requests an
+/// extra redraw while the user is deciding what to do.
 pub fn shimmer_frame() -> u64 {
-    if logo_hidden() {
-        return 0;
-    }
-    (anim_phase_secs() * SHIMMER_FPS) as u64
+    0
 }
 
-/// Per-glyph shine opacity in `[0, 1]` at normalized diagonal position `diag`
-/// (0 = bottom-left .. 1 = top-right) and animation time `secs`. A raised-cosine
-/// band sweeps bottom-left → top-right and parks off-screen between sweeps; a
-/// gentle global pulse breathes underneath it. 0 keeps the resting gray, 1 is
-/// full bright.
-fn shine_opacity(diag: f32, secs: f32) -> f32 {
-    const BAND: f32 = 0.38; // half-width of the shine band — wider = more gradual falloff
-    const CYCLE: f32 = 4.0; // seconds per sweep + rest
-    const SWEEP_FRAC: f32 = 0.32; // portion of the cycle spent sweeping (~1.3s glint, rest idles)
-    const SHINE: f32 = 0.33; // peak shine strength
-    const PULSE: f32 = 0.06; // global breathing amount
-    const PULSE_SECS: f32 = 5.0; // breathing period
-
-    let p = (secs % CYCLE) / CYCLE;
-    let q = (p / SWEEP_FRAC).min(1.0); // parks the band off-screen during the rest
-    let band_pos = -BAND + q * (1.0 + 2.0 * BAND);
-    let pulse = PULSE * (0.5 - 0.5 * (std::f32::consts::TAU * secs / PULSE_SECS).cos());
-
-    let d = (diag - band_pos).abs();
-    let shine = if d < BAND {
-        0.5 * (1.0 + (std::f32::consts::PI * d / BAND).cos())
-    } else {
-        0.0
-    };
-    (pulse + SHINE * shine).clamp(0.0, 1.0)
-}
-
-fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str, frame: u64) {
-    let logo = animated_logo(logo, frame);
+fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str) {
     let lines: Vec<&str> = non_empty_lines(logo).collect();
-    let rows = lines.len().max(1) as f32;
-    let cols = lines
-        .iter()
-        .map(|l| l.chars().count())
-        .max()
-        .unwrap_or(1)
-        .max(1) as f32;
-    let secs = anim_phase_secs();
-
-    // Blend each glyph from the resting gray toward the bright text color by its
-    // shine opacity, so a sheen sweeps across the braille art. Adjacent glyphs
-    // that land on the same blended color share one Span to hold down the
-    // per-frame allocation.
-    let base = theme.gray;
-    let hilite = theme.text_primary;
     let logo_lines: Vec<Line> = lines
         .iter()
-        .enumerate()
-        .map(|(row, line)| {
-            let mut spans: Vec<Span> = Vec::new();
-            let mut run = String::new();
-            let mut run_color: Option<Color> = None;
-            for (col, ch) in line.chars().enumerate() {
-                // Sweep along the bottom-left → top-right diagonal: the
-                // coordinate grows as col increases and row decreases.
-                let diag = (col as f32 + (rows - 1.0 - row as f32)) / (cols + rows);
-                let color = blend_color(base, hilite, shine_opacity(diag, secs)).unwrap_or(base);
-                if run_color != Some(color) {
-                    if let Some(prev) = run_color {
-                        spans.push(Span::styled(
-                            std::mem::take(&mut run),
-                            Style::default().fg(prev),
-                        ));
-                    }
-                    run_color = Some(color);
-                }
-                run.push(ch);
+        .map(|line| {
+            if let Some(wordmark) = line.strip_prefix("✦  ")
+                && wordmark == WORDMARK
+            {
+                Line::from(vec![
+                    Span::styled(
+                        "✦",
+                        Style::default()
+                            .fg(theme.accent_assistant)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        wordmark,
+                        Style::default()
+                            .fg(theme.text_primary)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])
+                .alignment(Alignment::Center)
+            } else if *line == TAGLINE {
+                Line::from(Span::styled(*line, Style::default().fg(theme.gray_bright)))
+                    .alignment(Alignment::Center)
+            } else {
+                Line::from(Span::styled(*line, Style::default().fg(theme.gray)))
+                    .alignment(Alignment::Center)
             }
-            if let Some(prev) = run_color {
-                spans.push(Span::styled(run, Style::default().fg(prev)));
-            }
-            Line::from(spans).alignment(Alignment::Center)
         })
         .collect();
     Paragraph::new(logo_lines).render(area, buf);
@@ -190,13 +104,9 @@ pub fn logo_line_count(window_height: u16) -> u16 {
     pick_logo(window_height).map_or(0, count_lines)
 }
 
-pub fn logo_visual_width(window_height: u16) -> u16 {
-    pick_logo(window_height).map_or(24, visual_width)
-}
-
 pub fn render_logo(area: Rect, buf: &mut Buffer, theme: &Theme, window_height: u16) {
     if let Some(logo) = pick_logo(window_height) {
-        render_into(area, buf, theme, logo, shimmer_frame());
+        render_into(area, buf, theme, logo);
     }
 }
 
@@ -222,7 +132,7 @@ fn full_logo_visual_width_for(hidden: bool) -> u16 {
 
 pub fn render_full_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
-        render_into(area, buf, theme, LOGO, shimmer_frame());
+        render_into(area, buf, theme, LOGO);
     }
 }
 
@@ -235,11 +145,11 @@ pub fn compact_logo_line_count() -> u16 {
     }
 }
 
-/// Render the small ASCII lightning logo (centered) into `area` for minimal's
-/// welcome card.
+/// Render the compact Supercharge wordmark (centered) into `area` for
+/// minimal's welcome card.
 pub fn render_compact_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
-        render_into(area, buf, theme, LOGO_SMALL, shimmer_frame());
+        render_into(area, buf, theme, LOGO_SMALL);
     }
 }
 
@@ -301,47 +211,26 @@ mod tests {
     }
 
     #[test]
-    fn shine_opacity_stays_in_unit_range() {
-        let mut secs = 0.0;
-        while secs < 10.0 {
-            for i in 0..=20 {
-                let diag = i as f32 / 20.0;
-                let op = shine_opacity(diag, secs);
-                assert!(
-                    (0.0..=1.0).contains(&op),
-                    "opacity {op} out of range at diag {diag}, secs {secs}"
-                );
+    fn full_wordmark_renders_without_the_legacy_lightning_art() {
+        let area = Rect::new(0, 0, 48, 4);
+        let mut buf = Buffer::empty(area);
+        render_full_logo(area, &mut buf, &Theme::tokyonight());
+
+        let mut rendered = String::new();
+        for y in area.y..area.y + area.height {
+            for x in area.x..area.x + area.width {
+                rendered.push_str(buf[(x, y)].symbol());
             }
-            secs += 0.13;
+            rendered.push('\n');
         }
+
+        assert!(rendered.contains(WORDMARK), "rendered:\n{rendered}");
+        assert!(rendered.contains(TAGLINE), "rendered:\n{rendered}");
+        assert!(!rendered.contains("/_"), "rendered:\n{rendered}");
     }
 
     #[test]
-    fn shine_band_sweeps_across() {
-        // The brightest point along the diagonal advances left → right as the
-        // sweep progresses through its active phase.
-        let brightest = |secs: f32| -> f32 {
-            (0..=100)
-                .map(|i| i as f32 / 100.0)
-                .max_by(|a, b| {
-                    shine_opacity(*a, secs)
-                        .partial_cmp(&shine_opacity(*b, secs))
-                        .unwrap()
-                })
-                .unwrap()
-        };
-        let early = brightest(0.1);
-        let mid = brightest(0.4);
-        let late = brightest(0.7);
-        assert!(early < mid, "early {early} should precede mid {mid}");
-        assert!(mid < late, "mid {mid} should precede late {late}");
-    }
-
-    #[test]
-    fn shine_rests_dim_between_sweeps() {
-        // During the rest phase the band is parked off-screen, so an interior
-        // glyph falls back to at most the gentle pulse — never full bright.
-        let op = shine_opacity(0.5, 6.0); // secs % 4.0 = 2.0 → past SWEEP_FRAC, in the rest phase
-        assert!(op < 0.2, "resting opacity {op} should stay dim");
+    fn static_wordmark_does_not_schedule_idle_redraws() {
+        assert_eq!(shimmer_frame(), 0);
     }
 }

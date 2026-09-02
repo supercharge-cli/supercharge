@@ -11410,7 +11410,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-pager-bin"
-version = "1.2.1"
+version = "1.2.3"
 dependencies = [
  "anyhow",
  "clap",

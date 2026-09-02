@@ -1,4 +1,12 @@
 /target
+target-local/
+.cache/
+.cursor/plans/
+
+# Local logs and exported diagnostics
+cloud-infra-log-export-*.json
+logs-*.csv
+
 **/*.rs.bk
 .DS_Store
 
