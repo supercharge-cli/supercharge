@@ -259,7 +259,7 @@ pub enum SourceFilter {
 impl SourceFilter {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Grok => "Grok",
+            Self::Grok => "Supercharge",
             Self::Local => "Local",
             Self::Remote => "Remote",
             Self::External => "External",
@@ -1497,7 +1497,7 @@ mod tests {
         assert_eq!(SourceFilter::All.next(), SourceFilter::Local);
         assert_eq!(SourceFilter::Local.next(), SourceFilter::Remote);
         assert_eq!(SourceFilter::Remote.next(), SourceFilter::Grok);
-        assert_eq!(SourceFilter::Grok.label(), "Grok");
+        assert_eq!(SourceFilter::Grok.label(), "Supercharge");
         assert_eq!(SourceFilter::External.label(), "External");
         assert_eq!(SourceFilter::default(), SourceFilter::Grok);
     }

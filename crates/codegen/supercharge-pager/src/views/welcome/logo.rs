@@ -14,8 +14,8 @@ use crate::theme::Theme;
 
 const WORDMARK: &str = "SUPERCHARGE";
 const TAGLINE: &str = "AI coding workspace";
-const LOGO: &str = "✦  SUPERCHARGE\nAI coding workspace\n";
-const LOGO_SMALL: &str = "✦  SUPERCHARGE\n";
+const LOGO: &str = "⚡  SUPERCHARGE\nAI coding workspace\n";
+const LOGO_SMALL: &str = "⚡  SUPERCHARGE\n";
 
 /// Height at or above which the small logo is shown (below it, no logo).
 const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
@@ -69,12 +69,12 @@ fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str) {
     let logo_lines: Vec<Line> = lines
         .iter()
         .map(|line| {
-            if let Some(wordmark) = line.strip_prefix("✦  ")
+            if let Some(wordmark) = line.strip_prefix("⚡  ")
                 && wordmark == WORDMARK
             {
                 Line::from(vec![
                     Span::styled(
-                        "✦",
+                        "⚡",
                         Style::default()
                             .fg(theme.accent_assistant)
                             .add_modifier(Modifier::BOLD),
