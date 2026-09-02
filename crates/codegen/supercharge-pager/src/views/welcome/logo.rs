@@ -9,11 +9,20 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use crate::theme::Theme;
 
 const WORDMARK: &str = "SUPERCHARGE";
 const TAGLINE: &str = "AI coding workspace";
+const COIN_FRAMES: [&str; 5] = [
+    "      .-========-.      \n    .'      ⚡      `.    \n   /        ⚡        \\   \n  |         ⚡         |  \n   \\        ⚡        /   \n    `.              .'    \n      `-========-'      ",
+    "       .-======-.       \n     .'    ⚡    `.     \n    /      ⚡      \\    \n   |       ⚡       |   \n    \\      ⚡      /    \n     `.          .'     \n       `-======-'       ",
+    "          ║           \n          ║           \n          ║           \n          ⚡           \n          ║           \n          ║           \n          ║           ",
+    "       .-======-.       \n     .'    ⚡    `.     \n    /      ⚡      \\    \n   |       ⚡       |   \n    \\      ⚡      /    \n     `.          .'     \n       `-======-'       ",
+    "      .-========-.      \n    .'      ⚡      `.    \n   /        ⚡        \\   \n  |         ⚡         |  \n   \\        ⚡        /   \n    `.              .'    \n      `-========-'      ",
+];
 const LOGO: &str = "⚡  SUPERCHARGE\nAI coding workspace\n";
 const LOGO_SMALL: &str = "⚡  SUPERCHARGE\n";
 
@@ -57,11 +66,24 @@ fn visual_width(logo: &str) -> u16 {
         .unwrap_or(24) as u16
 }
 
-/// Compatibility hook for the welcome renderer's low-frequency animation
-/// scheduler. The wordmark is intentionally static, so it never requests an
-/// extra redraw while the user is deciding what to do.
+/// Low-frequency phase for the coin turning left-to-right.
 pub fn shimmer_frame() -> u64 {
-    0
+    static START: OnceLock<Instant> = OnceLock::new();
+    let elapsed = START.get_or_init(Instant::now).elapsed();
+    (elapsed.as_millis() / Duration::from_millis(140).as_millis()) as u64
+}
+
+fn animated_logo(frame: u64) -> String {
+    format!(
+        "{}\n{}\n{}\n",
+        COIN_FRAMES[(frame as usize) % COIN_FRAMES.len()],
+        WORDMARK,
+        TAGLINE
+    )
+}
+
+fn animated_logo_layout() -> String {
+    animated_logo(0)
 }
 
 fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str) {
@@ -119,7 +141,11 @@ pub fn full_logo_line_count() -> u16 {
 }
 
 fn full_logo_line_count_for(hidden: bool) -> u16 {
-    if hidden { 0 } else { count_lines(LOGO) }
+    if hidden {
+        0
+    } else {
+        count_lines(&animated_logo_layout())
+    }
 }
 
 pub fn full_logo_visual_width() -> u16 {
@@ -127,12 +153,17 @@ pub fn full_logo_visual_width() -> u16 {
 }
 
 fn full_logo_visual_width_for(hidden: bool) -> u16 {
-    if hidden { 0 } else { visual_width(LOGO) }
+    if hidden {
+        0
+    } else {
+        visual_width(&animated_logo_layout())
+    }
 }
 
 pub fn render_full_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
-        render_into(area, buf, theme, LOGO);
+        let logo = animated_logo(shimmer_frame());
+        render_into(area, buf, theme, &logo);
     }
 }
 
@@ -184,8 +215,14 @@ mod tests {
     fn hero_box_always_uses_full_logo() {
         // The box renders the full logo regardless of height (it's laid out
         // beside the menu), and it's the large variant — never the small one.
-        assert_eq!(full_logo_line_count_for(false), count_lines(LOGO));
-        assert_eq!(full_logo_visual_width_for(false), visual_width(LOGO));
+        assert_eq!(
+            full_logo_line_count_for(false),
+            count_lines(&animated_logo_layout())
+        );
+        assert_eq!(
+            full_logo_visual_width_for(false),
+            visual_width(&animated_logo_layout())
+        );
         assert!(full_logo_line_count_for(false) > count_lines(LOGO_SMALL));
         assert!(full_logo_visual_width_for(false) > visual_width(LOGO_SMALL));
     }
@@ -212,7 +249,7 @@ mod tests {
 
     #[test]
     fn full_wordmark_renders_without_the_legacy_lightning_art() {
-        let area = Rect::new(0, 0, 48, 4);
+        let area = Rect::new(0, 0, 48, 12);
         let mut buf = Buffer::empty(area);
         render_full_logo(area, &mut buf, &Theme::tokyonight());
 
@@ -230,7 +267,13 @@ mod tests {
     }
 
     #[test]
-    fn static_wordmark_does_not_schedule_idle_redraws() {
-        assert_eq!(shimmer_frame(), 0);
+    fn coin_frames_are_stable_and_include_high_voltage() {
+        let height = count_lines(COIN_FRAMES[0]);
+        let width = visual_width(COIN_FRAMES[0]);
+        for frame in COIN_FRAMES {
+            assert_eq!(count_lines(frame), height);
+            assert_eq!(visual_width(frame), width);
+        }
+        assert!(COIN_FRAMES.iter().any(|frame| frame.contains('⚡')));
     }
 }
