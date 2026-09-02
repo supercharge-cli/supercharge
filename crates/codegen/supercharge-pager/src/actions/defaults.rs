@@ -717,6 +717,21 @@ pub(super) fn default_actions(
             ),
         },
         ActionDef {
+            id: ActionId::StashPrompt,
+            label: "stash",
+            description: "Stash / restore prompt draft",
+            default_key: key!('s', CONTROL),
+            alt_keys: vec![key!('s', ALT)],
+            category: Category::Input,
+            context: When::PromptFocused,
+            hint_priority: None,
+            hint_key_display: None,
+            requires_confirmation: false,
+            long_help: Some(
+                "Stash the current prompt draft. Ctrl+S clears the composer; Ctrl+S on an empty composer restores it. Alt+S is an alternative when the terminal swallows Ctrl+S.",
+            ),
+        },
+        ActionDef {
             id: ActionId::BashMode,
             label: "shell",
             description: "Shell mode (type ! on empty prompt)",

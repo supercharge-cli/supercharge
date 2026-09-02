@@ -1,7 +1,7 @@
 //! Theming for the pager.
 //!
 //! All colors come from the `Theme` struct. No hardcoded colors elsewhere.
-//! The default theme is Voltage Dark (deep navy base with electric-blue accents).
+//! The default theme is Oscura Midnight (near-black base with purple and cyan accents).
 //!
 //! ## Color support
 //!
@@ -154,7 +154,7 @@ pub fn display_name_for_canonical(value: &str) -> &str {
 
 impl Default for Theme {
     fn default() -> Self {
-        Self::voltage_dark()
+        Self::oscura_midnight()
     }
 }
 
@@ -275,8 +275,8 @@ impl Theme {
             ThemeKind::RosePineMoon => Self::rosepine_moon(),
             ThemeKind::OscuraMidnight => Self::oscura_midnight(),
             // Auto is resolved to a concrete theme before being stored;
-            // if reached, fall back to VoltageDark.
-            ThemeKind::Auto => Self::voltage_dark(),
+            // if reached, fall back to the Supercharge default.
+            ThemeKind::Auto => Self::oscura_midnight(),
         };
         // Sample polarity pre-quantization — post-quantize `bg_base` may
         // land on a named/indexed entry whose luminance is host-palette-

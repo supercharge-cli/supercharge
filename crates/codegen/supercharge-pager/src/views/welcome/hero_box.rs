@@ -315,11 +315,12 @@ pub(super) fn render_hero_box(
     )>,
 ) -> HeroBoxRects {
     // Dim the box border toward the background for a softer, dimmer gray.
-    let border_color = crate::render::color::blend_color(theme.bg_base, theme.gray_dim, 0.45)
-        .unwrap_or(theme.gray_dim);
+    let border_color =
+        crate::render::color::blend_color(theme.bg_base, theme.accent_assistant, 0.55)
+            .unwrap_or(theme.accent_assistant);
     let border_block = Block::new()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(BorderType::Double)
         .border_style(Style::default().fg(border_color));
     border_block.render(layout.hero_box, buf);
 
@@ -337,7 +338,7 @@ pub(super) fn render_hero_box(
 
     // Subtitle line below the version.
     if layout.hero_subtitle.height > 0 {
-        let subtitle_style = Style::default().fg(theme.gray);
+        let subtitle_style = Style::default().fg(theme.accent_system);
         buf.set_span(
             layout.hero_subtitle.x,
             layout.hero_subtitle.y,

@@ -20,7 +20,7 @@ use super::system_appearance;
 /// In-memory theme kind, encoded as a `u8` matching the
 /// `ThemeKind` discriminants. Loaded from disk once at startup via
 /// `load_from_disk()`, then kept in sync by `set()`.
-static CURRENT: AtomicU8 = AtomicU8::new(ThemeKind::VoltageDark as u8);
+static CURRENT: AtomicU8 = AtomicU8::new(ThemeKind::OscuraMidnight as u8);
 static LOADED: AtomicBool = AtomicBool::new(false);
 #[cfg(any(test, feature = "test-support"))]
 static TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -226,8 +226,8 @@ fn resolve_from_config(config_theme: Option<ThemeKind>, osc11_fallback: bool) ->
         return kind;
     }
 
-    // Default: VoltageDark
-    ThemeKind::VoltageDark
+    // Default: Supercharge's Oscura Midnight palette.
+    ThemeKind::OscuraMidnight
 }
 
 /// Map an optional appearance detection result to a concrete `ThemeKind`.
@@ -235,7 +235,7 @@ fn resolve_from_appearance(appearance: Option<system_appearance::SystemAppearanc
     let config = auto_theme_config();
     appearance
         .map(|a| system_appearance::to_theme_kind(a, config.dark_theme, config.light_theme))
-        .unwrap_or(ThemeKind::VoltageDark)
+        .unwrap_or(ThemeKind::OscuraMidnight)
 }
 
 /// Resolve "auto" by detecting system appearance and mapping via config.

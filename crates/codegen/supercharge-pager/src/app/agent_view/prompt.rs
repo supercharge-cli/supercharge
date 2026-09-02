@@ -542,6 +542,22 @@ impl AgentView {
         //    SendPrompt is routed here — the widget's try_send() applies guards.
         if let Some(action_id) = registry.lookup(key, When::PromptFocused) {
             match action_id {
+                ActionId::StashPrompt => {
+                    crate::actions::log_shortcut_used(
+                        key,
+                        ActionId::StashPrompt,
+                        When::PromptFocused.telemetry_name(),
+                    );
+                    if self.prompt.text().is_empty() {
+                        if let Some(stash) = self.prompt_stash.take() {
+                            self.prompt.restore(stash);
+                        }
+                    } else {
+                        self.prompt_stash = Some(self.prompt.stash());
+                        self.prompt.set_text("");
+                    }
+                    return InputOutcome::Changed;
+                }
                 ActionId::SendPrompt => {
                     // Apple Terminal: Shift+Enter arrives as bare Enter (no
                     // Kitty protocol). Poll CoreGraphics for real modifier
@@ -736,7 +752,8 @@ impl AgentView {
                         supercharge_telemetry::session_ctx::log_event(
                             supercharge_telemetry::events::ContextualTip {
                                 tip: supercharge_telemetry::events::ContextualTipKind::Undo,
-                                action: supercharge_telemetry::events::ContextualTipAction::Accepted,
+                                action:
+                                    supercharge_telemetry::events::ContextualTipAction::Accepted,
                             },
                         );
                         // Retire the hint on the restore that consumed it (its

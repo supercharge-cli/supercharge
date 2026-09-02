@@ -149,6 +149,7 @@ impl AgentView {
             bash_turn: false,
             cron_task_id: None,
             stashed_prompt: None,
+            prompt_stash: None,
             credit_limit_stashed_prompt: None,
             reauth_stashed_prompt: None,
             active_modal: None,
@@ -1136,13 +1137,14 @@ impl AgentView {
                 if total > 0 {
                     snap.total = total;
                 }
-                snap.usage_pct = supercharge_token_estimation::usage_percentage_u8(used, snap.total);
+                snap.usage_pct =
+                    supercharge_token_estimation::usage_percentage_u8(used, snap.total);
                 snap.free_tokens = supercharge_token_estimation::free_tokens(snap.total, used);
             }
             None => {
-                self.context_state = Some(supercharge_shell::session::ContextInfo::from_notification(
-                    used, total,
-                ));
+                self.context_state = Some(
+                    supercharge_shell::session::ContextInfo::from_notification(used, total),
+                );
             }
         }
     }

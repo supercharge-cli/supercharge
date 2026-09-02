@@ -150,7 +150,7 @@ pub struct EndpointsConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli_chat_proxy_base_url: Option<String>,
     /// Base URL for the public API. Legacy configs use `xai_api_base_url`.
-    #[serde(rename = "api_base_url", alias = "xai_api_base_url")]
+    #[serde(rename = "api_base_url")]
     pub api_base_url: String,
     /// Optional extra access-header value (applied only with the optional
     /// non-production feature, and only for matching first-party hosts).
@@ -291,7 +291,14 @@ impl EndpointsConfig {
             Err(_) => return Self::default(),
         };
         if let Some(endpoints) = config.get("endpoints") {
-            crate::config::deep_merge_toml(&mut base, endpoints);
+            let mut endpoints = endpoints.clone();
+            if let Some(table) = endpoints.as_table_mut()
+                && !table.contains_key("api_base_url")
+                && let Some(legacy) = table.get("xai_api_base_url").cloned()
+            {
+                table.insert("api_base_url".to_owned(), legacy);
+            }
+            crate::config::deep_merge_toml(&mut base, &endpoints);
         }
         let mut resolved: Self = base.try_into().unwrap_or_default();
         resolved.external_otel_master_switch = external_otel_master_switch;
@@ -2611,7 +2618,9 @@ impl Config {
     /// `[worktree.auto_gc]` TOML > remote `worktree_auto_gc` > defaults.
     /// Platform age-expiry (dead-only where no process-CWD scan exists) is
     /// enforced inside `supercharge_fast_worktree::maybe_auto_gc`, not here.
-    pub(crate) fn resolve_worktree_auto_gc(&self) -> supercharge_fast_worktree::ResolvedWorktreeAutoGc {
+    pub(crate) fn resolve_worktree_auto_gc(
+        &self,
+    ) -> supercharge_fast_worktree::ResolvedWorktreeAutoGc {
         crate::util::config::resolve_worktree_auto_gc_from_settings(
             Some(&self.worktree.auto_gc),
             self.remote_settings
@@ -3390,46 +3399,49 @@ pub(crate) fn resolve_external_otel_config_with(
     client: supercharge_telemetry::external::config::ExternalClientInfo,
     internal_pipeline_consumed_otel_vars: bool,
 ) -> Option<supercharge_telemetry::external::ExternalOtelConfig> {
-    let file_cfg: Option<supercharge_telemetry::external::ExternalOtelFileConfig> = effective_config
-        .and_then(|cfg| cfg.get("telemetry"))
-        .map(|t| supercharge_telemetry::external::ExternalOtelFileConfig {
-            enabled: t.get("otel_enabled").and_then(toml::Value::as_bool),
-            metrics_exporter: t
-                .get("otel_metrics_exporter")
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            logs_exporter: t
-                .get("otel_logs_exporter")
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            endpoint: t
-                .get("otel_endpoint")
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            protocol: t
-                .get("otel_protocol")
-                .or_else(|| t.get("otel_transport"))
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            certificate: t
-                .get("otel_certificate")
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            client_certificate: t
-                .get("otel_client_certificate")
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            client_key: t
-                .get("otel_client_key")
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned),
-            log_user_prompts: t
-                .get("otel_log_user_prompts")
-                .and_then(toml::Value::as_bool),
-            log_tool_details: t
-                .get("otel_log_tool_details")
-                .and_then(toml::Value::as_bool),
-        });
+    let file_cfg: Option<supercharge_telemetry::external::ExternalOtelFileConfig> =
+        effective_config
+            .and_then(|cfg| cfg.get("telemetry"))
+            .map(
+                |t| supercharge_telemetry::external::ExternalOtelFileConfig {
+                    enabled: t.get("otel_enabled").and_then(toml::Value::as_bool),
+                    metrics_exporter: t
+                        .get("otel_metrics_exporter")
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    logs_exporter: t
+                        .get("otel_logs_exporter")
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    endpoint: t
+                        .get("otel_endpoint")
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    protocol: t
+                        .get("otel_protocol")
+                        .or_else(|| t.get("otel_transport"))
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    certificate: t
+                        .get("otel_certificate")
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    client_certificate: t
+                        .get("otel_client_certificate")
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    client_key: t
+                        .get("otel_client_key")
+                        .and_then(toml::Value::as_str)
+                        .map(str::to_owned),
+                    log_user_prompts: t
+                        .get("otel_log_user_prompts")
+                        .and_then(toml::Value::as_bool),
+                    log_tool_details: t
+                        .get("otel_log_tool_details")
+                        .and_then(toml::Value::as_bool),
+                },
+            );
     let req_get =
         |key: &str| -> Option<bool> { requirements?.get("telemetry")?.get(key)?.as_bool() };
     let req_enabled = req_get("otel_enabled");

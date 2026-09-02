@@ -931,6 +931,8 @@ pub struct AgentView {
     /// Stashed normal prompt state while editing a queued prompt.
     /// Restored when editing ends.
     pub stashed_prompt: Option<StashedPrompt>,
+    /// Draft saved by the prompt stash shortcut.
+    pub prompt_stash: Option<StashedPrompt>,
     /// Complete prompt stashed from a credit-limit-blocked turn. Used by
     /// `CreditLimitRecheckComplete` to retry the prompt after a tier
     /// upgrade instead of showing a stale upsell.
@@ -2191,7 +2193,7 @@ fn resolve_action(action_id: Option<ActionId>) -> Option<InputOutcome> {
         ActionId::DumpInputLog => return None,
         ActionId::ToggleYolo => return None,
         ActionId::ToggleMultiline => return None,
-        ActionId::InterjectPrompt => return None,
+        ActionId::InterjectPrompt | ActionId::StashPrompt => return None,
         ActionId::EnableVoiceMode => Action::EnableVoiceMode,
         ActionId::VoiceToggle => {
             if !crate::app::voice_keybind_enabled() {
