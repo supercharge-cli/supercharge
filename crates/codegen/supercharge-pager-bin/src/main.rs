@@ -2005,6 +2005,9 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                 }
                 return Ok(());
             }
+            Command::Acp(acp_args) => {
+                return supercharge_pager::acp_cmd::run(acp_args);
+            }
             Command::Agent(agent_args) => {
                 if args.leader || args.no_leader {
                     let flag = if args.leader {
@@ -2135,8 +2138,8 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                 .await;
             }
             Command::Login { .. } => {
-                println!(
-                    "Provider authentication is configured in the TUI. Start `supercharge`, then run `/setup`."
+                eprintln!(
+                    "Opening Supercharge. Run `/setup` to configure a provider, then quit to return to your editor."
                 );
             }
             Command::Logout => {

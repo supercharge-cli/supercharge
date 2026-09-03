@@ -38,11 +38,9 @@ impl SessionActor {
         save_system_prompt(&self.session_info, &system_prompt);
         let system_message = ConversationItem::system(system_prompt);
         let mut messages = vec![system_message];
-        if let Some(effects) = self.inject_baseline_skill_reminder(&mut messages).await
-            && effects.send_available_commands
-        {
-            self.send_available_commands_update().await;
-        }
+        let _ = self.inject_baseline_skill_reminder(&mut messages).await;
+        // Do not emit available_commands_update here. Zed ignores slash
+        // commands sent before the session/new (or session/load) response.
         self.chat_state_handle
             .replace_conversation(messages.clone());
         persist_chat_history_jsonl_sync(&self.session_info, &messages);
@@ -227,12 +225,6 @@ impl SessionActor {
     /// Empty product success still advertises builtins.
     pub(super) async fn send_available_commands_update(&self) {
         let bridge = self.agent.borrow().tool_bridge().clone();
-        let skills = match slash_commands::acu_skill_source(self.is_chat_kind) {
-            slash_commands::AcuSkillSource::Product => {
-                return;
-            }
-            slash_commands::AcuSkillSource::Disk => bridge.slash_skills().await,
-        };
         let tool_names: Vec<String> = bridge
             .tool_definitions()
             .await
@@ -243,14 +235,36 @@ impl SessionActor {
         let availability = self.build_command_availability(&tool_names, has_workflow_runs);
         self.maybe_reconcile_active_goal_without_plan().await;
         let (_, workflows) = self.named_workflow_snapshot();
-        let commands = slash_commands::available_commands(&skills, availability, &workflows);
         let meta = Some(slash_commands::build_tools_meta(&tool_names));
+        // Fast path: builtins only so Zed can populate `/` before skill scan.
+        let builtins =
+            slash_commands::available_commands(&[], availability, &workflows);
+        tracing::info!(
+            session_id = %self.session_info.id.0,
+            command_count = builtins.len(),
+            tool_count = tool_names.len(),
+            is_chat_kind = self.is_chat_kind,
+            "Advertising available slash commands (builtins)",
+        );
+        self.send_update(
+            acp::SessionUpdate::AvailableCommandsUpdate(
+                acp::AvailableCommandsUpdate::new(builtins).meta(meta.clone()),
+            ),
+            None,
+        )
+        .await;
+        let skills = match slash_commands::acu_skill_source(self.is_chat_kind) {
+            slash_commands::AcuSkillSource::Product => Vec::new(),
+            slash_commands::AcuSkillSource::Disk => bridge.slash_skills().await,
+        };
+        if skills.is_empty() {
+            return;
+        }
+        let commands = slash_commands::available_commands(&skills, availability, &workflows);
         tracing::info!(
             session_id = %self.session_info.id.0,
             command_count = commands.len(),
-            tool_count = tool_names.len(),
-            is_chat_kind = self.is_chat_kind,
-            "Advertising available slash commands",
+            "Advertising available slash commands (with skills)",
         );
         self.send_update(
             acp::SessionUpdate::AvailableCommandsUpdate(

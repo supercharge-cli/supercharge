@@ -13,8 +13,24 @@ impl SessionActor {
             args_provided: action.args_provided(),
         });
         match action {
+            BuiltinAction::Help => {
+                let text = crate::session::slash_commands::help_text(
+                    self.command_availability().await,
+                );
+                self.send_host_turn_slash_command_output(&text).await;
+                ok_end_turn(0, None)
+            }
+            BuiltinAction::Setup { args } => {
+                let text = self.execute_setup_slash_command(&args).await;
+                self.send_host_turn_slash_command_output(&text).await;
+                ok_end_turn(0, None)
+            }
             BuiltinAction::Compact { user_context } => {
                 self.run_compact(user_context).await?;
+                self.send_host_turn_slash_command_output(
+                    "Compacted conversation history to free context window.",
+                )
+                .await;
                 ok_end_turn(0, None)
             }
             BuiltinAction::SetYolo { enabled } => {
@@ -50,38 +66,56 @@ impl SessionActor {
                     enabled = actual,
                     "YOLO mode {status} via /yolo slash command",
                 );
+                let msg = if actual == was {
+                    if actual {
+                        "Always-approve is already on. Tool permission prompts stay skipped."
+                    } else {
+                        "Always-approve is already off. Tools still ask for permission."
+                    }
+                } else if actual {
+                    "Always-approve is on. Tool permission prompts will be skipped."
+                } else {
+                    "Always-approve is off. Tools will ask for permission again."
+                };
+                self.send_host_turn_slash_command_output(msg).await;
                 ok_end_turn(0, None)
             }
             BuiltinAction::FlushMemory => {
-                if self.memory.is_enabled() {
+                let msg = if self.memory.is_enabled() {
                     let did_flush = self.run_memory_flush("slash_command", None).await;
-                    if !did_flush {
-                        tracing::info!(
-                            session_id = %self.session_info.id.0,
-                            "memory flush skipped via /flush: another flush already in progress",
-                        );
+                    if did_flush {
+                        "Flushed conversation memory to disk."
+                    } else {
+                        "Memory flush skipped: another flush is already in progress."
                     }
                 } else {
-                    tracing::warn!(
-                        session_id = %self.session_info.id.0,
-                        "memory flush skipped via /flush: memory not enabled for this session",
-                    );
-                }
+                    "Memory is not enabled for this session, so nothing was flushed."
+                };
+                self.send_host_turn_slash_command_output(msg).await;
                 ok_end_turn(0, None)
             }
             BuiltinAction::Dream => {
-                // No user-visible output — intentional, matches /flush behaviour.
-                if self.memory.is_enabled() {
+                let msg = if self.memory.is_enabled() {
                     self.run_dream_slash_command().await;
+                    "Ran memory consolidation (dream)."
                 } else {
-                    tracing::warn!(
-                        session_id = %self.session_info.id.0,
-                        "dream skipped via /dream: memory not enabled for this session",
-                    );
-                }
+                    "Memory is not enabled for this session, so dream did not run."
+                };
+                self.send_host_turn_slash_command_output(msg).await;
                 ok_end_turn(0, None)
             }
-            BuiltinAction::ContextInfo => ok_end_turn(0, None),
+            BuiltinAction::ContextInfo => {
+                let info = self.build_session_info().await;
+                let ctx = &info.context;
+                let context_pct =
+                    supercharge_token_estimation::usage_percentage(ctx.used, ctx.total);
+                let text = format!(
+                    "Context: {} / {} tokens ({:.0}%). Turn {}.",
+                    ctx.used, ctx.total, context_pct, info.turn_index
+                );
+                self.send_host_turn_slash_command_output(&text).await;
+                ok_end_turn(0, None)
+            }
             BuiltinAction::HooksTrust => {
                 let msg = match Self::do_hooks_trust_project(&self.session_info.cwd) {
                     Ok(root) => {
@@ -962,6 +996,117 @@ impl SessionActor {
                     .await;
                 ok_end_turn(0, None)
             }
+        }
+    }
+
+    async fn execute_setup_slash_command(&self, args: &str) -> String {
+        use crate::agent::provider_setup::{
+            ProviderSetup, fetch_provider_models, find_setup_provider, persist_provider_setup,
+            setup_provider_profiles,
+        };
+        let trimmed = args.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("list") {
+            let mut lines = vec![
+                "Configure the inference provider for this CLI (writes `~/.supercharge/config.toml`).".to_string(),
+                String::new(),
+                "Usage:".to_string(),
+                "/setup <provider> <api_key>".to_string(),
+                "/setup <base_url> <api_key> [model]".to_string(),
+                String::new(),
+                "Built-in providers:".to_string(),
+            ];
+            for profile in setup_provider_profiles() {
+                lines.push(format!(
+                    "- `{}` — {} (`{}`, default `{}`)",
+                    profile.id, profile.name, profile.base_url, profile.default_model
+                ));
+            }
+            return lines.join("\n");
+        }
+        let mut parts = trimmed.split_whitespace();
+        let first = parts.next().unwrap_or_default();
+        let second = parts.next().unwrap_or_default();
+        let rest: Vec<&str> = parts.collect();
+        if second.is_empty() {
+            if let Some(profile) = find_setup_provider(first) {
+                return format!(
+                    "Usage: /setup {} <api_key>\nDefault model: `{}`\n{}",
+                    profile.id, profile.default_model, profile.description
+                );
+            }
+            return "Usage: /setup <provider> <api_key>  or  /setup <base_url> <api_key> [model]"
+                .to_string();
+        }
+        let (base_url, api_key, model_id, format, provider_id) =
+            if let Some(profile) = find_setup_provider(first) {
+                let model = rest.first().copied().unwrap_or(profile.default_model);
+                (
+                    profile.base_url.to_string(),
+                    second.to_string(),
+                    model.to_string(),
+                    profile.format,
+                    profile.id.to_string(),
+                )
+            } else {
+                let model = rest.first().copied().unwrap_or("");
+                (
+                    first.to_string(),
+                    second.to_string(),
+                    model.to_string(),
+                    crate::agent::provider_setup::SetupWireFormat::Openai,
+                    String::new(),
+                )
+            };
+        let api_key_for_fetch = api_key.clone();
+        let base_for_fetch = base_url.clone();
+        let provider_for_fetch = provider_id.clone();
+        let listed = tokio::task::spawn_blocking(move || {
+            fetch_provider_models(
+                &base_for_fetch,
+                &api_key_for_fetch,
+                format,
+                if provider_for_fetch.is_empty() {
+                    None
+                } else {
+                    Some(provider_for_fetch.as_str())
+                },
+            )
+        })
+        .await;
+        let models = match listed {
+            Ok(Ok(models)) => models,
+            Ok(Err(err)) => return format!("Could not list models: {err}"),
+            Err(err) => return format!("Could not list models: {err}"),
+        };
+        let model_id = if model_id.is_empty() {
+            models
+                .first()
+                .map(|m| m.id.clone())
+                .unwrap_or_default()
+        } else {
+            model_id
+        };
+        if model_id.is_empty() {
+            return "Provider returned no models. Pass an explicit model id: `/setup <base_url> <api_key> <model>`.".to_string();
+        }
+        let model_name = models
+            .iter()
+            .find(|m| m.id == model_id)
+            .map(|m| m.name.clone())
+            .unwrap_or_else(|| model_id.clone());
+        let setup = ProviderSetup {
+            base_url,
+            api_key,
+            model_id: model_id.clone(),
+            model_name,
+            format,
+            provider_id,
+        };
+        match persist_provider_setup(&setup) {
+            Ok(()) => format!(
+                "Saved provider settings. Default model: `{model_id}`.\nStart a new Supercharge thread in Zed so the agent reloads config."
+            ),
+            Err(err) => format!("Could not save provider settings: {err}"),
         }
     }
 

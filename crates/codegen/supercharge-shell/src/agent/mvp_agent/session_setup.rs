@@ -663,6 +663,7 @@ impl MvpAgent {
         }
         #[cfg(all(feature = "local-workspace", unix))]
         local_ws_reap_guard.disarm();
+        self.schedule_advertise_commands(&session_id);
         Ok(acp::NewSessionResponse::new(session_id)
             .models(Some(models))
             .meta(meta.as_object().cloned()))
@@ -1003,11 +1004,11 @@ impl MvpAgent {
         let response = acp::LoadSessionResponse::new()
             .models(Some(model_state))
             .meta(response_meta.as_object().cloned());
-        if let Some(handle) = self.resident_handle(&session_id) {
-            let _ = handle.cmd_tx.send(SessionCommand::AdvertiseCommands);
-            if restored.awaiting_plan_approval {
-                let _ = handle.cmd_tx.send(SessionCommand::RestorePlanApproval);
-            }
+        self.schedule_advertise_commands(&session_id);
+        if restored.awaiting_plan_approval
+            && let Some(handle) = self.resident_handle(&session_id)
+        {
+            let _ = handle.cmd_tx.send(SessionCommand::RestorePlanApproval);
         }
         if self.product_analytics_enabled() {
             log_event(supercharge_telemetry::events::SessionLoad {

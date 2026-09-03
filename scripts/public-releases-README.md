@@ -70,6 +70,18 @@ supercharge --single "Explain this repo"
 
 Config is stored under `~/.supercharge/`.
 
+### Zed (Agent Client Protocol)
+
+```bash
+supercharge acp setup --editor zed
+```
+
+That writes Zed `settings.json` so **Supercharge** appears in the Agent Panel picker. Then authenticate in the thread (browser sign-in or `supercharge login` / `/setup`).
+
+Do not point Zed at bare `supercharge` — that starts the TUI. ACP is `supercharge agent stdio`.
+
+Full notes: `docs/zed-acp.md`. Registry listing files: `docs/acp-registry/`.
+
 ## Releases
 
 Binaries are published from GitHub Actions when a `v*` tag is pushed to the main Supercharge repo. Each release includes:

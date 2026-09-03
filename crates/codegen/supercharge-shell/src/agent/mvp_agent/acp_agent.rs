@@ -343,8 +343,9 @@ impl acp::Agent for MvpAgent {
         // A configured provider key is sufficient for startup. Do not offer the
         // legacy interactive account login when `/setup` has already supplied
         // credentials, even if the endpoint remains first-party-shaped.
-        // A fresh installation also starts without an account login screen so
-        // the user can enter `/setup` from the normal interface.
+        // Fresh ACP clients (Zed, registry CI) still need at least one
+        // advertised auth method; the TUI does not auto-login unless
+        // `--force-login` is set.
         let setup_provider_auth = has_external_api_key;
         let no_credentials_yet = !has_external_api_key
             && !has_cached_token
@@ -353,7 +354,7 @@ impl acp::Agent for MvpAgent {
         let built = auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
             has_external_api_key,
             prefer_provider_api_key_default: setup_provider_auth,
-            suppress_interactive_login: setup_provider_auth || no_credentials_yet,
+            suppress_interactive_login: setup_provider_auth,
             has_cached_token,
             has_enterprise_oidc,
             enterprise_oidc_issuer: enterprise_oidc_issuer.as_deref(),
@@ -361,7 +362,14 @@ impl acp::Agent for MvpAgent {
             has_auth_provider_command: has_auth_provider,
             preferred_method,
         });
-        let auth_methods = built.methods;
+        let mut auth_methods = built.methods;
+        if !setup_provider_auth
+            && !auth_methods.iter().any(|m| {
+                m.id().0.as_ref() == auth_method::TERMINAL_SETUP_METHOD_ID
+            })
+        {
+            auth_methods.push(auth_method::terminal_setup_auth_method());
+        }
         if no_credentials_yet {
             // Keep session creation usable so the normal prompt can open and
             // `/setup` can be entered before any provider is configured.
@@ -459,6 +467,10 @@ impl acp::Agent for MvpAgent {
                 .agent_capabilities(
                     acp::AgentCapabilities::new()
                         .load_session(true)
+                        .auth(
+                            acp::AgentAuthCapabilities::new()
+                                .logout(acp::LogoutCapabilities::new()),
+                        )
                         .meta(
                             serde_json::json!({
                     "x.ai/fs_notify": true,
@@ -908,6 +920,20 @@ impl acp::Agent for MvpAgent {
                 )
             }
         }
+    }
+    async fn logout(
+        &self,
+        _arguments: acp::LogoutRequest,
+    ) -> Result<acp::LogoutResponse, acp::Error> {
+        self.interactive_auth.cancel();
+        crate::auth::perform_logout(&self.auth_manager, None).map_err(|e| {
+            acp::Error::internal_error().data(format!("failed to logout: {e}"))
+        })?;
+        self.models_manager.on_auth_changed().await;
+        self.set_auth_method(acp::AuthMethodId::new(
+            auth_method::SETUP_PENDING_METHOD_ID,
+        ));
+        Ok(acp::LogoutResponse::new())
     }
     async fn new_session(
         &self,

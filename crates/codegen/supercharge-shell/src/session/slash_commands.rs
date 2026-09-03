@@ -46,6 +46,24 @@ pub(crate) enum BuiltinGate {
 /// All built-in slash commands. Order here = display order in autocomplete.
 pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     BuiltinCommand {
+        name: "help",
+        description: "List slash commands available in this ACP session",
+        argument_hint: None,
+        aliases: &["commands", "h"],
+        gate: BuiltinGate::AlwaysOn,
+        resolve: |_args| BuiltinAction::Help,
+    },
+    BuiltinCommand {
+        name: "setup",
+        description: "Configure provider base URL, API key, and default model",
+        argument_hint: Some("[<provider> <api_key>] | [<base_url> <api_key> [model]]"),
+        aliases: &[],
+        gate: BuiltinGate::AlwaysOn,
+        resolve: |args| BuiltinAction::Setup {
+            args: args.trim().to_string(),
+        },
+    },
+    BuiltinCommand {
         name: "compact",
         description: "Compress conversation history to save context window",
         argument_hint: Some("optional context about what to preserve"),
@@ -435,6 +453,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "chat",
     "clear",
     "cloud",
+    "commands",
     "compact",
     "compact-mode",
     "config",
@@ -772,6 +791,31 @@ pub(super) fn available_commands(
 /// `MvpAgent::command_availability` for how the pre-session snapshot is
 /// built. With `CommandAvailability::default()` (all gates closed) this
 /// is equivalent to advertising only `BuiltinGate::AlwaysOn` commands.
+pub(crate) fn help_text(availability: CommandAvailability) -> String {
+    let mut lines = vec![
+        "Slash commands (ACP / Zed):".to_string(),
+        String::new(),
+    ];
+    for cmd in BUILTIN_COMMANDS
+        .iter()
+        .chain(PROMPT_COMMANDS.iter())
+        .filter(|cmd| availability.allows(cmd.gate))
+    {
+        let hint = cmd.argument_hint.unwrap_or("");
+        if hint.is_empty() {
+            lines.push(format!("/{} — {}", cmd.name, cmd.description));
+        } else {
+            lines.push(format!("/{} {} — {}", cmd.name, hint, cmd.description));
+        }
+    }
+    lines.push(String::new());
+    lines.push(
+        "Configure a provider with `/setup <base_url> <api_key> [model]` or `/setup <provider> <api_key>`."
+            .to_string(),
+    );
+    lines.join("\n")
+}
+
 pub(crate) fn builtin_commands(availability: CommandAvailability) -> Vec<acp::AvailableCommand> {
     BUILTIN_COMMANDS
         .iter()
@@ -1182,6 +1226,10 @@ pub(super) enum SlashCommandOutcome {
 }
 #[derive(Debug)]
 pub(super) enum BuiltinAction {
+    Help,
+    Setup {
+        args: String,
+    },
     Compact {
         user_context: Option<String>,
     },
@@ -1251,6 +1299,8 @@ pub(super) enum BuiltinAction {
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
         match self {
+            BuiltinAction::Help => "help",
+            BuiltinAction::Setup { .. } => "setup",
             BuiltinAction::Compact { .. } => "compact",
             BuiltinAction::SetYolo { .. } => "yolo",
             BuiltinAction::FlushMemory => "flush",
@@ -1285,6 +1335,8 @@ impl BuiltinAction {
     }
     pub(crate) fn args_provided(&self) -> bool {
         match self {
+            BuiltinAction::Help => false,
+            BuiltinAction::Setup { args } => !args.is_empty(),
             BuiltinAction::Compact { user_context } => user_context.is_some(),
             BuiltinAction::SetYolo { .. } => true,
             BuiltinAction::FlushMemory => false,

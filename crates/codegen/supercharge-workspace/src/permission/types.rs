@@ -150,10 +150,11 @@ pub enum ClientType {
     /// `"grok_pager"` form for symmetry with the rest of this enum.
     #[serde(rename = "grok-pager", alias = "grok_pager")]
     GrokPager,
-    /// Grok Desktop (Electron) client - identified by clientIdentifier "grok-desktop".
+    /// First-party desktop ACP client (`supercharge-desktop`).
+    /// Also accepts the legacy `grok-desktop` identifier.
     /// Uses TUI-style bash permission options (primary command extraction + prefix matching)
     /// but without interactive `<`/`>` word selection.
-    #[serde(rename = "grok_desktop")]
+    #[serde(rename = "supercharge-desktop", alias = "grok-desktop", alias = "grok_desktop")]
     Desktop,
 }
 impl ClientType {
@@ -166,7 +167,7 @@ impl ClientType {
             Self::Nebula => "nebula",
             Self::Extension => "grok-code-extension",
             Self::GrokPager => "grok-pager",
-            Self::Desktop => "grok-desktop",
+            Self::Desktop => "supercharge-desktop",
         }
     }
     /// Resolve from ACP `clientIdentifier` string (e.g. `"grok-web"`, `"grok-desktop"`).
@@ -175,7 +176,7 @@ impl ClientType {
             Some("grok-web") => Self::GrokWeb,
             Some("nebula") => Self::Nebula,
             Some("grok-code-extension") => Self::Extension,
-            Some("grok-desktop") => Self::Desktop,
+            Some("grok-desktop" | "supercharge-desktop") => Self::Desktop,
             Some("grok-pager") => Self::GrokPager,
             _ => Self::Generic,
         }

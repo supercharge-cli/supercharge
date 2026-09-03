@@ -9,6 +9,8 @@ use std::path::PathBuf;
 pub enum Command {
     /// Run Supercharge AI without the interactive UI
     Agent(Box<AgentArgs>),
+    /// Configure Supercharge as an ACP coding agent in an editor (Zed)
+    Acp(crate::acp_cmd::AcpArgs),
     /// Show the configuration Supercharge AI discovers for this directory
     Inspect {
         /// Emit machine-readable JSON output.
@@ -1464,6 +1466,26 @@ mod tests {
             PagerArgs::try_parse_from(["Supercharge AI", "logout"]).expect("subcommand parses");
         assert!(matches!(args.command, Some(Command::Logout)));
         assert!(args.prompt.is_none());
+    }
+    #[test]
+    fn acp_setup_zed_parses() {
+        let args = PagerArgs::try_parse_from([
+            "Supercharge AI",
+            "acp",
+            "setup",
+            "--editor",
+            "zed",
+        ])
+        .expect("acp setup parses");
+        let Some(Command::Acp(acp)) = args.command else {
+            panic!("expected acp subcommand");
+        };
+        match acp.command {
+            crate::acp_cmd::AcpCommand::Setup { editor, print } => {
+                assert_eq!(editor, "zed");
+                assert!(!print);
+            }
+        }
     }
     #[test]
     fn positional_prompt_conflicts_with_headless_single() {

@@ -491,6 +491,24 @@ pub(crate) fn cached_token_auth_method() -> acp::AuthMethod {
 
 pub const SUPERCHARGE_COM_METHOD_ID: &str = "supercharge.ai";
 
+/// Terminal login used by ACP clients (Zed registry). Replaces `agent stdio`
+/// args with `login`, which opens the TUI so the user can run `/setup`.
+pub const TERMINAL_SETUP_METHOD_ID: &str = "terminal-setup";
+
+pub(crate) fn terminal_setup_auth_method() -> acp::AuthMethod {
+    acp::AuthMethod::Terminal(
+        acp::AuthMethodTerminal::new(
+            acp::AuthMethodId::new(TERMINAL_SETUP_METHOD_ID),
+            "Configure provider in terminal",
+        )
+        .description(Some(
+            "Opens Supercharge so you can run /setup, then exit to return to the editor."
+                .to_string(),
+        ))
+        .args(vec!["login".to_string()]),
+    )
+}
+
 /// xAI OAuth2/OIDC auth. Method id `"supercharge.ai"` kept for ACP wire-compat.
 pub(crate) fn grok_com_auth_method(
     label: Option<&str>,
@@ -765,6 +783,24 @@ mod tests {
 
         assert!(built.methods.is_empty());
         assert!(built.default_auth_method_id.is_none());
+    }
+
+    /// ACP clients (Zed, registry) need a non-empty `authMethods` list on a
+    /// machine with no credentials yet.
+    #[test]
+    fn fresh_user_without_suppress_advertises_interactive_login() {
+        let built = build_auth_methods(default_inputs());
+        assert!(
+            built
+                .methods
+                .iter()
+                .any(|m| m.id().0.as_ref() == SUPERCHARGE_COM_METHOD_ID),
+            "fresh ACP initialize must advertise supercharge.ai"
+        );
+        assert_eq!(
+            terminal_setup_auth_method().id().0.as_ref(),
+            TERMINAL_SETUP_METHOD_ID
+        );
     }
 
     /// Enterprise OIDC replaces `supercharge.ai` (mutually exclusive). provider.api_key,

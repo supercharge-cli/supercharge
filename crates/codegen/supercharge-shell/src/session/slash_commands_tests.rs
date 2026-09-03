@@ -226,6 +226,18 @@ fn resolve_builtin(name: &str, args: &str) -> Option<BuiltinAction> {
 }
 
 #[test]
+fn setup_and_help_are_always_on_builtins() {
+    assert!(matches!(
+        resolve_builtin("help", ""),
+        Some(BuiltinAction::Help)
+    ));
+    assert!(matches!(
+        resolve_builtin("setup", "https://api.example.com/v1 sk-test"),
+        Some(BuiltinAction::Setup { args }) if args.contains("sk-test")
+    ));
+}
+
+#[test]
 fn compact_parses_optional_context() {
     assert!(matches!(
         resolve_builtin("compact", ""),
@@ -559,6 +571,8 @@ fn available_commands_orders_builtins_first() {
     assert_eq!(
         names,
         [
+            "help",
+            "setup",
             "compact",
             "always-approve",
             "flush",
@@ -806,7 +820,14 @@ fn pre_session_builtin_commands_excludes_gated_entries() {
         );
     }
     // Always-on commands are still present.
-    for required in ["compact", "always-approve", "context", "session-info"] {
+    for required in [
+        "compact",
+        "always-approve",
+        "context",
+        "session-info",
+        "help",
+        "setup",
+    ] {
         assert!(
             names.iter().any(|n| n == required),
             "{required} should be present, got: {names:?}",
@@ -1433,7 +1454,14 @@ fn default_availability_is_fail_closed_on_every_gate() {
             "{forbidden} must not be advertised under default fail-closed availability, got: {names:?}",
         );
     }
-    for required in ["compact", "always-approve", "context", "session-info"] {
+    for required in [
+        "compact",
+        "always-approve",
+        "context",
+        "session-info",
+        "help",
+        "setup",
+    ] {
         assert!(
             names.iter().any(|n| n == required),
             "AlwaysOn {required} must always be advertised, got: {names:?}",

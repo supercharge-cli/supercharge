@@ -3,6 +3,7 @@
 //! A clean-room implementation built on the v3 pager rendering engine.
 
 pub mod acp;
+pub mod acp_cmd;
 pub mod actions;
 pub mod app;
 pub mod client_identity;

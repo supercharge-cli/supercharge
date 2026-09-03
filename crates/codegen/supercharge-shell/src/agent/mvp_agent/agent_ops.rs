@@ -66,6 +66,32 @@ impl MvpAgent {
         }
         session_ids.len()
     }
+    /// Queue slash-command advertising after the current ACP JSON-RPC
+    /// response is written. Zed drops `available_commands_update` that
+    /// arrives before `session/new` / `session/load` completes, and it
+    /// also ignores updates that wait behind slow session Initialize.
+    /// Send builtins on the gateway immediately, then refresh via the
+    /// session actor once tools/skills are ready.
+    pub(crate) fn schedule_advertise_commands(&self, session_id: &acp::SessionId) {
+        let gateway = self.gateway.clone();
+        let sid = session_id.clone();
+        let commands = crate::session::slash_commands::builtin_commands(
+            self.command_availability(),
+        );
+        let handle_tx = self.resident_handle(session_id).map(|h| h.cmd_tx.clone());
+        tokio::task::spawn_local(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(75)).await;
+            gateway.forward_fire_and_forget(acp::SessionNotification::new(
+                sid,
+                acp::SessionUpdate::AvailableCommandsUpdate(
+                    acp::AvailableCommandsUpdate::new(commands),
+                ),
+            ));
+            if let Some(tx) = handle_tx {
+                let _ = tx.send(SessionCommand::AdvertiseCommands);
+            }
+        });
+    }
     pub fn advertise_commands_all_sessions(&self) -> usize {
         let session_ids = self.resident_ids();
         for session_id in &session_ids {
@@ -4770,7 +4796,6 @@ impl MvpAgent {
                 });
             tracing::debug!(session_id = %session_info.id.0, "enqueued SessionCommand::Initialize");
         }
-        let _ = handle.cmd_tx.send(SessionCommand::AdvertiseCommands);
         if let Some(mut loc_rx) = loc_aggregate_rx {
             let signals = handle.signals_handle.clone();
             tokio::spawn(async move {
