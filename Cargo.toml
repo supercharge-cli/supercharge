@@ -5,6 +5,8 @@ async-openai = { git = "https://github.com/our-forks/async-openai.git", rev = "9
 
 [workspace]
 resolver = "2"
+# The native desktop client is shipped as source but built independently.
+exclude = ["crates/codegen/supercharge-desktop"]
 members = [
     "crates/build/supercharge-proto-build",
     "crates/codegen/ptyctl",
