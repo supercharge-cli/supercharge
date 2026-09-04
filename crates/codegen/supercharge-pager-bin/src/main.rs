@@ -2254,7 +2254,8 @@ async fn async_main(args: PagerArgs) -> Result<()> {
         Ok(true) => {
             let adopted = bg_update_wait.lock().await.take();
             if finish_update_on_exit(adopted, &update_config).await {
-                eprintln!("Update installed. Run `supercharge` to start.");
+                eprintln!("Update installed. Restarting...");
+                relaunch_after_update();
             } else {
                 eprintln!("Update did not complete. Run `supercharge update` to retry.");
             }
@@ -2264,7 +2265,33 @@ async fn async_main(args: PagerArgs) -> Result<()> {
         Err(e) => Err(e),
     }
 }
-/// Complete the update after a quit-for-update (Ctrl+U) exit. Returns `true`
+fn relaunch_after_update() {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let exe = std::env::current_exe().ok().filter(|p| p.exists()).or_else(|| {
+        let name = if cfg!(windows) { "grok.exe" } else { "grok" };
+        let p = supercharge_shell::util::grok_home::grok_home().join("bin").join(name);
+        p.exists().then_some(p)
+    });
+    let Some(exe) = exe else {
+        eprintln!("Could not find the updated binary. Run `supercharge` to start.");
+        return;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = std::process::Command::new(&exe).args(&args).exec();
+        eprintln!("Failed to restart {}: {err}", exe.display());
+    }
+    #[cfg(windows)]
+    {
+        match std::process::Command::new(&exe).args(&args).spawn() {
+            Ok(_) => std::process::exit(0),
+            Err(err) => eprintln!("Failed to restart {}: {err}", exe.display()),
+        }
+    }
+}
+
+/// Complete the update after a quit-for-update (Ctrl+L) exit. Returns `true`
 /// when an update path completed without a reported failure.
 ///
 /// Prefers awaiting the parked waiter for the background `grok update` child

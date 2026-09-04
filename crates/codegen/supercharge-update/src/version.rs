@@ -11,7 +11,7 @@ use supercharge_shell::util::grok_home::grok_home;
 
 const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
 const NPM_PACKAGE: &str = "@xai-official/grok";
-pub const GH_RELEASE_REPO: &str = "xai-org-shared/supercharge-core";
+pub const GH_RELEASE_REPO: &str = "iotserver24/supercharge-releases";
 
 /// Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and binaries
 /// (`/grok-{version}-{os}-{arch}`). Host this layout yourself with
@@ -260,7 +260,39 @@ pub async fn fetch_gh_release_version(channel: &str) -> Result<String> {
         )?;
         return semver_max(&with_pre, &stable_only);
     }
-    fetch_gh_release_latest(true).await
+    match fetch_github_api_latest().await {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            tracing::warn!("GitHub API latest failed ({:#}); trying gh CLI", e);
+            fetch_gh_release_latest(true).await
+        }
+    }
+}
+
+/// Latest GitHub release tag via the public API (no `gh` CLI).
+pub async fn fetch_github_api_latest() -> Result<String> {
+    let repo = std::env::var("SUPERCHARGE_GITHUB_REPO")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| GH_RELEASE_REPO.to_string());
+    let url = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let client = reqwest::Client::builder()
+        .user_agent("supercharge-cli")
+        .build()?;
+    let resp = client.get(&url).send().await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("GitHub releases/latest HTTP {}", resp.status());
+    }
+    let body: Value = resp.json().await?;
+    let tag = body
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("GitHub latest release missing tag_name"))?;
+    let version = tag.strip_prefix('v').unwrap_or(tag).trim().to_string();
+    if version.is_empty() {
+        anyhow::bail!("empty tag_name from {repo}");
+    }
+    Ok(version)
 }
 
 async fn fetch_gh_release_latest(exclude_pre: bool) -> Result<String> {
@@ -422,10 +454,17 @@ pub async fn fetch_latest_version(installer: &str, config: &UpdateConfig) -> Res
     match installer {
         "npm" => fetch_npm_version(&config.channel, config.npm_registry.as_deref()).await,
         "gh-release" => fetch_gh_release_version(&config.channel).await,
-        _ => {
-            let bases = cli_base_urls_with_override(config.update_base_url.as_deref());
-            fetch_gcs_version_from_bases(&config.channel, &bases).await
-        }
+        _ => match fetch_github_api_latest().await {
+            Ok(v) => Ok(v),
+            Err(gh_err) => {
+                tracing::warn!(
+                    "GitHub Releases latest failed ({:#}); falling back to CLI feed",
+                    gh_err
+                );
+                let bases = cli_base_urls_with_override(config.update_base_url.as_deref());
+                fetch_gcs_version_from_bases(&config.channel, &bases).await
+            }
+        },
     }
 }
 

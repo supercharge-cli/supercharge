@@ -190,6 +190,7 @@ pub(crate) fn test_app() -> AppView {
         coding_data_write_seq: 0,
         show_tips: None,
         auto_update: None,
+        thinking_effort: None,
         ask_user_question_timeout_enabled: None,
         zdr_access_enabled: false,
         usage_billing_redirect_url: None,
@@ -1794,6 +1795,11 @@ fn welcome_ctrl_u_update_keeps_priority_over_foreign_resume() {
     app.pending_update_version = Some("9.9.9".into());
     assert!(matches!(
         app.handle_input(&key),
+        InputOutcome::Action(Action::QuitForUpdate)
+    ));
+    let ctrl_l = key_event(KeyCode::Char('l'), KeyModifiers::CONTROL);
+    assert!(matches!(
+        app.handle_input(&ctrl_l),
         InputOutcome::Action(Action::QuitForUpdate)
     ));
 }

@@ -2122,6 +2122,52 @@ pub(in crate::app::dispatch) fn set_auto_update(app: &mut AppView, new: bool) ->
     }]
 }
 
+pub(super) fn set_thinking_effort_inner(app: &mut AppView, value: String) {
+    app.thinking_effort = Some(value);
+}
+
+pub(in crate::app::dispatch) fn set_thinking_effort(app: &mut AppView, new: String) -> Vec<Effect> {
+    let canonical = match new.to_ascii_lowercase().as_str() {
+        "none" | "low" | "medium" | "high" | "xhigh" | "max" => new.to_ascii_lowercase(),
+        _ => return vec![],
+    };
+    let prev = app
+        .thinking_effort
+        .clone()
+        .unwrap_or_else(|| "medium".to_string());
+    if prev == canonical {
+        return vec![];
+    }
+    set_thinking_effort_inner(app, canonical.clone());
+    refresh_open_settings_modals(app);
+    tracing::info!(
+        target: "settings",
+        key = "thinking_effort",
+        value = %canonical,
+        "setting changed",
+    );
+    app.show_toast(&format!("\u{2713} Thinking effort: {canonical}"));
+    vec![Effect::PersistSetting {
+        key: "thinking_effort",
+        value: crate::settings::SettingValue::Enum(match canonical.as_str() {
+            "none" => "none",
+            "low" => "low",
+            "high" => "high",
+            "xhigh" => "xhigh",
+            "max" => "max",
+            _ => "medium",
+        }),
+        rollback_value: crate::settings::SettingValue::Enum(match prev.as_str() {
+            "none" => "none",
+            "low" => "low",
+            "high" => "high",
+            "xhigh" => "xhigh",
+            "max" => "max",
+            _ => "medium",
+        }),
+    }]
+}
+
 // ---------------------------------------------------------------------------
 // display_refresh_auto_cadence — SHELL-OWNED nested Option on
 // `[ui.display_refresh].auto_cadence_enabled`. Restart-required.

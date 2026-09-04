@@ -280,6 +280,8 @@ pub struct PagerLocalSnapshot {
     pub show_tips: Option<bool>,
     /// `[cli].auto_update` mirror. `None` = no TOML override → default `true`.
     pub auto_update: Option<bool>,
+    /// `[models].default_reasoning_effort` mirror. `None` → `"medium"`.
+    pub thinking_effort: Option<String>,
     /// Process-wide vim-mode scrollback flag. Mirrors
     /// `appearance::cache::load_vim_mode()` at snapshot time.
     pub vim_mode: bool,
@@ -320,6 +322,7 @@ impl Default for PagerLocalSnapshot {
             plan_mode_active: false,
             show_tips: None,
             auto_update: None,
+            thinking_effort: None,
             vim_mode: false,
             // Matches the registry default and
             // `appearance::cache::SCROLL_SPEED_DEFAULT`. Bare `u8::default()`
@@ -332,6 +335,17 @@ impl Default for PagerLocalSnapshot {
             // Matches `resolve_scheduler_background_loops`'s default.
             scheduler_background_loops: true,
         }
+    }
+}
+
+fn canonical_thinking_effort(value: Option<&str>) -> &'static str {
+    match value.unwrap_or_default().trim().to_ascii_lowercase().as_str() {
+        "none" => "none",
+        "low" => "low",
+        "high" => "high",
+        "xhigh" => "xhigh",
+        "max" => "max",
+        _ => "medium",
     }
 }
 
@@ -703,6 +717,9 @@ pub fn current_value_for(
         // CLI batch: snapshot mirrors; `None` → effective default `true`.
         "show_tips" => Some(SettingValue::Bool(pager.show_tips.unwrap_or(true))),
         "auto_update" => Some(SettingValue::Bool(pager.auto_update.unwrap_or(true))),
+        "thinking_effort" => Some(SettingValue::Enum(canonical_thinking_effort(
+            pager.thinking_effort.as_deref(),
+        ))),
         // fork_secondary_model: baseline value folds to empty string. The
         // mirror persists the ModelId slug but the DynamicEnum canonicals
         // are catalog display names, so resolve via the snapshot; a stale
@@ -974,6 +991,12 @@ mod tests {
                         *default,
                         "auto_update registry default must be true \
                          (matches auto_update.rs's `.unwrap_or(true)`)"
+                    );
+                }
+                ("thinking_effort", SettingKind::Enum { default, .. }) => {
+                    assert_eq!(
+                        *default, "medium",
+                        "thinking_effort registry default must be medium"
                     );
                 }
                 // vim_mode: Option<bool>; None → false.

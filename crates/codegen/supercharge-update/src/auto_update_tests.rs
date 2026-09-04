@@ -998,12 +998,8 @@ fn test_reinstall_hint_npm_mentions_npm_command() {
 fn test_reinstall_hint_gh_release_mentions_gh_command() {
     let hint = reinstall_hint("gh-release", "stable");
     assert!(
-        hint.contains("gh release download"),
-        "should suggest gh release download: {hint}"
-    );
-    assert!(
-        hint.contains("xai-org-shared/supercharge-core"),
-        "should name the repo: {hint}"
+        hint.contains("github.com/iotserver24/supercharge-releases"),
+        "should name the GitHub Releases repo: {hint}"
     );
 }
 

@@ -398,3 +398,13 @@ pub async fn set_show_tips(value: bool) -> Result<()> {
 pub async fn set_auto_update(value: bool) -> Result<()> {
     update_config(|cfg| cfg.cli.auto_update = Some(value)).await
 }
+
+/// Persist `[models].default_reasoning_effort`. Empty / invalid clears the key.
+pub async fn set_default_reasoning_effort(value: String) -> Result<()> {
+    update_config(|cfg| {
+        cfg.models.default_reasoning_effort = value
+            .parse::<supercharge_sampling_types::ReasoningEffort>()
+            .ok();
+    })
+    .await
+}

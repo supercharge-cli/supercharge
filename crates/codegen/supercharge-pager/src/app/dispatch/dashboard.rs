@@ -1313,6 +1313,7 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
     let coding_data_sharing_lock_from_app = app.coding_data_sharing_lock();
     let show_tips_from_app = app.show_tips;
     let auto_update_from_app = app.auto_update;
+    let thinking_effort_from_app = app.thinking_effort.clone();
     let respect_manual_folds_from_app = app.appearance.scrollback.scroll.respect_manual_folds;
     let auto_mode_gate_from_app = app.auto_mode_gate;
     let ask_user_question_timeout_enabled_from_app = app.ask_user_question_timeout_enabled;
@@ -1425,6 +1426,7 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
                 plan_mode_active: false,
                 show_tips: show_tips_from_app,
                 auto_update: auto_update_from_app,
+                thinking_effort: thinking_effort_from_app,
                 vim_mode: crate::appearance::cache::load_vim_mode(),
                 scroll_speed: crate::appearance::cache::load_scroll_speed(),
                 respect_manual_folds: respect_manual_folds_from_app,

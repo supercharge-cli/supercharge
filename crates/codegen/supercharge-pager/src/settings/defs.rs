@@ -539,6 +539,39 @@ const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
     },
 ];
 
+const THINKING_EFFORT_CHOICES: &[EnumChoice] = &[
+    EnumChoice {
+        canonical: "none",
+        display: "None",
+        description: "No extra reasoning tokens.",
+    },
+    EnumChoice {
+        canonical: "low",
+        display: "Low",
+        description: "Light reasoning.",
+    },
+    EnumChoice {
+        canonical: "medium",
+        display: "Medium",
+        description: "Default reasoning depth.",
+    },
+    EnumChoice {
+        canonical: "high",
+        display: "High",
+        description: "Deeper reasoning.",
+    },
+    EnumChoice {
+        canonical: "xhigh",
+        display: "Extra high",
+        description: "Very deep reasoning when the model supports it.",
+    },
+    EnumChoice {
+        canonical: "max",
+        display: "Max",
+        description: "Maximum reasoning effort.",
+    },
+];
+
 /// Child settings shown inside the "Show contextual hints" group sub-sheet.
 /// Keys match the `[ui.contextual_hints]` serde fields (namespaced so they stay
 /// globally unique — bare `plan_mode` collides with the plan-mode enum row).
@@ -933,6 +966,28 @@ pub fn default_settings() -> Vec<SettingMeta> {
             kind: SettingKind::DynamicEnum {
                 default: "",
                 source: DynamicEnumSource::ActiveModelCatalog,
+                supports_preview: false,
+            },
+            restart_required: false,
+            hidden_in_minimal: false,
+        },
+        SettingMeta {
+            key: "thinking_effort",
+            category: SettingCategory::Models,
+            owner: SettingOwner::Shell,
+            label: "Thinking effort",
+            description: "Reasoning effort sent to models that support it (none / low / medium / high / xhigh / max).",
+            keywords: &[
+                "thinking",
+                "effort",
+                "reasoning",
+                "thoughts",
+                "depth",
+                "xhigh",
+            ],
+            kind: SettingKind::Enum {
+                default: "medium",
+                choices: THINKING_EFFORT_CHOICES,
                 supports_preview: false,
             },
             restart_required: false,
@@ -1403,7 +1458,7 @@ pub fn default_settings() -> Vec<SettingMeta> {
             category: SettingCategory::Advanced,
             owner: SettingOwner::Shell,
             label: "Auto-update",
-            description: "Automatically download and install pager updates on startup. \
+            description: "On startup, check GitHub Releases for a newer version and install it. \
                           Restart required.",
             keywords: &[
                 "auto", "update", "updates", "upgrade", "version", "install", "channel",

@@ -2151,7 +2151,7 @@ fn render_welcome_done(
                 width: tip_centered.width.saturating_sub(inset * 2),
                 height: tip_centered.height,
             };
-            let key_name = "ctrl+u";
+            let key_name = "Ctrl+L";
             let line = Line::from(vec![
                 Span::styled(
                     "Update: ",
@@ -2160,7 +2160,7 @@ fn render_welcome_done(
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!("v{ver} available \u{2014} press {key_name} to restart"),
+                    format!("v{ver} available \u{2014} press {key_name} to update and restart"),
                     Style::default().fg(theme.accent_user),
                 ),
             ]);

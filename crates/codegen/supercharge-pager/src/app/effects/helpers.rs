@@ -1432,6 +1432,14 @@ pub(crate) async fn persist_setting(
                 .await
                 .map_err(|e| e.to_string())
         }
+        "thinking_effort" => {
+            let SettingValue::Enum(s) = value else {
+                return Err(kind_mismatch("thinking_effort", "Enum", &value));
+            };
+            supercharge_shell::util::config::set_default_reasoning_effort(s.to_string())
+                .await
+                .map_err(|e| e.to_string())
+        }
         "fork_secondary_model" => {
             let SettingValue::String(s) = value else {
                 return Err(kind_mismatch("fork_secondary_model", "String", &value));

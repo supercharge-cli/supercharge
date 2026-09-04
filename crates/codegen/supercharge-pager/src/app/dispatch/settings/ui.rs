@@ -51,6 +51,7 @@ pub(crate) fn refresh_open_settings_modals(app: &mut AppView) {
     let coding_data_sharing_lock_from_app = app.coding_data_sharing_lock();
     let show_tips_from_app = app.show_tips;
     let auto_update_from_app = app.auto_update;
+    let thinking_effort_from_app = app.thinking_effort.clone();
     let respect_manual_folds_from_app = app.appearance.scrollback.scroll.respect_manual_folds;
     let auto_mode_gate_from_app = app.auto_mode_gate;
     let ask_user_question_timeout_enabled_from_app = app.ask_user_question_timeout_enabled;
@@ -88,6 +89,7 @@ pub(crate) fn refresh_open_settings_modals(app: &mut AppView) {
                 plan_mode_active: agent.plan_mode_pending.unwrap_or(agent.plan_mode_active),
                 show_tips: show_tips_from_app,
                 auto_update: auto_update_from_app,
+                thinking_effort: thinking_effort_from_app.clone(),
                 vim_mode: crate::appearance::cache::load_vim_mode(),
                 scroll_speed: crate::appearance::cache::load_scroll_speed(),
                 respect_manual_folds: respect_manual_folds_from_app,
@@ -192,6 +194,7 @@ pub(in crate::app::dispatch) fn dispatch_open_settings(
     let coding_data_sharing_lock_from_app = app.coding_data_sharing_lock();
     let show_tips_from_app = app.show_tips;
     let auto_update_from_app = app.auto_update;
+    let thinking_effort_from_app = app.thinking_effort.clone();
     let respect_manual_folds_from_app = app.appearance.scrollback.scroll.respect_manual_folds;
     let auto_mode_gate_from_app = app.auto_mode_gate;
     let ask_user_question_timeout_enabled_from_app = app.ask_user_question_timeout_enabled;
@@ -238,6 +241,7 @@ pub(in crate::app::dispatch) fn dispatch_open_settings(
         plan_mode_active: agent.plan_mode_pending.unwrap_or(agent.plan_mode_active),
         show_tips: show_tips_from_app,
         auto_update: auto_update_from_app,
+        thinking_effort: thinking_effort_from_app,
         vim_mode: crate::appearance::cache::load_vim_mode(),
         scroll_speed: crate::appearance::cache::load_scroll_speed(),
         respect_manual_folds: respect_manual_folds_from_app,
@@ -849,6 +853,7 @@ pub(crate) fn build_pager_snapshot(app: &AppView) -> crate::settings::PagerLocal
         plan_mode_active: agent_plan_mode(app),
         show_tips: app.show_tips,
         auto_update: app.auto_update,
+        thinking_effort: app.thinking_effort.clone(),
         vim_mode: crate::appearance::cache::load_vim_mode(),
         scroll_speed: crate::appearance::cache::load_scroll_speed(),
         respect_manual_folds: app.appearance.scrollback.scroll.respect_manual_folds,
@@ -1015,6 +1020,9 @@ pub(in crate::app::dispatch) fn action_for_reset(
         // show_tips / auto_update / display_refresh_auto_cadence: direct bool.
         ("show_tips", SettingValue::Bool(b)) => Some(Action::SetShowTips(*b)),
         ("auto_update", SettingValue::Bool(b)) => Some(Action::SetAutoUpdate(*b)),
+        ("thinking_effort", SettingValue::Enum(s)) => {
+            Some(Action::SetThinkingEffort((*s).to_string()))
+        }
         ("display_refresh_auto_cadence", SettingValue::Bool(b)) => {
             Some(Action::SetDisplayRefreshAutoCadence(*b))
         }

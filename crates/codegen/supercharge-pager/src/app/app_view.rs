@@ -1126,6 +1126,8 @@ pub struct AppView {
     pub show_tips: Option<bool>,
     /// Persisted `[cli].auto_update` mirror. `None` = no override (default `true`).
     pub auto_update: Option<bool>,
+    /// Persisted `[models].default_reasoning_effort` mirror.
+    pub thinking_effort: Option<String>,
     /// Persisted `[toolset.ask_user_question].timeout_enabled` mirror, seeded
     /// from the effective TOML merge like `show_tips`. `None` = unset in TOML
     /// (default `true`); toggles write the user layer.
@@ -1618,6 +1620,7 @@ impl AppView {
             coding_data_write_seq: 0,
             show_tips: None,
             auto_update: None,
+            thinking_effort: None,
             ask_user_question_timeout_enabled: None,
             zdr_access_enabled: false,
             usage_billing_redirect_url: None,
@@ -2461,6 +2464,12 @@ impl AppView {
             Event::Key(k) if k.kind != KeyEventKind::Release => Some(k),
             _ => None,
         };
+        if self.pending_update_version.is_some()
+            && let Some(key) = key_event
+            && (key!('l', CONTROL).matches(key) || key!('u', CONTROL).matches(key))
+        {
+            return InputOutcome::Action(Action::QuitForUpdate);
+        }
         if let Event::Resize(_, rows) = ev {
             for agent in self.agents.values_mut() {
                 agent.note_terminal_resize();
@@ -3790,7 +3799,9 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
             if key!('s', CONTROL).matches(key) {
                 return InputOutcome::Action(Action::FetchSessionList);
             }
-            if ctx.has_pending_update && key!('u', CONTROL).matches(key) {
+            if ctx.has_pending_update
+                && (key!('l', CONTROL).matches(key) || key!('u', CONTROL).matches(key))
+            {
                 return InputOutcome::Action(Action::QuitForUpdate);
             }
             if ctx.has_foreign_resume && key!('u', CONTROL).matches(key) {

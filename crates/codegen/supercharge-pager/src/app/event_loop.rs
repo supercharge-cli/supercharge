@@ -1571,6 +1571,7 @@ pub(crate) async fn run(
     let config_session_bools = load_initial_config_session_bools();
     app.show_tips = config_session_bools.show_tips;
     app.auto_update = config_session_bools.auto_update;
+    app.thinking_effort = load_initial_thinking_effort();
     app.ask_user_question_timeout_enabled = config_session_bools.ask_user_question_timeout_enabled;
     // Prime thread-local caches so first render doesn't hit disk.
     crate::appearance::cache::prime(&app.current_ui);
@@ -2479,6 +2480,9 @@ pub(crate) async fn run(
                     );
                     let latest = update.latest_version;
                     app.pending_update_version = Some(latest.clone());
+                    app.show_toast(&format!(
+                        "Update v{latest} available — press Ctrl+L to install and restart"
+                    ));
                     // The full TUI surfaces this on the welcome screen, which
                     // minimal has none of — commit a one-line notice into
                     // native scrollback instead (update notice).
@@ -3127,6 +3131,16 @@ struct InitialConfigSessionBools {
     show_tips: Option<bool>,
     auto_update: Option<bool>,
     ask_user_question_timeout_enabled: Option<bool>,
+}
+
+fn load_initial_thinking_effort() -> Option<String> {
+    let Ok(root) = supercharge_shell::config::load_effective_config() else {
+        return None;
+    };
+    root.get("models")
+        .and_then(|m| m.get("default_reasoning_effort"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
 }
 
 fn load_initial_config_session_bools() -> InitialConfigSessionBools {

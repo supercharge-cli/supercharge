@@ -80,7 +80,10 @@ fn manual_install_cmd(channel: &str) -> String {
 fn reinstall_hint(installer: &str, channel: &str) -> String {
     match installer {
         "npm" => "Please reinstall via npm:\n  npm i -g @xai-official/grok".to_string(),
-        "gh-release" => "Please reinstall via GitHub Releases:\n  gh release download --repo xai-org-shared/supercharge-core --pattern 'grok-*' --output grok && chmod +x grok".to_string(),
+        "gh-release" => format!(
+            "Please reinstall via GitHub Releases:\n  https://github.com/{}/releases/latest",
+            crate::version::GH_RELEASE_REPO
+        ),
         _ => format!("Please reinstall via:\n  {}", manual_install_cmd(channel)),
     }
 }
@@ -2345,6 +2348,31 @@ async fn agent_exe_differs(
     }
 }
 
+/// Download `supercharge-{os}-{arch}` then `grok-{ver}-{os}-{arch}` from GitHub Releases.
+async fn download_github_release_asset(
+    version: &str,
+    os: &str,
+    arch: &str,
+    dest: &std::path::Path,
+) -> Result<()> {
+    let repo = crate::version::GH_RELEASE_REPO;
+    let tag = format!("v{}", version.trim_start_matches('v'));
+    let ext = if os == "windows" { ".exe" } else { "" };
+    let names = [
+        format!("supercharge-{os}-{arch}{ext}"),
+        format!("grok-{version}-{os}-{arch}{ext}"),
+    ];
+    let mut last_err = None;
+    for name in names {
+        let url = format!("https://github.com/{repo}/releases/download/{tag}/{name}");
+        match download_with_progress(&url, dest).await {
+            Ok(()) => return Ok(()),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("no GitHub release assets tried")))
+}
+
 /// Download a single asset from a GitHub release via `gh release download`.
 async fn gh_release_download(tag: &str, pattern: &str, dest: &std::path::Path) -> Result<()> {
     let pb = ProgressBar::new_spinner();
@@ -2419,7 +2447,10 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
         version, platform
     );
 
-    gh_release_download(&tag, &binary_name, &binary_path).await?;
+    if let Err(e) = download_github_release_asset(&version, &os, &arch, &binary_path).await {
+        tracing::warn!("HTTP GitHub asset failed ({e:#}); trying gh CLI");
+        gh_release_download(&tag, &binary_name, &binary_path).await?;
+    }
 
     // chmod +x
     #[cfg(unix)]

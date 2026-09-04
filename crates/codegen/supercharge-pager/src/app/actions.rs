@@ -609,6 +609,10 @@ pub enum Action {
     /// Commit the `auto_update` preference. Persisted to `[cli].auto_update`.
     /// Restart-required — auto-update check fires once at startup.
     SetAutoUpdate(bool),
+    /// Commit thinking / reasoning effort. Persisted to
+    /// `[models].default_reasoning_effort`. Applied on the next turn for
+    /// models that support reasoning effort.
+    SetThinkingEffort(String),
     /// Commit `[ui.display_refresh].auto_cadence_enabled`. Restart-required —
     /// cadence is pinned once at startup.
     SetDisplayRefreshAutoCadence(bool),
