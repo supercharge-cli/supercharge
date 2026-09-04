@@ -7163,7 +7163,9 @@ fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
         // Resolved via `Theme::current()` rather than a constructor
         // because `theme::oscura` is a private module.
         crate::theme::ThemeKind::OscuraMidnight => crate::theme::Theme::current(),
-        crate::theme::ThemeKind::Auto => crate::theme::Theme::voltage_dark(),
+        crate::theme::ThemeKind::NavyCyan => crate::theme::Theme::navy_cyan(),
+        crate::theme::ThemeKind::BlackCrimson => crate::theme::Theme::black_crimson(),
+        crate::theme::ThemeKind::Auto => crate::theme::Theme::navy_cyan(),
     };
     assert_ne!(
         raw_theme.bg_visual, raw_theme.bg_highlight,

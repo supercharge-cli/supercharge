@@ -1,7 +1,7 @@
 //! Theming for the pager.
 //!
 //! All colors come from the `Theme` struct. No hardcoded colors elsewhere.
-//! The default theme is Oscura Midnight (near-black base with purple and cyan accents).
+//! The default theme is Navy Cyan (light navy base with cyan accents).
 //!
 //! ## Color support
 //!
@@ -15,6 +15,8 @@ pub mod color_support;
 pub mod env_appearance;
 pub mod md_style;
 pub mod osc11;
+mod black_crimson;
+mod navy_cyan;
 mod oscura;
 mod rosepine;
 pub mod system_appearance;
@@ -34,6 +36,8 @@ pub enum ThemeKind {
     TokyoNight = 2,
     RosePineMoon = 3,
     OscuraMidnight = 5,
+    NavyCyan = 6,
+    BlackCrimson = 7,
     /// Meta-variant: follow system dark/light appearance.
     ///
     /// Never stored in `cache::CURRENT` — resolved to a concrete
@@ -47,6 +51,8 @@ pub enum ThemeKind {
 impl ThemeKind {
     /// All theme kinds (including those that may not work on the current terminal).
     pub const ALL: &[ThemeKind] = &[
+        ThemeKind::NavyCyan,
+        ThemeKind::BlackCrimson,
         ThemeKind::VoltageDark,
         ThemeKind::VoltageLight,
         ThemeKind::TokyoNight,
@@ -62,7 +68,12 @@ impl ThemeKind {
         // Two possible results — pick the right const slice based on
         // the detected color level. No heap allocation needed.
         const ALL: &[ThemeKind] = ThemeKind::ALL;
-        const NO_TRUECOLOR: &[ThemeKind] = &[ThemeKind::VoltageDark, ThemeKind::VoltageLight];
+        const NO_TRUECOLOR: &[ThemeKind] = &[
+            ThemeKind::NavyCyan,
+            ThemeKind::BlackCrimson,
+            ThemeKind::VoltageDark,
+            ThemeKind::VoltageLight,
+        ];
 
         if color_support::detect().has_truecolor() {
             ALL
@@ -79,6 +90,8 @@ impl ThemeKind {
             Self::VoltageLight => "voltage_light",
             Self::RosePineMoon => "rosepine-moon",
             Self::OscuraMidnight => "oscura-midnight",
+            Self::NavyCyan => "navy-cyan",
+            Self::BlackCrimson => "black-crimson",
             Self::Auto => "auto",
         }
     }
@@ -95,6 +108,8 @@ impl ThemeKind {
             Self::VoltageLight => false,
             Self::RosePineMoon => true,
             Self::OscuraMidnight => true,
+            Self::NavyCyan => false,
+            Self::BlackCrimson => false,
             // Auto is resolved to a concrete theme before rendering.
             Self::Auto => false,
         }
@@ -106,13 +121,15 @@ impl ThemeKind {
         let lower = name.to_lowercase();
         match lower.as_str() {
             "auto" | "system" => Some(Self::Auto),
-            "voltage_dark" | "dark" => Some(Self::VoltageDark),
+            "voltage_dark" | "voltage-dark" | "dark" => Some(Self::VoltageDark),
             "tokyonight" | "tokyo-night" | "tokyo" => Some(Self::TokyoNight),
-            "voltage_light" | "light" | "day" => Some(Self::VoltageLight),
+            "voltage_light" | "voltage-light" | "light" | "day" => Some(Self::VoltageLight),
             "rosepine" | "rose-pine" | "rosepine-moon" | "rose-pine-moon" => {
                 Some(Self::RosePineMoon)
             }
             "oscura" | "oscura-midnight" => Some(Self::OscuraMidnight),
+            "navy-cyan" | "navy_cyan" | "navy" | "cyan" => Some(Self::NavyCyan),
+            "black-crimson" | "black_crimson" | "crimson" | "black" => Some(Self::BlackCrimson),
             _ => None,
         }
     }
@@ -148,13 +165,15 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "voltage_light" => "Voltage Light",
         "tokyonight" => "Tokyo Night",
         "rosepine-moon" => "Rose Pine Moon",
+        "navy-cyan" => "Navy Cyan",
+        "black-crimson" => "Black Crimson",
         other => other,
     }
 }
 
 impl Default for Theme {
     fn default() -> Self {
-        Self::oscura_midnight()
+        Self::navy_cyan()
     }
 }
 
@@ -274,9 +293,11 @@ impl Theme {
             ThemeKind::VoltageLight => Self::voltage_light(),
             ThemeKind::RosePineMoon => Self::rosepine_moon(),
             ThemeKind::OscuraMidnight => Self::oscura_midnight(),
+            ThemeKind::NavyCyan => Self::navy_cyan(),
+            ThemeKind::BlackCrimson => Self::black_crimson(),
             // Auto is resolved to a concrete theme before being stored;
             // if reached, fall back to the Supercharge default.
-            ThemeKind::Auto => Self::oscura_midnight(),
+            ThemeKind::Auto => Self::navy_cyan(),
         };
         // Sample polarity pre-quantization — post-quantize `bg_base` may
         // land on a named/indexed entry whose luminance is host-palette-
@@ -341,7 +362,7 @@ impl Theme {
     /// Clamp a theme kind to what the terminal supports.
     fn clamp_to_terminal(kind: ThemeKind) -> ThemeKind {
         if kind.requires_truecolor() && !color_support::detect().has_truecolor() {
-            ThemeKind::VoltageDark
+            ThemeKind::NavyCyan
         } else {
             kind
         }
@@ -706,6 +727,8 @@ mod tests {
         assert!(!ThemeKind::TokyoNight.is_auto());
         assert!(!ThemeKind::RosePineMoon.is_auto());
         assert!(!ThemeKind::OscuraMidnight.is_auto());
+        assert!(!ThemeKind::NavyCyan.is_auto());
+        assert!(!ThemeKind::BlackCrimson.is_auto());
     }
 
     #[test]
@@ -725,6 +748,8 @@ mod tests {
         assert!(Theme::tokyonight().is_dark());
         assert!(Theme::rosepine_moon().is_dark());
         assert!(Theme::oscura_midnight().is_dark());
+        assert!(Theme::navy_cyan().is_dark());
+        assert!(Theme::black_crimson().is_dark());
         assert!(!Theme::voltage_light().is_dark());
     }
 
@@ -1063,6 +1088,8 @@ mod tests {
                 ThemeKind::TokyoNight => Theme::tokyonight(),
                 ThemeKind::RosePineMoon => Theme::rosepine_moon(),
                 ThemeKind::OscuraMidnight => Theme::oscura_midnight(),
+                ThemeKind::NavyCyan => Theme::navy_cyan(),
+                ThemeKind::BlackCrimson => Theme::black_crimson(),
                 ThemeKind::Auto => unreachable!("ALL excludes Auto"),
             };
             let track = lum(theme.scrollbar_bg, "scrollbar_bg", kind);
@@ -1206,6 +1233,11 @@ mod tests {
             ThemeKind::from_name("oscura-midnight"),
             Some(ThemeKind::OscuraMidnight)
         );
+        assert_eq!(ThemeKind::from_name("navy-cyan"), Some(ThemeKind::NavyCyan));
+        assert_eq!(
+            ThemeKind::from_name("black-crimson"),
+            Some(ThemeKind::BlackCrimson)
+        );
     }
 
     /// `FromStr` agrees with `from_name` for all canonicals + aliases.
@@ -1229,6 +1261,10 @@ mod tests {
             ("rose-pine", ThemeKind::RosePineMoon),
             ("rosepine-moon", ThemeKind::RosePineMoon),
             ("rose-pine-moon", ThemeKind::RosePineMoon),
+            ("navy-cyan", ThemeKind::NavyCyan),
+            ("navy_cyan", ThemeKind::NavyCyan),
+            ("black-crimson", ThemeKind::BlackCrimson),
+            ("crimson", ThemeKind::BlackCrimson),
         ];
         for (name, expected) in cases {
             assert_eq!(

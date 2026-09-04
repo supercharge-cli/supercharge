@@ -240,7 +240,7 @@ fn limited_color_output_is_stable() {
             "  multiplexer  None detected\n",
             "  ssh          no\n",
             "  color        256\n",
-            "  themes       2/5: voltage-dark, voltage-light\n",
+            "  themes       4/7: navy-cyan, black-crimson, voltage_dark, voltage_light\n",
             "\n",
             "Clipboard\n",
             "  native       local (pbcopy)\n",

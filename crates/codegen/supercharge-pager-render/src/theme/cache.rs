@@ -20,7 +20,7 @@ use super::system_appearance;
 /// In-memory theme kind, encoded as a `u8` matching the
 /// `ThemeKind` discriminants. Loaded from disk once at startup via
 /// `load_from_disk()`, then kept in sync by `set()`.
-static CURRENT: AtomicU8 = AtomicU8::new(ThemeKind::OscuraMidnight as u8);
+static CURRENT: AtomicU8 = AtomicU8::new(ThemeKind::NavyCyan as u8);
 static LOADED: AtomicBool = AtomicBool::new(false);
 #[cfg(any(test, feature = "test-support"))]
 static TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -48,8 +48,10 @@ fn theme_kind_from_u8(byte: u8) -> ThemeKind {
         x if x == ThemeKind::TokyoNight as u8 => ThemeKind::TokyoNight,
         x if x == ThemeKind::RosePineMoon as u8 => ThemeKind::RosePineMoon,
         x if x == ThemeKind::OscuraMidnight as u8 => ThemeKind::OscuraMidnight,
+        x if x == ThemeKind::NavyCyan as u8 => ThemeKind::NavyCyan,
+        x if x == ThemeKind::BlackCrimson as u8 => ThemeKind::BlackCrimson,
         x if x == ThemeKind::Auto as u8 => ThemeKind::Auto,
-        _ => ThemeKind::VoltageDark,
+        _ => ThemeKind::NavyCyan,
     }
 }
 
@@ -226,8 +228,8 @@ fn resolve_from_config(config_theme: Option<ThemeKind>, osc11_fallback: bool) ->
         return kind;
     }
 
-    // Default: Supercharge's Oscura Midnight palette.
-    ThemeKind::OscuraMidnight
+    // Default: Navy Cyan.
+    ThemeKind::NavyCyan
 }
 
 /// Map an optional appearance detection result to a concrete `ThemeKind`.
@@ -235,7 +237,7 @@ fn resolve_from_appearance(appearance: Option<system_appearance::SystemAppearanc
     let config = auto_theme_config();
     appearance
         .map(|a| system_appearance::to_theme_kind(a, config.dark_theme, config.light_theme))
-        .unwrap_or(ThemeKind::OscuraMidnight)
+        .unwrap_or(ThemeKind::NavyCyan)
 }
 
 /// Resolve "auto" by detecting system appearance and mapping via config.
@@ -471,7 +473,7 @@ mod tests {
             );
             assert!(is_auto_mode(), "auto must arm the appearance watcher");
 
-            assert_eq!(resolve_from_config(None, false), ThemeKind::VoltageDark);
+            assert_eq!(resolve_from_config(None, false), ThemeKind::NavyCyan);
         });
     }
 
@@ -510,7 +512,7 @@ mod tests {
         with_test_env(|| {
             system_appearance::set_mock(Some(system_appearance::SystemAppearance::Dark));
             let result = resolve_auto();
-            assert_eq!(result, ThemeKind::VoltageDark);
+            assert_eq!(result, ThemeKind::NavyCyan);
         });
     }
 
@@ -528,7 +530,7 @@ mod tests {
         with_test_env(|| {
             system_appearance::set_mock(None);
             let result = resolve_auto();
-            assert_eq!(result, ThemeKind::VoltageDark);
+            assert_eq!(result, ThemeKind::NavyCyan);
         });
     }
 
@@ -560,7 +562,7 @@ mod tests {
     fn resolve_from_config_no_config_returns_voltage_dark() {
         with_test_env(|| {
             let result = resolve_from_config(None, true);
-            assert_eq!(result, ThemeKind::VoltageDark);
+            assert_eq!(result, ThemeKind::NavyCyan);
             assert!(!is_auto_mode());
         });
     }
@@ -582,7 +584,7 @@ mod tests {
         with_test_env(|| {
             system_appearance::set_mock(Some(system_appearance::SystemAppearance::Dark));
             let result = resolve_from_config(Some(ThemeKind::Auto), true);
-            assert_eq!(result, ThemeKind::VoltageDark);
+            assert_eq!(result, ThemeKind::NavyCyan);
             assert!(is_auto_mode(), "auto config must enable auto mode");
         });
     }
@@ -602,7 +604,7 @@ mod tests {
         with_test_env(|| {
             system_appearance::set_mock(None);
             let result = resolve_from_config(Some(ThemeKind::Auto), true);
-            assert_eq!(result, ThemeKind::VoltageDark);
+            assert_eq!(result, ThemeKind::NavyCyan);
             assert!(is_auto_mode(), "auto mode is set before detection");
         });
     }
@@ -640,7 +642,7 @@ mod tests {
             system_appearance::set_mock(Some(system_appearance::SystemAppearance::Dark));
             assert_eq!(
                 resolve_initial_theme_from(Some("auto"), Some(ThemeKind::TokyoNight), false),
-                ThemeKind::VoltageDark
+                ThemeKind::NavyCyan
             );
             assert!(is_auto_mode());
         });
@@ -795,7 +797,7 @@ mod tests {
                     Some(ThemeKind::TokyoNight),
                     true,
                 ),
-                ThemeKind::VoltageDark
+                ThemeKind::NavyCyan
             );
             assert!(is_auto_mode());
         });

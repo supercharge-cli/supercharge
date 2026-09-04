@@ -143,7 +143,7 @@ fn mixed_report() -> DiagnosticReport {
     report.facts.ssh = true;
     report.facts.color = ColorFacts {
         level: RuntimeFact::Available(ColorLevel::Ansi256),
-        available_themes: vec![ThemeKind::VoltageDark, ThemeKind::VoltageLight],
+        available_themes: vec![ThemeKind::NavyCyan, ThemeKind::BlackCrimson],
         total_themes: ThemeKind::ALL.len(),
     };
     report.facts.keyboard = Some(KeyboardFact {
@@ -488,7 +488,7 @@ fn human_mixed_fixture_is_exact() {
             "  · byobu                        tmux\n",
             "  · ssh                          yes\n",
             "  · color                        256\n",
-            "  · themes                       2/5: voltage-dark, voltage-light\n",
+            "  · themes                       2/7: navy-cyan, black-crimson\n",
             "  · keyboard                     cmd=dropped, opt=native (OS rescue active)\n",
             "  · newline                      Alt+Enter (Cursor: xterm.js cannot distinguish Shift+Enter)\n",
             "\n",
@@ -686,7 +686,7 @@ fn json_empty_fixture_pins_null_policy() {
                 "color": {
                     "level": {"status": "unavailable", "value": null},
                     "availableThemes": [],
-                    "totalThemes": 5
+                    "totalThemes": 7
                 },
                 "keyboard": null,
                 "newline": null,
@@ -733,8 +733,8 @@ fn json_contract_is_structural_stable_ordered_and_ansi_free() {
                 "ssh": true,
                 "color": {
                     "level": {"status": "available", "value": "256"},
-                    "availableThemes": ["voltage-dark", "voltage-light"],
-                    "totalThemes": 5
+                    "availableThemes": ["navy-cyan", "black-crimson"],
+                    "totalThemes": 7
                 },
                 "keyboard": {"cmd": "dropped", "opt": "native", "os": "macos"},
                 "newline": {"kind": "xterm_js", "terminalName": "cursor"},

@@ -968,7 +968,7 @@ fn deep_link_preview_esc_closes_modal_and_forwards_revert_action() {
     );
     match outcome {
         InputOutcome::Action(Action::PreviewTheme(name)) => {
-            assert_eq!(name, "voltage-dark");
+            assert_eq!(name, "navy-cyan");
         }
         other => panic!("expected Action(PreviewTheme), got {other:?}"),
     }
@@ -3131,7 +3131,7 @@ fn set_theme_emits_persist_setting_with_correct_payload() {
             } => {
                 assert_eq!(*key, "theme");
                 assert_eq!(*value, SettingValue::Enum("voltage-light"));
-                assert_eq!(*rollback_value, SettingValue::Enum("voltage-dark"));
+                assert_eq!(*rollback_value, SettingValue::Enum("navy-cyan"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
@@ -3163,7 +3163,7 @@ fn set_auto_dark_theme_emits_persist_setting_with_correct_payload() {
             } => {
                 assert_eq!(*key, "auto_dark_theme");
                 assert_eq!(*value, SettingValue::Enum("voltage-light"));
-                assert_eq!(*rollback_value, SettingValue::Enum("voltage-dark"));
+                assert_eq!(*rollback_value, SettingValue::Enum("navy-cyan"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }

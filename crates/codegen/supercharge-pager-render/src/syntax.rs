@@ -148,6 +148,8 @@ pub fn get_syntect() -> &'static Syntect {
         ThemeKind::VoltageDark
         | ThemeKind::RosePineMoon
         | ThemeKind::OscuraMidnight
+        | ThemeKind::NavyCyan
+        | ThemeKind::BlackCrimson
         | ThemeKind::Auto => SYNTECT_VOLTAGE_DARK
             .get_or_init(|| Syntect::new(include_bytes!("../assets/voltage-dark.tmTheme"))),
         ThemeKind::TokyoNight => SYNTECT_TOKYONIGHT

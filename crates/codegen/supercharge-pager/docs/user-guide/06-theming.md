@@ -6,12 +6,14 @@ Supercharge AI draws all TUI colors from a central theme. You can switch themes 
 
 ## Available Themes
 
-Supercharge AI includes five built-in themes, plus an `auto` option that follows your system appearance:
+Supercharge AI includes seven built-in themes, plus an `auto` option that follows your system appearance:
 
 | Theme | Config Names | Description | Truecolor Required |
 |-------|-------------|-------------|--------------------|
-| **Voltage Dark** | `voltage-dark`, `dark`, `dark` | Deep navy base with electric-blue accents. Default theme. Survives quantization cleanly on 256-color and 16-color terminals. | No |
-| **Voltage Light** | `voltage-light`, `voltage-light`, `light`, `day` | Light theme for bright terminal backgrounds. | No |
+| **Navy Cyan** | `navy-cyan`, `navy`, `cyan` | Light navy canvas with cyan accents. Default theme. Survives quantization on 256-color and 16-color terminals. | No |
+| **Black Crimson** | `black-crimson`, `crimson`, `black` | Near-black canvas with crimson accents. | No |
+| **Voltage Dark** | `voltage-dark`, `dark` | Deep navy base with electric-blue accents. Survives quantization cleanly on 256-color and 16-color terminals. | No |
+| **Voltage Light** | `voltage-light`, `light`, `day` | Light theme for bright terminal backgrounds. | No |
 | **TokyoNight** | `tokyonight`, `tokyo-night`, `tokyo` | Dark, blue-tinted backgrounds from the Tokyo Night palette. Loses its character when quantized. | Yes |
 | **RosePineMoon** | `rosepine`, `rose-pine`, `rosepine-moon`, `rose-pine-moon` | Muted dark palette with mauve accents, from the Rosé Pine family. | Yes |
 | **OscuraMidnight** | `oscura`, `oscura-midnight` | Deep dark base with purple accents. | Yes |
@@ -112,7 +114,7 @@ Every theme is defined using full RGB values. At startup, Supercharge AI quantiz
 - On **256-color** terminals, each RGB value is mapped to the nearest indexed palette entry.
 - On **16-color** terminals, colors map to ANSI names.
 
-Voltage Dark and Voltage Light use navy tones that quantize cleanly. TokyoNight, RosePineMoon, and OscuraMidnight use distinctive tinted backgrounds that lose their character when quantized, which is why the theme picker hides them on non-truecolor terminals.
+Navy Cyan, Black Crimson, Voltage Dark, and Voltage Light quantize cleanly. TokyoNight, RosePineMoon, and OscuraMidnight use distinctive tinted backgrounds that lose their character when quantized, which is why the theme picker hides them on non-truecolor terminals.
 
 ### Runtime-Generated Colors
 
@@ -149,7 +151,7 @@ Use compact mode on small screens to maximize content area.
 
 Supercharge AI bundles three `.tmTheme` files for code-block syntax highlighting and selects one based on the active theme:
 
-- `voltage-dark.tmTheme` -- Voltage Dark, RosePineMoon, and OscuraMidnight
+- `voltage-dark.tmTheme` -- Navy Cyan, Black Crimson, Voltage Dark, RosePineMoon, and OscuraMidnight
 - `voltage-light.tmTheme` -- Voltage Light
 - `tokyo-night.tmTheme` -- TokyoNight
 

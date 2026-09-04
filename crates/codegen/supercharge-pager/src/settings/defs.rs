@@ -46,12 +46,22 @@ const THEME_CHOICES: &[EnumChoice] = &[
         description: "Follow system dark/light appearance.",
     },
     EnumChoice {
-        canonical: "voltage-dark",
+        canonical: "navy-cyan",
+        display: "Navy Cyan",
+        description: "Light navy canvas with cyan accents (default).",
+    },
+    EnumChoice {
+        canonical: "black-crimson",
+        display: "Black Crimson",
+        description: "Near-black canvas with crimson accents.",
+    },
+    EnumChoice {
+        canonical: "voltage_dark",
         display: "Voltage Dark",
         description: "Neutral dark with magenta accent.",
     },
     EnumChoice {
-        canonical: "voltage-light",
+        canonical: "voltage_light",
         display: "Voltage Light",
         description: "Light theme for bright environments.",
     },
@@ -60,7 +70,6 @@ const THEME_CHOICES: &[EnumChoice] = &[
         display: "Tokyo Night",
         description: "Dark + blue-tinted; needs truecolor.",
     },
-    // ASCII "Rose Pine Moon" (not "Rosé") for cross-terminal compatibility.
     EnumChoice {
         canonical: "rosepine-moon",
         display: "Rose Pine Moon",
@@ -69,7 +78,7 @@ const THEME_CHOICES: &[EnumChoice] = &[
     EnumChoice {
         canonical: "oscura-midnight",
         display: "Oscura Midnight",
-        description: "Deep dark with warm accents; needs truecolor.",
+        description: "Deep dark with purple accents; needs truecolor.",
     },
 ];
 
@@ -494,12 +503,22 @@ const VOICE_STT_LANGUAGE_CHOICES: &[EnumChoice] = &[
 /// the user can pair any theme with any system-appearance bucket.
 const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
     EnumChoice {
-        canonical: "voltage-dark",
+        canonical: "navy-cyan",
+        display: "Navy Cyan",
+        description: "Light navy canvas with cyan accents (default).",
+    },
+    EnumChoice {
+        canonical: "black-crimson",
+        display: "Black Crimson",
+        description: "Near-black canvas with crimson accents.",
+    },
+    EnumChoice {
+        canonical: "voltage_dark",
         display: "Voltage Dark",
         description: "Neutral dark with magenta accent.",
     },
     EnumChoice {
-        canonical: "voltage-light",
+        canonical: "voltage_light",
         display: "Voltage Light",
         description: "Light theme for bright environments.",
     },
@@ -516,7 +535,7 @@ const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
     EnumChoice {
         canonical: "oscura-midnight",
         display: "Oscura Midnight",
-        description: "Deep dark with warm accents; needs truecolor.",
+        description: "Deep dark with purple accents; needs truecolor.",
     },
 ];
 
@@ -759,8 +778,8 @@ pub fn default_settings() -> Vec<SettingMeta> {
                 "light",
             ],
             kind: SettingKind::Enum {
-                // `Option<String>` — `None` resolved to "voltage-dark".
-                default: "voltage-dark",
+                // `Option<String>` — `None` resolved to "navy-cyan".
+                default: "navy-cyan",
                 choices: THEME_CHOICES,
                 supports_preview: true,
             },
@@ -775,8 +794,8 @@ pub fn default_settings() -> Vec<SettingMeta> {
             description: "Theme to use when the system is in dark mode (only with theme=auto).",
             keywords: &["auto", "dark", "theme", "system", "appearance", "night"],
             kind: SettingKind::Enum {
-                // `Option<String>` — `None` falls back to "voltage-dark".
-                default: "voltage-dark",
+                // `Option<String>` — `None` falls back to "navy-cyan".
+                default: "navy-cyan",
                 choices: CONCRETE_THEME_CHOICES,
                 supports_preview: true,
             },
@@ -791,8 +810,8 @@ pub fn default_settings() -> Vec<SettingMeta> {
             description: "Theme to use when the system is in light mode (only with theme=auto).",
             keywords: &["auto", "light", "theme", "system", "appearance", "day"],
             kind: SettingKind::Enum {
-                // `Option<String>` — `None` falls back to "voltage-light".
-                default: "voltage-light",
+                // `Option<String>` — `None` falls back to "navy-cyan".
+                default: "navy-cyan",
                 choices: CONCRETE_THEME_CHOICES,
                 supports_preview: true,
             },
