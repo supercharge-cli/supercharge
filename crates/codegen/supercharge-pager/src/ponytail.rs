@@ -52,9 +52,22 @@ fn load_from_config() -> bool {
         .unwrap_or(DEFAULT)
 }
 
-pub fn prepend_to_prompt(mut blocks: Vec<agent_client_protocol::ContentBlock>) -> Vec<agent_client_protocol::ContentBlock> {
+pub fn prepend_to_prompt(
+    mut blocks: Vec<agent_client_protocol::ContentBlock>,
+) -> Vec<agent_client_protocol::ContentBlock> {
     if !is_enabled() {
         return blocks;
+    }
+    // Merge into the first text block. A separate ContentBlock is echoed as
+    // its own `user_message_chunk`; the TUI only skips one echo per turn, so
+    // a leading extra block made every user prompt appear twice.
+    for block in &mut blocks {
+        if let agent_client_protocol::ContentBlock::Text(text) = block {
+            if !text.text.contains("<ponytail>") {
+                text.text = format!("{PROMPT_BLOCK}\n{}", text.text);
+            }
+            return blocks;
+        }
     }
     let mut out = Vec::with_capacity(blocks.len() + 1);
     out.push(agent_client_protocol::ContentBlock::Text(
@@ -62,4 +75,39 @@ pub fn prepend_to_prompt(mut blocks: Vec<agent_client_protocol::ContentBlock>) -
     ));
     out.append(&mut blocks);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agent_client_protocol as acp;
+
+    #[test]
+    fn prepend_merges_into_first_text_block() {
+        set_enabled(true);
+        let blocks = prepend_to_prompt(vec![acp::ContentBlock::Text(acp::TextContent::new(
+            "hello".to_string(),
+        ))]);
+        assert_eq!(blocks.len(), 1, "must stay one block so ACP echoes once");
+        match &blocks[0] {
+            acp::ContentBlock::Text(t) => {
+                assert!(t.text.contains("<ponytail>"));
+                assert!(t.text.contains("hello"));
+            }
+            other => panic!("expected text, got {other:?}"),
+        }
+        set_enabled(false);
+    }
+
+    #[test]
+    fn prepend_noop_when_disabled() {
+        set_enabled(false);
+        let blocks = prepend_to_prompt(vec![acp::ContentBlock::Text(acp::TextContent::new(
+            "hello".to_string(),
+        ))]);
+        match &blocks[0] {
+            acp::ContentBlock::Text(t) => assert_eq!(t.text, "hello"),
+            other => panic!("expected text, got {other:?}"),
+        }
+    }
 }
