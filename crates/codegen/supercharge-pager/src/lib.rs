@@ -44,6 +44,7 @@ pub mod notifications;
 #[allow(unused_imports, unused_macros)]
 pub mod obf;
 pub mod plugin_cmd;
+pub(crate) mod ponytail;
 pub mod pty_wrap;
 pub mod recent_dirs;
 pub mod scrollback;

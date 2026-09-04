@@ -7,7 +7,7 @@ use supercharge_shell::sampling::types::{
     parse_reasoning_efforts_meta, supports_reasoning_effort_meta,
 };
 
-use crate::slash::commands::effort_levels::legacy_effort_options;
+use crate::slash::commands::effort_levels::{effort_options_from_ids, legacy_effort_options};
 
 /// Why an effort token could not be applied to a model. Shared by every effort
 /// surface (`/effort`, the CLI deferred switch, and headless) so they classify
@@ -180,10 +180,30 @@ impl ModelState {
         let Some(info) = self.available.get(id) else {
             return Vec::new();
         };
-        if !supports_reasoning_effort_meta(info.meta.as_ref()) {
+        let inferred = supercharge_shell::agent::provider_setup::infer_thinking_from_id(id.0.as_ref())
+            || supercharge_shell::agent::provider_setup::infer_thinking_from_id(&info.name);
+        if !supports_reasoning_effort_meta(info.meta.as_ref()) && !inferred {
             return Vec::new();
         }
-        parse_reasoning_efforts_meta(info.meta.as_ref()).unwrap_or_else(legacy_effort_options)
+        if let Some(list) = parse_reasoning_efforts_meta(info.meta.as_ref()) {
+            return list;
+        }
+        let from_id = supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
+            id.0.as_ref(),
+        );
+        if !from_id.is_empty() {
+            return effort_options_from_ids(from_id.iter().copied());
+        }
+        if inferred {
+            return effort_options_from_ids(
+                supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
+                    &info.name,
+                )
+                .iter()
+                .copied(),
+            );
+        }
+        legacy_effort_options()
     }
 
     /// Map a typed/selected effort token to its canonical value for the current
@@ -229,11 +249,11 @@ impl ModelState {
         id: &acp::ModelId,
         token: &str,
     ) -> Result<ReasoningEffort, EffortTokenError> {
-        let supports = self
-            .available
-            .get(id)
-            .map(|info| supports_reasoning_effort_meta(info.meta.as_ref()))
-            .unwrap_or(false);
+        let supports = self.available.get(id).is_some_and(|info| {
+            supports_reasoning_effort_meta(info.meta.as_ref())
+                || supercharge_shell::agent::provider_setup::infer_thinking_from_id(id.0.as_ref())
+                || supercharge_shell::agent::provider_setup::infer_thinking_from_id(&info.name)
+        });
         if !supports {
             return Err(EffortTokenError::Unsupported);
         }
@@ -410,6 +430,23 @@ mod tests {
             "reasoningEfforts": [{ "value": "high" }],
         })));
         assert!(state.reasoning_effort_options().is_empty());
+    }
+
+    #[test]
+    fn grok_45_inferred_menu_omits_xhigh() {
+        let id = acp::ModelId::new(Arc::from("grok-4.5"));
+        let mut state = ModelState::default();
+        state.available.insert(
+            id.clone(),
+            acp::ModelInfo::new(id.clone(), "Grok 4.5".to_string()),
+        );
+        state.current = Some(id);
+        let ids: Vec<_> = state
+            .reasoning_effort_options()
+            .into_iter()
+            .map(|o| o.id)
+            .collect();
+        assert_eq!(ids, ["high", "medium", "low"]);
     }
 
     #[test]

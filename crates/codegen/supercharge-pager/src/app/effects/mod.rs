@@ -1105,7 +1105,9 @@ pub(crate) fn execute(
                         ),
                     );
                     let send_start = std::time::Instant::now();
-                    let prompt = vec![plain_prompt_content_block(text, &skill_token_ranges)];
+                    let prompt = crate::ponytail::prepend_to_prompt(vec![
+                        plain_prompt_content_block(text, &skill_token_ranges),
+                    ]);
                     let req = acp::PromptRequest::new(session_id.clone(), prompt)
                         .meta(
                             prompt_request_meta(&prompt_id, screen_mode)
@@ -1165,6 +1167,7 @@ pub(crate) fn execute(
                         map.insert("sendNow".into(), serde_json::Value::Bool(true));
                     }
                     let requeue_blocks = send_now.then(|| blocks.clone());
+                    let blocks = crate::ponytail::prepend_to_prompt(blocks);
                     let req = acp::PromptRequest::new(session_id.clone(), blocks)
                         .meta(meta.as_object().cloned());
                     let result = acp_send(req, &tx).await;
@@ -1517,7 +1520,9 @@ pub(crate) fn execute(
                         Some(&session_id.0),
                         Some(serde_json::json!({"len": text.len()})),
                     );
-                    let prompt = vec![plain_prompt_content_block(text, &skill_token_ranges)];
+                    let prompt = crate::ponytail::prepend_to_prompt(vec![
+                        plain_prompt_content_block(text, &skill_token_ranges),
+                    ]);
                     let req = acp::PromptRequest::new(session_id.clone(), prompt)
                         .meta(
                             prompt_request_meta(&prompt_id, screen_mode)

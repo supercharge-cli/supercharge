@@ -30,9 +30,16 @@ pub(crate) fn effort_description(level: ReasoningEffort) -> &'static str {
 /// descriptions from `effort_description`. The active row is matched by value
 /// against the session effort at render time, so `default` is left unset here.
 pub(crate) fn legacy_effort_options() -> Vec<ReasoningEffortOption> {
-    EFFORT_LEVELS
-        .iter()
-        .map(|&level| ReasoningEffortOption {
+    effort_options_from_ids(EFFORT_LEVELS.iter().map(|l| l.as_str()))
+}
+
+/// Build a menu from canonical effort id strings (e.g. xAI catalog).
+pub(crate) fn effort_options_from_ids<'a>(
+    ids: impl IntoIterator<Item = &'a str>,
+) -> Vec<ReasoningEffortOption> {
+    ids.into_iter()
+        .filter_map(|id| id.parse::<ReasoningEffort>().ok())
+        .map(|level| ReasoningEffortOption {
             id: level.as_str().to_string(),
             value: level,
             label: level.to_string(),

@@ -282,8 +282,17 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
     use crate::views::modal::ActiveModal;
     use crate::views::setup_modal::SetupModalState;
 
-    if supercharge_shell::agent::provider_setup::load_existing_provider_setup_details().is_none()
-    {
+    let has_setup =
+        supercharge_shell::agent::provider_setup::load_existing_provider_setup_details().is_some();
+    let has_catalog = match app.active_view {
+        ActiveView::Agent(id) => app
+            .agents
+            .get(&id)
+            .is_some_and(|a| !a.session.models.available.is_empty()),
+        _ => !app.models.available.is_empty()
+            || app.agents.values().any(|a| !a.session.models.available.is_empty()),
+    };
+    if !has_setup && !has_catalog {
         return dispatch_open_setup(app);
     }
 
@@ -315,7 +324,8 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
         agent.active_modal = None;
         return effects;
     }
-    let (state, fetch) = SetupModalState::live_model_picker();
+    let (mut state, fetch) = SetupModalState::live_model_picker();
+    state.seed_catalog_models(&agent.session.models);
     agent.active_modal = Some(ActiveModal::ProviderSetup {
         state: Box::new(state),
     });
@@ -335,6 +345,51 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
             generation,
         });
     }
+    effects
+}
+
+pub(in crate::app::dispatch) fn dispatch_open_effort_picker(app: &mut AppView) -> Vec<Effect> {
+    use crate::views::modal::ActiveModal;
+    use crate::views::setup_modal::SetupModalState;
+    use supercharge_shell::agent::provider_setup::ProviderModel;
+
+    let effects = vec![];
+    let id = match app.active_view {
+        ActiveView::Agent(id) => id,
+        _ => {
+            app.show_toast("No active model");
+            return effects;
+        }
+    };
+    let Some(agent) = app.agents.get_mut(&id) else {
+        return effects;
+    };
+    let Some(model_id) = agent.session.models.current.clone() else {
+        app.show_toast("No active model");
+        return effects;
+    };
+    let options = agent.session.models.reasoning_effort_options_for(&model_id);
+    if options.is_empty() {
+        app.show_toast("Current model does not support thinking effort");
+        return effects;
+    }
+    let name = agent
+        .session
+        .models
+        .available
+        .get(&model_id)
+        .map(|info| info.name.clone())
+        .unwrap_or_else(|| model_id.0.to_string());
+    let model = ProviderModel {
+        id: model_id.0.to_string(),
+        name,
+        supports_thinking: true,
+    };
+    let levels: Vec<String> = options.into_iter().map(|o| o.id).collect();
+    let state = SetupModalState::effort_picker(model, levels);
+    agent.active_modal = Some(ActiveModal::ProviderSetup {
+        state: Box::new(state),
+    });
     effects
 }
 

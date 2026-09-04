@@ -15,8 +15,12 @@ impl SlashCommand for EffortCommand {
         "effort"
     }
 
+    fn aliases(&self) -> &[&str] {
+        &["thinking"]
+    }
+
     fn description(&self) -> &str {
-        "Set reasoning effort for the current model"
+        "Set thinking / reasoning effort: /effort <none|low|medium|high|xhigh|max>"
     }
 
     fn session_scoped(&self) -> bool {
@@ -34,7 +38,7 @@ impl SlashCommand for EffortCommand {
     }
 
     fn args_required(&self) -> bool {
-        true
+        false
     }
 
     fn arg_placeholder(&self) -> Option<&str> {
@@ -67,17 +71,12 @@ impl SlashCommand for EffortCommand {
                 .into_iter()
                 .map(|opt| opt.id)
                 .collect();
-            let current = ctx
-                .models
-                .reasoning_effort
-                .map(|e| format!(" (current: {e})"))
-                .unwrap_or_default();
-            let levels = if offered.is_empty() {
-                "<level>".to_string()
-            } else {
-                offered.join("|")
-            };
-            return CommandResult::Error(format!("Usage: /effort <{levels}>{current}"));
+            if offered.is_empty() {
+                return CommandResult::Error(
+                    "current model does not support reasoning effort".into(),
+                );
+            }
+            return CommandResult::Action(Action::OpenEffortPicker);
         }
 
         // Same gate-first policy as the CLI (`--effort`) and headless.
@@ -146,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_args_errors_with_usage() {
+    fn empty_args_opens_effort_picker() {
         let mut state = ModelState::default();
         let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
         state.available.insert(id.clone(), info);
@@ -154,23 +153,16 @@ mod tests {
         state.reasoning_effort = Some(ReasoningEffort::Medium);
         let mut ctx = dummy_exec_ctx(&state);
         let result = EffortCommand.run(&mut ctx, "");
-        match result {
-            CommandResult::Error(msg) => {
-                assert!(msg.contains("Usage: /effort"));
-                // Legacy menu option ids only — not none/minimal.
-                assert!(msg.contains("xhigh|high|medium|low"), "msg={msg}");
-                assert!(msg.contains("current: medium"));
-                assert!(!msg.contains("none"));
-                assert!(!msg.contains("minimal"));
-            }
-            other => panic!("expected Error, got {other:?}"),
-        }
+        assert!(
+            matches!(result, CommandResult::Action(Action::OpenEffortPicker)),
+            "got {result:?}"
+        );
     }
 
     #[test]
     fn unknown_level_errors() {
         let mut state = ModelState::default();
-        let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
+        let (id, info) = model_with_reasoning("grok-4.6", "Grok 4.6");
         state.available.insert(id.clone(), info);
         state.current = Some(id);
         let mut ctx = dummy_exec_ctx(&state);
@@ -294,7 +286,7 @@ mod tests {
     #[test]
     fn non_reasoning_model_errors() {
         let mut state = ModelState::default();
-        let (id, info) = plain_model("grok-4.5", "Supercharge Core");
+        let (id, info) = plain_model("gpt-4o", "GPT-4o");
         state.available.insert(id.clone(), info);
         state.current = Some(id);
         let mut ctx = dummy_exec_ctx(&state);
@@ -332,7 +324,7 @@ mod tests {
         assert!(cmd.suggest_args(&ctx, "").is_none());
 
         let mut plain = ModelState::default();
-        let (id, info) = plain_model("grok-4.5", "Supercharge Core");
+        let (id, info) = plain_model("gpt-4o", "GPT-4o");
         plain.available.insert(id.clone(), info);
         plain.current = Some(id);
         let ctx = AppCtx {
@@ -351,7 +343,7 @@ mod tests {
     #[test]
     fn suggest_args_lists_levels_with_active_marker() {
         let mut state = ModelState::default();
-        let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
+        let (id, info) = model_with_reasoning("grok-4.6", "Grok 4.6");
         state.available.insert(id.clone(), info);
         state.current = Some(id);
         state.reasoning_effort = Some(ReasoningEffort::High);

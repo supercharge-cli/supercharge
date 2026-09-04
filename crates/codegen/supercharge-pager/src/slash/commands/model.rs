@@ -23,7 +23,7 @@ impl SlashCommand for ModelCommand {
     }
 
     fn description(&self) -> &str {
-        "Switch the active model (live list from the configured provider)"
+        "Switch model; thinking models then offer /effort levels"
     }
 
     fn session_scoped(&self) -> bool {
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn trailing_space_after_reasoning_model_enters_effort_phase() {
         let mut state = ModelState::default();
-        let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
+        let (id, info) = model_with_reasoning("grok-4.6", "Reasoning X");
         state.available.insert(id, info);
 
         let cmd = ModelCommand;
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn partial_effort_query_still_in_effort_phase() {
         let mut state = ModelState::default();
-        let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
+        let (id, info) = model_with_reasoning("grok-4.6", "Reasoning X");
         state.available.insert(id, info);
 
         let cmd = ModelCommand;
@@ -385,13 +385,13 @@ mod tests {
     #[test]
     fn run_parses_model_plus_effort_when_supported() {
         let mut state = ModelState::default();
-        let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
+        let (id, info) = model_with_reasoning("grok-4.6", "Reasoning X");
         state.available.insert(id, info);
         let mut ctx = dummy_exec_ctx(&state);
         let result = ModelCommand.run(&mut ctx, "Reasoning X xhigh");
         match result {
             CommandResult::Action(Action::SwitchModel { model_id, effort }) => {
-                assert_eq!(model_id.0.as_ref(), "reasoning-x");
+                assert_eq!(model_id.0.as_ref(), "grok-4.6");
                 assert_eq!(effort, Some(ReasoningEffort::Xhigh));
             }
             other => panic!("expected SwitchModel with effort, got {other:?}"),

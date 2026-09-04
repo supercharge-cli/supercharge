@@ -632,12 +632,15 @@ pub async fn check_update_background(update_config: &UpdateConfig) -> Background
         }
     };
 
-    let allow_downgrade = installer_allows_downgrade(installer);
+    // In-TUI "update available" is only for a *newer* release. A local
+    // build ahead of GitHub (or a pointer rollback) must not nag to
+    // "update" to an older version. Managed rollback still lives in
+    // `run_update_if_available` / `ensure_latest_on_disk`.
     if !needs_update(
         &current_version,
         &target_version,
         &update_config.channel,
-        allow_downgrade,
+        false,
     )
     .unwrap_or(false)
     {
@@ -653,13 +656,8 @@ pub async fn check_update_background(update_config: &UpdateConfig) -> Background
     // installer maintaining the managed symlink — for npm a leftover symlink
     // would wrongly suppress the download (see `disk_version_for_installer`).
     let disk_needs_download = match disk_version_for_installer(installer) {
-        Some(disk) => needs_update(
-            &disk,
-            &target_version,
-            &update_config.channel,
-            allow_downgrade,
-        )
-        .unwrap_or(true),
+        Some(disk) => needs_update(&disk, &target_version, &update_config.channel, false)
+            .unwrap_or(true),
         None => true,
     };
 

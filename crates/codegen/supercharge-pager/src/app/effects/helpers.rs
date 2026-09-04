@@ -1432,6 +1432,14 @@ pub(crate) async fn persist_setting(
                 .await
                 .map_err(|e| e.to_string())
         }
+        "ponytail" => {
+            let SettingValue::Bool(b) = value else {
+                return Err(kind_mismatch("ponytail", "Bool", &value));
+            };
+            supercharge_shell::util::config::set_ponytail(b)
+                .await
+                .map_err(|e| e.to_string())
+        }
         "thinking_effort" => {
             let SettingValue::Enum(s) = value else {
                 return Err(kind_mismatch("thinking_effort", "Enum", &value));

@@ -1197,6 +1197,14 @@ fn build_spawn_system_prompt(
             prompt.push_str(rules);
             prompt.push_str("\n</human_rules>");
         }
+        if crate::util::config::load_effective_config()
+            .ok()
+            .and_then(|root| root.get("ui")?.get("ponytail")?.as_bool())
+            == Some(true)
+        {
+            prompt.push_str("\n\n");
+            prompt.push_str(supercharge_shared::ponytail::SYSTEM_BLOCK);
+        }
         prompt
     }
 }

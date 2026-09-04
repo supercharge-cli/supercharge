@@ -35,6 +35,7 @@ pub enum SetupStep {
     Fetching,
     FetchError { message: String },
     PickModel,
+    PickEffort,
     CustomModel,
     Saving,
 }
@@ -56,6 +57,9 @@ pub struct SetupModalState {
     pub kind: SetupKind,
     /// `/model` live picker: skip the URL/key wizard and close on Esc.
     pub(crate) picker_only: bool,
+    pending_model: Option<ProviderModel>,
+    /// Per-model effort ids shown in `PickEffort` (xAI catalog).
+    effort_levels: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -73,6 +77,11 @@ pub enum SetupOutcome {
     Save {
         setup: ProviderSetup,
         generation: u64,
+    },
+    /// Live `/model` picker: switch the session without rewriting provider setup.
+    SwitchSession {
+        model_id: String,
+        effort: Option<String>,
     },
 }
 
@@ -132,7 +141,20 @@ impl SetupModalState {
             format,
             kind,
             picker_only: false,
+            pending_model: None,
+            effort_levels: Vec::new(),
         }
+    }
+
+    /// `/effort` picker: skip URL/key/model and list this model's levels.
+    pub fn effort_picker(model: ProviderModel, levels: Vec<String>) -> Self {
+        let mut state = Self::with_kind(SetupKind::Chat);
+        state.picker_only = true;
+        state.pending_model = Some(model);
+        state.effort_levels = levels;
+        state.selected = 0;
+        state.step = SetupStep::PickEffort;
+        state
     }
 
     /// `/model` picker: live-fetch `/models` with the saved URL + key.
@@ -141,6 +163,30 @@ impl SetupModalState {
         state.picker_only = true;
         let outcome = state.begin_live_fetch();
         (state, outcome)
+    }
+
+    pub fn seed_catalog_models(&mut self, models: &crate::acp::model_state::ModelState) {
+        use supercharge_shell::sampling::types::supports_reasoning_effort_meta;
+        if models.available.is_empty() {
+            return;
+        }
+        self.models = models
+            .available
+            .iter()
+            .map(|(id, info)| ProviderModel {
+                id: id.0.to_string(),
+                name: info.name.clone(),
+                supports_thinking: supports_reasoning_effort_meta(info.meta.as_ref())
+                    || supercharge_shell::agent::provider_setup::infer_thinking_from_id(&info.name)
+                    || supercharge_shell::agent::provider_setup::infer_thinking_from_id(
+                        id.0.as_ref(),
+                    ),
+            })
+            .collect();
+        if !self.models.is_empty() {
+            self.step = SetupStep::PickModel;
+            self.selected = 0;
+        }
     }
 
     pub fn begin_live_fetch(&mut self) -> Option<SetupOutcome> {
@@ -204,6 +250,7 @@ impl SetupModalState {
             models.push(ProviderModel {
                 id: CUSTOM_MODEL_ID.to_owned(),
                 name: "Type a custom model id…".to_owned(),
+                supports_thinking: false,
             });
         }
         models
@@ -223,12 +270,32 @@ impl SetupModalState {
         }
         match result {
             Ok(models) => {
-                self.models = models;
+                if self.models.is_empty() {
+                    self.models = models;
+                } else {
+                    for model in models {
+                        if let Some(existing) = self
+                            .models
+                            .iter_mut()
+                            .find(|m| m.id == model.id)
+                        {
+                            existing.supports_thinking |= model.supports_thinking;
+                            if existing.name == existing.id && model.name != model.id {
+                                existing.name = model.name;
+                            }
+                        } else {
+                            self.models.push(model);
+                        }
+                    }
+                }
                 if self.models.is_empty() {
                     if let Some(profile) = find_setup_provider(&self.provider_id) {
                         self.models.push(ProviderModel {
                             id: profile.default_model.to_owned(),
                             name: profile.default_model.to_owned(),
+                            supports_thinking: supercharge_shell::agent::provider_setup::infer_thinking_from_id(
+                                profile.default_model,
+                            ),
                         });
                     }
                 }
@@ -302,6 +369,12 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.step = SetupStep::ApiKey;
                 SetupOutcome::Changed
             }
+            SetupStep::PickEffort => {
+                state.step = SetupStep::PickModel;
+                state.pending_model = None;
+                state.selected = 0;
+                SetupOutcome::Changed
+            }
             SetupStep::CustomModel => {
                 state.step = SetupStep::PickModel;
                 SetupOutcome::Changed
@@ -328,6 +401,7 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
             }
         }
         SetupStep::PickModel => handle_pick_model(state, key),
+        SetupStep::PickEffort => handle_pick_effort(state, key),
         SetupStep::CustomModel => handle_custom_model(state, key),
     }
 }
@@ -342,6 +416,7 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
             }
             _ => SetupOutcome::Changed,
         },
+        SetupStep::PickEffort => SetupOutcome::Unchanged,
         SetupStep::BaseUrl => match state.base_url.insert_paste(text) {
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
@@ -495,6 +570,31 @@ fn handle_pick_model(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcom
                 state.step = SetupStep::CustomModel;
                 return SetupOutcome::Changed;
             }
+            if state.picker_only && model.supports_thinking {
+                state.effort_levels = supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
+                    &model.id,
+                )
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect();
+                if state.effort_levels.is_empty() {
+                    state.effort_levels = ["high", "medium", "low"]
+                        .into_iter()
+                        .map(str::to_owned)
+                        .collect();
+                }
+                state.pending_model = Some(model);
+                state.selected = 0;
+                state.filter.reset();
+                state.step = SetupStep::PickEffort;
+                return SetupOutcome::Changed;
+            }
+            if state.picker_only {
+                return SetupOutcome::SwitchSession {
+                    model_id: model.id,
+                    effort: None,
+                };
+            }
             save_selected_model(state, model.id, model.name)
         }
         _ => match state.filter.handle_key(key) {
@@ -505,6 +605,39 @@ fn handle_pick_model(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcom
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
         },
+    }
+}
+
+fn handle_pick_effort(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
+    let level_count = state.effort_levels.len();
+    match key.code {
+        KeyCode::Up => {
+            if state.selected > 0 {
+                state.selected -= 1;
+            }
+            SetupOutcome::Changed
+        }
+        KeyCode::Down => {
+            if level_count > 0 && state.selected + 1 < level_count {
+                state.selected += 1;
+            }
+            SetupOutcome::Changed
+        }
+        KeyCode::Enter => {
+            let Some(model) = state.pending_model.take() else {
+                state.step = SetupStep::PickModel;
+                return SetupOutcome::Changed;
+            };
+            let effort = state.effort_levels.get(state.selected).cloned();
+            if state.picker_only {
+                return SetupOutcome::SwitchSession {
+                    model_id: model.id,
+                    effort,
+                };
+            }
+            save_selected_model(state, model.id, model.name)
+        }
+        _ => SetupOutcome::Unchanged,
     }
 }
 
@@ -571,6 +704,7 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
         SetupStep::Fetching => format!("{prefix}  ·  fetching models"),
         SetupStep::FetchError { .. } => format!("{prefix}  ·  error"),
         SetupStep::PickModel => format!("{prefix}  ·  choose model"),
+        SetupStep::PickEffort => format!("{prefix}  ·  thinking effort"),
         SetupStep::CustomModel => format!("{prefix}  ·  custom model id"),
         SetupStep::Saving => format!("{prefix}  ·  saving"),
     };
@@ -631,6 +765,7 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
             render_status(buf, inner, &theme, message);
         }
         SetupStep::PickModel => render_model_list(buf, inner, &theme, state),
+        SetupStep::PickEffort => render_effort_list(buf, inner, &theme, state),
     }
 }
 
@@ -675,6 +810,18 @@ fn shortcuts_for(step: &SetupStep) -> Vec<Shortcut<'static>> {
         SetupStep::PickModel => vec![
             Shortcut {
                 label: "Enter save",
+                clickable: false,
+                id: 1,
+            },
+            Shortcut {
+                label: "Esc back",
+                clickable: false,
+                id: 2,
+            },
+        ],
+        SetupStep::PickEffort => vec![
+            Shortcut {
+                label: "Enter set effort",
                 clickable: false,
                 id: 1,
             },
@@ -847,11 +994,14 @@ fn render_model_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &SetupM
         .enumerate()
     {
         let index = start + row;
-        let label = if model.name == model.id {
+        let mut label = if model.name == model.id {
             model.id.clone()
         } else {
             format!("{}  {}", model.id, model.name)
         };
+        if model.supports_thinking {
+            label.push_str("  · thinking");
+        }
         let truncated = truncate_to_width(&label, area.width as usize);
         let style = if index == selected {
             Style::default()
@@ -862,6 +1012,39 @@ fn render_model_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &SetupM
         };
         Line::from(Span::styled(truncated, style))
             .render(Rect::new(area.x, list_y + row as u16, area.width, 1), buf);
+    }
+}
+
+fn render_effort_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &SetupModalState) {
+    if area.height == 0 || area.width == 0 {
+        return;
+    }
+    let model_name = state
+        .pending_model
+        .as_ref()
+        .map(|m| m.name.as_str())
+        .unwrap_or("model");
+    Line::from(Span::styled(
+        format!("Thinking effort for {model_name}"),
+        Style::default().fg(theme.gray_dim),
+    ))
+    .render(Rect::new(area.x, area.y, area.width, 1), buf);
+    let list_y = area.y.saturating_add(2);
+    let selected = state
+        .selected
+        .min(state.effort_levels.len().saturating_sub(1));
+    for (index, level) in state.effort_levels.iter().enumerate() {
+        let style = if index == selected {
+            Style::default()
+                .fg(theme.fuzzy_accent)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.text_primary)
+        };
+        Line::from(Span::styled(level.as_str(), style)).render(
+            Rect::new(area.x, list_y + index as u16, area.width, 1),
+            buf,
+        );
     }
 }
 
@@ -977,10 +1160,12 @@ mod tests {
                 ProviderModel {
                     id: "gpt-4o".to_owned(),
                     name: "GPT-4o".to_owned(),
+                    supports_thinking: false,
                 },
                 ProviderModel {
                     id: "o3-mini".to_owned(),
                     name: "o3-mini".to_owned(),
+                    supports_thinking: true,
                 },
             ]),
         );

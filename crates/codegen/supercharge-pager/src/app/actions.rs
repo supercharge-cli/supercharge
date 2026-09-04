@@ -482,6 +482,8 @@ pub enum Action {
     /// Used by the settings modal; the `ToggleVimMode` variant covers
     /// the `/vim-mode` slash-command path.
     SetVimMode(bool),
+    /// Built-in Ponytail YAGNI mode. Persisted to `[ui].ponytail`.
+    SetPonytail(bool),
     /// Toggle the per-tool "Always allow …" prompt options. SHELL-owned;
     /// persisted to `[ui].remember_tool_approvals`. Applies to new sessions.
     SetRememberToolApprovals(bool),
@@ -633,6 +635,8 @@ pub enum Action {
     OpenImageSetup,
     /// Live-fetch `/models` with the saved `/setup` URL + key and pick a model.
     OpenLiveModelPicker,
+    /// Open the thinking-effort picker for the session's current model.
+    OpenEffortPicker,
     /// Fetch `/models` for the in-progress setup wizard.
     FetchProviderModels {
         base_url: String,

@@ -2103,6 +2103,15 @@ pub(super) fn apply_setup_outcome(
             provider_id,
             generation,
         }),
+        SetupOutcome::SwitchSession { model_id, effort } => {
+            agent.active_modal = None;
+            InputOutcome::Action(Action::SwitchModel {
+                model_id: agent_client_protocol::ModelId::new(std::sync::Arc::from(
+                    model_id.as_str(),
+                )),
+                effort: effort.and_then(|s| s.parse().ok()),
+            })
+        }
         SetupOutcome::Save { setup, generation } => {
             let image = matches!(
                 &agent.active_modal,

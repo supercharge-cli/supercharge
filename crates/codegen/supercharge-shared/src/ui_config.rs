@@ -74,6 +74,9 @@ pub struct UiConfig {
     /// Vim-style scrollback navigation (hjkl, gg/G, /).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vim_mode: Option<bool>,
+    /// Built-in Ponytail YAGNI / lazy-senior mode. `None` = off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ponytail: Option<bool>,
     /// How ` ```mermaid ` code blocks are rendered (`auto` | `on` | `off`).
     /// Written by the pager's settings modal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -274,6 +277,7 @@ impl Default for UiConfig {
             invert_scroll: None,
             scroll_lines: None,
             vim_mode: None,
+            ponytail: None,
             render_mermaid: None,
             hunk_tracker_mode: None,
             voice_capture_mode: None,

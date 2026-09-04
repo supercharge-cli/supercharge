@@ -75,7 +75,7 @@ use super::session::modal::{dispatch_rename_session, dispatch_reset_session_titl
 use super::settings::setters::{
     clear_default_model, clear_fork_secondary_model, preview_auto_dark_theme,
     preview_auto_light_theme, preview_theme, set_ask_user_question_timeout_enabled,
-    set_auto_dark_theme, set_auto_light_theme, set_auto_update, set_thinking_effort,
+    set_auto_dark_theme, set_auto_light_theme, set_auto_update, set_thinking_effort, set_ponytail,
     set_collapsed_edit_blocks,
     set_combine_queued_prompts, set_compact_mode, set_confirm_before_rewind,
     set_contextual_hint_image_input, set_contextual_hint_plan_mode, set_contextual_hint_send_now,
@@ -92,7 +92,7 @@ use super::settings::setters::{
 use super::settings::ui::{
     dispatch_confirm_reset_setting, dispatch_open_command_palette, dispatch_open_howto_guides,
     dispatch_open_reset_confirm, dispatch_open_settings, dispatch_open_setup,
-    dispatch_open_image_setup, dispatch_open_live_model_picker,
+    dispatch_open_image_setup, dispatch_open_live_model_picker, dispatch_open_effort_picker,
     dispatch_toggle_compact_mode, dispatch_toggle_mouse_capture, dispatch_toggle_multiline,
     dispatch_toggle_timestamps, dispatch_toggle_vim_mode,
 };
@@ -1095,6 +1095,7 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::SetMaxThoughtsWidth(v) => set_max_thoughts_width(app, v),
         Action::SetShowTips(v) => set_show_tips(app, v),
         Action::SetAutoUpdate(v) => set_auto_update(app, v),
+        Action::SetPonytail(v) => set_ponytail(app, v),
         Action::SetThinkingEffort(v) => set_thinking_effort(app, v),
         Action::SetDisplayRefreshAutoCadence(v) => set_display_refresh_auto_cadence(app, v),
         Action::PreviewTheme(v) => preview_theme(app, v),
@@ -1105,6 +1106,7 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::OpenSetup => dispatch_open_setup(app),
         Action::OpenImageSetup => dispatch_open_image_setup(app),
         Action::OpenLiveModelPicker => dispatch_open_live_model_picker(app),
+        Action::OpenEffortPicker => dispatch_open_effort_picker(app),
         Action::FetchProviderModels {
             base_url,
             api_key,

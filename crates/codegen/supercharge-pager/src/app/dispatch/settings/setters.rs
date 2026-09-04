@@ -2102,6 +2102,30 @@ pub(super) fn set_auto_update_inner(app: &mut AppView, value: bool) {
 }
 
 /// Outer dispatcher for `Action::SetAutoUpdate`.
+pub(in crate::app::dispatch) fn set_ponytail(app: &mut AppView, new: bool) -> Vec<Effect> {
+    let prev = crate::ponytail::is_enabled();
+    if prev == new {
+        app.show_toast(if new {
+            "Token-saving mode is already on"
+        } else {
+            "Token-saving mode is already off"
+        });
+        return vec![];
+    }
+    crate::ponytail::set_enabled(new);
+    tracing::info!(target: "settings", key = "ponytail", value = new, "setting changed");
+    app.show_toast(if new {
+        "Token-saving mode on — shorter YAGNI replies"
+    } else {
+        "Token-saving mode off"
+    });
+    vec![Effect::PersistSetting {
+        key: "ponytail",
+        value: crate::settings::SettingValue::Bool(new),
+        rollback_value: crate::settings::SettingValue::Bool(prev),
+    }]
+}
+
 pub(in crate::app::dispatch) fn set_auto_update(app: &mut AppView, new: bool) -> Vec<Effect> {
     let prev_state = app.auto_update;
     let prev_effective = prev_state.unwrap_or(true);

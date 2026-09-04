@@ -399,6 +399,11 @@ pub async fn set_auto_update(value: bool) -> Result<()> {
     update_config(|cfg| cfg.cli.auto_update = Some(value)).await
 }
 
+/// Persist `[ui].ponytail` (built-in YAGNI mode).
+pub async fn set_ponytail(value: bool) -> Result<()> {
+    update_config(|cfg| cfg.ui.ponytail = Some(value)).await
+}
+
 /// Persist `[models].default_reasoning_effort`. Empty / invalid clears the key.
 pub async fn set_default_reasoning_effort(value: String) -> Result<()> {
     update_config(|cfg| {

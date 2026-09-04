@@ -318,10 +318,12 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
     },
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProviderModel {
     pub id: String,
     pub name: String,
+    /// True when this model accepts a reasoning / thinking effort level.
+    pub supports_thinking: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -559,6 +561,62 @@ fn is_non_chat_model(id: &str) -> bool {
         || lower.contains("transcri")
 }
 
+pub fn infer_thinking_from_id(id: &str) -> bool {
+    let s = id.to_ascii_lowercase();
+    s.contains("grok")
+        || s.contains("reason")
+        || s.contains("think")
+        || s.contains("o1")
+        || s.contains("o3")
+        || s.contains("o4")
+}
+
+/// Canonical effort ids this model accepts, strongest first.
+///
+/// From xAI docs (`reasoning_effort` on grok-4.6 / grok-4.5 / grok-4.3):
+/// - grok-4.6 and later, grok-4.20: `low` | `medium` | `high` | `xhigh`
+/// - grok-4.5 / grok-4.3: `low` | `medium` | `high` (no `xhigh`; cannot disable)
+/// Other thinking-capable ids get the three-level set.
+pub fn reasoning_effort_ids_for_model(id: &str) -> &'static [&'static str] {
+    if !infer_thinking_from_id(id) {
+        return &[];
+    }
+    let s = id.to_ascii_lowercase();
+    if s.contains("4.6")
+        || s.contains("4.20")
+        || s.contains("grok-5")
+        || s.contains("xhigh")
+        || s.contains("-max")
+    {
+        return &["xhigh", "high", "medium", "low"];
+    }
+    &["high", "medium", "low"]
+}
+
+fn model_entry_supports_thinking(entry: &Value, id: &str, name: &str) -> bool {
+    if let Some(obj) = entry.as_object() {
+        for key in [
+            "supports_reasoning_effort",
+            "supportsReasoningEffort",
+            "reasoning",
+            "thinking",
+        ] {
+            if obj.get(key).and_then(Value::as_bool) == Some(true) {
+                return true;
+            }
+        }
+        if obj.get("reasoning_efforts").and_then(Value::as_array).is_some_and(|a| !a.is_empty())
+            || obj
+                .get("reasoningEfforts")
+                .and_then(Value::as_array)
+                .is_some_and(|a| !a.is_empty())
+        {
+            return true;
+        }
+    }
+    infer_thinking_from_id(id) || infer_thinking_from_id(name)
+}
+
 fn curated_models(provider_id: Option<&str>) -> Vec<ProviderModel> {
     let Some(id) = provider_id.filter(|id| !id.is_empty() && *id != CUSTOM_PROVIDER_ID) else {
         return Vec::new();
@@ -570,6 +628,7 @@ fn curated_models(provider_id: Option<&str>) -> Vec<ProviderModel> {
             .map(|model| ProviderModel {
                 id: (*model).to_owned(),
                 name: (*model).to_owned(),
+                supports_thinking: infer_thinking_from_id(model),
             })
             .collect();
     }
@@ -628,6 +687,7 @@ pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
         models.push(ProviderModel {
             id: id.to_owned(),
             name: name.to_owned(),
+            supports_thinking: model_entry_supports_thinking(&entry, id, name),
         });
         if models.len() >= MAX_MODELS {
             break;
@@ -880,35 +940,97 @@ pub fn load_existing_provider_setup() -> Option<(String, String)> {
     load_existing_provider_setup_details().map(|setup| (setup.base_url, setup.api_key))
 }
 
+fn env_provider_api_key() -> Option<String> {
+    for var in ["XAI_API_KEY", "GROK_API_KEY", "OPENAI_API_KEY"] {
+        if let Ok(raw) = std::env::var(var) {
+            let key = sanitize_provider_api_key(&raw);
+            if !key.is_empty() {
+                return Some(key);
+            }
+        }
+    }
+    None
+}
+
+fn first_model_provider_setup(parsed: &toml::Value) -> Option<ExistingProviderSetup> {
+    let providers = parsed.get("model_providers")?.as_table()?;
+    for (id, provider) in providers {
+        let Some(base_url) = provider
+            .get("base_url")
+            .and_then(toml::Value::as_str)
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .map(str::to_owned)
+        else {
+            continue;
+        };
+        let api_key = provider
+            .get("api_key")
+            .and_then(toml::Value::as_str)
+            .map(sanitize_provider_api_key)
+            .unwrap_or_default();
+        let format = provider
+            .get("api_backend")
+            .and_then(toml::Value::as_str)
+            .map(SetupWireFormat::from_api_backend)
+            .unwrap_or_default();
+        return Some(ExistingProviderSetup {
+            base_url,
+            api_key,
+            format,
+            provider_id: id.clone(),
+        });
+    }
+    None
+}
+
 pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
     let path = crate::util::config::user_config_path();
-    let content = crate::util::config::read_to_string_or_empty(&path).ok()?;
-    if content.trim().is_empty() {
-        return None;
+    let content = crate::util::config::read_to_string_or_empty(&path).unwrap_or_default();
+    let parsed = if content.trim().is_empty() {
+        None
+    } else {
+        content.parse::<toml::Value>().ok()
+    };
+
+    if let Some(parsed) = parsed.as_ref() {
+        let base_url = parsed
+            .get("endpoints")
+            .and_then(|endpoints| {
+                endpoints
+                    .get("models_base_url")
+                    .or_else(|| endpoints.get("api_base_url"))
+                    .or_else(|| endpoints.get("xai_api_base_url"))
+            })
+            .and_then(toml::Value::as_str)
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .map(str::to_owned);
+        let api_key = provider_setup_api_key_from_toml(parsed)
+            .map(|key| sanitize_provider_api_key(&key))
+            .filter(|key| !key.is_empty())
+            .or_else(env_provider_api_key)
+            .unwrap_or_default();
+        if let Some(base_url) = base_url {
+            return Some(ExistingProviderSetup {
+                base_url,
+                api_key,
+                format: setup_wire_format_from_config(parsed),
+                provider_id: setup_profile_id_from_config(parsed)
+                    .unwrap_or_else(|| CUSTOM_PROVIDER_ID.to_owned()),
+            });
+        }
+        if let Some(setup) = first_model_provider_setup(parsed) {
+            return Some(setup);
+        }
     }
-    let parsed = content.parse::<toml::Value>().ok()?;
-    let base_url = parsed
-        .get("endpoints")
-        .and_then(|endpoints| {
-            endpoints
-                .get("models_base_url")
-                .or_else(|| endpoints.get("api_base_url"))
-                .or_else(|| endpoints.get("xai_api_base_url"))
-        })
-        .and_then(toml::Value::as_str)
-        .map(str::trim)
-        .filter(|url| !url.is_empty())
-        .map(str::to_owned)?;
-    let api_key = provider_setup_api_key_from_toml(&parsed)
-        .map(|key| sanitize_provider_api_key(&key))
-        .filter(|key| !key.is_empty())
-        .unwrap_or_default();
+
+    let api_key = env_provider_api_key()?;
     Some(ExistingProviderSetup {
-        base_url,
+        base_url: "https://api.x.ai/v1".to_owned(),
         api_key,
-        format: setup_wire_format_from_config(&parsed),
-        provider_id: setup_profile_id_from_config(&parsed)
-            .unwrap_or_else(|| CUSTOM_PROVIDER_ID.to_owned()),
+        format: SetupWireFormat::Openai,
+        provider_id: "grok".to_owned(),
     })
 }
 
@@ -923,10 +1045,12 @@ mod tests {
             ProviderModel {
                 id: "kimi-code".to_owned(),
                 name: "Kimi Code".to_owned(),
+                supports_thinking: false,
             },
             ProviderModel {
                 id: "openai".to_owned(),
                 name: "openai".to_owned(),
+                supports_thinking: false,
             },
         ];
         let catalog = provider_models_to_catalog(
@@ -968,6 +1092,23 @@ mod tests {
     }
 
     #[test]
+    fn reasoning_effort_ids_match_xai_docs() {
+        assert_eq!(
+            reasoning_effort_ids_for_model("grok-4.6"),
+            &["xhigh", "high", "medium", "low"]
+        );
+        assert_eq!(
+            reasoning_effort_ids_for_model("grok-4.5"),
+            &["high", "medium", "low"]
+        );
+        assert_eq!(
+            reasoning_effort_ids_for_model("grok-4.3"),
+            &["high", "medium", "low"]
+        );
+        assert!(reasoning_effort_ids_for_model("gpt-4o").is_empty());
+    }
+
+    #[test]
     fn skips_embedding_and_audio_models() {
         let body = json!({
             "data": [
@@ -1000,10 +1141,12 @@ mod tests {
                 ProviderModel {
                     id: "gpt-4o".to_owned(),
                     name: "gpt-4o".to_owned(),
+                    supports_thinking: false,
                 },
                 ProviderModel {
                     id: "o3-mini".to_owned(),
                     name: "o3 mini".to_owned(),
+                    supports_thinking: true,
                 },
             ]
         );
@@ -1025,10 +1168,12 @@ mod tests {
                 ProviderModel {
                     id: "a-model".to_owned(),
                     name: "A model".to_owned(),
+                    supports_thinking: false,
                 },
                 ProviderModel {
                     id: "z-model".to_owned(),
                     name: "z-model".to_owned(),
+                    supports_thinking: false,
                 },
             ]
         );

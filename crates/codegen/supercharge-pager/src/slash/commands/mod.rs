@@ -47,6 +47,7 @@ pub mod new;
 pub mod personas;
 pub mod plan;
 pub mod plugin;
+pub mod pony;
 pub mod privacy;
 pub mod queue;
 pub mod recap;
@@ -121,6 +122,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(announcements::AnnouncementsCommand),
         Arc::new(remember::RememberCommand),
         Arc::new(plan::PlanCommand),
+        Arc::new(pony::PonyCommand),
         Arc::new(view_plan::ViewPlanCommand),
         Arc::new(resume::ResumeCommand),
         Arc::new(mcps::McpsCommand),

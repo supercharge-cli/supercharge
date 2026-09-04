@@ -1534,7 +1534,22 @@ fn merge_provider_models_into_catalog(
         } else {
             model.name.clone()
         };
-        let info = acp::ModelInfo::new(id.clone(), name);
+        let mut info = acp::ModelInfo::new(id.clone(), name);
+        if model.supports_thinking {
+            let efforts: Vec<serde_json::Value> =
+                supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(&model.id)
+                    .iter()
+                    .map(|id| serde_json::json!({ "value": id, "label": id }))
+                    .collect();
+            info = info.meta(
+                serde_json::json!({
+                    "supportsReasoningEffort": true,
+                    "reasoningEfforts": efforts,
+                })
+                .as_object()
+                .cloned(),
+            );
+        }
         app.models.available.insert(id.clone(), info.clone());
         if let Some(agent) = get_active_agent_mut(app) {
             agent.session.models.available.insert(id, info);
