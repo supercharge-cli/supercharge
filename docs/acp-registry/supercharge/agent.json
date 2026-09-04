@@ -1,7 +1,7 @@
 {
   "id": "supercharge",
   "name": "Supercharge",
-  "version": "1.2.5",
+  "version": "1.2.8",
   "description": "Self-hostable coding agent CLI with native ACP stdio support",
   "repository": "https://github.com/iotserver24/supercharge-releases",
   "website": "https://github.com/iotserver24/supercharge-releases",
@@ -10,37 +10,37 @@
   "distribution": {
     "binary": {
       "darwin-aarch64": {
-        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.5/supercharge-macos-aarch64",
+        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.8/supercharge-macos-aarch64",
         "sha256": "788f2191ebdd2ea8e2ba208068810499cb5837f93c48143d3d86f519d599a4df",
         "cmd": "./supercharge-macos-aarch64",
         "args": ["agent", "stdio"]
       },
       "darwin-x86_64": {
-        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.5/supercharge-macos-x86_64",
+        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.8/supercharge-macos-x86_64",
         "sha256": "6ffedcac732ec2400d4cd9015a48d70f715a889af453c4a28efda00e68691028",
         "cmd": "./supercharge-macos-x86_64",
         "args": ["agent", "stdio"]
       },
       "linux-aarch64": {
-        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.5/supercharge-linux-aarch64",
+        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.8/supercharge-linux-aarch64",
         "sha256": "824e0166c6d86e889c2b1f5cc58f3935f0d41f7413f20763876169c1536c1e4b",
         "cmd": "./supercharge-linux-aarch64",
         "args": ["agent", "stdio"]
       },
       "linux-x86_64": {
-        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.5/supercharge-linux-x86_64",
+        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.8/supercharge-linux-x86_64",
         "sha256": "d7a38353d251d4d2552b3588f258be4b8e05a06e1592df4ca17dcb1c718ded97",
         "cmd": "./supercharge-linux-x86_64",
         "args": ["agent", "stdio"]
       },
       "windows-aarch64": {
-        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.5/supercharge-windows-aarch64.exe",
+        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.8/supercharge-windows-aarch64.exe",
         "sha256": "743726f7a342b9bc31fde677e75f218a9a6605babde12bf21d3f130a2b3a3848",
         "cmd": "supercharge-windows-aarch64.exe",
         "args": ["agent", "stdio"]
       },
       "windows-x86_64": {
-        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.5/supercharge-windows-x86_64.exe",
+        "archive": "https://github.com/iotserver24/supercharge-releases/releases/download/v1.2.8/supercharge-windows-x86_64.exe",
         "sha256": "630ec710ba00631b9a0ca8030744867c613b09ae579856e57ee40f8cfc3a88d7",
         "cmd": "supercharge-windows-x86_64.exe",
         "args": ["agent", "stdio"]
