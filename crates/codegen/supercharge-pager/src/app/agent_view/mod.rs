@@ -2124,6 +2124,52 @@ pub(super) fn apply_setup_outcome(
                 InputOutcome::Action(Action::PersistProviderSetup { setup, generation })
             }
         }
+        SetupOutcome::OpenNousLoginUrl => {
+            let url = match &agent.active_modal {
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                    state.device_login_url().to_owned()
+                }
+                _ => String::new(),
+            };
+            if url.is_empty() {
+                InputOutcome::Unchanged
+            } else {
+                InputOutcome::Action(Action::OpenUrl(url))
+            }
+        }
+        SetupOutcome::CopyNousLoginUrl => {
+            let url = match &agent.active_modal {
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                    state.device_login_url().to_owned()
+                }
+                _ => String::new(),
+            };
+            if url.is_empty() {
+                InputOutcome::Unchanged
+            } else {
+                InputOutcome::Action(Action::CopyText(url))
+            }
+        }
+        SetupOutcome::StartNousDeviceLogin { generation } => {
+            InputOutcome::Action(Action::StartNousDeviceLogin { generation })
+        }
+        SetupOutcome::PollNousDeviceLogin {
+            device_code,
+            user_code,
+            verification_uri,
+            verification_uri_complete,
+            expires_in,
+            interval,
+            generation,
+        } => InputOutcome::Action(Action::PollNousDeviceLogin {
+            device_code,
+            user_code,
+            verification_uri,
+            verification_uri_complete,
+            expires_in,
+            interval,
+            generation,
+        }),
         SetupOutcome::Changed => InputOutcome::Changed,
         SetupOutcome::Unchanged => InputOutcome::Unchanged,
     }

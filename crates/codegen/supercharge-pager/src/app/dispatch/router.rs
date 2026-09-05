@@ -1126,6 +1126,26 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::PersistImageProviderSetup { setup, generation } => {
             vec![Effect::PersistImageProviderSetup { setup, generation }]
         }
+        Action::StartNousDeviceLogin { generation } => {
+            vec![Effect::StartNousDeviceLogin { generation }]
+        }
+        Action::PollNousDeviceLogin {
+            device_code,
+            user_code,
+            verification_uri,
+            verification_uri_complete,
+            expires_in,
+            interval,
+            generation,
+        } => vec![Effect::PollNousDeviceLogin {
+            device_code,
+            user_code,
+            verification_uri,
+            verification_uri_complete,
+            expires_in,
+            interval,
+            generation,
+        }],
         Action::PrivacyBannerOptIn => dispatch_privacy_banner_opt_in(app),
         Action::PrivacyBannerOptOut => dispatch_privacy_banner_opt_out(app),
         Action::OpenCommandPalette => dispatch_open_command_palette(app),
@@ -1140,6 +1160,11 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::SwitchAccount => dispatch_switch_account(app),
         Action::CheckSubscription => vec![Effect::CheckSubscription { verify: None }],
         Action::OpenSuperchargeUpgradeUrl => dispatch_open_supercharge_upgrade_url(app),
+        Action::CopyText(text) => {
+            let delivery = crate::clipboard::copy_text_or_file(&text);
+            app.show_toast(delivery.toast_message().as_ref());
+            vec![]
+        }
         Action::OpenUrl(url) => {
             if url.starts_with("file://") {
                 let opened = url::Url::parse(&url)

@@ -32,6 +32,8 @@ pub enum SetupStep {
     PickProvider,
     BaseUrl,
     ApiKey,
+    /// Nous Portal RFC 8628 device-code login (free-tier JWTs).
+    DeviceAuth,
     Fetching,
     FetchError { message: String },
     PickModel,
@@ -60,6 +62,9 @@ pub struct SetupModalState {
     pending_model: Option<ProviderModel>,
     /// Per-model effort ids shown in `PickEffort` (xAI catalog).
     effort_levels: Vec<String>,
+    device_user_code: String,
+    device_verification_uri: String,
+    device_status: String,
 }
 
 #[derive(Debug)]
@@ -82,6 +87,24 @@ pub enum SetupOutcome {
     SwitchSession {
         model_id: String,
         effort: Option<String>,
+    },
+    /// Start Nous Portal device-code OAuth.
+    StartNousDeviceLogin {
+        generation: u64,
+    },
+    /// Open the Nous login URL in the default browser.
+    OpenNousLoginUrl,
+    /// Copy the Nous login URL to the clipboard.
+    CopyNousLoginUrl,
+    /// Poll until the user approves the device code.
+    PollNousDeviceLogin {
+        device_code: String,
+        user_code: String,
+        verification_uri: String,
+        verification_uri_complete: String,
+        expires_in: u64,
+        interval: u64,
+        generation: u64,
     },
 }
 
@@ -143,6 +166,9 @@ impl SetupModalState {
             picker_only: false,
             pending_model: None,
             effort_levels: Vec::new(),
+            device_user_code: String::new(),
+            device_verification_uri: String::new(),
+            device_status: String::new(),
         }
     }
 
@@ -329,6 +355,82 @@ impl SetupModalState {
             }
         }
     }
+
+    pub fn apply_nous_device_started(
+        &mut self,
+        generation: u64,
+        pending: supercharge_shell::agent::nous_oauth::DeviceCodePending,
+    ) -> Option<SetupOutcome> {
+        if generation != self.generation {
+            return None;
+        }
+        self.device_user_code = pending.user_code.clone();
+        self.device_verification_uri = if pending.verification_uri_complete.is_empty() {
+            pending.verification_uri.clone()
+        } else {
+            pending.verification_uri_complete.clone()
+        };
+        self.device_status = "Opened in your browser. Waiting for approval…".into();
+        self.step = SetupStep::DeviceAuth;
+        Some(SetupOutcome::PollNousDeviceLogin {
+            device_code: pending.device_code,
+            user_code: pending.user_code,
+            verification_uri: pending.verification_uri,
+            verification_uri_complete: pending.verification_uri_complete,
+            expires_in: pending.expires_in,
+            interval: pending.interval,
+            generation,
+        })
+    }
+
+    pub fn apply_nous_device_finished(
+        &mut self,
+        generation: u64,
+        result: Result<String, String>,
+    ) -> Option<SetupOutcome> {
+        if generation != self.generation {
+            return None;
+        }
+        match result {
+            Ok(access_token) => {
+                self.api_key.set_text(access_token);
+                self.base_url
+                    .set_text(supercharge_shell::agent::nous_oauth::INFERENCE_BASE);
+                self.device_status = "Logged in. Fetching models…".into();
+                match normalize_provider_base_url(self.base_url.text()) {
+                    Ok(base_url) => {
+                        self.generation = self.generation.saturating_add(1);
+                        self.step = SetupStep::Fetching;
+                        Some(SetupOutcome::Fetch {
+                            base_url,
+                            api_key: self.api_key.text().trim().to_owned(),
+                            format: self.format,
+                            provider_id: self.provider_id.clone(),
+                            generation: self.generation,
+                        })
+                    }
+                    Err(error) => {
+                        self.step = SetupStep::FetchError {
+                            message: error.to_string(),
+                        };
+                        None
+                    }
+                }
+            }
+            Err(message) => {
+                self.step = SetupStep::FetchError { message };
+                None
+            }
+        }
+    }
+
+    pub fn device_login_url(&self) -> &str {
+        if self.device_verification_uri.is_empty() {
+            "https://portal.nousresearch.com/oauth/device"
+        } else {
+            self.device_verification_uri.as_str()
+        }
+    }
 }
 
 pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
@@ -342,9 +444,10 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 || key.modifiers.contains(KeyModifiers::SUPER)))
     {
         return match &state.step {
-            SetupStep::PickProvider | SetupStep::Fetching | SetupStep::Saving => {
-                SetupOutcome::Close
-            }
+            SetupStep::PickProvider
+            | SetupStep::Fetching
+            | SetupStep::Saving
+            | SetupStep::DeviceAuth => SetupOutcome::Close,
             SetupStep::BaseUrl => {
                 state.step = SetupStep::PickProvider;
                 state.filter.reset();
@@ -384,6 +487,7 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
 
     match &state.step {
         SetupStep::Fetching | SetupStep::Saving => SetupOutcome::Unchanged,
+        SetupStep::DeviceAuth => handle_device_auth(state, key),
         SetupStep::PickProvider => handle_pick_provider(state, key),
         SetupStep::BaseUrl => handle_base_url(state, key),
         SetupStep::ApiKey => handle_api_key(state, key),
@@ -429,9 +533,22 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
         },
-        SetupStep::Fetching | SetupStep::FetchError { .. } | SetupStep::Saving => {
-            SetupOutcome::Unchanged
+        SetupStep::Fetching
+        | SetupStep::FetchError { .. }
+        | SetupStep::Saving
+        | SetupStep::DeviceAuth => SetupOutcome::Unchanged,
+    }
+}
+
+fn handle_device_auth(_state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
+    match key.code {
+        KeyCode::Enter | KeyCode::Char('o') | KeyCode::Char('O') => SetupOutcome::OpenNousLoginUrl,
+        KeyCode::Char('c') | KeyCode::Char('C')
+            if !key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            SetupOutcome::CopyNousLoginUrl
         }
+        _ => SetupOutcome::Unchanged,
     }
 }
 
@@ -457,6 +574,33 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.base_url.set_text(profile.base_url);
                 state.filter.reset();
                 state.selected = 0;
+                if profile.id == "nous" {
+                    if supercharge_shell::agent::nous_oauth::resolve_access_token().is_ok() {
+                        state.generation = state.generation.saturating_add(1);
+                        state.step = SetupStep::Fetching;
+                        return match normalize_provider_base_url(state.base_url.text()) {
+                            Ok(base_url) => SetupOutcome::Fetch {
+                                base_url,
+                                api_key: String::new(),
+                                format: state.format,
+                                provider_id: state.provider_id.clone(),
+                                generation: state.generation,
+                            },
+                            Err(error) => {
+                                state.step = SetupStep::FetchError {
+                                    message: error.to_string(),
+                                };
+                                SetupOutcome::Changed
+                            }
+                        };
+                    }
+                    state.generation = state.generation.saturating_add(1);
+                    state.device_status = "Starting Nous Portal login…".into();
+                    state.step = SetupStep::DeviceAuth;
+                    return SetupOutcome::StartNousDeviceLogin {
+                        generation: state.generation,
+                    };
+                }
                 state.step = SetupStep::ApiKey;
                 SetupOutcome::Changed
             }
@@ -701,6 +845,7 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
         SetupStep::PickProvider => format!("{prefix}  ·  choose provider"),
         SetupStep::BaseUrl => format!("{prefix}  ·  base URL"),
         SetupStep::ApiKey => format!("{prefix}  ·  API key"),
+        SetupStep::DeviceAuth => format!("{prefix}  ·  Nous Portal login"),
         SetupStep::Fetching => format!("{prefix}  ·  fetching models"),
         SetupStep::FetchError { .. } => format!("{prefix}  ·  error"),
         SetupStep::PickModel => format!("{prefix}  ·  choose model"),
@@ -741,6 +886,27 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
             state.custom_model.text(),
             true,
         ),
+        SetupStep::DeviceAuth => {
+            let uri = if state.device_verification_uri.is_empty() {
+                "https://portal.nousresearch.com/oauth/device"
+            } else {
+                state.device_verification_uri.as_str()
+            };
+            let code = if state.device_user_code.is_empty() {
+                "…"
+            } else {
+                state.device_user_code.as_str()
+            };
+            render_status(
+                buf,
+                inner,
+                &theme,
+                &format!(
+                    "To continue:\n  1. Open: {uri}\n  2. If prompted, enter code: {code}\n\n{}\n\nEnter/o opens the link  ·  c copies it",
+                    state.device_status
+                ),
+            );
+        }
         SetupStep::ApiKey => {
             let display = if state.reveal_api_key {
                 state.api_key.text().to_owned()
@@ -791,6 +957,23 @@ fn shortcuts_for(step: &SetupStep) -> Vec<Shortcut<'static>> {
             },
             Shortcut {
                 label: "Esc close",
+                clickable: false,
+                id: 2,
+            },
+        ],
+        SetupStep::DeviceAuth => vec![
+            Shortcut {
+                label: "o open",
+                clickable: false,
+                id: 1,
+            },
+            Shortcut {
+                label: "c copy",
+                clickable: false,
+                id: 3,
+            },
+            Shortcut {
+                label: "Esc cancel",
                 clickable: false,
                 id: 2,
             },

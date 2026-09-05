@@ -4453,6 +4453,46 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::StartNousDeviceLogin { generation } => {
+            tasks.spawn(async move {
+                let result = tokio::task::spawn_blocking(
+                    supercharge_shell::agent::nous_oauth::request_device_code,
+                )
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|r| r);
+                TaskResult::NousDeviceStarted { generation, result }
+            });
+        }
+        Effect::PollNousDeviceLogin {
+            device_code,
+            user_code,
+            verification_uri,
+            verification_uri_complete,
+            expires_in,
+            interval,
+            generation,
+        } => {
+            tasks.spawn(async move {
+                let pending = supercharge_shell::agent::nous_oauth::DeviceCodePending {
+                    device_code,
+                    user_code,
+                    verification_uri,
+                    verification_uri_complete,
+                    expires_in,
+                    interval,
+                };
+                let result = tokio::task::spawn_blocking(move || {
+                    let state = supercharge_shell::agent::nous_oauth::poll_for_token(&pending)?;
+                    supercharge_shell::agent::nous_oauth::persist_state(&state)?;
+                    Ok(state.access_token)
+                })
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|r| r);
+                TaskResult::NousDeviceFinished { generation, result }
+            });
+        }
         Effect::FetchProviderModels { base_url, api_key, format, provider_id, generation } => {
             tasks
                 .spawn(async move {

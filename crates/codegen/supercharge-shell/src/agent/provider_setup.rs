@@ -292,11 +292,11 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
     SetupProviderProfile {
         id: "nous",
         name: "Nous Research",
-        description: "Nous Portal inference",
+        description: "Nous Portal OAuth — free-tier models",
         base_url: "https://inference-api.nousresearch.com/v1",
-        default_model: "deepseek/deepseek-v4-flash",
+        default_model: "Hermes-4.3-36B",
         format: SetupWireFormat::Openai,
-        curated: &["deepseek/deepseek-v4-flash"],
+        curated: &["Hermes-4.3-36B", "Hermes-4-70B", "deepseek/deepseek-v4-flash"],
     },
     SetupProviderProfile {
         id: "ollama",
@@ -762,6 +762,17 @@ pub fn fetch_provider_models(
     format: SetupWireFormat,
     provider_id: Option<&str>,
 ) -> Result<Vec<ProviderModel>, ProviderSetupError> {
+    let mut api_key = api_key.to_owned();
+    if provider_id == Some("nous") {
+        match super::nous_oauth::resolve_access_token() {
+            Ok(token) => api_key = token,
+            Err(err) if api_key.trim().is_empty() => {
+                return Err(ProviderSetupError::Fetch(err));
+            }
+            Err(_) => {}
+        }
+    }
+    let api_key = api_key.as_str();
     let base_url = normalize_provider_base_url(base_url)?;
     if api_key.len() > MAX_API_KEY_LEN {
         return Err(ProviderSetupError::ApiKeyTooLong);

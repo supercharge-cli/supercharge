@@ -52,9 +52,9 @@ use super::transcript::{
 };
 use super::turn::handle_bg_task_killed;
 use crate::app::actions::{
-    ClipboardPasteCompletion, ClipboardPasteContext, ClipboardPasteFailure, ClipboardPasteTarget,
-    DoctorFixTarget, DoctorPlanningOutcome, Effect, ProbedAttachment, SubagentKillOutcome,
-    TaskResult,
+    Action, ClipboardPasteCompletion, ClipboardPasteContext, ClipboardPasteFailure,
+    ClipboardPasteTarget, DoctorFixTarget, DoctorPlanningOutcome, Effect, ProbedAttachment,
+    SubagentKillOutcome, TaskResult,
 };
 use crate::app::agent::{AgentId, DeferredModelSwitch};
 use crate::app::app_view::{ActiveView, AppView, AuthState};
@@ -1461,6 +1461,88 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             let scrubbed = scrub_error_for_toast(&error);
             app.show_toast(&format!("\u{2717} Could not save {key}: {scrubbed}"));
             vec![]
+        }
+        TaskResult::NousDeviceStarted { generation, result } => {
+            let mut open_url = None;
+            let next = get_active_agent_mut(app).and_then(|agent| {
+                let crate::views::modal::ActiveModal::ProviderSetup { state } =
+                    agent.active_modal.as_mut()?
+                else {
+                    return None;
+                };
+                match result {
+                    Ok(pending) => {
+                        let url = if pending.verification_uri_complete.is_empty() {
+                            pending.verification_uri.clone()
+                        } else {
+                            pending.verification_uri_complete.clone()
+                        };
+                        open_url = Some(url);
+                        match state.apply_nous_device_started(generation, pending) {
+                            Some(crate::views::setup_modal::SetupOutcome::PollNousDeviceLogin {
+                                device_code,
+                                user_code,
+                                verification_uri,
+                                verification_uri_complete,
+                                expires_in,
+                                interval,
+                                generation,
+                            }) => Some(Action::PollNousDeviceLogin {
+                                device_code,
+                                user_code,
+                                verification_uri,
+                                verification_uri_complete,
+                                expires_in,
+                                interval,
+                                generation,
+                            }),
+                            _ => None,
+                        }
+                    }
+                    Err(message) => {
+                        state.step = crate::views::setup_modal::SetupStep::FetchError { message };
+                        None
+                    }
+                }
+            });
+            let mut effects = vec![];
+            if let Some(url) = open_url {
+                effects.extend(crate::app::dispatch::router::dispatch(
+                    Action::OpenUrl(url),
+                    app,
+                ));
+            }
+            if let Some(action) = next {
+                effects.extend(crate::app::dispatch::router::dispatch(action, app));
+            }
+            effects
+        }
+        TaskResult::NousDeviceFinished { generation, result } => {
+            let next = get_active_agent_mut(app).and_then(|agent| {
+                let crate::views::modal::ActiveModal::ProviderSetup { state } =
+                    agent.active_modal.as_mut()?
+                else {
+                    return None;
+                };
+                match state.apply_nous_device_finished(generation, result) {
+                    Some(crate::views::setup_modal::SetupOutcome::Fetch {
+                        base_url,
+                        api_key,
+                        format,
+                        provider_id,
+                        generation,
+                    }) => Some(Action::FetchProviderModels {
+                        base_url,
+                        api_key,
+                        format,
+                        provider_id,
+                        generation,
+                    }),
+                    _ => None,
+                }
+            });
+            next.map(|action| crate::app::dispatch::router::dispatch(action, app))
+                .unwrap_or_default()
         }
         TaskResult::ProviderModelsFetched { generation, result } => {
             if let Ok(models) = &result {

@@ -17,6 +17,7 @@ pub mod dashboard;
 pub mod debug;
 pub mod delete;
 pub mod docs;
+pub mod donate;
 pub mod doctor;
 pub mod edit_prompt;
 pub mod effort;
@@ -85,6 +86,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(exit::ExitCommand),
         Arc::new(help::HelpCommand),
         Arc::new(docs::DocsCommand),
+        Arc::new(donate::DonateCommand),
         Arc::new(home::HomeCommand),
         Arc::new(delete::DeleteCommand),
         Arc::new(new::NewCommand),

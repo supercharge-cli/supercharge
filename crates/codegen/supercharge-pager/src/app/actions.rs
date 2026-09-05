@@ -68,6 +68,8 @@ pub enum Action {
     CheckSubscription,
     /// Open an arbitrary URL in the system browser (with scheme validation).
     OpenUrl(String),
+    /// Copy text to the system clipboard and toast the result.
+    CopyText(String),
     /// Open a semantic scrollback link.
     OpenLink(crate::render::osc8::LinkTarget),
     /// Open supercharge.ai managed connectors, appending session teamId when set.
@@ -653,6 +655,18 @@ pub enum Action {
     /// Persist `[image_provider]` from `/isetup`.
     PersistImageProviderSetup {
         setup: supercharge_shell::agent::provider_setup::ProviderSetup,
+        generation: u64,
+    },
+    StartNousDeviceLogin {
+        generation: u64,
+    },
+    PollNousDeviceLogin {
+        device_code: String,
+        user_code: String,
+        verification_uri: String,
+        verification_uri_complete: String,
+        expires_in: u64,
+        interval: u64,
         generation: u64,
     },
     /// Open settings on a registry key: its chooser, or the browse row when
@@ -2252,6 +2266,18 @@ pub enum Effect {
         setup: supercharge_shell::agent::provider_setup::ProviderSetup,
         generation: u64,
     },
+    StartNousDeviceLogin {
+        generation: u64,
+    },
+    PollNousDeviceLogin {
+        device_code: String,
+        user_code: String,
+        verification_uri: String,
+        verification_uri_complete: String,
+        expires_in: u64,
+        interval: u64,
+        generation: u64,
+    },
 }
 /// Wire params for `x.ai/session/rename`. Shared with the effect executor
 /// so dispatch tests can pin the exact camelCase payload.
@@ -3094,6 +3120,14 @@ pub enum TaskResult {
         generation: u64,
         model_id: String,
         result: Result<(), String>,
+    },
+    NousDeviceStarted {
+        generation: u64,
+        result: Result<supercharge_shell::agent::nous_oauth::DeviceCodePending, String>,
+    },
+    NousDeviceFinished {
+        generation: u64,
+        result: Result<String, String>,
     },
 }
 #[cfg(test)]
