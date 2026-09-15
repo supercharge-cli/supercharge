@@ -1545,6 +1545,17 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                 .unwrap_or_default()
         }
         TaskResult::ProviderModelsFetched { generation, result } => {
+            let is_current = get_active_agent_mut(app).is_some_and(|agent| {
+                matches!(
+                    agent.active_modal.as_ref(),
+                    Some(crate::views::modal::ActiveModal::ProviderSetup { state })
+                        if state.generation == generation
+                            && matches!(state.step, crate::views::setup_modal::SetupStep::Fetching)
+                )
+            });
+            if !is_current {
+                return vec![];
+            }
             if let Ok(models) = &result {
                 merge_provider_models_into_catalog(app, models);
             }
@@ -1648,9 +1659,15 @@ fn switch_session_to_setup_model(app: &mut AppView, model_id: &str) -> Vec<Effec
     };
     let id = acp::ModelId::new(std::sync::Arc::from(model_id));
     let info = acp::ModelInfo::new(id.clone(), model_id.to_string());
-    let (session_id, prev_id) = {
+    let (session_id, prev_id, effort) = {
         let Some(agent) = app.agents.get_mut(&aid) else {
             return vec![];
+        };
+        let effort = match agent.active_modal.as_ref() {
+            Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                state.selected_effort.as_deref().and_then(|effort| effort.parse().ok())
+            }
+            _ => None,
         };
         agent.active_modal = None;
         agent
@@ -1659,12 +1676,12 @@ fn switch_session_to_setup_model(app: &mut AppView, model_id: &str) -> Vec<Effec
             .available
             .insert(id.clone(), info.clone());
         let prev_id = agent.session.models.current.clone();
-        agent.session.models.set_current(id.clone(), None);
+        agent.session.models.set_current(id.clone(), effort.clone());
         agent.session.user_model_preference = Some(id.clone());
-        (agent.session.session_id.clone(), prev_id)
+        (agent.session.session_id.clone(), prev_id, effort)
     };
     app.models.available.insert(id.clone(), info);
-    app.models.set_current(id.clone(), None);
+    app.models.set_current(id.clone(), effort.clone());
     app.show_toast(&format!("Using {model_id}"));
 
     if let Some(session_id) = session_id {
@@ -1675,13 +1692,13 @@ fn switch_session_to_setup_model(app: &mut AppView, model_id: &str) -> Vec<Effec
             agent_id: aid,
             session_id,
             model_id: id,
-            effort: None,
+            effort,
             prev_model_id: prev_id,
         }]
     } else if let Some(agent) = app.agents.get_mut(&aid) {
         agent.session.deferred_model_switch = Some(DeferredModelSwitch {
             model_id: id,
-            effort: None,
+            effort,
             prev_model_id: prev_id,
         });
         vec![]

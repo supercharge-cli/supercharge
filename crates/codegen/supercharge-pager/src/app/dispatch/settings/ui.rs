@@ -325,7 +325,9 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
         return effects;
     }
     let (mut state, fetch) = SetupModalState::live_model_picker();
-    state.seed_catalog_models(&agent.session.models);
+    if fetch.is_none() {
+        state.seed_catalog_models(&agent.session.models);
+    }
     agent.active_modal = Some(ActiveModal::ProviderSetup {
         state: Box::new(state),
     });

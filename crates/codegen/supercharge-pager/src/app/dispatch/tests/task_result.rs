@@ -7,6 +7,69 @@ use super::super::task_result::{
 use super::*;
 use supercharge_shell::session::unified_list::ListScope;
 
+#[test]
+fn provider_setup_saved_switches_with_selected_effort() {
+    use crate::views::modal::ActiveModal;
+    use crate::views::setup_modal::SetupModalState;
+    use supercharge_shell::sampling::types::ReasoningEffort;
+
+    let mut app = test_app_with_agent();
+    let mut state = SetupModalState::new();
+    state.selected_effort = Some("high".to_owned());
+    let generation = state.generation;
+    let agent = app.agents.get_mut(&AgentId(0)).unwrap();
+    agent.bind_session_id("live-model-session".into());
+    agent.active_modal = Some(ActiveModal::ProviderSetup { state: Box::new(state) });
+    let effects = dispatch_task_result(
+        TaskResult::ProviderSetupSaved {
+            generation,
+            model_id: "new-live-model".to_owned(),
+            result: Ok(()),
+        },
+        &mut app,
+    );
+    assert!(effects.iter().any(|effect| matches!(
+        effect,
+        Effect::SwitchModel { model_id, effort: Some(ReasoningEffort::High), .. }
+            if model_id.0.as_ref() == "new-live-model"
+    )));
+}
+
+#[test]
+fn provider_models_results_do_not_mutate_catalog_after_picker_closed_or_reopened() {
+    use crate::views::modal::ActiveModal;
+    use crate::views::setup_modal::SetupModalState;
+    use supercharge_shell::agent::provider_setup::ProviderModel;
+
+    for reopened in [false, true] {
+        let mut app = test_app_with_agent();
+        let mut old = SetupModalState::new();
+        old.base_url.set_text("https://provider.example/v1");
+        old.begin_live_fetch().unwrap();
+        if reopened {
+            let mut state = SetupModalState::new();
+            state.base_url.set_text("https://provider.example/v1");
+            state.begin_live_fetch().unwrap();
+            app.agents.get_mut(&AgentId(0)).unwrap().active_modal =
+                Some(ActiveModal::ProviderSetup { state: Box::new(state) });
+        }
+        dispatch_task_result(
+            TaskResult::ProviderModelsFetched {
+                generation: old.generation,
+                result: Ok(vec![ProviderModel {
+                    id: "stale-provider-model".to_owned(),
+                    name: "Stale".to_owned(),
+                    supports_thinking: false,
+                }]),
+            },
+            &mut app,
+        );
+        let stale = acp::ModelId::new("stale-provider-model");
+        assert!(!app.models.available.contains_key(&stale));
+        assert!(!app.agents[&AgentId(0)].session.models.available.contains_key(&stale));
+    }
+}
+
 fn doctor_target(app: &AppView, id: AgentId) -> crate::app::actions::DoctorFixTarget {
     let agent = &app.agents[&id];
     crate::app::actions::DoctorFixTarget {

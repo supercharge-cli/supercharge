@@ -617,24 +617,6 @@ fn model_entry_supports_thinking(entry: &Value, id: &str, name: &str) -> bool {
     infer_thinking_from_id(id) || infer_thinking_from_id(name)
 }
 
-fn curated_models(provider_id: Option<&str>) -> Vec<ProviderModel> {
-    let Some(id) = provider_id.filter(|id| !id.is_empty() && *id != CUSTOM_PROVIDER_ID) else {
-        return Vec::new();
-    };
-    if let Some(profile) = find_setup_provider(id) {
-        return profile
-            .curated
-            .iter()
-            .map(|model| ProviderModel {
-                id: (*model).to_owned(),
-                name: (*model).to_owned(),
-                supports_thinking: infer_thinking_from_id(model),
-            })
-            .collect();
-    }
-    Vec::new()
-}
-
 fn is_loopback_host(host: &str) -> bool {
     let host = host.trim_matches(['[', ']']);
     if host.eq_ignore_ascii_case("localhost") {
@@ -673,11 +655,11 @@ pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
             else {
                 continue;
             };
-            let name = obj
-                .get("name")
-                .and_then(Value::as_str)
+            let name = ["display_name", "name"]
+                .into_iter()
+                .filter_map(|key| obj.get(key).and_then(Value::as_str))
                 .map(str::trim)
-                .filter(|name| !name.is_empty())
+                .find(|name| !name.is_empty())
                 .unwrap_or(id);
             (id, name)
         };
@@ -754,8 +736,8 @@ fn fetch_models_once(
     Ok(parse_openai_models_list(&parsed))
 }
 
-/// GET `{base_url}/models`. Tries without a key, then with the key.
-/// Falls back to the provider's curated list when the live catalog is empty.
+/// Fetch the live catalog using the saved credential, or anonymously when absent.
+/// Failed requests and empty catalogs are errors, never curated-model fallbacks.
 pub fn fetch_provider_models(
     base_url: &str,
     api_key: &str,
@@ -778,35 +760,11 @@ pub fn fetch_provider_models(
         return Err(ProviderSetupError::ApiKeyTooLong);
     }
     let endpoint = provider_models_list_url(&base_url);
-    let mut models = match fetch_models_once(&endpoint, &base_url, "", format) {
-        Ok(models) => models,
-        Err(_) => Vec::new(),
-    };
-    if !api_key.trim().is_empty() {
-        match fetch_models_once(&endpoint, &base_url, api_key, format) {
-            Ok(authed) => {
-                models.extend(authed);
-                models.sort_by(|a, b| a.id.cmp(&b.id));
-                models.dedup_by(|a, b| a.id == b.id);
-            }
-            Err(error) if models.is_empty() => {
-                let curated = curated_models(provider_id);
-                if curated.is_empty() {
-                    return Err(error);
-                }
-                return Ok(curated);
-            }
-            Err(_) => {}
-        }
-    }
+    let models = fetch_models_once(&endpoint, &base_url, api_key, format)?;
     if models.is_empty() {
-        let curated = curated_models(provider_id);
-        if curated.is_empty() {
-            return Err(ProviderSetupError::Fetch(
-                "provider returned no models".to_owned(),
-            ));
-        }
-        return Ok(curated);
+        return Err(ProviderSetupError::Fetch(
+            "provider returned no models".to_owned(),
+        ));
     }
     Ok(models)
 }
@@ -915,6 +873,22 @@ fn apply_provider_setup_to_document(
 
 /// Credential written by `/setup` for custom-endpoint catalog fetches.
 pub fn provider_setup_api_key_from_toml(config: &toml::Value) -> Option<String> {
+    let base_url = config
+        .get("endpoints")
+        .and_then(|endpoints| {
+            ["models_base_url", "api_base_url", "xai_api_base_url"]
+                .into_iter()
+                .filter_map(|key| endpoints.get(key).and_then(toml::Value::as_str))
+                .find(|url| !url.trim().is_empty())
+        })
+        .or_else(|| {
+            config
+                .get("model_providers")?
+                .get(SETUP_PROVIDER_ID)?
+                .get("base_url")?
+                .as_str()
+        })
+        .and_then(|url| normalize_provider_base_url(url).ok());
     config
         .get("model_providers")
         .and_then(|providers| providers.get(SETUP_PROVIDER_ID))
@@ -929,6 +903,20 @@ pub fn provider_setup_api_key_from_toml(config: &toml::Value) -> Option<String> 
                 .and_then(toml::Value::as_table)
                 .and_then(|models| {
                     models.values().find_map(|entry| {
+                        let is_setup_model =
+                            entry.get("model_provider").and_then(toml::Value::as_str)
+                                == Some(SETUP_PROVIDER_ID);
+                        let entry_url = entry.get("base_url").and_then(toml::Value::as_str);
+                        let matches_provider = match (base_url.as_deref(), entry_url) {
+                            (Some(base_url), Some(entry_url)) => {
+                                normalize_provider_base_url(entry_url).ok().as_deref()
+                                    == Some(base_url)
+                            }
+                            _ => is_setup_model,
+                        };
+                        if !matches_provider {
+                            return None;
+                        }
                         entry
                             .get("api_key")
                             .and_then(toml::Value::as_str)
@@ -1050,6 +1038,192 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn with_models_server<T>(
+        response: fn(&str) -> (&'static str, &'static str),
+        fetch: impl FnOnce(&str) -> T,
+    ) -> (T, Vec<String>) {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let base_url = format!("http://{}/v1", listener.local_addr().unwrap());
+        let (stop, stopped) = mpsc::channel::<()>();
+        let server = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            loop {
+                match stopped.try_recv() {
+                    Ok(()) | Err(mpsc::TryRecvError::Disconnected) => break,
+                    Err(mpsc::TryRecvError::Empty) => {}
+                }
+                let (mut stream, _) = match listener.accept() {
+                    Ok(connection) => connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(2));
+                        continue;
+                    }
+                    Err(error) => panic!("accept model request: {error}"),
+                };
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0; 1024];
+                while !bytes.windows(4).any(|window| window == b"\r\n\r\n") {
+                    let read = stream.read(&mut buffer).unwrap();
+                    assert!(read > 0, "request ended before headers");
+                    bytes.extend_from_slice(&buffer[..read]);
+                    assert!(bytes.len() < 32 * 1024, "request headers too large");
+                }
+                let request = String::from_utf8(bytes).unwrap().to_ascii_lowercase();
+                let (status, body) = response(&request);
+                requests.push(request);
+                write!(
+                    stream,
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+            }
+            requests
+        });
+        let result = fetch(&base_url);
+        stop.send(()).unwrap();
+        (result, server.join().unwrap())
+    }
+
+    fn fetch_saved_models(
+        base_url: &str,
+        format: SetupWireFormat,
+    ) -> Result<Vec<ProviderModel>, ProviderSetupError> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: base_url.to_owned(),
+                api_key: "saved-key".to_owned(),
+                model_id: "previous-model".to_owned(),
+                model_name: "Previous model".to_owned(),
+                format,
+                provider_id: "openai".to_owned(),
+            },
+        )
+        .unwrap();
+        let config: toml::Value = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let key = provider_setup_api_key_from_toml(&config).unwrap();
+        fetch_provider_models(
+            config["endpoints"]["models_base_url"].as_str().unwrap(),
+            &key,
+            setup_wire_format_from_config(&config),
+            setup_profile_id_from_config(&config).as_deref(),
+        )
+    }
+
+    #[test]
+    fn live_models_use_saved_bearer_key_without_anonymous_union() {
+        let (models, requests) = with_models_server(
+            |request| {
+                if request.contains("authorization: bearer saved-key\r\n") {
+                    ("200 OK", r#"{"data":[{"id":"private-model"}]}"#)
+                } else {
+                    ("200 OK", r#"{"data":[{"id":"public-only-model"}]}"#)
+                }
+            },
+            |base_url| fetch_saved_models(base_url, SetupWireFormat::Openai),
+        );
+        let models = models.unwrap();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "private-model");
+        assert_eq!(requests.len(), 1, "must not probe anonymously first");
+        assert!(requests[0].starts_with("get /v1/models http/1.1\r\n"));
+        assert!(requests[0].contains("authorization: bearer saved-key\r\n"));
+    }
+
+    #[test]
+    fn live_models_use_saved_anthropic_key_and_version() {
+        let (models, requests) = with_models_server(
+            |_| {
+                (
+                    "200 OK",
+                    r#"{"data":[{"id":"claude-test","display_name":"Claude Test"}]}"#,
+                )
+            },
+            |base_url| fetch_saved_models(base_url, SetupWireFormat::Anthropic),
+        );
+        assert_eq!(models.unwrap()[0].name, "Claude Test");
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("x-api-key: saved-key\r\n"));
+        assert!(requests[0].contains("anthropic-version: 2023-06-01\r\n"));
+        assert!(!requests[0].contains("authorization:"));
+    }
+
+    #[test]
+    fn live_models_allow_anonymous_requests_only_without_key() {
+        let (models, requests) = with_models_server(
+            |_| ("200 OK", r#"{"data":[{"id":"local-model"}]}"#),
+            |base_url| {
+                fetch_provider_models(base_url, "  ", SetupWireFormat::Openai, Some("ollama"))
+            },
+        );
+        assert_eq!(models.unwrap()[0].id, "local-model");
+        assert_eq!(requests.len(), 1);
+        assert!(!requests[0].contains("authorization:"));
+        assert!(!requests[0].contains("x-api-key:"));
+    }
+
+    #[test]
+    fn live_models_surface_http_errors_without_curated_fallback() {
+        for key in ["saved-key", ""] {
+            let (result, requests) = with_models_server(
+                |request| {
+                    if request.contains("authorization:") {
+                        ("401 Unauthorized", r#"{"error":"invalid key"}"#)
+                    } else {
+                        ("403 Forbidden", r#"{"error":"key required"}"#)
+                    }
+                },
+                |base_url| {
+                    fetch_provider_models(base_url, key, SetupWireFormat::Openai, Some("openai"))
+                },
+            );
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains(if key.is_empty() {
+                "HTTP 403"
+            } else {
+                "HTTP 401"
+            }));
+            assert!(error.contains(if key.is_empty() {
+                "key required"
+            } else {
+                "invalid key"
+            }));
+            assert_eq!(requests.len(), 1);
+        }
+    }
+
+    #[test]
+    fn live_models_surface_empty_catalog_without_curated_fallback() {
+        for key in ["saved-key", ""] {
+            let (result, requests) = with_models_server(
+                |_| ("200 OK", r#"{"data":[]}"#),
+                |base_url| {
+                    fetch_provider_models(base_url, key, SetupWireFormat::Openai, Some("openai"))
+                },
+            );
+            assert_eq!(
+                result.unwrap_err(),
+                ProviderSetupError::Fetch("provider returned no models".to_owned())
+            );
+            assert_eq!(requests.len(), 1);
+        }
+    }
+
     #[test]
     fn provider_models_to_catalog_uses_setup_auth_and_backend() {
         let models = vec![
@@ -1160,6 +1334,100 @@ mod tests {
                     supports_thinking: true,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn parses_anthropic_display_names_with_name_and_id_fallbacks() {
+        let models = parse_openai_models_list(&json!({
+            "data": [
+                {"id": "a", "display_name": " Claude A ", "name": "legacy"},
+                {"id": "b", "display_name": " ", "name": "Claude B"},
+                {"id": "c", "display_name": null, "name": " "}
+            ]
+        }));
+        assert_eq!(
+            models
+                .iter()
+                .map(|model| model.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Claude A", "Claude B", "c"]
+        );
+    }
+
+    #[test]
+    fn setup_key_fallback_ignores_unrelated_models() {
+        let config: toml::Value = toml::from_str(
+            r#"
+            [endpoints]
+            models_base_url = "https://api.example.com/v1"
+            [model.a_unrelated]
+            base_url = "https://other.example.com/v1"
+            api_key = "wrong-key"
+            [model.z_matching]
+            base_url = "https://api.example.com/v1/"
+            api_key = "right-key"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(
+            provider_setup_api_key_from_toml(&config).as_deref(),
+            Some("right-key")
+        );
+        let mut config = config;
+        config["model"].as_table_mut().unwrap().remove("z_matching");
+        assert_eq!(provider_setup_api_key_from_toml(&config), None);
+    }
+
+    #[test]
+    fn setup_key_fallback_accepts_setup_binding_without_endpoint() {
+        let config: toml::Value = toml::from_str(
+            r#"
+            [model.a_unrelated]
+            api_key = "wrong-key"
+            [model.z_setup]
+            model_provider = "setup"
+            api_key = "setup-key"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(
+            provider_setup_api_key_from_toml(&config).as_deref(),
+            Some("setup-key")
+        );
+    }
+
+    #[test]
+    fn setup_key_fallback_rejects_stale_setup_model_at_other_endpoint() {
+        let config: toml::Value = toml::from_str(
+            r#"
+            [endpoints]
+            models_base_url = "https://current.example.com/v1"
+            [model.old_setup]
+            model_provider = "setup"
+            base_url = "https://old.example.com/v1"
+            api_key = "old-key"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(provider_setup_api_key_from_toml(&config), None);
+    }
+
+    #[test]
+    fn setup_provider_key_takes_precedence_over_model_key() {
+        let config: toml::Value = toml::from_str(
+            r#"
+            [model_providers.setup]
+            api_key = "saved-provider-key"
+            [model.setup_model]
+            model_provider = "setup"
+            api_key = "old-model-key"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(
+            provider_setup_api_key_from_toml(&config).as_deref(),
+            Some("saved-provider-key")
         );
     }
 

@@ -21,6 +21,12 @@ use crate::views::modal_window::{
 pub const MODAL_TITLE: &str = "Provider setup";
 pub const IMAGE_MODAL_TITLE: &str = "Image provider setup";
 
+fn next_generation() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static GENERATION: AtomicU64 = AtomicU64::new(1);
+    GENERATION.fetch_add(1, Ordering::Relaxed)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetupKind {
     Chat,
@@ -60,6 +66,8 @@ pub struct SetupModalState {
     /// `/model` live picker: skip the URL/key wizard and close on Esc.
     pub(crate) picker_only: bool,
     pending_model: Option<ProviderModel>,
+    models_from_api: bool,
+    pub(crate) selected_effort: Option<String>,
     /// Per-model effort ids shown in `PickEffort` (xAI catalog).
     effort_levels: Vec<String>,
     device_user_code: String,
@@ -165,6 +173,8 @@ impl SetupModalState {
             kind,
             picker_only: false,
             pending_model: None,
+            models_from_api: false,
+            selected_effort: None,
             effort_levels: Vec::new(),
             device_user_code: String::new(),
             device_verification_uri: String::new(),
@@ -218,7 +228,8 @@ impl SetupModalState {
     pub fn begin_live_fetch(&mut self) -> Option<SetupOutcome> {
         match normalize_provider_base_url(self.base_url.text()) {
             Ok(base_url) => {
-                self.generation = self.generation.saturating_add(1);
+                self.generation = next_generation();
+                self.models.clear();
                 self.step = SetupStep::Fetching;
                 Some(SetupOutcome::Fetch {
                     base_url,
@@ -296,34 +307,13 @@ impl SetupModalState {
         }
         match result {
             Ok(models) => {
-                if self.models.is_empty() {
-                    self.models = models;
-                } else {
-                    for model in models {
-                        if let Some(existing) = self
-                            .models
-                            .iter_mut()
-                            .find(|m| m.id == model.id)
-                        {
-                            existing.supports_thinking |= model.supports_thinking;
-                            if existing.name == existing.id && model.name != model.id {
-                                existing.name = model.name;
-                            }
-                        } else {
-                            self.models.push(model);
-                        }
-                    }
-                }
-                if self.models.is_empty() {
-                    if let Some(profile) = find_setup_provider(&self.provider_id) {
-                        self.models.push(ProviderModel {
-                            id: profile.default_model.to_owned(),
-                            name: profile.default_model.to_owned(),
-                            supports_thinking: supercharge_shell::agent::provider_setup::infer_thinking_from_id(
-                                profile.default_model,
-                            ),
-                        });
-                    }
+                self.models = models;
+                self.models_from_api = true;
+                if self.models.is_empty() && self.kind == SetupKind::Chat {
+                    self.step = SetupStep::FetchError {
+                        message: "provider returned no models".to_owned(),
+                    };
+                    return;
                 }
                 self.filter.reset();
                 self.selected = 0;
@@ -399,7 +389,7 @@ impl SetupModalState {
                 self.device_status = "Logged in. Fetching models…".into();
                 match normalize_provider_base_url(self.base_url.text()) {
                     Ok(base_url) => {
-                        self.generation = self.generation.saturating_add(1);
+                        self.generation = next_generation();
                         self.step = SetupStep::Fetching;
                         Some(SetupOutcome::Fetch {
                             base_url,
@@ -576,7 +566,7 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.selected = 0;
                 if profile.id == "nous" {
                     if supercharge_shell::agent::nous_oauth::resolve_access_token().is_ok() {
-                        state.generation = state.generation.saturating_add(1);
+                        state.generation = next_generation();
                         state.step = SetupStep::Fetching;
                         return match normalize_provider_base_url(state.base_url.text()) {
                             Ok(base_url) => SetupOutcome::Fetch {
@@ -594,7 +584,7 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                             }
                         };
                     }
-                    state.generation = state.generation.saturating_add(1);
+                    state.generation = next_generation();
                     state.device_status = "Starting Nous Portal login…".into();
                     state.step = SetupStep::DeviceAuth;
                     return SetupOutcome::StartNousDeviceLogin {
@@ -658,7 +648,7 @@ fn handle_api_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
     if matches!(key.code, KeyCode::Enter) {
         match normalize_provider_base_url(state.base_url.text()) {
             Ok(base_url) => {
-                state.generation = state.generation.saturating_add(1);
+                state.generation = next_generation();
                 state.step = SetupStep::Fetching;
                 SetupOutcome::Fetch {
                     base_url,
@@ -733,7 +723,7 @@ fn handle_pick_model(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcom
                 state.step = SetupStep::PickEffort;
                 return SetupOutcome::Changed;
             }
-            if state.picker_only {
+            if state.picker_only && !state.models_from_api {
                 return SetupOutcome::SwitchSession {
                     model_id: model.id,
                     effort: None,
@@ -773,12 +763,13 @@ fn handle_pick_effort(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutco
                 return SetupOutcome::Changed;
             };
             let effort = state.effort_levels.get(state.selected).cloned();
-            if state.picker_only {
+            if state.picker_only && !state.models_from_api {
                 return SetupOutcome::SwitchSession {
                     model_id: model.id,
                     effort,
                 };
             }
+            state.selected_effort = effort;
             save_selected_model(state, model.id, model.name)
         }
         _ => SetupOutcome::Unchanged,
@@ -807,7 +798,7 @@ fn save_selected_model(
 ) -> SetupOutcome {
     match normalize_provider_base_url(state.base_url.text()) {
         Ok(base_url) => {
-            state.generation = state.generation.saturating_add(1);
+            state.generation = next_generation();
             state.step = SetupStep::Saving;
             SetupOutcome::Save {
                 setup: ProviderSetup {
@@ -1330,6 +1321,112 @@ mod tests {
             }
             other => panic!("expected fetch, got {other:?}"),
         }
+    }
+
+    fn model(id: &str) -> ProviderModel {
+        ProviderModel {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            supports_thinking: false,
+        }
+    }
+
+    #[test]
+    fn live_fetch_uses_saved_endpoint_and_key_without_cached_models() {
+        let mut state = SetupModalState::new();
+        state.base_url.set_text("https://provider.example/v1");
+        state.api_key.set_text("saved-key");
+        state.models = vec![model("old-model")];
+        let outcome = state.begin_live_fetch().expect("valid provider");
+        assert!(matches!(state.step, SetupStep::Fetching));
+        assert!(state.models.is_empty());
+        match outcome {
+            SetupOutcome::Fetch { base_url, api_key, .. } => {
+                assert_eq!(base_url, "https://provider.example/v1");
+                assert_eq!(api_key, "saved-key");
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn live_picker_persists_new_model_before_switching() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.base_url.set_text("https://provider.example/v1");
+        state.api_key.set_text("saved-key");
+        state.apply_fetched_models(state.generation, Ok(vec![model("new-live-model")]));
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Save { setup, .. } => {
+                assert_eq!(setup.model_id, "new-live-model");
+                assert_eq!(setup.base_url, "https://provider.example/v1");
+                assert_eq!(setup.api_key, "saved-key");
+            }
+            other => panic!("expected save before reload/switch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn live_picker_preserves_effort_while_saving_model() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.base_url.set_text("https://provider.example/v1");
+        let mut thinking_model = model("reasoning-model");
+        thinking_model.supports_thinking = true;
+        state.apply_fetched_models(state.generation, Ok(vec![thinking_model]));
+        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
+        assert!(matches!(state.step, SetupStep::PickEffort));
+        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Save { .. }));
+        assert_eq!(state.selected_effort.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn effort_only_picker_still_switches_without_saving_provider() {
+        let mut state = SetupModalState::effort_picker(model("current"), vec!["low".to_owned()]);
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::SwitchSession { effort: Some(effort), .. } if effort == "low"
+        ));
+    }
+
+    #[test]
+    fn live_models_replace_cached_models() {
+        let mut state = SetupModalState::new();
+        state.models = vec![model("old-model")];
+        state.apply_fetched_models(state.generation, Ok(vec![model("live-model")]));
+        assert!(matches!(state.step, SetupStep::PickModel));
+        assert_eq!(state.models.len(), 1);
+        assert_eq!(state.models[0].id, "live-model");
+    }
+
+    #[test]
+    fn empty_live_models_do_not_insert_builtin_default() {
+        let mut state = SetupModalState::new();
+        state.provider_id = "openai".to_owned();
+        state.apply_fetched_models(state.generation, Ok(vec![]));
+        assert!(matches!(state.step, SetupStep::FetchError { .. }));
+        assert!(state.models.is_empty());
+    }
+
+    #[test]
+    fn reopened_picker_rejects_previous_fetch() {
+        let mut first = SetupModalState::new();
+        first.base_url.set_text("https://provider.example/v1");
+        first.begin_live_fetch().unwrap();
+        let mut reopened = SetupModalState::new();
+        reopened.base_url.set_text("https://provider.example/v1");
+        reopened.begin_live_fetch().unwrap();
+        assert_ne!(first.generation, reopened.generation);
+        reopened.apply_fetched_models(first.generation, Ok(vec![model("stale")]));
+        assert!(reopened.models.is_empty());
+        assert!(matches!(reopened.step, SetupStep::Fetching));
+    }
+
+    #[test]
+    fn failed_live_fetch_is_visible() {
+        let mut state = SetupModalState::new();
+        state.apply_fetched_models(state.generation, Err("HTTP 401".to_owned()));
+        assert!(matches!(state.step, SetupStep::FetchError { ref message } if message == "HTTP 401"));
     }
 
     #[test]
