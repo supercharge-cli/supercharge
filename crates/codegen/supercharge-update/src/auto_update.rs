@@ -487,11 +487,13 @@ pub async fn get_installer() -> Option<&'static str> {
     match cfg.cli.installer.as_deref() {
         Some("npm") => Some("npm"),
         Some("gh-release") => Some("gh-release"),
-        Some(_) => Some("internal"),
+        // "internal" (the xAI-hosted GCS/cli.grok.com feed) has no Supercharge equivalent;
+        // `scripts/install.sh` distributes through GitHub Releases, so that's the real default.
+        Some(_) => Some("gh-release"),
         // A wiped config must not reclassify an npm install as internal:
         // that re-enables downgrades and updates npm never sees.
         None if path_resolves_to_npm_entry() => Some("npm"),
-        None => Some("internal"),
+        None => Some("gh-release"),
     }
 }
 
@@ -1695,15 +1697,16 @@ fn relative_symlink_target(target: &std::path::Path, link: &std::path::Path) -> 
     target.to_path_buf()
 }
 
-/// The bootstrap installers (`install.sh`, `install.ps1`, `install-enterprise.sh`) maintain `grok` and `agent` in
-/// lockstep, and so must the updater. Otherwise `grok update` leaves `agent` pinned at the previous version. Any earlier
-/// successful swaps are rolled back if a later one fails, including *removing* a link that didn't exist before.
+/// The bootstrap installers (`install.sh`, `install.ps1`, `deploy/install-supercharge.sh`) maintain `supercharge` and
+/// `sc` in lockstep, and so must the updater. Otherwise `supercharge update` leaves `sc` pinned at the previous
+/// version. Any earlier successful swaps are rolled back if a later one fails, including *removing* a link that
+/// didn't exist before.
 async fn swap_managed_bin_links(
     binary_path: &std::path::Path,
     bin_dir: &std::path::Path,
 ) -> Result<std::path::PathBuf> {
-    let grok_name = if cfg!(windows) { "grok.exe" } else { "grok" };
-    let agent_name = if cfg!(windows) { "agent.exe" } else { "agent" };
+    let grok_name = if cfg!(windows) { "supercharge.exe" } else { "supercharge" };
+    let agent_name = if cfg!(windows) { "sc.exe" } else { "sc" };
     let grok_link = bin_dir.join(grok_name);
     let pairs = [
         (binary_path.to_path_buf(), grok_link.clone()),
@@ -2089,8 +2092,8 @@ async fn heal_managed_install(installer: &str) {
 
 #[cfg(unix)]
 async fn reconcile_agent_to_grok(bin_dir: &std::path::Path) {
-    let grok_link = bin_dir.join("grok");
-    let agent_link = bin_dir.join("agent");
+    let grok_link = bin_dir.join("supercharge");
+    let agent_link = bin_dir.join("sc");
 
     let Ok(grok_target) = tokio::fs::read_link(&grok_link).await else {
         return;
@@ -2114,8 +2117,8 @@ async fn reconcile_agent_to_grok(bin_dir: &std::path::Path) {
 
 #[cfg(windows)]
 async fn reconcile_agent_exe_to_grok(bin_dir: &std::path::Path) {
-    let grok_exe = bin_dir.join("grok.exe");
-    let agent_exe = bin_dir.join("agent.exe");
+    let grok_exe = bin_dir.join("supercharge.exe");
+    let agent_exe = bin_dir.join("sc.exe");
 
     if tokio::fs::metadata(&grok_exe).await.is_err() {
         return;
@@ -2236,9 +2239,9 @@ async fn gh_release_download(tag: &str, pattern: &str, dest: &std::path::Path) -
     Ok(())
 }
 
-/// Download and install grok from GitHub Releases (xai-org-shared/grok-build). Uses `gh release download` to fetch the
-/// binary matching the current platform. This works anywhere the `gh` CLI is authenticated, without needing npm or
-/// internal network access.
+/// Download and install Supercharge from GitHub Releases (`iotserver24/supercharge-releases`). Uses `gh release
+/// download` to fetch the binary matching the current platform. This works anywhere the `gh` CLI is authenticated,
+/// without needing npm or internal network access.
 async fn install_gh_release(target: Option<&str>) -> Result<()> {
     let (os, arch) = detect_platform()?;
     let platform = format!("{}-{}", os, arch);
@@ -2254,18 +2257,29 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
     tokio::fs::create_dir_all(&download_dir).await?;
     tokio::fs::create_dir_all(&bin_dir).await?;
 
-    let binary_name = format!("grok-{}-{}", version, platform);
+    let binary_name = format!("supercharge-{}-{}", version, platform);
     let binary_path = download_dir.join(&binary_name);
     let tag = format!("v{}", version);
 
     eprintln!(
-        "  Downloading grok v{} ({}) from GitHub Releases...",
+        "  Downloading Supercharge v{} ({}) from GitHub Releases...",
         version, platform
     );
 
     if let Err(e) = download_github_release_asset(&version, &os, &arch, &binary_path).await {
         tracing::warn!("HTTP GitHub asset failed ({e:#}); trying gh CLI");
-        gh_release_download(&tag, &binary_name, &binary_path).await?;
+        // Mirror `download_github_release_asset`'s two asset-name patterns: the current
+        // `supercharge-{os}-{arch}` name (no version segment — the tag already carries it),
+        // falling back to the pre-rebrand `grok-{version}-{os}-{arch}` name for older releases.
+        let ext = if os == "windows" { ".exe" } else { "" };
+        let current_pattern = format!("supercharge-{os}-{arch}{ext}");
+        let legacy_pattern = format!("grok-{version}-{os}-{arch}{ext}");
+        if gh_release_download(&tag, &current_pattern, &binary_path)
+            .await
+            .is_err()
+        {
+            gh_release_download(&tag, &legacy_pattern, &binary_path).await?;
+        }
     }
 
     // chmod +x
@@ -2309,6 +2323,7 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
     eprintln!();
 
     // Current, N-1, and any leftover a live process is still executing.
+    cleanup_old_downloads(&download_dir, "supercharge", &version).await;
     cleanup_old_downloads(&download_dir, "grok", &version).await;
     cleanup_old_downloads(&download_dir, "grok-pager", &version).await;
 
@@ -2357,7 +2372,7 @@ fn create_temp_npmrc(npm_registry: Option<&str>) -> Result<Option<std::path::Pat
 fn warn_if_other_grok_processes_running() {
     let my_pid = std::process::id().to_string();
     let mut cmd = Command::new("pgrep");
-    cmd.args(["-f", "grok"])
+    cmd.args(["-f", "supercharge"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());

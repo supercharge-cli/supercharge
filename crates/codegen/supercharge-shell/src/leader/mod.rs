@@ -1573,9 +1573,9 @@ fn resolve_binary_with_home(grok_home: &Path) -> Result<std::path::PathBuf, Conn
 /// Binary file name for the managed Supercharge AI install (`Supercharge AI` / `Supercharge AI.exe`).
 fn managed_grok_bin_name() -> &'static str {
     if cfg!(windows) {
-        "Supercharge AI.exe"
+        "supercharge.exe"
     } else {
-        "Supercharge AI"
+        "supercharge"
     }
 }
 /// Core leader-binary resolution with the current-exe path injected, for testability.
@@ -2525,9 +2525,9 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let bin_dir = temp.path().join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
-        let target_v2 = bin_dir.join("Supercharge AI-v2");
+        let target_v2 = bin_dir.join("supercharge-v2");
         std::fs::write(&target_v2, "new-binary").unwrap();
-        std::os::unix::fs::symlink(&target_v2, bin_dir.join("Supercharge AI")).unwrap();
+        std::os::unix::fs::symlink(&target_v2, bin_dir.join(managed_grok_bin_name())).unwrap();
         let result = resolve_binary_with_home(temp.path()).unwrap();
         let current = std::env::current_exe().unwrap();
         assert_eq!(result, current);
@@ -2538,11 +2538,11 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let bin_dir = temp.path().join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
-        let new_target = bin_dir.join("Supercharge AI-v2");
+        let new_target = bin_dir.join("supercharge-v2");
         std::fs::write(&new_target, "new-binary").unwrap();
-        let managed = bin_dir.join("Supercharge AI");
+        let managed = bin_dir.join(managed_grok_bin_name());
         std::os::unix::fs::symlink(&new_target, &managed).unwrap();
-        let stale_target = bin_dir.join("Supercharge AI-v1");
+        let stale_target = bin_dir.join("supercharge-v1");
         std::fs::write(&stale_target, "old-binary").unwrap();
         let result = resolve_binary_impl(temp.path(), Some(stale_target)).unwrap();
         assert_eq!(result, managed);
