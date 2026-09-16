@@ -1,13 +1,11 @@
-//! supercharge.ai chat-product model catalog (`POST /rest/modes`) — the models
-//! Supercharge AI-web's chat picker shows, distinct from the CLI `/v1/models` build
-//! catalog. Transport only; cache + ACP mapping live in
-//! [`crate::agent::chat_modes`].
+//! The grok.com chat model catalog (`POST /rest/modes`): the models grok-web's chat picker shows, distinct from the CLI `/v1/models` build catalog.
+//! Transport only; the cache and the ACP mapping live in [`crate::agent::chat_modes`].
 
 use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::auth::AuthManager;
+use supercharge_login::AuthManager;
 
 const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
@@ -73,8 +71,7 @@ pub enum ChatModelsError {
     Parse(#[from] serde_json::Error),
 }
 
-/// Stateless transport for `POST /rest/modes`; caching lives in
-/// [`crate::agent::chat_modes::ChatModesManager`].
+/// Stateless transport for `POST /rest/modes`; caching lives in [`crate::agent::chat_modes::ChatModesManager`].
 pub struct ChatModelsClient {
     http: reqwest::Client,
     base_url: String,
@@ -104,9 +101,8 @@ impl ChatModelsClient {
         }
     }
 
-    /// Gated only on a valid supercharge.ai bearer — deliberately NOT `is_xai_auth()`
-    /// (unlike workspaces/conversations), since `/rest/modes` is the public chat
-    /// endpoint and that gate would exclude API-key / cached-token chat users.
+    /// Gated only on a valid grok.com bearer, not `is_xai_auth()` like workspaces/conversations.
+    /// `/rest/modes` is the public chat endpoint, and that gate would exclude API-key and cached-token chat users.
     pub(crate) async fn list_modes(
         &self,
         locale: &str,
@@ -129,9 +125,9 @@ impl ChatModelsClient {
                 self.auth.grok_com_config().token_header.clone(),
             )
             .header("x-userid", &auth.user_id)
-            .header("x-Supercharge AI-client-version", supercharge_version::VERSION)
+            .header("x-grok-client-version", supercharge_version::VERSION)
             .header(
-                "x-Supercharge AI-client-identifier",
+                "x-grok-client-identifier",
                 crate::http::process_client_identifier(),
             )
             .header(
@@ -142,7 +138,7 @@ impl ChatModelsClient {
         if let Some(email) = &auth.email {
             builder = builder.header("x-email", email);
         }
-        let builder = supercharge_file_utils::trace_context::inject_trace_context_into_request(builder);
+        let builder = supercharge_otel::inject_trace_context_into_request(builder);
 
         let response = builder.send().await?;
         let status = response.status();
@@ -181,28 +177,31 @@ mod tests {
             "defaultModeId": "auto"
         });
         let resp: ListModesResponse = serde_json::from_value(json).unwrap();
-        assert_eq!(resp.modes.len(), 2);
         assert_eq!(resp.default_mode_id, "auto");
-        let auto = &resp.modes[0];
+        let [auto, heavy] = resp.modes.as_slice() else {
+            panic!("expected two modes: {:?}", resp.modes);
+        };
         assert_eq!(auto.id, "auto");
         assert_eq!(auto.title, "Auto");
         assert_eq!(auto.badge_text.as_deref(), Some("New"));
         assert_eq!(auto.icon_hint, "rocket");
         assert_eq!(auto.tags, vec!["TAG_PRIMARY".to_string()]);
         assert!(auto.is_available());
-        assert!(!resp.modes[1].is_available());
+        assert!(!heavy.is_available());
     }
 
     #[test]
     fn missing_fields_default_gracefully() {
         let json = serde_json::json!({ "modes": [{ "id": "m1" }] });
         let resp: ListModesResponse = serde_json::from_value(json).unwrap();
-        let m = &resp.modes[0];
+        let [m] = resp.modes.as_slice() else {
+            panic!("expected one mode: {:?}", resp.modes);
+        };
         assert_eq!(m.id, "m1");
         assert!(m.title.is_empty());
         assert!(m.description.is_empty());
         assert!(m.badge_text.is_none());
-        // No availability field on the wire → not selectable.
+        // With no availability field on the wire, the mode is not selectable
         assert!(!m.is_available());
         assert!(resp.default_mode_id.is_empty());
     }

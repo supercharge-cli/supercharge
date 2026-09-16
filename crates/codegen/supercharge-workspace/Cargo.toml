@@ -14,14 +14,15 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 fs2 = { workspace = true }
-dirs = "6"
 parking_lot = { workspace = true }
 git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2"] }
 ignore = { workspace = true }
 regex = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+strum = { workspace = true }
 tokio = { workspace = true, features = [
     "fs",
     "io-std",
@@ -45,6 +46,7 @@ supercharge-workspace-client = { path = "../supercharge-workspace-client" }
 supercharge-workspace-daemon = { path = "../supercharge-workspace-daemon" }
 supercharge-workspace-types = { path = "../supercharge-workspace-types" }
 supercharge-config = { workspace = true }
+supercharge-dirs = { workspace = true }
 # Leaf config value types (RemoteSettings, BoolFlag) for the folder-trust decision.
 supercharge-config-types = { workspace = true }
 toml = { workspace = true, features = ["preserve_order"] }
@@ -103,7 +105,7 @@ tracing-subscriber = { workspace = true }
 # "enable" required for the SDK's spans to record at all.
 fastrace = { workspace = true, features = ["enable"] }
 supercharge-tracing = { workspace = true }
-rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+supercharge-extra-ca = { workspace = true }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tempfile = { workspace = true }
 zstd = { workspace = true }
@@ -137,6 +139,7 @@ default-bazel = [
 
 [dev-dependencies]
 tempfile = { workspace = true }
+axum = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 supercharge-test-utils = { path = "../../common/supercharge-test-utils" }
 # Decode tar.gz archives produced by workspace upload helpers in tests.

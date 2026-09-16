@@ -8,7 +8,7 @@ description = "Grok tools library"
 [dependencies]
 anyhow = { workspace = true }
 arc-swap = { workspace = true }
-dirs = { workspace = true }
+supercharge-dirs = { workspace = true }
 derive_more = { workspace = true, features = ["from", "try_into"] }
 dunce = { workspace = true }
 encoding_rs = { workspace = true, optional = true }
@@ -19,16 +19,18 @@ supercharge-tty-utils = { workspace = true }
 supercharge-auth = { workspace = true }
 supercharge-config = { path = "../supercharge-config" }
 supercharge-extra-ca = { workspace = true }
+supercharge-feedback = { workspace = true }
 supercharge-tools-api = { path = "../supercharge-tools-api" }
 supercharge-workspace-types = { path = "../supercharge-workspace-types" }
 supercharge-version = { workspace = true }
 supercharge-interjection-core = { workspace = true }
+supercharge-message-delivery-core = { workspace = true }
 supercharge-token-estimation = { workspace = true }
 async-lsp = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
-crc32fast = { workspace = true }
+supercharge-image = { workspace = true }
 ignore = { workspace = true }
 infer = { workspace = true }
 globset = { workspace = true }
@@ -90,7 +92,9 @@ chrono = { workspace = true }
 futures-util = { workspace = true }
 supercharge-sandbox = { path = "../supercharge-sandbox", default-features = false }
 supercharge-file-utils = { path = "../supercharge-file-utils" }
+supercharge-otel = { workspace = true }
 dhat = { workspace = true, optional = true }
+zstd = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 command-fds = { version = "0.3", features = ["tokio"] }
@@ -106,7 +110,6 @@ libc = { workspace = true }
 windows = { workspace = true, features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
-dirs = { workspace = true }
 pretty_assertions = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
@@ -119,6 +122,7 @@ reqwest = { workspace = true, features = ["blocking", "rustls-tls"] }
 flate2 = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
+zstd = { workspace = true }
 
 [lints]
 workspace = true

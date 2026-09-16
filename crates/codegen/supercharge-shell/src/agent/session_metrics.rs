@@ -1,10 +1,10 @@
 //! Session lifecycle event structs.
 //!
-//! Re-exported from `xai-Supercharge AI-telemetry` after the telemetry crate split.
-//! The structs themselves live in the telemetry crate; this module preserves
-//! the existing import path so nothing else in shell needs to change.
+//! The structs moved to `supercharge-telemetry` in the telemetry crate split.
+//! This module re-exports them so the existing import path in shell keeps working.
 
 pub(crate) use supercharge_telemetry::session_metrics::{
-    DoomLoopRecovery, SessionStarted, TraceUploadAttempted, TraceUploadFailed, TraceUploadSkipped,
-    TraceUploadSucceeded, Turn, TurnCompletedLifecycle,
+    DoomLoopDetected, DoomLoopRecovery, SessionContextSnapshot, SessionStartKind, SessionStarted,
+    TraceUploadAttempted, TraceUploadFailed, TraceUploadSkipped, TraceUploadSucceeded, Turn,
+    TurnCompletedLifecycle,
 };

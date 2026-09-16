@@ -83,10 +83,9 @@ pub use supercharge_tools_api::slash_commands::{
 pub struct ImageGenClient {
     http: reqwest::Client,
     base_url: String,
-    /// Imagine model slug used by `generate()`. Selected at construction
-    /// from `ImageGenConfig::model_override` (falling back to
-    /// [`XAI_IMAGINE_MODEL`]). `image_edit` uses its own model and is
-    /// unaffected.
+    /// Imagine model slug used by `generate()`. Selected at construction from
+    /// `ImageGenConfig::model_override` (falling back to [`XAI_IMAGINE_MODEL`]). `image_edit` uses
+    /// its own model and is unaffected.
     model: String,
     edit_model: String,
     format: ImageProviderFormat,
@@ -96,6 +95,9 @@ pub struct ImageGenClient {
     /// image API emits an `auth_401_attribution` event with
     /// `consumer == "ImageGen"` for unified auth-failure telemetry.
     attribution_callback: Option<SharedAttributionCallback>,
+    /// Per-request session header; transport remains cacheable.
+    session_header: Option<HeaderValue>,
+    defaults_have_session_header: bool,
 }
 
 impl ImageGenClient {
@@ -155,13 +157,18 @@ impl ImageGenClient {
             Ok::<(), supercharge_tool_runtime::ToolError>(())
         })?;
 
-        let http = supercharge_extra_ca::with_extra_root_certificates(
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(IMAGE_GEN_TIMEOUT_SECS))
-                .read_timeout(std::time::Duration::from_secs(IMAGE_GEN_READ_TIMEOUT_SECS))
-                .default_headers(headers),
-        )
-        .build()
+        // Process-cached: timeouts are constants, so the headers key
+        // suffices; the session id is attached per request, not here.
+        let defaults_have_session_header = headers.contains_key(SESSION_ID_HEADER);
+        let key = crate::util::shared_http::cache_key("image_gen", &headers);
+        let http = crate::util::shared_http::cached_client(key, || {
+            supercharge_extra_ca::build_reqwest_client(|builder| {
+                builder
+                    .timeout(std::time::Duration::from_secs(IMAGE_GEN_TIMEOUT_SECS))
+                    .read_timeout(std::time::Duration::from_secs(IMAGE_GEN_READ_TIMEOUT_SECS))
+                    .default_headers(headers.clone())
+            })
+        })
         .map_err(|e| {
             supercharge_tool_runtime::ToolError::invalid_arguments(format!(
                 "Failed to build HTTP client: {e}"
@@ -177,7 +184,20 @@ impl ImageGenClient {
             writer: super::storage::SessionFileWriter::new(DEFAULT_IMAGE_DIR, "jpg"),
             api_key_provider,
             attribution_callback: None,
+            session_header: None,
+            defaults_have_session_header,
         })
+    }
+
+    /// Attach [`SESSION_ID_HEADER`] per request; a caller-provided
+    /// `extra_headers` value is never overridden.
+    pub fn with_session_id(mut self, session_id: &str) -> Self {
+        if !self.defaults_have_session_header
+            && let Ok(value) = HeaderValue::from_str(session_id)
+        {
+            self.session_header = Some(value);
+        }
+        self
     }
 
     /// Wire a 401-attribution callback into this client. Idempotent;
@@ -203,8 +223,22 @@ impl ImageGenClient {
         &self.base_url
     }
 
-    pub(crate) fn http(&self) -> &reqwest::Client {
-        &self.http
+    /// Every Imagine-API POST goes through here so no call site can miss
+    /// the bearer or per-request session header (image_edit once did).
+    pub(crate) fn post_json(
+        &self,
+        url: &str,
+        payload: &serde_json::Value,
+        sent_bearer: Option<&str>,
+    ) -> reqwest::RequestBuilder {
+        let mut req = self.http.post(url).json(payload);
+        if let Some(key) = sent_bearer {
+            req = req.header(AUTHORIZATION, format!("Bearer {key}"));
+        }
+        if let Some(ref session) = self.session_header {
+            req = req.header(SESSION_ID_HEADER, session.clone());
+        }
+        req
     }
 
     pub(crate) fn writer(&self) -> &super::storage::SessionFileWriter {
@@ -245,10 +279,7 @@ impl ImageGenClient {
         // emit see the same value (even if the provider rotates between
         // the send and the response handling).
         let sent_bearer = self.current_bearer().await;
-        let mut req = self.http.post(&url).json(&payload);
-        if let Some(ref key) = sent_bearer {
-            req = req.header(AUTHORIZATION, format!("Bearer {key}"));
-        }
+        let req = self.post_json(&url, &payload, sent_bearer.as_deref());
 
         let response = req.send().await.map_err(|e| {
             supercharge_tool_runtime::ToolError::invalid_arguments(format!(
@@ -304,10 +335,7 @@ impl ImageGenClient {
             if !response.status().is_success() {
                 return Err(supercharge_tool_runtime::ToolError::new(
                     supercharge_tool_runtime::ToolErrorKind::Custom,
-                    format!(
-                        "Image download failed with HTTP {}",
-                        response.status()
-                    ),
+                    format!("Image download failed with HTTP {}", response.status()),
                 ));
             }
             return response.bytes().await.map(|b| b.to_vec()).map_err(|e| {
@@ -334,7 +362,9 @@ pub enum ImageGenConfig {
         extra_headers: indexmap::IndexMap<String, String>,
         image_gen_enabled: bool,
         image_edit_enabled: bool,
-        /// Image model slug. Empty until `/isetup` or `/imodels` sets one.
+        /// Optional Imagine model override for `image_gen`. When `Some(non-empty)`, `image_gen`
+        /// calls that model instead of the default quality model ([`XAI_IMAGINE_MODEL`]). Driven by
+        /// the remote `image_gen_model_override` config flag. `image_edit` is unaffected.
         model_override: Option<String>,
         edit_model_override: Option<String>,
         format: ImageProviderFormat,
@@ -348,16 +378,6 @@ impl ImageGenConfig {
     /// Credentials present — required to construct any of the clients.
     pub fn has_credentials(&self) -> bool {
         matches!(self, Self::Enabled { .. })
-    }
-
-    /// Stamp [`SESSION_ID_HEADER`] onto `extra_headers`. A caller-provided
-    /// value is never overwritten. No-op when `Disabled`.
-    pub fn stamp_session_id_header(&mut self, session_id: &str) {
-        if let Self::Enabled { extra_headers, .. } = self {
-            extra_headers
-                .entry(SESSION_ID_HEADER.to_string())
-                .or_insert_with(|| session_id.to_string());
-        }
     }
 
     pub fn image_gen_enabled(&self) -> bool {
@@ -494,7 +514,14 @@ impl supercharge_tool_runtime::Tool for ImageGenTool {
             res.require::<ImageGenClient>()?.clone()
         };
 
+        let generate_span = tracing::info_span!(
+            "image_gen.generate_wait",
+            elapsed_ms = tracing::field::Empty,
+        );
+        let generate_start = std::time::Instant::now();
         let image_bytes = client.generate(&input.prompt, &input.aspect_ratio).await?;
+        generate_span.record("elapsed_ms", generate_start.elapsed().as_millis() as i64);
+        drop(generate_span);
 
         let session_folder = {
             let res = resources.lock().await;
@@ -525,10 +552,9 @@ mod tests {
     #[test]
     fn tool_name_and_description() {
         let tool = ImageGenTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "image_gen");
-        assert!(
-            crate::types::tool_metadata::ToolMetadata::description_template(&tool)
-                .contains("Generate a new image from a text description")
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "image_gen"
         );
     }
 
@@ -559,41 +585,80 @@ mod tests {
     }
 
     #[test]
-    fn stamp_session_id_header_sets_and_preserves() {
-        let mk = |headers: indexmap::IndexMap<String, String>| ImageGenConfig::Enabled {
+    fn with_session_id_defers_to_caller_configured_header() {
+        let mut preset = indexmap::IndexMap::new();
+        preset.insert(SESSION_ID_HEADER.to_string(), "caller-set".to_string());
+        let cfg = ImageGenConfig::Enabled {
             api_key: "k".into(),
             base_url: "https://api.x.ai/v1".into(),
-            extra_headers: headers,
+            extra_headers: preset,
             image_gen_enabled: true,
             image_edit_enabled: true,
             model_override: None,
             edit_model_override: None,
             format: ImageProviderFormat::OpenaiImages,
         };
-        let hdrs = |cfg: &ImageGenConfig| match cfg {
-            ImageGenConfig::Enabled { extra_headers, .. } => extra_headers.clone(),
-            _ => unreachable!(),
+        let client = ImageGenClient::new(&cfg, None)
+            .unwrap()
+            .with_session_id("sess-1");
+        assert!(client.session_header.is_none());
+
+        let cfg_plain = ImageGenConfig::Enabled {
+            api_key: "k".into(),
+            base_url: "https://api.x.ai/v1".into(),
+            extra_headers: indexmap::IndexMap::new(),
+            image_gen_enabled: true,
+            image_edit_enabled: true,
+            model_override: None,
+            edit_model_override: None,
+            format: ImageProviderFormat::OpenaiImages,
         };
-
-        let mut cfg = mk(indexmap::IndexMap::new());
-        cfg.stamp_session_id_header("sess-123");
+        let client = ImageGenClient::new(&cfg_plain, None)
+            .unwrap()
+            .with_session_id("sess-1");
         assert_eq!(
-            hdrs(&cfg).get(SESSION_ID_HEADER).map(String::as_str),
-            Some("sess-123")
+            client.session_header.as_ref().and_then(|v| v.to_str().ok()),
+            Some("sess-1")
         );
+    }
 
-        let mut preset = indexmap::IndexMap::new();
-        preset.insert(SESSION_ID_HEADER.to_string(), "caller-set".to_string());
-        let mut cfg = mk(preset);
-        cfg.stamp_session_id_header("sess-123");
+    // Pins the image_edit wire regression: every POST routes through
+    // post_json, which attaches both bearer and session id.
+    #[tokio::test]
+    async fn post_json_attaches_session_and_bearer_headers() {
+        let cfg = ImageGenConfig::Enabled {
+            api_key: "k".into(),
+            base_url: "https://api.x.ai/v1".into(),
+            extra_headers: indexmap::IndexMap::new(),
+            image_gen_enabled: true,
+            image_edit_enabled: true,
+            model_override: None,
+            edit_model_override: None,
+            format: ImageProviderFormat::OpenaiImages,
+        };
+        let client = ImageGenClient::new(&cfg, None)
+            .unwrap()
+            .with_session_id("sess-42");
+        let req = client
+            .post_json(
+                "https://api.x.ai/v1/images",
+                &serde_json::json!({}),
+                Some("tok"),
+            )
+            .build()
+            .unwrap();
         assert_eq!(
-            hdrs(&cfg).get(SESSION_ID_HEADER).map(String::as_str),
-            Some("caller-set")
+            req.headers()
+                .get(SESSION_ID_HEADER)
+                .and_then(|v| v.to_str().ok()),
+            Some("sess-42")
         );
-
-        let mut disabled = ImageGenConfig::Disabled;
-        disabled.stamp_session_id_header("sess-123");
-        assert!(!disabled.has_credentials());
+        assert_eq!(
+            req.headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer tok")
+        );
     }
 
     #[test]

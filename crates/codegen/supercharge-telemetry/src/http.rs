@@ -1,16 +1,13 @@
 //! Origin/client identification used by the telemetry engine.
 //!
-//! [`OriginClientInfo`] is owned by `supercharge-sampler` (so `SamplerConfig`
-//! can use it without depending on shell). Re-exported here so the telemetry
-//! engine can label events without depending on shell or sampler internals
-//! beyond the type itself.
+//! [`OriginClientInfo`] is owned by `supercharge-sampler` (so `SamplerConfig` can use it without depending on shell).
+//! Re-exported here so the telemetry engine can label events without depending on shell or sampler internals beyond the type itself.
 
 pub use supercharge_sampler::OriginClientInfo;
 
-/// Construct an [`OriginClientInfo`] from `SUPERCHARGE_CLIENT_NAME` /
-/// `SUPERCHARGE_CLIENT_VERSION` env vars. Returns `None` when `SUPERCHARGE_CLIENT_NAME`
-/// is unset. Free function (not an inherent method) because the type lives
-/// in another crate.
+/// Construct an [`OriginClientInfo`] from the `SUPERCHARGE_CLIENT_NAME` / `SUPERCHARGE_CLIENT_VERSION` env vars.
+/// Returns `None` when `SUPERCHARGE_CLIENT_NAME` is unset.
+/// This is a free function rather than an inherent method because the type lives in another crate.
 pub fn origin_client_info_from_env() -> Option<OriginClientInfo> {
     std::env::var("SUPERCHARGE_CLIENT_NAME")
         .ok()

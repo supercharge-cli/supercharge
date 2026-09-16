@@ -51,19 +51,9 @@ Branch the current session into a new agent, keeping history up to this point.
 
 Roll the conversation back to an earlier turn and discard everything after it. `/undo` is the same command.
 
-### `/edit-prompt`
-
-In minimal mode, open an external editor for an empty composer. Supercharge AI resolves `$VISUAL`, then `$EDITOR`, then `vi`; command values may include quoted arguments. Saving replaces the draft without sending it, and saving an empty file clears it. The command is hidden outside minimal mode.
-
-```
-/edit-prompt
-```
-
-To edit an **existing** draft when a terminal or multiplexer reserves `Ctrl+G`, open the command palette and select **Edit Prompt in External Editor**. That direct route preserves the existing text and refuses pasted, file-reference, or image chips without flattening them. Typing `/edit-prompt` into the composer necessarily replaces that input, so it starts from an empty draft.
-
 ### `/copy`
 
-Copy the most recent response to the clipboard. Pass a number to copy the Nth-latest response instead, or a file path to write the text to a file rather than the clipboard (handy over SSH, where the local clipboard is often unreachable).
+Copy the most recent response's source markdown to the clipboard. Pass a number to copy the Nth-latest response instead, or a file path to write the text to a file rather than the clipboard (handy over SSH, where the local clipboard is often unreachable).
 
 ```
 /copy
@@ -113,8 +103,8 @@ Switch models. With no arguments, Supercharge live-fetches `/models` from the pr
 
 ```
 /model
-/model supercharge-build
-/model Supercharge AI
+/model grok-4.6
+/model Grok 4.6
 /model Reasoning X high
 ```
 
@@ -135,7 +125,7 @@ Both are real toggles for the permission mode: they stay in the menu, and runnin
 | `/always-approve` | Skip all permission prompts | Back to ask |
 | `/auto` | Classifier approves safe tools (dangerous ones may still prompt) | Back to ask |
 
-Running one while the other is active switches modes — for example, `/auto` while always-approve is on switches to auto. `/auto` only appears when the auto permission-mode feature is enabled. You can also change mode with `Shift+Tab` (cycles Normal / Plan / Always-approve), `Ctrl+O`, or `/settings`.
+Running one while the other is active switches modes — for example, `/auto` while always-approve is on switches to auto. `/auto` only appears when the auto permission-mode feature is enabled. You can also change mode with `Shift+Tab` (cycles Normal / Plan / Auto (when enabled) / Always-approve), `Ctrl+O`, or `/settings`.
 
 ### `/multiline`
 
@@ -145,7 +135,7 @@ Toggle multiline input. When it's on, `Enter` inserts a newline and `Shift+Enter
 
 Open prompt-history search: fuzzy-search this session's prompts newest-first, then press `Enter` or `Tab` to drop a match back into the prompt.
 
-For quick recall, press `↑` on an empty prompt instead. The panel opens with your most recent prompt already filled in; `↑`/`↓` step through entries (each lands in the input), `↓` past the newest entry closes the panel, and typing edits the recalled prompt in place.
+For quick recall, press `↑` on an empty prompt instead. With prompts queued, that moves focus into the queue pane, highlighting the last row; otherwise the panel opens with your most recent prompt already filled in, and `↑`/`↓` step through entries (each lands in the input), `↓` past the newest entry closes the panel, and typing edits the recalled prompt in place.
 
 ### `/compact-mode`
 
@@ -155,11 +145,19 @@ Toggle compact display — less padding and tighter spacing for denser output.
 
 Toggle vim-style scrollback keys (`j`/`k`, `h`/`l`, `g`/`G`, `y`/`Y`, and so on). With it off (the default), a bare letter or `Shift+letter` in the scrollback just focuses the prompt and types the character. The setting persists to `[ui] vim_mode`.
 
+### `/edit-prompt`
+
+Open an external editor for the prompt, in either render mode. Supercharge AI resolves `$VISUAL`, then `$EDITOR`, then `vi`; command values may include quoted arguments. Saving replaces the draft without sending it, and saving an empty file clears it. Typing `/edit-prompt` necessarily replaces the composer's contents, so the editor starts from an empty draft; to edit an **existing** draft, choose **Edit Prompt in External Editor** from the command palette (or press `Ctrl+G` in minimal mode), which preserves the text and refuses pasted, file-reference, or image chips without flattening them.
+
+```
+/edit-prompt
+```
+
 ### `/minimal` and `/fullscreen`
 
-Reopen the current session in the other render mode. `/minimal` (offered while you're in fullscreen) switches to the experimental scrollback-native mode; `/fullscreen` (offered while you're in minimal; alias `/full`) switches back to standard fullscreen mode. Both relaunch the pager on the same conversation for this session only — they don't touch `config.toml`, and the relaunch banner reminds you how to switch back. The `--minimal` / `--fullscreen` CLI flags are session-scoped the same way. To make plain `supercharge` open in a given mode by default, use `/settings` → **Default screen mode** or set `[ui] screen_mode`.
+Switch the current session to the other render mode, in place. `/minimal` (offered while you're in fullscreen) switches to the experimental scrollback-native mode; `/fullscreen` (offered while you're in minimal; alias `/full`) switches back to standard fullscreen mode. The switch happens inside the running process — nothing restarts, so a running turn keeps streaming and your composer draft, queued prompts, and permission mode all carry over; a marker (committed line in minimal, toast in fullscreen) reminds you how to switch back. Both are session-scoped — they don't touch `config.toml` — and the `--minimal` / `--fullscreen` CLI flags are session-scoped the same way. To make plain `supercharge` open in a given mode by default, use `/settings` → **Default screen mode** or set `[ui] screen_mode`. (If the in-place transition misbehaves in an exotic terminal, `SUPERCHARGE_SCREEN_MODE_SWITCH=exec` restores the old behavior of relaunching the pager onto the same session.)
 
-A handful of commands only work in one of the two modes, because the surface they drive doesn't exist in the other: `/find`, `/jump`, `/timeline`, `/theme`, `/tutorial`, `/workflows`, and `/dashboard` are fullscreen-only, while `/expand` and `/edit-prompt` are minimal-only. Those are hidden from the command menu and the palette in the mode they can't run in. If you type one out anyway, Supercharge AI says why — and points you at whichever is actually useful. When the other mode is the only way to get it, that's the mode switch: `/theme isn't available in minimal mode (minimal renders with your terminal's own palette). Run /fullscreen to switch this session.` When this mode already does the job another way, it names that instead: `/expand isn't available in fullscreen mode — press Tab to focus the scrollback, then → on the block.` Everything else works in both. Note that `--no-alt-screen` still counts as fullscreen here, so it keeps the fullscreen-only commands.
+A handful of commands only work in one of the two modes, because the surface they drive doesn't exist in the other: `/find`, `/jump`, `/timeline`, `/theme`, `/tutorial`, and `/dashboard` are fullscreen-only, while `/expand` is minimal-only. (`/workflow runs` is different: it opens the run pane in fullscreen and degrades to a text overview in minimal rather than refusing.) Those are hidden from the command menu and the palette in the mode they can't run in. If you type one out anyway, Supercharge AI says why — and points you at whichever is actually useful. When the other mode is the only way to get it, that's the mode switch: `/theme isn't available in minimal mode (minimal renders with your terminal's own palette). Run /fullscreen to switch this session.` When this mode already does the job another way, it names that instead: `/expand isn't available in fullscreen mode: press Tab to focus the scrollback, then → on the block.` Everything else works in both. Note that `--no-alt-screen` still counts as fullscreen here, so it keeps the fullscreen-only commands.
 
 ### `/plan`
 
@@ -182,10 +180,13 @@ Open a preview of the current saved plan. Aliases: `/show-plan`, `/plan-view`.
 ### `/memory`
 
 Browse, view, and manage saved memories. Pass `on` or `off` to enable or disable memory. Alias: `/mem`.
+In a memory-v2 session, pass `status` to show content-free queue, lease,
+retention, and pinned-rollout diagnostics.
 
 ```
 /memory
 /memory off
+/memory status
 ```
 
 ### `/flush`
@@ -208,7 +209,7 @@ Save a note to memory immediately, without waiting for an automatic summary.
 
 ## Hooks and Plugins
 
-`/hooks`, `/plugins`, `/marketplace`, and `/skills` all open the same extensions modal, each on its own tab.
+`/hooks`, `/plugins`, `/marketplace`, `/skills`, and `/workflows` all open the same extensions modal, each on its own tab.
 
 ### `/hooks`
 
@@ -307,29 +308,35 @@ Kick off a background research workflow. It plans a bounded set of questions, ga
 /deep-research Compare the migration risks of PostgreSQL 17 and MySQL 9
 ```
 
-The command returns right away — follow progress in `/workflows`, and the final report appears in the conversation on its own.
+The command returns right away — follow progress in `/workflow runs`, and the final report appears in the conversation on its own.
 
-Model-launched workflows may set `agent_budget` on the `workflow` tool. It's an absolute cumulative cap on logical child-agent calls: every `agent()` call and every item in a `parallel()` panel spends one slot, while schema-correction retries don't. The default is 128, explicit values run 1–1,024, and a panel that would cross the remaining budget is rejected before any of its children launch. Separately, a host-configured cap (32 by default) bounds how many children run at a time per run; larger panels queue and still act as a barrier. `budget()` reports the cap as `total`, admitted calls as `spent`, `reserved` (always zero), and `remaining`. Named slash launches use the default budget.
+Workflows use an absolute cumulative `agent_budget` cap on logical child-agent calls: every `agent()` call and every item in a `parallel()` panel spends one slot, while schema-correction retries don't. The default is 128, explicit values run 1–1,024, and a panel that would cross the remaining budget is rejected before any of its children launch. Model-launched workflows set `agent_budget` on the `workflow` tool; named slash launches accept `--agent-budget N` or an `agent_budget` field in their JSON args. Named launches can also set child reasoning effort with `--effort LEVEL` or JSON `effort`, without changing the current session's `/effort`; a child script's own `effort` option takes precedence. Separately, a host-configured cap (32 by default) bounds how many children run at a time per run; larger panels queue and still act as a barrier. `budget()` reports the cap as `total`, admitted calls as `spent`, `reserved` (always zero), and `remaining`.
 
 ### `/workflow`
 
-Launch a saved workflow, or manage a running one by the session-unique display name shown in `/workflows`. Launch the same workflow twice and the display names are numbered (`review-changes`, `review-changes-2`); you never need the internal run IDs.
+Launch a saved workflow, or manage a running one by its session-unique display name. Launch the same workflow twice and the display names are numbered (`review-changes`, `review-changes-2`); you never need the internal run IDs. Bare `/workflow` prints a text overview of this session's runs.
+
+Type `/workflow` and a space to autocomplete saved workflow names (built-in, project, and user) plus the manage verbs `runs`, `pause`, `resume`, `stop`, and `save`. Picking a name fills it in and offers launch flags before you add args; it does not launch until you press Enter. `pause` / `resume` / `stop` / `save` then list this session's run handles — a bare `/workflow stop` does not pick a run.
 
 ```
-/workflow review-changes {"target":"origin/main...HEAD"}
+/workflow review-changes --agent-budget 256 --effort high {"target":"origin/main...HEAD"}
+/workflow review-changes {"target":"origin/main...HEAD","agent_budget":256,"effort":"high"}
+/workflow runs
 /workflow pause review-changes
 /workflow resume review-changes
 /workflow stop review-changes-2
 /workflow save review-changes
 ```
 
-Project workflows live in the project workflow directory; user workflows live in the Supercharge configuration home. A same-process pause/resume continues the original immutable script, args, and `agent_budget` cap from committed host-call results — to iterate, edit the returned script copy and launch it as a new run.
+`/workflow runs` opens the live **Workflow Runs** dashboard in the fullscreen TUI — active and retained runs, not a catalog of saved definitions. Each row shows the run's display name, phase, agent roster, progress, and result. Inside a run's detail view, `p` pauses, `r` resumes an ordinary pause, and `x` stops. Budget-limited runs can't bare-resume: `r` returns the shell's rejection (raise the cap with a model/tool resume that passes a higher `agent_budget`), while `x` still stops. `s` saves the run's script, but it's hidden for known built-ins and numbered duplicate handles — for those, choose a new unique `meta.name` and save the edited script explicitly. In minimal mode and non-TUI clients, `/workflow runs` prints the same text overview as bare `/workflow`.
+
+Project workflows live in `.supercharge/workflows/*.rhai`; user workflows live in `~/.supercharge/workflows/*.rhai`. A same-process pause/resume continues the original immutable script, args, and `agent_budget` cap from committed host-call results — to iterate, edit the returned script copy and launch it as a new run.
 
 A budget-limited run is different: it only resumes through a model/tool resume request that supplies an `agent_budget` above the admitted agent count. A bare `/workflow resume <name>` can't raise the cap, so it rejects budget-limited runs. Runs interrupted by a process restart aren't resumed at all, because external effects have no stable cross-process identity. And resume is not exactly-once: an external effect whose result wasn't committed before a same-process pause can run again.
 
 ### `/workflows`
 
-Open the live workflows **run** dashboard — active and retained runs, not a catalog of saved definitions. Each row shows the run's display name, phase, agent roster, progress, and result. Inside a run's detail view, `p` pauses, `r` resumes an ordinary pause, and `x` stops. Budget-limited runs can't bare-resume: `r` returns the shell's rejection (raise the cap with a model/tool resume that passes a higher `agent_budget`), while `x` still stops. `s` saves the run's script, but it's hidden for known built-ins and numbered duplicate handles — for those, choose a new unique `meta.name` and save the edited script explicitly.
+Open the extensions modal on the **Workflows** tab — a browse-only catalog of the saved workflows Supercharge AI discovered (built-ins, project `.supercharge/workflows/`, and user `~/.supercharge/workflows/`), with each entry's source, description, and path. The same catalog is listed for the model under the skill listing in the session preamble. Launch one with `/workflow <name>` (or its own slash command), then watch it in `/workflow runs`.
 
 ---
 
@@ -341,7 +348,7 @@ Switch the color theme. Alias: `/t`.
 
 ### `/feedback [message]`
 
-Report an issue or send feedback. A message sends immediately. With none, a pane opens for a longer report: `Enter` sends, `Esc` discards.
+Report an issue or send feedback. Bare `/feedback` opens the feedback form in every mode, including `--minimal`. Its **Write** tab is a report box: `Enter` sends, `Esc` closes. Its **Drafts** tab (`Ctrl+Tab` switches) holds reports saved for later — failed sends and feedback the agent drafted for you — and `Enter` loads one into Write so you can review, pick a type, and send it. `/feedback <message>` sends the message immediately, in any mode; if the send fails, the message is saved to Drafts.
 
 ```
 /feedback
@@ -352,8 +359,11 @@ Report an issue or send feedback. A message sends immediately. With none, a pane
 
 Send an aside to the agent without interrupting the current task. In minimal mode (`--minimal`), the answer shows up in a dismissible panel above the prompt: `Esc` dismisses it, a finished answer is saved into native scrollback, and a late reply to an already-dismissed panel is dropped. The side question and its answer aren't part of the main turn.
 
+`/btw` can also appear mid-message: the whole message (minus the token) becomes the side question and nothing goes to the main turn. Only `/btw` works this way; other commands must start the message.
+
 ```
 /btw also check the error handling
+fix the retry loop first. /btw what does WBC stand for?
 ```
 
 ### `/mcps`
@@ -379,7 +389,7 @@ Browse the built-in How-to Guides, open the online Build docs, or jump straight 
 ```
 
 - Bare `/docs` (or `/docs how-to`) opens the How-to Guides picker.
-- `/docs web` opens https://docs.Voltage/build/overview in your browser.
+- `/docs web` opens https://docs.x.ai/build/overview in your browser.
 - `/docs <title>` opens a specific guide by case-insensitive title match.
 
 ### `/tutorial`
@@ -416,11 +426,11 @@ Create, edit, and delete personas. A subagent can apply a persona to shape how i
 
 ### `/login`
 
-Log in or re-authenticate without leaving the session.
+Open the provider setup wizard, the same as `/setup`. This does not force an upstream account login.
 
 ### `/logout`
 
-Log out and return to the login screen.
+Clear supported session-based authentication. Provider configuration is managed separately through `/setup`.
 
 ### `/usage`
 
@@ -431,6 +441,10 @@ View credit usage or manage billing. Alias: `/cost`.
 /usage manage
 ```
 
+Inside a session this opens the usage modal with the account allowance plus that session's context and token totals. From the [Agent Dashboard](23-dashboard.md#dispatch-input) the same modal opens over the dashboard; there is no session there, so only the **Usage limit** tab carries data.
+
+For persisted per-turn token and cost totals of any local session, use `supercharge usage <session-id> [turn]` from the shell. See [Session Management](17-sessions.md#the-grok-usage-subcommand).
+
 ### `/privacy`
 
 Open Settings on **Coding data, retention, and training**, where you choose
@@ -440,7 +454,7 @@ Open Settings on **Coding data, retention, and training**, where you choose
 /privacy
 ```
 
-This setting doesn't touch `[features] telemetry`, `trace_upload`, or your external OTEL settings — see [Monitoring Usage](24-monitoring-usage.md#related-settings). On team accounts only a team admin can change it, and admins can also enable or disable Zero Data Retention for the team ([how to enable ZDR](https://docs.Voltage/developers/faq/security#how-to-enable-zdr)). When the choice isn't yours to make, the row says so — `ZDR` or `· Admin Managed` — instead of opening the chooser.
+This setting doesn't touch `[features] telemetry`, `trace_upload`, or your external OTEL settings — see [Monitoring Usage](24-monitoring-usage.md#related-settings). On team accounts only a team admin can change it, and admins can also enable or disable Zero Data Retention for the team ([how to enable ZDR](https://docs.x.ai/developers/faq/security#how-to-enable-zdr)). When the choice isn't yours to make, the row says so — `ZDR` or `· Admin Managed` — instead of opening the chooser. ZDR locks coding-data sharing; it does not mute external OTEL or `user.email` — see [ZDR and this stream](24-monitoring-usage.md#zdr-and-this-stream).
 
 ---
 
@@ -448,13 +462,17 @@ This setting doesn't touch `[features] telemetry`, `trace_upload`, or your exter
 
 ### `/setup`
 
-Open Supercharge AI’s provider setup wizard. Pick a built-in provider (OpenAI, Anthropic, OpenRouter, Pollinations, Ollama, and others) or Custom. For Custom, enter an OpenAI-compatible base URL. Then enter the API key. Supercharge fetches `/models` from that API (Anthropic-compatible providers use `x-api-key`) and lists chat models so you can choose the default, or type a custom model id. The chosen model, endpoint, format, and credential are stored under `~/.supercharge/config.toml`, and the current session switches to that model immediately.
+Open Supercharge AI’s provider setup wizard. Pick a built-in provider (OpenAI, Anthropic, OpenRouter, Pollinations, Ollama, and others) or Custom. For Custom, enter the provider base URL. Choose Chat Completions, Messages, or Responses, then enter any credential required by that provider. Supercharge fetches `/models` from that API (Anthropic-compatible providers use `x-api-key`) and lists chat models so you can choose the default, or type a custom model id. The chosen model, endpoint, format, and credential are stored under `~/.supercharge/config.toml`, and the current session switches to that model immediately.
 
 ```
 /setup
 ```
 
 `/login` opens the same wizard. `/settings` remains available for terminal, workspace, and other local configuration, with aliases `/config`, `/preferences`, and `/prefs`.
+
+### `/format`
+
+Change the saved chat-provider protocol to **Chat Completions**, **Messages**, or **Responses** without rerunning setup or model discovery. The endpoint, credential, model, and compatible thinking effort are retained. See [Custom Models](11-custom-models.md#change-the-saved-format).
 
 ### `/timestamps`
 

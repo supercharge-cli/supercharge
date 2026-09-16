@@ -1,7 +1,5 @@
-//! Todo types — re-exported from `xai-Supercharge AI-tools` with ACP conversion helpers.
-//!
-//! Types are canonical in `xai-Supercharge AI-tools`. This module adds ACP ↔ TodoItem
-//! conversions since `xai-Supercharge AI-tools` is protocol-agnostic.
+//! Types are canonical in `supercharge-tools`.
+//! This module adds conversions between ACP plan entries and `TodoItem` since `supercharge-tools` is protocol-agnostic.
 
 pub use supercharge_tools::implementations::grok_build::todo::TodoId;
 pub use supercharge_tools::implementations::grok_build::todo::TodoItem;
@@ -11,16 +9,12 @@ pub use supercharge_tools::implementations::grok_build::todo::TodoStatus;
 
 use agent_client_protocol as acp;
 
-/// Convert an ACP `PlanEntry` to a `TodoItem`.
-///
-/// Handles the cancelled state: ACP has no `Cancelled` status, so cancelled
-/// items are stored as `Completed` with `{"cancelled": true}` in meta.
+/// ACP has no `Cancelled` status, so cancelled items are stored as `Completed` with `{"cancelled": true}` in meta.
 pub fn todo_item_from_plan_entry(entry: acp::PlanEntry) -> TodoItem {
     let status = match entry.status {
         acp::PlanEntryStatus::Pending => TodoStatus::Pending,
         acp::PlanEntryStatus::InProgress => TodoStatus::InProgress,
         acp::PlanEntryStatus::Completed => {
-            // Check if this is actually a cancelled item
             if entry
                 .meta
                 .as_ref()
@@ -50,8 +44,6 @@ pub fn todo_item_from_plan_entry(entry: acp::PlanEntry) -> TodoItem {
     }
 }
 
-/// Convert a `TodoItem` to an ACP `PlanEntry`.
-///
 /// Cancelled items become `Completed` with `{"cancelled": true}` in meta.
 pub(crate) fn plan_entry_from_todo_item(item: TodoItem) -> acp::PlanEntry {
     let status = match item.status {

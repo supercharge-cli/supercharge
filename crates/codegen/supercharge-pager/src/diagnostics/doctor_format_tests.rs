@@ -240,7 +240,7 @@ fn limited_color_output_is_stable() {
             "  multiplexer  None detected\n",
             "  ssh          no\n",
             "  color        256\n",
-            "  themes       4/7: navy-cyan, black-crimson, voltage_dark, voltage_light\n",
+            "  themes       5/8: navy-cyan, black-crimson, voltage_dark, voltage_light, terminal\n",
             "\n",
             "Clipboard\n",
             "  native       local (pbcopy)\n",
@@ -584,7 +584,9 @@ fn runtime_findings_merge_before_single_formatter_orders_issues_before_recommend
         },
     );
 
-    let issue = output.find("Supercharge is using the terminal bell").unwrap();
+    let issue = output
+        .find("Supercharge is using the terminal bell")
+        .unwrap();
     let recommendation = output.find("Recommendations").unwrap();
     assert!(issue < recommendation);
     assert!(!output.contains("No issues found."));

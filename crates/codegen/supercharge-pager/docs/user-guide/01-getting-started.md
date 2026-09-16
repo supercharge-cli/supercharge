@@ -1,6 +1,6 @@
 # Getting Started
 
-Supercharge AI is a terminal-based AI coding assistant from Voltage. It runs as a TUI (Terminal User Interface) that understands your codebase, executes shell commands, edits files, searches the web, and manages tasks.
+Supercharge AI is an independently branded, terminal-based AI coding assistant by R3AP3R Editz, derived from [xai-org/grok-build](https://github.com/xai-org/grok-build). It runs as a TUI (Terminal User Interface) that understands your codebase, executes shell commands, edits files, searches the web, and manages tasks.
 
 You can use it interactively as a full-screen TUI, run it headlessly for scripting and CI/CD, or integrate it into editors via the Agent Client Protocol (ACP).
 
@@ -8,31 +8,17 @@ You can use it interactively as a full-screen TUI, run it headlessly for scripti
 
 ## Installation
 
-Install the latest stable release (macOS, Linux, or Windows via Git Bash):
+Use the Supercharge release artifacts supplied by your deployment, or build the
+pager binary from this workspace with the pinned Rust toolchain, DotSlash, and
+`protoc` installed:
 
 ```bash
-curl -fsSL your Supercharge AI release source | bash
+cargo build --release -p supercharge-pager-bin
 ```
 
-Install a specific version:
-
-```bash
-curl -fsSL your Supercharge AI release source | bash -s 0.1.42
-```
-
-On **Windows (PowerShell)**, use the native PowerShell installer:
-
-```powershell
-irm your Supercharge AI release source | iex
-```
-
-Install a specific version:
-
-```powershell
-$env:SUPERCHARGE_VERSION="0.1.42"; irm your Supercharge AI release source | iex
-```
-
-The PowerShell installer automatically adds `%USERPROFILE%\.supercharge\bin` to your User PATH. Alternatively, install via [Git for Windows](https://gitforwindows.org/) (Git Bash) or MSYS2 using the bash script above. WSL users get the Linux binary automatically.
+The resulting binary is `target/release/supercharge-pager` (`.exe` on Windows).
+Install it on your PATH as `supercharge` to use the commands in this guide.
+Upstream Grok installers install the upstream product, not this fork.
 
 Verify the installation:
 
@@ -46,6 +32,22 @@ Update to the latest version at any time:
 supercharge update
 ```
 
+To fetch a repository through Grove (NFS on macOS, FUSE on Linux), enable
+`supercharge clone` with `[clone] enabled = true` in Grove config, `SUPERCHARGE_CLONE=1`,
+or the enable-both convenience `SUPERCHARGE_GROVE=1` / `[cli] grove = true` in
+`~/.supercharge/config.toml`:
+
+```bash
+supercharge clone <url> [dir]
+```
+
+The default is a depth-1 checkout of the selected branch. Pass `--full-history`
+for a complete clone. Clone enablement is independent of session / `-w` Grove
+worktrees (the convenience above turns both on; the specific knobs still win).
+Grove may require separate service credentials; those are not required for local
+provider setup. See [supercharge clone](27-grok-clone.md#authentication) and
+[Configuration reference](26-config-reference.md).
+
 ---
 
 ## First Launch
@@ -56,7 +58,7 @@ Start Supercharge AI by running:
 supercharge
 ```
 
-On first launch, Supercharge AI opens your browser to authenticate with your configured Supercharge identity provider. After you sign in, Supercharge AI stores your credentials in `~/.supercharge/auth.json`, where they persist across sessions. Supercharge AI refreshes your credentials automatically and prompts you to sign in again when they can no longer be renewed.
+Supercharge AI does not require an upstream account or browser sign-in to open the TUI. Configure your chosen provider through `/setup`; providers that require credentials use their own credentials, while local providers can run without an upstream login. Supported OAuth and enterprise integrations remain optional.
 
 To configure an AI provider, run `/setup` inside the TUI. Enter the provider endpoint, model, and credentials in the setup form; Supercharge AI stores the validated configuration in `~/.supercharge/config.toml`.
 
@@ -66,14 +68,14 @@ See [Authentication](02-authentication.md) for the `/setup` provider flow and su
 
 ## Basic Interaction
 
-Once authenticated, Supercharge AI presents a full-screen TUI with two main areas:
+Supercharge AI presents a full-screen TUI with two main areas:
 
 - **Scrollback** -- the conversation history showing your prompts, Supercharge AI's responses, tool calls, file edits, and more.
 - **Prompt** -- the input area at the bottom where you type messages.
 
 Type a message and press `Enter` to send it. Supercharge AI reads files, runs commands, and edits code as needed. Each tool run streams into the scrollback in real time.
 
-Press `Tab` to move focus between the prompt and the scrollback. While a turn is running, `Esc` cancels it (the exception is fullscreen vim scrollback mode, where mid-turn `Esc` is a no-op; minimal mode cancels even with vim on); `Ctrl+C` cancels once the composer is empty — with a draft, the first press only clears it. Idle, press `Esc` twice within 800ms to clear a non-empty prompt, or (with an empty prompt and conversation messages) to open rewind — see [Keyboard Shortcuts](03-keyboard-shortcuts.md#escape). With the scrollback focused, use the arrow keys to select entries and to collapse or expand them. To navigate with `j`/`k` and fold with `h`/`l` instead, enable Vim mode.
+Press `Tab` to move focus between the prompt and the scrollback. While a turn is running, `Ctrl+C` cancels it once the composer is empty — with a draft, the first press only clears it. `Esc` never cancels a turn; mid-turn it shows a reminder to use `Ctrl+C`. Idle, press `Esc` twice within 800ms to clear a non-empty prompt, or (with an empty prompt and conversation messages) to open rewind — see [Keyboard Shortcuts](03-keyboard-shortcuts.md#escape). With the scrollback focused, use the arrow keys to select entries and to collapse or expand them. To navigate with `j`/`k` and fold with `h`/`l` instead, enable Vim mode.
 
 ### File References
 
@@ -146,7 +148,7 @@ Tools can be extended with [MCP servers](05-configuration.md#mcp-servers) for in
 Type `/` in the prompt to access commands. These provide quick actions without writing a full prompt:
 
 ```
-/model supercharge-build                 # Switch model
+/model grok-4.6                 # Switch model
 /compact                          # Compress conversation history
 /always-approve                   # Toggle always-approve mode
 /new                              # Start a new session
@@ -181,7 +183,7 @@ supercharge --rules "Always use TypeScript. Prefer functional components."
 supercharge --yolo
 
 # Use a specific model
-supercharge -m supercharge-build
+supercharge -m grok-4.6
 
 # Resume a previous session
 supercharge --resume <session-id>
@@ -189,11 +191,11 @@ supercharge --resume <session-id>
 # Continue the most recent session
 supercharge -c
 
-# Experimental scrollback-native render mode. Sticky: plain `supercharge` reopens in
-# the mode last chosen via --minimal/--fullscreen (or /minimal//fullscreen).
+# Experimental scrollback-native render mode for this session.
+# Use /settings -> Default screen mode to persist the default.
 supercharge --minimal
 
-# Back to the standard fullscreen TUI (and make it sticky again)
+# Standard fullscreen TUI for this session
 supercharge --fullscreen
 
 # Headless mode (for scripts)

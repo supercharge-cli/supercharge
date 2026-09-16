@@ -1,7 +1,7 @@
 [package]
 license = "Apache-2.0"
 name = "supercharge-shell"
-version = "1.3.6"
+version = "1.3.8"
 edition.workspace = true
 
 [features]
@@ -9,19 +9,23 @@ default = []
 dhat-heap = ["dep:dhat"]
 # Session synthesis + in-process e2e harness (`session::testkit`) for soak,
 # load, and bench tests. Off by default; the tests/benches that use it declare
-# it via `required-features`.
-test-support = []
+# it via `required-features`. Forwards `supercharge-login/test-support` for downstream test builds.
+test-support = ["supercharge-login/test-support"]
 test-util = []
 # Local Computer Hub workspace_server (own/attach + crash-restart). Requires
 local-workspace = []
+# CI default set (preferred over cargo `default` for hermetic CI builds):
+# `config-docs` is on this set (not cargo `default`) so hermetic lib tests
+# parse the committed config-reference page.
+config-docs = []
 default-bazel = [
     "local-workspace",
     "test-support",
+    "config-docs",
 ]
 
 [dependencies]
 dunce = { workspace = true }
-tonic-prost = { workspace = true, optional = true }
 agent-client-protocol = { workspace = true }
 anyhow = { workspace = true }
 supercharge-announcements = { workspace = true }
@@ -53,12 +57,8 @@ reqwest-middleware = { workspace = true }
 serde = { workspace = true }
 serde_ignored = "0.1"
 serde_json = { workspace = true, features = ["preserve_order"] }
-similar = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
-dirs = "6"
-tokio-stream = { workspace = true }
-tower-http = { workspace = true, features = ["cors"] }
 toml = { workspace = true, features = ["preserve_order"] }
 toml_edit = { workspace = true }
 tokio = { workspace = true, features = [
@@ -78,7 +78,7 @@ tracing-subscriber = { workspace = true, features = [
     "time",
 ] }
 obfstr = { workspace = true }
-tokio-util = { workspace = true, features = ["compat"] }
+tokio-util = { workspace = true, features = ["compat", "rt"] }
 tokio-retry = { workspace = true }
 uuid = { workspace = true, features = ["v4", "v5", "v7"] }
 supercharge-acp-lib = { workspace = true }
@@ -97,7 +97,6 @@ rustls = { version = "0.23", default-features = false, features = [
     "std",
     "tls12",
 ] }
-rustls-native-certs = "0.8"
 futures-util = { workspace = true }
 urlencoding = { workspace = true }
 gethostname = { workspace = true }
@@ -114,25 +113,24 @@ image = { workspace = true, features = ["png", "jpeg", "gif", "webp"] }
 moka = { workspace = true, features = ["future"] }
 dhat = { workspace = true, optional = true }
 base64 = { workspace = true }
-jsonwebtoken = { version = "10", default-features = false, features = ["use_pem", "aws_lc_rs"] }
+hmac = { workspace = true }
 sha2 = { workspace = true }
-rand = { workspace = true }
-shlex = { workspace = true }
 strum = { workspace = true }
 supercharge-fast-worktree = { path = "../supercharge-fast-worktree", features = ["metadata"] }
 
-tonic = { workspace = true, optional = true }
-prost = { workspace = true, optional = true }
 supercharge-paths = { path = "../supercharge-paths" }
 supercharge-shell-base = { workspace = true }
 supercharge-shell-session-support = { workspace = true }
+supercharge-shell-terminal = { workspace = true }
 supercharge-shared = { workspace = true }
+supercharge-status-line = { workspace = true }
 supercharge-tracing-macros = { path = "../supercharge-tracing-macros" }
 supercharge-fsnotify = { path = "../supercharge-fsnotify" }
 supercharge-codebase-graph = { path = "../supercharge-codebase-graph" }
 supercharge-hunk-tracker = { path = "../supercharge-hunk-tracker" }
 supercharge-agent-lifecycle = { workspace = true }
 supercharge-interjection-core = { workspace = true }
+supercharge-message-delivery-core = { workspace = true }
 supercharge-sandbox = { path = "../supercharge-sandbox", default-features = false }
 supercharge-chat-state = { path = "../supercharge-chat-state" }
 # Segment markdown rendering + the `compaction/` store path convention.
@@ -147,7 +145,6 @@ supercharge-sampling-types = { path = "../supercharge-sampling-types" }
 supercharge-tools = { path = "../supercharge-tools" }
 supercharge-tty-utils = { workspace = true }
 supercharge-workflow = { path = "../supercharge-workflow" }
-supercharge-system-power = { workspace = true }
 supercharge-workspace = { workspace = true }
 # Backs the compatibility-only `supercharge_shell::foreign_sessions` re-export.
 supercharge-foreign-sessions = { workspace = true }
@@ -156,16 +153,21 @@ supercharge-superagent = { path = "../supercharge-superagent" }
 supercharge-agent = { path = "../supercharge-agent" }
 supercharge-bundle = { workspace = true }
 supercharge-config = { workspace = true }
+supercharge-feedback = { workspace = true }
 supercharge-config-types = { workspace = true }
+supercharge-env = { workspace = true }
+supercharge-dirs = { workspace = true }
 supercharge-memory = { workspace = true }
 supercharge-hooks = { path = "../supercharge-hooks" }
 supercharge-hooks-plugins-types = { path = "../supercharge-hooks-plugins-types" }
 supercharge-plugin-marketplace = { path = "../supercharge-plugin-marketplace" }
 supercharge-file-utils = { path = "../supercharge-file-utils" }
+supercharge-otel = { workspace = true }
 supercharge-session-events = { workspace = true }
 supercharge-auth = { workspace = true, features = ["middleware"] }
 supercharge-telemetry = { workspace = true }
 supercharge-http = { workspace = true }
+supercharge-login = { workspace = true }
 supercharge-models = { workspace = true }
 prod-mc-cli-chat-proxy-types = { path = "../../../prod/mc/cli-chat-proxy-types" }
 flate2 = { workspace = true }
@@ -176,8 +178,6 @@ url = { workspace = true }
 walkdir = { workspace = true }
 tdigests = "1.0"
 semver = { workspace = true }
-process-wrap = { version = "9.0.0", features = ["tokio1", "job-object"] }
-portable-pty = "0.9"
 parking_lot.workspace = true
 dashmap.workspace = true
 
@@ -197,6 +197,8 @@ siphasher = { workspace = true }
 windows = { workspace = true }
 
 [dev-dependencies]
+supercharge-dirs = { workspace = true }
+supercharge-status-line = { workspace = true, features = ["test-support"] }
 criterion = { workspace = true }
 # Pre-main unified-log redirect (`test_support::redirect_unified_log_for_tests`).
 ctor = { workspace = true }
@@ -207,17 +209,19 @@ tempfile = { workspace = true }
 # is `#[cfg(test)]`-only inside supercharge-bundle without this feature.
 supercharge-bundle = { workspace = true, features = ["test-support"] }
 supercharge-memory = { workspace = true, features = ["test-support"] }
-supercharge-workspace = { workspace = true, features = ["test-support"] }
+# sandbox-enforce: keep tests running against the enforcing sandbox build.
+supercharge-workspace = { workspace = true, features = ["test-support", "sandbox-enforce"] }
 supercharge-config = { workspace = true, features = [] }
-ring = { workspace = true }
 tar = { workspace = true }
 flate2 = { workspace = true }
-rcgen = { workspace = true }
 semver = { workspace = true }
 serial_test = { workspace = true }
 # Test-only builds expose `env::EnvVarGuard` and the cpu_profile test seams to
 # this crate's test targets.
 supercharge-shell-base = { workspace = true, features = ["test-support"] }
+# Exposes the login crate's `#[cfg(test)]`-only auth-provider helpers
+# (`test_counting_provider`, `test_backdate_provider_mint`) to shell tests.
+supercharge-login = { workspace = true, features = ["test-support"] }
 supercharge-test-support = { workspace = true, features = [] }
 supercharge-test-utils = { workspace = true }
 # `test-util` enables `#[tokio::test(start_paused = true)]` (paused virtual
@@ -245,28 +249,28 @@ harness = false
 name = "child_replay_lookup"
 harness = false
 
+# Ordinary integration tests live in `tests/all.rs` (`mod suite`) so cargo
+# links one binary. The test name is `supercharge-shell-all` (Bazel `//pkg:all`
+# is the package wildcard). Process-isolated suites stay as implicit
+# `tests/*.rs` binaries.
 [[test]]
-name = "test_leader_soak"
+name = "test_startup_prefetch_fallback"
 required-features = ["test-support"]
 
 [[test]]
-name = "test_session_load_memory"
+name = "test_startup_prefetch_overlap"
 required-features = ["test-support"]
 
 [[test]]
-name = "test_fork_copy_memory"
+name = "test_startup_prefetch_policy"
 required-features = ["test-support"]
 
 [[test]]
-name = "session_fork_replay_memory"
+name = "test_startup_prefetch_repair_skip"
 required-features = ["test-support"]
 
 [[test]]
-name = "session_load_perf"
-required-features = ["test-support"]
-
-[[test]]
-name = "testkit_synth_roundtrip"
+name = "test_startup_prefetch_shared"
 required-features = ["test-support"]
 
 [lints]
@@ -277,6 +281,7 @@ workspace = true
 reqwest = { workspace = true, features = ["blocking"] }
 flate2 = { workspace = true }
 tar = { workspace = true }
+
 [[bin]]
 name = "chat-history-downgrade"
 path = "src/bin/chat-history-downgrade.rs"

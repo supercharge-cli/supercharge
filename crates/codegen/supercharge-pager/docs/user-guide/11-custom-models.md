@@ -6,7 +6,7 @@ Supercharge AI connects to custom model endpoints for alternative providers, sel
 
 ## Default Models
 
-By default, Supercharge AI uses models hosted by Voltage, and new sessions start with `supercharge-4.5`. Default models require no configuration. Authenticate with `supercharge login` or an API key, then start a session.
+Supercharge AI uses the provider and default model saved through `/setup`. No upstream account or forced browser authentication is required. `/model` fetches the configured provider’s live model list; select a listed model or enter an ID supported by that provider. Examples using `grok-4.6` or `grok-4.5` refer to actual xAI model IDs, not renamed Supercharge models.
 
 List all available models:
 
@@ -21,7 +21,7 @@ supercharge models
 ### CLI Flag
 
 ```bash
-supercharge -p "Hello" -m supercharge-build
+supercharge -p "Hello" -m grok-4.6
 ```
 
 ### Slash Command
@@ -29,18 +29,30 @@ supercharge -p "Hello" -m supercharge-build
 In the TUI, switch models during a session:
 
 ```
-/model supercharge-build
+/model grok-4.6
 ```
 
 Or use the alias:
 
 ```
-/m supercharge-build
+/m grok-4.6
 ```
 
 ### Model Picker (Ctrl+M)
 
 Press `Ctrl+M` from the scrollback pane to open the model picker. It lists all available models, both built-in and custom, and lets you switch with a single keystroke. With the prompt focused, `Ctrl+M` toggles multiline input instead -- use `/model` to switch without leaving the prompt.
+
+### Fleet allowlist (`requirements.toml`)
+
+Enterprise hosts can pin the **selectable** set — not only the default — in signed `requirements.toml`. That list **replaces** any user `allowed_models` (it is not a union), so `/model`, `Ctrl+M`, and `-m` cannot offer models outside it.
+
+```toml
+[models]
+default = "grok-4.5"
+allowed_models = ["grok-4.5", "grok-4*"]
+```
+
+A fleet pin matches the **model id** (not a user-chosen catalog key), so a local `[model.<name>]` entry cannot widen the set. User-config `allowed_models` still matches catalog key or model id. Omit the key to leave user config standing. An empty array is unrestricted. A present-but-unreadable pin fail-closes (nothing selectable). A default or `-m` value outside the pinned set is rejected once the model catalog is fetched — contact your administrator; the list is not user-editable.
 
 ### Config Default
 
@@ -48,7 +60,7 @@ Set a persistent default in `~/.supercharge/config.toml`:
 
 ```toml
 [models]
-default = "supercharge-4.5"
+default = "grok-4.5"
 ```
 
 ---
@@ -95,6 +107,7 @@ name = "Display Name"                     # Shown in the model picker
 description = "Model description"          # Optional description
 api_key = "sk-..."                        # Provider credential; enter through `/setup`
 api_backend = "chat_completions"          # "chat_completions", "responses", or "messages"
+reasoning_summary = "concise"             # Responses API only: "none", "auto", "concise", or "detailed"
 temperature = 0.7                         # Sampling temperature
 top_p = 0.95                              # Nucleus sampling parameter
 max_completion_tokens = 8192              # Maximum tokens per response
@@ -133,11 +146,15 @@ temperature                 = 0.7
 top_p                       = 0.95
 max_completion_tokens       = 8192
 max_retries                 = 8
+rate_limit_retry_threshold  = 4
 inference_idle_timeout_secs = 600
+subagent_rate_limit_max_attempts = 8
 stream_tool_calls           = true
 ```
 
 This is a small, fixed set of environment-wide knobs. Settings that identify a specific model (`model`, `base_url`, `api_key`, `context_window`, ...) cannot be defaulted this way, and a few settings with their own dedicated configuration -- auto-compaction (`[session]`), the system-prompt label (`[agent]`), and reasoning effort (`[models].default_reasoning_effort`) -- keep their existing homes.
+
+`rate_limit_retry_threshold` and `subagent_rate_limit_max_attempts` select different 429 retry paths for subagents. Configuring `rate_limit_retry_threshold` makes the sampler own those retries and disables the separate subagent wait loop, including its 150-second cumulative wait budget and wait telemetry. `subagent_rate_limit_max_attempts` applies only when the sampler threshold is unset.
 
 > **Note on `stream_tool_calls`:** this one affects request *shape*, not just sampling. A few endpoints (some BYOK providers) expect it left unset; if a global `stream_tool_calls = true` causes problems for such a model, opt that model out with `stream_tool_calls = false` in its `[model.<id>]` block.
 
@@ -150,7 +167,7 @@ Some gateways route or version on the query string. `query_params` appends perce
 model = "my-model"
 base_url = "https://gateway.example/v1"
 api_backend = "responses"
-env_key = "GATEWAY_API_KEY"
+api_key = "<credential-configured-in-/setup>"
 query_params = { api-version = "2026-07-22" }
 ```
 
@@ -179,11 +196,11 @@ You can override specific fields of built-in models without redefining everythin
 
 ```toml
 # Override only the API key for a default model
-[model.supercharge-build]
+[model.grok-4.6]
 api_key = "my-api-key"
 
 # Override temperature and add a custom API key
-[model.supercharge-build]
+[model.grok-4.6]
 temperature = 0.5
 api_key = "sk-custom"
 ```
@@ -223,7 +240,7 @@ The `messages` backend uses the Anthropic Messages protocol. Anthropic authentic
 model = "gpt-4o"
 base_url = "https://api.openai.com/v1"
 name = "GPT-4o"
-env_key = "OPENAI_API_KEY"
+api_key = "<credential-configured-in-/setup>"
 ```
 
 `api_backend` defaults to `"chat_completions"`, so you don't need to set it explicitly for OpenAI.
@@ -238,7 +255,28 @@ model = "gpt-4o"
 base_url = "https://api.openai.com/v1"
 name = "GPT-4o (Responses)"
 api_backend = "responses"
-env_key = "OPENAI_API_KEY"
+api_key = "<credential-configured-in-/setup>"
+```
+
+On the Responses API, Supercharge AI asks for a `concise` reasoning summary by default; that is what the reasoning text shown in the UI comes from. `reasoning_summary` changes the request: `detailed` or `auto` for a fuller summary, or `none` to omit the field for gateways that reject it.
+
+### AWS Bedrock (Mantle)
+
+Bedrock's OpenAI-compatible gateway rejects `reasoning.summary`, so set `reasoning_summary = "none"`. It authenticates with a Bedrock API key as a bearer token; the example below mints a short-lived one through a named auth provider:
+
+```toml
+[auth_provider.bedrock]
+command = "aws-bedrock-token"   # prints a Bedrock API key on stdout (e.g. via aws-bedrock-token-generator)
+token_ttl_secs = 3600
+
+[model."bedrock-grok-4.6"]
+model = "xai.grok-4.6"
+base_url = "https://bedrock-mantle.us-west-2.api.aws/openai/v1"
+name = "Grok 4.6 (Bedrock)"
+api_backend = "responses"
+reasoning_summary = "none"
+auth_provider = "bedrock"
+context_window = 500000
 ```
 
 ### Ollama (Local Models)
@@ -261,7 +299,7 @@ Make sure Ollama is running (`ollama serve`) and the model is pulled (`ollama pu
 model = "mistralai/Mixtral-8x7B-Instruct-v0.1"
 base_url = "https://api.together.xyz/v1"
 name = "Mixtral 8x7B"
-env_key = "TOGETHER_API_KEY"
+api_key = "<credential-configured-in-/setup>"
 ```
 
 ### Local OpenAI-Compatible Server
@@ -301,7 +339,7 @@ Start Supercharge AI and run `/setup` in the TUI. Enter `https://api.acme.com/v1
 models_base_url = "https://api.acme.com/v1"
 
 # Override only the API key for a specific model
-[model.supercharge-build]
+[model.grok-4.6]
 api_key = "my-api-key"
 ```
 
@@ -309,7 +347,7 @@ When you use `[endpoints]` with partial model overrides, Supercharge AI inherits
 
 ### Auth Behavior
 
-When you set `models_base_url`, Supercharge AI uses API key auth (`Authorization: Bearer`) instead of session auth. You do not need `supercharge login` -- the API key is enough.
+When you set `models_base_url`, Supercharge AI uses API key auth (`Authorization: Bearer`) instead of session auth. Reuse the credential saved through `/setup`; an upstream account login is not required.
 
 ---
 
@@ -319,13 +357,13 @@ The `web_search` tool uses a separate model. Configure it with:
 
 ```toml
 [models]
-web_search = "supercharge-4.5"
+web_search = "grok-4.5"
 ```
 
 Or via environment variable:
 
 ```bash
-export SUPERCHARGE_WEB_SEARCH_MODEL="supercharge-4.5"
+export SUPERCHARGE_WEB_SEARCH_MODEL="grok-4.5"
 ```
 
 If you point web search at a custom model, you also need a `[model.*]` entry so Supercharge AI can reach it. Server-side ("backend") web search runs only when the model sets `supports_backend_search = true` (and the build enables backend search); it does not depend on `api_backend`:
@@ -377,9 +415,9 @@ auth_token_ttl = 3600
 default = "company-supercharge"
 
 [model.company-supercharge]
-model = "supercharge-build"
-base_url = "https://supercharge-proxy.acme.com/"
-name = "Supercharge AI Latest (Proxy)"
+model = "grok-4.6"
+base_url = "https://grok-proxy.acme.com/"
+name = "Grok 4.6 (Proxy)"
 context_window = 128000
 
 [features]

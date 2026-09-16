@@ -1,7 +1,5 @@
-//! Tool infrastructure for xai-Supercharge AI-shell.
-//!
-//! All tool execution goes through `xai-Supercharge AI-tools` via the `ToolBridge`.
-//! Types (ToolOutput, ToolInput, TodoState, etc.) come from `xai-Supercharge AI-tools` directly.
+//! All tool execution goes through `supercharge-tools` via the `ToolBridge`.
+//! Types (ToolOutput, ToolInput, TodoState, etc.) come from `supercharge-tools` directly.
 
 pub mod bridge;
 pub mod config;

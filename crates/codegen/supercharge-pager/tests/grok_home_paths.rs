@@ -1,5 +1,4 @@
-//! `SUPERCHARGE_HOME` override tests in an isolated binary so `grok_home()`'s
-//! process-wide `OnceLock` initializes from the overridden env var.
+//! `SUPERCHARGE_HOME` override tests in an isolated binary so `grok_home()`'s process-wide `OnceLock` initializes from the overridden env var.
 
 use std::path::PathBuf;
 
@@ -31,8 +30,7 @@ fn grok_home_override_path_helpers() {
         "$SUPERCHARGE_HOME/memory/MEMORY.md"
     );
 
-    // Copy-toast paths follow the same abbreviation convention, so a custom
-    // $SUPERCHARGE_HOME outside $HOME still displays short.
+    // The copy toast abbreviates paths the same way, so a custom $SUPERCHARGE_HOME outside $HOME still shows the short form
     assert_eq!(
         supercharge_pager::clipboard::display_copy_path(&grok_home.join("last-copy.txt")),
         "$SUPERCHARGE_HOME/last-copy.txt"
@@ -44,8 +42,7 @@ fn grok_home_override_path_helpers() {
     ));
 }
 
-/// Isolated because `grok_home()`'s `OnceLock` is already initialized by the
-/// time the shared lib-test binary reaches a case like this.
+/// Isolated because `grok_home()`'s `OnceLock` is already initialized by the time the shared lib-test binary reaches a case like this.
 #[test]
 #[serial_test::serial(SUPERCHARGE_HOME)]
 fn disk_usage_run_creates_no_grok_home() {

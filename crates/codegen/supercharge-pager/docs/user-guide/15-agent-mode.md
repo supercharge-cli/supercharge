@@ -57,13 +57,13 @@ Typical clients: IDE extensions (Zed, Neovim, Emacs), custom tools, and ACP SDKs
 Agent options apply to every transport (`stdio`, `serve`, `headless`, `leader`). They go after `agent` and before the mode name. Mode-specific flags go after the mode (for example `serve --bind`).
 
 ```bash
-supercharge agent --always-approve --model supercharge-build stdio
+supercharge agent --always-approve --model grok-4.6 stdio
 supercharge agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 ```
 
 | Flag | Description |
 | ---- | ----------- |
-| `-m, --model <MODEL>` | Model ID (for example `supercharge-build`). |
+| `-m, --model <MODEL>` | Model ID (for example `grok-4.6`). |
 | `--always-approve` | Run without interactive tool-permission prompts. Alias: `--yolo`. |
 | `--reauth` | Authenticate before the agent starts. |
 | `--agent-profile <PATH>` | Load an agent profile from a file. |
@@ -141,21 +141,21 @@ Each update names its type, so a client can render distinct panels for reasoning
 
 ## Extension methods
 
-Beyond the base ACP protocol, Supercharge AI defines extension methods under the `Voltage/` prefix for Voltage-specific functionality. These cover:
+Beyond the base ACP protocol, Supercharge AI defines extension methods under the `x.ai/` prefix for upstream-compatible functionality. These cover:
 
 | Category                   | Prefix               | Examples                                         |
 | -------------------------- | -------------------- | ------------------------------------------------ |
-| **Filesystem**             | `Voltage/fs/*`          | `list`, `exists`, `read_file`, `write_file`      |
-| **Git**                    | `Voltage/git/*`         | `status`, `stage`, `commit`, `diffs`, `discard`  |
-| **Git Worktree**           | `Voltage/git/worktree/*`| `create`, `remove`, `apply`, `list`, `gc`        |
-| **Search**                 | `Voltage/search/*`      | `fuzzy/open`, `fuzzy/change`, `content`          |
-| **Terminal**               | `Voltage/terminal/*`    | `create`, `kill`, `output`, `wait_for_exit`      |
-| **Session Management**     | `Voltage/session/*`     | `fork`, `resolve_local_for_worktree_resume`      |
-| **Conversation & History** | `Voltage/*`             | `prompt_history`, `rewind/*`, `compact_conversation` |
-| **Authentication**         | `Voltage/auth/*`        | `get_url`, `submit_code`                         |
-| **Feedback & Telemetry**   | `Voltage/*`             | `feedback`, `telemetry/*`                        |
+| **Filesystem**             | `x.ai/fs/*`          | `list`, `exists`, `read_file`, `write_file`      |
+| **Git**                    | `x.ai/git/*`         | `status`, `stage`, `commit`, `diffs`, `discard`  |
+| **Git Worktree**           | `x.ai/git/worktree/*`| `create`, `remove`, `apply`, `list`, `gc`        |
+| **Search**                 | `x.ai/search/*`      | `fuzzy/open`, `fuzzy/change`, `content`          |
+| **Terminal**               | `x.ai/terminal/*`    | `create`, `kill`, `output`, `wait_for_exit`      |
+| **Session Management**     | `x.ai/session/*`     | `fork`, `resolve_local_for_worktree_resume`      |
+| **Conversation & History** | `x.ai/*`             | `prompt_history`, `rewind/*`, `compact_conversation` |
+| **Authentication**         | `x.ai/auth/*`        | `get_url`, `submit_code`                         |
+| **Feedback & Telemetry**   | `x.ai/*`             | `feedback`, `telemetry/*`                        |
 
-The tables here show representative methods in each category. The `Voltage/*` set is Voltage-specific and may expand across releases, so treat it as non-exhaustive and discover the available methods from the agent's `initialize` response.
+The tables here show representative methods in each category. The `x.ai/*` set is upstream-compatible and may expand across releases, so treat it as non-exhaustive and discover the available methods from the agent's `initialize` response.
 
 ### Notifications (agent to client)
 
@@ -163,13 +163,34 @@ The agent sends push notifications to clients for real-time updates:
 
 | Notification               | Description                          |
 | -------------------------- | ------------------------------------ |
-| `Voltage/search/fuzzy/status` | Fuzzy search results update          |
-| `Voltage/git/worktree/status` | Worktree creation progress           |
-| `Voltage/fs_notify`           | Filesystem change notification       |
-| `Voltage/fs/index`            | Full file index update               |
-| `Voltage/fs/index/delta`      | Incremental file index update        |
-| `Voltage/session_notification`| Session-specific updates (diff review, retry state, auto-compact) |
-| `Voltage/session/update`      | Session update (tool calls, content) |
+| `x.ai/search/fuzzy/status` | Fuzzy search results update          |
+| `x.ai/git/worktree/status` | Worktree creation progress           |
+| `x.ai/fs_notify`           | Filesystem change notification       |
+| `x.ai/fs/index`            | Full file index update               |
+| `x.ai/fs/index/delta`      | Incremental file index update        |
+| `x.ai/session_notification`| Session-specific updates (diff review, retry state, auto-compact) |
+| `x.ai/session/update`      | Session update (tool calls, content) |
+
+---
+
+## Session config options
+
+`session/new` and `session/load` responses include a typed `configOptions` list (standard ACP, not an `x.ai/` extension). Change a live option with `session/set_config_option`.
+
+| `configId` | Category | Effect |
+|------------|----------|--------|
+| `model` | `model` | Switches the session model (`allowed_models`, chat gateway routing). Value must be a string id. |
+| `reasoning_effort` | `thought_level` | Applies effort to the current model without changing the model (no prompt rewrite, no `allowed_models` gate). Value must be a string id (`minimal`, `low`, `medium`, `high`, `xhigh`). Dropped with a warning when the model does not advertise `supportsReasoningEffort`. |
+
+```json
+{
+  "sessionId": "…",
+  "configId": "reasoning_effort",
+  "value": { "value": "high" }
+}
+```
+
+The response is the **complete, updated** option list. A `config_option_update` session notification mirrors it to every subscribed client. In leader mode the proxy snoops `configId: model` so each client's `default_model` stays in sync. Boolean values are rejected; exposing boolean options is not implemented yet.
 
 ---
 

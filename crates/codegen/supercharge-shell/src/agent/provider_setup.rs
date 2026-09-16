@@ -502,6 +502,7 @@ pub fn provider_models_to_catalog(
             show_model_fingerprint: false,
             stream_tool_calls: None,
             laziness_detector: config::LazinessDetectorPerModelConfig::default(),
+            ..Default::default()
         };
         catalog.insert(model.id.clone(), ModelEntry::from_config_entry(&entry_config));
     }

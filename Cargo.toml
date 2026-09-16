@@ -17,6 +17,7 @@ members = [
     "crates/codegen/supercharge-codebase-graph",
     "crates/codegen/supercharge-compaction-transcript",
     "crates/codegen/supercharge-crash-handler",
+    "crates/codegen/supercharge-dirs",
     "crates/codegen/supercharge-fast-worktree",
     "crates/codegen/supercharge-file-utils",
     "crates/codegen/supercharge-fsnotify",
@@ -29,19 +30,24 @@ members = [
     "crates/codegen/supercharge-bundle",
     "crates/codegen/supercharge-config",
     "crates/codegen/supercharge-config-types",
+    "crates/codegen/supercharge-dashboard-store",
     "crates/codegen/supercharge-diag-server",
     "crates/codegen/supercharge-env",
     "crates/codegen/supercharge-extra-ca",
+    "crates/codegen/supercharge-feedback",
     "crates/codegen/supercharge-foreign-sessions",
-    "crates/codegen/supercharge-home",
+    "crates/codegen/supercharge-gboom",
     "crates/codegen/supercharge-hooks",
     "crates/codegen/supercharge-http",
+    "crates/codegen/supercharge-image",
+    "crates/codegen/supercharge-login",
     "crates/codegen/supercharge-markdown",
     "crates/codegen/supercharge-markdown-core",
     "crates/codegen/supercharge-mcp",
     "crates/codegen/supercharge-memory",
     "crates/codegen/supercharge-mermaid",
     "crates/codegen/supercharge-models",
+    "crates/codegen/supercharge-otel",
     "crates/codegen/supercharge-pager",
     "crates/codegen/supercharge-pager-bin",
     "crates/codegen/supercharge-pager-diff",
@@ -61,6 +67,8 @@ members = [
     "crates/codegen/supercharge-shell-base",
     "crates/codegen/supercharge-shell-session-support",
     "crates/codegen/supercharge-superagent",
+    "crates/codegen/supercharge-shell-terminal",
+    "crates/codegen/supercharge-status-line",
     "crates/codegen/supercharge-subagent-resolution",
     "crates/codegen/supercharge-telemetry",
     "crates/codegen/supercharge-test-support",
@@ -91,6 +99,7 @@ members = [
     "crates/common/supercharge-computer-hub-sdk",
     "crates/common/supercharge-compaction",
     "crates/common/supercharge-interjection-core",
+    "crates/common/supercharge-message-delivery-core",
     "crates/common/supercharge-test-utils",
     "crates/common/supercharge-tool-protocol",
     "crates/common/supercharge-tool-runtime",
@@ -145,14 +154,13 @@ crossterm = "0.28"
 cryptify = "3.2"
 ctor = "0.4"
 dashmap = "6"
-derive_more = { version = "2", features = ["add", "add_assign", "debug", "deref", "deref_mut", "display", "from", "from_str", "into", "into_iterator", "try_into"] }
+derive_more = { version = "2", features = ["add", "add_assign", "debug", "deref", "deref_mut", "display", "from", "from_str", "into", "into_iterator", "as_ref", "try_into"] }
 dhat = "0.3"
 dirs = "5.0"
 documented = "0.9"
 dunce = "1"
 educe = "0.6.0"
 encoding_rs = "0.8.35"
-enum_delegate = "0.2"
 env_logger = "0.11"
 eventsource-stream = "0.2"
 fastrace = { version = "0.7" }
@@ -169,9 +177,11 @@ futures-util = "0.3"
 fuzzy-matcher = "0.3.7"
 gcloud-storage = { version = "1.3.0", default-features = false, features = ["auth", "jwt-aws-lc-rs", "external-account"] }
 gethostname = "1"
+git2 = "0.20"
 gix = { version = "0.83", default-features = false, features = ["sha1"] }
 glob = "0.3"
 globset = "0.4"
+hmac = "0.12"
 htmd = "0.5.4"
 html-escape = "0.2"
 http = "1"
@@ -190,6 +200,7 @@ libc = "0.2"
 linkify = "0.10"
 lipsum = "0.9"
 log = { version = "0.4", features = ["kv", "kv_unstable"] }
+loom = "0.7"
 md5 = "0.8"
 mermaid-to-svg = { path = "third_party/mermaid-to-svg" }
 minijinja = "2.9"
@@ -237,6 +248,8 @@ rsa = "0.9"
 runfiles = "0.1"
 rustc-hash = "2"
 rustls = { version = "0.23", features = ["aws-lc-rs"] }
+rustls-native-certs = "0.8"
+same-file = "1"
 schemars = "1"
 scraper = "0.23"
 semver = "1"
@@ -255,22 +268,22 @@ smallvec = "1"
 strip-ansi-escapes = "0.2.1"
 strum = { version = "0.27", features = ["derive"] }
 supports-color = "3.0"
-syntect = "5.3"
+syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 tar = "0.4"
 tempfile = "3"
 terminput = "0.3"
 termwiz = { version = "0.23", default-features = false }
 textwrap = "0.16"
 thiserror = "2"
-tikv-jemalloc-ctl = "0.6"
-tikv-jemalloc-sys = "0.6"
-tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
+tikv-jemalloc-ctl = "0.7"
+tikv-jemalloc-sys = "0.7"
+tikv-jemallocator = { version = "0.7", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
 time = "0.3"
 tiny-skia = "0.12"
 tokio = { version = "1", features = ["full"] }
 tokio-retry = "0.3"
 tokio-stream = { version = "0.1", features = ["net"] }
-tokio-tungstenite = "0.27"
+tokio-tungstenite = "0.28"
 tokio-util = { version = "0.7", features = ["rt"] }
 toml = "0.9"
 toml_edit = "0.22"
@@ -310,6 +323,7 @@ supercharge-circuit-breaker = { path = "crates/common/supercharge-circuit-breake
 supercharge-compaction-transcript = { path = "crates/codegen/supercharge-compaction-transcript" }
 supercharge-computer-hub-core = { path = "crates/common/supercharge-computer-hub-core" }
 supercharge-computer-hub-sdk = { path = "crates/common/supercharge-computer-hub-sdk" }
+supercharge-dirs = { path = "crates/codegen/supercharge-dirs" }
 supercharge-fuzzy-file-search = { path = "crates/codegen/supercharge-fuzzy-file-search" }
 supercharge-gix-status = { path = "crates/codegen/supercharge-gix-status" }
 supercharge-active-sessions = { path = "crates/codegen/supercharge-active-sessions" }
@@ -319,18 +333,22 @@ supercharge-auth = { path = "crates/codegen/supercharge-auth" }
 supercharge-bundle = { path = "crates/codegen/supercharge-bundle" }
 supercharge-config = { path = "crates/codegen/supercharge-config" }
 supercharge-config-types = { path = "crates/codegen/supercharge-config-types" }
+supercharge-dashboard-store = { path = "crates/codegen/supercharge-dashboard-store" }
 supercharge-diag-server = { path = "crates/codegen/supercharge-diag-server" }
 supercharge-env = { path = "crates/codegen/supercharge-env" }
 supercharge-extra-ca = { path = "crates/codegen/supercharge-extra-ca" }
+supercharge-feedback = { path = "crates/codegen/supercharge-feedback" }
 supercharge-foreign-sessions = { path = "crates/codegen/supercharge-foreign-sessions" }
-supercharge-home = { path = "crates/codegen/supercharge-home" }
 supercharge-http = { path = "crates/codegen/supercharge-http" }
+supercharge-image = { path = "crates/codegen/supercharge-image" }
+supercharge-login = { path = "crates/codegen/supercharge-login" }
 supercharge-markdown = { path = "crates/codegen/supercharge-markdown" }
 supercharge-markdown-core = { path = "crates/codegen/supercharge-markdown-core" }
 supercharge-mcp = { path = "crates/codegen/supercharge-mcp" }
 supercharge-memory = { path = "crates/codegen/supercharge-memory" }
 supercharge-mermaid = { path = "crates/codegen/supercharge-mermaid" }
 supercharge-models = { path = "crates/codegen/supercharge-models" }
+supercharge-otel = { path = "crates/codegen/supercharge-otel" }
 supercharge-sampler = { path = "crates/codegen/supercharge-sampler" }
 supercharge-secrets = { path = "crates/codegen/supercharge-secrets" }
 supercharge-session-events = { path = "crates/codegen/supercharge-session-events" }
@@ -339,15 +357,18 @@ supercharge-shared = { path = "crates/codegen/supercharge-shared" }
 supercharge-shell = { path = "crates/codegen/supercharge-shell" }
 supercharge-shell-base = { path = "crates/codegen/supercharge-shell-base" }
 supercharge-shell-session-support = { path = "crates/codegen/supercharge-shell-session-support" }
+supercharge-shell-terminal = { path = "crates/codegen/supercharge-shell-terminal" }
+supercharge-status-line = { path = "crates/codegen/supercharge-status-line" }
 supercharge-telemetry = { path = "crates/codegen/supercharge-telemetry" }
 supercharge-test-support = { path = "crates/codegen/supercharge-test-support" }
 supercharge-tools = { path = "crates/codegen/supercharge-tools" }
 supercharge-tools-api = { path = "crates/codegen/supercharge-tools-api" }
 supercharge-version = { path = "crates/codegen/supercharge-version" }
-supercharge-workspace = { path = "crates/codegen/supercharge-workspace" }
+supercharge-workspace = { path = "crates/codegen/supercharge-workspace", default-features = false }
 supercharge-workspace-types = { path = "crates/codegen/supercharge-workspace-types" }
 supercharge-hooks-plugins-types = { path = "crates/codegen/supercharge-hooks-plugins-types" }
 supercharge-interjection-core = { path = "crates/common/supercharge-interjection-core" }
+supercharge-message-delivery-core = { path = "crates/common/supercharge-message-delivery-core" }
 supercharge-mixpanel = { path = "crates/codegen/supercharge-mixpanel" }
 supercharge-prompt-queue = { path = "crates/codegen/supercharge-prompt-queue" }
 supercharge-proto-build = { path = "crates/build/supercharge-proto-build" }
@@ -407,6 +428,14 @@ panic = "unwind"
 inherits = "release-dist"
 # All settings now match the parent — this is an intentional alias.
 
+# Size-optimized profile for prod-admin-cli distribution builds. Cargo ignores
+# profiles in non-root manifests, so this lives here instead of the CLI crate.
+[profile.admin-cli-dist]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
 
 [profile.dev]
 panic = "abort"
@@ -416,6 +445,10 @@ debug = "line-tables-only"
 opt-level = 0
 lto = false
 incremental = true
+
+# Skip debug info for non-workspace dependencies; workspace crates keep line-tables-only.
+[profile.dev.package."*"]
+debug = false
 
 [profile.bench]
 debug = true

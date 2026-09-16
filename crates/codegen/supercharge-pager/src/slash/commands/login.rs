@@ -1,21 +1,13 @@
-//! `/login` -- compatibility alias that opens the provider setup modal.
-
 use crate::app::actions::Action;
-use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand};
+use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand, slash_meta};
 
 pub struct LoginCommand;
 
 impl SlashCommand for LoginCommand {
-    fn name(&self) -> &str {
-        "login"
-    }
-
-    fn description(&self) -> &str {
-        "Open `/setup` to configure the AI provider"
-    }
-
-    fn usage(&self) -> &str {
-        "/login"
+    slash_meta! {
+        name: "login",
+        description: "Open `/setup` to configure the AI provider",
+        usage: "/login",
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {

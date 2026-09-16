@@ -1,6 +1,6 @@
 # Configuration
 
-Supercharge AI reads settings from config files, environment variables, and CLI flags. This page covers the common options.
+Supercharge AI reads settings from config files, environment variables, and CLI flags. This page covers the common options. The field list for `config.toml`, `managed_config.toml`, and `requirements.toml` is [26-config-reference.md](26-config-reference.md) (extracted to `~/.supercharge/docs/user-guide/` on launch).
 
 ---
 
@@ -46,8 +46,11 @@ Location: `~/.supercharge/config.toml`. If the file is missing, Supercharge AI u
 auto_update = true                     # check for updates on launch
 
 [models]
-default = "supercharge-4.5"                   # model used for new sessions
-web_search = "supercharge-4.5"                # model used by the web_search tool
+default = "grok-4.5"                   # model used for new sessions
+web_search = "grok-4.5"                # model used by the web_search tool
+# Optional picker allowlist (globs on catalog key or model id). Empty = unrestricted.
+# A signed policy pin replaces this list (model id only) and cannot be widened from here.
+# allowed_models = ["grok-4.5", "grok-4*"]
 
 # Defaults applied to every model; a per-model [model.<id>] value always wins.
 # See "Custom Models" for the per-model overrides and full details.
@@ -57,6 +60,7 @@ top_p = 0.95
 max_completion_tokens = 8192
 max_retries = 8
 inference_idle_timeout_secs = 600
+subagent_rate_limit_max_attempts = 8
 stream_tool_calls = true
 
 [ui]
@@ -64,8 +68,8 @@ simple_mode = true                     # readline-style prompt editing (default)
 vim_mode = false                       # vim-style scrollback navigation keys (default: false)
 max_thoughts_width = 120               # max column width for reasoning display
 default_selected_permission = "always_allow_all_sessions" # preselected row on the FIRST approval prompt
-remember_tool_approvals = false        # show per-command "Always allow" options on permission prompts;
-                                       # grants are remembered per project (default: false); see 22-permissions-and-safety.md
+remember_tool_approvals = true         # show per-command "Always allow" options on permission prompts;
+                                       # grants are remembered per project (default: true); see 22-permissions-and-safety.md
 show_thinking_blocks = true            # show agent thinking blocks in the TUI (default: true)
 group_tool_verbs = true                # fold runs of read/search/list tool calls and subagent rows
                                        # — and finished thoughts among them — into one row (default: true)
@@ -87,7 +91,7 @@ telemetry = false                      # anonymous usage telemetry
 feedback = true                        # feedback system (default: true)
 lsp_tools = false                      # expose the lsp tool
 codebase_indexing = true               # code graph indexing (default: true)
-two_pass_compaction = false            # prefire two-pass compaction (default: false, opt-in)
+two_pass_compaction = true             # prefire two-pass compaction (default: true)
 remote_fetch = true                    # allow optional online model-catalog fetches (default: true;
                                        # set false for firewalled/air-gapped deployments; background
                                        # managed-config sync has its own switch: managed_config)
@@ -146,7 +150,7 @@ default_selected_permission = "allow_once"
 
 After you answer the first prompt the cursor turns **sticky**: each later prompt preselects whatever you last confirmed (pick "No" once and subsequent prompts start on their reject row), carrying across edit / bash / MCP prompts until you restart. So this setting only picks the starting point.
 
-Values match case-insensitively; an unset or unrecognized value falls back to `always_allow_all_sessions`. The `allow_command_always` row is always scoped to the specific action being approved (command / tool / domain / edit-session), never a global allow-everything — that's what `always_allow_all_sessions` is for. Note the per-command "Always allow" rows only appear when `[ui] remember_tool_approvals = true` (default false). See [22-permissions-and-safety.md](22-permissions-and-safety.md).
+Values match case-insensitively; an unset or unrecognized value falls back to `always_allow_all_sessions`. The `allow_command_always` row is always scoped to the specific action being approved (command / tool / domain / edit-session), never a global allow-everything — that's what `always_allow_all_sessions` is for. Note the per-command "Always allow" rows appear while `[ui] remember_tool_approvals` is enabled (the default; set it to `false` to hide them). See [22-permissions-and-safety.md](22-permissions-and-safety.md).
 
 You can also override this with `SUPERCHARGE_DEFAULT_SELECTED_PERMISSION`, which is handy for headless or agent test runs that shouldn't mutate `config.toml`. Precedence: env var → `config.toml` → `always_allow_all_sessions`.
 
@@ -156,8 +160,8 @@ You can also override this with `SUPERCHARGE_DEFAULT_SELECTED_PERMISSION`, which
 
 | Value | Behavior |
 |-------|----------|
-| `false` (default) | Bare-letter and `Shift+letter` keys (`j`/`k`, `h`/`l`, `g`/`G`, `y`/`Y`, `o`/`O`, `r`, `x`, `e`/`E`, `H`/`L`, plus `i`) are suppressed in the scrollback: pressing one focuses the prompt and types the character. Arrows, `Tab`, `Space`, `PageUp`/`PageDown`, and every `Ctrl+letter` shortcut still navigate. `Esc` is **not** a scrollback key — it cancels a running turn, and while idle follows the clear / rewind policy (see [Keyboard Shortcuts](03-keyboard-shortcuts.md#escape)). |
-| `true` | All vim-style scrollback bindings are active, exactly as listed in [Keyboard Shortcuts](03-keyboard-shortcuts.md). Mid-turn `Esc` is swallowed in this mode (`Ctrl+C` cancels); minimal mode keeps Esc-cancel regardless. |
+| `false` (default) | Bare-letter and `Shift+letter` keys (`j`/`k`, `h`/`l`, `g`/`G`, `y`/`Y`, `o`/`O`, `r`, `x`, `e`/`E`, `H`/`L`, plus `i`) are suppressed in the scrollback: pressing one focuses the prompt and types the character. Arrows, `Tab`, `Space`, `PageUp`/`PageDown`, and every `Ctrl+letter` shortcut still navigate. `Esc` is **not** a scrollback key — it never cancels a running turn (`Ctrl+C` does), and while idle follows the clear / rewind policy (see [Keyboard Shortcuts](03-keyboard-shortcuts.md#escape)). |
+| `true` | All vim-style scrollback bindings are active, exactly as listed in [Keyboard Shortcuts](03-keyboard-shortcuts.md). Esc behavior is the same in both settings. |
 
 Toggle it at runtime with `/vim-mode`, or from `/settings` → **Vim scrollback navigation**. Supercharge AI writes the change to `[ui] vim_mode` immediately and applies it to every future pager session, including new agents and subagents in the same process. There's no per-session override — `config.toml` is the source of truth on next launch. `vim_mode` is independent of `simple_mode`.
 
@@ -212,12 +216,12 @@ timeout_secs = 1800                    # seconds to wait when enabled (default: 
 
 [toolset.web_fetch]
 proxy_endpoint = "https://proxy.example.com"   # egress proxy URL
-allowed_domains = ["docs.rs", "Voltage"]          # override the built-in allowlist
+allowed_domains = ["docs.rs", "x.ai"]          # override the built-in allowlist
 allow_local = false                            # true = allow localhost / 127.0.0.0/8 / ::1 only
 
 [toolset.web_search]
 # Restrict web_search to these domains (max 5). Mutually exclusive with excluded_domains.
-allowed_domains = ["docs.Voltage", "arxiv.org"]
+allowed_domains = ["docs.x.ai", "arxiv.org"]
 # ...or block these domains instead (leave allowed_domains unset):
 # excluded_domains = ["reddit.com", "pinterest.com"]
 ```
@@ -269,7 +273,7 @@ Provider credentials are validated and stored through `/setup`; global environme
 To override a built-in model, use its name as the section key and set only the fields you need:
 
 ```toml
-[model.supercharge-build]
+[model.grok-4.6]
 api_key = "my-api-key"
 ```
 
@@ -296,17 +300,29 @@ url = "https://mcp.example.com/api/mcp"  # HTTP/SSE transport
 headers = { "x-mcp-session-id" = "{{session_id}}" }
 ```
 
+Remote (HTTP/SSE) servers receive a default `User-Agent: grok-cli/<version>` header; a
+valid `User-Agent` entry in `headers` overrides it (Figma servers receive bare
+`grok-cli`). See [MCP servers](07-mcp-servers.md) for details.
+
 MCP servers can also be set per-project in `.supercharge/config.toml`. Project-scoped config contributes `[mcp_servers]`, `[plugins]`, and `[permission]` rules; every other section loads only from `~/.supercharge/config.toml`.
 
 Priority for `[mcp_servers]` and `[plugins]`: `.supercharge/config.toml` (current dir) > `<repo-root>/.supercharge/config.toml` > `~/.supercharge/config.toml`. `[permission]` rules aren't overridden by priority — they merge across all files with `deny` > `ask` > `allow` (see [22-permissions-and-safety.md](22-permissions-and-safety.md)).
 
 ### Memory
 
-Persist knowledge across sessions. Enable memory with `SUPERCHARGE_MEMORY=1`, `[memory] enabled = true`, or managed remote settings.
+Persist knowledge across sessions. New users should opt into memory v2 with
+`[memory_v2] enabled = true`. Existing `SUPERCHARGE_MEMORY=1`, `[memory] enabled =
+true`, and managed `memory_enabled` settings continue to enable legacy memory
+unless the v2 gate is enabled.
 
 ```toml
+[memory_v2]
+enabled = true                        # primary memory-v2 switch
+capture_status_enabled = false        # expandable capture diagnostics
+
+# Legacy memory compatibility settings:
 [memory]
-enabled = false                       # enable memory
+enabled = false
 
 [memory.session]
 save_on_end = true                    # write metadata summary on session end
@@ -332,13 +348,14 @@ dimensions = 1024                     # vector dimensions
 ```toml
 [subagents]
 enabled = true
+sampling_limit = 12                   # concurrent in-flight subagent sampling calls per process; defaults to max_concurrent (32) when unset (SUPERCHARGE_SUBAGENT_SAMPLING_LIMIT)
 
 [subagents.toggle]
 explore = true                        # enable/disable specific types
 plan = false
 
 [subagents.models]
-explore = "supercharge-build"               # route to different models
+explore = "grok-4.6"               # route to different models
 ```
 
 To pin the model a subagent uses, set its entry under `[subagents.models]`.
@@ -356,7 +373,7 @@ enabled = false                       # disable background workflows (or SUPERCH
 
 Project workflows are discovered from `<repo-root>/.supercharge/workflows/`; user workflows from `~/.supercharge/workflows/`. Discovery and invocation key off the script's `meta.name`, so keep each filename aligned with its `meta.name`. Built-ins win over project names, and project names win over user names, so keep names unique across scopes.
 
-Each launch gets a session-unique display handle such as `deep-research-2`. That handle is what you see in the `/workflows` run dashboard and pass to `/workflow pause`, `resume`, or `stop` — the internal run IDs never surface in commands. A numbered handle isn't a reusable definition name, so the dashboard disables **save** until you pick a new unique `meta.name` and save the edited script yourself. See [Slash Commands](04-slash-commands.md) for examples.
+Each launch gets a session-unique display handle such as `deep-research-2`. That handle is what you see in the `/workflow runs` dashboard and pass to `/workflow pause`, `resume`, or `stop` — the internal run IDs never surface in commands. A numbered handle isn't a reusable definition name, so the dashboard disables **save** until you pick a new unique `meta.name` and save the edited script yourself. See [Slash Commands](04-slash-commands.md) for examples.
 
 ### Skills
 
@@ -514,6 +531,20 @@ Run `/doctor` in the affected session. It shows the detected notification and fo
 
 **Sleep prevention not taking effect:** on macOS, sleep prevention uses `IOPMAssertionCreateWithName` via CoreFoundation; on Linux, `systemd-inhibit` (which must be on `$PATH`). Make sure the relevant tool is available. Prevention is only active during agent turns and releases automatically when the turn ends.
 
+### Status line
+
+An optional row at the bottom of the full-screen pager, disabled by default. Opt in with `[ui.status_line]`:
+
+```toml
+[ui.status_line]
+type = "builtin"                # builtin | command | disabled
+items = ["cwd", "model", "context"]
+```
+
+The other keys are `items` (which built-in segments to show, in order), `command`, `padding`, and `refresh_interval` (in seconds; re-runs a `command` row on a timer, so an incident page or a CI status reaches an idle session). The [Status Line guide](25-status-line.md) documents all of them, along with the JSON contract a `command` script reads on stdin and an example script.
+
+Minimal mode has no status-line row; it uses the terminal tab title instead (see [Notifications](#notifications) `title.items`).
+
 ### Keyboard shortcuts
 
 Keyboard shortcuts are **not** configurable — all bindings are built in. See [Keyboard Shortcuts](03-keyboard-shortcuts.md) for the complete reference.
@@ -551,9 +582,16 @@ otel_protocol = "http/protobuf"                           # http/protobuf | grpc
 otel_certificate = "/etc/ssl/corp-ca.pem"                 # optional: trust private CA (path only)
 otel_client_certificate = "/etc/ssl/client.crt"           # optional: mTLS client cert (path only)
 otel_client_key = "/etc/ssl/client.key"                   # optional: mTLS client key (path only)
-otel_log_user_prompts = false                             # content gate (admins can pin via requirements)
-otel_log_tool_details = false                             # content gate (admins can pin via requirements)
+otel_log_user_prompts = false                             # content gate (admins pin via requirements)
+otel_log_assistant_responses = false                      # unset follows prompts; pin false for prompts-only
+otel_log_tool_details = true                              # metadata/preview; enterprise default on for SIEM join
+otel_log_tool_content = false                             # full-body gate; independent of details — does not imply names/paths
 ```
+
+Listed `[telemetry] otel_*` keys in signed `requirements.toml` **pin** over
+process env (destination lock). `managed_config.toml` does not. There is no
+`headers` key — collector tokens stay in `OTEL_EXPORTER_OTLP_HEADERS`. See
+[Monitoring & Usage](24-monitoring-usage.md).
 
 ### Version pinning
 
@@ -607,9 +645,9 @@ auth_token_ttl = 3600
 default = "company-supercharge"
 
 [model.company-supercharge]
-model = "supercharge-build"
-base_url = "https://supercharge-proxy.acme.com/"
-name = "Supercharge AI Latest (Proxy)"
+model = "grok-4.6"
+base_url = "https://grok-proxy.acme.com/"
+name = "Grok 4.6 (Proxy)"
 context_window = 128000
 
 [features]

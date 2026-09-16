@@ -1,8 +1,4 @@
-//! Supercharge wordmark for the welcome screen.
-//!
-//! This deliberately stays compact and text-first. A terminal welcome screen
-//! should identify the product without consuming the workspace with ASCII art
-//! or an idle animation.
+//! The logo is hidden entirely on legacy Windows consoles: the ConHost raster fonts do not cover the U+2800 braille block, so it renders as tofu.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
@@ -31,19 +27,59 @@ const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
 /// Height at or above which the full logo is shown.
 const FULL_LOGO_MIN_HEIGHT: u16 = 26;
 
+/// Which logo art the stacked column shows.
+/// The terminal height picks the tier; the stacked layout steps it down only while the column would not fit beside the draft.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogoTier {
+    Full,
+    Compact,
+    Hidden,
+}
+
+impl LogoTier {
+    pub fn for_height(window_height: u16) -> Self {
+        Self::for_height_and_hidden(window_height, logo_hidden())
+    }
+
+    /// Takes the legacy-console flag as a parameter so tests can drive it directly.
+    fn for_height_and_hidden(window_height: u16, hidden: bool) -> Self {
+        if hidden || window_height < SMALL_LOGO_MIN_HEIGHT {
+            Self::Hidden
+        } else if window_height < FULL_LOGO_MIN_HEIGHT {
+            Self::Compact
+        } else {
+            Self::Full
+        }
+    }
+
+    fn art(self) -> Option<&'static str> {
+        match self {
+            Self::Full => Some(LOGO),
+            Self::Compact => Some(LOGO_SMALL),
+            Self::Hidden => None,
+        }
+    }
+
+    pub fn rows(self) -> u16 {
+        self.art().map_or(0, count_lines)
+    }
+
+    /// The next smaller tier; `None` once hidden.
+    pub fn step_down(self) -> Option<Self> {
+        match self {
+            Self::Full => Some(Self::Compact),
+            Self::Compact => Some(Self::Hidden),
+            Self::Hidden => None,
+        }
+    }
+}
+
 fn pick_logo(window_height: u16) -> Option<&'static str> {
     pick_logo_for(window_height, logo_hidden())
 }
 
-/// Pure tier selection so tests can drive the visibility flag directly.
 fn pick_logo_for(window_height: u16, hidden: bool) -> Option<&'static str> {
-    if hidden || window_height < SMALL_LOGO_MIN_HEIGHT {
-        None
-    } else if window_height < FULL_LOGO_MIN_HEIGHT {
-        Some(LOGO_SMALL)
-    } else {
-        Some(LOGO)
-    }
+    LogoTier::for_height_and_hidden(window_height, hidden).art()
 }
 
 /// The wordmark is safe for the terminals Supercharge supports.
@@ -84,6 +120,31 @@ fn animated_logo(frame: u64) -> String {
 
 fn animated_logo_layout() -> String {
     animated_logo(0)
+}
+
+/// Per-glyph shine opacity in `[0, 1]` at normalized diagonal position `diag` (0 is bottom-left, 1 is top-right) and animation time `secs`.
+/// A raised-cosine band sweeps from bottom-left to top-right and parks off-screen between sweeps; a gentle global pulse breathes underneath it.
+/// 0 keeps the resting gray, 1 is full bright.
+fn shine_opacity(diag: f32, secs: f32) -> f32 {
+    const BAND: f32 = 0.38; // half-width of the shine band; wider means a more gradual falloff
+    const CYCLE: f32 = 4.0; // seconds for one sweep plus its rest
+    const SWEEP_FRAC: f32 = 0.32; // portion of the cycle spent sweeping (~1.3s glint, rest idles)
+    const SHINE: f32 = 0.33; // peak shine strength
+    const PULSE: f32 = 0.06; // global breathing amount
+    const PULSE_SECS: f32 = 5.0; // breathing period
+
+    let p = (secs % CYCLE) / CYCLE;
+    let q = (p / SWEEP_FRAC).min(1.0); // parks the band off-screen during the rest
+    let band_pos = -BAND + q * (1.0 + 2.0 * BAND);
+    let pulse = PULSE * (0.5 - 0.5 * (std::f32::consts::TAU * secs / PULSE_SECS).cos());
+
+    let d = (diag - band_pos).abs();
+    let shine = if d < BAND {
+        0.5 * (1.0 + (std::f32::consts::PI * d / BAND).cos())
+    } else {
+        0.0
+    };
+    (pulse + SHINE * shine).clamp(0.0, 1.0)
 }
 
 fn render_into(area: Rect, buf: &mut Buffer, theme: &Theme, logo: &str) {
@@ -132,10 +193,16 @@ pub fn render_logo(area: Rect, buf: &mut Buffer, theme: &Theme, window_height: u
     }
 }
 
-/// The hero box always shows the full logo: it is laid out beside the menu, so
-/// it fits whenever the box does. These report and render that logo directly,
-/// independent of the height-based [`pick_logo`] tiers used by the stacked
-/// layout. When [`logo_hidden`], they report 0 and render nothing.
+/// Paint the tier the layout reserved rows for, so the art can never outgrow its slot.
+pub fn render_logo_tier(area: Rect, buf: &mut Buffer, theme: &Theme, tier: LogoTier) {
+    if let Some(logo) = tier.art() {
+        render_into(area, buf, theme, logo);
+    }
+}
+
+/// The hero box always shows the full logo: it is laid out beside the menu, so it fits whenever the box does.
+/// These report and render that logo directly, independent of the height-based [`pick_logo`] tiers used by the stacked layout.
+/// When [`logo_hidden`], they report 0 and render nothing.
 pub fn full_logo_line_count() -> u16 {
     full_logo_line_count_for(logo_hidden())
 }
@@ -167,7 +234,7 @@ pub fn render_full_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     }
 }
 
-/// Line count of the small logo used in minimal's committed welcome card.
+/// Line count of the small logo used in minimal's committed welcome card (0 on a legacy Windows console, where the braille art is suppressed).
 pub fn compact_logo_line_count() -> u16 {
     if logo_hidden() {
         0
@@ -176,8 +243,8 @@ pub fn compact_logo_line_count() -> u16 {
     }
 }
 
-/// Render the compact Supercharge wordmark (centered) into `area` for
-/// minimal's welcome card.
+/// Render the small braille logo (centered) into `area` for minimal's welcome card.
+/// No-op when the logo is hidden.
 pub fn render_compact_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
         render_into(area, buf, theme, LOGO_SMALL);
@@ -202,8 +269,7 @@ mod tests {
         assert_eq!(pick_logo_for(FULL_LOGO_MIN_HEIGHT, false), Some(LOGO));
     }
 
-    // The explicit hidden parameter remains covered for layout callers that
-    // intentionally suppress the logo.
+    // The braille art has no legacy-safe stand-in, so every height tier must collapse to no logo when the legacy-console flag is set
     #[test]
     fn logo_hidden_on_legacy_console_at_every_height() {
         for h in [0, SMALL_LOGO_MIN_HEIGHT, FULL_LOGO_MIN_HEIGHT, u16::MAX] {
@@ -235,9 +301,7 @@ mod tests {
 
     #[test]
     fn compact_logo_line_count_matches_small_logo_when_visible() {
-        // The minimal welcome card budgets exactly the small logo's rows. When
-        // the logo isn't hidden, the count equals the small art's line count and
-        // is strictly shorter than the full logo.
+        // The minimal welcome card budgets exactly the small logo's rows
         if !logo_hidden() {
             assert_eq!(compact_logo_line_count(), count_lines(LOGO_SMALL));
             assert!(compact_logo_line_count() < count_lines(LOGO));
@@ -275,5 +339,13 @@ mod tests {
             assert_eq!(visual_width(frame), width);
         }
         assert!(COIN_FRAMES.iter().any(|frame| frame.contains('⚡')));
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn shine_rests_dim_between_sweeps() {
+        // During the rest phase the band is parked off-screen, so an interior glyph falls back to at most the gentle pulse, never full bright
+        let op = shine_opacity(0.5, 6.0); // secs % 4.0 = 2.0, past SWEEP_FRAC, in the rest phase
+        assert!(op < 0.2, "resting opacity {op} should stay dim");
     }
 }

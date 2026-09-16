@@ -1,6 +1,6 @@
 [package]
 name = "supercharge-pager-bin"
-version = "1.3.6"
+version = "1.3.8"
 edition.workspace = true
 license = "Apache-2.0"
 authors = ["xAI"]
@@ -22,6 +22,7 @@ supercharge-pager = { path = "../supercharge-pager" }
 supercharge-pager-minimal = { path = "../supercharge-pager-minimal" }
 
 # Agent runtime + leader/stdio/headless entry points.
+supercharge-login = { workspace = true }
 supercharge-shell = { workspace = true }
 supercharge-update = { path = "../supercharge-update" }
 supercharge-version = { workspace = true }
@@ -52,16 +53,13 @@ supercharge-tty-utils = { workspace = true }
 supercharge-active-sessions = { workspace = true }
 supercharge-config = { workspace = true }
 supercharge-sandbox = { path = "../supercharge-sandbox", default-features = false }
-rustls = { version = "0.23", default-features = false, features = [
-    "ring",
-    "logging",
-    "std",
-    "tls12",
-] }
+supercharge-extra-ca = { workspace = true }
 
 # Binary hardening: compile-time string + control-flow obfuscation.
 obfstr = { workspace = true }
 cryptify = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
@@ -83,7 +81,6 @@ serial_test = { workspace = true }
 # `PagerArgs::try_parse_from` in the CLI-parsing unit tests (needs the
 # `clap::Parser` trait in scope).
 clap = { workspace = true, features = ["derive"] }
-tempfile = { workspace = true }
 
 [features]
 default = [
@@ -96,6 +93,9 @@ default-bazel = [
     "local-workspace",
     ]
 jemalloc = ["dep:tikv-jemallocator", "dep:tikv-jemalloc-sys", "dep:tikv-jemalloc-ctl"]
-sandbox-enforce = ["supercharge-pager/sandbox-enforce"]
+# supercharge-workspace no longer enables sandbox-enforce by default, so enable it here.
+sandbox-enforce = ["supercharge-pager/sandbox-enforce", "supercharge-workspace/sandbox-enforce"]
 local-workspace = ["supercharge-pager/local-workspace"]
-release-dist = ["supercharge-pager/release-dist"]
+release-dist = [
+    "supercharge-pager/release-dist",
+    ]

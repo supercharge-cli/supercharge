@@ -1,8 +1,6 @@
-//! VoltageLight theme — neutral gray base (light) with deepened accent colors.
-//!
-//! Light counterpart to VoltageDark. Backgrounds and text use a neutral
-//! grayscale ramp (no blue/warm tint). Accent colors are the same hue
-//! family as VoltageDark but deepened for contrast on light backgrounds.
+//! VoltageLight is the light counterpart to VoltageDark.
+//! Backgrounds and text use a neutral grayscale ramp (no blue/warm tint).
+//! Accent colors are the same hue family as VoltageDark but deepened for contrast on light backgrounds.
 
 use ratatui::style::{Color, Modifier};
 

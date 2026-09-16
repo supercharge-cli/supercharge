@@ -13,11 +13,12 @@ reqwest = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 supercharge-circuit-breaker = { workspace = true }
 supercharge-compaction = { path = "../../common/supercharge-compaction" }
-supercharge-tools = { path = "../supercharge-tools" }
+supercharge-tool-types = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

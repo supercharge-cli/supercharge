@@ -16,22 +16,17 @@ pub const GH_RELEASE_REPO: &str = "iotserver24/supercharge-releases";
 /// Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and binaries
 /// (`/grok-{version}-{os}-{arch}`). Host this layout yourself with
 /// `deploy/publish-cli-feed.sh`.
-pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://cli.supercharge.com";
+pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://cli.grok.com";
 
 /// Fallback Supercharge artifact host when the primary feed is unreachable.
-pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://assets.supercharge.com/cli";
+pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://assets.grok.com/cli";
 
-/// CLI base URLs in preference order. Callers (channel-pointer fetch, binary
-/// download, in-app updater) try each in turn and stop at the first success.
+/// CLI base URLs in preference order.
+/// Callers (channel-pointer fetch, binary download, in-app updater) try each in turn and stop at the first success.
 pub(crate) const CLI_BASE_URLS: &[&str] = &[CLI_BASE_URL_PRIMARY, CLI_BASE_URL_FALLBACK];
 
-/// [`CLI_BASE_URLS`] with override seams:
-/// - `SUPERCHARGE_CLI_BASE_URL` — loopback-only test harness
-/// - `SUPERCHARGE_UPDATE_BASE_URL` — Supercharge-owned or self-hosted HTTPS feed
-/// - `config_override` — `[cli].update_base_url` from config.toml
-///
-/// A configured Supercharge/self-host URL replaces the compiled defaults
-/// (no mixed xAI fallback). Loopback test seams stay single-base.
+/// [`CLI_BASE_URLS`], unless tests set `SUPERCHARGE_CLI_BASE_URL` to point fetches and downloads at one base (as they set `SUPERCHARGE_INSTALLER`).
+/// Loopback-only: downloads are verified by a smoke test, not a checksum, so redirecting to an arbitrary base could serve a hijacked install.
 pub(crate) fn cli_base_urls() -> Vec<String> {
     cli_base_urls_with_override(None)
 }
@@ -83,11 +78,14 @@ pub(crate) fn is_allowed_update_base(base: &str) -> bool {
 
 /// Parsed, not prefix-matched: `http://127.0.0.1:9@evil.com` starts with a
 /// loopback prefix but its host is `evil.com` (userinfo trick).
+/// `https` loopback is allowed so merge CI can smoke rustls/aws-lc against a
+/// local SHA-512 server (GB-6134); non-loopback https is still rejected.
 fn is_loopback_base(base: &str) -> bool {
     let Ok(u) = url::Url::parse(base) else {
         return false;
     };
-    if u.scheme() != "http" || !u.username().is_empty() || u.password().is_some() {
+    if !matches!(u.scheme(), "http" | "https") || !u.username().is_empty() || u.password().is_some()
+    {
         return false;
     }
     match u.host() {
@@ -98,14 +96,12 @@ fn is_loopback_base(base: &str) -> bool {
     }
 }
 
-/// Minimal configuration the update system needs from the environment.
-///
-/// Constructed once from `GrokBuildEnvironment` at startup and threaded through the
-/// update call chain so that `auto_update` and `version` never need to know
-/// about the `GrokBuildEnvironment` enum directly.
+/// Minimal configuration the update system needs from the environment. Constructed once from `GrokBuildEnvironment` at
+/// startup and threaded through the update call chain. `auto_update` and `version` never need to know about the
+/// `GrokBuildEnvironment` enum directly.
 #[derive(Debug, Clone)]
 pub struct UpdateConfig {
-    /// Chat API proxy base URL (versioned `https://cli-chat-proxy.supercharge.com/v1` endpoint).
+    /// Chat API proxy base URL (versioned `https://cli-chat-proxy.grok.com/v1` endpoint).
     pub proxy_base_url: String,
     /// Auth scope key for `~/.supercharge/auth.json`.
     pub auth_scope: String,
@@ -126,7 +122,7 @@ impl UpdateConfig {
     pub fn from_environment(env: &GrokBuildEnvironment) -> Self {
         Self {
             proxy_base_url: env.cli_chat_proxy_base_url(),
-            auth_scope: supercharge_shell::auth::GrokComConfig::default().auth_scope(),
+            auth_scope: supercharge_login::GrokComConfig::default().auth_scope(),
             deployment_key: None,
             alpha_test_key: None,
             channel: "stable".to_string(),
@@ -172,7 +168,6 @@ impl GrokVersion {
     }
 }
 
-/// Return the semver-greater of two version strings.
 fn semver_max(a: &str, b: &str) -> Result<String> {
     let va = semver::Version::parse(a)?;
     let vb = semver::Version::parse(b)?;
@@ -180,9 +175,8 @@ fn semver_max(a: &str, b: &str) -> Result<String> {
 }
 
 /// Fetch the latest version from npm registry using `npm view`.
-/// For alpha channel, fetches both `@alpha` and `@latest` dist-tags and
-/// returns the semver-greater — prevents alpha users getting stuck when a
-/// newer stable ships without updating the alpha dist-tag.
+/// For alpha channel, fetches both `@alpha` and `@latest` dist-tags and returns the semver-greater.
+/// This keeps alpha users from getting stuck when a newer stable ships without updating the alpha dist-tag.
 async fn fetch_npm_version(channel: &str, npm_registry: Option<&str>) -> Result<String> {
     if channel == "alpha" {
         let (alpha_v, stable_v) = tokio::try_join!(
@@ -194,15 +188,13 @@ async fn fetch_npm_version(channel: &str, npm_registry: Option<&str>) -> Result<
     fetch_npm_tag("latest", npm_registry).await
 }
 
-/// Test-only entry point: invokes the private [`fetch_npm_tag`] for tests
-/// that swap in a fake `npm` via PATH.
+/// Test-only entry point: invokes the private [`fetch_npm_tag`] for tests that swap in a fake `npm` via PATH.
 #[doc(hidden)]
 pub async fn fetch_npm_tag_for_test(tag: &str, npm_registry: Option<&str>) -> Result<String> {
     fetch_npm_tag(tag, npm_registry).await
 }
 
-/// Test-only entry point: invokes the private [`fetch_npm_version`] for tests
-/// that swap in a fake `npm` via PATH.
+/// Test-only entry point: invokes the private [`fetch_npm_version`] for tests that swap in a fake `npm` via PATH.
 #[doc(hidden)]
 pub async fn fetch_npm_version_for_test(
     channel: &str,
@@ -248,9 +240,8 @@ async fn fetch_npm_tag(tag: &str, npm_registry: Option<&str>) -> Result<String> 
 }
 
 /// Fetch the latest version from GitHub Releases using `gh release list`.
-/// For alpha channel, fetches both pre-release and stable-only, returns the
-/// semver-greater — `gh release list --limit 1` orders by publication date,
-/// not semver, so we need both to guarantee correctness.
+/// For alpha channel, fetches both pre-release and stable-only, returns the semver-greater.
+/// `gh release list --limit 1` orders by publication date, not semver, so we need both.
 #[doc(hidden)]
 pub async fn fetch_gh_release_version(channel: &str) -> Result<String> {
     if channel == "alpha" {
@@ -365,8 +356,7 @@ async fn fetch_gcs_version_from_bases(channel: &str, bases: &[String]) -> Result
     Err(last_err.unwrap_or_else(|| anyhow::anyhow!("no CLI base URLs configured")))
 }
 
-/// Test-only entry point: same as [`fetch_gcs_version_from_bases`] but reads
-/// from a single `base_url` instead of the configured base list.
+/// Test-only entry point: same as [`fetch_gcs_version`] but reads from `base_url` instead of the hardcoded GCS bucket.
 #[doc(hidden)]
 pub async fn fetch_gcs_version_from_base(channel: &str, base_url: &str) -> Result<String> {
     if channel == "alpha" {
@@ -381,9 +371,9 @@ pub async fn fetch_gcs_version_from_base(channel: &str, base_url: &str) -> Resul
 
 async fn fetch_gcs_channel_pointer(channel: &str, base_url: &str) -> Result<String> {
     let url = format!("{}/{}", base_url, channel);
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .build()?;
+    let client = supercharge_extra_ca::build_reqwest_client(|builder| {
+        builder.timeout(Duration::from_secs(15))
+    })?;
 
     let max_retries: u32 = 3;
     let mut last_err = None;
@@ -446,10 +436,9 @@ async fn fetch_gcs_channel_pointer(channel: &str, base_url: &str) -> Result<Stri
     Err(last_err.unwrap())
 }
 
-/// Fetch the latest version for the given installer type without writing the
-/// version cache. Use this when the caller needs to control when the cache is
-/// written (e.g. auto-update should only cache after a successful install or
-/// when no update is needed).
+/// Fetch the latest version for the given installer type without writing the version cache.
+/// Use this when the caller needs to control when the cache is written.
+/// Auto-update, for example, should only cache after a successful install or when no update is needed.
 pub async fn fetch_latest_version(installer: &str, config: &UpdateConfig) -> Result<String> {
     match installer {
         "npm" => fetch_npm_version(&config.channel, config.npm_registry.as_deref()).await,
@@ -468,12 +457,9 @@ pub async fn fetch_latest_version(installer: &str, config: &UpdateConfig) -> Res
     }
 }
 
-/// Write the version cache to disk, recording that `version` was seen at the
-/// current time. Call after confirming the version is current (no update
-/// needed) or after a successful install.
-///
-/// `stable_version` records the current stable channel pointer so that
-/// `channel_label()` can derive `[alpha]` vs `[stable]` without network I/O.
+/// Write the version cache to disk, recording that `version` was seen at the current time. Call after confirming the
+/// version is current (no update needed) or after a successful install. `stable_version` records the current stable
+/// channel pointer so that `channel_label()` can derive `[alpha]` vs `[stable]` without network I/O.
 pub async fn write_version_cache(version: &str, stable_version: Option<&str>) {
     let version_path = grok_home().join("version.json");
     let now = time::OffsetDateTime::now_utc();
@@ -505,13 +491,9 @@ pub async fn write_version_cache(version: &str, stable_version: Option<&str>) {
     }
 }
 
-/// Fetch the latest version for the given installer type and cache it.
-///
-/// Each installer is fully independent — no cross-installer fallback.
-///
-/// - `"npm"` — uses `npm view` against the public registry.
-/// - `"internal"` — reads the channel pointer from the public GCS bucket.
-/// - `"gh-release"` — uses `gh release list` against GitHub Releases.
+/// Fetch the latest version for the given installer type and cache it. Each installer is fully independent: there is no
+/// cross-installer fallback. `"npm"`: uses `npm view` against the public registry; `"internal"`: reads the channel
+/// pointer from the public GCS bucket; `"gh-release"`: uses `gh release list` against GitHub Releases.
 pub async fn get_latest_version(installer: &str, config: &UpdateConfig) -> Result<String> {
     let version = fetch_latest_version(installer, config).await?;
     let stable_ptr = try_fetch_stable_pointer().await;
@@ -534,32 +516,15 @@ pub async fn is_version_cache_fresh() -> bool {
 
 pub use supercharge_version::installed as get_installed_grok_version;
 
-/// Version of the managed grok binary currently on disk, read from the
-/// `~/.supercharge/bin/grok` symlink target (`../downloads/grok-<version>-<platform>`)
-/// without exec'ing anything.
-///
-/// Concurrent updaters (TUI background download, leader hourly checker,
-/// explicit `grok update`) decide staleness from this instead of their own
-/// compiled-in version, so a binary another process already installed is
-/// never downloaded a second time.
-///
-/// Returns `None` when there is no parseable managed symlink (Windows
-/// copy-based installs, dev builds) or when the symlink is DANGLING — a
-/// link whose target binary was deleted (e.g. manual `~/.supercharge/downloads`
-/// cleanup) must not report an installed version, or every updater would
-/// claim "already up to date" forever while no runnable binary exists.
-/// NOTE: the symlink existing does not prove the *active installer*
-/// maintains it — npm manages its own global install and a leftover symlink
-/// from a previous internal install would lie about the npm install's
-/// version. Callers must gate on the installer (see
-/// `disk_version_for_installer` in `auto_update`).
+/// Returns `None` when there is no parseable managed symlink (Windows copy-based installs, dev builds) or when the
+/// symlink is DANGLING — a link whose target binary was deleted (e.g. manual `~/.supercharge/downloads` cleanup) must not report
+/// an installed version, or every updater would claim "already up to date" forever while no runnable binary exists.
 pub fn installed_on_disk_version() -> Option<String> {
     #[cfg(unix)]
     {
         let app = supercharge_shell::util::grok_home::grok_application();
         let target = std::fs::read_link(&app).ok()?;
-        // metadata() follows the symlink: Err means the target is gone
-        // (dangling link) and the version it names is not actually on disk.
+        // metadata() follows the symlink: Err means the target is gone (dangling link) and the version it names is not actually on disk
         std::fs::metadata(&app).ok()?;
         version_from_versioned_binary_name(target.file_name()?.to_str()?, "grok")
     }
@@ -569,18 +534,9 @@ pub fn installed_on_disk_version() -> Option<String> {
     }
 }
 
-/// Extract the `<version>` portion of a versioned binary file name.
-///
-/// Handles the internal layout (`grok-0.1.150-macos-aarch64`, including
-/// pre-releases: `grok-0.1.150-alpha.1-linux-x86_64` → `0.1.150-alpha.1`)
-/// and the npm layout without a platform suffix (`grok-0.1.150`,
-/// `grok-0.1.150-alpha.1`): everything between the `{bin_prefix}-` prefix
-/// and the first platform-OS component is the version, validated as semver
-/// so unknown layouts (`grok-latest`, `grok-pager-*` when `bin_prefix` is
-/// `grok`) return `None` instead of garbage.
-///
-/// Shared by the disk-version probe above and `cleanup_old_downloads` in
-/// `auto_update` — keep it the single place that understands this naming.
+/// Handles the internal layout (`grok-0.1.150-macos-aarch64`) and the npm layout without a platform suffix
+/// (`grok-0.1.150`). Pre-releases parse whole: `grok-0.1.150-alpha.1-linux-x86_64` gives `0.1.150-alpha.1`. Unknown
+/// layouts (`grok-latest`, `supercharge-pager-*` when `bin_prefix` is `grok`) return `None` instead of garbage.
 pub(crate) fn version_from_versioned_binary_name(name: &str, bin_prefix: &str) -> Option<String> {
     const PLATFORM_OS: &[&str] = &["macos", "linux", "darwin", "windows"];
     let suffix = name.strip_prefix(bin_prefix)?.strip_prefix('-')?;
@@ -589,23 +545,14 @@ pub(crate) fn version_from_versioned_binary_name(name: &str, bin_prefix: &str) -
         .iter()
         .position(|p| PLATFORM_OS.contains(p))
         .unwrap_or(parts.len());
-    let ver_str = parts[..platform_start].join("-");
+    let ver_str = parts.get(..platform_start).unwrap_or(&[]).join("-");
     semver::Version::parse(&ver_str).ok()?;
     Some(ver_str)
 }
 
-/// Fetch the stable channel pointer for caching alongside the version.
-///
-/// Tries each base URL in [`CLI_BASE_URLS`] and returns the first success.
-/// Best-effort: returns `None` on any failure (the caller will simply omit
-/// the stable pointer from the cache, and `channel_label()` will return `""`
-/// until the next successful fetch).
-///
-/// The entire operation is capped at 500 ms. The stable pointer is only used
-/// to derive the `[alpha]`/`[stable]` channel label — it is never required
-/// for correctness. On slow or unreachable networks the timeout fires and we
-/// return `None`; the label will populate on the next successful TTL check
-/// (~30 min). This keeps startup and post-install paths fast.
+/// Best-effort: returns `None` on any failure, and `channel_label()` returns `""` until the next successful fetch. The
+/// entire operation is capped at 500 ms to keep startup and post-install paths fast. The stable pointer is only used to
+/// derive the `[alpha]`/`[stable]` channel label; it is never required for correctness.
 pub(crate) async fn try_fetch_stable_pointer() -> Option<String> {
     tokio::time::timeout(Duration::from_millis(500), async {
         for base in cli_base_urls() {
@@ -621,8 +568,7 @@ pub(crate) async fn try_fetch_stable_pointer() -> Option<String> {
 
 /// Read the cached stable version from `~/.supercharge/version.json` (sync, for display).
 ///
-/// Returns `None` if the file doesn't exist, can't be parsed, or has no
-/// `stable_version` field (e.g. written by an older binary).
+/// Returns `None` if the file doesn't exist, can't be parsed, or has no `stable_version` field (e.g. written by an older binary).
 pub fn cached_stable_version() -> Option<String> {
     let version_path = grok_home().join("version.json");
     let content = std::fs::read_to_string(&version_path).ok()?;
@@ -630,10 +576,7 @@ pub fn cached_stable_version() -> Option<String> {
     gv.stable_version
 }
 
-/// Pure comparison: derive the channel name from current vs stable pointer.
-///
-/// Returns `Some("alpha")` when `current > stable`, `Some("stable")` when
-/// `current <= stable`, or `None` when either version fails to parse.
+/// Returns `Some("alpha")` when `current > stable`, `Some("stable")` when `current <= stable`, or `None` when either version fails to parse.
 fn derive_channel<'a>(current: &str, stable: &str) -> Option<&'a str> {
     let current_v = semver::Version::parse(current).ok()?;
     let stable_v = semver::Version::parse(stable).ok()?;
@@ -644,13 +587,9 @@ fn derive_channel<'a>(current: &str, stable: &str) -> Option<&'a str> {
     }
 }
 
-/// Machine-readable channel name derived from the cached stable pointer.
-///
-/// Returns `Some("alpha")` when the current version is ahead of the cached
-/// stable pointer, `Some("stable")` when at or behind, or `None` when no
-/// cached pointer is available (first launch, old cache format, parse error).
-///
-/// The result is computed once and cached for the process lifetime.
+/// Machine-readable channel name derived from the cached stable pointer. Returns `Some("alpha")` when the current version
+/// is ahead of the cached stable pointer, `Some("stable")` when at or behind. Returns `None` when no cached pointer is
+/// available (first launch, old cache format, parse error).
 pub fn channel_name() -> Option<&'static str> {
     use std::sync::OnceLock;
     static NAME: OnceLock<Option<&'static str>> = OnceLock::new();
@@ -660,15 +599,9 @@ pub fn channel_name() -> Option<&'static str> {
     })
 }
 
-/// Channel label derived from the cached stable pointer.
-///
-/// Compares the compiled-in `VERSION` against the stable pointer stored in
-/// `~/.supercharge/version.json` (written by the auto-updater):
-/// - `" [alpha]"` when the current version is ahead of stable,
-/// - `" [stable]"` when at or behind stable,
-/// - `""` when no cached pointer is available (first launch, old cache format).
-///
-/// The result is computed once and cached for the process lifetime.
+/// Compares the compiled-in `VERSION` against the stable pointer stored in `~/.supercharge/version.json` (written by the
+/// auto-updater): `" [alpha]"` when the current version is ahead of stable,; `" [stable]"` when at or behind stable,;
+/// `""` when no cached pointer is available (first launch, old cache format).
 pub fn channel_label() -> &'static str {
     use std::sync::OnceLock;
     static LABEL: OnceLock<&'static str> = OnceLock::new();
@@ -693,11 +626,13 @@ mod tests {
         assert!(is_loopback_base("http://127.0.0.1:8971"));
         assert!(is_loopback_base("http://localhost:8971"));
         assert!(is_loopback_base("http://[::1]:8971"));
+        assert!(is_loopback_base("https://127.0.0.1:8971"));
+        assert!(is_loopback_base("https://localhost:8971"));
         // Prefix-check bypass vectors.
         assert!(!is_loopback_base("http://127.0.0.1:9@evil.com"));
         assert!(!is_loopback_base("http://localhost.evil.com:80"));
         assert!(!is_loopback_base("https://x.ai/cli"));
-        assert!(!is_loopback_base("https://cli.supercharge.com"));
+        assert!(!is_loopback_base("https://cli.grok.com"));
         assert!(!is_loopback_base("http://192.168.1.1:80"));
         assert!(!is_loopback_base(""));
     }
@@ -705,8 +640,8 @@ mod tests {
     #[test]
     fn allowed_update_base_accepts_https_and_loopback() {
         use super::is_allowed_update_base;
-        assert!(is_allowed_update_base("https://cli.supercharge.com"));
-        assert!(is_allowed_update_base("https://assets.supercharge.com/cli"));
+        assert!(is_allowed_update_base("https://cli.grok.com"));
+        assert!(is_allowed_update_base("https://assets.grok.com/cli"));
         assert!(is_allowed_update_base("http://127.0.0.1:8971"));
         assert!(!is_allowed_update_base("http://example.com/cli"));
         assert!(!is_allowed_update_base(
@@ -718,9 +653,8 @@ mod tests {
 
     use super::*;
 
-    /// Verifies that a future `checked_at` timestamp (e.g. from clock skew or
-    /// NTP time-warp) is never considered fresh. Without the clock-skew guard
-    /// this would return true indefinitely, silently disabling auto-update.
+    /// Verifies that a future `checked_at` timestamp (e.g. from clock skew or NTP time-warp) is never considered fresh.
+    /// Without the clock-skew guard this would return true indefinitely, silently disabling auto-update.
     #[test]
     fn test_is_fresh_rejects_future_timestamp() {
         let now = time::OffsetDateTime::now_utc();
@@ -732,17 +666,15 @@ mod tests {
         );
     }
 
-    /// Disk-version probe: parsing the version out of the managed install's
-    /// symlink-target file name (`grok-<version>-<platform>`).
+    /// Disk-version probe: parsing the version out of the managed install's symlink-target file name (`grok-<version>-<platform>`).
     #[test]
     fn test_version_from_versioned_binary_name() {
         let cases: &[(&str, Option<&str>)] = &[
             ("grok-0.2.46-darwin-arm64", Some("0.2.46")),
             ("grok-0.1.220-linux-x86_64", Some("0.1.220")),
             ("grok-0.2.5-windows-x86_64.exe", Some("0.2.5")),
-            // Pre-releases must round-trip whole — truncating to "0.1.220"
-            // would make an alpha install masquerade as the release and
-            // mask alpha → stable updates.
+            // Pre-releases must round-trip whole
+            // Truncating to "0.1.220" would make an alpha install masquerade as the release and mask updates from alpha to stable
             ("grok-0.1.220-alpha.4-linux-x86_64", Some("0.1.220-alpha.4")),
             ("grok-0.1.220-alpha.4", Some("0.1.220-alpha.4")), // npm layout
             ("grok-pager-0.1.5-darwin-arm64", None),           // "pager" is not a version
@@ -761,8 +693,7 @@ mod tests {
             );
         }
 
-        // bin_prefix discrimination: the pager binary parses under its own
-        // prefix but not under "grok".
+        // bin_prefix discrimination: the pager binary parses under its own prefix but not under "grok"
         assert_eq!(
             version_from_versioned_binary_name("grok-pager-0.1.5-darwin-arm64", "grok-pager")
                 .as_deref(),
@@ -770,12 +701,9 @@ mod tests {
         );
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // derive_channel — invariant matrix
-    //
-    // Tests the pure comparison logic that determines [alpha] vs [stable].
-    // Covers current 0.1.X-alpha.N, future 0.2.X, edge cases, and errors.
-    // ──────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────── derive_channel — invariant matrix. Tests the
+    // pure comparison logic that determines [alpha] vs [stable]. Covers current 0.1.X-alpha.N, future 0.2.X, edge cases, and
+    // errors. ──────────────────────────────────────────────────────────────────────
 
     #[test]
     fn test_derive_channel_matrix() {
@@ -855,7 +783,7 @@ mod tests {
 
     #[test]
     fn test_version_json_backward_compat() {
-        // Old format (no stable_version) must parse — serde(default) fills None.
+        // Old format (no stable_version) must parse; serde(default) fills None
         let old = r#"{"version":"0.1.180","checked_at":"2026-04-22T10:30:00Z"}"#;
         let v: GrokVersion = serde_json::from_str(old).unwrap();
         assert_eq!(v.version, "0.1.180");
@@ -869,7 +797,6 @@ mod tests {
         assert_eq!(parsed.version, "0.2.5");
         assert_eq!(parsed.stable_version.as_deref(), Some("0.2.3"));
 
-        // checked_at must be valid RFC3339.
         assert!(
             time::OffsetDateTime::parse(
                 &parsed.checked_at,
@@ -896,36 +823,25 @@ mod tests {
         let now = time::OffsetDateTime::now_utc();
         let v = GrokVersion::new("0.1.200".to_string(), None, now);
 
-        // Within TTL → fresh
+        // Within the TTL the timestamp is fresh
         assert!(v.is_fresh(now, Duration::from_secs(60)));
         assert!(v.is_fresh(now + Duration::from_secs(29), Duration::from_secs(30)));
 
-        // At TTL boundary → NOT fresh (strict <)
+        // At the TTL boundary it is not fresh (strict <)
         assert!(!v.is_fresh(now + Duration::from_secs(30), Duration::from_secs(30)));
 
-        // Past TTL → not fresh
+        // Past the TTL it is not fresh
         assert!(!v.is_fresh(now + Duration::from_secs(31), Duration::from_secs(30)));
 
-        // Zero TTL → never fresh
+        // A zero TTL is never fresh
         assert!(!v.is_fresh(now, Duration::ZERO));
 
-        // Malformed timestamp → not fresh
+        // A malformed timestamp is not fresh
         let bad = GrokVersion {
             version: "0.1.200".to_string(),
             stable_version: None,
             checked_at: "not-rfc3339".to_string(),
         };
         assert!(!bad.is_fresh(now, Duration::from_secs(60)));
-    }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // UpdateConfig defaults
-    // ──────────────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_update_config_default_channel_is_stable() {
-        use supercharge_shell::env::GrokBuildEnvironment;
-        let cfg = UpdateConfig::from_environment(&GrokBuildEnvironment::Production);
-        assert_eq!(cfg.channel, "stable");
     }
 }

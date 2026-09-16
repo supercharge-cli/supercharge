@@ -1,5 +1,3 @@
-//! Menu component — renders shortcut key menus.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -36,8 +34,8 @@ pub fn render_menu(
         .fg(theme.gray_bright)
         .bg(theme.bg_highlight);
 
-    // Keep the actions as a compact palette. The old logo-driven width could
-    // leave a huge, empty canyon between an action and its shortcut.
+    // Width: label + gap + key
+    // Keep a 4-col gap between label and key for readability
     let content_min: u16 = items
         .iter()
         .map(|(key, label)| {
@@ -173,6 +171,13 @@ pub fn render_menu(
                     cell.set_style(dismiss_style);
                 }
             }
+        }
+
+        // Terminal theme (Reset band slots): the selection/hover cue is
+        // reverse video; the row is all default-fg text so it inverts
+        // uniformly. RGB themes keep their bg_highlight band.
+        if is_selected && theme.is_bandless() {
+            buf.set_style(row_rect, Style::default().add_modifier(Modifier::REVERSED));
         }
 
         y += 1;

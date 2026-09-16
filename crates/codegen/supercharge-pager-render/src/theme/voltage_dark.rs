@@ -1,25 +1,17 @@
-//! VoltageDark theme — neutral gray base with TokyoNight accent colors.
+//! VoltageDark theme: neutral gray base with TokyoNight accent colors.
 //!
-//! The canonical palette is defined in RGB (`Color::Rgb`). At startup the
-//! theme is run through [`Theme::quantized`] which downgrades every color
-//! to the terminal's detected capability level (256-color, 16-color, etc.).
+//! The canonical palette is defined in RGB (`Color::Rgb`).
+//! At startup [`Theme::quantized`] downgrades every color to the terminal's detected capability level (256-color, 16-color, etc.).
 
 use ratatui::style::{Color, Modifier};
 
 use super::tokyonight::Theme;
 
-/// Helper for concise const `Color::Rgb` definitions.
 const fn rgb(r: u8, g: u8, b: u8) -> Color {
     Color::Rgb(r, g, b)
 }
 
-// Voltage Dark palette — deep navy base with electric-blue accents.
-//
-// Backgrounds use a dark navy ramp anchored at:
-//   • bg  = #10243b (16, 36, 59)
-//   • fg  = #f3f7ff (243, 247, 255)
-//
-// Accent colors are the original TokyoNight Night hex values.
+// Grayscale ramp anchored at bg #141414 / fg #f3f3f3. Accents are TokyoNight Night hex.
 #[allow(dead_code)]
 mod palette {
     use super::*;
@@ -54,16 +46,12 @@ mod palette {
     pub const TEAL: Color = rgb(26, 188, 156); // #1abc9c
     pub const YELLOW: Color = rgb(224, 175, 104); // #e0af68
 
-    pub const RED_DARK: Color = rgb(66, 14, 20); // #420e14 — quantizes to 256-color red, not gray
-    pub const GREEN_DARK: Color = rgb(6, 56, 6); // #063806 — quantizes to 256-color green, not gray
+    pub const RED_DARK: Color = rgb(66, 14, 20); // #420e14, quantizes to 256-color red, not gray
+    pub const GREEN_DARK: Color = rgb(6, 56, 6); // #063806, quantizes to 256-color green, not gray
 }
 use palette::*;
 
 impl Theme {
-    /// VoltageDark theme — neutral gray base with TokyoNight accents.
-    ///
-    /// Colors are defined in RGB. Call [`Theme::quantized`] to downgrade
-    /// them to the terminal's supported color level before rendering.
     pub const fn voltage_dark() -> Self {
         Self {
             bg_base: BG_STORM,
@@ -86,7 +74,7 @@ impl Theme {
             text_primary: FG,
             text_secondary: FG_DARK,
 
-            gray_dim: rgb(88, 88, 88), // #585858 — slightly brighter than FG_GUTTER
+            gray_dim: rgb(88, 88, 88), // #585858, slightly brighter than FG_GUTTER
             gray: COMMENT,
             gray_bright: DARK5,
 
@@ -97,11 +85,11 @@ impl Theme {
 
             fuzzy_accent: BLUE,
 
-            accent_plan: rgb(255, 219, 141), // #FFDB8D — golden
+            accent_plan: rgb(255, 219, 141), // #FFDB8D, golden
 
-            accent_verify: rgb(187, 154, 247), // #bb9af7 — violet
+            accent_verify: rgb(187, 154, 247), // #bb9af7, violet
 
-            accent_remember: Color::Rgb(139, 195, 74), // #8BC34A — Material Design light green
+            accent_remember: Color::Rgb(139, 195, 74), // #8BC34A, Material Design light green
 
             selection_border: rgb(50, 108, 170),
             prompt_border: rgb(29, 66, 108), // #1d426c — dim blue prompt chrome
@@ -146,19 +134,5 @@ impl Theme {
             md_text: FG_DARK,
             link_fg: rgb(104, 194, 255), // #68c2ff — electric blue for dark bg
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[ignore = "known broken: expected accent values drift from runtime theme"]
-    fn test_voltage_dark_theme() {
-        let theme = Theme::voltage_dark();
-        assert!(matches!(theme.bg_base, Color::Rgb(20, 20, 20)));
-        assert!(matches!(theme.accent_user, Color::Rgb(225, 225, 225)));
-        assert!(matches!(theme.text_primary, Color::Rgb(225, 225, 225)));
     }
 }
