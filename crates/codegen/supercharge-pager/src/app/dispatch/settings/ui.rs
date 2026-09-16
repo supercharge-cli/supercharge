@@ -350,6 +350,48 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
     effects
 }
 
+pub(in crate::app::dispatch) fn dispatch_open_format_picker(app: &mut AppView) -> Vec<Effect> {
+    use crate::views::modal::ActiveModal;
+    use crate::views::setup_modal::SetupModalState;
+    use supercharge_shell::agent::provider_setup::load_saved_format_target;
+
+    let models = match app.active_view {
+        ActiveView::Agent(id) => app.agents.get(&id).map(|agent| &agent.session.models),
+        _ => Some(app.agents.values().next().map(|agent| &agent.session.models).unwrap_or(&app.models)),
+    };
+    let Some(setup) = load_saved_format_target(models.and_then(|models| models.current_model_id_str())) else {
+        app.show_toast("No saved provider model to change. Run /setup first.");
+        return vec![];
+    };
+    let effort = models
+        .filter(|models| models.current_model_id_str() == Some(setup.model_id.as_str()))
+        .and_then(|models| models.reasoning_effort.as_ref())
+        .map(ToString::to_string);
+    let mut effects = vec![];
+    let id = match app.active_view {
+        ActiveView::Agent(id) => id,
+        _ => {
+            if let Some(existing) = app.agents.keys().next().copied() {
+                crate::app::dispatch::ctx::switch_to_agent(
+                    app, existing, crate::app::dispatch::ctx::SwitchCause::Picker,
+                );
+                existing
+            } else {
+                let (id, create_effects) =
+                    crate::app::dispatch::session::lifecycle::dispatch_new_session_inner_with_id(app, None);
+                effects.extend(create_effects);
+                id
+            }
+        }
+    };
+    if let Some(agent) = app.agents.get_mut(&id) {
+        agent.active_modal = Some(ActiveModal::ProviderSetup {
+            state: Box::new(SetupModalState::format_picker(setup, effort)),
+        });
+    }
+    effects
+}
+
 pub(in crate::app::dispatch) fn dispatch_open_effort_picker(app: &mut AppView) -> Vec<Effect> {
     use crate::views::modal::ActiveModal;
     use crate::views::setup_modal::SetupModalState;

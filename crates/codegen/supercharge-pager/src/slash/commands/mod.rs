@@ -28,6 +28,7 @@ pub mod export;
 pub mod feedback;
 pub mod find;
 pub mod fork;
+pub mod format;
 pub mod gboom;
 pub mod help;
 pub mod history;
@@ -143,6 +144,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(toggle_mouse_reporting::ToggleMouseReportingCommand),
         Arc::new(settings_cmd::SettingsCommand),
         Arc::new(setup::SetupCommand),
+        Arc::new(format::FormatCommand),
         Arc::new(privacy::PrivacyCommand),
         Arc::new(rewind::RewindCommand),
         Arc::new(jump::JumpCommand),
@@ -222,6 +224,12 @@ mod tests {
         assert!(reg.get("compact").is_some());
         assert!(reg.get("model").is_some());
         assert!(reg.get("setup").is_some());
+        let format = reg.get("format").expect("/format should be registered");
+        let models = ModelState::default();
+        assert!(matches!(
+            format.run(&mut make_ctx(&models), ""),
+            CommandResult::Action(Action::OpenFormatPicker)
+        ));
         assert!(reg.get("isetup").is_some());
         assert!(reg.get("imagine-setup").is_some());
         assert!(reg.get("imodels").is_some());

@@ -37,6 +37,7 @@ pub enum SetupKind {
 pub enum SetupStep {
     PickProvider,
     BaseUrl,
+    PickFormat,
     ApiKey,
     /// Nous Portal RFC 8628 device-code login (free-tier JWTs).
     DeviceAuth,
@@ -65,6 +66,8 @@ pub struct SetupModalState {
     pub kind: SetupKind,
     /// `/model` live picker: skip the URL/key wizard and close on Esc.
     pub(crate) picker_only: bool,
+    /// `/format`: save only the protocol for a validated saved model.
+    format_only: bool,
     pending_model: Option<ProviderModel>,
     models_from_api: bool,
     pub(crate) selected_effort: Option<String>,
@@ -172,6 +175,7 @@ impl SetupModalState {
             format,
             kind,
             picker_only: false,
+            format_only: false,
             pending_model: None,
             models_from_api: false,
             selected_effort: None,
@@ -180,6 +184,24 @@ impl SetupModalState {
             device_verification_uri: String::new(),
             device_status: String::new(),
         }
+    }
+
+    /// `/format`: reuse saved credentials/model without fetching or re-entering them.
+    pub fn format_picker(setup: ProviderSetup, effort: Option<String>) -> Self {
+        let mut state = Self::with_kind(SetupKind::Chat);
+        state.format_only = true;
+        state.base_url.set_text(setup.base_url);
+        state.api_key.set_text(setup.api_key);
+        state.provider_id = setup.provider_id;
+        state.format = setup.format;
+        state.pending_model = Some(ProviderModel {
+            id: setup.model_id,
+            name: setup.model_name,
+            supports_thinking: false,
+        });
+        state.selected_effort = effort;
+        pick_format_or_api_key(&mut state);
+        state
     }
 
     /// `/effort` picker: skip URL/key/model and list this model's levels.
@@ -433,6 +455,9 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
             && (key.modifiers.contains(KeyModifiers::CONTROL)
                 || key.modifiers.contains(KeyModifiers::SUPER)))
     {
+        if state.format_only {
+            return SetupOutcome::Close;
+        }
         return match &state.step {
             SetupStep::PickProvider
             | SetupStep::Fetching
@@ -444,15 +469,28 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.selected = 0;
                 SetupOutcome::Changed
             }
-            SetupStep::ApiKey | SetupStep::FetchError { .. } => {
-                if state.picker_only {
-                    return SetupOutcome::Close;
-                }
+            SetupStep::PickFormat => {
                 state.step = if state.provider_id == CUSTOM_PROVIDER_ID {
                     SetupStep::BaseUrl
                 } else {
                     SetupStep::PickProvider
                 };
+                state.selected = 0;
+                SetupOutcome::Changed
+            }
+            SetupStep::ApiKey | SetupStep::FetchError { .. } => {
+                if state.picker_only {
+                    return SetupOutcome::Close;
+                }
+                if state.kind == SetupKind::Chat {
+                    pick_format_or_api_key(state);
+                } else {
+                    state.step = if state.provider_id == CUSTOM_PROVIDER_ID {
+                        SetupStep::BaseUrl
+                    } else {
+                        SetupStep::PickProvider
+                    };
+                }
                 SetupOutcome::Changed
             }
             SetupStep::PickModel => {
@@ -480,9 +518,14 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
         SetupStep::DeviceAuth => handle_device_auth(state, key),
         SetupStep::PickProvider => handle_pick_provider(state, key),
         SetupStep::BaseUrl => handle_base_url(state, key),
+        SetupStep::PickFormat => handle_pick_format(state, key),
         SetupStep::ApiKey => handle_api_key(state, key),
         SetupStep::FetchError { .. } => {
             if matches!(key.code, KeyCode::Enter) {
+                if state.format_only {
+                    pick_format_or_api_key(state);
+                    return SetupOutcome::Changed;
+                }
                 if state.picker_only
                     && let Some(fetch) = state.begin_live_fetch()
                 {
@@ -510,7 +553,7 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
             }
             _ => SetupOutcome::Changed,
         },
-        SetupStep::PickEffort => SetupOutcome::Unchanged,
+        SetupStep::PickEffort | SetupStep::PickFormat => SetupOutcome::Unchanged,
         SetupStep::BaseUrl => match state.base_url.insert_paste(text) {
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
@@ -528,6 +571,41 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
         | SetupStep::Saving
         | SetupStep::DeviceAuth => SetupOutcome::Unchanged,
     }
+}
+
+const API_FORMATS: [(SetupWireFormat, &str); 3] = [
+    (SetupWireFormat::Openai, "Chat Completions  ·  /chat/completions"),
+    (SetupWireFormat::Anthropic, "Messages  ·  /messages"),
+    (SetupWireFormat::Responses, "Responses  ·  /responses"),
+];
+
+fn pick_format_or_api_key(state: &mut SetupModalState) {
+    if state.kind == SetupKind::Image {
+        state.step = SetupStep::ApiKey;
+        return;
+    }
+    state.selected = API_FORMATS.iter().position(|(format, _)| *format == state.format).unwrap_or(0);
+    state.step = SetupStep::PickFormat;
+}
+
+fn handle_pick_format(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
+    match key.code {
+        KeyCode::Up => state.selected = state.selected.saturating_sub(1),
+        KeyCode::Down => state.selected = (state.selected + 1).min(API_FORMATS.len() - 1),
+        KeyCode::Enter => {
+            state.format = API_FORMATS[state.selected.min(API_FORMATS.len() - 1)].0;
+            if state.format_only {
+                let Some(model) = state.pending_model.clone() else {
+                    return SetupOutcome::Close;
+                };
+                return save_selected_model(state, model.id, model.name);
+            }
+            state.selected = 0;
+            state.step = SetupStep::ApiKey;
+        }
+        _ => return SetupOutcome::Unchanged,
+    }
+    SetupOutcome::Changed
 }
 
 fn handle_device_auth(_state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
@@ -591,12 +669,11 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                         generation: state.generation,
                     };
                 }
-                state.step = SetupStep::ApiKey;
+                pick_format_or_api_key(state);
                 SetupOutcome::Changed
             }
             Some(ProviderRow::Custom) => {
                 state.provider_id = CUSTOM_PROVIDER_ID.to_owned();
-                state.format = SetupWireFormat::Openai;
                 state.filter.reset();
                 state.selected = 0;
                 state.step = SetupStep::BaseUrl;
@@ -620,7 +697,7 @@ fn handle_base_url(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome 
         match normalize_provider_base_url(state.base_url.text()) {
             Ok(url) => {
                 state.base_url.set_text(url);
-                state.step = SetupStep::ApiKey;
+                pick_format_or_api_key(state);
                 SetupOutcome::Changed
             }
             Err(error) => {
@@ -823,8 +900,19 @@ fn save_selected_model(
 
 pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalState) {
     let theme = Theme::current();
-    let shortcuts = shortcuts_for(&state.step);
-    let prefix = if state.picker_only {
+    let mut shortcuts = shortcuts_for(&state.step);
+    if state.format_only {
+        for shortcut in &mut shortcuts {
+            if shortcut.id == 2 {
+                shortcut.label = "Esc close";
+            } else if shortcut.id == 1 && matches!(state.step, SetupStep::PickFormat) {
+                shortcut.label = "Enter save";
+            }
+        }
+    }
+    let prefix = if state.format_only {
+        "Change format"
+    } else if state.picker_only {
         "Switch model"
     } else {
         match state.kind {
@@ -835,6 +923,7 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
     let title = match &state.step {
         SetupStep::PickProvider => format!("{prefix}  ·  choose provider"),
         SetupStep::BaseUrl => format!("{prefix}  ·  base URL"),
+        SetupStep::PickFormat => format!("{prefix}  ·  API format"),
         SetupStep::ApiKey => format!("{prefix}  ·  API key"),
         SetupStep::DeviceAuth => format!("{prefix}  ·  Nous Portal login"),
         SetupStep::Fetching => format!("{prefix}  ·  fetching models"),
@@ -859,11 +948,12 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
     let inner = content.content;
     match &state.step {
         SetupStep::PickProvider => render_provider_list(buf, inner, &theme, state),
+        SetupStep::PickFormat => render_format_list(buf, inner, &theme, state),
         SetupStep::BaseUrl => render_prompt(
             buf,
             inner,
             &theme,
-            "OpenAI-compatible base URL",
+            "Provider base URL (without the inference endpoint)",
             "Example: https://api.openai.com/v1  or  http://127.0.0.1:11434/v1",
             state.base_url.text(),
             true,
@@ -909,7 +999,7 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
                 inner,
                 &theme,
                 "API key (leave blank for local endpoints)",
-                "Ctrl+R reveals the key",
+                &format!("{} API  ·  Ctrl+R reveals the key", state.format.display_name()),
                 &display,
                 true,
             );
@@ -939,6 +1029,11 @@ fn shortcuts_for(step: &SetupStep) -> Vec<Shortcut<'static>> {
                 clickable: false,
                 id: 2,
             },
+        ],
+        SetupStep::PickFormat => vec![
+            Shortcut { label: "↑/↓ choose", clickable: false, id: 3 },
+            Shortcut { label: "Enter continue", clickable: false, id: 1 },
+            Shortcut { label: "Esc back", clickable: false, id: 2 },
         ],
         SetupStep::BaseUrl | SetupStep::CustomModel => vec![
             Shortcut {
@@ -1134,6 +1229,33 @@ fn render_provider_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &Set
     }
 }
 
+fn render_format_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &SetupModalState) {
+    if area.is_empty() {
+        return;
+    }
+    Line::from(Span::styled(
+        "Choose the API format supported by your provider",
+        Style::default().fg(theme.gray_dim),
+    ))
+    .render(Rect::new(area.x, area.y, area.width, 1), buf);
+    for (index, (_, label)) in API_FORMATS.iter().enumerate() {
+        let row = index as u16 + 2;
+        if row >= area.height {
+            break;
+        }
+        let style = if index == state.selected {
+            Style::default().fg(theme.fuzzy_accent).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.text_primary)
+        };
+        let marker = if index == state.selected { "> " } else { "  " };
+        Line::from(Span::styled(
+            truncate_to_width(&format!("{marker}{label}"), area.width as usize), style,
+        ))
+        .render(Rect::new(area.x, area.y + row, area.width, 1), buf);
+    }
+}
+
 fn render_model_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &SetupModalState) {
     if area.height == 0 || area.width == 0 {
         return;
@@ -1277,6 +1399,58 @@ mod tests {
         }
     }
 
+    fn saved_format_picker(format: SetupWireFormat) -> SetupModalState {
+        SetupModalState::format_picker(ProviderSetup {
+            base_url: "https://api.example.com/v1".to_owned(),
+            api_key: "saved-key".to_owned(),
+            model_id: "saved-model".to_owned(),
+            model_name: "Saved Model".to_owned(),
+            provider_id: "custom".to_owned(),
+            format,
+        }, Some("high".to_owned()))
+    }
+
+    #[test]
+    fn format_only_preselects_and_saves_every_format_directly() {
+        for (index, (format, _)) in API_FORMATS.iter().enumerate() {
+            let mut state = saved_format_picker(*format);
+            assert!(matches!(state.step, SetupStep::PickFormat));
+            assert_eq!(state.selected, index);
+            assert!(state.models.is_empty());
+            let SetupOutcome::Save { setup, generation } = handle_setup_key(&mut state, &enter()) else {
+                panic!("format picker must save without fetching or asking for credentials");
+            };
+            assert_eq!(setup.format, *format);
+            assert_eq!(setup.base_url, "https://api.example.com/v1");
+            assert_eq!(setup.api_key, "saved-key");
+            assert_eq!(setup.model_id, "saved-model");
+            assert_eq!(setup.model_name, "Saved Model");
+            assert_eq!(setup.provider_id, "custom");
+            assert_eq!(state.selected_effort.as_deref(), Some("high"));
+            assert!(matches!(state.step, SetupStep::Saving));
+            assert_eq!(generation, state.generation);
+            assert_ne!(generation, 0);
+        }
+    }
+
+    #[test]
+    fn format_only_navigation_cancel_and_retry_never_enter_setup() {
+        let mut state = saved_format_picker(SetupWireFormat::Anthropic);
+        assert!(matches!(handle_setup_paste(&mut state, "secret"), SetupOutcome::Unchanged));
+        handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(state.selected, 2);
+        let SetupOutcome::Save { setup, generation } = handle_setup_key(&mut state, &enter()) else { panic!() };
+        assert_eq!(setup.format, SetupWireFormat::Responses);
+        assert!(!state.apply_saved(generation, Err("cannot write config".to_owned())));
+        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
+        assert!(matches!(state.step, SetupStep::PickFormat));
+        assert_eq!(state.selected, 2);
+        handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(state.selected, 1);
+        assert!(matches!(handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)), SetupOutcome::Close));
+        assert_eq!(state.selected_effort.as_deref(), Some("high"));
+    }
+
     #[test]
     fn builtin_provider_skips_base_url() {
         let mut state = SetupModalState::new();
@@ -1285,6 +1459,10 @@ mod tests {
             handle_setup_key(&mut state, &enter()),
             SetupOutcome::Changed
         ));
+        assert!(matches!(state.step, SetupStep::PickFormat));
+        assert_eq!(state.format, SetupWireFormat::Openai);
+        assert_eq!(state.selected, 0);
+        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
         assert!(matches!(state.step, SetupStep::ApiKey));
         assert_eq!(state.provider_id, "pollinations");
         assert_eq!(state.base_url.text(), "https://gen.pollinations.ai/v1");
@@ -1295,6 +1473,9 @@ mod tests {
         let mut state = SetupModalState::new();
         state.step = SetupStep::BaseUrl;
         state.provider_id = CUSTOM_PROVIDER_ID.to_owned();
+        state.format = SetupWireFormat::Openai;
+        state.base_url.set_text("");
+        state.api_key.set_text("");
         for ch in "https://api.openai.com/v1".chars() {
             let _ = handle_setup_key(&mut state, &char_key(ch));
         }
@@ -1302,6 +1483,8 @@ mod tests {
             handle_setup_key(&mut state, &enter()),
             SetupOutcome::Changed
         ));
+        assert!(matches!(state.step, SetupStep::PickFormat));
+        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
         assert!(matches!(state.step, SetupStep::ApiKey));
         for ch in "sk-test".chars() {
             let _ = handle_setup_key(&mut state, &char_key(ch));
@@ -1320,6 +1503,69 @@ mod tests {
                 assert_eq!(provider_id, CUSTOM_PROVIDER_ID);
             }
             other => panic!("expected fetch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn each_api_format_is_used_for_fetch_and_save() {
+        for (index, (format, _)) in API_FORMATS.iter().enumerate() {
+            let mut state = SetupModalState::new();
+            state.provider_id = CUSTOM_PROVIDER_ID.to_owned();
+            state.base_url.set_text("https://provider.example/v1");
+            state.api_key.set_text("test-key");
+            state.step = SetupStep::PickFormat;
+            state.selected = index;
+            handle_setup_key(&mut state, &enter());
+            assert_eq!(state.format, *format);
+            assert!(matches!(state.step, SetupStep::ApiKey));
+            match handle_setup_key(&mut state, &enter()) {
+                SetupOutcome::Fetch { format: fetched_format, .. } => assert_eq!(fetched_format, *format),
+                other => panic!("expected fetch, got {other:?}"),
+            }
+            state.apply_fetched_models(state.generation, Ok(vec![model("provider-model")]));
+            match handle_setup_key(&mut state, &enter()) {
+                SetupOutcome::Save { setup, .. } => assert_eq!(setup.format, *format),
+                other => panic!("expected save, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn format_picker_navigation_and_back_preserve_selection() {
+        let mut state = SetupModalState::new();
+        state.format = SetupWireFormat::Responses;
+        pick_format_or_api_key(&mut state);
+        assert_eq!(state.selected, 2);
+        let mut key = enter();
+        key.code = KeyCode::Up;
+        handle_setup_key(&mut state, &key);
+        assert_eq!(state.selected, 1);
+        handle_setup_key(&mut state, &enter());
+        assert_eq!(state.format, SetupWireFormat::Anthropic);
+        key.code = KeyCode::Esc;
+        handle_setup_key(&mut state, &key);
+        assert!(matches!(state.step, SetupStep::PickFormat));
+        assert_eq!(state.selected, 1);
+    }
+
+    #[test]
+    fn image_setup_does_not_offer_chat_api_formats() {
+        let mut state = SetupModalState::image();
+        state.step = SetupStep::BaseUrl;
+        state.base_url.set_text("https://provider.example/v1");
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::ApiKey));
+    }
+
+    #[test]
+    fn format_list_renders_all_protocols() {
+        let state = SetupModalState::new();
+        let area = Rect::new(0, 0, 72, 10);
+        let mut buffer = Buffer::empty(area);
+        render_format_list(&mut buffer, area, &Theme::current(), &state);
+        let text: String = buffer.content.iter().map(|cell| cell.symbol()).collect();
+        for label in ["Chat Completions", "Messages", "Responses"] {
+            assert!(text.contains(label), "missing {label}");
         }
     }
 
@@ -1432,6 +1678,8 @@ mod tests {
     #[test]
     fn pick_model_saves_selected_id() {
         let mut state = SetupModalState::new();
+        // Do not inherit the developer's saved API format in this fixture.
+        state.format = SetupWireFormat::Openai;
         state.base_url.set_text("https://api.openai.com/v1");
         state.api_key.set_text("sk-test");
         state.apply_fetched_models(

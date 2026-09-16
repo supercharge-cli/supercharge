@@ -633,6 +633,8 @@ pub enum Action {
     OpenSettings,
     /// Open the provider setup wizard (`/setup`, `/login`).
     OpenSetup,
+    /// Change the saved provider's API format without repeating setup.
+    OpenFormatPicker,
     /// Open the image-generation provider wizard (`/isetup`).
     OpenImageSetup,
     /// Live-fetch `/models` with the saved `/setup` URL + key and pick a model.

@@ -65,6 +65,20 @@ Supercharge AI supports three API backends. Set `api_backend` in your `[model.*]
 
 When you omit `api_backend`, Supercharge AI uses `chat_completions`.
 
+### Change the saved format
+
+Run `/format` to choose **Chat Completions**, **Messages**, or **Responses** without repeating `/setup`. The saved format is preselected; use Up/Down and **Enter** to save, or **Esc** to cancel. The URL, API key, model, and selected thinking effort are retained, with no model-discovery request. The updated configuration is reloaded for the current session, including when the model ID stays the same.
+
+If the active model does not belong to the saved provider, `/format` uses that provider's saved default model instead, without transferring the unrelated model's thinking effort. If no valid saved setup/model exists, run `/setup` first. Your endpoint must support the chosen API.
+
+### Choose the format during setup
+
+Run `/setup`, select a provider (or **Custom** and enter its base URL), then choose **Chat Completions**, **Messages**, or **Responses** before entering the API key. Built-in providers preselect their usual format. Nous Portal keeps its existing OAuth flow, and image-provider setup does not use this chat-format chooser.
+
+Use a base URL such as `https://api.example.com/v1`, without `/chat/completions`, `/messages`, or `/responses`. The selected adapter adds the inference endpoint. Model discovery still uses `/models` with the saved credentials; `/models` preserves the selected format when switching models.
+
+The CLI and tool loop share one conversation representation. Existing adapters translate requests and streamed replies at the provider boundary; Chat Completions keeps its existing direct path. Messages uses `x-api-key` and the Anthropic version header by default, while Chat Completions and Responses use bearer authentication. Provider-specific features such as signed reasoning are not guaranteed to transfer between APIs.
+
 To send provider-specific authentication or version headers -- for example, Anthropic's `x-api-key` -- use the `extra_headers` field described below. Supercharge AI sends those headers verbatim with every request to the endpoint.
 
 ---

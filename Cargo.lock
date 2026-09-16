@@ -11317,7 +11317,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-pager"
-version = "1.3.3"
+version = "1.3.5"
 dependencies = [
  "agent-client-protocol",
  "ansi-to-tui",
@@ -11410,7 +11410,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-pager-bin"
-version = "1.3.3"
+version = "1.3.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -11783,7 +11783,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-shell"
-version = "1.3.3"
+version = "1.3.5"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -12003,7 +12003,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-superagent"
-version = "1.3.3"
+version = "1.3.5"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -12351,7 +12351,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-version"
-version = "1.3.3"
+version = "1.3.5"
 dependencies = [
  "semver",
 ]

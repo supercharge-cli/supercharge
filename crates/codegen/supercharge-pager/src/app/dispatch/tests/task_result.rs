@@ -1590,6 +1590,46 @@ fn provider_setup_saved_switches_live_session() {
 }
 
 #[test]
+fn format_saved_switches_same_model_and_preserves_effort() {
+    use crate::views::setup_modal::{SetupModalState, SetupOutcome, handle_setup_key};
+    use supercharge_shell::agent::provider_setup::{ProviderSetup, SetupWireFormat};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let mut app = test_app_with_agent();
+    let aid = AgentId(0);
+    let model_id = acp::ModelId::new(std::sync::Arc::from("saved-model"));
+    let mut state = SetupModalState::format_picker(ProviderSetup {
+        base_url: "https://api.example.com/v1".to_owned(),
+        api_key: "saved-key".to_owned(),
+        model_id: "saved-model".to_owned(),
+        model_name: "Saved Model".to_owned(),
+        provider_id: "custom".to_owned(),
+        format: SetupWireFormat::Openai,
+    }, Some("high".to_owned()));
+    handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let SetupOutcome::Save { setup, generation } =
+        handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!() };
+    assert_eq!(setup.format, SetupWireFormat::Anthropic);
+    let agent = app.agents.get_mut(&aid).unwrap();
+    agent.session.models.current = Some(model_id.clone());
+    agent.session.models.reasoning_effort = Some("high".parse().unwrap());
+    agent.active_modal = Some(crate::views::modal::ActiveModal::ProviderSetup { state: Box::new(state) });
+
+    let persist = dispatch(Action::PersistProviderSetup { setup, generation }, &mut app);
+    assert!(matches!(persist.as_slice(), [Effect::PersistProviderSetup { generation: g, .. }] if *g == generation));
+    let effects = dispatch(Action::TaskComplete(TaskResult::ProviderSetupSaved {
+        generation, model_id: "saved-model".to_owned(), result: Ok(()),
+    }), &mut app);
+    assert!(matches!(effects.as_slice(), [Effect::SwitchModel {
+        model_id: target, prev_model_id: Some(previous), effort: Some(effort), ..
+    }] if target == &model_id && previous == &model_id && effort.to_string() == "high"));
+    let agent = &app.agents[&aid];
+    assert!(agent.active_modal.is_none());
+    assert!(agent.session.model_switch_pending);
+    assert_eq!(agent.session.models.reasoning_effort.as_ref().unwrap().to_string(), "high");
+}
+
+#[test]
 fn provider_setup_saved_defers_switch_without_session() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);

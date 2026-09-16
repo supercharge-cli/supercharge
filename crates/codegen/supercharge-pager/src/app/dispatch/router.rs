@@ -92,6 +92,7 @@ use super::settings::setters::{
 use super::settings::ui::{
     dispatch_confirm_reset_setting, dispatch_open_command_palette, dispatch_open_howto_guides,
     dispatch_open_reset_confirm, dispatch_open_settings, dispatch_open_setup,
+    dispatch_open_format_picker,
     dispatch_open_image_setup, dispatch_open_live_model_picker, dispatch_open_effort_picker,
     dispatch_toggle_compact_mode, dispatch_toggle_mouse_capture, dispatch_toggle_multiline,
     dispatch_toggle_timestamps, dispatch_toggle_vim_mode,
@@ -1104,6 +1105,7 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::OpenSettings => dispatch_open_settings(app, None),
         Action::OpenSettingsFocus { key } => dispatch_open_settings(app, Some(key)),
         Action::OpenSetup => dispatch_open_setup(app),
+        Action::OpenFormatPicker => dispatch_open_format_picker(app),
         Action::OpenImageSetup => dispatch_open_image_setup(app),
         Action::OpenLiveModelPicker => dispatch_open_live_model_picker(app),
         Action::OpenEffortPicker => dispatch_open_effort_picker(app),

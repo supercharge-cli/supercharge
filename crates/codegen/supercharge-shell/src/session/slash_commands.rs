@@ -540,6 +540,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "sessions",
     "settings",
     "setup",
+    "format",
     "share",
     "show-plan",
     "skills",
