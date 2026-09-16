@@ -60,12 +60,12 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     /opt/vectra/wake-http/server.py \
     /opt/vectra/browser-runtime/start.sh \
     && mkdir -p /var/lib/superagent \
-    && echo "1.1.0" > /var/lib/superagent/e2b-version \
+    && echo "1.3.6" > /var/lib/superagent/e2b-version \
     && chown -R 1000:1000 /opt/vectra /var/lib/superagent
 
 USER user
 WORKDIR /home/user
-ENV PATH="/usr/local/bin:${PATH}"
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV SUPERAGENT_BIND=0.0.0.0:8790
 ENV SUPERAGENT_DAEMON_WORKDIR=/home/user/workspace
 ENV SUPERAGENT_SHARE_WORKSPACE_ROOT=/home/user/workspace
@@ -77,7 +77,7 @@ ENV SUPERAGENT_CONTROL_STATE=/home/user/.supercharge/state/controls.json
 ENV SUPERAGENT_GATEWAY_STATE=/home/user/.supercharge/state/gateway-state.json
 ENV SUPERAGENT_E2B_SESSION_STATE=/home/user/.supercharge/state/e2b-sessions.json
 ENV SUPERAGENT_E2B_WORKSPACE_ROOT=/home/user/workspace
-ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.1.0
+ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.3.6
 ENV SUPERCHARGE_RUNTIME_MODE=e2b
 ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/supercharge
 ENV SUPERAGENT_DAEMON_COMMAND=/usr/local/bin/supercharge-superagent-server
