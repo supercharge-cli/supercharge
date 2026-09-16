@@ -6,7 +6,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 template_dir="$repo_root/sandbox/e2b-agent-template"
 bin_dir="$template_dir/bin"
-tag="${SUPERCHARGE_E2B_UPDATE_TAG:-1.1.0}"
+tag="${SUPERCHARGE_E2B_UPDATE_TAG:?Set SUPERCHARGE_E2B_UPDATE_TAG to a new release version}"
+release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-iotserver24/supercharge-releases}"
 
 "$repo_root/sandbox/prepare-e2b-agent-assets.sh"
 
@@ -36,7 +37,7 @@ XibeCode instances are not affected.
 EOF
 )"
 
-gh release create "$tag" \
+gh release create "$tag" --repo "$release_repo" \
   "$stage/supercharge-superagent-server-linux-x86_64" \
   "$stage/supercharge-linux-x86_64" \
   "$stage/e2b-manifest.json" \
@@ -45,5 +46,5 @@ gh release create "$tag" \
 
 echo
 echo "Published GitHub release ${tag}"
-echo "Sandboxes fetch: https://github.com/iotserver24/supercharge/releases/latest/download/"
+echo "Sandboxes fetch: https://github.com/${release_repo}/releases/latest/download/"
 echo "Then in an existing Supercharge VM: /update yes"

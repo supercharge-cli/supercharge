@@ -10,6 +10,7 @@ pub enum ProviderFormat {
     #[default]
     Openai,
     Anthropic,
+    Responses,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -76,6 +77,14 @@ const BUILTINS: &[BuiltinProvider] = &[
         default_model: "gpt-5.4",
         format: ProviderFormat::Openai,
         api_key_env: "OPENAI_API_KEY",
+    },
+    BuiltinProvider {
+        id: "anthropic",
+        name: "Anthropic",
+        base_url: "https://api.anthropic.com/v1",
+        default_model: "claude-sonnet-4-6",
+        format: ProviderFormat::Anthropic,
+        api_key_env: "ANTHROPIC_API_KEY",
     },
     BuiltinProvider {
         id: "openrouter",
@@ -292,9 +301,6 @@ pub fn validate_request(request: ProviderConfigRequest) -> Result<ProviderProfil
         .format
         .or_else(|| builtin.map(|entry| entry.format.clone()))
         .unwrap_or_default();
-    if format == ProviderFormat::Anthropic && builtin.is_none() {
-        return Err(ProviderError::UnsupportedFormat);
-    }
     let api_key_env = request
         .api_key_env
         .or_else(|| builtin.map(|entry| entry.api_key_env.to_owned()))
@@ -349,10 +355,7 @@ pub fn write_runtime_config(
     );
     model.insert(
         "api_backend".to_owned(),
-        toml::Value::String(match profile.format {
-            ProviderFormat::Openai => "chat_completions".to_owned(),
-            ProviderFormat::Anthropic => "messages".to_owned(),
-        }),
+        toml::Value::String(profile.format.api_backend().to_owned()),
     );
     let agent_type = if crate::browser::is_e2b_runtime() {
         "supercharge-e2b"
@@ -396,10 +399,35 @@ fn profile_for_builtin(entry: &BuiltinProvider) -> ProviderProfile {
     }
 }
 
-fn parse_format(value: &str) -> Option<ProviderFormat> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "openai" | "openai-compatible" | "chat-completions" => Some(ProviderFormat::Openai),
-        "anthropic" | "messages" => Some(ProviderFormat::Anthropic),
+impl ProviderFormat {
+    pub fn api_backend(&self) -> &'static str {
+        match self {
+            Self::Openai => "chat_completions",
+            Self::Anthropic => "messages",
+            Self::Responses => "responses",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Openai => "Chat Completions",
+            Self::Anthropic => "Messages",
+            Self::Responses => "Responses",
+        }
+    }
+}
+
+pub fn parse_format(value: &str) -> Option<ProviderFormat> {
+    match value
+        .trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+        .as_str()
+    {
+        "openai" | "openai_compatible" | "chat_completions" | "chat_completion"
+        | "chatcompletions" => Some(ProviderFormat::Openai),
+        "anthropic" | "messages" | "anthropic_messages" => Some(ProviderFormat::Anthropic),
+        "responses" | "response" => Some(ProviderFormat::Responses),
         _ => None,
     }
 }
@@ -421,6 +449,13 @@ mod tests {
         assert!(
             profiles
                 .iter()
+                .any(|profile| profile.id == "anthropic"
+                    && profile.format == ProviderFormat::Anthropic)
+        );
+        assert!(
+            profiles
+                .iter()
+                .filter(|profile| profile.id != "anthropic")
                 .all(|profile| profile.format == ProviderFormat::Openai)
         );
     }
@@ -443,7 +478,30 @@ mod tests {
         assert!(text.contains("http://127.0.0.1:8000/v1"));
         assert!(!text.contains("secret"));
         assert!(text.contains("LOCAL_LLM_API_KEY"));
+        assert!(text.contains("api_backend = \"chat_completions\""));
         assert!(text.contains("context_window = 128000"));
+    }
+
+    #[test]
+    fn writes_responses_and_messages_backends() {
+        for (format, backend) in [
+            (ProviderFormat::Responses, "responses"),
+            (ProviderFormat::Anthropic, "messages"),
+        ] {
+            let profile = validate_request(ProviderConfigRequest {
+                provider: "custom".to_owned(),
+                base_url: Some("https://api.example.com/v1".to_owned()),
+                model: Some("m".to_owned()),
+                format: Some(format),
+                api_key_env: Some("CUSTOM_API_KEY".to_owned()),
+            })
+            .unwrap();
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("provider.toml");
+            write_runtime_config(&path, &profile).unwrap();
+            let text = std::fs::read_to_string(path).unwrap();
+            assert!(text.contains(&format!("api_backend = \"{backend}\"")));
+        }
     }
 
     #[test]

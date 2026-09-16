@@ -146,6 +146,9 @@ Then send /imagine <description>."
                         .to_owned(),
                 );
             }
+            AgentCommand::Format(choice) => {
+                return Ok(apply_format_command(choice.as_deref()));
+            }
             AgentCommand::Model(model) => {
                 if let Some(model) = model {
                     if model.len() > 128 || model.chars().any(char::is_whitespace) {
@@ -266,6 +269,138 @@ async fn run_workspace_command(command: &str) -> String {
     }
 }
 
+fn apply_format_command(choice: Option<&str>) -> String {
+    let current = read_chat_format()
+        .map(|format| format.display_name())
+        .unwrap_or("Chat Completions");
+    let Some(raw) = choice.map(str::trim).filter(|value| !value.is_empty()) else {
+        return format!(
+            "API format: {current}.\n\
+Usage: /format chat_completions | messages | responses\n\
+Aliases: openai, anthropic.\n\
+This updates the saved provider without repeating instance settings. Restart the daemon if a running session still uses the old protocol."
+        );
+    };
+    let Some(format) = crate::provider::parse_format(raw) else {
+        return "Unknown format. Use chat_completions, messages, or responses.".to_owned();
+    };
+    if let Err(error) = persist_chat_format(format.clone()) {
+        return format!(
+            "Could not write api_backend: {error}. Set API format in instance settings."
+        );
+    }
+    format!(
+        "API format set to {} (`{}`). Restart the daemon or start a new session so inference uses it.",
+        format.display_name(),
+        format.api_backend()
+    )
+}
+
+fn provider_config_path() -> PathBuf {
+    std::env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/user/.supercharge/provider-config.toml"))
+}
+
+fn read_chat_format() -> Option<crate::provider::ProviderFormat> {
+    let path = provider_config_path();
+    let raw = std::fs::read_to_string(path).ok()?;
+    let value = toml::from_str::<toml::Value>(&raw).ok()?;
+    let models = value.get("model")?.as_table()?;
+    for entry in models.values() {
+        if let Some(backend) = entry.get("api_backend").and_then(toml::Value::as_str) {
+            return crate::provider::parse_format(backend);
+        }
+    }
+    None
+}
+
+fn persist_chat_format(format: crate::provider::ProviderFormat) -> Result<(), String> {
+    let path = provider_config_path();
+    let mut value = if path.exists() {
+        let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        toml::from_str::<toml::Value>(&raw).map_err(|error| error.to_string())?
+    } else {
+        toml::Value::Table(toml::map::Map::new())
+    };
+    let table = value
+        .as_table_mut()
+        .ok_or_else(|| "provider-config.toml is not a table".to_owned())?;
+    let models = table
+        .entry("model".to_owned())
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+    let models = models
+        .as_table_mut()
+        .ok_or_else(|| "model is not a table".to_owned())?;
+    if models.is_empty() {
+        return Err("no saved provider model to change. Save instance settings first.".to_owned());
+    }
+    for (_, entry) in models.iter_mut() {
+        if let Some(model) = entry.as_table_mut() {
+            model.insert(
+                "api_backend".to_owned(),
+                toml::Value::String(format.api_backend().to_owned()),
+            );
+        }
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(
+        &path,
+        toml::to_string_pretty(&value).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let home = PathBuf::from("/home/user/.superagent");
+    let env_path = home.join("daemon.env");
+    if env_path.exists() {
+        if let Ok(raw) = std::fs::read_to_string(&env_path) {
+            let mut lines = Vec::new();
+            let mut wrote = false;
+            for line in raw.lines() {
+                if line.starts_with("SUPERAGENT_PROVIDER_FORMAT=") {
+                    lines.push(format!(
+                        "SUPERAGENT_PROVIDER_FORMAT={}",
+                        format.api_backend()
+                    ));
+                    wrote = true;
+                } else {
+                    lines.push(line.to_owned());
+                }
+            }
+            if !wrote {
+                lines.push(format!(
+                    "SUPERAGENT_PROVIDER_FORMAT={}",
+                    format.api_backend()
+                ));
+            }
+            lines.push(String::new());
+            let _ = std::fs::write(env_path, lines.join("\n"));
+        }
+    }
+    let profile_path = home.join("profile-default.json");
+    if profile_path.exists() {
+        if let Ok(raw) = std::fs::read_to_string(&profile_path) {
+            if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&raw) {
+                if let Some(obj) = json.as_object_mut() {
+                    obj.insert(
+                        "format".to_owned(),
+                        serde_json::Value::String(format.api_backend().to_owned()),
+                    );
+                    let _ = std::fs::write(
+                        profile_path,
+                        serde_json::to_string_pretty(&json).unwrap_or(raw),
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn persist_image_model(model: &str) -> Result<(), String> {
     let path = PathBuf::from("/home/user/.supercharge/config.toml");
     let mut value = if path.exists() {
@@ -317,5 +452,27 @@ mod tests {
         let mut restored = ControlStore::load(&path).unwrap();
         restored.set_emergency_stopped(true).unwrap();
         assert!(ControlStore::load(&path).unwrap().is_emergency_stopped());
+    }
+
+    #[test]
+    fn format_command_requires_a_saved_model_table() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("provider-config.toml");
+        unsafe {
+            std::env::set_var("SUPERAGENT_PROVIDER_CONFIG_PATH", &path);
+        }
+        let msg = super::apply_format_command(Some("responses"));
+        assert!(msg.contains("no saved provider") || msg.contains("Could not write"));
+        std::fs::write(
+            &path,
+            "[model.custom]\nmodel = \"m\"\nbase_url = \"https://example.com/v1\"\napi_backend = \"chat_completions\"\n",
+        )
+        .unwrap();
+        let ok = super::apply_format_command(Some("responses"));
+        assert!(ok.contains("Responses"), "{ok}");
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("api_backend = \"responses\""));
+        let listed = super::apply_format_command(None);
+        assert!(listed.contains("Responses"), "{listed}");
     }
 }

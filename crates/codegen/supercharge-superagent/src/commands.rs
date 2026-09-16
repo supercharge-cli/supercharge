@@ -8,6 +8,7 @@ pub enum AgentCommand {
     Status,
     Help,
     Model(Option<String>),
+    Format(Option<String>),
     Setup,
     ISetup,
     IModels(Option<String>),
@@ -26,6 +27,7 @@ pub fn parse_command(input: &str) -> Option<AgentCommand> {
         "status" => Some(AgentCommand::Status),
         "help" => Some(AgentCommand::Help),
         "model" => Some(AgentCommand::Model(parts.next().map(str::to_owned))),
+        "format" => Some(AgentCommand::Format(parts.next().map(str::to_owned))),
         "setup" => Some(AgentCommand::Setup),
         "isetup" | "imagine-setup" | "image-setup" => Some(AgentCommand::ISetup),
         "imodels" | "imodel" | "imagine-model" | "image-model" => {
@@ -59,6 +61,7 @@ pub fn help_text() -> &'static str {
 /stop — pause agent turns for this session\n\
 /status — show daemon control state\n\
 /model [id] — inspect or set the chat model\n\
+/format [chat_completions|messages|responses] — show or set the API format\n\
 /setup — chat provider: set it in Vectra instance settings (TUI: /setup)\n\
 /isetup — image provider: set it in Vectra instance settings (TUI: /isetup)\n\
 /imodels [id] — show or set the image model (any custom id)\n\
@@ -91,5 +94,10 @@ mod tests {
             Some(AgentCommand::Cmd("ls -la /tmp".to_owned()))
         );
         assert_eq!(parse_command("/cmd"), Some(AgentCommand::Cmd(String::new())));
+        assert_eq!(
+            parse_command("/format responses"),
+            Some(AgentCommand::Format(Some("responses".to_owned())))
+        );
+        assert_eq!(parse_command("/FORMAT"), Some(AgentCommand::Format(None)));
     }
 }

@@ -145,6 +145,7 @@ struct AppState {
     app_turn_busy: Arc<AtomicBool>,
     app_turn_started_ms: Arc<AtomicU64>,
     app_turn_tools: Arc<AtomicU64>,
+    app_turn: Arc<Mutex<Option<RunningAppTurn>>>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
@@ -590,7 +591,7 @@ async fn main() -> anyhow::Result<()> {
         schedule_store,
         app_events,
         app_event_log,
-        app_event_seq: Arc::new(AtomicU64::new(0)),
+        app_event_seq: Arc::new(AtomicU64::new(unix_millis().saturating_mul(1_000))),
         sessions: Arc::new(Mutex::new(sessions)),
         active_app_session: Arc::new(Mutex::new(active_app_session)),
         session_state_path,
@@ -598,6 +599,7 @@ async fn main() -> anyhow::Result<()> {
         app_turn_busy: Arc::new(AtomicBool::new(false)),
         app_turn_started_ms: Arc::new(AtomicU64::new(0)),
         app_turn_tools: Arc::new(AtomicU64::new(0)),
+        app_turn: Arc::new(Mutex::new(None)),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
             env::var("SUPERAGENT_E2B_SESSION_STATE")
@@ -1331,6 +1333,33 @@ async fn read_cli_stream(
     Ok(stream)
 }
 
+struct CliProcessGroup(Option<u32>);
+
+impl Drop for CliProcessGroup {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(pid) = self.0 {
+            // Each CLI owns a separate process group; stop its shell/tool children too.
+            unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
+        }
+    }
+}
+
+async fn read_cli_stderr(mut stderr: tokio::process::ChildStderr) -> std::io::Result<String> {
+    use tokio::io::AsyncReadExt;
+    let mut retained = Vec::new();
+    let mut buffer = [0; 8192];
+    loop {
+        let count = stderr.read(&mut buffer).await?;
+        if count == 0 {
+            break;
+        }
+        let keep = count.min(64 * 1024 - retained.len());
+        retained.extend_from_slice(&buffer[..keep]);
+    }
+    Ok(String::from_utf8_lossy(&retained).into_owned())
+}
+
 async fn execute_headless_cli_turn(
     binary: &FsPath,
     agent_home: &FsPath,
@@ -1358,30 +1387,29 @@ async fn execute_headless_cli_turn(
             .env("SUPERCHARGE_RUNTIME_MODE", "e2b")
             .env("SUPERCHARGE_AGENT", "supercharge-e2b");
     }
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
     let mut child = command
         .spawn()
         .map_err(|error| redact_secrets(&error.to_string()))?;
+    let mut process_group = CliProcessGroup(child.id());
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| "agent stdout pipe missing".to_owned())?;
-    let stderr = child.stderr.take();
-    let clock_stop = Arc::new(AtomicBool::new(false));
-    if let Some(PromptStreamSink::App { state, chat_id }) = sink {
-        let state = state.clone();
-        let chat_id = chat_id.clone();
-        let stop = clock_stop.clone();
-        let started = Instant::now();
-        tokio::spawn(async move {
+    let stderr = child.stderr.take().ok_or_else(|| "agent stderr pipe missing".to_owned())?;
+    let clock = async {
+        if let Some(PromptStreamSink::App { state, chat_id }) = sink {
+            let started = Instant::now();
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             interval.tick().await;
-            while !stop.load(Ordering::Relaxed) {
+            loop {
                 interval.tick().await;
-                if stop.load(Ordering::Relaxed) {
-                    break;
-                }
                 let elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
                 let eta_ms = estimated_turn_ms().saturating_sub(elapsed_ms);
                 app_emit(
@@ -1400,19 +1428,22 @@ async fn execute_headless_cli_turn(
                     }),
                 );
             }
-        });
-    }
-    let stream = read_cli_stream(stdout, sink).await?;
-    clock_stop.store(true, Ordering::Relaxed);
-    let status = child
-        .wait()
-        .await
-        .map_err(|error| redact_secrets(&error.to_string()))?;
-    if !status.success() {
-        let mut stderr_text = String::new();
-        if let Some(mut pipe) = stderr {
-            let _ = tokio::io::AsyncReadExt::read_to_string(&mut pipe, &mut stderr_text).await;
         }
+        std::future::pending::<()>().await;
+    };
+    let output = async {
+        tokio::try_join!(
+            read_cli_stream(stdout, sink),
+            async { read_cli_stderr(stderr).await.map_err(|error| redact_secrets(&error.to_string())) },
+            async { child.wait().await.map_err(|error| redact_secrets(&error.to_string())) },
+        )
+    };
+    let (stream, stderr_text, status) = tokio::select! {
+        result = output => result?,
+        _ = clock => unreachable!(),
+    };
+    process_group.0 = None;
+    if !status.success() {
         let stderr = redact_secrets(&stderr_text);
         return Err(if stderr.trim().is_empty() {
             format!("{} exited with status {}", profile.id, status)
@@ -2958,6 +2989,10 @@ fn app_chat_id(chat_id: Option<String>) -> String {
 
 const APP_EVENT_LOG_LIMIT: usize = 512;
 
+fn app_replay_cursor(since: u64, latest: u64) -> u64 {
+    if since > latest { 0 } else { since }
+}
+
 fn app_event_id(event: &Value) -> u64 {
     event.get("id").and_then(Value::as_u64).unwrap_or(0)
 }
@@ -3117,10 +3152,19 @@ fn app_mark_turn(state: &AppState, busy: bool) {
     }
 }
 
-fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) {
+struct RunningAppTurn {
+    chat_id: String,
+    cancel: tokio::sync::oneshot::Sender<()>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) -> RunningAppTurn {
+    let (cancel, cancelled) = tokio::sync::oneshot::channel();
+    let turn_chat_id = chat_id.clone();
     app_mark_turn(&state, true);
     app_emit(&state, &chat_id, json!({"type":"status", "busy":true}));
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
+        let work = async {
         let session_key = format!("app:{session_id}");
         let result = run_supercharge_prompt_inner(
             &session_key,
@@ -3129,8 +3173,7 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
                 state: state.clone(),
                 chat_id: chat_id.clone(),
             }),
-        )
-        .await;
+        ).await;
         match result {
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
@@ -3158,7 +3201,19 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
                 }
             }
         }
+        };
+        let stopped = tokio::select! {
+            biased;
+            _ = cancelled => true,
+            _ = work => false,
+        };
+        if stopped {
+            app_mark_turn(&state, false);
+            app_emit(&state, &chat_id, json!({"type":"status", "busy":false, "stopped":true}));
+            app_emit(&state, &chat_id, json!({"type":"done"}));
+        }
     });
+    RunningAppTurn { chat_id: turn_chat_id, cancel, task }
 }
 
 async fn list_sessions(State(state): State<Arc<AppState>>) -> Json<Vec<DaemonSession>> {
@@ -3226,6 +3281,7 @@ async fn app_commands() -> Json<Value> {
         {"command":"/stop", "description":"Pause agent turns"},
         {"command":"/status", "description":"Show daemon control state"},
         {"command":"/model", "description":"Inspect or set the requested model"},
+        {"command":"/format", "description":"Change API format: Chat Completions, Messages, or Responses"},
         {"command":"/cmd", "description":"Run a shell command in the sandbox workspace"},
         {"command":"/update", "description":"Check for a Supercharge binary update (E2B)"},
         {"command":"/help", "description":"Show available commands"}
@@ -3375,6 +3431,13 @@ async fn app_chat(
             }),
         ));
     }
+    let turn_slot = state.app_turn.clone();
+    let mut turn = turn_slot.lock().await;
+    if turn.as_ref().is_some_and(|running| !running.task.is_finished()) {
+        return Err((StatusCode::CONFLICT, Json(ErrorResponse {
+            error: "A chat turn is already running. Stop it before sending another message.".to_owned(),
+        })));
+    }
     let text = request.text.unwrap_or_default().trim().to_owned();
     let files = request.files.unwrap_or_default();
     let paths = save_app_uploads(&files)
@@ -3429,7 +3492,7 @@ async fn app_chat(
             "sessionId": session_id,
         }),
     );
-    spawn_app_turn(state, chat_id.clone(), session_id.clone(), prompt);
+    *turn = Some(spawn_app_turn(state, chat_id.clone(), session_id.clone(), prompt));
     Ok((
         StatusCode::ACCEPTED,
         Json(json!({"ok":true,"chatId":chat_id,"sessionId":session_id})),
@@ -3450,6 +3513,7 @@ async fn app_chat_events(
     // the broadcast receiver. The Vectra app reconnects after Vercel's ~55s
     // SSE cap; without replay those turns look like “no reply”.
     let mut receiver = state.app_events.subscribe();
+    let since = app_replay_cursor(since, state.app_event_seq.load(Ordering::Relaxed));
     let replay = {
         let log = state
             .app_event_log
@@ -3545,12 +3609,13 @@ async fn app_chat_stop(
         .get("chatId")
         .and_then(Value::as_str)
         .unwrap_or("owner");
-    app_mark_turn(&state, false);
-    app_emit(
-        &state,
-        chat_id,
-        json!({"type":"status", "busy":false, "stopped":true}),
-    );
+    let mut turn = state.app_turn.lock().await;
+    if turn.as_ref().is_some_and(|running| running.chat_id == chat_id) {
+        if let Some(running) = turn.take() {
+            let _ = running.cancel.send(());
+            let _ = running.task.await;
+        }
+    }
     Json(json!({"ok":true}))
 }
 
@@ -3779,6 +3844,165 @@ mod tests {
         assert_eq!(replay.len(), 2);
         assert_eq!(replay[0]["type"], "text");
         assert_eq!(replay[1]["type"], "done");
+    }
+
+    #[test]
+    fn app_replay_recovers_after_restart_and_preserves_current_cursor() {
+        let events = vec![serde_json::json!({"id":1,"chatId":"owner","type":"text","text":"reply"})];
+        let cursor = super::app_replay_cursor(500, 1);
+        assert_eq!(app_events_for_replay(&events, "owner", cursor).len(), 1);
+        assert_eq!(super::app_replay_cursor(1, 1), 1);
+        assert_eq!(super::app_replay_cursor(500, 0), 0);
+        let restarted = super::unix_millis().saturating_mul(1_000);
+        assert!(restarted > 500);
+        assert!(restarted < 9_007_199_254_740_991);
+    }
+
+    fn chat_test_state(directory: &std::path::Path) -> std::sync::Arc<super::AppState> {
+        use super::*;
+        Arc::new(AppState {
+            config: SuperagentConfig::default(), started_at: unix_seconds(),
+            approval: ApprovalPolicy::default(),
+            rate_limiter: Arc::new(Mutex::new(RateLimiter { per_minute: 0, buckets: HashMap::new() })),
+            api_token: None, whatsapp: None, webhook: None,
+            job_store: Arc::new(Mutex::new(JobStore::load(directory.join("jobs.json")).unwrap())),
+            memory_store: Arc::new(Mutex::new(MemoryStore::load(directory.join("memory.json")).unwrap())),
+            schedule_store: Arc::new(Mutex::new(ScheduleStore::load(directory.join("schedules.json")).unwrap())),
+            app_events: broadcast::channel(64).0,
+            app_event_log: Arc::new(StdMutex::new(VecDeque::new())),
+            app_event_seq: Arc::new(AtomicU64::new(0)),
+            sessions: Arc::new(Mutex::new(BTreeMap::new())),
+            active_app_session: Arc::new(Mutex::new("owner".into())),
+            session_state_path: directory.join("sessions.json").to_string_lossy().into_owned(),
+            metrics: runtime_metrics(), app_turn_busy: Arc::new(AtomicBool::new(false)),
+            app_turn_started_ms: Arc::new(AtomicU64::new(0)),
+            app_turn_tools: Arc::new(AtomicU64::new(0)),
+            app_turn: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "e2b")]
+            sandbox_plan: SandboxPlan::default(),
+            #[cfg(feature = "e2b")]
+            e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(directory.join("e2b.json").to_string_lossy().into_owned()).unwrap())),
+        })
+    }
+
+    #[tokio::test]
+    async fn chat_stop_cancels_matching_turn_and_rejects_overlapping_messages() {
+        use super::*;
+        let directory = tempfile::tempdir().unwrap();
+        let state = chat_test_state(directory.path());
+        let (cancel, cancelled) = tokio::sync::oneshot::channel();
+        let stopped = Arc::new(AtomicBool::new(false));
+        let observed = stopped.clone();
+        let task = tokio::spawn(async move {
+            cancelled.await.unwrap();
+            observed.store(true, Ordering::SeqCst);
+        });
+        *state.app_turn.lock().await = Some(RunningAppTurn { chat_id: "owner".into(), cancel, task });
+        let response = app_chat(State(state.clone()), Json(AppChatRequest {
+            text: Some("second message".into()), chat_id: None, files: None,
+        })).await;
+        assert!(matches!(response, Err((StatusCode::CONFLICT, _))));
+        let _ = app_chat_stop(State(state.clone()), Json(json!({"chatId":"other"}))).await;
+        assert!(!stopped.load(Ordering::SeqCst));
+        let _ = app_chat_stop(State(state.clone()), Json(json!({}))).await;
+        assert!(stopped.load(Ordering::SeqCst));
+        assert!(state.app_turn.lock().await.is_none());
+        let _ = app_chat_stop(State(state), Json(json!({}))).await;
+    }
+
+    #[tokio::test]
+    async fn sse_reconnect_with_old_cursor_delivers_new_daemon_reply() {
+        use super::*;
+        let directory = tempfile::tempdir().unwrap();
+        let state = chat_test_state(directory.path());
+        let response = app_chat_events(State(state.clone()), Query(AppChatQuery {
+            chat_id: None, since: Some("500".into()),
+        })).await;
+        let mut stream = response.into_body().into_data_stream();
+        let ready = stream.next().await.unwrap().unwrap();
+        assert!(String::from_utf8_lossy(&ready).contains("ready"));
+        app_emit(&state, "owner", json!({"type":"text", "text":"after restart", "final":true}));
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
+            .await.expect("reply must not be filtered by stale cursor").unwrap().unwrap();
+        assert!(String::from_utf8_lossy(&frame).contains("after restart"));
+    }
+
+    #[tokio::test]
+    async fn stopped_app_turn_emits_done_and_no_later_reply() {
+        use super::*;
+        let directory = tempfile::tempdir().unwrap();
+        let state = chat_test_state(directory.path());
+        let running = spawn_app_turn(state.clone(), "owner".into(), "test".into(), "hello".into());
+        running.cancel.send(()).unwrap();
+        running.task.await.unwrap();
+        assert!(!state.app_turn_busy.load(Ordering::Relaxed));
+        let log = state.app_event_log.lock().unwrap();
+        assert_eq!(log.len(), 3);
+        assert_eq!(log[0]["busy"], true);
+        assert_eq!(log[1]["stopped"], true);
+        assert_eq!(log[2]["type"], "done");
+    }
+
+    #[cfg(unix)]
+    fn fake_cli(directory: &std::path::Path, body: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = directory.join("cli");
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        path
+    }
+
+    #[cfg(unix)]
+    fn test_profile() -> super::ProviderProfile {
+        super::ProviderProfile {
+            id: "test".into(), name: "Test".into(),
+            base_url: "https://example.test/v1".into(), model: "test".into(),
+            format: supercharge_superagent::provider::ProviderFormat::Openai,
+            api_key_env: "TEST_KEY".into(), configured: true,
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cli_turn_drains_large_stderr_without_hanging() {
+        let directory = tempfile::tempdir().unwrap();
+        let binary = fake_cli(directory.path(), "dd if=/dev/zero bs=65536 count=32 >&2 2>/dev/null\nprintf '%s\\n' '{\"type\":\"text\",\"data\":\"hello\"}'");
+        let profile = test_profile();
+        let marker = directory.path().join("marker");
+        let output = tokio::time::timeout(std::time::Duration::from_secs(10), super::execute_headless_cli_turn(
+            &binary, directory.path(), &directory.path().join("config.toml"), &profile,
+            "app:test", "test", &marker, "hello", None,
+        )).await.expect("CLI must not deadlock").unwrap();
+        assert_eq!(output.live_text, "hello");
+        assert!(marker.exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancelling_cli_turn_kills_process_and_tool_children() {
+        let directory = tempfile::tempdir().unwrap();
+        let pid_path = directory.path().join("pid");
+        let child_path = directory.path().join("child-pid");
+        let finished_path = directory.path().join("finished");
+        let binary = fake_cli(directory.path(), &format!(
+            "echo $$ > '{}'\n(sleep 2; touch '{}') &\necho $! > '{}'\nwait",
+            pid_path.display(), finished_path.display(), child_path.display(),
+        ));
+        let home = directory.path().to_owned();
+        let task = tokio::spawn(async move {
+            super::execute_headless_cli_turn(&binary, &home, &home.join("config.toml"), &test_profile(),
+                "app:test", "test", &home.join("marker"), "hello", None).await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !child_path.exists() { tokio::time::sleep(std::time::Duration::from_millis(10)).await; }
+        }).await.unwrap();
+        task.abort();
+        assert!(matches!(task.await, Err(error) if error.is_cancelled()));
+        tokio::time::sleep(std::time::Duration::from_millis(2300)).await;
+        assert!(!finished_path.exists(), "tool child survived cancellation");
+        assert!(!directory.path().join("marker").exists());
+        let pid: i32 = std::fs::read_to_string(pid_path).unwrap().trim().parse().unwrap();
+        assert_eq!(unsafe { libc::kill(pid, 0) }, -1, "CLI survived cancellation");
     }
 
     #[test]
