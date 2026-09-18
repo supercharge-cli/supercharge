@@ -340,6 +340,8 @@ pub enum AgentCmd {
     Headless(HeadlessArgs),
     /// Run the agent as a WebSocket server
     Serve(ServeArgs),
+    /// Paseo-style HTTP inbox: clients talk here; this process launches the CLI agent.
+    Daemon(DaemonArgs),
     /// Run as the shared leader process for other clients
     Leader(LeaderArgs),
 }
@@ -380,6 +382,29 @@ impl ServeArgs {
     pub fn get_secret(&self) -> String {
         self.secret
             .clone()
+            .unwrap_or_else(|| generate_random_key(12))
+    }
+}
+/// Arguments for `supercharge daemon` (HTTP inbox for phone / Vectra / Docker).
+#[derive(Debug, clap::Args, Clone)]
+pub struct DaemonArgs {
+    /// Address for the inbox HTTP server (`host:port`).
+    #[arg(
+        long,
+        default_value = "0.0.0.0:8790",
+        env = "SUPERAGENT_BIND"
+    )]
+    pub bind: SocketAddr,
+    /// Shared secret for Bearer / SUPERCHARGE_PASSWORD (auto-generated if omitted).
+    #[arg(long, env = "SUPERCHARGE_PASSWORD")]
+    pub secret: Option<String>,
+}
+impl DaemonArgs {
+    pub fn get_secret(&self) -> String {
+        self.secret
+            .clone()
+            .or_else(|| std::env::var("SUPERAGENT_API_TOKEN").ok())
+            .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| generate_random_key(12))
     }
 }

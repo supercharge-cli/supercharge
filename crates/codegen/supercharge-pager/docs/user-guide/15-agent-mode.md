@@ -77,6 +77,16 @@ supercharge agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 supercharge agent --always-approve serve --bind 127.0.0.1:2419 --secret <token>
 ```
 
+## Daemon (phone, Vectra, Docker)
+
+Paseo-style HTTP inbox. Clients never launch the CLI; this process does.
+
+```bash
+supercharge agent --always-approve daemon --bind 0.0.0.0:8790 --secret <token>
+```
+
+Listens for `/health` and `/v1/chat` (Vectra inbox). Prefer this on E2B (`SUPERAGENT_BIND=0.0.0.0:8790`). Docker/VPS can bind `0.0.0.0:6767`.
+
 Clients connect over WebSocket and authenticate with the secret token. If you omit `--secret`, the agent prints a generated token at startup, or set `SUPERCHARGE_AGENT_SECRET`. The process keeps state across client reconnects. Permissions match other entry points; see [Permissions and safety](22-permissions-and-safety.md).
 
 This is a server you run yourself — Supercharge AI's hosted cloud sandboxes do not run `supercharge agent serve`.

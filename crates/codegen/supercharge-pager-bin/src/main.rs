@@ -177,7 +177,68 @@ fn print_serve_startup_info(bind_addr: SocketAddr, secret: &str) {
     );
     eprintln!();
 }
-/// Entrypoint tag for `grok -p`; keys the quiet stderr default in `init_tracing_simple`.
+
+/// Paseo-style inbox: exec `supercharge-superagent-server` (HTTP `/v1/chat` on bind)
+/// which launches Supercharge CLI children. Falls back to ACP `agent serve` if the
+/// inbox binary is missing.
+async fn run_inbox_daemon(
+    bind: SocketAddr,
+    secret: &str,
+    agent_config: AgentConfig,
+) -> Result<()> {
+    unsafe {
+        std::env::set_var("SUPERAGENT_BIND", bind.to_string());
+        std::env::set_var("SUPERAGENT_APP_INBOX_PORT", bind.port().to_string());
+        std::env::set_var("SUPERCHARGE_PASSWORD", secret);
+        std::env::set_var("SUPERAGENT_API_TOKEN", secret);
+        std::env::set_var("SUPERAGENT_APP_INBOX_SECRET", secret);
+    }
+    eprintln!();
+    eprintln!("   Supercharge daemon (inbox) starting...");
+    eprintln!("   Address:  http://{bind}");
+    eprintln!("   Clients talk to this process; it launches Supercharge CLI.");
+    eprintln!();
+
+    let exe = std::env::current_exe().ok();
+    let sibling = exe
+        .as_ref()
+        .map(|p| p.with_file_name("supercharge-superagent-server"));
+    let bin = sibling.filter(|p| p.is_file()).or_else(|| {
+        std::env::var_os("PATH").and_then(|path| {
+            std::env::split_paths(&path).find_map(|dir| {
+                let cand = dir.join("supercharge-superagent-server");
+                cand.is_file().then_some(cand)
+            })
+        })
+    });
+
+    if let Some(bin) = bin {
+        eprintln!("   Inbox binary: {}", bin.display());
+        let mut cmd = std::process::Command::new(bin);
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = cmd.exec();
+            return Err(err.into());
+        }
+        #[cfg(not(unix))]
+        {
+            let status = cmd.status()?;
+            if status.success() {
+                return Ok(());
+            }
+            anyhow::bail!("supercharge-superagent-server exited {status}");
+        }
+    }
+
+    eprintln!("   supercharge-superagent-server not found; ACP WebSocket fallback");
+    print_serve_startup_info(bind, secret);
+    let server_config = supercharge_shell::agent::ServerConfig {
+        bind_addr: bind,
+        secret: secret.to_string(),
+    };
+    supercharge_shell::agent::run_agent_server(server_config, agent_config).await
+}
 const HEADLESS_ENTRYPOINT: &str = "headless";
 /// Initialize simple tracing for non-TUI agent modes.
 fn init_tracing_simple(app_entrypoint: &'static str) {
@@ -1202,7 +1263,13 @@ async fn run_agent_command(
     let signal_flush = agent_command::spawn_signal_flush();
     if matches!(
         agent_args.mode,
-        Some(AgentCmd::Leader(_) | AgentCmd::Stdio | AgentCmd::Headless(_) | AgentCmd::Serve(_))
+        Some(
+            AgentCmd::Leader(_)
+                | AgentCmd::Stdio
+                | AgentCmd::Headless(_)
+                | AgentCmd::Serve(_)
+                | AgentCmd::Daemon(_),
+        )
     ) {
         supercharge_shell::agent::app::suppress_otel();
     }
@@ -1346,7 +1413,7 @@ async fn run_agent_command(
         entrypoint: match &agent_args.mode {
             Some(AgentCmd::Stdio) => Entrypoint::Embedded,
             Some(AgentCmd::Leader(_)) => Entrypoint::Leader,
-            Some(AgentCmd::Serve(_)) => Entrypoint::Workspace,
+            Some(AgentCmd::Serve(_) | AgentCmd::Daemon(_)) => Entrypoint::Workspace,
             Some(AgentCmd::Headless(_)) | None => Entrypoint::Headless,
         },
         leader: if use_leader || matches!(agent_args.mode, Some(AgentCmd::Leader(_))) {
@@ -1588,6 +1655,10 @@ async fn run_agent_command(
             };
             print_serve_startup_info(a.bind, &secret);
             supercharge_shell::agent::run_agent_server(server_config, agent_config).await
+        }
+        Some(AgentCmd::Daemon(a)) => {
+            let secret = a.get_secret();
+            run_inbox_daemon(a.bind, &secret, agent_config.clone()).await
         }
         Some(AgentCmd::Leader(a)) => {
             let mut agent_config = agent_config.clone();
