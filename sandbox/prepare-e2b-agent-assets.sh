@@ -58,7 +58,7 @@ build_in_docker() {
   if [ "$daemon_only" != "1" ]; then
     extra='
       cargo build --locked --release -p supercharge-pager-bin --bin supercharge-pager
-      install -Dm755 target/release/supercharge-pager /work/sandbox/e2b-agent-template/bin/supercharge
+      install -Dm755 "$CARGO_TARGET_DIR/release/supercharge-pager" /work/sandbox/e2b-agent-template/bin/supercharge
       echo "--- glibc check ---"
       ldd /work/sandbox/e2b-agent-template/bin/supercharge | head -5
       /work/sandbox/e2b-agent-template/bin/supercharge --version
@@ -69,6 +69,7 @@ build_in_docker() {
     -w /work \
     -e CARGO_HOME=/work/.cargo-docker \
     -e RUSTUP_HOME=/work/.rustup-docker \
+    -e CARGO_TARGET_DIR=/work/target-e2b-release \
     -e CARGO_NET_RETRY=8 \
     -e SUPERCHARGE_TOOLS_BUNDLE_RG_PATH="/work/.cache/e2b-vendor/rg-${rg_ver}-${rg_triple}" \
     -e SUPERCHARGE_SHELL_BUNDLE_RG_PATH="/work/.cache/e2b-vendor/rg-${rg_ver}-${rg_triple}" \
@@ -82,7 +83,7 @@ build_in_docker() {
       rustc --version
       cargo build --locked --release \\
         -p supercharge-superagent --features e2b --bin supercharge-superagent-server
-      install -Dm755 target/release/supercharge-superagent-server \\
+      install -Dm755 \"\$CARGO_TARGET_DIR/release/supercharge-superagent-server\" \\
         /work/sandbox/e2b-agent-template/bin/supercharge-superagent-server
       ${extra}
     "
