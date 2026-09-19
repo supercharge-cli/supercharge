@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use supercharge_superagent::{
     ApprovalPolicy, ScheduledJob, SuperagentConfig,
+    acp_runtime::{CliLaunch, PersistentCli, session_has_history},
     browser::{self, StreamStatus},
     controls::{
         handle_text as handle_control_text, init_global as init_controls,
@@ -146,6 +147,8 @@ struct AppState {
     app_turn_started_ms: Arc<AtomicU64>,
     app_turn_tools: Arc<AtomicU64>,
     app_turn: Arc<Mutex<Option<RunningAppTurn>>>,
+    app_runtimes: Arc<Mutex<HashMap<String, Arc<AppRuntime>>>>,
+    app_background: Arc<StdMutex<HashMap<String, Value>>>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
 }
@@ -600,6 +603,8 @@ async fn main() -> anyhow::Result<()> {
         app_turn_started_ms: Arc::new(AtomicU64::new(0)),
         app_turn_tools: Arc::new(AtomicU64::new(0)),
         app_turn: Arc::new(Mutex::new(None)),
+        app_runtimes: Arc::new(Mutex::new(HashMap::new())),
+        app_background: Arc::new(StdMutex::new(HashMap::new())),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
             env::var("SUPERAGENT_E2B_SESSION_STATE")
@@ -842,7 +847,11 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("superagent server listening on {addr}");
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            let runtimes = state.app_runtimes.lock().await.values().cloned().collect::<Vec<_>>();
+            for runtime in runtimes { runtime.cli.close().await; }
+        })
         .await?;
     Ok(())
 }
@@ -3091,7 +3100,7 @@ fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
     };
     let id = state.app_event_seq.fetch_add(1, Ordering::Relaxed) + 1;
     object.insert("id".to_owned(), json!(id));
-    object.insert("ts".to_owned(), json!(unix_seconds()));
+    object.insert("ts".to_owned(), json!(unix_millis()));
     object.insert("chatId".to_owned(), json!(chat_id));
     if let Ok(mut log) = state.app_event_log.lock() {
         retain_app_event(&mut log, payload.clone());
@@ -3152,6 +3161,149 @@ fn app_mark_turn(state: &AppState, busy: bool) {
     }
 }
 
+struct AppRuntime {
+    cli: Arc<PersistentCli>,
+    stream: Arc<StdMutex<CliStreamState>>,
+    fingerprint: String,
+    generation: String,
+    chat_id: Arc<StdMutex<String>>,
+    accepting_events: Arc<AtomicBool>,
+}
+
+fn background_snapshot(state: &AppState) -> Vec<Value> {
+    state.app_background.lock().unwrap_or_else(|e| e.into_inner()).values().cloned().collect()
+}
+
+fn app_runtime_notification(
+    state: &Arc<AppState>,
+    session_id: &str,
+    chat_id: &str,
+    generation: &str,
+    stream: &StdMutex<CliStreamState>,
+    message: Value,
+) {
+    if message.get("type").and_then(Value::as_str) == Some("runtime_exit") {
+        let error = message.get("error").and_then(Value::as_str).unwrap_or("Agent runtime exited");
+        let mut tasks = state.app_background.lock().unwrap_or_else(|e| e.into_inner());
+        tasks.retain(|_, task| task.get("sessionId").and_then(Value::as_str) != Some(session_id));
+        drop(tasks);
+        app_emit(state, chat_id, json!({"type":"background", "sessionId":session_id,
+            "runtimeGeneration":generation,"state":"error","error":error,"tasks":[]}));
+        app_emit(state, chat_id, json!({"type":"runtime", "sessionId":session_id,"state":"error","text":error}));
+        return;
+    }
+    let Some(update) = message.pointer("/params/update") else { return };
+    let cli_session_id = agent_session_id(&format!("app:{session_id}"));
+    if message.pointer("/params/sessionId").and_then(Value::as_str) != Some(cli_session_id.as_str()) { return; }
+    let kind = update.get("sessionUpdate").and_then(Value::as_str).unwrap_or_default();
+    if kind == "background_tasks" {
+        let tasks = update.get("tasks").and_then(Value::as_array).cloned().unwrap_or_default();
+        let mut background = state.app_background.lock().unwrap_or_else(|e| e.into_inner());
+        background.retain(|_, task| task.get("sessionId").and_then(Value::as_str) != Some(session_id));
+        let mut normalized = Vec::new();
+        for task in tasks {
+            if task.get("status").and_then(Value::as_str) != Some("running") { continue; }
+            let id = task.get("task_id").and_then(Value::as_str).unwrap_or_default();
+            if id.is_empty() { continue; }
+            let value = json!({"taskId":id,"sessionId":session_id,"runtimeGeneration":generation,
+                "title":task.get("description").or_else(|| task.get("command")).cloned().unwrap_or(Value::Null),
+                "command":task.get("command"),"status":"running","startedAt":task.get("started_at")});
+            background.insert(format!("{session_id}:{id}"), value.clone());
+            normalized.push(value);
+        }
+        drop(background);
+        app_emit(state, chat_id, json!({"type":"background","sessionId":session_id,"tasks":normalized}));
+        return;
+    }
+    let mut line = update.clone();
+    line["type"] = json!(match kind {
+        "agent_message_chunk" => "text",
+        "agent_thought_chunk" => "thought",
+        "tool_call" => "tool_call",
+        "tool_call_update" => "tool_call_update",
+        _ => return,
+    });
+    if kind.ends_with("_chunk") { line["data"] = update.get("content").cloned().unwrap_or(Value::Null); }
+    let mut stream = stream.lock().unwrap_or_else(|e| e.into_inner());
+    ingest_cli_stream_line(&line, &mut stream, Some(&PromptStreamSink::App {
+        state: state.clone(), chat_id: chat_id.to_owned(),
+    }));
+}
+
+async fn persistent_app_runtime(
+    state: &Arc<AppState>,
+    chat_id: &str,
+    session_id: &str,
+) -> Result<Arc<AppRuntime>, String> {
+    let profile = configured_profile();
+    let binary = configured_agent_binary().ok_or("Agent binary is not configured")?;
+    let base_config = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
+        .or_else(|_| env::var("SUPERCHARGE_CONFIG_PATH"))
+        .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
+    let home = agent_runtime_home(&base_config, &profile);
+    let fingerprint = format!("{:?}:{:?}", binary, profile);
+    let mut runtimes = state.app_runtimes.lock().await;
+    if let Some(runtime) = runtimes.get(session_id) {
+        if runtime.cli.is_alive() && runtime.fingerprint == fingerprint {
+            *runtime.chat_id.lock().unwrap_or_else(|e| e.into_inner()) = chat_id.to_owned();
+            return Ok(runtime.clone());
+        }
+        runtime.accepting_events.store(false, Ordering::SeqCst);
+        runtime.cli.close().await;
+    }
+    runtimes.remove(session_id);
+    write_runtime_config(home.join("config.toml"), &profile).map_err(|e| e.to_string())?;
+    let cli_session_id = agent_session_id(&format!("app:{session_id}"));
+    let cwd = app_workspace_root();
+    let resume = session_has_history(&home, &cli_session_id, &cwd);
+    let stream = Arc::new(StdMutex::new(CliStreamState::default()));
+    let generation = uuid::Uuid::new_v4().to_string();
+    state.app_background.lock().unwrap_or_else(|e| e.into_inner())
+        .retain(|_, task| task.get("sessionId").and_then(Value::as_str) != Some(session_id));
+    let current_chat = Arc::new(StdMutex::new(chat_id.to_owned()));
+    let accepting_events = Arc::new(AtomicBool::new(true));
+    let weak_state = Arc::downgrade(state);
+    let listener_stream = stream.clone();
+    let listener_chat = current_chat.clone();
+    let listener_generation = generation.clone();
+    let listener_session = session_id.to_owned();
+    let listening = accepting_events.clone();
+    let cli = PersistentCli::launch(CliLaunch {
+        binary: PathBuf::from(binary), home, cwd, model: profile.id,
+        session_id: cli_session_id, resume, rules: e2b_agent_rules_for(&format!("app:{session_id}")),
+    }, Arc::new(move |message| {
+        if !listening.load(Ordering::SeqCst) { return; }
+        if let Some(state) = weak_state.upgrade() {
+            let chat = listener_chat.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            app_runtime_notification(&state, &listener_session, &chat, &listener_generation, &listener_stream, message);
+        }
+    })).await?;
+    let runtime = Arc::new(AppRuntime {
+        cli: Arc::new(cli), stream, fingerprint, generation,
+        chat_id: current_chat, accepting_events,
+    });
+    runtimes.insert(session_id.to_owned(), runtime.clone());
+    Ok(runtime)
+}
+
+async fn run_persistent_app_prompt(
+    state: &Arc<AppState>, chat_id: &str, session_id: &str, prompt: &str,
+) -> Result<Option<String>, String> {
+    let key = format!("app:{session_id}");
+    if control_is_emergency_stopped().await { return Err("The daemon is in emergency-stop mode".to_owned()); }
+    if let Some(reply) = handle_control_text(&key, prompt).await.map_err(|e| e.to_string())? {
+        return Ok(Some(reply));
+    }
+    if control_is_stopped(&key).await { return Err("This session is stopped. Use /start to resume it.".to_owned()); }
+    let runtime = persistent_app_runtime(state, chat_id, session_id).await?;
+    *runtime.stream.lock().unwrap_or_else(|e| e.into_inner()) = CliStreamState::default();
+    app_emit(state, chat_id, json!({"type":"runtime","sessionId":session_id,"state":"connected",
+        "pid":runtime.cli.pid,"generation":runtime.generation}));
+    runtime.cli.prompt(prompt, &uuid::Uuid::new_v4().to_string()).await?;
+    let stream = runtime.stream.lock().unwrap_or_else(|e| e.into_inner());
+    Ok(Some(stream.live_text.clone()))
+}
+
 struct RunningAppTurn {
     chat_id: String,
     cancel: tokio::sync::oneshot::Sender<()>,
@@ -3166,14 +3318,18 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
     let task = tokio::spawn(async move {
         let work = async {
         let session_key = format!("app:{session_id}");
-        let result = run_supercharge_prompt_inner(
-            &session_key,
-            &prompt,
-            Some(PromptStreamSink::App {
-                state: state.clone(),
-                chat_id: chat_id.clone(),
-            }),
-        ).await;
+        let result = if browser::is_e2b_runtime() {
+            run_persistent_app_prompt(&state, &chat_id, &session_id, &prompt).await
+        } else {
+            run_supercharge_prompt_inner(
+                &session_key,
+                &prompt,
+                Some(PromptStreamSink::App {
+                    state: state.clone(),
+                    chat_id: chat_id.clone(),
+                }),
+            ).await.map_err(|error| error.to_string())
+        };
         match result {
             Ok(Some(reply)) if !reply.trim().is_empty() => {
                 let prepared = prepare_reply_for_delivery(&reply).await;
@@ -3208,6 +3364,8 @@ fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, pro
             _ = work => false,
         };
         if stopped {
+            let runtime = state.app_runtimes.lock().await.get(&session_id).cloned();
+            if let Some(runtime) = runtime { runtime.cli.cancel().await; }
             app_mark_turn(&state, false);
             app_emit(&state, &chat_id, json!({"type":"status", "busy":false, "stopped":true}));
             app_emit(&state, &chat_id, json!({"type":"done"}));
@@ -3271,6 +3429,8 @@ async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
         },
         "daemon": "running",
         "uptimeSeconds": unix_seconds().saturating_sub(state.started_at),
+        "backgroundTasks": background_snapshot(&state),
+        "runtimeMode": if browser::is_e2b_runtime() { "persistent" } else { "headless" },
     }))
 }
 
@@ -3514,19 +3674,27 @@ async fn app_chat_events(
     // SSE cap; without replay those turns look like “no reply”.
     let mut receiver = state.app_events.subscribe();
     let since = app_replay_cursor(since, state.app_event_seq.load(Ordering::Relaxed));
-    let replay = {
+    let (replay, oldest) = {
         let log = state
             .app_event_log
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        app_events_for_replay(log.iter(), &chat_id, since)
+        (app_events_for_replay(log.iter(), &chat_id, since), log.front().map(app_event_id).unwrap_or(0))
     };
     let replayed_ids: HashSet<u64> = replay.iter().map(app_event_id).collect();
+    let resync = since > 0 && since < oldest.saturating_sub(1);
+    let session_id = app_active_session(&state).await;
+    let snapshot = json!({"type":"snapshot","sessionId":session_id,
+        "busy":state.app_turn_busy.load(Ordering::Relaxed),
+        "startedAt":state.app_turn_started_ms.load(Ordering::Relaxed),
+        "tools":state.app_turn_tools.load(Ordering::Relaxed),
+        "backgroundTasks":background_snapshot(&state)});
     let stream = async_stream::stream! {
-        yield Ok::<Bytes, Infallible>(app_sse_data_frame(&json!({"type":"ready","id":0,"chatId":chat_id})));
+        yield Ok::<Bytes, Infallible>(app_sse_data_frame(&json!({"type":"ready","id":0,"chatId":chat_id,"resync":resync})));
         for event in replay {
             yield Ok::<Bytes, Infallible>(app_sse_data_frame(&event));
         }
+        yield Ok::<Bytes, Infallible>(app_sse_data_frame(&snapshot));
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(15), receiver.recv()).await {
                 Ok(Ok(event)) => {
@@ -3538,7 +3706,8 @@ async fn app_chat_events(
                     }
                 }
                 Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
-                    yield Ok::<Bytes, Infallible>(Bytes::from(": lagged\n\n"));
+                    yield Ok::<Bytes, Infallible>(app_sse_data_frame(&json!({"type":"resync","reason":"event_gap"})));
+                    break;
                 }
                 Ok(Err(broadcast::error::RecvError::Closed)) => break,
                 Err(_) => yield Ok::<Bytes, Infallible>(Bytes::from(": ping\n\n")),
@@ -3878,6 +4047,8 @@ mod tests {
             app_turn_started_ms: Arc::new(AtomicU64::new(0)),
             app_turn_tools: Arc::new(AtomicU64::new(0)),
             app_turn: Arc::new(Mutex::new(None)),
+            app_runtimes: Arc::new(Mutex::new(HashMap::new())),
+            app_background: Arc::new(StdMutex::new(HashMap::new())),
             #[cfg(feature = "e2b")]
             sandbox_plan: SandboxPlan::default(),
             #[cfg(feature = "e2b")]

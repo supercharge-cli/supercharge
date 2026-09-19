@@ -4,6 +4,7 @@
 //! scheduling independent from the interactive shell. The shell can adopt the
 //! pieces incrementally without creating a second agent implementation.
 
+pub mod acp_runtime;
 mod approval;
 pub mod browser;
 mod capabilities;
