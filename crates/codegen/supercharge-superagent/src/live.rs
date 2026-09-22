@@ -301,8 +301,10 @@ pub fn tool_computer_kind(name: &str) -> &'static str {
 /// Injected on every daemon turn so E2B app sessions use the native browser
 /// tools and the same secure browser-tab handoff contract as the runtime.
 pub const E2B_BROWSER_RULES: &str = r#"Browser (E2B / native Playwright):
-- Use `browser_navigate`, then `browser_snapshot` for current accessible element references. Use `browser_click`, `browser_fill`, and `browser_press` only with current snapshot references. Prefer snapshots to screenshots.
-- The agent controls ordinary browsing and non-sensitive forms. Do not ask the user to take control merely because a page is complex.
+- Proactively use the shared visible browser when the task depends on a live website: web research, current public facts, comparing pages or products, inspecting a URL, reproducing a browser issue, or validating anything the user sees in a web UI. The authenticated Vectra app user can watch the same browser live.
+- Do not open the browser for work fully answerable from local code, files, tests, or a non-visual API response. Browser use must advance the task, not perform a token demonstration.
+- Use `browser_navigate`, then `browser_snapshot` for current accessible element references. Use `browser_click`, `browser_fill`, and `browser_press` only with current snapshot references. Prefer snapshots to screenshots, but use `browser_screenshot` when layout, rendering, images, charts, canvas, or other visual evidence matters.
+- The agent controls ordinary browsing and non-sensitive forms. Do not ask the user to take control merely because a page is complex. Keep using the same browser tab when practical so the live view and automation stay aligned.
 - For passwords, passkeys, MFA/OTP, CAPTCHA, OAuth/consent, payments, private messages, or other sensitive user-only input, do not enter or request the value. Call `browser_handoff` with `action: "start"`, explain the step, and wait for the authenticated user to complete it in the Browser tab.
 - Browser handoff is private, ticketed noVNC in the Browser tab only. It does not expose VNC, CDP, sidecar, gateway credentials, or a general remote desktop. Call `browser_handoff` with `action: "stop"` after the step, then resume from a fresh snapshot.
 - Never ask the user to paste passwords, MFA codes, cookies, or other secrets into chat.
@@ -848,6 +850,9 @@ mod tests {
         assert!(block.contains("sudo -n"));
         assert!(block.contains("0.0.0.0"));
         assert!(block.contains("browser_snapshot"));
+        assert!(block.contains("web research, current public facts"));
+        assert!(block.contains("fully answerable from local code"));
+        assert!(block.contains("same browser tab"));
         assert!(block.contains("browser_handoff"));
         assert!(block.contains("private, ticketed noVNC"));
         assert!(!block.contains("agent-browser"));

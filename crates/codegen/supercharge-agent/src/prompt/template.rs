@@ -282,6 +282,8 @@ mod tests {
         let prompt = render_base(&renderer, &e2b);
         assert!(prompt.contains("<e2b_browser_control>"));
         assert!(prompt.contains("browser_snapshot"));
+        assert!(prompt.contains("web research, current public facts"));
+        assert!(prompt.contains("fully answerable from local code"));
         assert!(prompt.contains("browser_handoff"));
         assert!(prompt.contains("passwords, passkeys, MFA"));
         assert!(prompt.contains("private noVNC"));
