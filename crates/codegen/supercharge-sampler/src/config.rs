@@ -2,6 +2,7 @@
 //! It deliberately does **not** alias `supercharge_sampling_types::SamplingConfig`.
 //! Aliasing would pull transitive dependencies on shell-specific types (`supercharge-tools`, etc.) into the sampler crate.
 
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 
 use indexmap::IndexMap;
@@ -71,6 +72,9 @@ pub struct SamplerConfig {
     #[serde(default)]
     pub rate_limit_retry_threshold: Option<u32>,
     pub stream_tool_calls: bool,
+    /// Request-body cap used to evict old images. Filled from the model or its `api_backend` default.
+    #[serde(default)]
+    pub max_request_bytes: Option<NonZeroU64>,
     pub idle_timeout_secs: Option<u64>,
 
     // Reasoning effort
@@ -143,6 +147,7 @@ impl Default for SamplerConfig {
             max_retries: None,
             rate_limit_retry_threshold: None,
             stream_tool_calls: false,
+            max_request_bytes: None,
             idle_timeout_secs: None,
             reasoning_effort: None,
             reasoning_summary: None,

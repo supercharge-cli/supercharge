@@ -33,6 +33,10 @@ pub(crate) fn resolve_prefetch_inputs_from_parts(
         tracing::info!("startup model/settings prefetch skipped: remote_fetch disabled");
         return None;
     }
+    if super::is_builtin_grok_proxy(&endpoints.proxy_url()) {
+        tracing::info!("startup model/settings prefetch skipped: built-in Grok proxy");
+        return None;
+    }
 
     let model_fetch_auth = ModelFetchAuth::resolve(&endpoints, auth.is_some());
 

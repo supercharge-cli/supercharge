@@ -41,7 +41,18 @@ impl ChatStateActor {
             }
             self.rebase_turn_capture_offset();
         }
-        let budgeted = apply_image_budget(self.state.conversation.clone());
+        let request_cap = self.state.sampling_config.max_request_bytes.or_else(|| {
+            Some(
+                self.state
+                    .sampling_config
+                    .api_backend
+                    .clone()
+                    .default_max_request_bytes(),
+            )
+        });
+        let (trigger_bytes, reclaim_target_bytes) =
+            crate::image_budget::image_budget_limits(request_cap);
+        let budgeted = apply_image_budget(self.state.conversation.clone(), request_cap);
         let ImageBudgetOutcome {
             body_bytes,
             body_bytes_after,
@@ -53,8 +64,8 @@ impl ChatStateActor {
         if inline_images > 0 {
             self.send_event(ChatStateEvent::ImageBudget {
                 body_bytes,
-                trigger_bytes: crate::image_budget::IMAGE_COMPACT_TRIGGER_BYTES,
-                reclaim_target_bytes: crate::image_budget::IMAGE_COMPACT_RECLAIM_TARGET_BYTES,
+                trigger_bytes,
+                reclaim_target_bytes,
                 inline_images,
                 needs_image_compaction,
                 evicted,

@@ -1040,6 +1040,8 @@ pub struct ModelsConfig {
     pub subagent_rate_limit_max_attempts: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_tool_calls: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_request_bytes: Option<NonZeroU64>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -1180,7 +1182,7 @@ pub struct MarketplaceSourceEntry {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct StorageConfig {
-    /// Number of days to keep stale sessions before cleanup. Default: 30.
+    /// Number of days to keep stale sessions before cleanup. Unset or `0` disables cleanup.
     pub cleanup_ttl_days: Option<u32>,
 }
 pub use supercharge_agent::prompt::paths::PathsConfig;
@@ -1650,7 +1652,7 @@ impl Default for Config {
             feature_values: BTreeMap::new(),
             config_models: IndexMap::new(),
             config_warnings: Vec::new(),
-            grok_com_config: GrokComConfig::default(),
+            grok_com_config: GrokComConfig::provider_only_default(),
             login_device_flow: None,
             auth_providers: IndexMap::new(),
             model_providers: IndexMap::new(),
@@ -3567,6 +3569,9 @@ fn apply_global_scalar_defaults(
         if let Some(v) = models.stream_tool_calls {
             info.stream_tool_calls.get_or_insert(v);
         }
+        if let Some(v) = models.max_request_bytes {
+            info.max_request_bytes.get_or_insert(v);
+        }
     }
 }
 /// Built-in default models. Prefer `resolve_model_list()`.
@@ -3707,6 +3712,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 compaction_at_tokens: m.compaction_at_tokens,
                 show_model_fingerprint: m.show_model_fingerprint,
                 stream_tool_calls: None,
+                max_request_bytes: None,
                 reasoning_summary: None,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
             };
@@ -3825,6 +3831,9 @@ pub struct ModelEntryConfig {
     /// Per-model opt-in: BYOK endpoints that don't understand the flag should leave this unset to avoid request errors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_tool_calls: Option<bool>,
+    /// Largest request body this model accepts. A provider value is used when this is unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_request_bytes: Option<NonZeroU64>,
     /// Responses API `reasoning.summary` for this model; unset keeps the built-in `concise`.
     /// `none` omits the field for BYOK gateways that reject it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3875,6 +3884,7 @@ impl Default for ModelEntryConfig {
             compaction_at_tokens: None,
             show_model_fingerprint: false,
             stream_tool_calls: None,
+            max_request_bytes: None,
             reasoning_summary: None,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
         }
@@ -3943,6 +3953,9 @@ pub struct ConfigModelOverride {
     pub compaction_at_tokens: Option<CompactionAtTokens>,
     pub show_model_fingerprint: Option<bool>,
     pub stream_tool_calls: Option<bool>,
+    /// Largest request body this model accepts. Overrides the provider value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_request_bytes: Option<NonZeroU64>,
     pub reasoning_summary: Option<ReasoningSummary>,
 }
 impl ConfigModelOverride {
@@ -4050,6 +4063,9 @@ impl ConfigModelOverride {
         if self.stream_tool_calls.is_some() {
             entry.info.stream_tool_calls = self.stream_tool_calls;
         }
+        if self.max_request_bytes.is_some() {
+            entry.info.max_request_bytes = self.max_request_bytes;
+        }
         if self.reasoning_summary.is_some() {
             entry.info.reasoning_summary = self.reasoning_summary;
         }
@@ -4146,6 +4162,9 @@ pub struct ModelInfo {
     pub show_model_fingerprint: bool,
     /// When `Some(true)`, the sampler injects `stream_tool_calls: true`
     pub stream_tool_calls: Option<bool>,
+    /// Largest request body this endpoint accepts. Image eviction uses it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_request_bytes: Option<NonZeroU64>,
     /// Responses API `reasoning.summary` override; `None` keeps the request builder's default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_summary: Option<ReasoningSummary>,
@@ -4202,6 +4221,7 @@ impl ModelInfo {
             compaction_at_tokens: None,
             show_model_fingerprint: false,
             stream_tool_calls: None,
+            max_request_bytes: None,
             reasoning_summary: None,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
         }
@@ -4243,6 +4263,7 @@ impl ModelInfo {
             compaction_at_tokens: entry.compaction_at_tokens,
             show_model_fingerprint: entry.show_model_fingerprint,
             stream_tool_calls: entry.stream_tool_calls,
+            max_request_bytes: entry.max_request_bytes,
             reasoning_summary: entry.reasoning_summary,
             laziness_detector: entry.laziness_detector.clone(),
         }
@@ -4938,6 +4959,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
                 compaction_at_tokens: None,
                 show_model_fingerprint: false,
                 stream_tool_calls: None,
+                max_request_bytes: None,
                 reasoning_summary: None,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
             },
@@ -5054,6 +5076,9 @@ pub(crate) fn sampling_config_for_model(
         &credentials.base_url,
     );
     let api_backend = info.api_backend.clone();
+    let max_request_bytes = info
+        .max_request_bytes
+        .or_else(|| Some(api_backend.clone().default_max_request_bytes()));
     let extra_response_includes = response_include_extensions(
         info.supports_backend_search,
         &api_backend,
@@ -5084,6 +5109,7 @@ pub(crate) fn sampling_config_for_model(
         max_retries: info.max_retries,
         rate_limit_retry_threshold: info.rate_limit_retry_threshold,
         stream_tool_calls: info.stream_tool_calls.unwrap_or(false),
+        max_request_bytes,
         idle_timeout_secs: None,
         client_identifier: None,
         deployment_id,
@@ -5165,6 +5191,7 @@ fn resolve_hidden_default_web_search_sampling_config(
             compaction_at_tokens: None,
             show_model_fingerprint: false,
             stream_tool_calls: None,
+            max_request_bytes: None,
             reasoning_summary: None,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
         },

@@ -575,6 +575,14 @@ pub(crate) async fn spawn_session_actor(
         reasoning_effort: sampling_config.reasoning_effort,
         reasoning_summary: sampling_config.reasoning_summary,
         stream_tool_calls: Some(sampling_config.stream_tool_calls),
+        max_request_bytes: sampling_config.max_request_bytes.or_else(|| {
+            Some(
+                sampling_config
+                    .api_backend
+                    .clone()
+                    .default_max_request_bytes(),
+            )
+        }),
     };
     let actor_pruning_config = supercharge_chat_state::PruningConfig {
         enabled: session_pruning_config.enabled,

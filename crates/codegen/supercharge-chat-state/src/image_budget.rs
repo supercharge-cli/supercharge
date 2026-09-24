@@ -1,5 +1,7 @@
 //! Cache-aware byte budgeting for inline images on owned request histories.
 
+use std::num::NonZeroU64;
+
 use supercharge_sampling_types::{ContentPart, ConversationItem};
 
 /// Replaces an inline image evicted to keep the request body under the proxy's 50 MB limit.
@@ -29,6 +31,26 @@ pub const IMAGE_COMPACT_RECLAIM_TARGET_BYTES: usize = MAX_REQUEST_BYTES / 2;
 // One batch eviction buys many cache-warm turns instead of re-busting the prompt cache every turn.
 // Enforced at compile time so the two constants cannot drift together.
 const _: () = assert!(IMAGE_COMPACT_RECLAIM_TARGET_BYTES < IMAGE_COMPACT_TRIGGER_BYTES);
+
+const TRIGGER_HEADROOM_BYTES: usize = MAX_REQUEST_BYTES - IMAGE_COMPACT_TRIGGER_BYTES;
+
+/// Below this cap the reclaim mark would meet the trigger, so smaller caps are raised to it.
+const MIN_REQUEST_BYTES: usize = 4 * TRIGGER_HEADROOM_BYTES;
+
+/// Trigger and reclaim target for a provider request-body cap.
+/// `None` keeps the 50 MiB chat-completions default.
+pub fn image_budget_limits(max_request_bytes: Option<NonZeroU64>) -> (usize, usize) {
+    let Some(max_request_bytes) = max_request_bytes else {
+        return (
+            IMAGE_COMPACT_TRIGGER_BYTES,
+            IMAGE_COMPACT_RECLAIM_TARGET_BYTES,
+        );
+    };
+    let cap = usize::try_from(max_request_bytes.get())
+        .unwrap_or(usize::MAX)
+        .max(MIN_REQUEST_BYTES);
+    (cap - TRIGGER_HEADROOM_BYTES, cap / 2)
+}
 
 /// An [`std::io::Write`] sink that counts bytes instead of storing them. Lets
 /// us measure a `serde_json` encoding's length without allocating the full
@@ -107,14 +129,14 @@ pub struct BudgetedConversation {
     pub outcome: ImageBudgetOutcome,
 }
 
-/// Applies the production 47 MiB trigger and 25 MiB reclaim target.
+/// Applies the trigger and reclaim target derived from `max_request_bytes`.
 #[must_use]
-pub fn apply_image_budget(items: Vec<ConversationItem>) -> BudgetedConversation {
-    apply_image_budget_with_limits(
-        items,
-        IMAGE_COMPACT_TRIGGER_BYTES,
-        IMAGE_COMPACT_RECLAIM_TARGET_BYTES,
-    )
+pub fn apply_image_budget(
+    items: Vec<ConversationItem>,
+    max_request_bytes: Option<NonZeroU64>,
+) -> BudgetedConversation {
+    let (trigger_bytes, reclaim_target_bytes) = image_budget_limits(max_request_bytes);
+    apply_image_budget_with_limits(items, trigger_bytes, reclaim_target_bytes)
 }
 
 /// Applies an explicit high-water trigger and low-water reclaim target.
@@ -391,7 +413,7 @@ mod tests {
     fn below_trigger_preserves_complete_history() {
         let history = mixed_history();
         let expected = serde_json::to_value(&history).unwrap();
-        let budgeted = apply_image_budget(history);
+        let budgeted = apply_image_budget(history, None);
         assert_eq!(
             budgeted.outcome,
             ImageBudgetOutcome {
@@ -487,7 +509,7 @@ mod tests {
                 )])
             })
             .collect();
-        let budgeted = apply_image_budget(history);
+        let budgeted = apply_image_budget(history, None);
 
         assert!(budgeted.outcome.body_bytes >= IMAGE_COMPACT_TRIGGER_BYTES);
         assert!(budgeted.outcome.body_bytes_after <= IMAGE_COMPACT_RECLAIM_TARGET_BYTES);

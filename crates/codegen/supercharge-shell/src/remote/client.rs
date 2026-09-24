@@ -7,13 +7,14 @@ use supercharge_login::backend::{ActiveAuthBackend, AuthBackend};
 use supercharge_login::{GrokAuth, GrokComConfig};
 const SUPERCHARGE_CODE_BACKEND_URL: &str = "https://code.grok.com";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-const SUPERCHARGE_CODE_WEB_URL: &str = "https://supercharge.ai";
-/// Build a share URL from a permission ID
-pub fn share_url(permission_id: &str) -> String {
+/// Sharing needs an explicitly configured web frontend.
+pub fn share_url(permission_id: &str) -> Result<String, BackendError> {
     let web_url = std::env::var("SUPERCHARGE_CODE_WEB_URL")
-        .unwrap_or_else(|_| SUPERCHARGE_CODE_WEB_URL.to_string());
-    format!("{}/build/share/{}", web_url, permission_id)
+        .ok().filter(|url| !url.trim().is_empty())
+        .ok_or_else(|| BackendError::Auth("Sharing requires SUPERCHARGE_CODE_WEB_URL".into()))?;
+    Ok(format!("{}/build/share/{}", web_url.trim_end_matches('/'), permission_id))
 }
+
 fn add_cli_chat_proxy_headers_blocking(
     builder: reqwest::blocking::RequestBuilder,
     auth: &GrokAuth,
@@ -352,6 +353,7 @@ impl BackendClient {
         session: &ExportedSession,
         agent_id: &str,
     ) -> Result<String, BackendError> {
+        share_url("")?;
         self.upsert_session(&session.session_id, &session.metadata, agent_id)
             .await?;
         match self
@@ -373,7 +375,7 @@ impl BackendClient {
             Err(e) => return Err(e),
         }
         let share_response = self.create_share_link(&session.session_id).await?;
-        Ok(share_url(&share_response.permission_id))
+        share_url(&share_response.permission_id)
     }
     /// Must include X-XAI-Token-Auth so nginx auth subrequest routes to OAuth.
     /// See: crates/codegen/supercharge-shell/src/agent/app.rs:run_headless
@@ -795,6 +797,11 @@ pub(crate) fn parse_remote_model_value(
             .get("streamToolCalls")
             .or_else(|| obj.get("stream_tool_calls"))
             .and_then(|v| v.as_bool()),
+        max_request_bytes: obj
+            .get("maxRequestBytes")
+            .or_else(|| obj.get("max_request_bytes"))
+            .and_then(|v| v.as_u64())
+            .and_then(std::num::NonZeroU64::new),
         reasoning_summary: obj
             .get("reasoningSummary")
             .or_else(|| obj.get("reasoning_summary"))

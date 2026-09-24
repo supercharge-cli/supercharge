@@ -424,7 +424,7 @@ async fn apply_turn_image_budget_and_prune(
     chat_state: &supercharge_chat_state::ChatStateHandle,
     items: Vec<ConversationItem>,
 ) -> Vec<ConversationItem> {
-    let items = supercharge_chat_state::image_budget::apply_image_budget(items).items;
+    let items = supercharge_chat_state::image_budget::apply_image_budget(items, None).items;
     chat_state.apply_turn_request_pruning(items).await
 }
 /// Start fitted when the (already image-budgeted and pruned) estimate cannot leave room for tools + summary.

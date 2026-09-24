@@ -20,6 +20,8 @@ pub struct ModelProviderConfig {
     pub auth_provider: Option<String>,
     pub auth: Option<supercharge_config_types::AuthProviderConfig>,
     pub context_window: Option<u64>,
+    /// Inherited by models that do not set their own `max_request_bytes`.
+    pub max_request_bytes: Option<u64>,
 }
 
 pub(crate) fn model_provider_auth_name(provider_id: &str) -> String {
@@ -184,6 +186,7 @@ impl ConfigModelOverride {
             auth_provider,
             auth,
             context_window,
+            max_request_bytes,
         } = provider;
 
         let mut merged = self.clone();
@@ -192,6 +195,9 @@ impl ConfigModelOverride {
         merged.api_base_url = merged.api_base_url.or_else(|| api_base_url.clone());
         merged.api_backend = merged.api_backend.or_else(|| api_backend.clone());
         merged.context_window = merged.context_window.or(*context_window);
+        merged.max_request_bytes = merged
+            .max_request_bytes
+            .or_else(|| max_request_bytes.and_then(std::num::NonZeroU64::new));
         // Inherited wholesale only when the model sets none of its own.
         if merged.extra_headers.is_empty() {
             merged.extra_headers = extra_headers.clone();

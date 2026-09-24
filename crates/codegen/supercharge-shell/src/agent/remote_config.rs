@@ -1,5 +1,34 @@
 //! Remote settings and model-catalog fetching, caching, and startup wiring.
 
+/// True for the built-in `cli-chat-proxy.grok.com` origin.
+///
+/// That host serves Grok account announcements and campaign default models.
+/// Supercharge does not connect to it. A provider configured with `/setup`
+/// uses that provider's own base URL.
+pub(crate) fn is_builtin_grok_proxy(url: &str) -> bool {
+    fn norm(s: &str) -> String {
+        s.trim().trim_end_matches('/').to_ascii_lowercase()
+    }
+    norm(url) == norm(crate::env::PROD_CLI_CHAT_PROXY_BASE_URL)
+}
+
+#[cfg(test)]
+mod builtin_proxy_tests {
+    use super::is_builtin_grok_proxy;
+
+    #[test]
+    fn builtin_grok_proxy_is_only_the_prod_host() {
+        assert!(is_builtin_grok_proxy(
+            crate::env::PROD_CLI_CHAT_PROXY_BASE_URL
+        ));
+        assert!(is_builtin_grok_proxy(
+            "https://cli-chat-proxy.grok.com/v1/"
+        ));
+        assert!(!is_builtin_grok_proxy("https://api.x.ai/v1"));
+        assert!(!is_builtin_grok_proxy("https://api.zenllm.org/v1"));
+    }
+}
+
 mod cache;
 mod cache_file;
 mod endpoint;

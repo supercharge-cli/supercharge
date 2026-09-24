@@ -282,6 +282,12 @@ pub fn is_eligible(query: &SettingsQuery) -> bool {
     if query.auth.is_none() {
         return false;
     }
+    // The built-in Grok proxy pushes announcements and a default model
+    // (`Grok 4.7 is here`). Supercharge does not use that account. `/setup`
+    // talks to the provider URL the user entered, not this proxy.
+    if crate::agent::remote_config::is_builtin_grok_proxy(&query.origin) {
+        return false;
+    }
     if !crate::util::config::resolve_remote_fetch_enabled() {
         return false;
     }

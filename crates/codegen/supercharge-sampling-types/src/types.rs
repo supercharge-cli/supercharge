@@ -1045,6 +1045,15 @@ impl ApiBackend {
     pub fn forwards_prompt_cache_key(&self) -> bool {
         matches!(self, Self::Responses)
     }
+
+    /// Body cap hosts for this protocol usually enforce. Used when a model sets no `max_request_bytes`.
+    pub fn default_max_request_bytes(self) -> NonZeroU64 {
+        let bytes = match self {
+            Self::Messages => 30 * 1024 * 1024,
+            Self::ChatCompletions | Self::Responses => 50 * 1024 * 1024,
+        };
+        NonZeroU64::new(bytes).expect("request cap is non-zero")
+    }
 }
 
 /// Stable identifier shared by every model request in one root conversation tree.
@@ -1119,6 +1128,9 @@ pub struct SamplingConfig {
     /// When true, inject `stream_tool_calls: true` into the Responses API request body so the upstream emits per-chunk argument deltas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_tool_calls: Option<bool>,
+    /// Largest request body this endpoint accepts. Image eviction uses it so a screenshot-heavy chat is not rejected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_request_bytes: Option<NonZeroU64>,
 }
 
 impl Default for SamplingConfig {
@@ -1143,6 +1155,7 @@ impl Default for SamplingConfig {
             reasoning_effort: None,
             reasoning_summary: None,
             stream_tool_calls: None,
+            max_request_bytes: None,
         }
     }
 }
