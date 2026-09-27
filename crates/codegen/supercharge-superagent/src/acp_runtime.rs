@@ -54,6 +54,7 @@ pub struct PersistentCli {
     shutdown: mpsc::UnboundedSender<()>,
     pub session_id: String,
     pub pid: u32,
+    home: PathBuf,
 }
 
 pub struct CliLaunch {
@@ -64,6 +65,14 @@ pub struct CliLaunch {
     pub session_id: String,
     pub resume: bool,
     pub rules: String,
+    pub bot_environment: Option<BotToolEnvironment>,
+}
+
+pub struct BotToolEnvironment {
+    pub instance_id: String,
+    pub bot_id: String,
+    pub site: String,
+    pub capability: String,
 }
 
 struct ProcessGroup(Option<u32>);
@@ -87,11 +96,28 @@ impl PersistentCli {
             .env("SUPERCHARGE_RUNTIME_MODE", "e2b")
             .env("SUPERCHARGE_AGENT", "supercharge-e2b")
             .env("SUPERCHARGE_DISABLE_AUTOUPDATER", "1")
+            .env("SUPERCHARGE_MAX_CONCURRENT_SUBAGENTS", "2")
+            .env("SUPERCHARGE_SUBAGENTS_MAX_DEPTH", "1")
             .current_dir(&config.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        for key in ["VECTRA_BOT_ID", "VECTRA_BOT_INSTANCE_ID", "VECTRA_BOT_SITE", "VECTRA_BOT_CAPABILITY", "VECTRA_BOT_SESSION_ID"] {
+            command.env_remove(key);
+        }
+        command.env("VECTRA_BROWSER_OWNER", &config.session_id);
+        if let Some(bot) = &config.bot_environment {
+            command.env("VECTRA_BOT_ID", &bot.bot_id).env("VECTRA_BOT_SESSION_ID", &config.session_id);
+            if bot.bot_id == "main" && !bot.capability.is_empty() {
+                command.env("VECTRA_BOT_INSTANCE_ID", &bot.instance_id)
+                    .env("VECTRA_BOT_SITE", &bot.site)
+                    .env("VECTRA_BOT_CAPABILITY", &bot.capability);
+            }
+        }
+        for key in ["E2B_API_KEY", "SUPERAGENT_API_TOKEN", "SUPERAGENT_GATEWAY_TOKEN", "SUPERAGENT_APP_INBOX_SECRET", "XIBECODE_GATEWAY_TOKEN", "XIBECODE_APP_INBOX_SECRET"] {
+            command.env_remove(key);
+        }
         #[cfg(unix)]
         command.process_group(0);
         let mut retries = 0;
@@ -199,7 +225,7 @@ impl PersistentCli {
             let detail = diagnostics.lock().unwrap_or_else(|e| e.into_inner()).clone();
             supervisor_state.fail(redact_secrets(&format!("{reason} {}", detail.trim())));
         });
-        let runtime = Self { state, writer, shutdown, session_id: config.session_id.clone(), pid };
+        let runtime = Self { state, writer, shutdown, session_id: config.session_id.clone(), pid, home: config.home.clone() };
         let initialized = runtime.initialize(&config).await;
         if let Err(error) = initialized {
             runtime.close().await;
@@ -213,20 +239,40 @@ impl PersistentCli {
             "protocolVersion":1,
             "clientInfo":{"name":"supercharge-e2b-inbox","version":env!("CARGO_PKG_VERSION")},
             "clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},
-            "_meta":{"clientType":"headless","rules":config.rules,
+            "_meta":{"clientType":"headless","rules":managed_rules(&config.rules),
                 "startupHints":{"nonInteractive":true,"skipGitStatus":true,"skipProjectLayout":true}}
         }), Some(Duration::from_secs(45))).await?;
         let method = if config.resume { "session/load" } else { "session/new" };
         let mut params = json!({
             "cwd":config.cwd,"mcpServers":[],
-            "_meta":{"sessionId":config.session_id,"sessionKind":"headless","yoloMode":true,"noReplay":true,"modelId":config.model}
+            "_meta":{"sessionId":config.session_id,"sessionKind":"headless","yoloMode":true,"noReplay":true,
+                "modelId":config.model}
         });
-        if config.resume { params["sessionId"] = json!(config.session_id); }
+        if config.resume {
+            params["sessionId"] = json!(config.session_id);
+            if let Some(system) = load_system_prompt(&config.home, &config.session_id, &config.cwd) {
+                params["_meta"]["systemPromptOverride"] = json!(replace_managed_rules(&system, &config.rules));
+            } else {
+                return Err("Saved conversation has no readable system prompt; cannot safely update its instructions".to_owned());
+            }
+        }
         self.request(method, params, Some(Duration::from_secs(45))).await?;
         Ok(())
     }
 
+    pub async fn refresh_rules(&self, cwd: &Path, model: &str, rules: &str) -> Result<(), String> {
+        if self.is_prompting() { return Err("Cannot edit instructions during a turn".into()); }
+        let system = load_system_prompt(&self.home, &self.session_id, cwd)
+            .ok_or("Saved system prompt unavailable; instructions were not changed")?;
+        self.request("session/load", json!({"sessionId":self.session_id,"cwd":cwd,"mcpServers":[],
+            "_meta":{"sessionKind":"headless","yoloMode":true,"noReplay":true,"modelId":model,
+            "systemPromptOverride":replace_managed_rules(&system, rules)}}), Some(Duration::from_secs(45))).await?;
+        Ok(())
+    }
+
     pub fn is_alive(&self) -> bool { self.state.alive.load(Ordering::SeqCst) }
+
+    pub fn is_prompting(&self) -> bool { self.state.prompting.load(Ordering::SeqCst) }
 
     pub async fn prompt(&self, text: &str, prompt_id: &str) -> Response {
         if self.state.prompting.swap(true, Ordering::SeqCst) {
@@ -319,7 +365,7 @@ for line in sys.stdin:
         std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
         PersistentCli::launch(CliLaunch {
             binary, home: directory.to_owned(), cwd: directory.to_owned(), model: "test".to_owned(),
-            session_id: "test".to_owned(), resume: false, rules: String::new(),
+            session_id: "test".to_owned(), resume: false, rules: String::new(), bot_environment: None,
         }, Arc::new(move |event| events.lock().unwrap().push(event))).await.unwrap()
     }
 
@@ -369,7 +415,64 @@ impl Drop for PersistentCli {
     fn drop(&mut self) { let _ = self.shutdown.send(()); }
 }
 
-pub fn session_has_history(home: &Path, session_id: &str, cwd: &Path) -> bool {
+pub fn session_directory(home: &Path, session_id: &str, cwd: &Path) -> Option<PathBuf> {
     let encoded = urlencoding::encode(&cwd.to_string_lossy()).into_owned();
-    home.join("sessions").join(encoded).join(session_id).join("summary.json").is_file()
+    let direct = home.join("sessions").join(encoded).join(session_id);
+    if direct.join("summary.json").is_file() { return Some(direct); }
+    for entry in std::fs::read_dir(home.join("sessions")).ok()?.flatten() {
+        let directory = entry.path();
+        let same_cwd = std::fs::read_to_string(directory.join(".cwd")).ok()
+            .is_some_and(|stored| stored.trim() == cwd.to_string_lossy());
+        if same_cwd && directory.join(session_id).join("summary.json").is_file() {
+            return Some(directory.join(session_id));
+        }
+    }
+    None
+}
+
+pub fn session_has_history(home: &Path, session_id: &str, cwd: &Path) -> bool {
+    session_directory(home, session_id, cwd).is_some()
+}
+
+fn load_system_prompt(home: &Path, session_id: &str, cwd: &Path) -> Option<String> {
+    let directory = session_directory(home, session_id, cwd)?;
+    if let Ok(system) = std::fs::read_to_string(directory.join("system_prompt.txt")) {
+        if !system.trim().is_empty() { return Some(system); }
+    }
+    let history = std::fs::read_to_string(directory.join("chat_history.jsonl")).ok()?;
+    history.lines().filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .find_map(|item| (item.get("type").and_then(Value::as_str) == Some("system"))
+            .then(|| item.get("content").and_then(Value::as_str).map(str::to_owned)).flatten())
+}
+
+const BOT_RULES_START: &str = "<!-- vectra-e2b-rules:start -->";
+const BOT_RULES_END: &str = "<!-- vectra-e2b-rules:end -->";
+
+fn managed_rules(rules: &str) -> String {
+    format!("{BOT_RULES_START}\n{rules}\n{BOT_RULES_END}")
+}
+
+fn replace_managed_rules(system: &str, rules: &str) -> String {
+    if let Some(start) = system.find(BOT_RULES_START) {
+        if let Some(end) = system[start..].find(BOT_RULES_END) {
+            let mut next = system.to_owned();
+            next.replace_range(start..start + end + BOT_RULES_END.len(), &managed_rules(rules));
+            return next;
+        }
+    }
+    format!("{system}\n\n{}", managed_rules(rules))
+}
+
+#[cfg(test)]
+mod bot_prompt_tests {
+    use super::*;
+    #[test]
+    fn bot_rules_replace_only_the_managed_block() {
+        let old = format!("CLI safety and tools\n{}\nProject instructions", managed_rules("old bot rules"));
+        let updated = replace_managed_rules(&old, "new bot rules");
+        assert!(updated.starts_with("CLI safety and tools"));
+        assert!(updated.ends_with("Project instructions"));
+        assert!(!updated.contains("old bot rules"));
+        assert_eq!(updated.matches(BOT_RULES_START).count(), 1);
+    }
 }

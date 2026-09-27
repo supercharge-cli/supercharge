@@ -123,7 +123,8 @@ async fn call_sidecar(
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|error| supercharge_tool_runtime::ToolError::custom("browser_sidecar", error.to_string()))?;
-    let request = client.request(method, url);
+    let owner = std::env::var("VECTRA_BROWSER_OWNER").unwrap_or_else(|_| "legacy".to_owned());
+    let request = client.request(method, url).header("x-vectra-browser-owner", owner);
     let response = match payload {
         Some(value) => request.json(&value).send().await,
         None => request.send().await,

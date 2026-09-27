@@ -1,3 +1,11 @@
+#[path = "server/app_bots.rs"]
+mod app_bots;
+#[path = "server/app_bot_queue.rs"]
+mod app_bot_queue;
+
+use app_bots::{BotCatalog, BotDefinition, BotSyncRequest, MAIN_BOT_ID, validate_folder};
+use app_bot_queue::{BotQueue, BotWork};
+
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     convert::Infallible,
@@ -35,7 +43,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use supercharge_superagent::{
     ApprovalPolicy, ScheduledJob, SuperagentConfig,
-    acp_runtime::{CliLaunch, PersistentCli, session_has_history},
+    acp_runtime::{BotToolEnvironment, CliLaunch, PersistentCli, session_has_history},
     browser::{self, StreamStatus},
     controls::{
         handle_text as handle_control_text, init_global as init_controls,
@@ -142,12 +150,23 @@ struct AppState {
     sessions: Arc<Mutex<BTreeMap<String, DaemonSession>>>,
     active_app_session: Arc<Mutex<String>>,
     session_state_path: String,
+    bot_catalog: Arc<Mutex<BotCatalog>>,
+    bot_catalog_path: PathBuf,
+    bot_queue: Arc<Mutex<BotQueue>>,
+    bot_queue_path: PathBuf,
+    maintenance_path: PathBuf,
     metrics: Arc<RuntimeMetrics>,
     app_turn_busy: Arc<AtomicBool>,
     app_turn_started_ms: Arc<AtomicU64>,
     app_turn_tools: Arc<AtomicU64>,
     app_turn: Arc<Mutex<Option<RunningAppTurn>>>,
+    bot_turns: Arc<Mutex<HashMap<String, RunningAppTurn>>>,
+    bot_turn_budget: Arc<tokio::sync::Semaphore>,
+    bot_dispatch: Arc<Mutex<()>>,
+    app_maintenance: Arc<AtomicBool>,
     app_runtimes: Arc<Mutex<HashMap<String, Arc<AppRuntime>>>>,
+    bot_runtime_last_used: Arc<Mutex<HashMap<String, u64>>>,
+    app_event_routes: Arc<StdMutex<HashMap<String, (String, String, String)>>>,
     app_background: Arc<StdMutex<HashMap<String, Value>>>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
@@ -164,16 +183,30 @@ struct DaemonSession {
     status: String,
     #[serde(default)]
     messages: Vec<ConversationMessage>,
+    #[serde(default = "default_bot_id")]
+    bot_id: String,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    instructions_revision: u64,
+    #[serde(default)]
+    runtime_home: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ConversationMessage {
     role: String,
     content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    id: Option<String>,
 }
 
 fn default_session_status() -> String {
     "active".to_owned()
+}
+
+fn default_bot_id() -> String {
+    MAIN_BOT_ID.to_owned()
 }
 
 fn load_daemon_sessions(path: &str) -> anyhow::Result<BTreeMap<String, DaemonSession>> {
@@ -189,18 +222,9 @@ fn persist_daemon_sessions(
     path: &str,
     sessions: &BTreeMap<String, DaemonSession>,
 ) -> anyhow::Result<()> {
-    let path = std::path::Path::new(path);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, serde_json::to_vec_pretty(sessions)?)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))?;
-    }
-    std::fs::rename(temporary, path)?;
+    supercharge_superagent::atomic_state::write_private(
+        FsPath::new(path), &serde_json::to_vec_pretty(sessions)?,
+    )?;
     Ok(())
 }
 
@@ -569,14 +593,45 @@ async fn main() -> anyhow::Result<()> {
     let app_event_log = Arc::new(StdMutex::new(VecDeque::with_capacity(APP_EVENT_LOG_LIMIT)));
     let session_state_path = env::var("SUPERAGENT_SESSION_STATE")
         .unwrap_or_else(|_| "./runtime/sessions.json".to_owned());
-    let sessions = load_daemon_sessions(&session_state_path)?;
+    if browser::is_e2b_runtime() && session_state_path != "./runtime/sessions.json" &&
+        !FsPath::new(&session_state_path).exists() {
+        let mut merged = BTreeMap::new();
+        for legacy in ["/home/user/runtime/sessions.json", "/home/user/workspace/runtime/sessions.json", "./runtime/sessions.json"] {
+            if FsPath::new(legacy) == FsPath::new(&session_state_path) { continue; }
+            for (id, session) in load_daemon_sessions(legacy)? {
+                let use_newer = merged.get(&id).is_none_or(|prior: &DaemonSession| session.updated_at > prior.updated_at);
+                if use_newer { merged.insert(id, session); }
+            }
+        }
+        if !merged.is_empty() { persist_daemon_sessions(&session_state_path, &merged)?; }
+    }
+    let mut sessions = load_daemon_sessions(&session_state_path)?;
+    if browser::is_e2b_runtime() {
+        for session in sessions.values_mut() {
+            if session.cwd.is_none() { session.cwd = Some(app_workspace_root().to_string_lossy().into_owned()); }
+        }
+        if !sessions.is_empty() { persist_daemon_sessions(&session_state_path, &sessions)?; }
+    }
+    let bot_catalog_path = env::var("SUPERAGENT_BOT_STATE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("./runtime/bots.json"));
+    let bot_catalog = BotCatalog::load(&bot_catalog_path).map_err(anyhow::Error::msg)?;
+    let bot_queue_path = env::var("SUPERAGENT_BOT_QUEUE_STATE")
+        .map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("./runtime/bot-queue.json"));
+    let maintenance_path = env::var("SUPERAGENT_BOT_MAINTENANCE_STATE")
+        .map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("./runtime/bot-maintenance"));
+    let mut bot_queue = BotQueue::load(&bot_queue_path).map_err(anyhow::Error::msg)?;
+    let interrupted = bot_queue.recover_interrupted(&bot_queue_path, unix_millis()).map_err(anyhow::Error::msg)?;
+    if !interrupted.is_empty() {
+        eprintln!("bot queue: {} interrupted turns require manual retry", interrupted.len());
+    }
     let active_app_session = if sessions.contains_key("owner") {
         "owner".to_owned()
     } else {
-        sessions
-            .keys()
-            .next_back()
-            .cloned()
+        sessions.iter().rev()
+            .find(|(_, session)| session.bot_id == MAIN_BOT_ID && session.status == "active")
+            .or_else(|| sessions.iter().rev().find(|(_, session)| session.bot_id == MAIN_BOT_ID))
+            .map(|(id, _)| id.clone())
             .unwrap_or_else(|| "owner".to_owned())
     };
     let state = AppState {
@@ -598,12 +653,23 @@ async fn main() -> anyhow::Result<()> {
         sessions: Arc::new(Mutex::new(sessions)),
         active_app_session: Arc::new(Mutex::new(active_app_session)),
         session_state_path,
+        bot_catalog: Arc::new(Mutex::new(bot_catalog)),
+        bot_catalog_path,
+        bot_queue: Arc::new(Mutex::new(bot_queue)),
+        bot_queue_path,
+        maintenance_path: maintenance_path.clone(),
         metrics: runtime_metrics(),
         app_turn_busy: Arc::new(AtomicBool::new(false)),
         app_turn_started_ms: Arc::new(AtomicU64::new(0)),
         app_turn_tools: Arc::new(AtomicU64::new(0)),
         app_turn: Arc::new(Mutex::new(None)),
+        bot_turns: Arc::new(Mutex::new(HashMap::new())),
+        bot_turn_budget: Arc::new(tokio::sync::Semaphore::new(4)),
+        bot_dispatch: Arc::new(Mutex::new(())),
+        app_maintenance: Arc::new(AtomicBool::new(maintenance_path.exists())),
         app_runtimes: Arc::new(Mutex::new(HashMap::new())),
+        bot_runtime_last_used: Arc::new(Mutex::new(HashMap::new())),
+        app_event_routes: Arc::new(StdMutex::new(HashMap::new())),
         app_background: Arc::new(StdMutex::new(HashMap::new())),
         #[cfg(feature = "e2b")]
         e2b_sessions: Arc::new(Mutex::new(E2bSessionStore::load(
@@ -611,6 +677,47 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| "./runtime/e2b-sessions.json".to_owned()),
         )?)),
     };
+
+    if browser::is_e2b_runtime() {
+        schedule_bot_queue(Arc::new(state.clone()));
+        let idle_state = Arc::new(state.clone());
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(StdDuration::from_secs(60)).await;
+                let _dispatch = idle_state.bot_dispatch.lock().await;
+                let cutoff = unix_millis().saturating_sub(10 * 60_000);
+                let active = idle_state.bot_turns.lock().await.keys().cloned().collect::<HashSet<_>>();
+                let last_used = idle_state.bot_runtime_last_used.lock().await.clone();
+                let keep = idle_state.app_background.lock().unwrap_or_else(|e| e.into_inner())
+                    .values().filter_map(|task| task.get("sessionId").and_then(Value::as_str))
+                    .map(str::to_owned).collect::<HashSet<_>>();
+                let mut removed = Vec::new();
+                {
+                    let mut runtimes = idle_state.app_runtimes.lock().await;
+                    runtimes.retain(|id, runtime| {
+                        let protected = active.contains(id) || keep.contains(id) ||
+                            runtime.cli.is_prompting() ||
+                            last_used.get(id).is_some_and(|time| *time >= cutoff);
+                        if !protected {
+                            runtime.accepting_events.store(false, Ordering::SeqCst);
+                            removed.push((id.clone(), runtime.clone()));
+                        }
+                        protected
+                    });
+                }
+                if !removed.is_empty() {
+                    {
+                        let mut usage = idle_state.bot_runtime_last_used.lock().await;
+                        for (id, _) in &removed {
+                            usage.remove(id);
+                            idle_state.app_event_routes.lock().unwrap_or_else(|e| e.into_inner()).retain(|_, (_, session, _)| session != id);
+                        }
+                    }
+                    for (_, runtime) in removed { runtime.cli.close().await; }
+                }
+            }
+        });
+    }
 
     let scheduler_state = Arc::new(state.clone());
     tokio::spawn(async move {
@@ -714,6 +821,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/computer/control", post(browser_control))
         .route("/v1/computer/handoff", post(browser_handoff))
         .route("/v1/status", get(app_status))
+        .route("/v1/app/bots/sync", post(sync_app_bots))
+        .route("/v1/app/maintenance", post(app_maintenance))
+        .route("/v1/app/bot-jobs", post(enqueue_bot_job))
+        .route("/v1/app/bot-jobs/{id}", get(get_bot_job))
         .route("/v1/commands", get(app_commands))
         .route(
             "/v1/conversations",
@@ -2963,12 +3074,15 @@ async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket) {
 struct AppChatQuery {
     #[serde(alias = "chatId")]
     chat_id: Option<String>,
+    #[serde(alias = "botId")]
+    bot_id: Option<String>,
     since: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct AppChatFile {
     name: Option<String>,
+    #[serde(alias = "contentBase64")]
     content_base64: Option<String>,
     url: Option<String>,
 }
@@ -2978,6 +3092,8 @@ struct AppChatRequest {
     text: Option<String>,
     #[serde(alias = "chatId")]
     chat_id: Option<String>,
+    #[serde(alias = "botId")]
+    bot_id: Option<String>,
     files: Option<Vec<AppChatFile>>,
 }
 
@@ -2985,6 +3101,157 @@ struct AppChatRequest {
 struct SwitchConversationRequest {
     #[serde(rename = "sessionId")]
     session_id: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CreateAppConversationRequest {
+    bot_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct AppConversationQuery {
+    bot_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct AppStatusQuery {
+    session_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BotJobRequest {
+    job_id: String,
+    bot_id: String,
+    chat_id: String,
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppMaintenanceRequest {
+    action: String,
+}
+
+async fn app_maintenance(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AppMaintenanceRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if !browser::is_e2b_runtime() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".to_owned() })));
+    }
+    match request.action.as_str() {
+        "drain" => {
+            if let Some(parent) = state.maintenance_path.parent() {
+                std::fs::create_dir_all(parent).map_err(internal_error)?;
+            }
+            std::fs::write(&state.maintenance_path, b"draining\n").map_err(internal_error)?;
+            state.app_maintenance.store(true, Ordering::SeqCst);
+            let _dispatch = state.bot_dispatch.lock().await;
+            app_emit(&state, "owner", json!({"type":"maintenance","state":"draining"}));
+            let main = state.app_turn_busy.load(Ordering::SeqCst);
+            let active = state.bot_turns.lock().await.len();
+            Ok(Json(json!({"ok":true,"draining":true,"busy":main || active > 0,
+                "activeTurns":active + usize::from(main)})))
+        }
+        "interrupt" => {
+            if !state.app_maintenance.load(Ordering::SeqCst) {
+                return Err((StatusCode::CONFLICT, Json(ErrorResponse { error: "Enter drain before interrupting".into() })));
+            }
+            let turns = {
+                let _dispatch = state.bot_dispatch.lock().await;
+                std::mem::take(&mut *state.bot_turns.lock().await)
+            };
+            let mut joins = Vec::new();
+            for (_, turn) in turns { let _ = turn.cancel.send(()); joins.push(turn.task); }
+            for task in joins { task.await.map_err(internal_error)?; }
+            Ok(Json(json!({"ok":true,"busy":false})))
+        }
+        "resume" => {
+            let _ = browser::reset_after_resume().await;
+            match std::fs::remove_file(&state.maintenance_path) {
+                Ok(()) => {},
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+                Err(error) => return Err(internal_error(error)),
+            }
+            state.app_maintenance.store(false, Ordering::SeqCst);
+            app_emit(&state, "owner", json!({"type":"maintenance","state":"running"}));
+            schedule_bot_queue(state);
+            Ok(Json(json!({"ok":true,"draining":false})))
+        }
+        _ => Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Invalid maintenance action".to_owned() }))),
+    }
+}
+
+async fn get_bot_job(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if !browser::is_e2b_runtime() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".to_owned() })));
+    }
+    let queue = state.bot_queue.lock().await;
+    if let Some(result) = queue.completed.get(&id).or_else(|| queue.interrupted.get(&id)) {
+        return Ok(Json(json!({"status":result.status,"reply":result.reply,"error":result.error,
+            "botId":result.work.bot_id,"sessionId":result.work.session_id})));
+    }
+    if let Some(work) = queue.in_flight.get(&id) {
+        return Ok(Json(json!({"status":"running","botId":work.bot_id,"sessionId":work.session_id})));
+    }
+    if let Some(work) = queue.queued.iter().find(|work| work.id == id) {
+        return Ok(Json(json!({"status":"queued","botId":work.bot_id,"sessionId":work.session_id})));
+    }
+    Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "bot job not found".to_owned() })))
+}
+
+async fn enqueue_bot_job(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<BotJobRequest>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<ErrorResponse>)> {
+    if state.app_maintenance.load(Ordering::SeqCst) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "Sandbox is pausing; retry after resume".to_owned() })));
+    }
+    if !browser::is_e2b_runtime() || request.bot_id == MAIN_BOT_ID ||
+        !request.job_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') ||
+        request.job_id.len() > 120 || request.chat_id.len() > 128 ||
+        request.job_id.is_empty() || request.text.trim().is_empty() || request.text.len() > 13_000 {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid bot job".to_owned() })));
+    }
+    let _dispatch = state.bot_dispatch.lock().await;
+    let bot = bot_definition(&state, &request.bot_id).await?;
+    if !request.chat_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') ||
+        request.chat_id != format!("bot-{}", bot.id) {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid job conversation".to_owned() })));
+    }
+    let cwd = validate_folder(&bot.default_folder)
+        .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
+    {
+        let mut sessions = state.sessions.lock().await;
+        let now = unix_seconds();
+        let session = sessions.entry(request.chat_id.clone()).or_insert_with(|| DaemonSession {
+            id: request.chat_id.clone(), created_at: now, updated_at: now,
+            title: app_session_title(&request.text), status: default_session_status(),
+            messages: Vec::new(), bot_id: bot.id.clone(),
+            cwd: Some(cwd.to_string_lossy().into_owned()), instructions_revision: bot.revision, runtime_home: None,
+        });
+        if session.bot_id != request.bot_id {
+            return Err((StatusCode::CONFLICT, Json(ErrorResponse { error: "conversation belongs to another bot".to_owned() })));
+        }
+        persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
+    }
+    let work = BotWork {
+        id: request.job_id.clone(), chat_id: request.chat_id.clone(), session_id: request.chat_id.clone(), bot_id: bot.id,
+        prompt: request.text, job_id: Some(request.job_id.clone()), queued_at: unix_millis(), started_at: None,
+    };
+    let added = state.bot_queue.lock().await.enqueue(work, &state.bot_queue_path)
+        .map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error })))?;
+    if !added { return Ok((StatusCode::ACCEPTED, Json(json!({"ok":true,"jobId":request.job_id})))); }
+    app_emit(&state, "owner", json!({"type":"bot_job","jobId":request.job_id,
+        "botId":request.bot_id,"sessionId":request.chat_id,"state":"queued"}));
+    schedule_bot_queue(state.clone());
+    Ok((StatusCode::ACCEPTED, Json(json!({"ok":true,"jobId":request.job_id}))))
 }
 
 /// The cloud-infra mobile app listens on the owner conversation unless it
@@ -3006,6 +3273,12 @@ fn app_event_id(event: &Value) -> u64 {
     event.get("id").and_then(Value::as_u64).unwrap_or(0)
 }
 
+fn app_event_matches(event: &Value, chat_id: &str) -> bool {
+    matches!(event.get("type").and_then(Value::as_str), Some("bots" | "bot_job" | "conversation_created" | "maintenance"))
+        || event.get("chatId").and_then(Value::as_str) == Some(chat_id)
+        || event.get("sessionId").and_then(Value::as_str) == Some(chat_id)
+}
+
 fn app_events_for_replay<'a>(
     events: impl IntoIterator<Item = &'a Value>,
     chat_id: &str,
@@ -3014,8 +3287,7 @@ fn app_events_for_replay<'a>(
     events
         .into_iter()
         .filter(|event| {
-            event.get("chatId").and_then(Value::as_str) == Some(chat_id)
-                && app_event_id(event) > since
+            app_event_matches(event, chat_id) && app_event_id(event) > since
         })
         .cloned()
         .collect()
@@ -3057,6 +3329,9 @@ async fn app_record_message(state: &AppState, session_id: &str, role: &str, cont
             title: app_session_title(content),
             status: default_session_status(),
             messages: Vec::new(),
+            bot_id: default_bot_id(),
+            cwd: None,
+            instructions_revision: 0, runtime_home: None,
         });
     session.updated_at = now;
     if session.title.is_empty() || session.title == "New conversation" {
@@ -3065,13 +3340,57 @@ async fn app_record_message(state: &AppState, session_id: &str, role: &str, cont
     session.messages.push(ConversationMessage {
         role: role.to_owned(),
         content: content.to_owned(),
+        id: None,
     });
     let _ = persist_daemon_sessions(&state.session_state_path, &sessions);
+}
+
+async fn record_bot_message(state: &AppState, work: &BotWork, role: &str, text: &str) -> Result<(), String> {
+    let mut sessions = state.sessions.lock().await;
+    let session = sessions.get_mut(work.session()).ok_or("conversation not found")?;
+    let id = format!("{}:{role}", work.id);
+    if session.messages.iter().any(|message| message.id.as_deref() == Some(&id)) { return Ok(()); }
+    let previous = session.clone();
+    session.messages.push(ConversationMessage { role: role.to_owned(), content: text.to_owned(), id: Some(id) });
+    session.updated_at = unix_seconds();
+    if role == "user" && (session.title.is_empty() || session.title == "New conversation") { session.title = app_session_title(text); }
+    if let Err(error) = persist_daemon_sessions(&state.session_state_path, &sessions) {
+        sessions.insert(previous.id.clone(), previous);
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
+async fn sync_app_bots(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<BotSyncRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if !browser::is_e2b_runtime() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".to_owned() })));
+    }
+    if state.app_maintenance.load(Ordering::SeqCst) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "Sandbox is pausing; retry after resume".to_owned() })));
+    }
+    let instance_id = env::var("SUPERAGENT_INSTANCE_ID").unwrap_or_default();
+    let mut catalog = state.bot_catalog.lock().await;
+    catalog.sync(request, &state.bot_catalog_path, &instance_id)
+        .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
+    let bot_ids = catalog.bots.keys().cloned().collect::<Vec<_>>();
+    drop(catalog);
+    app_emit(&state, "owner", json!({"type":"bots","botIds":bot_ids}));
+    Ok(Json(json!({"ok":true,"botIds":bot_ids})))
+}
+
+async fn bot_definition(state: &AppState, bot_id: &str) -> Result<BotDefinition, (StatusCode, Json<ErrorResponse>)> {
+    state.bot_catalog.lock().await.get(bot_id).ok_or_else(|| (
+        StatusCode::NOT_FOUND, Json(ErrorResponse { error: "bot not found".to_owned() })
+    ))
 }
 
 fn app_conversation_summary(session: &DaemonSession) -> Value {
     json!({
         "sessionId": session.id,
+        "botId": session.bot_id,
         "title": if session.title.is_empty() { "Conversation" } else { &session.title },
         "createdAt": session.created_at.saturating_mul(1000),
         "updatedAt": session.updated_at.saturating_mul(1000),
@@ -3098,6 +3417,18 @@ fn app_emit(state: &AppState, chat_id: &str, mut payload: Value) {
     let Some(object) = payload.as_object_mut() else {
         return;
     };
+    if let Some((bot, session, turn)) = state.app_event_routes.lock().unwrap_or_else(|e| e.into_inner()).get(chat_id) {
+        object.entry("botId").or_insert_with(|| json!(bot));
+        object.entry("sessionId").or_insert_with(|| json!(session));
+        object.entry("turnId").or_insert_with(|| json!(turn));
+        let role = match object.get("type").and_then(Value::as_str) {
+            Some("user") => Some("user"),
+            Some("text") if object.get("final").and_then(Value::as_bool) == Some(true) => Some("assistant"),
+            Some("error") => Some("error"),
+            _ => None,
+        };
+        if let Some(role) = role { object.entry("messageId").or_insert_with(|| json!(format!("{turn}:{role}"))); }
+    }
     let id = state.app_event_seq.fetch_add(1, Ordering::Relaxed) + 1;
     object.insert("id".to_owned(), json!(id));
     object.insert("ts".to_owned(), json!(unix_millis()));
@@ -3115,8 +3446,7 @@ fn app_workspace_root() -> std::path::PathBuf {
         .unwrap_or_else(|_| std::path::PathBuf::from("/home/user/workspace"))
 }
 
-fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
-    let root = app_workspace_root();
+fn save_app_uploads(files: &[AppChatFile], root: &FsPath) -> Result<Vec<String>, String> {
     let inbox = root.join(".superagent-inbox");
     std::fs::create_dir_all(&inbox).map_err(|error| error.to_string())?;
     let mut paths = Vec::new();
@@ -3143,11 +3473,36 @@ fn save_app_uploads(files: &[AppChatFile]) -> Result<Vec<String>, String> {
         if raw.len() > 25 * 1024 * 1024 {
             return Err(format!("upload {name} exceeds 25 MiB"));
         }
-        let path = inbox.join(format!("{}-{name}", unix_seconds() + index as u64));
+        let path = inbox.join(format!("{}-{index}-{name}", uuid::Uuid::new_v4()));
         std::fs::write(&path, raw).map_err(|error| error.to_string())?;
         paths.push(path.to_string_lossy().into_owned());
     }
     Ok(paths)
+}
+
+fn schedule_bot_queue(state: Arc<AppState>) {
+    if state.app_maintenance.load(Ordering::SeqCst) { return; }
+    tokio::spawn(async move {
+        let _dispatch = state.bot_dispatch.lock().await;
+        if state.app_maintenance.load(Ordering::SeqCst) { return; }
+        loop {
+            let permit = match state.bot_turn_budget.clone().try_acquire_owned() {
+                Ok(permit) => permit,
+                Err(_) => break,
+            };
+            let active = state.bot_turns.lock().await.keys().cloned().collect::<HashSet<_>>();
+            let work = match state.bot_queue.lock().await.start_next(&active, &state.bot_queue_path) {
+                Ok(Some(work)) => work,
+                Ok(None) => break,
+                Err(error) => { eprintln!("bot queue claim failed: {error}"); break; }
+            };
+            let chat = work.session().to_owned();
+            let (ready, started) = tokio::sync::oneshot::channel();
+            let turn = spawn_bot_turn(state.clone(), work, permit, started);
+            state.bot_turns.lock().await.insert(chat, turn);
+            let _ = ready.send(());
+        }
+    });
 }
 
 fn app_mark_turn(state: &AppState, busy: bool) {
@@ -3230,6 +3585,37 @@ fn app_runtime_notification(
     }));
 }
 
+fn bot_rules(bot: &BotDefinition, session_id: &str, cwd: &FsPath) -> String {
+    let mut rules = e2b_agent_rules_for(&format!("app:{session_id}"));
+    rules = rules.replace("Workspace: `/home/user/workspace` (cwd for every command)",
+        &format!("Shared workspace: `/home/user/workspace`. This bot's working directory: `{}`", cwd.display()));
+    rules.push_str(&format!("\n\n## Persistent bot\nName: {}\nBot ID: {}\nDefault working folder: {}\nOther bots share the sandbox. Keep separate files by default; these folders are not security isolation.\n", bot.name, bot.id, cwd.display()));
+    if bot.id == MAIN_BOT_ID {
+        rules.push_str("Use vectra_bot to create/list persistent bots and send/get their tasks. They appear in the app. Do not confuse these with task subagents. Send is asynchronous; get returns progress or the attributed result. Limit delegation to the user's requested work.\n");
+    } else {
+        rules.push_str("You are a persistent specialist bot. Answer the user and tasks from Main, but do not create or contact other bots.\n");
+    }
+    rules.push_str("For MEDIA: use paths relative to this conversation's working folder. Browser actions share one browser; wait when another bot or the user owns it.\n");
+    if !bot.instructions.is_empty() { rules.push_str("\n## Custom instructions\n"); rules.push_str(&bot.instructions); }
+    rules
+}
+
+async fn prepare_bot_reply(state: &AppState, session_id: &str, reply: &str) -> String {
+    let root = app_workspace_root();
+    let cwd = state.sessions.lock().await.get(session_id).and_then(|session| session.cwd.clone())
+        .map(PathBuf::from).unwrap_or_else(|| root.clone());
+    let translated = reply.lines().map(|line| {
+        if let Some(path) = line.trim().strip_prefix("MEDIA:") {
+            let relative = FsPath::new(path.trim());
+            if !relative.is_absolute() && !relative.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                if let Ok(prefix) = cwd.strip_prefix(&root) { return format!("MEDIA:{}", prefix.join(relative).display()); }
+            }
+        }
+        line.to_owned()
+    }).collect::<Vec<_>>().join("\n");
+    prepare_reply_for_delivery(&translated).await
+}
+
 async fn persistent_app_runtime(
     state: &Arc<AppState>,
     chat_id: &str,
@@ -3237,15 +3623,58 @@ async fn persistent_app_runtime(
 ) -> Result<Arc<AppRuntime>, String> {
     let profile = configured_profile();
     let binary = configured_agent_binary().ok_or("Agent binary is not configured")?;
+    let session = state.sessions.lock().await.get(session_id).cloned()
+        .ok_or_else(|| "Conversation not found".to_owned())?;
+    let bot = state.bot_catalog.lock().await.get(&session.bot_id)
+        .ok_or_else(|| "Bot not found or archived".to_owned())?;
     let base_config = env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
         .or_else(|_| env::var("SUPERCHARGE_CONFIG_PATH"))
         .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
-    let home = agent_runtime_home(&base_config, &profile);
-    let fingerprint = format!("{:?}:{:?}", binary, profile);
+    let profile_home = agent_runtime_home(&base_config, &profile);
+    let folder = session.cwd.as_deref().unwrap_or(&bot.default_folder);
+    let cwd = if session.bot_id == MAIN_BOT_ID && session.cwd.is_none() && bot.default_folder == "/home/user/workspace" {
+        app_workspace_root()
+    } else {
+        validate_folder(folder)?
+    };
+    std::fs::create_dir_all(&cwd).map_err(|error| error.to_string())?;
+    validate_folder(&cwd.to_string_lossy())?;
+    let cli_session_id = agent_session_id(&format!("app:{session_id}"));
+    let stable_home = PathBuf::from(&base_config)
+        .parent().unwrap_or_else(|| FsPath::new("."))
+        .join("agent-runtime").join("bots").join(&bot.id);
+    let home = if let Some(pinned) = session.runtime_home.as_ref() {
+        PathBuf::from(pinned)
+    } else {
+        let legacy_root = PathBuf::from(&base_config).parent().unwrap_or_else(|| FsPath::new(".")).join("agent-runtime");
+        let mut candidates = vec![stable_home.clone(), profile_home];
+        if let Ok(entries) = std::fs::read_dir(legacy_root) {
+            candidates.extend(entries.filter_map(Result::ok).map(|entry| entry.path()));
+        }
+        let found = candidates.into_iter().find(|home| session_has_history(home, &cli_session_id, &cwd)).unwrap_or(stable_home);
+        let mut sessions = state.sessions.lock().await;
+        if let Some(session) = sessions.get_mut(session_id) {
+            session.runtime_home = Some(found.to_string_lossy().into_owned());
+            session.cwd = Some(cwd.to_string_lossy().into_owned());
+        }
+        persist_daemon_sessions(&state.session_state_path, &sessions).map_err(|error| error.to_string())?;
+        found
+    };
+    let credential_revision = {
+        use sha2::{Digest, Sha256};
+        let catalog = state.bot_catalog.lock().await;
+        format!("{:x}", Sha256::digest(catalog.capability.as_bytes()))
+    };
+    let fingerprint = format!("{:?}:{:?}:{}:{}:{}:{}", binary, profile, bot.revision, cwd.display(), home.display(), credential_revision);
     let mut runtimes = state.app_runtimes.lock().await;
     if let Some(runtime) = runtimes.get(session_id) {
         if runtime.cli.is_alive() && runtime.fingerprint == fingerprint {
             *runtime.chat_id.lock().unwrap_or_else(|e| e.into_inner()) = chat_id.to_owned();
+            return Ok(runtime.clone());
+        }
+        if state.app_background.lock().unwrap_or_else(|e| e.into_inner()).values()
+            .any(|task| task.get("sessionId").and_then(Value::as_str) == Some(session_id)) {
+            runtime.cli.refresh_rules(&cwd, &profile.id, &bot_rules(&bot, session_id, &cwd)).await?;
             return Ok(runtime.clone());
         }
         runtime.accepting_events.store(false, Ordering::SeqCst);
@@ -3253,8 +3682,6 @@ async fn persistent_app_runtime(
     }
     runtimes.remove(session_id);
     write_runtime_config(home.join("config.toml"), &profile).map_err(|e| e.to_string())?;
-    let cli_session_id = agent_session_id(&format!("app:{session_id}"));
-    let cwd = app_workspace_root();
     let resume = session_has_history(&home, &cli_session_id, &cwd);
     let stream = Arc::new(StdMutex::new(CliStreamState::default()));
     let generation = uuid::Uuid::new_v4().to_string();
@@ -3268,9 +3695,21 @@ async fn persistent_app_runtime(
     let listener_generation = generation.clone();
     let listener_session = session_id.to_owned();
     let listening = accepting_events.clone();
+    let rules = bot_rules(&bot, session_id, &cwd);
+    let bot_environment = {
+        let catalog = state.bot_catalog.lock().await;
+        if catalog.capability.is_empty() { None } else {
+            Some(BotToolEnvironment {
+                bot_id: bot.id.clone(), instance_id: catalog.instance_id.clone(),
+                site: catalog.site.clone(), capability: if bot.id == MAIN_BOT_ID {
+                    catalog.capability.clone()
+                } else { String::new() },
+            })
+        }
+    };
     let cli = PersistentCli::launch(CliLaunch {
         binary: PathBuf::from(binary), home, cwd, model: profile.id,
-        session_id: cli_session_id, resume, rules: e2b_agent_rules_for(&format!("app:{session_id}")),
+        session_id: cli_session_id, resume, rules, bot_environment,
     }, Arc::new(move |message| {
         if !listening.load(Ordering::SeqCst) { return; }
         if let Some(state) = weak_state.upgrade() {
@@ -3291,15 +3730,20 @@ async fn run_persistent_app_prompt(
 ) -> Result<Option<String>, String> {
     let key = format!("app:{session_id}");
     if control_is_emergency_stopped().await { return Err("The daemon is in emergency-stop mode".to_owned()); }
-    if let Some(reply) = handle_control_text(&key, prompt).await.map_err(|e| e.to_string())? {
+    let session_cwd = state.sessions.lock().await.get(session_id).and_then(|session| session.cwd.clone())
+        .unwrap_or_else(|| app_workspace_root().to_string_lossy().into_owned());
+    if let Some(reply) = supercharge_superagent::controls::handle_text_in(&key, prompt, Some(FsPath::new(&session_cwd))).await.map_err(|e| e.to_string())? {
         return Ok(Some(reply));
     }
     if control_is_stopped(&key).await { return Err("This session is stopped. Use /start to resume it.".to_owned()); }
     let runtime = persistent_app_runtime(state, chat_id, session_id).await?;
+    state.bot_runtime_last_used.lock().await.insert(session_id.to_owned(), unix_millis());
     *runtime.stream.lock().unwrap_or_else(|e| e.into_inner()) = CliStreamState::default();
     app_emit(state, chat_id, json!({"type":"runtime","sessionId":session_id,"state":"connected",
         "pid":runtime.cli.pid,"generation":runtime.generation}));
-    runtime.cli.prompt(prompt, &uuid::Uuid::new_v4().to_string()).await?;
+    let prompted = runtime.cli.prompt(prompt, &uuid::Uuid::new_v4().to_string()).await;
+    state.bot_runtime_last_used.lock().await.insert(session_id.to_owned(), unix_millis());
+    prompted?;
     let stream = runtime.stream.lock().unwrap_or_else(|e| e.into_inner());
     Ok(Some(stream.live_text.clone()))
 }
@@ -3308,6 +3752,93 @@ struct RunningAppTurn {
     chat_id: String,
     cancel: tokio::sync::oneshot::Sender<()>,
     task: tokio::task::JoinHandle<()>,
+}
+
+fn spawn_bot_turn(
+    state: Arc<AppState>, work: BotWork, permit: tokio::sync::OwnedSemaphorePermit,
+    started: tokio::sync::oneshot::Receiver<()>,
+) -> RunningAppTurn {
+    let (cancel, cancelled) = tokio::sync::oneshot::channel();
+    let chat_id = work.chat_id.clone();
+    let chat = chat_id.clone();
+    let state_for_task = state.clone();
+    let task = tokio::spawn(async move {
+        if started.await.is_err() { return; }
+        let state = state_for_task;
+        let work_id = work.id.clone();
+        let session_id = if work.session_id.is_empty() { work.chat_id.clone() } else { work.session_id.clone() };
+        let bot_id = work.bot_id.clone();
+        let prompt = work.prompt.clone();
+        let job_id = work.job_id.clone();
+        state.app_event_routes.lock().unwrap_or_else(|e| e.into_inner()).insert(chat.clone(),
+            (bot_id.clone(), session_id.clone(), work_id.clone()));
+        let started = unix_millis();
+        app_emit(&state, &chat, json!({"type":"status","busy":true,
+            "sessionId":session_id,"botId":bot_id,"startedAt":started,"turnId":work_id}));
+        let recorded = record_bot_message(&state, &work, "user", &prompt).await;
+        app_emit(&state, &chat, json!({"type":"user","role":"user","text":prompt,
+            "format":"markdown","sessionId":session_id,"botId":bot_id,"turnId":work_id}));
+        let result = tokio::select! {
+            biased;
+            _ = cancelled => {
+                let runtime = state.app_runtimes.lock().await.get(&session_id).cloned();
+                if let Some(runtime) = runtime { runtime.cli.cancel().await; }
+                Err("Stopped".to_owned())
+            }
+            result = async {
+                recorded?;
+                tokio::time::timeout(StdDuration::from_secs(30 * 60), run_persistent_app_prompt(&state, &chat, &session_id, &prompt))
+                    .await.map_err(|_| "Turn timed out; review before retrying".to_owned())?
+            } => result,
+        };
+        if result.is_err() {
+            let runtime = state.app_runtimes.lock().await.get(&session_id).cloned();
+            if let Some(runtime) = runtime { if runtime.cli.is_prompting() { runtime.cli.cancel().await; } }
+        }
+        let (status, reply, error) = match result {
+            Ok(Some(reply)) => {
+                let prepared = prepare_bot_reply(&state, &session_id, &reply).await;
+                let persisted = record_bot_message(&state, &work, "assistant", &prepared).await;
+                app_emit(&state, &chat, json!({"type":"text","text":prepared,"final":true}));
+                match persisted {
+                    Ok(()) => ("succeeded", prepared, String::new()),
+                    Err(error) => {
+                        let error = format!("Reply persistence failed: {error}");
+                        app_emit(&state, &chat, json!({"type":"error","text":error}));
+                        ("failed", prepared, error)
+                    }
+                }
+            }
+            Ok(None) => {
+                app_emit(&state, &chat, json!({"type":"text","text":"","final":true}));
+                ("succeeded", String::new(), String::new())
+            }
+            Err(error) => {
+                app_emit(&state, &chat, json!({"type":"error","text":error,"botId":bot_id,"turnId":work_id}));
+                let _ = record_bot_message(&state, &work, "error", &error).await;
+                (if error == "Stopped" && state.app_maintenance.load(Ordering::SeqCst) { "interrupted" } else if error == "Stopped" { "stopped" } else { "failed" }, String::new(), error)
+            }
+        };
+        let _ = browser::release_owner(&agent_session_id(&format!("app:{session_id}"))).await;
+        let _dispatch = state.bot_dispatch.lock().await;
+        let saved = state.bot_queue.lock().await.finish(&work_id, status, &reply, &error, unix_millis(), &state.bot_queue_path);
+        if let Err(failure) = &saved {
+            eprintln!("bot work result persistence failed for {work_id}: {failure}");
+        }
+        if saved.is_ok() {
+            if let Some(job) = job_id {
+            app_emit(&state, "owner", json!({"type":"bot_job","jobId":job,"botId":bot_id,
+                "sessionId":session_id,"state":status}));
+            }
+        }
+        for event in app_turn_completion_events() { app_emit(&state, &chat, event); }
+        state.bot_runtime_last_used.lock().await.insert(session_id.clone(), unix_millis());
+        state.bot_turns.lock().await.remove(&session_id);
+        drop(permit);
+        drop(_dispatch);
+        schedule_bot_queue(state);
+    });
+    RunningAppTurn { chat_id, cancel, task }
 }
 
 fn spawn_app_turn(state: Arc<AppState>, chat_id: String, session_id: String, prompt: String) -> RunningAppTurn {
@@ -3403,6 +3934,9 @@ async fn create_session(
         title: "Conversation".to_owned(),
         status: default_session_status(),
         messages: Vec::new(),
+        bot_id: default_bot_id(),
+        cwd: None,
+        instructions_revision: 0, runtime_home: None,
     };
     {
         let mut sessions = state.sessions.lock().await;
@@ -3415,23 +3949,31 @@ async fn create_session(
     ))
 }
 
-async fn app_status(State(state): State<Arc<AppState>>) -> Json<Value> {
-    let busy = state.app_turn_busy.load(Ordering::Relaxed);
-    let started = state.app_turn_started_ms.load(Ordering::Relaxed);
-    let tools = state.app_turn_tools.load(Ordering::Relaxed);
-    Json(json!({
-        "ok": true,
-        "usage": {},
-        "turn": {
-            "busy": busy,
-            "startedAt": if busy && started > 0 { Value::from(started) } else { Value::Null },
-            "tools": tools,
-        },
-        "daemon": "running",
-        "uptimeSeconds": unix_seconds().saturating_sub(state.started_at),
-        "backgroundTasks": background_snapshot(&state),
-        "runtimeMode": if browser::is_e2b_runtime() { "persistent" } else { "headless" },
-    }))
+async fn app_status(State(state): State<Arc<AppState>>, Query(query): Query<AppStatusQuery>) -> Json<Value> {
+    let legacy_busy = state.app_turn_busy.load(Ordering::Relaxed);
+    let sessions = state.sessions.lock().await;
+    let queue = state.bot_queue.lock().await;
+    let selected = query.session_id.clone().unwrap_or_default();
+    let running = queue.in_flight.values().find(|work| work.session() == selected);
+    let queued = queue.queued.iter().any(|work| work.session() == selected);
+    let routes = state.app_event_routes.lock().unwrap_or_else(|e| e.into_inner());
+    let legacy_selected = routes.get("owner").is_some_and(|(_, id, _)| *id == selected) || selected == "owner";
+    let busy = if query.session_id.is_some() { running.is_some() || (legacy_selected && legacy_busy) }
+        else { legacy_busy || !queue.in_flight.is_empty() };
+    let started = running.map(|work| work.started_at.unwrap_or(work.queued_at))
+        .unwrap_or_else(|| if busy { state.app_turn_started_ms.load(Ordering::Relaxed) } else { 0 });
+    let summary = sessions.values().map(|session| {
+        let active = queue.in_flight.values().any(|work| work.session() == session.id);
+        let waiting = queue.queued.iter().any(|work| work.session() == session.id);
+        json!({"sessionId":session.id,"botId":session.bot_id,"updatedAt":session.updated_at.saturating_mul(1000),
+            "lastMessageId":session.messages.last().and_then(|message| message.id.as_ref()),"busy":active,"queued":waiting})
+    }).collect::<Vec<_>>();
+    Json(json!({"ok":true,"usage":{},"turn":{"busy":busy,"queued":queued,"startedAt":started,"tools":0},
+        "activeBotChats":queue.in_flight.values().map(|work| work.session()).collect::<Vec<_>>(),
+        "queuedBotChats":queue.queued.iter().map(|work| work.session()).collect::<Vec<_>>(),
+        "conversations":summary,"draining":state.app_maintenance.load(Ordering::SeqCst),
+        "daemon":"running","uptimeSeconds":unix_seconds().saturating_sub(state.started_at),
+        "backgroundTasks":background_snapshot(&state),"runtimeMode":if browser::is_e2b_runtime() { "persistent" } else { "headless" }}))
 }
 
 async fn app_commands() -> Json<Value> {
@@ -3448,11 +3990,19 @@ async fn app_commands() -> Json<Value> {
     ]}))
 }
 
-async fn list_app_conversations(State(state): State<Arc<AppState>>) -> Json<Value> {
+async fn list_app_conversations(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<AppConversationQuery>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let bot_id = query.bot_id.as_deref().unwrap_or(MAIN_BOT_ID);
+    if bot_id != MAIN_BOT_ID {
+        bot_definition(&state, bot_id).await?;
+    }
     let active = app_active_session(&state).await;
     let sessions = state.sessions.lock().await;
     let mut conversations = sessions
         .values()
+        .filter(|session| session.bot_id == bot_id)
         .map(app_conversation_summary)
         .collect::<Vec<_>>();
     conversations.sort_by(|left, right| {
@@ -3461,15 +4011,24 @@ async fn list_app_conversations(State(state): State<Arc<AppState>>) -> Json<Valu
             .and_then(Value::as_u64)
             .cmp(&left.get("updatedAt").and_then(Value::as_u64))
     });
-    Json(json!({"active":active,"conversations":conversations}))
+    let active = if bot_id == MAIN_BOT_ID {
+        active
+    } else {
+        conversations.first().and_then(|c| c.get("sessionId")).and_then(Value::as_str)
+            .unwrap_or_default().to_owned()
+    };
+    Ok(Json(json!({"active":active,"conversations":conversations})))
 }
 
 async fn get_app_conversation(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
+    Query(query): Query<AppConversationQuery>,
 ) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
     let sessions = state.sessions.lock().await;
-    let session = sessions.get(&session_id).ok_or_else(|| {
+    let session = sessions.get(&session_id)
+        .filter(|session| query.bot_id.as_ref().is_none_or(|id| id == &session.bot_id))
+        .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -3477,48 +4036,67 @@ async fn get_app_conversation(
             }),
         )
     })?;
-    let messages = session
+    let mut messages = session
         .messages
         .iter()
-        .map(|message| json!({"role":message.role,"content":message.content}))
+        .enumerate()
+        .map(|(index, message)| json!({"role":message.role,"content":message.content,
+            "id":message.id.clone().unwrap_or_else(|| format!("{}:{index}", session.id))}))
         .collect::<Vec<_>>();
-    Ok(Json(json!({"sessionId":session.id,"messages":messages})))
+    let queue = state.bot_queue.lock().await;
+    for work in queue.queued.iter().filter(|work| work.session() == session.id) {
+        messages.push(json!({"role":"user","content":work.prompt,"id":format!("{}:user",work.id),"queued":true}));
+    }
+    for result in queue.interrupted.values().filter(|result| result.work.session() == session.id) {
+        messages.push(json!({"role":"error","content":result.error,"id":format!("{}:error",result.work.id)}));
+    }
+    Ok(Json(json!({"sessionId":session.id,"botId":session.bot_id,"messages":messages})))
 }
 
-async fn create_app_conversation(State(state): State<Arc<AppState>>) -> Json<Value> {
+async fn create_app_conversation(
+    State(state): State<Arc<AppState>>,
+    request: Option<Json<CreateAppConversationRequest>>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    let requested_bot = request.and_then(|body| body.0.bot_id);
+    let legacy = requested_bot.is_none();
+    let bot_id = requested_bot.unwrap_or_else(default_bot_id);
+    if state.app_maintenance.load(Ordering::SeqCst) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "Sandbox is pausing; retry after resume".to_owned() })));
+    }
+    let bot = bot_definition(&state, &bot_id).await?;
+    if bot_id != MAIN_BOT_ID && !browser::is_e2b_runtime() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".to_owned() })));
+    }
     let now = unix_seconds();
     let previous = app_active_session(&state).await;
     let session_id = format!("chat-{}", uuid::Uuid::new_v4());
     let conversations = {
         let mut sessions = state.sessions.lock().await;
-        if let Some(current) = sessions.get_mut(&previous) {
-            current.status = "closed".to_owned();
-            current.updated_at = now;
+        if legacy {
+            if let Some(current) = sessions.get_mut(&previous) {
+                current.status = "closed".to_owned();
+                current.updated_at = now;
+            }
         }
-        sessions.insert(
-            session_id.clone(),
-            DaemonSession {
-                id: session_id.clone(),
-                created_at: now,
-                updated_at: now,
-                title: "New conversation".to_owned(),
-                status: default_session_status(),
-                messages: Vec::new(),
-            },
-        );
-        let _ = persist_daemon_sessions(&state.session_state_path, &sessions);
-        sessions
-            .values()
-            .map(app_conversation_summary)
-            .collect::<Vec<_>>()
+        sessions.insert(session_id.clone(), DaemonSession {
+            id: session_id.clone(), created_at: now, updated_at: now,
+            title: "New conversation".to_owned(), status: default_session_status(),
+            messages: Vec::new(), bot_id: bot_id.clone(),
+            cwd: if legacy { None } else { Some(bot.default_folder) },
+            instructions_revision: bot.revision, runtime_home: None,
+        });
+        persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
+        sessions.values().filter(|session| session.bot_id == bot_id)
+            .map(app_conversation_summary).collect::<Vec<_>>()
     };
-    *state.active_app_session.lock().await = session_id.clone();
-    app_emit(
-        &state,
-        "owner",
-        json!({"type":"conversation","sessionId":session_id,"previousSessionId":previous,"conversations":conversations}),
-    );
-    Json(json!({"active":app_active_session(&state).await,"conversations":conversations}))
+    if legacy {
+        *state.active_app_session.lock().await = session_id.clone();
+        app_emit(&state, "owner", json!({"type":"conversation","sessionId":session_id,
+            "previousSessionId":previous,"conversations":conversations,"botId":bot_id}));
+    } else {
+        app_emit(&state, "owner", json!({"type":"conversation_created","sessionId":session_id,"botId":bot_id}));
+    }
+    Ok(Json(json!({"active":session_id,"conversations":conversations})))
 }
 
 async fn switch_app_conversation(
@@ -3537,7 +4115,7 @@ async fn switch_app_conversation(
     let previous = app_active_session(&state).await;
     let conversations = {
         let mut sessions = state.sessions.lock().await;
-        if !sessions.contains_key(&request.session_id) {
+        if !sessions.get(&request.session_id).is_some_and(|session| session.bot_id == MAIN_BOT_ID) {
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -3545,7 +4123,7 @@ async fn switch_app_conversation(
                 }),
             ));
         }
-        for (id, session) in sessions.iter_mut() {
+        for (id, session) in sessions.iter_mut().filter(|(_, session)| session.bot_id == MAIN_BOT_ID) {
             session.status = if id == &request.session_id {
                 "active"
             } else {
@@ -3559,6 +4137,7 @@ async fn switch_app_conversation(
         let _ = persist_daemon_sessions(&state.session_state_path, &sessions);
         sessions
             .values()
+            .filter(|session| session.bot_id == MAIN_BOT_ID)
             .map(app_conversation_summary)
             .collect::<Vec<_>>()
     };
@@ -3577,86 +4156,68 @@ async fn app_chat(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AppChatRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<ErrorResponse>)> {
-    let explicit_chat_id = request.chat_id.filter(|value| !value.trim().is_empty());
-    let chat_id = app_chat_id(explicit_chat_id.clone());
-    let session_id = match explicit_chat_id {
-        Some(value) => value,
-        None => app_active_session(&state).await,
-    };
-    if chat_id.len() > 128 || chat_id.chars().any(char::is_control) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid chat id".to_owned(),
-            }),
-        ));
+    let e2b = browser::is_e2b_runtime();
+    let explicit = request.chat_id.as_ref().filter(|id| !id.trim().is_empty());
+    if request.bot_id.is_some() && (!e2b || explicit.is_none()) {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "E2B bot conversation ID required".into() })));
     }
-    let turn_slot = state.app_turn.clone();
-    let mut turn = turn_slot.lock().await;
-    if turn.as_ref().is_some_and(|running| !running.task.is_finished()) {
-        return Err((StatusCode::CONFLICT, Json(ErrorResponse {
-            error: "A chat turn is already running. Stop it before sending another message.".to_owned(),
-        })));
+    let bot_id = request.bot_id.as_deref().unwrap_or(MAIN_BOT_ID);
+    let session_id = match explicit { Some(id) => id.clone(), None => app_active_session(&state).await };
+    let chat_id = if explicit.is_some() { session_id.clone() } else { "owner".to_owned() };
+    if session_id.is_empty() || session_id.len() > 128 || !session_id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Invalid conversation ID".into() })));
     }
-    let text = request.text.unwrap_or_default().trim().to_owned();
-    let files = request.files.unwrap_or_default();
-    let paths = save_app_uploads(&files)
-        .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
-    if text.is_empty() && paths.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "text or files required".to_owned(),
-            }),
-        ));
+    let _dispatch = state.bot_dispatch.lock().await;
+    if state.app_maintenance.load(Ordering::SeqCst) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "Sandbox is pausing; retry after resume".into() })));
     }
-    let mut prompt = text;
-    if !paths.is_empty() {
-        if !prompt.is_empty() {
-            prompt.push_str("\\n\\n");
-        }
-        prompt.push_str(
-            "User-provided files are available in the workspace. Inspect them when relevant:\\n",
-        );
-        prompt.push_str(
-            &paths
-                .iter()
-                .map(|path| format!("- {path}"))
-                .collect::<Vec<_>>()
-                .join("\\n"),
-        );
+    let bot = bot_definition(&state, bot_id).await?;
+    let mut legacy_turn = state.app_turn.lock().await;
+    if !e2b && legacy_turn.as_ref().is_some_and(|turn| !turn.task.is_finished()) {
+        return Err((StatusCode::CONFLICT, Json(ErrorResponse { error: "A chat turn is already running. Stop it before sending another message.".into() })));
     }
-    {
-        let now = unix_seconds();
+    let cwd = {
         let mut sessions = state.sessions.lock().await;
-        let session = sessions.entry(session_id.clone()).or_insert(DaemonSession {
-            id: session_id.clone(),
-            created_at: now,
-            updated_at: now,
-            title: app_session_title(&prompt),
-            status: default_session_status(),
-            messages: Vec::new(),
-        });
-        session.updated_at = now;
-        persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
+        if !sessions.contains_key(&session_id) {
+            if request.bot_id.is_some() { return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Conversation not found".into() }))); }
+            let now = unix_seconds();
+            sessions.insert(session_id.clone(), DaemonSession { id: session_id.clone(), created_at: now, updated_at: now,
+                title: "New conversation".into(), status: default_session_status(), messages: Vec::new(),
+                bot_id: bot_id.to_owned(), cwd: Some(app_workspace_root().to_string_lossy().into_owned()),
+                instructions_revision: 0, runtime_home: None });
+            persist_daemon_sessions(&state.session_state_path, &sessions).map_err(internal_error)?;
+        }
+        let session = sessions.get(&session_id).unwrap();
+        if session.bot_id != bot_id { return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Conversation not found".into() }))); }
+        if e2b { validate_folder(session.cwd.as_deref().unwrap_or(&bot.default_folder))
+            .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))? }
+        else { app_workspace_root() }
+    };
+    let mut prompt = request.text.unwrap_or_default().trim().to_owned();
+    if prompt.len() > 64_000 { return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Message exceeds 64 KB".into() }))); }
+    let paths = save_app_uploads(&request.files.unwrap_or_default(), &cwd)
+        .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
+    if prompt.is_empty() && paths.is_empty() { return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "text or files required".into() }))); }
+    if !paths.is_empty() {
+        prompt.push_str("\n\nUser-provided files:\n");
+        prompt.push_str(&paths.iter().map(|path| format!("- {path}")).collect::<Vec<_>>().join("\n"));
     }
-    app_record_message(&state, &session_id, "user", &prompt).await;
-    app_emit(
-        &state,
-        &chat_id,
-        json!({
-            "type": "user",
-            "role": "user",
-            "text": prompt,
-            "format": "markdown",
-            "sessionId": session_id,
-        }),
-    );
-    *turn = Some(spawn_app_turn(state, chat_id.clone(), session_id.clone(), prompt));
-    Ok((
-        StatusCode::ACCEPTED,
-        Json(json!({"ok":true,"chatId":chat_id,"sessionId":session_id})),
-    ))
+    if e2b {
+        let id = uuid::Uuid::new_v4().to_string();
+        let work = BotWork { id: id.clone(), chat_id: chat_id.clone(), session_id: session_id.clone(),
+            bot_id: bot_id.to_owned(), prompt, job_id: None, queued_at: unix_millis(), started_at: None };
+        state.bot_queue.lock().await.enqueue(work.clone(), &state.bot_queue_path)
+            .map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error })))?;
+
+        app_emit(&state, &chat_id, json!({"type":"queued","sessionId":session_id,"botId":bot_id,"turnId":id}));
+        schedule_bot_queue(state.clone());
+        Ok((StatusCode::ACCEPTED, Json(json!({"ok":true,"chatId":chat_id,"sessionId":session_id,"botId":bot_id,"turnId":id,"queued":true}))))
+    } else {
+        app_record_message(&state, &session_id, "user", &prompt).await;
+        app_emit(&state, &chat_id, json!({"type":"user","role":"user","text":prompt,"format":"markdown","sessionId":session_id}));
+        *legacy_turn = Some(spawn_app_turn(state.clone(), chat_id.clone(), session_id.clone(), prompt));
+        Ok((StatusCode::ACCEPTED, Json(json!({"ok":true,"chatId":chat_id,"sessionId":session_id}))))
+    }
 }
 
 async fn app_chat_events(
@@ -3664,6 +4225,15 @@ async fn app_chat_events(
     Query(query): Query<AppChatQuery>,
 ) -> Response {
     let chat_id = app_chat_id(query.chat_id);
+    if let Some(ref bot_id) = query.bot_id {
+        let sessions = state.sessions.lock().await;
+        if sessions.get(&chat_id).is_none_or(|session| &session.bot_id != bot_id) {
+            return (StatusCode::NOT_FOUND, Json(json!({"error":"conversation not found"}))).into_response();
+        }
+    } else if chat_id != "owner" && state.sessions.lock().await.get(&chat_id)
+        .is_some_and(|session| session.bot_id != MAIN_BOT_ID) {
+        return (StatusCode::NOT_FOUND, Json(json!({"error":"conversation not found"}))).into_response();
+    }
     let since = query
         .since
         .as_deref()
@@ -3683,11 +4253,21 @@ async fn app_chat_events(
     };
     let replayed_ids: HashSet<u64> = replay.iter().map(app_event_id).collect();
     let resync = since > 0 && since < oldest.saturating_sub(1);
-    let session_id = app_active_session(&state).await;
+    let legacy = query.bot_id.is_none();
+    let session_id = if legacy { app_active_session(&state).await } else { chat_id.clone() };
+    let scoped_work = if !browser::is_e2b_runtime() { None } else {
+        let queue = state.bot_queue.lock().await;
+        queue.in_flight.values().find(|work| work.session() == session_id).cloned()
+    };
+    let queued = if !browser::is_e2b_runtime() { false } else {
+        state.bot_queue.lock().await.queued.iter().any(|work| work.session() == session_id)
+    };
     let snapshot = json!({"type":"snapshot","sessionId":session_id,
-        "busy":state.app_turn_busy.load(Ordering::Relaxed),
-        "startedAt":state.app_turn_started_ms.load(Ordering::Relaxed),
-        "tools":state.app_turn_tools.load(Ordering::Relaxed),
+        "botId":query.bot_id,
+        "busy":scoped_work.is_some() || (legacy && state.app_turn_busy.load(Ordering::Relaxed)),
+        "queued":queued,
+        "startedAt":scoped_work.map(|work| work.started_at.unwrap_or(work.queued_at)).unwrap_or_else(|| state.app_turn_started_ms.load(Ordering::Relaxed)),
+        "tools":if legacy { state.app_turn_tools.load(Ordering::Relaxed) } else { 0 },
         "backgroundTasks":background_snapshot(&state)});
     let stream = async_stream::stream! {
         yield Ok::<Bytes, Infallible>(app_sse_data_frame(&json!({"type":"ready","id":0,"chatId":chat_id,"resync":resync})));
@@ -3698,7 +4278,7 @@ async fn app_chat_events(
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(15), receiver.recv()).await {
                 Ok(Ok(event)) => {
-                    let same_chat = event.get("chatId").and_then(Value::as_str) == Some(chat_id.as_str());
+                    let same_chat = app_event_matches(&event, &chat_id);
                     let event_id = app_event_id(&event);
                     let newer = event_id > since;
                     if same_chat && newer && !replayed_ids.contains(&event_id) {
@@ -3756,7 +4336,7 @@ async fn api_stream(
                 }
                 event = receiver.recv() => {
                     match event {
-                        Ok(event) if event.get("chatId").and_then(Value::as_str) == Some(chat_id.as_str()) => {
+                        Ok(event) if app_event_matches(&event, &chat_id) => {
                             if socket.send(Message::Text(event.to_string().into())).await.is_err() {
                                 break;
                             }
@@ -3770,21 +4350,38 @@ async fn api_stream(
     })
 }
 
-async fn app_chat_stop(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<Value>,
-) -> Json<Value> {
-    let chat_id = request
-        .get("chatId")
-        .and_then(Value::as_str)
-        .unwrap_or("owner");
-    let mut turn = state.app_turn.lock().await;
-    if turn.as_ref().is_some_and(|running| running.chat_id == chat_id) {
-        if let Some(running) = turn.take() {
-            let _ = running.cancel.send(());
-            let _ = running.task.await;
+async fn app_chat_stop(State(state): State<Arc<AppState>>, Json(request): Json<Value>) -> Json<Value> {
+    let chat_id = request.get("chatId").and_then(Value::as_str).unwrap_or("owner");
+    if browser::is_e2b_runtime() {
+        let session_id = if request.get("chatId").is_some() { chat_id.to_owned() } else { app_active_session(&state).await };
+        let bot_id = request.get("botId").and_then(Value::as_str).unwrap_or(MAIN_BOT_ID);
+        let _dispatch = state.bot_dispatch.lock().await;
+        if state.sessions.lock().await.get(&session_id).is_none_or(|session| session.bot_id != bot_id) {
+            return Json(json!({"ok":false,"error":"conversation does not belong to that bot"}));
         }
+        let stopped = match state.bot_queue.lock().await.cancel_queued(&session_id, unix_millis(), &state.bot_queue_path) {
+            Ok(stopped) => stopped,
+            Err(error) => return Json(json!({"ok":false,"error":error})),
+        };
+        for result in stopped {
+            let _ = record_bot_message(&state, &result.work, "error", "Queued turn stopped").await;
+            app_emit(&state, &result.work.chat_id, json!({"type":"status","busy":false,"stopped":true,
+                "sessionId":session_id,"botId":bot_id,"turnId":result.work.id}));
+        }
+        let running = state.bot_turns.lock().await.remove(&session_id);
+        drop(_dispatch);
+        if let Some(running) = running {
+            let _ = running.cancel.send(());
+            if running.task.await.is_err() { return Json(json!({"ok":false,"error":"Runtime cleanup failed"})); }
+        }
+        schedule_bot_queue(state);
+        return Json(json!({"ok":true}));
     }
+    let running = {
+        let mut turn = state.app_turn.lock().await;
+        if turn.as_ref().is_some_and(|running| running.chat_id == chat_id) { turn.take() } else { None }
+    };
+    if let Some(running) = running { let _ = running.cancel.send(()); let _ = running.task.await; }
     Json(json!({"ok":true}))
 }
 
@@ -4043,11 +4640,22 @@ mod tests {
             sessions: Arc::new(Mutex::new(BTreeMap::new())),
             active_app_session: Arc::new(Mutex::new("owner".into())),
             session_state_path: directory.join("sessions.json").to_string_lossy().into_owned(),
+            bot_catalog: Arc::new(Mutex::new(BotCatalog::default())),
+            bot_catalog_path: directory.join("bots.json"),
+            bot_queue: Arc::new(Mutex::new(BotQueue::default())),
+            bot_queue_path: directory.join("bot-queue.json"),
+            maintenance_path: directory.join("bot-maintenance"),
             metrics: runtime_metrics(), app_turn_busy: Arc::new(AtomicBool::new(false)),
             app_turn_started_ms: Arc::new(AtomicU64::new(0)),
             app_turn_tools: Arc::new(AtomicU64::new(0)),
             app_turn: Arc::new(Mutex::new(None)),
+            bot_turns: Arc::new(Mutex::new(HashMap::new())),
+            bot_turn_budget: Arc::new(tokio::sync::Semaphore::new(4)),
+            bot_dispatch: Arc::new(Mutex::new(())),
+            app_maintenance: Arc::new(AtomicBool::new(false)),
             app_runtimes: Arc::new(Mutex::new(HashMap::new())),
+            bot_runtime_last_used: Arc::new(Mutex::new(HashMap::new())),
+            app_event_routes: Arc::new(StdMutex::new(HashMap::new())),
             app_background: Arc::new(StdMutex::new(HashMap::new())),
             #[cfg(feature = "e2b")]
             sandbox_plan: SandboxPlan::default(),
@@ -4070,7 +4678,7 @@ mod tests {
         });
         *state.app_turn.lock().await = Some(RunningAppTurn { chat_id: "owner".into(), cancel, task });
         let response = app_chat(State(state.clone()), Json(AppChatRequest {
-            text: Some("second message".into()), chat_id: None, files: None,
+            text: Some("second message".into()), chat_id: None, bot_id: None, files: None,
         })).await;
         assert!(matches!(response, Err((StatusCode::CONFLICT, _))));
         let _ = app_chat_stop(State(state.clone()), Json(json!({"chatId":"other"}))).await;
@@ -4087,15 +4695,19 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let state = chat_test_state(directory.path());
         let response = app_chat_events(State(state.clone()), Query(AppChatQuery {
-            chat_id: None, since: Some("500".into()),
+            chat_id: None, bot_id: None, since: Some("500".into()),
         })).await;
         let mut stream = response.into_body().into_data_stream();
         let ready = stream.next().await.unwrap().unwrap();
         assert!(String::from_utf8_lossy(&ready).contains("ready"));
         app_emit(&state, "owner", json!({"type":"text", "text":"after restart", "final":true}));
-        let frame = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
-            .await.expect("reply must not be filtered by stale cursor").unwrap().unwrap();
-        assert!(String::from_utf8_lossy(&frame).contains("after restart"));
+        let reply = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                let frame = stream.next().await.unwrap().unwrap();
+                if String::from_utf8_lossy(&frame).contains("after restart") { break frame; }
+            }
+        }).await.expect("reply must not be filtered by stale cursor");
+        assert!(String::from_utf8_lossy(&reply).contains("after restart"));
     }
 
     #[tokio::test]
@@ -4197,6 +4809,9 @@ mod tests {
                 title: "Conversation".to_owned(),
                 status: default_session_status(),
                 messages: Vec::new(),
+                bot_id: super::default_bot_id(),
+                cwd: None,
+                instructions_revision: 0, runtime_home: None,
             },
         );
         persist_daemon_sessions(path.to_str().unwrap(), &sessions).unwrap();

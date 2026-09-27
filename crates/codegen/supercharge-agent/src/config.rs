@@ -206,6 +206,7 @@ fn supercharge_e2b_toolset() -> ToolServerConfig {
     tools.push((&grok_build::BrowserPressTool).into());
     tools.push((&grok_build::BrowserScreenshotTool).into());
     tools.push((&grok_build::BrowserHandoffTool).into());
+    tools.push((&grok_build::VectraBotTool).into());
     ToolServerConfig {
         tools,
         behavior_preset: None,

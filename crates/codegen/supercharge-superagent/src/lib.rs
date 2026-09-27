@@ -5,6 +5,7 @@
 //! pieces incrementally without creating a second agent implementation.
 
 pub mod acp_runtime;
+pub mod atomic_state;
 mod approval;
 pub mod browser;
 mod capabilities;

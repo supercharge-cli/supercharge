@@ -16,6 +16,7 @@ pub mod bash;
 pub mod deploy_app;
 pub mod enter_plan_mode;
 pub mod e2b_browser;
+pub mod e2b_bot;
 pub mod exit_plan_mode;
 pub mod grep;
 pub mod image_edit;
@@ -49,6 +50,7 @@ pub use e2b_browser::{
     BrowserClickTool, BrowserFillTool, BrowserHandoffTool, BrowserNavigateTool, BrowserPressTool,
     BrowserScreenshotTool, BrowserSnapshotTool,
 };
+pub use e2b_bot::VectraBotTool;
 pub use exit_plan_mode::ExitPlanModeTool;
 pub use grep::GrepTool;
 pub use image_edit::{IMAGE_EDIT_TOOL_NAME, ImageEditTool};

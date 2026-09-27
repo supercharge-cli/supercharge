@@ -186,6 +186,10 @@ pub fn global() -> Option<Arc<Mutex<ControlStore>>> {
 }
 
 pub async fn handle_text(session_key: &str, text: &str) -> Result<Option<String>, std::io::Error> {
+    handle_text_in(session_key, text, None).await
+}
+
+pub async fn handle_text_in(session_key: &str, text: &str, cwd: Option<&std::path::Path>) -> Result<Option<String>, std::io::Error> {
     let Some(command) = parse_command(text) else {
         return Ok(None);
     };
@@ -193,7 +197,7 @@ pub async fn handle_text(session_key: &str, text: &str) -> Result<Option<String>
         return Ok(Some(crate::self_update::handle(action).await));
     }
     if let AgentCommand::Cmd(command) = command {
-        return Ok(Some(run_workspace_command(&command).await));
+        return Ok(Some(run_workspace_command(&command, cwd).await));
     }
     let Some(store) = global() else {
         return Ok(Some("Control store is not initialized.".to_owned()));
@@ -223,7 +227,7 @@ pub async fn set_emergency_stopped(stopped: bool) -> Result<(), std::io::Error> 
     store.lock().await.set_emergency_stopped(stopped)
 }
 
-async fn run_workspace_command(command: &str) -> String {
+async fn run_workspace_command(command: &str, cwd: Option<&std::path::Path>) -> String {
     let command = command.trim();
     if command.is_empty() {
         return "Usage: /cmd <command>  (runs in /home/user/workspace)".to_owned();
@@ -231,11 +235,11 @@ async fn run_workspace_command(command: &str) -> String {
     if command.len() > 4000 {
         return "Command is too long (max 4000 characters).".to_owned();
     }
-    let cwd = if std::path::Path::new("/home/user/workspace").is_dir() {
-        "/home/user/workspace"
+    let cwd = cwd.unwrap_or_else(|| if std::path::Path::new("/home/user/workspace").is_dir() {
+        std::path::Path::new("/home/user/workspace")
     } else {
-        "/home/user"
-    };
+        std::path::Path::new("/home/user")
+    });
     let mut shell = tokio::process::Command::new("bash");
     shell
         .arg("-lc")

@@ -83,6 +83,7 @@ pub enum ToolInput {
     BrowserPress(BrowserPressInput),
     BrowserScreenshot(BrowserScreenshotInput),
     BrowserHandoff(BrowserHandoffInput),
+    VectraBot(crate::implementations::grok_build::e2b_bot::BotInput),
     Write(WriteInput),
     ApplyPatch(ApplyPatchInput),
     HashlineEdit(crate::implementations::grok_build_hashline::edit::types::HashlineEditInput),

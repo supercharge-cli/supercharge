@@ -83,7 +83,7 @@ async fn sidecar_json(
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|error| error.to_string())?;
-    let request = client.request(method, sidecar_url(path));
+    let request = client.request(method, sidecar_url(path)).header("x-vectra-browser-observer", "1");
     let response = match payload {
         Some(value) => request.json(&value).send().await,
         None => request.send().await,
@@ -288,6 +288,16 @@ pub async fn handoff(start: bool, minutes: Option<u8>) -> Result<serde_json::Val
 pub async fn handoff_active() -> Result<bool, String> {
     let value = sidecar_json(reqwest::Method::GET, "/status", None).await?;
     Ok(value.get("handoff").and_then(serde_json::Value::as_bool).unwrap_or(false))
+}
+
+pub async fn release_owner(owner: &str) -> Result<(), String> {
+    sidecar_json(reqwest::Method::POST, "/lease/release", Some(serde_json::json!({"owner":owner}))).await?;
+    Ok(())
+}
+
+pub async fn reset_after_resume() -> Result<(), String> {
+    sidecar_json(reqwest::Method::POST, "/lease/reset", Some(serde_json::json!({}))).await?;
+    Ok(())
 }
 
 #[cfg(test)]

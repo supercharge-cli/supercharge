@@ -2,6 +2,8 @@ import { chromium } from "playwright";
 import { createServer } from "node:http";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { BrowserLease } from "./lease.mjs";
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.SUPERAGENT_BROWSER_SIDECAR_PORT || "9224", 10);
@@ -10,6 +12,8 @@ const mediaDir = process.env.SUPERAGENT_MEDIA_ROOT || "/home/user/workspace/.sup
 const maxBodyBytes = 128 * 1024;
 const maxTextChars = 16_000;
 const refs = new Map();
+const lease = new BrowserLease();
+let serial = Promise.resolve();
 let handoff = { active: false, expiresAt: 0 };
 let context;
 let page;
@@ -63,14 +67,15 @@ function locatorFor(ref) {
 }
 
 async function snapshot() {
+  const generation = randomUUID().slice(0, 8);
   refs.clear();
-  const nodes = await page.locator("a,button,input,textarea,select,[role],summary").evaluateAll((elements) => elements.slice(0, 250).map((element, index) => {
+  const nodes = await page.locator("a,button,input,textarea,select,[role],summary").evaluateAll((elements, generation) => elements.slice(0, 250).map((element, index) => {
     const text = (element.getAttribute("aria-label") || element.getAttribute("title") || element.innerText || element.value || "").replace(/\s+/g, " ").trim().slice(0, 240);
     const role = element.getAttribute("role") || element.tagName.toLowerCase();
-    const id = `e${index + 1}`;
+    const id = `${generation}-e${index + 1}`;
     element.setAttribute("data-supercharge-ref", id);
     return { ref: id, role, name: text, disabled: "disabled" in element && Boolean(element.disabled) };
-  }));
+  }), generation);
   for (const node of nodes) refs.set(node.ref, page.locator(`[data-supercharge-ref="${node.ref}"]`));
   let aria = "";
   try {
@@ -81,11 +86,11 @@ async function snapshot() {
   return { ok: true, url: page.url(), title: await page.title(), snapshot: aria.slice(0, 50_000), elements: nodes, handoff: handoffActive() };
 }
 
-async function screenshot() {
+async function screenshot(persist = true) {
   await mkdir(mediaDir, { recursive: true });
-  const filename = `browser-${now()}.jpg`;
+  const filename = `browser-${randomUUID()}.jpg`;
   const path = join(mediaDir, filename);
-  const image = await page.screenshot({ type: "jpeg", quality: 72, path, fullPage: false });
+  const image = await page.screenshot({ type: "jpeg", quality: 72, ...(persist ? { path } : {}), fullPage: false });
   return { ok: true, path, jpeg: image.toString("base64"), url: page.url(), handoff: handoffActive() };
 }
 
@@ -101,17 +106,45 @@ async function ensureBrowser() {
   page.setDefaultTimeout(15_000);
 }
 
-async function route(req, res) {
+async function route(req, res, input = {}) {
   try {
     const url = new URL(req.url || "/", `http://${host}:${port}`);
+    const owner = typeof req.headers["x-vectra-browser-owner"] === "string" ? req.headers["x-vectra-browser-owner"] : "legacy";
+    const observer = req.headers["x-vectra-browser-observer"] === "1";
     if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, browser: Boolean(page), handoff: handoffActive() });
-    if (req.method === "GET" && url.pathname === "/status") return json(res, 200, { ok: true, url: page.url(), handoff: handoffActive(), vncPort: 6080 });
+    if (req.method === "GET" && url.pathname === "/status") return json(res, 200, { ok: true, url: page.url(), handoff: handoffActive(), vncPort: 6080, owner:lease.owner });
+    if (req.method === "POST" && url.pathname === "/lease/release") {
+      if (lease.release(requireString(input.owner, "owner", 128))) refs.clear();
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === "POST" && url.pathname === "/lease/reset") {
+      lease.reset(); refs.clear(); handoff = { active:false, expiresAt:0 };
+      return json(res, 200, { ok:true });
+    }
+    if (req.method === "POST" && url.pathname === "/handoff/start") {
+      if (!observer && lease.acquire(owner, handoffActive())) refs.clear();
+      const minutes = Math.min(Math.max(Number(input.minutes) || 10, 1), 30);
+      refs.clear();
+      handoff = { active: true, expiresAt: now() + minutes * 60_000, owner };
+      return json(res, 200, { ok: true, handoff: true, expiresAt:handoff.expiresAt, vncPort:6080 });
+    }
+    if (req.method === "POST" && url.pathname === "/handoff/stop") {
+      if (!observer && handoff.owner && handoff.owner !== owner) throw new Error("Another bot owns this handoff");
+      handoff = { active:false, expiresAt:0 }; lease.reset(); refs.clear();
+      return json(res, 200, { ok:true, handoff:false });
+    }
+    if (req.method === "GET" && url.pathname === "/screenshot" && observer) return json(res, 200, await screenshot(false));
+    if (observer && url.pathname === "/control") {
+      if (!handoffActive()) throw new Error("Take control before sending browser input");
+    } else if (lease.acquire(owner, handoffActive())) {
+      refs.clear();
+    }
     if (req.method === "GET" && url.pathname === "/snapshot") return json(res, 200, await snapshot());
     if (req.method === "GET" && url.pathname === "/screenshot") return json(res, 200, await screenshot());
     if (req.method !== "POST") return json(res, 404, { error: "not found" });
-    const input = await body(req);
     if (url.pathname === "/navigate") {
       const destination = requireUrl(input.url);
+      refs.clear();
       await page.goto(destination, { waitUntil: "domcontentloaded" });
       return json(res, 200, { ok: true, url: page.url(), title: await page.title() });
     }
@@ -127,15 +160,6 @@ async function route(req, res) {
       const target = input.ref ? locatorFor(input.ref) : page.locator("body");
       await target.press(requireString(input.key, "key", 80));
       return json(res, 200, { ok: true });
-    }
-    if (url.pathname === "/handoff/start") {
-      const minutes = Math.min(Math.max(Number(input.minutes) || 10, 1), 30);
-      handoff = { active: true, expiresAt: now() + minutes * 60_000 };
-      return json(res, 200, { ok: true, handoff: handoffActive(), expiresAt: handoff.expiresAt, vncPort: 6080 });
-    }
-    if (url.pathname === "/handoff/stop") {
-      handoff = { active: false, expiresAt: 0 };
-      return json(res, 200, { ok: true, handoff: false });
     }
     if (url.pathname === "/control") {
       const action = requireString(input.action, "action", 32);
@@ -179,7 +203,16 @@ async function route(req, res) {
 }
 
 await ensureBrowser();
-const server = createServer(route);
+const server = createServer(async (req, res) => {
+  try {
+    const input = req.method === "POST" ? await body(req) : {};
+    const action = () => res.destroyed ? undefined : route(req, res, input);
+    serial = serial.then(action, action);
+    await serial;
+  } catch (error) {
+    if (!res.headersSent) json(res, 400, { ok:false, error:String(error) });
+  }
+});
 server.listen(port, host, () => console.log(`supercharge-browser sidecar listening on ${host}:${port}`));
 
 async function shutdown() {

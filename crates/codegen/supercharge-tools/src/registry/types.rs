@@ -634,6 +634,7 @@ impl ToolRegistryBuilder {
         b.register::<grok_build::BrowserPressTool>();
         b.register::<grok_build::BrowserScreenshotTool>();
         b.register::<grok_build::BrowserHandoffTool>();
+        b.register::<grok_build::VectraBotTool>();
         b.register::<grok_build::LspTool>();
         b.register::<grok_build::ImageGenTool>();
         b.register::<grok_build::ImageEditTool>();

@@ -18,7 +18,7 @@ daemon_only="${SUPERCHARGE_E2B_DAEMON_ONLY:-0}"
 # Keep dependencies out of the context: the Dockerfile installs them there.
 rm -rf "$browser_runtime_stage_dir"
 mkdir -p "$browser_runtime_stage_dir"
-cp "$browser_runtime_dir/package.json" "$browser_runtime_dir/server.mjs" "$browser_runtime_dir/start.sh" "$browser_runtime_stage_dir/"
+cp "$browser_runtime_dir/package.json" "$browser_runtime_dir/server.mjs" "$browser_runtime_dir/lease.mjs" "$browser_runtime_dir/start.sh" "$browser_runtime_stage_dir/"
 
 # Pre-fetch the musl ripgrep the CLI build embeds. cargo's 60s GitHub download
 # times out on this host; curl retries here and we pass the binary into cargo.

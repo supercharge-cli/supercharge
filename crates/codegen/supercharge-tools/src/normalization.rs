@@ -106,6 +106,7 @@ pub fn canonical_input(input: &ToolInput) -> Option<serde_json::Value> {
         | ToolInput::BrowserPress(_)
         | ToolInput::BrowserScreenshot(_)
         | ToolInput::BrowserHandoff(_)
+        | ToolInput::VectraBot(_)
         | ToolInput::ApplyPatch(_)
         | ToolInput::HashlineEdit(_)
         | ToolInput::CodexReadFile(_)
