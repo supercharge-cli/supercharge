@@ -6,20 +6,13 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::app::app_view::InputOutcome;
-use crate::views::credit_bar::CreditBalance;
 use crate::views::dashboard::state::DashboardState;
 use crate::views::usage_modal::{UsageInfoContext, UsageInfoModalState, UsageInfoTab};
 
 fn session_less_modal(tab: UsageInfoTab) -> Box<UsageInfoModalState> {
     Box::new(UsageInfoModalState::new(
         tab,
-        UsageInfoContext {
-            session_id: None,
-            usage_visible: true,
-            chat_kind: false,
-            billing_redirect_url: None,
-            subscription_tier: Some("SuperGrok".to_string()),
-        },
+        UsageInfoContext { session_id: None },
     ))
 }
 
@@ -27,11 +20,7 @@ fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
-fn render_with_modal(
-    state: &mut DashboardState,
-    area: Rect,
-    credit_balance: Option<&CreditBalance>,
-) -> String {
+fn render_with_modal(state: &mut DashboardState, area: Rect) -> String {
     let mut buf = Buffer::empty(area);
     let mut agents = IndexMap::new();
     let registry = crate::actions::ActionRegistry::defaults();
@@ -51,7 +40,7 @@ fn render_with_modal(
         None,
         false,
         None,
-        credit_balance,
+        None,
     );
     assert!(
         cursor.is_none(),
@@ -149,64 +138,48 @@ fn tab_header_click_switches_tab() {
 }
 
 #[test]
-fn usage_modal_renders_allowance_from_app_balance() {
+fn usage_modal_renders_session_usage_not_a_plan() {
     let area = Rect::new(0, 0, 100, 30);
     let mut state = DashboardState::new();
-    state.usage_modal = Some(session_less_modal(UsageInfoTab::UsageLimit));
-    let balance = CreditBalance {
-        usage_pct: 42.0,
-        effective_usage_pct: 42.0,
-        period_end_display: Some("May 29, 00:00".to_string()),
-        pay_as_you_go: false,
-        on_demand_cap_cents: None,
-        on_demand_used_cents: None,
-        prepaid_balance_cents: None,
-        period_type: None,
-        is_unified_billing_user: None,
-    };
+    let mut modal = session_less_modal(UsageInfoTab::UsageLimit);
+    modal.ctx.session_id = Some("sid-123".to_string());
+    modal.session_usage_text = Some("Session usage: 3 input tokens".to_string());
+    state.usage_modal = Some(modal);
 
-    let content = render_with_modal(&mut state, area, Some(&balance));
-    assert!(content.contains("Usage limit"), "{content}");
-    assert!(content.contains("(SuperGrok)"), "{content}");
-    assert!(content.contains("42%"), "{content}");
-    assert!(content.contains("Resets: May 29, 00:00"), "{content}");
-    assert!(
-        !content.contains("Loading session usage"),
-        "no session means no session-usage placeholder: {content}"
-    );
+    let content = render_with_modal(&mut state, area);
+    assert!(content.contains("Usage"), "{content}");
+    assert!(content.contains("Session usage: 3 input tokens"), "{content}");
+    assert!(!content.contains("SuperGrok"), "{content}");
+    assert!(!content.contains("42%"), "{content}");
 
     state
         .usage_modal
         .as_mut()
         .unwrap()
         .set_tab(UsageInfoTab::ContextUsage);
-    let content = render_with_modal(&mut state, area, Some(&balance));
-    assert!(content.contains("No active session."), "{content}");
+    let content = render_with_modal(&mut state, area);
+    assert!(content.contains("Loading context usage"), "{content}");
 }
 
 #[test]
-fn usage_modal_renders_loading_until_balance_arrives() {
+fn usage_modal_renders_loading_until_session_usage_arrives() {
     let area = Rect::new(0, 0, 100, 30);
     let mut state = DashboardState::new();
     let mut modal = session_less_modal(UsageInfoTab::UsageLimit);
-    modal.billing_loading = true;
+    modal.ctx.session_id = Some("sid-123".to_string());
     state.usage_modal = Some(modal);
 
-    let content = render_with_modal(&mut state, area, None);
-    assert!(content.contains("Loading usage"), "{content}");
+    let content = render_with_modal(&mut state, area);
+    assert!(content.contains("Loading session usage"), "{content}");
 }
 
 #[test]
-fn usage_modal_renders_billing_error() {
+fn usage_modal_renders_no_session_without_billing_error() {
     let area = Rect::new(0, 0, 100, 30);
     let mut state = DashboardState::new();
-    let mut modal = session_less_modal(UsageInfoTab::UsageLimit);
-    modal.billing_error = Some("proxy unreachable".to_string());
-    state.usage_modal = Some(modal);
+    state.usage_modal = Some(session_less_modal(UsageInfoTab::UsageLimit));
 
-    let content = render_with_modal(&mut state, area, None);
-    assert!(
-        content.contains("Couldn't load usage: proxy unreachable"),
-        "{content}"
-    );
+    let content = render_with_modal(&mut state, area);
+    assert!(content.contains("No active session"), "{content}");
+    assert!(!content.contains("Couldn't load usage"), "{content}");
 }

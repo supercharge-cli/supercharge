@@ -79,7 +79,11 @@ pub enum ClientType {
     /// Also accepts the legacy `grok-desktop` identifier.
     /// Uses TUI-style bash permission options (primary command extraction + prefix matching)
     /// but without interactive `<`/`>` word selection.
-    #[serde(rename = "supercharge-desktop", alias = "grok-desktop", alias = "grok_desktop")]
+    #[serde(
+        rename = "supercharge-desktop",
+        alias = "grok-desktop",
+        alias = "grok_desktop"
+    )]
     Desktop,
 }
 impl ClientType {
@@ -318,10 +322,13 @@ impl From<&supercharge_tools::types::ToolInput> for AccessKind {
                 name: mcp.tool_name.to_string(),
                 input: mcp.tool_input.clone(),
             },
-            ToolInput::UseTool(u) => AccessKind::MCPTool {
+            ToolInput::UseTool(
+                supercharge_tools::implementations::use_tool::UseToolInput::Inline(u),
+            ) => AccessKind::MCPTool {
                 name: u.tool_name.clone(),
                 input: u.tool_input.clone(),
             },
+            ToolInput::UseTool(_) => AccessKind::Read(None),
             ToolInput::WebFetch(wf) => AccessKind::WebFetch(wf.url.clone()),
             ToolInput::Dynamic(value) => access_kind_from_dynamic(value),
             #[allow(unreachable_patterns)]
@@ -765,10 +772,12 @@ mod tests {
     fn use_tool_maps_to_mcp_tool_access() {
         use supercharge_tools::implementations::use_tool::UseToolInput;
         use supercharge_tools::types::ToolInput;
-        let input = ToolInput::UseTool(UseToolInput {
-            tool_name: "linear__save_issue".into(),
-            tool_input: serde_json::json!({ "title" : "test" }),
-        });
+        let input = ToolInput::UseTool(UseToolInput::Inline(
+            supercharge_tools::implementations::use_tool::InlineMcpInvocation {
+                tool_name: "linear__save_issue".into(),
+                tool_input: serde_json::json!({ "title" : "test" }),
+            },
+        ));
         let access = AccessKind::from(&input);
         assert!(
             matches!(
@@ -845,8 +854,9 @@ mod tests {
         use supercharge_tools::implementations::codex::apply_patch::ApplyPatchInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::ApplyPatch(ApplyPatchInput {
-            patch: "*** Begin Patch\n*** Update File: /home/user/.supercharge/mcp.json\n*** End Patch"
-                .to_owned(),
+            patch:
+                "*** Begin Patch\n*** Update File: /home/user/.supercharge/mcp.json\n*** End Patch"
+                    .to_owned(),
         });
         assert!(matches!(
             AccessKind::from(&input),
@@ -869,9 +879,9 @@ mod tests {
     }
     #[test]
     fn write_scoped_and_dynamic_inputs_map_to_edit_not_read() {
+        use supercharge_tool_types::TaskToolInput;
         use supercharge_tools::implementations::opencode::edit::EditInput;
         use supercharge_tools::types::ToolInput;
-        use supercharge_tool_types::TaskToolInput;
         let edit = ToolInput::from(EditInput {
             file_path: "/tmp/denied.txt".into(),
             old_string: "ORIGINAL".into(),

@@ -3,7 +3,6 @@
 use indexmap::IndexMap;
 
 use super::SettingsCacheManager;
-use crate::agent::auth_method::read_xai_api_key_env;
 use crate::agent::config::{self, ModelEntry};
 use crate::remote::{ModelSource, active_model_source};
 use supercharge_login::{GrokAuth, GrokComConfig};
@@ -18,7 +17,9 @@ pub(crate) enum ModelFetchAuth {
 }
 
 impl ModelFetchAuth {
-    /// Precedence: custom_endpoint, then session, then deployment, then API key.
+    /// Precedence: custom endpoint, then an active session, then deployment credentials.
+    /// Ambient first-party API keys are deliberately excluded: Supercharge only uses
+    /// provider credentials resolved from `/setup` or an explicit model entry.
     pub(crate) fn resolve(endpoints: &config::EndpointsConfig, has_cached_session: bool) -> Self {
         if endpoints.has_custom_endpoint() {
             Self::CustomEndpoint
@@ -26,8 +27,6 @@ impl ModelFetchAuth {
             Self::Session
         } else if endpoints.deployment_key.is_some() {
             Self::Deployment
-        } else if crate::agent::auth_method::has_xai_api_key_env() {
-            Self::ApiKey
         } else {
             Self::Session
         }
@@ -89,8 +88,10 @@ impl ModelsCacheScope {
                 .map(|a| SettingsCacheManager::identity(a, alpha))
                 .unwrap_or_default(),
             ModelFetchAuth::ApiKey => {
-                let key = read_xai_api_key_env().unwrap_or_default();
-                scope_hash(&["models-api-key", key.as_str(), alpha.unwrap_or("")])
+                // Not produced by [`ModelFetchAuth::resolve`]: ambient first-party
+                // keys are never a fetch credential. The scope stays key-independent
+                // so the mode is inert rather than env-sensitive.
+                scope_hash(&["models-api-key", "", alpha.unwrap_or("")])
             }
             ModelFetchAuth::Deployment => scope_hash(&[
                 "models-deployment",

@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use supercharge_login::{AuthManager, GrokAuth};
 
-const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,6 +55,8 @@ pub struct UpdateConversationBody {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConvError {
+    #[error("This optional service has no configured URL")]
+    NotConfigured,
     #[error("no OAuth credentials for conversations:read")]
     NoOauth,
     #[error("network error: {0}")]
@@ -100,7 +101,7 @@ impl ConversationsClient {
                     .ok()
                     .filter(|s| !s.is_empty())
             })
-            .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
+            .unwrap_or_default();
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -109,6 +110,9 @@ impl ConversationsClient {
     }
 
     async fn require_xai_auth(&self) -> Result<GrokAuth, ConvError> {
+        if self.base_url.trim().is_empty() {
+            return Err(ConvError::NotConfigured);
+        }
         let auth = self.auth.auth().await.map_err(|_| ConvError::NoOauth)?;
         if !auth.is_xai_auth() {
             return Err(ConvError::NoOauth);

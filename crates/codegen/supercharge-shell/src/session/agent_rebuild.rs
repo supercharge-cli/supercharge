@@ -299,6 +299,7 @@ impl AgentRebuildSpec {
         .with_write_file_enabled(*write_file_enabled)
         .with_active_agent_messages_enabled(active_agent_messages_enabled)
         .with_fs(fs_backend.clone())
+        .with_mcp_file_input_preparation()
         .with_subagents_enabled(*subagents_enabled)
         .with_child_nested_subagents_allowed(1 < *subagents_max_depth)
         .with_subagent_toggle(subagent_toggle.clone())

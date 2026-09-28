@@ -96,83 +96,6 @@ fn resolve_subscription_tier_prefers_display_then_api_key_then_jwt() {
         Some("free")
     );
 }
-/// Maps the JWT tier claim to the `/user` tier name to gate the post-unblock catalog refresh (a stale older paid claim must not skip retry).
-#[test]
-fn jwt_claim_matches_user_subscription_tier_known_pairs() {
-    let cases = [
-        ("supercharge", "GrokPro"),
-        ("x_basic", "XBasic"),
-        ("x_premium", "XPremium"),
-        ("x_premium_plus", "XPremiumPlus"),
-        ("supercharge_heavy", "SuperchargePro"),
-        ("9", "EnterpriseMystery"),
-        ("supercharge_lite", "SuperchargeLite"),
-        ("supercharge_plus", "SuperchargePlus"),
-    ];
-    for (claim, user_tier) in cases {
-        assert!(
-            jwt_claim_matches_user_subscription_tier(claim, user_tier),
-            "{claim} should match {user_tier}"
-        );
-    }
-}
-#[test]
-fn jwt_claim_matches_user_subscription_tier_rejects_stale_and_unknown() {
-    assert!(!jwt_claim_matches_user_subscription_tier(
-        "x_basic",
-        "SuperchargePro"
-    ));
-    assert!(!jwt_claim_matches_user_subscription_tier(
-        "supercharge",
-        "SuperchargePro"
-    ));
-    assert!(!jwt_claim_matches_user_subscription_tier(
-        "supercharge",
-        "SuperchargePlus"
-    ));
-    assert!(!jwt_claim_matches_user_subscription_tier(
-        "supercharge_heavy",
-        "SuperchargePlus"
-    ));
-    assert!(!jwt_claim_matches_user_subscription_tier("free", "GrokPro"));
-    assert!(!jwt_claim_matches_user_subscription_tier("", "XPremium"));
-    assert!(!jwt_claim_matches_user_subscription_tier(
-        "supercharge_heavy",
-        "EnterpriseMystery"
-    ));
-    assert!(!jwt_claim_matches_user_subscription_tier(
-        "0",
-        "EnterpriseMystery"
-    ));
-}
-/// Single-flight flag must clear on Drop even if the retry task panics / aborts mid-backoff (guards against the flag stuck true forever).
-#[test]
-fn post_unblock_jwt_retry_in_flight_guard_clears_on_drop() {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    let flag = Arc::new(AtomicBool::new(true));
-    {
-        let _guard = PostUnblockJwtRetryInFlightGuard { flag: flag.clone() };
-        assert!(flag.load(Ordering::Acquire));
-    }
-    assert!(
-        !flag.load(Ordering::Acquire),
-        "Drop must release post_unblock_jwt_retry_in_flight"
-    );
-    let flag = Arc::new(AtomicBool::new(true));
-    let flag_for_catch = flag.clone();
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _guard = PostUnblockJwtRetryInFlightGuard {
-            flag: flag_for_catch,
-        };
-        panic!("simulate retry task panic");
-    }));
-    assert!(result.is_err());
-    assert!(
-        !flag.load(Ordering::Acquire),
-        "Drop must release flag on panic unwind"
-    );
-}
 mod hunk_tracking_mode {
     use super::super::{plan_hunk_tracking, resolve_hunk_tracking_mode};
     use supercharge_hunk_tracker::TrackingMode;
@@ -357,34 +280,6 @@ async fn broadcast_refresh_skill_baseline_tolerates_dropped_receiver() {
         rx_alive.try_recv(),
         Ok(crate::session::SessionCommand::RefreshSkillBaseline)
     ));
-}
-#[test]
-fn settings_allow_access_none_settings_is_allowed() {
-    assert!(settings_allow_access(None));
-}
-#[test]
-fn settings_allow_access_true_is_allowed() {
-    let rs = crate::util::config::RemoteSettings {
-        allow_access: Some(true),
-        ..Default::default()
-    };
-    assert!(settings_allow_access(Some(&rs)));
-}
-#[test]
-fn settings_allow_access_false_is_blocked() {
-    let rs = crate::util::config::RemoteSettings {
-        allow_access: Some(false),
-        ..Default::default()
-    };
-    assert!(!settings_allow_access(Some(&rs)));
-}
-#[test]
-fn settings_allow_access_field_absent_is_allowed() {
-    let rs = crate::util::config::RemoteSettings {
-        allow_access: None,
-        ..Default::default()
-    };
-    assert!(settings_allow_access(Some(&rs)));
 }
 /// Build a synthetic harness `task` call/result pair carrying the `<subagent_result>` footer, mirroring what the verifier/planner record.
 fn harness_pair(id: &str) -> Vec<supercharge_sampling_types::conversation::ConversationItem> {
@@ -3862,6 +3757,35 @@ async fn cached_token_fallthrough_falls_to_grok_com_without_credentials() {
         "no API-key creds and no kill switch -> interactive grok.com login",
     );
 }
+/// A provider-only deployment has no account session to offer, so every session
+/// method must be refused with setup guidance instead of starting the inherited
+/// first-party sign-in.
+#[tokio::test(flavor = "current_thread")]
+#[serial_test::serial]
+async fn provider_only_deployment_refuses_session_auth_methods() {
+    use supercharge_test_support::EnvGuard;
+    let _oidc_issuer = EnvGuard::unset("SUPERCHARGE_OIDC_ISSUER");
+    let _oauth2_issuer = EnvGuard::unset("SUPERCHARGE_OAUTH2_ISSUER");
+    let _command = EnvGuard::unset("SUPERCHARGE_AUTH_PROVIDER_COMMAND");
+    let agent = build_minimal_agent_for_tests();
+    assert!(
+        !agent.cfg.borrow().grok_com_config.session_auth_enabled(),
+        "the agent default must not enable session auth"
+    );
+    for method in ["cached_token", "supercharge.ai", "oidc"] {
+        let err = acp::Agent::authenticate(
+            &agent,
+            acp::AuthenticateRequest::new(acp::AuthMethodId::new(method)),
+        )
+        .await
+        .expect_err("session auth must be refused without a configured authority");
+        assert_eq!(
+            err.data.as_ref().and_then(|d| d.as_str()),
+            Some(crate::agent::auth_method::AUTH_ERROR_SESSION_DISABLED),
+            "method {method} must be refused with setup guidance",
+        );
+    }
+}
 /// Verifies the 4-state matrix of `(disable_zdr_incompatible_tools, zdr_video_output_s3)`: | ZDR flag | S3 config | Result | |----------|-----------|---------------------------------------------| | false | None | Enabled, no S3 (normal non-ZDR mode) | | true | None | Disabled (ZDR with no escape hatch) | | false | Some | Enabled, S3 **not** threaded (non-ZDR) | | true | Some | Enabled, S3 threaded (ZDR with upload path) |
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_video_gen_config_disabled_when_zdr_flag_set() {
@@ -6928,192 +6852,6 @@ fn post_auth_settings_not_coalesced_by_in_flight_reapply() {
         assert!(agent.post_auth_settings_in_flight.get());
     });
 }
-/// The tier re-check work is single-flight across every caller: back-to-back gated initializes run at most one live check.
-/// An awaited authenticate-path check skips (rather than doubles or waits out) a check already wedged on a stalled subscription endpoint. Drives the exact block `initialize` runs when `tier_allowed` is false.
-/// The full `initialize` fires once-per-process SUPERCHARGE_HOME cleanup work that a unit test must not run against the developer's real home.
-#[test]
-fn gated_reconnect_tier_recheck_is_single_flight() {
-    run_local_for_bridge_test(|| async {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-        let addr = listener.local_addr().expect("addr");
-        listener
-            .set_nonblocking(true)
-            .expect("nonblocking accept loop");
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let accept_stop = stop.clone();
-        let accept_thread = std::thread::spawn(move || {
-            let mut held = Vec::new();
-            while !accept_stop.load(std::sync::atomic::Ordering::Acquire) {
-                match listener.accept() {
-                    Ok((stream, _)) => held.push(stream),
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        std::thread::sleep(std::time::Duration::from_millis(20));
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-        let agent = build_minimal_agent_for_tests();
-        agent.cfg.borrow_mut().endpoints.cli_chat_proxy_base_url =
-            Some(format!("http://{addr}/v1"));
-        agent.cfg.borrow_mut().remote_settings = Some(crate::util::config::RemoteSettings {
-            allow_access: Some(false),
-            ..Default::default()
-        });
-        let auth = supercharge_login::GrokAuth {
-            key: "gated-user-key".into(),
-            user_id: "user-gated".into(),
-            auth_mode: supercharge_login::AuthMode::Oidc,
-            oidc_issuer: Some(supercharge_login::XAI_OAUTH2_ISSUER.to_owned()),
-            expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-            ..supercharge_login::GrokAuth::test_default()
-        };
-        agent.auth_manager.hot_swap(auth.clone());
-        *agent.allow_access_resolved_for.borrow_mut() = Some(auth.user_id.clone());
-        agent.tier_allowed.set(false);
-        for _ in 0..2 {
-            if !agent.tier_allowed.get() {
-                agent.spawn_tier_recheck();
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
-        assert_eq!(
-            agent.tier_recheck_run_count.get(),
-            1,
-            "the second spawned check must skip the claimed re-check"
-        );
-        tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            agent.enforce_grok_code_access(&auth),
-        )
-        .await
-        .expect("an awaited check must skip, not wait out, the wedged re-check");
-        assert_eq!(
-            agent.tier_recheck_run_count.get(),
-            1,
-            "the awaited check must not run a second concurrent re-check"
-        );
-        assert!(
-            !agent.tier_allowed.get(),
-            "the gate stays until a re-check resolves"
-        );
-        stop.store(true, std::sync::atomic::Ordering::Release);
-        accept_thread.join().expect("accept loop joins");
-    });
-}
-/// The check's own mint spawns a `/user` enrichment that can rewrite the in-memory user_id to the proxy-canonical value mid-check.
-/// The identity guard must read that normalization as the same account (it is the id the check's own bearer resolved to).
-/// A live id matching neither the started nor the canonical id is a real switch and still discards.
-#[test]
-fn tier_recheck_identity_guard_accepts_enrichment_canonical_user_id() {
-    run_local_for_bridge_test(|| async {
-        let agent = build_minimal_agent_for_tests();
-        let auth = supercharge_login::GrokAuth {
-            key: "seeded-key".into(),
-            user_id: "canonical-user".into(),
-            expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-            ..supercharge_login::GrokAuth::test_default()
-        };
-        agent.auth_manager.hot_swap(auth);
-        assert!(!agent.tier_recheck_identity_changed("seeded-user", Some("canonical-user")));
-        assert!(!agent.tier_recheck_identity_changed("canonical-user", None));
-        assert!(!agent.tier_recheck_identity_changed("canonical-user", Some("other-user")));
-        assert!(agent.tier_recheck_identity_changed("seeded-user", Some("other-user")));
-        assert!(agent.tier_recheck_identity_changed("seeded-user", None));
-        assert!(agent.tier_recheck_identity_changed("seeded-user", Some("")));
-    });
-}
-/// The other half of the reconnect paywall flash (the wedged test above locks the "gate holds while the check is in flight" half).
-/// A re-check that confirms a qualifying tier lifts `tier_allowed`, so the flash a subscribed user can see on a gated reconnect clears. Settings stay absent (the mock 404s `/settings`).
-/// That models the remote-fetch-failed / disabled arm where the confirmed tier is the authority for the lift. The bearer's tier claim already matches the live tier, so the post-unblock mint is skipped and no refresher is needed.
-#[test]
-fn gated_reconnect_recheck_lifts_gate_clearing_paywall_flash() {
-    run_local_for_bridge_test(|| async {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-        let addr = listener.local_addr().expect("addr");
-        listener
-            .set_nonblocking(true)
-            .expect("nonblocking accept loop");
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let accept_stop = stop.clone();
-        let accept_thread = std::thread::spawn(move || {
-            use std::io::{Read, Write};
-            while !accept_stop.load(std::sync::atomic::Ordering::Acquire) {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(2)));
-                        let mut head = Vec::new();
-                        let mut byte = [0u8; 1];
-                        while !head.ends_with(b"\r\n\r\n") {
-                            match stream.read(&mut byte) {
-                                Ok(1) => head.push(byte[0]),
-                                _ => break,
-                            }
-                        }
-                        let head = String::from_utf8_lossy(&head);
-                        let response = if head.contains("/user?include=subscription") {
-                            let body =
-                                r#"{"userId":"user-flash","subscriptionTier":"SuperGrokPro"}"#;
-                            format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
-                                 Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                                body.len()
-                            )
-                        } else {
-                            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\
-                             Connection: close\r\n\r\n"
-                                .to_owned()
-                        };
-                        let _ = stream.write_all(response.as_bytes());
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        std::thread::sleep(std::time::Duration::from_millis(20));
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-        let temp_dir = tempfile::tempdir().unwrap();
-        let auth_manager = std::sync::Arc::new(supercharge_login::AuthManager::new(
-            temp_dir.path(),
-            supercharge_login::GrokComConfig::default(),
-        ));
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let gateway = GatewaySender::new(tx);
-        let cfg = crate::agent::config::Config::default();
-        let agent =
-            MvpAgent::new(gateway, &cfg, auth_manager, None, None).expect("valid test config");
-        agent.cfg.borrow_mut().endpoints.cli_chat_proxy_base_url =
-            Some(format!("http://{addr}/v1"));
-        let auth = supercharge_login::GrokAuth {
-            key: jwt_with_tier(5),
-            user_id: "user-flash".into(),
-            auth_mode: supercharge_login::AuthMode::Oidc,
-            oidc_issuer: Some(supercharge_login::XAI_OAUTH2_ISSUER.to_owned()),
-            expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-            ..supercharge_login::GrokAuth::test_default()
-        };
-        agent.auth_manager.hot_swap(auth);
-        agent.tier_allowed.set(false);
-        tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            agent.retry_subscription_check(),
-        )
-        .await
-        .expect("re-check must finish well inside its bounded awaits");
-        assert!(
-            agent.tier_allowed.get(),
-            "a confirmed qualifying tier must lift the gate — the reconnect paywall flash clears"
-        );
-        assert_eq!(
-            agent.tier_recheck_run_count.get(),
-            1,
-            "the lift came from exactly one claimed re-check"
-        );
-        stop.store(true, std::sync::atomic::Ordering::Release);
-        accept_thread.join().expect("accept loop joins");
-    });
-}
 /// Agent with pre-loaded auth, a gateway receiver (to assert emitted notifications), and the proxy URL pointed at a mock `/v1/settings`.
 fn build_agent_with_auth_and_proxy(
     auth: supercharge_login::GrokAuth,
@@ -7160,42 +6898,6 @@ impl Drop for RestoreOtelGate {
     fn drop(&mut self) {
         supercharge_telemetry::external::mark_external_otel_settings_resolved();
     }
-}
-/// Regression: `cfg.remote_settings` is not reset on an account switch, so the access gate must not read a previous identity's cached `allow_access`.
-/// A mismatched identity stays provisionally open (unknown), like the OTEL gate's `rearm_on_switch`.
-#[tokio::test]
-async fn access_gate_does_not_leak_verdict_across_identities() {
-    use crate::agent::config::AgentMode;
-    use supercharge_login::{GrokAuth, XAI_OAUTH2_ISSUER};
-    let auth_a = GrokAuth {
-        oidc_issuer: Some(XAI_OAUTH2_ISSUER.to_string()),
-        user_id: "user-a".into(),
-        ..GrokAuth::test_default()
-    };
-    let (agent, _rx) = build_agent_with_auth_and_proxy(
-        auth_a,
-        "http://127.0.0.1:1/".to_string(),
-        AgentMode::Leader,
-    );
-    {
-        let mut cfg = agent.cfg.borrow_mut();
-        cfg.remote_settings = Some(crate::util::config::RemoteSettings {
-            allow_access: Some(false),
-            ..Default::default()
-        });
-    }
-    *agent.allow_access_resolved_for.borrow_mut() = Some("user-a".to_string());
-    let auth_b = GrokAuth {
-        oidc_issuer: Some(XAI_OAUTH2_ISSUER.to_string()),
-        user_id: "user-b".into(),
-        ..GrokAuth::test_default()
-    };
-    assert!(auth_b.is_xai_auth(), "precondition: first-party provider authentication");
-    agent.enforce_grok_code_access(&auth_b).await;
-    assert!(
-        agent.tier_allowed.get(),
-        "identity B must not inherit identity A's denied allow_access verdict",
-    );
 }
 /// First-party xAI auth with `writeback_enabled` settings upgrades storage to Writeback.
 /// The settings arrival also emits `x.ai/settings/update` and opens the external-OTEL gate.

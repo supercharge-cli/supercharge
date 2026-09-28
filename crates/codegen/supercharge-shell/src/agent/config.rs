@@ -1652,7 +1652,7 @@ impl Default for Config {
             feature_values: BTreeMap::new(),
             config_models: IndexMap::new(),
             config_warnings: Vec::new(),
-            grok_com_config: GrokComConfig::default(),
+            grok_com_config: GrokComConfig::provider_only_default(),
             login_device_flow: None,
             auth_providers: IndexMap::new(),
             model_providers: IndexMap::new(),

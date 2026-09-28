@@ -1,6 +1,7 @@
 //! `use_tool` — dispatch to a discovered MCP tool.
 
-use schemars::JsonSchema;
+mod input;
+pub use input::{InlineMcpInvocation, UseToolInput, parse_arguments_file};
 use serde::{Deserialize, Serialize};
 
 use crate::types::output::{MCPOutput, ToolOutput};
@@ -13,24 +14,7 @@ use crate::util::mcp_truncate::{McpTruncateContext, truncate_tool_output};
 /// raw name is all a renderer has.
 pub const USE_TOOL_NAME: &str = "use_tool";
 
-/// Input for the `use_tool` meta-dispatch tool.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct UseToolInput {
-    /// The qualified name of the integration tool to call (e.g., "linear__save_issue").
-    /// Must be a tool previously discovered via `search_tool`.
-    pub tool_name: String,
-    /// The arguments to pass to the tool, as a JSON object.
-    /// Use the parameter schema returned by `search_tool` to construct this.
-    #[schemars(schema_with = "object_value_schema")]
-    pub tool_input: serde_json::Value,
-}
-
-fn object_value_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    schemars::json_schema!({
-        "type": "object",
-        "additionalProperties": true,
-    })
-}
+pub(crate) const FILE_INPUT_SUPPORTED: &str = "file_input_supported";
 
 /// Configuration for [`UseTool`]. Controls whether the native-tool corrective error is active. When
 /// `native_tool_correction` is `true` (default), `use_tool` detects native tool names via
@@ -40,6 +24,15 @@ pub struct UseToolParams {
     /// Enable the native-tool corrective error. Default: `true`.
     #[serde(default = "default_true")]
     pub native_tool_correction: bool,
+    // Finalization overwrites this from host capability; never persist it as user configuration.
+    #[serde(default, skip_serializing)]
+    pub(crate) file_input_supported: bool,
+}
+
+impl UseToolParams {
+    pub fn supports_file_input(&self) -> bool {
+        self.file_input_supported
+    }
 }
 
 fn default_true() -> bool {
@@ -50,6 +43,7 @@ impl Default for UseToolParams {
     fn default() -> Self {
         Self {
             native_tool_correction: true,
+            file_input_supported: false,
         }
     }
 }
@@ -69,7 +63,9 @@ async fn dispatch_local_mcp(
     ctx: supercharge_tool_runtime::ToolCallContext,
 ) -> Result<ToolOutput, supercharge_tool_runtime::ToolError> {
     let tool_id = supercharge_tool_protocol::ToolId::new(tool_name).map_err(|_| {
-        supercharge_tool_runtime::ToolError::invalid_arguments(format!("invalid tool name: '{tool_name}'"))
+        supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+            "invalid tool name: '{tool_name}'"
+        ))
     })?;
     let typed = dispatch.0.call_terminal(tool_id, tool_input, ctx).await?;
     serde_json::from_value(typed.value)
@@ -207,9 +203,11 @@ pub async fn dispatch_mcp_tool(
         .get::<crate::types::resources::InnerDispatch>();
 
     if gateway_source.is_none() && dispatch.is_none() {
-        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-            "{caller} called outside of tool execution context. inner_dispatch not set -- this is a bug."
-        )));
+        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+            format!(
+                "{caller} called outside of tool execution context. inner_dispatch not set -- this is a bug."
+            ),
+        ));
     }
 
     if let Some(source) = gateway_source {
@@ -265,6 +263,63 @@ pub async fn dispatch_mcp_tool(
     .await
 }
 
+/// Check MCP routing eligibility without dispatching or probing a remote tool.
+///
+/// # Errors
+/// Rejects native or unqualified targets not present in the managed catalog.
+pub async fn validate_mcp_target(
+    resources: Option<&crate::types::resources::SharedResources>,
+    tool_name: &str,
+) -> Result<(), supercharge_tool_runtime::ToolError> {
+    use crate::types::resources::{EnabledNativeToolNames, ManagedGatewayToolCatalog, Params};
+
+    let (gateway_source, is_native, search_tool_name) = if let Some(resources) = resources {
+        let guard = resources.lock().await;
+        let gateway_source = guard
+            .get::<ManagedGatewayToolCatalog>()
+            .and_then(|catalog| catalog.get(tool_name).cloned());
+        let correction_enabled = guard
+            .get::<Params<UseToolParams>>()
+            .is_none_or(|p| p.0.native_tool_correction);
+        let native = correction_enabled
+            && guard
+                .get::<EnabledNativeToolNames>()
+                .is_some_and(|set| set.contains(tool_name));
+        let st = guard
+            .get::<crate::types::template_renderer::TemplateRenderer>()
+            .and_then(|r| r.tool_for_kind(ToolKind::SearchTool))
+            .map(str::to_string)
+            .unwrap_or_else(|| "search_tool".to_string());
+        (gateway_source, native, st)
+    } else {
+        (None, false, "search_tool".to_string())
+    };
+
+    if !tool_name.contains("__") && gateway_source.is_none() {
+        return Err(if is_native {
+            tracing::info!(
+                tool_name = %tool_name,
+                "use_tool: native tool detected, returning corrective error"
+            );
+            supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+                "`{tool}` is a native tool, not an MCP integration tool. \
+                 Call `{tool}` directly as its own tool call instead of \
+                 routing it through `use_tool`.",
+                tool = tool_name
+            ))
+        } else {
+            supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+                "'{}' is not a valid MCP tool name. \
+                 Tool names must be qualified as `server__tool` (e.g., `linear__save_issue`). \
+                 Use `{}` to discover available tools.",
+                tool_name, search_tool_name
+            ))
+        });
+    }
+
+    Ok(())
+}
+
 impl crate::types::tool_metadata::ToolMetadata for UseTool {
     fn kind(&self) -> ToolKind {
         ToolKind::UseTool
@@ -275,12 +330,52 @@ impl crate::types::tool_metadata::ToolMetadata for UseTool {
     }
 
     fn description_template(&self) -> &str {
-        "Call an MCP integration tool.\n\n\
-         The `tool_name` must be the qualified `server__tool` name (e.g., `linear__save_issue`). \
-         The `tool_input` must conform exactly to the tool's input schema\
-         ${%- if tools.by_kind.search_tool %} as returned by `${{ tools.by_kind.search_tool }}`${%- endif %}."
+        "Call a discovered MCP integration tool with `${{ params.use_tool.tool_name }}` and \
+         `${{ params.use_tool.tool_input }}`. Arguments must match the discovered schema\
+         ${%- if tools.by_kind.search_tool %} from `${{ tools.by_kind.search_tool }}`${%- endif %}."
+    }
+
+    fn versioned_definition(
+        &self,
+        _contract_version: Option<&str>,
+        client_name: &str,
+        description_override: Option<&str>,
+        renderer: &crate::types::template_renderer::TemplateRenderer,
+        param_map: &std::collections::HashMap<String, String>,
+        _input_schema: &serde_json::Value,
+        effective_params: &serde_json::Value,
+    ) -> crate::types::definition::ToolDefinition {
+        let supports_file_input = effective_params
+            .get(FILE_INPUT_SUPPORTED)
+            .and_then(serde_json::Value::as_bool)
+            == Some(true);
+        let template = description_override.unwrap_or_else(|| {
+            if supports_file_input {
+                FILE_INPUT_DESCRIPTION
+            } else {
+                self.description_template()
+            }
+        });
+        let description = renderer.render(template).unwrap_or_else(|error| {
+            crate::types::template_renderer::strip_markers_on_render_failure(template, &error)
+        });
+        let schema = serde_json::json!(UseToolInput::input_schema(supports_file_input));
+        crate::types::definition::ToolDefinition::function(
+            client_name,
+            Some(&description),
+            crate::util::remap::remap_schema_properties(&schema, param_map),
+        )
     }
 }
+
+const FILE_INPUT_DESCRIPTION: &str = "Call a discovered MCP integration tool.\n\n\
+         Supply exactly one form: `${{ params.use_tool.tool_name }}` plus `${{ params.use_tool.tool_input }}` inline; \
+         `${{ params.use_tool.tool_name }}` plus `${{ params.use_tool.tool_input_file }}` for a UTF-8 JSON arguments-only object; \
+         or `${{ params.use_tool.file }}` for a UTF-8 JSON document with canonical `tool_name` and object `tool_input`. \
+         File forms require Read permission, then normal MCP approval. \
+         Files must be complete regular files, at most 8 MiB. Do not mix forms or delegate to another file or native tool. \
+         Remote keys and JSON-encoded strings remain unchanged. Arguments must match the discovered schema\
+         ${%- if tools.by_kind.search_tool %} from `${{ tools.by_kind.search_tool }}`${%- endif %}.";
 
 impl supercharge_tool_runtime::Tool for UseTool {
     type Args = UseToolInput;
@@ -313,59 +408,13 @@ impl supercharge_tool_runtime::Tool for UseTool {
         ctx: supercharge_tool_runtime::ToolCallContext,
         input: UseToolInput,
     ) -> Result<ToolOutput, supercharge_tool_runtime::ToolError> {
-        use crate::types::resources::{EnabledNativeToolNames, ManagedGatewayToolCatalog, Params};
-
+        let UseToolInput::Inline(input) = input else {
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                "File-backed MCP invocations require supported shell preparation; this backend cannot execute unresolved file inputs",
+            ));
+        };
         let resources = crate::types::tool_metadata::shared_resources(&ctx).ok();
-        let (gateway_source, is_native, search_tool_name) =
-            if let Some(resources) = resources.as_ref() {
-                let guard = resources.lock().await;
-                let gateway_source = guard
-                    .get::<ManagedGatewayToolCatalog>()
-                    .and_then(|catalog| catalog.get(&input.tool_name).cloned());
-                let correction_enabled = guard
-                    .get::<Params<UseToolParams>>()
-                    .is_none_or(|p| p.0.native_tool_correction);
-                let native = correction_enabled
-                    && guard
-                        .get::<EnabledNativeToolNames>()
-                        .is_some_and(|set| set.contains(&input.tool_name));
-                let st = guard
-                    .get::<crate::types::template_renderer::TemplateRenderer>()
-                    .and_then(|r| r.tool_for_kind(ToolKind::SearchTool))
-                    .map(str::to_string)
-                    .unwrap_or_else(|| "search_tool".to_string());
-                (gateway_source, native, st)
-            } else {
-                (None, false, "search_tool".to_string())
-            };
-
-        if !input.tool_name.contains("__") && gateway_source.is_none() {
-            return Err(if is_native {
-                // Native tool wrongly routed through use_tool. Tell the model to call it directly.
-                // Strategy chosen via offline eval over real production failures: 2% doom-loop, 86%
-                // native recovery, 0 double-schedules.
-                tracing::info!(
-                    tool_name = %input.tool_name,
-                    "use_tool: native tool detected, returning corrective error"
-                );
-                supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "`{tool}` is a native tool, not an MCP integration tool. \
-                     Call `{tool}` directly as its own tool call instead of \
-                     routing it through `use_tool`.",
-                    tool = input.tool_name
-                ))
-            } else {
-                // Unknown name (e.g. a built-in skill like `jira`). Keep the
-                // existing search_tool steer (empirically reduces retry loops
-                // on unqualified tool names).
-                supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "'{}' is not a valid MCP tool name. \
-                     Tool names must be qualified as `server__tool` (e.g., `linear__save_issue`). \
-                     Use `{}` to discover available tools.",
-                    input.tool_name, search_tool_name
-                ))
-            });
-        }
+        validate_mcp_target(resources.as_ref(), &input.tool_name).await?;
 
         let output =
             dispatch_mcp_tool(&ctx, &input.tool_name, input.tool_input, "use_tool").await?;
@@ -396,12 +445,13 @@ mod tests {
             tool_id: supercharge_tool_protocol::ToolId,
             _args: serde_json::Value,
             _ctx: supercharge_tool_runtime::ToolCallContext,
-        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput> {
+        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput>
+        {
             assert_eq!(tool_id.as_str(), self.expected_tool_name);
             let value = serde_json::to_value(self.return_output.clone()).unwrap();
-            supercharge_tool_runtime::terminal_only(Ok(supercharge_tool_runtime::TypedToolOutput::from_value(
-                tool_id, value,
-            )))
+            supercharge_tool_runtime::terminal_only(Ok(
+                supercharge_tool_runtime::TypedToolOutput::from_value(tool_id, value),
+            ))
         }
     }
 
@@ -419,7 +469,8 @@ mod tests {
             tool_id: supercharge_tool_protocol::ToolId,
             args: serde_json::Value,
             _ctx: supercharge_tool_runtime::ToolCallContext,
-        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput> {
+        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput>
+        {
             if !matches!(
                 tool_id.as_str(),
                 "server__tool" | "linear__save_issue" | "linear__list_issues"
@@ -430,9 +481,9 @@ mod tests {
             }
             *self.captured_args.lock().unwrap() = Some(args);
             let value = serde_json::to_value(ToolOutput::Text("ok".into())).unwrap();
-            supercharge_tool_runtime::terminal_only(Ok(supercharge_tool_runtime::TypedToolOutput::from_value(
-                tool_id, value,
-            )))
+            supercharge_tool_runtime::terminal_only(Ok(
+                supercharge_tool_runtime::TypedToolOutput::from_value(tool_id, value),
+            ))
         }
     }
 
@@ -455,11 +506,11 @@ mod tests {
             tool_id: supercharge_tool_protocol::ToolId,
             _args: serde_json::Value,
             _ctx: supercharge_tool_runtime::ToolCallContext,
-        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput> {
-            supercharge_tool_runtime::terminal_only(Err(supercharge_tool_runtime::ToolError::not_found(
-                tool_id,
-                "Tool not found",
-            )))
+        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput>
+        {
+            supercharge_tool_runtime::terminal_only(Err(
+                supercharge_tool_runtime::ToolError::not_found(tool_id, "Tool not found"),
+            ))
         }
     }
 
@@ -470,10 +521,11 @@ mod tests {
             _tool_id: supercharge_tool_protocol::ToolId,
             _args: serde_json::Value,
             _ctx: supercharge_tool_runtime::ToolCallContext,
-        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput> {
-            supercharge_tool_runtime::terminal_only(Err(supercharge_tool_runtime::ToolError::invalid_arguments(
-                "local validation failed",
-            )))
+        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput>
+        {
+            supercharge_tool_runtime::terminal_only(Err(
+                supercharge_tool_runtime::ToolError::invalid_arguments("local validation failed"),
+            ))
         }
     }
 
@@ -489,13 +541,17 @@ mod tests {
             _tool_id: supercharge_tool_protocol::ToolId,
             _args: serde_json::Value,
             _ctx: supercharge_tool_runtime::ToolCallContext,
-        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput> {
-            let tid = supercharge_tool_protocol::ToolId::new(&self.error)
-                .unwrap_or_else(|_| supercharge_tool_protocol::ToolId::new("unknown").expect("valid"));
-            supercharge_tool_runtime::terminal_only(Err(supercharge_tool_runtime::ToolError::not_found(
-                tid,
-                format!("Tool not found: {}", self.error),
-            )))
+        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput>
+        {
+            let tid = supercharge_tool_protocol::ToolId::new(&self.error).unwrap_or_else(|_| {
+                supercharge_tool_protocol::ToolId::new("unknown").expect("valid")
+            });
+            supercharge_tool_runtime::terminal_only(Err(
+                supercharge_tool_runtime::ToolError::not_found(
+                    tid,
+                    format!("Tool not found: {}", self.error),
+                ),
+            ))
         }
     }
 
@@ -520,15 +576,18 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "read_file".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await;
 
         let err = result.unwrap_err();
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::InvalidArguments);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::InvalidArguments
+        );
         assert!(err.detail.contains("not a valid MCP tool name"));
         assert!(err.detail.contains("read_file"));
     }
@@ -541,15 +600,18 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "linear__save_issue".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await;
 
         let err = result.unwrap_err();
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::InvalidArguments);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::InvalidArguments
+        );
         assert!(err.detail.contains("inner_dispatch not set"));
     }
 
@@ -564,10 +626,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "linear__save_issue".into(),
                 tool_input: serde_json::json!({"title": "test issue"}),
-            },
+            }),
         )
         .await;
 
@@ -589,10 +651,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "bad__tool".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await;
 
@@ -702,10 +764,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "grafana__search_dashboards".into(),
                 tool_input: serde_json::json!({"query": "prod"}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -743,10 +805,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "grafana__search_dashboards".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -776,10 +838,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "grafana__search_dashboards".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -799,10 +861,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "grafana__search_dashboards".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -869,10 +931,10 @@ mod tests {
         supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "grafana__search_dashboards".into(),
                 tool_input: serde_json::Value::Null,
-            },
+            }),
         )
         .await
         .unwrap();
@@ -891,10 +953,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "linear__list_issues".into(),
                 tool_input: serde_json::Value::String(r#"{"assignee": "me", "limit": 10}"#.into()),
-            },
+            }),
         )
         .await;
 
@@ -917,10 +979,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "linear__save_issue".into(),
                 tool_input: expected.clone(),
-            },
+            }),
         )
         .await;
 
@@ -937,10 +999,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::Value::String("not json".into()),
-            },
+            }),
         )
         .await;
 
@@ -964,10 +1026,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "connector__bad/id".into(),
                 tool_input: serde_json::json!({"q": "x"}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -993,15 +1055,18 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({"local": true}),
-            },
+            }),
         )
         .await;
 
         let err = result.unwrap_err();
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::InvalidArguments);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::InvalidArguments
+        );
         assert!(err.detail.contains("local validation failed"));
         assert!(gateway_captured.lock().unwrap().is_none());
     }
@@ -1022,10 +1087,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({"local": true}),
-            },
+            }),
         )
         .await;
 
@@ -1042,10 +1107,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({"local": true}),
-            },
+            }),
         )
         .await;
 
@@ -1096,10 +1161,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -1156,10 +1221,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -1212,10 +1277,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -1473,10 +1538,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -1563,10 +1628,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "server__tool".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await
         .unwrap();
@@ -1606,6 +1671,7 @@ mod tests {
         resources.insert(EnabledNativeToolNames(set));
         resources.insert(Params(UseToolParams {
             native_tool_correction: false,
+            ..UseToolParams::default()
         }));
         resources.into_shared()
     }
@@ -1631,15 +1697,18 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "scheduler_create".into(),
                 tool_input: serde_json::json!({"interval": "5m"}),
-            },
+            }),
         )
         .await;
 
         let err = result.unwrap_err();
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::InvalidArguments);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::InvalidArguments
+        );
         assert!(err.detail.contains("native tool"), "got: {}", err.detail);
         assert!(err.detail.contains("scheduler_create"));
         assert!(err.detail.contains("directly"));
@@ -1659,10 +1728,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "jira".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await;
 
@@ -1689,10 +1758,10 @@ mod tests {
         let result = supercharge_tool_runtime::Tool::run(
             &UseTool,
             ctx,
-            UseToolInput {
+            UseToolInput::Inline(InlineMcpInvocation {
                 tool_name: "scheduler_create".into(),
                 tool_input: serde_json::json!({}),
-            },
+            }),
         )
         .await;
 

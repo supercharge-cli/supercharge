@@ -103,7 +103,7 @@ pub(super) fn ensure_dashboard_state(app: &mut AppView) {
     state.set_voice_visible(app.voice_mode_enabled);
     state.set_restricted_commands(&app.tier_restricted_commands);
     let billing = app.usage_visible;
-    let usage_cmd = !app.has_external_auth_provider;
+    let usage_cmd = true;
     state
         .dispatch
         .slash_controller
@@ -1413,21 +1413,6 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
             });
         }
 
-        // Tier-restricted commands stay visible for discoverability but must not execute
-        // They must not fall through to the unknown-command path below, which would spawn a session with the raw slash text as its first prompt
-        // The dashboard has no question modal, so upsell via the feedback toast
-        if reg.is_restricted(invocation.token) {
-            let token = invocation.token.to_string();
-            if let Some(d) = app.dashboard.as_mut() {
-                d.dispatch.set_text("");
-                d.set_error_toast(&format!(
-                    "/{token} requires SuperGrok: upgrade at {}",
-                    super::billing::UPSELL_URL_UPGRADE
-                ));
-            }
-            return vec![];
-        }
-
         let Some(command) = reg.get(invocation.token).cloned() else {
             // Unknown command. Fall back to the regular dispatch path so the text becomes a new session's prompt.
             return dispatch_dashboard_dispatch(app, text, /* attach */ false);
@@ -1464,7 +1449,7 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
             bundle_state: &app.bundle_state,
             screen_mode: app.screen_mode,
             billing_surface_visible: app.usage_visible,
-            usage_command_visible: !app.has_external_auth_provider,
+            usage_command_visible: true,
             pager_state: crate::settings::PagerLocalSnapshot {
                 multiline_mode: dashboard_multiline,
                 yolo_mode: app.default_yolo,

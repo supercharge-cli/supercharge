@@ -364,53 +364,18 @@ fn voice_ctrl_space_release_leaves_toggle_recording_running() {
     );
 }
 
-/// A free-tier user hitting the voice keybinding gets the SuperGrok upsell instead of a doomed voice session.
-/// The keybinding bypasses the slash registry, so this dispatcher is the enforcement point.
 #[test]
-fn voice_keybinding_on_restricted_tier_opens_upsell() {
-    if !supercharge_voice::AUDIO_SUPPORTED {
-        return; // The tier check runs after the AUDIO_SUPPORTED gate.
+fn voice_keybinding_ignores_remote_subscription_tier() {
+    for tier in ["Free", "Supercharge"] {
+        let mut app = test_app_with_agent();
+        app.voice_mode_enabled = true;
+        app.apply_auth_meta(&supercharge_login::AuthMeta {
+            subscription_tier: Some(tier.into()),
+            ..Default::default()
+        });
+        dispatch(Action::EnableVoiceMode, &mut app);
+        assert!(app.agents.get(&AgentId(0)).unwrap().question_view.is_none());
     }
-    let mut app = test_app_with_agent();
-    app.voice_mode_enabled = true;
-    // A personal login without a subscription tier is free tier, so voice is restricted
-    app.apply_auth_meta(&supercharge_login::AuthMeta::default());
-    assert!(app.is_voice_tier_restricted());
-
-    dispatch(Action::EnableVoiceMode, &mut app);
-
-    assert!(
-        app.agents.get(&AgentId(0)).unwrap().question_view.is_some(),
-        "restricted-tier voice keybinding must open the Supercharge upsell"
-    );
-    assert!(
-        !app.voice_listening(),
-        "voice must not start on a restricted tier"
-    );
-}
-
-/// A paid-tier user's voice keybinding is not intercepted by the tier gate.
-#[test]
-fn voice_keybinding_on_paid_tier_not_gated() {
-    if !supercharge_voice::AUDIO_SUPPORTED {
-        return;
-    }
-    let mut app = test_app_with_agent();
-    app.voice_mode_enabled = true;
-    let meta = supercharge_login::AuthMeta {
-        subscription_tier: Some("Supercharge".into()),
-        ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert!(!app.is_voice_tier_restricted());
-
-    dispatch(Action::EnableVoiceMode, &mut app);
-
-    // No upsell modal; the paid user proceeds down the normal voice path
-    assert!(
-        app.agents.get(&AgentId(0)).unwrap().question_view.is_none(),
-        "paid-tier voice must not be intercepted by the tier gate"
-    );
 }
 
 #[test]

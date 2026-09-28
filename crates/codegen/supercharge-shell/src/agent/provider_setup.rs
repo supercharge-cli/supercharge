@@ -716,7 +716,6 @@ fn apply_catalog_auth(
         request = request.bearer_auth(key);
         if base_url.contains("openrouter.ai") {
             request = request
-                .header("HTTP-Referer", "https://supercharge.ai")
                 .header("X-Title", "Supercharge AI");
         }
     }
@@ -1020,18 +1019,6 @@ pub fn load_existing_provider_setup() -> Option<(String, String)> {
     load_existing_provider_setup_details().map(|setup| (setup.base_url, setup.api_key))
 }
 
-fn env_provider_api_key() -> Option<String> {
-    for var in ["XAI_API_KEY", "GROK_API_KEY", "OPENAI_API_KEY"] {
-        if let Ok(raw) = std::env::var(var) {
-            let key = sanitize_provider_api_key(&raw);
-            if !key.is_empty() {
-                return Some(key);
-            }
-        }
-    }
-    None
-}
-
 fn first_model_provider_setup(parsed: &toml::Value) -> Option<ExistingProviderSetup> {
     let providers = parsed.get("model_providers")?.as_table()?;
     for (id, provider) in providers {
@@ -1065,8 +1052,12 @@ fn first_model_provider_setup(parsed: &toml::Value) -> Option<ExistingProviderSe
 }
 
 pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
-    let path = crate::util::config::user_config_path();
-    let content = crate::util::config::read_to_string_or_empty(&path).unwrap_or_default();
+    load_existing_provider_setup_details_at(&crate::util::config::user_config_path())
+}
+
+/// Path-injectable form of [`load_existing_provider_setup_details`].
+fn load_existing_provider_setup_details_at(path: &Path) -> Option<ExistingProviderSetup> {
+    let content = crate::util::config::read_to_string_or_empty(path).unwrap_or_default();
     let parsed = if content.trim().is_empty() {
         None
     } else {
@@ -1086,10 +1077,13 @@ pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
             .map(str::trim)
             .filter(|url| !url.is_empty())
             .map(str::to_owned);
+        // Only credentials persisted for this provider count. Ambient first-party
+        // key variables are not a provider setup: filling one in here would point a
+        // launch at a first-party endpoint nobody configured, and would attach an
+        // inherited key to whatever base URL happens to be present.
         let api_key = provider_setup_api_key_from_toml(parsed)
             .map(|key| sanitize_provider_api_key(&key))
             .filter(|key| !key.is_empty())
-            .or_else(env_provider_api_key)
             .unwrap_or_default();
         if let Some(base_url) = base_url {
             return Some(ExistingProviderSetup {
@@ -1104,14 +1098,7 @@ pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
             return Some(setup);
         }
     }
-
-    let api_key = env_provider_api_key()?;
-    Some(ExistingProviderSetup {
-        base_url: "https://api.x.ai/v1".to_owned(),
-        api_key,
-        format: SetupWireFormat::Openai,
-        provider_id: "grok".to_owned(),
-    })
+    None
 }
 
 #[cfg(test)]
@@ -1251,6 +1238,41 @@ mod tests {
         }
         assert_eq!(SetupWireFormat::default(), SetupWireFormat::Openai);
         assert_eq!(SetupWireFormat::parse("unknown"), SetupWireFormat::Openai);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn provider_setup_prefill_never_invents_a_provider_from_ambient_keys() {
+        use supercharge_test_support::EnvGuard;
+        let _xai = EnvGuard::set("XAI_API_KEY", "ambient-first-party-key");
+        let _grok = EnvGuard::set("GROK_API_KEY", "ambient-grok-key");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        assert!(
+            load_existing_provider_setup_details_at(&path).is_none(),
+            "an unconfigured machine must not produce a provider setup, even with \
+             XAI_API_KEY/GROK_API_KEY present: that would pre-fill /setup with an \
+             api.x.ai endpoint nobody chose"
+        );
+
+        // A saved provider keeps its own key; the ambient variable is not substituted.
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://inference.example.com/v1".to_owned(),
+                api_key: "saved-provider-key".to_owned(),
+                model_id: "saved-model".to_owned(),
+                model_name: "Saved model".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "openai".to_owned(),
+            },
+        )
+        .unwrap();
+        let existing = load_existing_provider_setup_details_at(&path).expect("saved setup");
+        assert_eq!(existing.api_key, "saved-provider-key");
+        assert_eq!(existing.base_url, "https://inference.example.com/v1");
+        assert_ne!(existing.base_url, "https://api.x.ai/v1");
     }
 
     #[test]

@@ -3181,40 +3181,18 @@ fn dashboard_does_not_advertise_or_dispatch_doctor() {
         assert_eq!(dashboard.error_toast.as_deref(), Some(expected.as_str()));
     }
 }
-/// External-auth hides `/usage` via `visible()`, not session-scope. Typed
-/// `/usage` on the dashboard must refuse with the command's message, not
-/// claim it only works in a session.
 #[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
-fn dashboard_slash_usage_hidden_for_external_auth() {
+fn dashboard_usage_remains_available_with_external_provider_auth() {
     let mut app = three_agent_app();
-    app.has_external_auth_provider = true;
     app.apply_auth_meta(&supercharge_login::AuthMeta::default());
     open_dashboard(&mut app);
     let before = app.agents.len();
     let effects = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    assert!(effects.is_empty(), "must not enqueue spawn effects");
-    assert_eq!(app.agents.len(), before, "must not add an agent");
-    assert_eq!(app.dashboard.as_ref().unwrap().dispatch.text(), "");
-    let toast = app
-        .dashboard
-        .as_ref()
-        .unwrap()
-        .error_toast
-        .as_deref()
-        .expect("error toast for gated /usage");
-    assert!(
-        toast.contains("/usage is not available"),
-        "unexpected toast: {toast}"
-    );
-    assert!(
-        !toast.contains("only works in a session"),
-        "must not mis-label /usage as session-scoped: {toast}"
-    );
-    assert!(
-        !toast.contains("Supercharge"),
-        "must not upsell billing on external auth: {toast}"
-    );
+    assert!(effects.is_empty());
+    assert_eq!(app.agents.len(), before);
+    assert!(app.dashboard.as_ref().unwrap().usage_modal.is_some());
+    assert!(app.dashboard.as_ref().unwrap().error_toast.is_none());
 }
 /// The dashboard modal's own fetch generation and its open state.
 fn dashboard_usage_modal(app: &AppView) -> &crate::views::usage_modal::UsageInfoModalState {
@@ -3234,13 +3212,7 @@ fn dashboard_slash_usage_opens_dashboard_modal() {
     open_dashboard(&mut app);
     let before = app.agents.len();
     let effects = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    let [Effect::FetchAppBilling { nonce }] = effects.as_slice() else {
-        panic!("session-less open refreshes only the account allowance, got: {effects:?}");
-    };
-    assert_ne!(
-        *nonce, 0,
-        "a modal-driven fetch must carry a real generation"
-    );
+    assert!(effects.is_empty(), "session-less usage must not fetch account billing");
     assert_eq!(app.agents.len(), before, "must not add an agent");
     assert!(
         matches!(app.active_view, ActiveView::AgentDashboard),
@@ -3255,11 +3227,8 @@ fn dashboard_slash_usage_opens_dashboard_modal() {
     );
     let modal = dashboard_usage_modal(&app);
     assert_eq!(modal.active_tab, UsageInfoTab::UsageLimit);
-    assert_eq!(modal.fetch_nonce, *nonce);
+    assert_eq!(modal.fetch_nonce, 0);
     assert!(modal.ctx.session_id.is_none());
-    assert!(modal.ctx.usage_visible);
-    assert!(!modal.ctx.chat_kind);
-    assert!(modal.billing_loading);
     for agent in app.agents.values() {
         assert!(
             agent.active_modal.is_none(),
@@ -3312,84 +3281,7 @@ fn dashboard_usage_modal_reopen_retabs_without_refetch_and_session_slashes_stay_
         "unexpected toast: {toast}"
     );
 }
-/// The reply that carries the modal's generation settles it; a background reply (nonce 0) updates the cache but not the modal.
-#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
-#[test]
-fn dashboard_usage_modal_settles_only_on_its_own_app_billing_generation() {
-    let mut app = three_agent_app();
-    open_dashboard(&mut app);
-    let _ = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    let nonce = dashboard_usage_modal(&app).fetch_nonce;
-    let _ = dispatch(
-        Action::TaskComplete(TaskResult::AppBillingFetched {
-            balance: Some(test_bal(10.0)),
-            autotopup: crate::views::credit_bar::AutoTopupFetch::Unchanged,
-            nonce: 0,
-        }),
-        &mut app,
-    );
-    assert!(
-        dashboard_usage_modal(&app).billing_loading,
-        "a startup/login refresh must not settle the modal's fetch"
-    );
-    assert_eq!(app.credit_balance.as_ref().map(|b| b.usage_pct), Some(10.0));
-    let effects = dispatch(
-        Action::TaskComplete(TaskResult::AppBillingFetched {
-            balance: Some(test_bal(42.0)),
-            autotopup: crate::views::credit_bar::AutoTopupFetch::Unchanged,
-            nonce,
-        }),
-        &mut app,
-    );
-    assert!(effects.is_empty(), "got: {effects:?}");
-    let modal = dashboard_usage_modal(&app);
-    assert!(!modal.billing_loading);
-    assert!(modal.billing_error.is_none());
-    assert_eq!(app.credit_balance.as_ref().map(|b| b.usage_pct), Some(42.0));
-}
-/// A failed fetch surfaces its error in the modal and keeps the last-known-good balance (the welcome warning and new-agent seed read it).
-#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
-#[test]
-fn dashboard_usage_modal_billing_error_keeps_cached_balance() {
-    let mut app = three_agent_app();
-    app.credit_balance = Some(test_bal(63.0));
-    open_dashboard(&mut app);
-    let _ = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    let nonce = dashboard_usage_modal(&app).fetch_nonce;
-    let effects = dispatch(
-        Action::TaskComplete(TaskResult::AppBillingError {
-            error: "proxy unreachable".to_string(),
-            nonce,
-        }),
-        &mut app,
-    );
-    assert!(effects.is_empty(), "got: {effects:?}");
-    let modal = dashboard_usage_modal(&app);
-    assert!(!modal.billing_loading);
-    assert_eq!(modal.billing_error.as_deref(), Some("proxy unreachable"));
-    assert_eq!(
-        app.credit_balance.as_ref().map(|b| b.usage_pct),
-        Some(63.0),
-        "a transport failure must not wipe the cached balance"
-    );
-}
-#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
-#[test]
-fn dashboard_slash_usage_redirect_url_skips_billing_fetch() {
-    let mut app = three_agent_app();
-    app.usage_billing_redirect_url = Some("https://billing.example.com/me".to_string());
-    open_dashboard(&mut app);
-    let effects = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    assert!(effects.is_empty(), "got: {effects:?}");
-    let modal = dashboard_usage_modal(&app);
-    assert!(!modal.billing_loading);
-    assert_eq!(modal.fetch_nonce, 0);
-    assert_eq!(
-        modal.ctx.billing_redirect_url.as_deref(),
-        Some("https://billing.example.com/me")
-    );
-}
-/// Team / API-key accounts have no consumer billing surface: no fetch, and the modal explains who manages the limits.
+/// Session-less usage does not fetch provider or account data.
 #[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_slash_usage_team_account_skips_billing_fetch() {
@@ -3400,26 +3292,9 @@ fn dashboard_slash_usage_team_account_skips_billing_fetch() {
     let effects = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
     assert!(effects.is_empty(), "got: {effects:?}");
     let modal = dashboard_usage_modal(&app);
-    assert!(!modal.ctx.usage_visible);
-    assert!(!modal.billing_loading);
     assert_eq!(modal.fetch_nonce, 0);
 }
-/// `--chat` processes carry `chat_kind` on every session; the dashboard modal follows so it hides Build coding credits the same way.
-#[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
-#[test]
-fn dashboard_slash_usage_in_chat_mode_marks_modal_chat_kind() {
-    let mut app = three_agent_app();
-    app.chat_mode = true;
-    open_dashboard(&mut app);
-    let effects = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    assert!(
-        effects.is_empty(),
-        "chat kind never fetches Build billing, got: {effects:?}"
-    );
-    let modal = dashboard_usage_modal(&app);
-    assert!(modal.ctx.chat_kind);
-    assert!(!modal.billing_loading);
-}
+
 #[serial_test::serial(SUPERCHARGE_AGENT_DASHBOARD)]
 #[test]
 fn dashboard_reopen_clears_usage_modal() {

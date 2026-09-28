@@ -24,12 +24,11 @@ const MAX_PENDING: usize = 256;
 /// Number of messages to drop when buffer is full.
 const DROP_BATCH_SIZE: usize = 64;
 
-/// Build the share URL for a session.
-/// Format: https://supercharge.ai/build/{sessionId}
-pub(crate) fn build_share_url(session_id: &str) -> String {
+/// Build a session link only when a web frontend is explicitly configured.
+pub(crate) fn build_share_url(session_id: &str) -> Option<String> {
     let base_url = std::env::var("SUPERCHARGE_CODE_WEB_URL")
-        .unwrap_or_else(|_| "https://supercharge.ai".to_string());
-    format!("{}/build/{}", base_url, session_id)
+        .ok().filter(|url| !url.trim().is_empty())?;
+    Some(format!("{}/build/{}", base_url.trim_end_matches('/'), session_id))
 }
 
 /// Connection state for the relay sync.
@@ -551,8 +550,9 @@ fn handle_relay_message(
                 }
 
                 // Display share URL after successful handshake
-                let share_url = build_share_url(session_id);
-                tprintln!("📡 Session syncing to relay. View at: {}", share_url);
+                if let Some(share_url) = build_share_url(session_id) {
+                    tprintln!("📡 Session syncing to relay. View at: {}", share_url);
+                }
             }
         }
         Some("_x.ai/relay/initialized") => {
@@ -783,18 +783,11 @@ mod tests {
     }
 
     #[test]
-    fn test_build_share_url_default() {
-        let url = build_share_url("test-session-123");
-        assert_eq!(url, "https://supercharge.ai/build/test-session-123");
-    }
-
-    #[test]
-    fn test_build_share_url_with_uuid() {
-        let url = build_share_url("01937d8a-1234-7abc-9def-0123456789ab");
-        assert_eq!(
-            url,
-            "https://supercharge.ai/build/01937d8a-1234-7abc-9def-0123456789ab"
-        );
+    fn share_url_requires_explicit_frontend() {
+        let env = supercharge_env::EnvVarGuard::remove("SUPERCHARGE_CODE_WEB_URL");
+        assert_eq!(build_share_url("session"), None);
+        env.set_value("https://example.invalid/");
+        assert_eq!(build_share_url("session").as_deref(), Some("https://example.invalid/build/session"));
     }
 
     // ===== Sync Status Tests =====

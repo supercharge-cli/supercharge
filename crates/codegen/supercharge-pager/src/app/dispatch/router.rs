@@ -3,7 +3,6 @@ use super::auth::{
     dispatch_cancel_login, dispatch_login, dispatch_logout, dispatch_submit_auth_code,
     dispatch_switch_account,
 };
-use super::billing::dispatch_open_supercharge_upgrade_url;
 use super::ctx::{
     active_agent_session_id, get_active_agent_mut, navigate_clearing_selection, open_url_or_show,
     sync_sleep_inhibitor, with_active_agent, with_scrollback,
@@ -99,7 +98,7 @@ use super::settings::ui::{
     dispatch_toggle_multiline, dispatch_toggle_timestamps, dispatch_toggle_vim_mode,
 };
 use super::status::{
-    dispatch_copy_session_id, dispatch_manage_billing, dispatch_open_gboom, dispatch_open_tutorial,
+    dispatch_copy_session_id, dispatch_open_gboom, dispatch_open_tutorial,
     dispatch_privacy_banner_opt_in, dispatch_privacy_banner_opt_out, dispatch_share_session,
     dispatch_show_context_info, dispatch_show_queue, dispatch_show_release_notes,
     dispatch_show_session_info, dispatch_show_tasks, dispatch_show_usage, set_coding_data_sharing,
@@ -1053,7 +1052,6 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::ResetSessionTitleToAuto => dispatch_reset_session_title(app),
         Action::ShowContextInfo => dispatch_show_context_info(app),
         Action::ShowUsage => dispatch_show_usage(app),
-        Action::ManageBilling => dispatch_manage_billing(app),
         Action::ShowQueue => dispatch_show_queue(app),
         Action::ShowTasks => dispatch_show_tasks(app),
         Action::ShowPlan => dispatch_show_plan(app),
@@ -1213,14 +1211,11 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::PermissionCancel => dispatch_permission_cancel(app),
         Action::Logout => dispatch_logout(app),
         Action::SwitchAccount => dispatch_switch_account(app),
-        Action::CheckSubscription => vec![Effect::CheckSubscription { verify: None }],
-        Action::OpenSuperchargeUpgradeUrl => dispatch_open_supercharge_upgrade_url(app),
         Action::CopyText(text) => {
             let delivery = crate::clipboard::copy_text_or_file(&text);
             app.show_toast(delivery.toast_message().as_ref());
             vec![]
         }
-        Action::RetryCreditLimitPrompt => super::billing::dispatch_retry_credit_limit_prompt(app),
         Action::OpenUrl(url) => {
             if url.starts_with("file://") {
                 let opened = url::Url::parse(&url)

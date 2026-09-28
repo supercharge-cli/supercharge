@@ -533,103 +533,26 @@ mod tests {
             CommandResult::Action(Action::EnterRememberMode)
         ));
     }
-    fn run_usage(args: &str, billing: bool) -> CommandResult {
-        run_usage_gated(args, billing, true)
-    }
-    fn run_usage_gated(args: &str, billing: bool, usage_cmd: bool) -> CommandResult {
+    #[test]
+    fn byok_usage_is_available_without_account_flags_or_purchase_arguments() {
         let models = ModelState::default();
-        let mut ctx = make_ctx(&models);
-        ctx.billing_surface_visible = billing;
-        ctx.usage_command_visible = usage_cmd;
-        usage::UsageCommand.run(&mut ctx, args)
-    }
-    #[test]
-    fn usage_consumer_show_and_manage() {
-        assert!(matches!(
-            run_usage("", true),
-            CommandResult::Action(Action::ShowUsage)
-        ));
-        assert!(matches!(
-            run_usage("show", true),
-            CommandResult::Action(Action::ShowUsage)
-        ));
-        assert!(matches!(
-            run_usage("  manage  ", true),
-            CommandResult::Action(Action::ManageBilling)
-        ));
-        assert!(matches!(run_usage("delete", true), CommandResult::Error(_)));
-    }
-    #[test]
-    fn usage_non_consumer_is_bare_only() {
-        assert!(matches!(
-            run_usage("", false),
-            CommandResult::Action(Action::ShowUsage)
-        ));
-        assert!(matches!(
-            run_usage("manage", false),
-            CommandResult::Error(_)
-        ));
-        assert!(matches!(run_usage("show", false), CommandResult::Error(_)));
-    }
-    #[test]
-    fn usage_takes_args_only_for_consumer() {
-        let models = ModelState::default();
-        let mut ctx = crate::slash::command::AppCtx {
-            models: &models,
-            cwd: std::path::Path::new("."),
-            has_session_announcements: false,
-            billing_surface_visible: true,
-            usage_command_visible: true,
-            workflows_available: true,
-            saved_workflows: &[],
-            workflow_runs: &[],
-            screen_mode: crate::app::ScreenMode::Fullscreen,
-            current_title: None,
-        };
-        let cmd = usage::UsageCommand;
-        assert!(cmd.takes_args_now(&ctx));
-        ctx.billing_surface_visible = false;
-        assert!(!cmd.takes_args_now(&ctx));
-    }
-    #[test]
-    fn usage_suggest_args_consumer_only() {
-        let models = ModelState::default();
-        let mut ctx = crate::slash::command::AppCtx {
-            models: &models,
-            cwd: std::path::Path::new("."),
-            has_session_announcements: false,
-            billing_surface_visible: true,
-            usage_command_visible: true,
-            workflows_available: false,
-            saved_workflows: &[],
-            workflow_runs: &[],
-            screen_mode: crate::app::ScreenMode::Fullscreen,
-            current_title: None,
-        };
-        let items = usage::UsageCommand.suggest_args(&ctx, "").unwrap();
-        assert_eq!(
-            items.iter().map(|i| i.display.as_str()).collect::<Vec<_>>(),
-            ["show", "manage"]
-        );
-        ctx.billing_surface_visible = false;
-        assert!(usage::UsageCommand.suggest_args(&ctx, "").is_none());
-    }
-    #[test]
-    fn usage_registered_in_builtin_commands() {
-        assert!(
-            CommandRegistry::new(builtin_commands())
-                .get("usage")
-                .is_some()
-        );
-    }
-    #[test]
-    fn usage_hidden_when_command_not_visible() {
-        let models = ModelState::default();
+        for enabled in [false, true] {
+            let mut ctx = make_ctx(&models);
+            ctx.billing_surface_visible = enabled;
+            ctx.usage_command_visible = enabled;
+            for args in ["", "show"] {
+                assert!(matches!(usage::UsageCommand.run(&mut ctx, args), CommandResult::Action(Action::ShowUsage)));
+            }
+            for args in ["manage", "  manage  ", "delete"] {
+                assert!(matches!(usage::UsageCommand.run(&mut ctx, args), CommandResult::Error(_)));
+            }
+        }
+        assert!(CommandRegistry::new(builtin_commands()).get("usage").is_some());
         let ctx = crate::slash::command::AppCtx {
             models: &models,
             cwd: std::path::Path::new("."),
             has_session_announcements: false,
-            billing_surface_visible: true,
+            billing_surface_visible: false,
             usage_command_visible: false,
             workflows_available: false,
             saved_workflows: &[],
@@ -637,13 +560,8 @@ mod tests {
             screen_mode: crate::app::ScreenMode::Fullscreen,
             current_title: None,
         };
-        assert!(!usage::UsageCommand.visible(&ctx));
-        assert!(!usage::UsageCommand.takes_args_now(&ctx));
+        assert!(usage::UsageCommand.visible(&ctx));
         assert!(usage::UsageCommand.suggest_args(&ctx, "").is_none());
-        assert!(matches!(
-            run_usage_gated("", true, false),
-            CommandResult::Error(msg) if msg.contains("not available")
-        ));
     }
     #[test]
     fn cd_registered_in_builtin_commands() {

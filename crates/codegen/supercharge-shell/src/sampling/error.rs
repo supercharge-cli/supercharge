@@ -11,26 +11,25 @@ pub use supercharge_sampler::SamplingErrorKind;
 use agent_client_protocol as acp;
 
 /// ACP error code for rate-limited requests (HTTP 429). Uses the JSON-RPC implementation-defined server error range (-32000 to -32099). Contract: set only for actual HTTP 429 responses from the sampling client.
-/// Clients derive user-facing text via [`format_rate_limited_user_message`]. The desktop path (`prompt_complete_fields`) reports the stop reason with no detail.
+/// Clients derive user-facing text via [`format_rate_limited_user_message`]. Turn-completion notifications preserve the provider detail too.
 pub const RATE_LIMITED_ERROR_CODE: i32 = -32003;
 
-/// OAuth / session rate-limit copy (personal plan upgrade path).
+/// Provider-neutral rate-limit copy for explicit provider credentials.
 pub const RATE_LIMITED_USER_MESSAGE_OAUTH: &str =
-    "You\u{2019}ve hit the rate limit for your plan. Upgrade your account or try again later.";
+    "The selected provider is rate limiting requests. Try again later or run /setup to choose another provider.";
 
-/// API key / team rate-limit copy.
-/// Personal grok.com upgrades do not raise API team limits; admins purchase credits or a higher spend-based tier.
-/// See https://docs.x.ai/developers/rate-limits#rate-limit-tiers
-pub const RATE_LIMITED_USER_MESSAGE_API_KEY: &str = "You\u{2019}ve hit your team\u{2019}s API rate limit. Ask a team admin to purchase more credits for higher limits, or try again later. See https://docs.x.ai/developers/rate-limits#rate-limit-tiers";
+/// Kept as a separate constant for clients that distinguish API-key errors.
+pub const RATE_LIMITED_USER_MESSAGE_API_KEY: &str = RATE_LIMITED_USER_MESSAGE_OAUTH;
 
 /// Well-known free-usage exhaustion code CCP returns on HTTP 429.
 /// Matches `prod_util_well_known_errors::SUBSCRIPTION_FREE_USAGE_EXHAUSTED`.
 /// sampling-types' `parse_error_bytes` prepends the flat `code` to the flattened message, so this reaches clients embedded in error detail.
 pub const FREE_USAGE_EXHAUSTED_ERROR_CODE: &str = "subscription:free-usage-exhausted";
 
-/// User-facing free-usage exhaustion copy (paywall). Deliberately promises no
-/// reset duration — the quota window is backend-config-driven.
-pub const FREE_USAGE_USER_MESSAGE: &str = "You\u{2019}ve reached your free Supercharge AI usage limit for now. Get Supercharge for much higher limits, or try again later: https://supercharge.ai/upgrade?referrer=Supercharge AI-build";
+/// A provider quota can reset or be changed with that provider; Supercharge
+/// cannot sell credits for an independently configured BYOK endpoint.
+pub const FREE_USAGE_USER_MESSAGE: &str =
+    "The selected provider reports that its usage limit has been reached. Check your provider account or run /setup to choose another provider.";
 
 /// Whether flattened server detail is free-usage-quota exhaustion (paywall), not transient throttling.
 /// Sniffs the well-known code embedded by `parse_error_bytes`.
@@ -38,30 +37,19 @@ pub fn is_free_usage_exhausted_error(detail: &str) -> bool {
     detail.contains(FREE_USAGE_EXHAUSTED_ERROR_CODE)
 }
 
-/// User-facing text for an ACP -32003 rate-limit error. The free-usage code wins first (consumer-only; checked before the API-key rewrite).
-/// An API-key caller whose detail pushes the personal SuperGrok upsell gets the team credits copy instead. Otherwise the body is shown after stripping the `API error (status …):` prefix (SamplingError Display).
-/// An empty detail falls back to the OAuth or API-key message. Callers that show this in UI should still run their usual sanitizer (scrub/cap).
+/// Display the selected provider's rate-limit detail. Authentication mode does
+/// not turn a provider quota error into a Supercharge subscription decision.
 pub fn format_rate_limited_user_message(
     server_detail: Option<&str>,
-    is_api_key_auth: bool,
+    _is_api_key_auth: bool,
 ) -> String {
-    // Free-usage sniff works on the prefixed wire string (`contains` the code).
-    if server_detail.is_some_and(is_free_usage_exhausted_error) {
-        return FREE_USAGE_USER_MESSAGE.to_string();
-    }
-    if let Some(detail) = server_detail.map(str::trim).filter(|s| !s.is_empty()) {
-        let detail = strip_sampling_api_error_prefix(detail);
-        if is_api_key_auth && pushes_consumer_subscription_upsell(detail) {
-            return RATE_LIMITED_USER_MESSAGE_API_KEY.to_string();
-        }
-        return detail.to_string();
-    }
-    if is_api_key_auth {
-        RATE_LIMITED_USER_MESSAGE_API_KEY
-    } else {
-        RATE_LIMITED_USER_MESSAGE_OAUTH
-    }
-    .to_string()
+    server_detail
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty())
+        .map(strip_sampling_api_error_prefix)
+        .filter(|detail| !pushes_supercharge_purchase(detail))
+        .unwrap_or(RATE_LIMITED_USER_MESSAGE_API_KEY)
+        .to_owned()
 }
 
 /// Drop `SamplingError::Api`'s Display prefix so users see the IC body, not `API error (status 429 Too Many Requests): …`.
@@ -77,12 +65,21 @@ fn strip_sampling_api_error_prefix(detail: &str) -> &str {
     detail.trim()
 }
 
-/// IC sometimes reuses OAuth free-tier upsell copy on 429s ("upgrade to a Grok subscription" / grok.com/supergrok).
-/// That is wrong for API-key / team auth: higher limits come from credits and spend-based rate-limit tiers, not a personal SuperGrok plan.
-fn pushes_consumer_subscription_upsell(detail: &str) -> bool {
-    let d = detail.to_ascii_lowercase();
-    d.contains("supercharge.ai/supercharge")
-        || d.contains("upgrade to a Supercharge AI subscription")
+/// Old proxy responses can echo the fork's inherited purchase copy. Do not
+/// present those instructions as a way to fix an independently configured provider.
+fn pushes_supercharge_purchase(detail: &str) -> bool {
+    let detail = detail.to_ascii_lowercase();
+    detail.contains("supercharge.ai")
+        || detail.contains("upgrade to a supercharge")
+        || detail.contains("buy supercharge credits")
+}
+
+fn provider_error_message(message: String) -> String {
+    if pushes_supercharge_purchase(&message) {
+        "The selected provider rejected the request. Check your provider account or run /setup to choose another provider.".to_owned()
+    } else {
+        message
+    }
 }
 
 /// User-facing copy for capacity/overload failures (stream `overloaded_error`, HTTP 529, proxy-wrapped 5xx).
@@ -111,7 +108,9 @@ pub(crate) fn map_sampling_err_to_acp(err: SamplingError) -> acp::Error {
         SamplingError::Serialization(_) => acp::Error::invalid_params().data(err.to_string()),
         SamplingError::Api {
             status, message, ..
-        } => match status {
+        } => {
+            let message = provider_error_message(message);
+            match status {
             StatusCode::UNAUTHORIZED => acp::Error::auth_required().data(message),
             // 403 Forbidden is not an auth error: the request was authenticated, but the action is not permitted
             // Examples: content-safety blocks, ZDR-gated operations, remote-settings-blocked users
@@ -130,6 +129,7 @@ pub(crate) fn map_sampling_err_to_acp(err: SamplingError) -> acp::Error {
             // Preserve the HTTP status in data so the classifier folds capacity errors (503/529) into `rate_limit`
             _ => acp::Error::internal_error()
                 .data(error_data_with_status(message, Some(status.as_u16()))),
+            }
         },
         SamplingError::EventStreamError(message) => acp::Error::internal_error().data(message),
         SamplingError::StreamError {
@@ -165,6 +165,7 @@ pub(crate) fn error_data_with_status(
     message: String,
     http_status: Option<u16>,
 ) -> serde_json::Value {
+    let message = provider_error_message(message);
     match http_status {
         Some(sc) => serde_json::json!({ "message": message, "http_status": sc }),
         None => serde_json::Value::String(message),
@@ -377,7 +378,7 @@ pub fn prompt_usage_from_error(
 }
 
 /// Derive `(stop reason, agent result, error kind)` for the turn-end payloads (`prompt_complete`, durable `TurnCompleted`) from a prompt result.
-/// Rate-limit errors produce `("rate_limit", null)` so the client shows its own upgrade message; other errors produce `("error", <detail>)`.
+/// Rate-limit errors retain their stop reason and provider detail; other errors use `error`.
 /// The error kind ([`error_kind_from_error`]) is `None` for successes and errors without a kind marker.
 pub(crate) fn prompt_complete_fields(
     result: &std::result::Result<acp::StopReason, acp::Error>,
@@ -391,14 +392,10 @@ pub(crate) fn prompt_complete_fields(
         Err(err) => {
             let is_rate_limit = i32::from(err.code) == RATE_LIMITED_ERROR_CODE;
             let stop = if is_rate_limit { "rate_limit" } else { "error" };
-            let result = if is_rate_limit {
-                serde_json::Value::Null
-            } else {
-                err.data
-                    .as_ref()
-                    .map(error_message_from_data)
-                    .unwrap_or_else(|| serde_json::Value::String(err.message.clone()))
-            };
+            let result = err.data
+                .as_ref()
+                .map(error_message_from_data)
+                .unwrap_or_else(|| serde_json::Value::String(err.message.clone()));
             (serde_json::json!(stop), result, error_kind_from_error(err))
         }
     }
@@ -512,24 +509,82 @@ mod tests {
         );
     }
 
+
+    #[tokio::test]
+    async fn byok_provider_http_errors_preserve_detail_and_session_usage() {
+        use supercharge_sampler::{ApiBackend, SamplerConfig, SamplingClient};
+        use supercharge_sampling_types::{CreateResponseWrapper, rs};
+        use supercharge_test_support::{MockInferenceServer, ScriptedResponse};
+
+        let server = MockInferenceServer::start().await.unwrap();
+        let client = SamplingClient::new(SamplerConfig {
+            base_url: server.url(),
+            api_key: Some("fake-provider-key".into()),
+            model: "fake-provider-model".into(),
+            api_backend: ApiBackend::Responses,
+            max_retries: Some(0),
+            ..Default::default()
+        }).unwrap();
+        for (status, detail) in [
+            (402, "Provider account has insufficient credits"),
+            (403, "Provider credit limit prevents this request"),
+            (429, "subscription:free-usage-exhausted: provider quota reached"),
+        ] {
+            server.enqueue_response("/v1/responses", ScriptedResponse::json(status,
+                serde_json::json!({"error": {"message": detail}})));
+            let error = client.create_response(CreateResponseWrapper::new(rs::CreateResponse {
+                input: rs::InputParam::Text("hello".into()),
+                ..Default::default()
+            })).await.expect_err("provider should reject request");
+            assert!(matches!(&error, SamplingError::Api { status: actual, .. } if actual.as_u16() == status));
+            let error = attach_prompt_usage(map_sampling_err_to_acp(error), Some(
+                crate::extensions::notification::PromptUsage {
+                    totals: crate::extensions::notification::PromptUsageModel { input_tokens: 3, ..Default::default() },
+                    model_usage: Default::default(),
+                    num_turns: 1,
+                    usage_is_incomplete: false,
+                }
+            ));
+            assert_eq!(error_detail_from_data(error.data.as_ref().unwrap()).as_deref(), Some(detail));
+            assert_ne!(error.code, acp::Error::auth_required().code);
+            assert_eq!(prompt_usage_from_error(&error).unwrap().totals.input_tokens, 3);
+            let (_, result, _) = prompt_complete_fields(&Err(error));
+            assert_eq!(result, serde_json::json!(detail));
+            assert_eq!(format_rate_limited_user_message(Some(detail), true), detail);
+        }
+        assert_eq!(server.request_count(), 3);
+        assert!(server.requests().iter().all(|request| request.path == "/v1/responses"));
+    }
+
     #[test]
-    fn rate_limited_fallback_oauth_vs_api_key() {
-        assert_eq!(
-            format_rate_limited_user_message(None, false),
-            RATE_LIMITED_USER_MESSAGE_OAUTH
-        );
-        assert_eq!(
-            format_rate_limited_user_message(None, true),
-            RATE_LIMITED_USER_MESSAGE_API_KEY
-        );
-        assert!(RATE_LIMITED_USER_MESSAGE_OAUTH.contains("Upgrade your account"));
-        assert!(RATE_LIMITED_USER_MESSAGE_API_KEY.contains("team"));
-        assert!(RATE_LIMITED_USER_MESSAGE_API_KEY.contains("credits"));
-        assert!(
-            RATE_LIMITED_USER_MESSAGE_API_KEY
-                .contains("https://docs.x.ai/developers/rate-limits#rate-limit-tiers")
-        );
-        assert!(!RATE_LIMITED_USER_MESSAGE_API_KEY.contains("Upgrade your account"));
+    fn byok_provider_errors_never_echo_inherited_supercharge_purchase_links() {
+        for status in [402, 403, 429] {
+            let error = map_sampling_err_to_acp(SamplingError::Api {
+                status: StatusCode::from_u16(status).unwrap(),
+                message: "Buy more credits at https://supercharge.ai/upgrade".into(),
+                model_metadata: None,
+                retry_after_secs: None,
+                should_retry: None,
+                error_code: None,
+            });
+            let detail = error_detail_from_data(error.data.as_ref().unwrap()).unwrap();
+            assert!(detail.contains("selected provider"));
+            assert!(detail.contains("/setup"));
+            assert!(!detail.contains("https://"));
+            assert!(!detail.contains("Buy more credits"));
+        }
+    }
+
+    #[test]
+    fn rate_limited_fallback_is_provider_neutral() {
+        for api_key in [false, true] {
+            let message = format_rate_limited_user_message(None, api_key);
+            assert!(message.contains("selected provider"));
+            assert!(message.contains("/setup"));
+            assert!(!message.contains("https://"));
+            assert!(!message.to_lowercase().contains("upgrade"));
+            assert!(!message.to_lowercase().contains("credits"));
+        }
     }
 
     #[test]
@@ -554,18 +609,17 @@ mod tests {
     }
 
     #[test]
-    fn format_rate_limited_api_key_rewrites_consumer_subscription_upsell() {
+    fn format_rate_limited_replaces_inherited_purchase_copy_for_all_auth_modes() {
         let body = "Some resource has been exhausted: You are sending requests too quickly. \
              Please slow down, or upgrade to a Grok subscription for higher limits: \
              https://supercharge.ai/upgrade";
         let wire = format!("API error (status 429 Too Many Requests): {body}");
-        // OAuth keeps the IC body (personal plan upgrade is correct).
-        assert_eq!(format_rate_limited_user_message(Some(&wire), false), body);
-        // API key must not push grok.com SuperGrok; it gets the team credits / rate-limit tiers copy
-        assert_eq!(
-            format_rate_limited_user_message(Some(&wire), true),
-            RATE_LIMITED_USER_MESSAGE_API_KEY
-        );
+        for api_key in [false, true] {
+            assert_eq!(
+                format_rate_limited_user_message(Some(&wire), api_key),
+                RATE_LIMITED_USER_MESSAGE_API_KEY
+            );
+        }
     }
 
     #[test]
@@ -591,17 +645,16 @@ mod tests {
     }
 
     #[test]
-    fn format_rate_limited_free_usage_uses_paywall_copy() {
+    fn format_rate_limited_free_usage_preserves_provider_detail() {
         let wire = "API error (status 429 Too Many Requests): \
             subscription:free-usage-exhausted: You have used all your free usage.";
         assert_eq!(
             format_rate_limited_user_message(Some(wire), false),
-            FREE_USAGE_USER_MESSAGE
+            "subscription:free-usage-exhausted: You have used all your free usage."
         );
-        // Free-usage code is consumer-only; still wins for API-key callers.
         assert_eq!(
             format_rate_limited_user_message(Some(wire), true),
-            FREE_USAGE_USER_MESSAGE
+            "subscription:free-usage-exhausted: You have used all your free usage."
         );
     }
 
@@ -803,7 +856,7 @@ mod tests {
 
     #[test]
     #[serial_test::serial]
-    fn forbidden_subscription_error_includes_api_key_hint_when_env_set() {
+    fn forbidden_subscription_error_preserves_provider_detail_with_ambient_key() {
         with_api_key_env(Some("xai-test"), || {
             let err = SamplingError::Api {
                 status: StatusCode::FORBIDDEN,
@@ -816,14 +869,8 @@ mod tests {
             let acp_err = map_sampling_err_to_acp(err);
             let data = acp_err.data.unwrap();
             let msg = data.as_str().unwrap();
-            assert!(
-                msg.contains("Supercharge AI logout"),
-                "should suggest Supercharge AI logout when API key is available: {msg}"
-            );
-            assert!(
-                msg.contains("/logout"),
-                "should mention /logout TUI command: {msg}"
-            );
+            assert_eq!(msg, "The model 'Supercharge AI-build' requires a Grok subscription.");
+            assert!(!msg.contains("/logout"));
         });
     }
 
@@ -881,13 +928,13 @@ mod tests {
     }
 
     #[test]
-    fn prompt_complete_fields_rate_limit_omits_detail() {
+    fn prompt_complete_fields_rate_limit_preserves_provider_detail() {
         let err = acp::Error::new(RATE_LIMITED_ERROR_CODE, "Rate limited".to_string())
             .data("Rate limit exceeded");
         let result = Err(err);
         let (stop, agent_result, error_kind) = prompt_complete_fields(&result);
         assert_eq!(stop, serde_json::json!("rate_limit"));
-        assert_eq!(agent_result, serde_json::Value::Null);
+        assert_eq!(agent_result, serde_json::json!("upstream detail"));
         assert_eq!(error_kind, None);
     }
 

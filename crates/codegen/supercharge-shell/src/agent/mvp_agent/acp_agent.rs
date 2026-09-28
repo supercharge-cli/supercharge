@@ -169,9 +169,6 @@ impl acp::Agent for MvpAgent {
                 }
             }
         }
-        if !self.tier_allowed.get() {
-            self.spawn_tier_recheck();
-        }
         self.maybe_sync_bundle_in_background(false);
         let mut client_type = arguments
             .meta
@@ -238,6 +235,15 @@ impl acp::Agent for MvpAgent {
         if self.initialize_request.set(arguments).is_err() {
             tracing::info!("Initialize called on reconnect (already initialized)");
         }
+        // Account session auth (cached token, interactive sign-in) is opt-in: it exists only when
+        // this deployment configures OIDC, OAuth2, or an external auth command. A provider-only
+        // launch neither reloads an inherited account token nor offers the account login, so a
+        // missing provider credential leads to `/setup` rather than to a first-party sign-in.
+        let session_auth_enabled = self
+            .cfg
+            .borrow()
+            .grok_com_config
+            .session_auth_enabled();
         let pre = self
             .auth_manager
             .current()
@@ -248,7 +254,7 @@ impl acp::Agent for MvpAgent {
                     .as_deref()
                     .map(|t| supercharge_auth::bearer_suffix(t).to_owned()),
             ));
-        {
+        if session_auth_enabled {
             let _t = supercharge_telemetry::instrumentation::timer(
                 "startup.acp_initialize.auth_reload",
             );
@@ -338,7 +344,11 @@ impl acp::Agent for MvpAgent {
             self.models_manager.models().values(),
             first_party_env_ok,
         );
-        let init_token_state = self.auth_manager.cached_token_state();
+        let init_token_state = if session_auth_enabled {
+            self.auth_manager.cached_token_state()
+        } else {
+            CachedTokenState::Missing
+        };
         let init_has_current = matches!(init_token_state, CachedTokenState::Valid(_));
         let init_is_expired = matches!(init_token_state, CachedTokenState::Expired);
         supercharge_telemetry::unified_log::info(
@@ -392,11 +402,15 @@ impl acp::Agent for MvpAgent {
                 None,
                 Some(serde_json::json!({ "issuer": issuer })),
             );
-        } else {
+        } else if session_auth_enabled {
             tracing::info!(
                 label = ?login_label,
                 has_auth_provider,
                 "auth: advertising supercharge.ai auth method",
+            );
+        } else {
+            tracing::info!(
+                "auth: account sign-in not configured; advertising terminal setup only",
             );
         }
         let preferred_method = preferred_method_early;
@@ -415,14 +429,20 @@ impl acp::Agent for MvpAgent {
         // advertised auth method; the TUI does not auto-login unless
         // `--force-login` is set.
         let setup_provider_auth = has_external_api_key;
-        let no_credentials_yet = !has_external_api_key
-            && !has_cached_token
-            && !has_enterprise_oidc
-            && !matches!(preferred_method, Some(crate::auth::PreferredAuthMethod::Oidc));
+        let no_credentials_yet = if session_auth_enabled {
+            !has_external_api_key
+                && !has_cached_token
+                && !has_enterprise_oidc
+                && !matches!(preferred_method, Some(crate::auth::PreferredAuthMethod::Oidc))
+        } else {
+            // Provider-only deployment: until `/setup` configures a provider there is
+            // nothing to authenticate against, so start on the setup-pending method.
+            !has_external_api_key
+        };
         let built = auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
             has_external_api_key,
             prefer_provider_api_key_default: setup_provider_auth,
-            suppress_interactive_login: setup_provider_auth,
+            suppress_interactive_login: setup_provider_auth || !session_auth_enabled,
             has_cached_token,
             has_enterprise_oidc,
             enterprise_oidc_issuer: enterprise_oidc_issuer.as_deref(),
@@ -457,6 +477,7 @@ impl acp::Agent for MvpAgent {
                 "disable_api_key_auth": disable_api_key_auth,
                 "has_cached_token": has_cached_token,
                 "has_enterprise_oidc": has_enterprise_oidc,
+                "session_auth_enabled": session_auth_enabled,
                 "init_has_current": init_has_current,
                 "init_is_expired": init_is_expired,
                 "auth_mode": self.auth_manager.current().map(|a| format!("{:?}", a.auth_mode)),
@@ -614,6 +635,19 @@ impl acp::Agent for MvpAgent {
             None,
             Some(serde_json::json!({"method": arguments.method_id.0.as_ref()})),
         );
+        if !self.cfg.borrow().grok_com_config.session_auth_enabled()
+            && auth_method::AuthMethodKind::from_id(&arguments.method_id).is_session_based()
+        {
+            emit_login_span(
+                false,
+                arguments.method_id.0.as_ref(),
+                None,
+                Some("session_auth_disabled"),
+            );
+            return Err(
+                acp::Error::auth_required().data(auth_method::AUTH_ERROR_SESSION_DISABLED),
+            );
+        }
         if let Some(preferred) = self.cfg.borrow().grok_com_config.preferred_method {
             let kind = auth_method::AuthMethodKind::from_id(&arguments.method_id);
             let allowed = match preferred {
@@ -754,7 +788,6 @@ impl acp::Agent for MvpAgent {
                         .authenticate_after_cached_token_unavailable(arguments)
                         .await;
                 }
-                self.enforce_grok_code_access(&auth).await;
                 self.maybe_sync_bundle_in_background(false);
                 let auth_for_settings = auth.clone();
                 {
@@ -905,7 +938,6 @@ impl acp::Agent for MvpAgent {
                     );
                 }
                 self.auth_manager.hot_swap(auth.clone());
-                self.enforce_grok_code_access(&auth).await;
                 self.maybe_sync_bundle_in_background(false);
                 tokio::task::spawn_local(
                     crate::managed_config::post_login_sync(Some(auth.clone())),
@@ -2237,10 +2269,10 @@ impl acp::Agent for MvpAgent {
                     })?;
                 crate::extensions::to_raw_response(&serde_json::json!({ "ok": true }))
             }
-            "x.ai/billing" => crate::extensions::billing::handle(self, &args).await,
-            "x.ai/auto-topup-rule" => {
-                crate::extensions::billing::handle(self, &args).await
-            }
+            "x.ai/billing" | "x.ai/auto-topup-rule" => Err(
+                acp::Error::method_not_found()
+                    .data("Billing is unavailable in provider-only Supercharge."),
+            ),
             "x.ai/share_session" => crate::extensions::share::handle(self, &args).await,
             "x.ai/privacy/setCodingDataRetention" => {
                 crate::extensions::privacy::handle(self, &args).await

@@ -1280,8 +1280,6 @@ pub(crate) async fn run(
     } else {
         vec![]
     };
-    app.has_external_auth_provider =
-        crate::slash::commands::usage::detect_external_auth_provider(&app.auth_methods);
     if let Some(meta) = connection.auth_meta.as_ref() {
         match serde_json::from_value::<supercharge_login::AuthMeta>(meta.clone()) {
             Ok(auth_meta) => app.apply_auth_meta(&auth_meta),
@@ -1291,10 +1289,8 @@ pub(crate) async fn run(
         app.is_api_key_auth = app.auth_methods.iter().any(|m| {
             m.id().0.as_ref() == supercharge_shell::agent::auth_method::PROVIDER_API_KEY_METHOD_ID
         });
-        if !app.consumer_account() {
-            app.usage_visible = false;
-            app.sync_billing_surface_to_agents();
-        }
+        app.usage_visible = false;
+        app.sync_billing_surface_to_agents();
     }
     let voice_mode_enabled = crate::app::resolve_voice_mode_live(
         remote_settings.as_ref().and_then(|s| s.voice_mode_enabled),
@@ -1308,14 +1304,6 @@ pub(crate) async fn run(
     crate::views::dock::set_enabled(crate::app::resolve_dock_enabled(
         remote_settings.as_ref().and_then(|s| s.dock_enabled),
     ));
-    if app.gate.is_none()
-        && let Some(rs) = remote_settings.as_ref()
-    {
-        app.gate = AppView::gate_from_settings(rs);
-    }
-    if let Some(gate) = app.gate.take() {
-        post_render_effects.extend(app.impose_gate(gate));
-    }
     app.hidden_announcement_ids = supercharge_announcements::read_hidden_announcement_ids().await;
     let requirements = supercharge_shell::config::load_merged_requirements();
     let user_config = supercharge_shell::config::load_from_disk().ok();
@@ -1360,9 +1348,6 @@ pub(crate) async fn run(
         managed_config.as_ref(),
         remote_settings.as_ref(),
     );
-    app.subscription_watch_interval_secs = remote_settings
-        .as_ref()
-        .and_then(|rs| rs.subscription_watch_interval_secs);
     crate::appearance::cache::set_show_thinking_blocks(
         supercharge_shell::util::config::resolve_show_thinking_blocks(
             requirements.as_ref(),
@@ -1390,9 +1375,6 @@ pub(crate) async fn run(
         )
         .value,
     );
-    app.usage_billing_redirect_url = remote_settings
-        .as_ref()
-        .and_then(|s| s.usage_billing_redirect_url.clone());
     if app.is_access_blocked() {
         app.welcome_prompt_focused = false;
     }
@@ -1677,8 +1659,6 @@ pub(crate) async fn run(
     let ack_deadlines = crate::app::prompt_ack::PromptAckDeadlines::from_process_env();
     let mut gboom_keyboard_pushed = false;
     let mut cursor_color_on_wire = crate::theme::cursor_color_escape();
-    const BILLING_POLL_INTERVAL: Duration = Duration::from_secs(30);
-    let mut billing_poll_at: Option<Instant> = None;
     let mut status_line_refresh_interval: Option<Duration> =
         if super::status_line::draws_a_row(&app.current_ui.status_line) {
             app.status_line_refresh_interval()
@@ -1687,14 +1667,6 @@ pub(crate) async fn run(
         };
     let mut status_line_refresh_at: Option<Instant> =
         status_line_refresh_interval.map(|interval| Instant::now() + interval);
-    const GATE_POLL_INTERVAL: Duration = Duration::from_secs(30);
-    let mut gate_poll_at: Option<Instant> = None;
-    let mut subscription_watch_at: Option<Instant> = if app.subscription_watch_wanted() {
-        app.subscription_watch_interval()
-            .map(|iv| Instant::now() + iv)
-    } else {
-        None
-    };
     const DASHBOARD_POLL_INTERVAL: Duration = Duration::from_secs(1);
     let mut dashboard_poll_at: Option<Instant> = Some(Instant::now());
     const RECAP_POLL_INTERVAL: Duration = Duration::from_secs(20);
@@ -1708,18 +1680,9 @@ pub(crate) async fn run(
         if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
             return Ok(finish_run(&mut app));
         }
-        if app.usage_visible {
-            let effs = vec![super::actions::Effect::FetchAppBilling { nonce: 0 }];
-            if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
-                return Ok(finish_run(&mut app));
-            }
-        }
         let effs = vec![super::actions::Effect::FetchChangelog];
         if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
             return Ok(finish_run(&mut app));
-        }
-        if !app.has_access() {
-            gate_poll_at = Some(Instant::now() + GATE_POLL_INTERVAL);
         }
     }
     if !post_render_effects.is_empty()
@@ -1917,10 +1880,6 @@ pub(crate) async fn run(
                 &mut animation_tick_at,
                 tick_interval,
                 &mut resize_debounce_at,
-                &mut billing_poll_at,
-                BILLING_POLL_INTERVAL,
-                &mut gate_poll_at,
-                GATE_POLL_INTERVAL,
                 &mut presenter,
             );
         }
@@ -2025,12 +1984,6 @@ pub(crate) async fn run(
         } else if dashboard_poll_at.is_none() {
             dashboard_poll_at = Some(Instant::now());
         }
-        if subscription_watch_at.is_none()
-            && app.subscription_watch_wanted()
-            && let Some(iv) = app.subscription_watch_interval()
-        {
-            subscription_watch_at = Some(Instant::now() + iv);
-        }
         let animation_tick = async {
             match animation_tick_at {
                 Some(at) => sleep_until(at).await,
@@ -2073,26 +2026,8 @@ pub(crate) async fn run(
                 None => std::future::pending().await,
             }
         };
-        let billing_poll = async {
-            match billing_poll_at {
-                Some(at) => sleep_until(at).await,
-                None => std::future::pending().await,
-            }
-        };
         let status_line_refresh = async {
             match status_line_refresh_at {
-                Some(at) => sleep_until(at).await,
-                None => std::future::pending().await,
-            }
-        };
-        let gate_poll = async {
-            match gate_poll_at {
-                Some(at) => sleep_until(at).await,
-                None => std::future::pending().await,
-            }
-        };
-        let subscription_watch = async {
-            match subscription_watch_at {
                 Some(at) => sleep_until(at).await,
                 None => std::future::pending().await,
             }
@@ -2294,10 +2229,6 @@ pub(crate) async fn run(
                             &mut animation_tick_at,
                             tick_interval,
                             &mut resize_debounce_at,
-                            &mut billing_poll_at,
-                            BILLING_POLL_INTERVAL,
-                            &mut gate_poll_at,
-                            GATE_POLL_INTERVAL,
                             &mut presenter,
                         );
                     }
@@ -2477,34 +2408,6 @@ pub(crate) async fn run(
                 schedule_tick(&mut animation_tick_at, &app, tick_interval);
             }
 
-            _ = billing_poll => {
-                billing_poll_at = None;
-                if let ActiveView::Agent(id) = app.active_view {
-                    let effs = vec![Effect::FetchBilling {
-                        agent_id: id,
-                        silent: true,
-                        nonce: Default::default(),
-                    }];
-                    if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
-                        break;
-                    }
-                }
-                if app.billing_poll_wanted {
-                    billing_poll_at = Some(Instant::now() + BILLING_POLL_INTERVAL);
-                }
-            }
-
-            _ = gate_poll => {
-                gate_poll_at = None;
-                let effs = vec![Effect::RefreshGate];
-                if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
-                    break;
-                }
-                if !app.has_access() {
-                    gate_poll_at = Some(Instant::now() + GATE_POLL_INTERVAL);
-                }
-            }
-
             _ = status_line_refresh => {
                 status_line_refresh_at = None;
                 // Lands in `pending_effects`, drained below like every arm's
@@ -2518,14 +2421,6 @@ pub(crate) async fn run(
                 // The owed-run rule above is what keeps a slow script from stacking runs behind the timer
                 if let Some(interval) = status_line_refresh_interval {
                     status_line_refresh_at = Some(Instant::now() + interval);
-                }
-            }
-
-            _ = subscription_watch => {
-                subscription_watch_at = None;
-                let effs = app.fire_subscription_check("watch");
-                if process_effects(effs, &mut tasks, &mut app, &progress_tx) {
-                    break;
                 }
             }
 
@@ -3071,30 +2966,15 @@ fn should_pregenerate_away_recap(app: &AppView) -> bool {
         .is_some_and(crate::app::agent_view::AgentView::is_eligible_for_auto_recap)
 }
 /// Bookkeeping shared by the JoinSet arm and the deferred SessionLoaded drain.
-/// A deferred load that sets `billing_poll_wanted` must arm the poll here; waiting for an unrelated later event would stall billing/gate timers.
 fn after_task_complete_dispatch(
     app: &AppView,
     animation_tick_at: &mut Option<Instant>,
     tick_interval: Duration,
     resize_debounce_at: &mut Option<Instant>,
-    billing_poll_at: &mut Option<Instant>,
-    billing_poll_interval: Duration,
-    gate_poll_at: &mut Option<Instant>,
-    gate_poll_interval: Duration,
     presenter: &mut Presenter,
 ) {
     schedule_tick(animation_tick_at, app, tick_interval);
     *resize_debounce_at = None;
-    if app.billing_poll_wanted && billing_poll_at.is_none() {
-        *billing_poll_at = Some(Instant::now() + billing_poll_interval);
-    } else if !app.billing_poll_wanted {
-        *billing_poll_at = None;
-    }
-    if !app.has_access() && gate_poll_at.is_none() {
-        *gate_poll_at = Some(Instant::now() + gate_poll_interval);
-    } else if app.has_access() {
-        *gate_poll_at = None;
-    }
     presenter.request(false);
 }
 /// Schedule the next animation tick when demanded and none is pending.
@@ -3292,10 +3172,6 @@ async fn drain_and_process(
                     && crate::clipboard::clipboard_image_probe_supported()
                 {
                     crate::clipboard::prewarm_image_probe();
-                }
-                let effs = app.fire_subscription_check("focus");
-                if process_effects(effs, tasks, app, progress_tx) {
-                    return true;
                 }
                 match app.active_view {
                     ActiveView::Agent(id) => {

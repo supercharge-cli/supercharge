@@ -1579,24 +1579,6 @@ fn show_usage_on_welcome_screen_is_noop() {
     );
 }
 
-#[test]
-fn show_usage_with_redirect_url_fetches_session_only() {
-    // Redirect link is deferred until SessionUsageComplete (see billing tests).
-    let mut app = test_app_with_agent();
-    app.screen_mode = crate::app::ScreenMode::Minimal;
-    app.usage_billing_redirect_url = Some("https://billing.example.com/me".to_string());
-    let before = agent_scrollback_len(&app);
-    let effects = dispatch(Action::ShowUsage, &mut app);
-    assert!(
-        matches!(
-            effects.as_slice(),
-            [Effect::FetchSessionUsage { agent_id, .. }] if *agent_id == AgentId(0)
-        ),
-        "got: {effects:?}"
-    );
-    assert_eq!(agent_scrollback_len(&app), before);
-}
-
 // ── Minimal update-notice tests ──────────────────────────────────────
 
 #[test]
@@ -1656,7 +1638,6 @@ fn show_usage_opens_modal_on_usage_limit_tab_with_fetches() {
         crate::views::usage_modal::UsageInfoTab::UsageLimit
     );
     assert_eq!(state.ctx.session_id.as_deref(), Some("test-session"));
-    assert!(state.billing_loading);
     assert!(
         matches!(
             effects.as_slice(),
@@ -1664,7 +1645,6 @@ fn show_usage_opens_modal_on_usage_limit_tab_with_fetches() {
                 Effect::ShowContextInfo { .. },
                 Effect::ShowSessionInfo { .. },
                 Effect::FetchSessionUsage { .. },
-                Effect::FetchBilling { silent: true, .. },
             ]
         ),
         "got: {effects:?}"

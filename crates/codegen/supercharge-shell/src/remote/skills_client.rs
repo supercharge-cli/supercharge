@@ -24,7 +24,6 @@ use supercharge_tools::implementations::skills::types::{SkillInfo, SkillScope};
 
 use supercharge_login::AuthManager;
 
-const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 /// Marker stored on SkillInfo.metadata / AvailableCommand._meta so clients can tell product Skills from Build disk discovery without name allowlists.
 pub const CHAT_PRODUCT_META_VALUE: &str = "chat";
@@ -265,7 +264,9 @@ fn product_skill_info(
 
 #[derive(Debug, thiserror::Error)]
 pub enum SkillsError {
-    #[error("no supercharge.ai credentials")]
+    #[error("This optional service has no configured URL")]
+    NotConfigured,
+    #[error("no credentials for the configured service")]
     NoAuth,
     #[error("network error: {0}")]
     Network(#[from] reqwest::Error),
@@ -280,7 +281,7 @@ impl SkillsError {
         match self {
             SkillsError::Network(_) => true,
             SkillsError::Http { status } => *status >= 500,
-            SkillsError::NoAuth | SkillsError::Parse(_) => false,
+            SkillsError::NotConfigured | SkillsError::NoAuth | SkillsError::Parse(_) => false,
         }
     }
 }
@@ -376,7 +377,7 @@ impl SkillsClient {
                     .ok()
                     .filter(|s| !s.is_empty())
             })
-            .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
+            .unwrap_or_default();
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -416,6 +417,9 @@ impl SkillsClient {
 
     /// Grok.com product Skills require first-party session auth (the same gate as managed MCP and sibling grok.com clients), not plain BYOK API keys.
     async fn require_skills_auth(&self) -> Result<supercharge_login::GrokAuth, SkillsError> {
+        if self.base_url.trim().is_empty() {
+            return Err(SkillsError::NotConfigured);
+        }
         let auth = self.auth.auth().await.map_err(|_| SkillsError::NoAuth)?;
         if !auth.is_managed_mcp_eligible() {
             return Err(SkillsError::NoAuth);
@@ -430,31 +434,13 @@ impl SkillsClient {
         &self,
         primary: &supercharge_login::GrokAuth,
     ) -> Vec<SkillsAuthCandidate> {
-        use supercharge_login::AuthMode;
-        let mut out = vec![SkillsAuthCandidate {
+        let out = vec![SkillsAuthCandidate {
             key: primary.key.clone(),
             user_id: primary.user_id.clone(),
             email: primary.email.clone(),
             untagged_recovery: false,
         }];
-        if primary.auth_mode != AuthMode::Oidc || primary.user_id.is_empty() {
-            return out;
-        }
-        if self.base_url != SUPERCHARGE_WEB_URL {
-            return out;
-        }
-        let Ok(store) = supercharge_login::read_auth_json(self.auth.auth_json_path()) else {
-            return out;
-        };
-        out.extend(skills_auth_alt_candidates(
-            primary,
-            store.values().filter(|e| {
-                e.auth_mode != AuthMode::Oidc
-                    && !e.key.is_empty()
-                    && e.key != primary.key
-                    && e.user_id == primary.user_id
-            }),
-        ));
+
         out
     }
 

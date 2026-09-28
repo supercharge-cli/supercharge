@@ -4,7 +4,6 @@ use serde::Deserialize;
 
 use supercharge_login::AuthManager;
 
-const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +34,8 @@ pub struct ListWorkspacesPage {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WsError {
+    #[error("This optional service has no configured URL")]
+    NotConfigured,
     #[error("no OAuth credentials for workspaces:read")]
     NoOauth,
     #[error("network error: {0}")]
@@ -67,7 +68,7 @@ impl WorkspacesClient {
             "SUPERCHARGE_CONVERSATIONS_BASE_URL",
             "SUPERCHARGE_CODE_WEB_URL",
         ])
-        .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
+        .unwrap_or_default();
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -76,6 +77,9 @@ impl WorkspacesClient {
     }
 
     pub(crate) async fn list_workspaces(&self, q: &WsQuery) -> Result<ListWorkspacesPage, WsError> {
+        if self.base_url.trim().is_empty() {
+            return Err(WsError::NotConfigured);
+        }
         let auth = self.auth.auth().await.map_err(|_| WsError::NoOauth)?;
         if !auth.is_xai_auth() {
             return Err(WsError::NoOauth);

@@ -199,14 +199,15 @@ pub struct WorkspaceBindMetadata {
     )]
     pub yolo_mode: Option<bool>,
     /// The tenant's attended-execution ceiling for the server's host kind, set by the hub
-    /// (never the harness). Omitted by emitters that predate it; the workspace then applies
-    /// [`ToolApprovalPolicy::GrantsAllowed`].
+    /// (never the harness). Omitted or null means no ceiling; a present malformed value is
+    /// retained as an error so consumers fail closed instead of widening permissions.
     #[serde(
         default,
-        deserialize_with = "ok_or_default",
-        skip_serializing_if = "Option::is_none"
+        deserialize_with = "tool_approval_policy_ok_or_err",
+        serialize_with = "serialize_tool_approval_policy",
+        skip_serializing_if = "skip_unparsed_tool_approval_policy"
     )]
-    pub tool_approval_policy: Option<ToolApprovalPolicy>,
+    pub tool_approval_policy: Option<Result<ToolApprovalPolicy, serde_json::Value>>,
     /// Optional/additive: omitted by emitters that don't yet write it.
     #[serde(
         default,
@@ -269,6 +270,40 @@ where
     Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
+fn tool_approval_policy_ok_or_err<'de, D>(
+    deserializer: D,
+) -> Result<Option<Result<ToolApprovalPolicy, serde_json::Value>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = <serde_json::Value as serde::Deserialize>::deserialize(deserializer)?;
+    if value.is_null() {
+        return Ok(None);
+    }
+    Ok(Some(
+        serde_json::from_value(value.clone()).map_err(|_| value),
+    ))
+}
+
+fn serialize_tool_approval_policy<S>(
+    policy: &Option<Result<ToolApprovalPolicy, serde_json::Value>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match policy {
+        Some(Ok(policy)) => serde::Serialize::serialize(policy, serializer),
+        Some(Err(_)) | None => serializer.serialize_none(),
+    }
+}
+
+fn skip_unparsed_tool_approval_policy(
+    policy: &Option<Result<ToolApprovalPolicy, serde_json::Value>>,
+) -> bool {
+    !matches!(policy, Some(Ok(_)))
+}
+
 #[cfg(test)]
 mod bind_metadata_tests {
     use super::{ToolApprovalPolicy, WorkspaceBindMetadata};
@@ -292,7 +327,7 @@ mod bind_metadata_tests {
                 stream_tool_progress: true,
             }),
             yolo_mode: Some(true),
-            tool_approval_policy: Some(ToolApprovalPolicy::AlwaysPrompt),
+            tool_approval_policy: Some(Ok(ToolApprovalPolicy::AlwaysPrompt)),
             manifest_version: Some("v1".to_owned()),
             manifest_hash: Some("abc123".to_owned()),
             system_notifications: Some(true),
@@ -309,7 +344,7 @@ mod bind_metadata_tests {
         assert_eq!(back.yolo_mode, Some(true));
         assert_eq!(
             back.tool_approval_policy,
-            Some(ToolApprovalPolicy::AlwaysPrompt)
+            Some(Ok(ToolApprovalPolicy::AlwaysPrompt))
         );
         assert_eq!(back.manifest_version.as_deref(), Some("v1"));
         assert_eq!(back.manifest_hash.as_deref(), Some("abc123"));

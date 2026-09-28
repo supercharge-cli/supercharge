@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use supercharge_hooks::discovery::HookSource;
-use supercharge_tools::registry::types::{SessionContext, ToolRegistryBuilder, ToolServerConfig};
 use supercharge_tool_runtime::ToolApprovalPolicy;
+use supercharge_tools::registry::types::{SessionContext, ToolRegistryBuilder, ToolServerConfig};
 /// Default capacity for the workspace event broadcast channel.
 pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 64;
 /// A session-lifetime terminal backend (background-task registry and persistent shell) paired with its explicit shutdown hook.
@@ -91,8 +91,8 @@ pub struct WorkspaceBindConfig {
     pub viewer_ctx: Option<supercharge_tool_runtime::WorkspaceViewerContext>,
     /// Initial auto-approve (YOLO) state. `None` on legacy payloads fails closed (false).
     pub yolo_mode: Option<bool>,
-    /// The hub-set attended-execution ceiling; absent or malformed falls back to
-    /// [`ToolApprovalPolicy::GrantsAllowed`], never to unattended.
+    /// The hub-set attended-execution ceiling; omitted uses [`ToolApprovalPolicy::GrantsAllowed`],
+    /// while a present-but-unparseable value fails closed to [`ToolApprovalPolicy::AlwaysPrompt`].
     pub tool_approval_policy: ToolApprovalPolicy,
     /// Plane-configured toolset in the gRPC wire shape. An empty list is treated as unset (proto3 repeated default).
     pub tools: Option<Vec<supercharge_tools_api::ToolConfigEntry>>,
@@ -151,7 +151,17 @@ impl WorkspaceBindConfig {
                 .and_then(|v| parse_field("tool_config", v)),
             viewer_ctx: wire.viewer_ctx,
             yolo_mode: wire.yolo_mode,
-            tool_approval_policy: wire.tool_approval_policy.unwrap_or_default(),
+            tool_approval_policy: match wire.tool_approval_policy {
+                Some(Ok(policy)) => policy,
+                Some(Err(raw)) => {
+                    tracing::warn!(
+                        tool_approval_policy = %raw,
+                        "session.bind metadata: unreadable tool_approval_policy; applying always_prompt"
+                    );
+                    ToolApprovalPolicy::AlwaysPrompt
+                }
+                None => ToolApprovalPolicy::GrantsAllowed,
+            },
             tools: Some(wire.tools).filter(|tools| !tools.is_empty()),
             manifest_version: wire.manifest_version,
             manifest_hash: wire.manifest_hash,
@@ -353,16 +363,25 @@ mod bind_config_tests {
             ceiling.tool_approval_policy,
             ToolApprovalPolicy::AlwaysPrompt
         );
-        for metadata in [
-            serde_json::json!({"preset": "explore"}),
-            serde_json::json!({"tool_approval_policy": "unattended"}),
-        ] {
-            assert_eq!(
-                ToolApprovalPolicy::GrantsAllowed,
-                WorkspaceBindConfig::from_metadata(&metadata).tool_approval_policy,
-                "{metadata}"
-            );
-        }
+        assert_eq!(
+            ToolApprovalPolicy::GrantsAllowed,
+            WorkspaceBindConfig::from_metadata(&serde_json::json!({"preset": "explore"}))
+                .tool_approval_policy,
+        );
+        assert_eq!(
+            ToolApprovalPolicy::AlwaysPrompt,
+            WorkspaceBindConfig::from_metadata(&serde_json::json!({
+                "tool_approval_policy": "unattended"
+            }))
+            .tool_approval_policy,
+        );
+        assert_eq!(
+            ToolApprovalPolicy::AlwaysPrompt,
+            WorkspaceBindConfig::from_metadata(&serde_json::json!({
+                "tool_approval_policy": true
+            }))
+            .tool_approval_policy,
+        );
     }
     #[test]
     fn workspace_bind_config_extracts_system_notifications_flag() {
@@ -1143,16 +1162,19 @@ mod tests {
                 "platform": std::env::consts::OS,
             })
         );
-        let fresh =
-            merge_host_identity_metadata(None, supercharge_tool_protocol::HOST_KIND_DAEMON).unwrap();
+        let fresh = merge_host_identity_metadata(None, supercharge_tool_protocol::HOST_KIND_DAEMON)
+            .unwrap();
         assert_eq!(
             fresh,
             serde_json::json!({ "host_kind": "daemon", "platform": std::env::consts::OS })
         );
         let scalar = serde_json::json!("opaque");
         assert_eq!(
-            merge_host_identity_metadata(Some(scalar.clone()), supercharge_tool_protocol::HOST_KIND_DAEMON)
-                .unwrap(),
+            merge_host_identity_metadata(
+                Some(scalar.clone()),
+                supercharge_tool_protocol::HOST_KIND_DAEMON
+            )
+            .unwrap(),
             scalar
         );
     }

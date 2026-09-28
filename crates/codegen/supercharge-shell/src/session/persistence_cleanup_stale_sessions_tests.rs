@@ -4,9 +4,33 @@ use std::time::{Duration, SystemTime};
 use filetime::FileTime;
 use tempfile::TempDir;
 
-use super::{CleanupLevel, CleanupStats, cleanup_stale_sessions_inner, mark_session_live};
+use super::{
+    CleanupLevel, CleanupStats, cleanup_stale_sessions_inner, cleanup_ttl_days_from_effective,
+    mark_session_live,
+};
 
 const TTL_DAYS: u32 = 30;
+
+#[test]
+fn cleanup_ttl_is_opt_in() {
+    for raw in [
+        toml::Value::Table(Default::default()),
+        toml::toml! { storage = { cleanup_ttl_days = 0 } }.into(),
+        toml::toml! { storage = { cleanup_ttl_days = -1 } }.into(),
+        toml::toml! { storage = { cleanup_ttl_days = "30" } }.into(),
+    ] {
+        assert_eq!(None, cleanup_ttl_days_from_effective(&raw));
+    }
+    assert_eq!(
+        Some(45),
+        cleanup_ttl_days_from_effective(
+            &toml::toml! {
+                storage = { cleanup_ttl_days = 45 }
+            }
+            .into()
+        )
+    );
+}
 
 fn days_ago(days: u64) -> FileTime {
     FileTime::from_system_time(SystemTime::now() - Duration::from_secs(days * 86_400))

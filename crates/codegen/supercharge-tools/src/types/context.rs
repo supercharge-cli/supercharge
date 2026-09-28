@@ -16,6 +16,24 @@ pub struct TruncationConfig {
     /// `default_max_output_bytes`. Deliberately separate from `default_max_output_bytes` so an MCP-specific override (e.g. a repo's `[mcp]
     /// max_output_bytes`) never changes non-MCP readers like the opencode bash cap.
     pub mcp_max_output_bytes: Option<usize>,
+    /// Which policy-controlled Markdown files may be returned whole under the token cap.
+    pub whole_read: WholeReadPolicy,
+}
+
+/// Whole-read exceptions for files whose later lines are part of the model contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WholeReadPolicy {
+    pub skill_markdown: bool,
+    pub instruction_files: bool,
+}
+
+impl Default for WholeReadPolicy {
+    fn default() -> Self {
+        Self {
+            skill_markdown: true,
+            instruction_files: true,
+        }
+    }
 }
 
 impl TruncationConfig {
@@ -128,8 +146,9 @@ mod tests {
             cfg.interpolate_description("capped at {max_wait_ms}", "get_task_output", 40_000, cap),
             "capped at 300000 (~5 min)"
         );
-        let default_cap =
-            supercharge_tool_types::format_wait_cap_ms(supercharge_tool_types::MAX_WAIT_BLOCK_MS_DEFAULT);
+        let default_cap = supercharge_tool_types::format_wait_cap_ms(
+            supercharge_tool_types::MAX_WAIT_BLOCK_MS_DEFAULT,
+        );
         assert_eq!(
             TruncationConfig::default().interpolate_description(
                 "capped at {max_wait_ms}",
@@ -205,9 +224,10 @@ mod tests {
     /// it relies on. schemars puts `minimum` at the root for the same field, which is the precedent this follows.
     #[test]
     fn apply_to_schema_bounds_the_real_optional_u64_property() {
-        let generated =
-            serde_json::to_value(schemars::schema_for!(supercharge_tool_types::TaskOutputToolInput))
-                .unwrap();
+        let generated = serde_json::to_value(schemars::schema_for!(
+            supercharge_tool_types::TaskOutputToolInput
+        ))
+        .unwrap();
         let Some(timeout) = generated.pointer("/properties/timeout_ms") else {
             panic!("expected timeout_ms: {generated}");
         };

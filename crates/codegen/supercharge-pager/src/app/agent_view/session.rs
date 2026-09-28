@@ -183,7 +183,6 @@ impl AgentView {
             stashed_prompt: None,
             prompt_stash: None,
             draft_consumed: false,
-            credit_limit_stashed_prompt: None,
             reauth_stashed_prompt: None,
             active_modal: None,
             modal_buttons: Vec::new(),

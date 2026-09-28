@@ -2,8 +2,8 @@
 use super::hooks::RewriteProblem;
 use super::*;
 use futures::StreamExt;
-use tracing::Instrument;
 use supercharge_hooks::result::HookDecision;
+use tracing::Instrument;
 #[path = "wait_interrupt.rs"]
 mod wait_interrupt;
 use wait_interrupt::{
@@ -117,7 +117,9 @@ fn is_interruptible_wait_tool(tool_name: &str, args: &serde_json::Value) -> bool
         "get_task_output"
         | "get_command_or_subagent_output"
         | "get_task_or_subagent_output"
-        | "get_terminal_command_output" => supercharge_tool_types::task_output_waits_from_json(args),
+        | "get_terminal_command_output" => {
+            supercharge_tool_types::task_output_waits_from_json(args)
+        }
         "wait_tasks" | "wait_commands_or_subagents" | "wait_tasks_or_subagents" => true,
         "Await" | "AwaitShell" => true,
         _ => false,
@@ -183,7 +185,10 @@ pub(super) fn is_file_backed_exit_plan_input(tool_input: &ToolInput) -> bool {
 pub(super) fn is_file_backed_exit_plan_kind(
     kind: Option<supercharge_tools::types::tool::ToolKind>,
 ) -> bool {
-    matches!(kind, Some(supercharge_tools::types::tool::ToolKind::ExitPlan))
+    matches!(
+        kind,
+        Some(supercharge_tools::types::tool::ToolKind::ExitPlan)
+    )
 }
 /// Split ExitPlan-kind calls into the tail so they run after the rest of the batch.
 fn split_exit_plan_tail(
@@ -1014,12 +1019,12 @@ impl SessionActor {
                 }
                 Err(_) => true,
             };
-            let (ext_tool_output, ext_error_message) = if supercharge_telemetry::external::is_active()
-            {
-                external_tool_bodies(&result)
-            } else {
-                (None, None)
-            };
+            let (ext_tool_output, ext_error_message) =
+                if supercharge_telemetry::external::is_active() {
+                    external_tool_bodies(&result)
+                } else {
+                    (None, None)
+                };
             let tool_loop = match result {
                 Ok(tool_result) => {
                     let effective_tool_name = tool_result
@@ -1250,7 +1255,8 @@ impl SessionActor {
             let ctx = self.hook_run_ctx();
             let batch = self.announce_hook_run(&registry, &envelope, &ctx);
             let pre_result =
-                supercharge_hooks::dispatcher::dispatch_pre_tool_use(&registry, &envelope, &ctx).await;
+                supercharge_hooks::dispatcher::dispatch_pre_tool_use(&registry, &envelope, &ctx)
+                    .await;
             self.send_hook_execution(&batch, &pre_result.results).await;
             self.emit_hook_executed_telemetry(
                 "pre_tool_use",
@@ -1617,7 +1623,10 @@ impl SessionActor {
                     supercharge_telemetry::events::AccessKind::AgentMessage,
                     subagent_id.clone(),
                 ),
-                _ => (supercharge_telemetry::events::AccessKind::Other, String::new()),
+                _ => (
+                    supercharge_telemetry::events::AccessKind::Other,
+                    String::new(),
+                ),
             };
             let canonical_permission_tool_name =
                 crate::session::telemetry::canonical_permission_tool_name(&access_kind);
@@ -1647,13 +1656,15 @@ impl SessionActor {
                 !self.session_info.id.0.is_empty(),
                 "permission reverse-request must carry a non-empty sessionId (design §5.4)"
             );
-            let path_context = Some(supercharge_workspace::permission::types::RequestPathContext {
-                real_cwd: std::path::PathBuf::from(self.session_info.cwd.as_str()),
-                display_cwd: self
-                    .display_cwd
-                    .get()
-                    .map(|cwd| std::path::PathBuf::from(cwd.as_str())),
-            });
+            let path_context = Some(
+                supercharge_workspace::permission::types::RequestPathContext {
+                    real_cwd: std::path::PathBuf::from(self.session_info.cwd.as_str()),
+                    display_cwd: self
+                        .display_cwd
+                        .get()
+                        .map(|cwd| std::path::PathBuf::from(cwd.as_str())),
+                },
+            );
             let perm_wait_start = std::time::Instant::now();
             let perm_wait_span = supercharge_telemetry::region::Region::from_span(
                 tracing::info_span!("permission.wait", wait_ms = tracing::field::Empty),
@@ -2381,7 +2392,12 @@ impl SessionActor {
                 vec![],
                 vec![],
             ),
-            ToolInput::UseTool(ut) => (ut.tool_name.clone(), acp::ToolKind::Other, vec![], vec![]),
+            ToolInput::UseTool(ut) => (
+                ut.target_name().unwrap_or("use_tool").to_owned(),
+                acp::ToolKind::Other,
+                vec![],
+                vec![],
+            ),
             ToolInput::Write(ref w) => (
                 format!("Write `{}`", w.file_path),
                 acp::ToolKind::Edit,
@@ -2555,7 +2571,10 @@ impl SessionActor {
                 crate::session::telemetry::is_same_skill_file(Path::new(&skill.path), &read_path)
             })
     }
-    fn emit_skill_md_read(&self, skill: supercharge_tools::implementations::skills::types::SkillInfo) {
+    fn emit_skill_md_read(
+        &self,
+        skill: supercharge_tools::implementations::skills::types::SkillInfo,
+    ) {
         let skill_source =
             crate::session::telemetry::skill_source(skill.scope, skill.plugin_name.as_deref());
         supercharge_telemetry::event_span!(
@@ -2564,12 +2583,14 @@ impl SessionActor {
             invocation_trigger = "skill_md_read",
             skill_source = skill_source,
         );
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::SkillDispatched {
-            skill_name: skill.name,
-            plugin_source: skill.plugin_name,
-            trigger: supercharge_telemetry::events::SkillTrigger::SkillMdRead,
-            skill_source: Some(skill_source.to_owned()),
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::SkillDispatched {
+                skill_name: skill.name,
+                plugin_source: skill.plugin_name,
+                trigger: supercharge_telemetry::events::SkillTrigger::SkillMdRead,
+                skill_source: Some(skill_source.to_owned()),
+            },
+        );
     }
     pub(super) fn make_pre_tool_use_envelope(
         &self,
@@ -3502,9 +3523,9 @@ mod plan_approval_helper_tests {
     }
     #[test]
     fn ext_method_no_client_defaults_false_for_untagged_error() {
-        assert!(!ext_method_no_client(&supercharge_acp_lib::acp_internal_error(
-            "unrelated internal error"
-        )));
+        assert!(!ext_method_no_client(
+            &supercharge_acp_lib::acp_internal_error("unrelated internal error")
+        ));
     }
     #[test]
     fn revise_plan_message_includes_feedback_when_present() {

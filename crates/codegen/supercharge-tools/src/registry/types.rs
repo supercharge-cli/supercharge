@@ -348,7 +348,9 @@ struct ToolEntry {
     /// Noop when `T::Params = ()`.
     register_params: Box<dyn Fn(&mut Resources) + Send + Sync>,
     parse_input: Box<
-        dyn Fn(serde_json::Value) -> Result<ToolInput, supercharge_tool_runtime::ToolError> + Send + Sync,
+        dyn Fn(serde_json::Value) -> Result<ToolInput, supercharge_tool_runtime::ToolError>
+            + Send
+            + Sync,
     >,
     /// Registers this tool into a `LocalRegistry` using the concrete type.
     /// Captured at `register::<T>()` time when T is known.
@@ -374,6 +376,8 @@ struct FinalizedTool {
     output_converter:
         Arc<dyn Fn(serde_json::Value) -> Result<ToolOutput, serde_json::Error> + Send + Sync>,
     definition: ToolDefinition,
+    /// `use_tool` re-exported without the MCP file forms for hosts that must not see them.
+    inline_mcp_definition: Option<ToolDefinition>,
     /// Effective params (defaults merged with client overrides).
     /// Kept for building `ProposedTool` during reminder evaluation and for
     /// params-aware finalized definition construction.
@@ -386,7 +390,9 @@ struct FinalizedTool {
     reverse_params: HashMap<String, String>,
     /// useful for parsing input to specific type
     parse_input: Arc<
-        dyn Fn(serde_json::Value) -> Result<ToolInput, supercharge_tool_runtime::ToolError> + Send + Sync,
+        dyn Fn(serde_json::Value) -> Result<ToolInput, supercharge_tool_runtime::ToolError>
+            + Send
+            + Sync,
     >,
     /// Resolved behavior contract version for this tool (e.g. `"current"`,
     /// `"legacy-0.4.10"`). `None` for unmanaged tools and dynamically
@@ -478,6 +484,7 @@ pub struct ToolRegistryBuilder {
     /// model. Exposed to description templates as `system_reminders_enabled` so "you are notified on completion" promises
     /// are only rendered when the client actually delivers them.
     system_reminders_enabled: bool,
+    mcp_file_input_preparation: bool,
 }
 impl Default for ToolRegistryBuilder {
     fn default() -> Self {
@@ -531,7 +538,9 @@ impl ToolRegistryBuilder {
             supercharge_tool_runtime::Tool::id(&tool).as_str()
         );
         let namespace = tool.tool_namespace().to_string();
-        let id = supercharge_tool_runtime::Tool::id(&tool).as_str().to_string();
+        let id = supercharge_tool_runtime::Tool::id(&tool)
+            .as_str()
+            .to_string();
         let kind = tool.kind();
         let requires = tool.requires_expr();
         self.tools.insert(
@@ -542,7 +551,13 @@ impl ToolRegistryBuilder {
                 kind,
                 requires,
                 default_params: serde_json::to_value(P::default()).unwrap_or_default(),
-                input_schema: generate_schema_cached::<T::Args>(),
+                input_schema: if kind == ToolKind::UseTool {
+                    serde_json::json!(
+                        crate::implementations::use_tool::UseToolInput::input_schema(true)
+                    )
+                } else {
+                    generate_schema_cached::<T::Args>()
+                },
                 metadata: Box::new(tool),
                 output_converter: Box::new(|value| {
                     let typed: T::Output = serde_json::from_value(value)?;
@@ -605,6 +620,7 @@ impl ToolRegistryBuilder {
             reminders: Vec::new(),
             shared_local_registry: None,
             system_reminders_enabled: true,
+            mcp_file_input_preparation: false,
         };
         b.register_with_params::<grok_build::BashTool, grok_build::bash::BashParams>();
         b.register_with_params::<grok_build::ReadFileTool, grok_build::read_file::ReadFileParams>();
@@ -701,7 +717,10 @@ impl ToolRegistryBuilder {
         }
         b
     }
-    pub fn with_local_registry(mut self, registry: supercharge_computer_hub_sdk::LocalRegistry) -> Self {
+    pub fn with_local_registry(
+        mut self,
+        registry: supercharge_computer_hub_sdk::LocalRegistry,
+    ) -> Self {
         self.shared_local_registry = Some(registry);
         self
     }
@@ -718,7 +737,11 @@ impl ToolRegistryBuilder {
                         "id": e.id,
                         "kind": e.kind,
                         "default_params": e.default_params,
-                        "input_schema": e.input_schema,
+                        "input_schema": if e.kind == ToolKind::UseTool {
+                            serde_json::json!(crate::implementations::use_tool::UseToolInput::input_schema(false))
+                        } else {
+                            e.input_schema.clone()
+                        },
                         "requires": e.requires,
                     }),
                 )
@@ -773,6 +796,30 @@ impl ToolRegistryBuilder {
                         .with_category("behavior_version"),
                 );
                 continue;
+            }
+            if entry.kind == ToolKind::UseTool
+                && let Some(mapping) = &tool_config.params_name_overrides
+            {
+                let fields = ["tool_name", "tool_input", "tool_input_file", "file"];
+                let mut destinations = std::collections::HashSet::new();
+                let has_collision = mapping.iter().any(|(canonical, client)| {
+                    !destinations.insert(client.as_str())
+                        || (canonical != client && fields.contains(&client.as_str()))
+                }) || fields
+                    .iter()
+                    .filter(|field| !mapping.contains_key(**field))
+                    .any(|field| !destinations.insert(*field));
+                if has_collision {
+                    errors.push(
+                        RequirementError::new(
+                            tool_config.id.clone(),
+                            "ambiguous MCP wrapper parameter mapping",
+                        )
+                        .with_field_path("params_name_overrides")
+                        .with_category("parameter_mapping"),
+                    );
+                    continue;
+                }
             }
             let effective = match compute_effective_params(entry, tool_config) {
                 Ok(effective) => effective,
@@ -876,6 +923,11 @@ impl ToolRegistryBuilder {
     pub fn set_system_reminders_enabled(&mut self, enabled: bool) {
         self.system_reminders_enabled = enabled;
     }
+    /// Opt in only when the host prepares file-backed MCP calls before tool dispatch.
+    pub fn with_mcp_file_input_preparation(mut self) -> Self {
+        self.mcp_file_input_preparation = true;
+        self
+    }
     pub fn finalize(
         self,
         config: ToolServerConfig,
@@ -902,6 +954,8 @@ impl ToolRegistryBuilder {
         if !errors.is_empty() {
             return Err(errors);
         }
+        let mcp_file_input_supported =
+            self.mcp_file_input_preparation && ctx.fs.supports_bounded_read();
         let mut kind_to_name: HashMap<ToolKind, String> = HashMap::new();
         for tool_config in &config.tools {
             let Some(entry) = self.tools.get(&tool_config.id) else {
@@ -1093,32 +1147,49 @@ impl ToolRegistryBuilder {
                 .iter()
                 .map(|(canonical, client)| (client.clone(), canonical.clone()))
                 .collect();
-            let effective_params = compute_effective_params(&entry, tool_config)
+            let mut effective_params = compute_effective_params(&entry, tool_config)
                 .map_err(|e| vec![requirement_error_from_param_error(&tool_config.id, e)])?;
-            let mut definition = entry.metadata.versioned_definition(
-                contract_version.as_deref(),
-                &client_name,
-                tool_config.description_override.as_deref(),
-                &renderer,
-                &param_map,
-                &entry.input_schema,
-                &effective_params,
-            );
-            if let Some(desc) = &definition.function.description {
-                definition.function.description = Some(truncation_config.interpolate_description(
-                    desc,
+            if entry.kind == ToolKind::UseTool {
+                effective_params = merge_json(
+                    &effective_params,
+                    &serde_json::json!({crate::implementations::use_tool::FILE_INPUT_SUPPORTED: mcp_file_input_supported}),
+                );
+            }
+            let build_definition = |effective_params: &serde_json::Value| {
+                let mut definition = entry.metadata.versioned_definition(
+                    contract_version.as_deref(),
+                    &client_name,
+                    tool_config.description_override.as_deref(),
+                    &renderer,
+                    &param_map,
+                    &entry.input_schema,
+                    effective_params,
+                );
+                if let Some(desc) = &definition.function.description {
+                    definition.function.description =
+                        Some(truncation_config.interpolate_description(
+                            desc,
+                            &client_name,
+                            crate::DEFAULT_TOOL_OUTPUT_BYTES,
+                            supercharge_tool_types::max_wait_block_ms(),
+                        ));
+                }
+                renderer.render_schema_descriptions(&mut definition.function.parameters);
+                truncation_config.apply_to_schema(
+                    &mut definition.function.parameters,
                     &client_name,
                     crate::DEFAULT_TOOL_OUTPUT_BYTES,
                     supercharge_tool_types::max_wait_block_ms(),
-                ));
-            }
-            renderer.render_schema_descriptions(&mut definition.function.parameters);
-            truncation_config.apply_to_schema(
-                &mut definition.function.parameters,
-                &client_name,
-                crate::DEFAULT_TOOL_OUTPUT_BYTES,
-                supercharge_tool_types::max_wait_block_ms(),
-            );
+                );
+                definition
+            };
+            let definition = build_definition(&effective_params);
+            let inline_mcp_definition = (entry.kind == ToolKind::UseTool
+                && mcp_file_input_supported)
+                .then(|| build_definition(&merge_json(
+                    &effective_params,
+                    &serde_json::json!({crate::implementations::use_tool::FILE_INPUT_SUPPORTED: false}),
+                )));
             (entry.apply_params)(&effective_params, &mut resources);
             tools.push(FinalizedTool {
                 namespace: entry.namespace,
@@ -1128,6 +1199,7 @@ impl ToolRegistryBuilder {
                 metadata: Arc::from(entry.metadata),
                 output_converter: Arc::from(entry.output_converter),
                 definition,
+                inline_mcp_definition,
                 effective_params,
                 input_schema: entry.input_schema,
                 reverse_params,
@@ -1354,6 +1426,19 @@ impl FinalizedToolset {
             .map(|t| t.definition.clone())
             .collect()
     }
+    /// Built-in definitions with `use_tool` advertised inline-only for hosts that reject the file-form union.
+    pub fn tool_definitions_builtins_only_inline_mcp(&self) -> Vec<ToolDefinition> {
+        self.tools
+            .read()
+            .iter()
+            .filter(|t| !t.client_name.contains("__"))
+            .map(|t| {
+                t.inline_mcp_definition
+                    .clone()
+                    .unwrap_or_else(|| t.definition.clone())
+            })
+            .collect()
+    }
     /// Get the resolved contract version for a tool by its client-facing name. Returns `None` if
     /// the tool is not found or is not version-managed. Returns an owned `String` because the
     /// internal `RwLock` read guard cannot outlive this call.
@@ -1392,21 +1477,76 @@ impl FinalizedToolset {
         tool_name: &str,
         tool_params: &serde_json::Value,
     ) -> Result<ToolInput, supercharge_tool_runtime::ToolError> {
-        let (reverse_params, parse_input) = {
+        let (reverse_params, parse_input, is_mcp_wrapper) = {
             let tools = self.tools.read();
             let tool = tools
                 .iter()
                 .find(|t| t.client_name == tool_name)
                 .ok_or_else(|| Self::tool_not_found_error(tool_name))?;
-            (tool.reverse_params.clone(), tool.parse_input.clone())
+            (
+                tool.reverse_params.clone(),
+                tool.parse_input.clone(),
+                tool.metadata.kind() == ToolKind::UseTool,
+            )
         };
-        let canonical_params = if reverse_params.is_empty() {
+        let canonical_params = if is_mcp_wrapper {
+            crate::util::remap::remap_json_keys_checked(tool_params.clone(), &reverse_params)
+                .map_err(supercharge_tool_runtime::ToolError::invalid_arguments)?
+        } else if reverse_params.is_empty() {
             tool_params.clone()
         } else {
             remap_json_keys(tool_params.clone(), &reverse_params)
         };
         (parse_input)(canonical_params)
     }
+    /// Parse an MCP wrapper from original JSON before key remapping loses duplicate keys.
+    pub fn parse_mcp_wrapper_json(
+        &self,
+        tool_name: &str,
+        arguments: &str,
+    ) -> Result<crate::implementations::UseToolInput, supercharge_tool_runtime::ToolError> {
+        let tools = self.tools.read();
+        let tool = tools
+            .iter()
+            .find(|t| t.client_name == tool_name)
+            .ok_or_else(|| Self::tool_not_found_error(tool_name))?;
+        crate::implementations::UseToolInput::from_model_json(arguments, &tool.reverse_params)
+            .map_err(|error| {
+                supercharge_tool_runtime::ToolError::invalid_arguments(error.to_string())
+            })
+    }
+
+    /// Convert only this finalized wrapper's canonical keys into its model-facing keys.
+    pub fn model_mcp_arguments(
+        &self,
+        tool_name: &str,
+        input: &crate::implementations::UseToolInput,
+    ) -> Result<serde_json::Value, supercharge_tool_runtime::ToolError> {
+        let tools = self.tools.read();
+        let tool = tools
+            .iter()
+            .find(|t| t.client_name == tool_name)
+            .ok_or_else(|| Self::tool_not_found_error(tool_name))?;
+        let forward: HashMap<_, _> = tool
+            .reverse_params
+            .iter()
+            .map(|(client, canonical)| (canonical.clone(), client.clone()))
+            .collect();
+        let value = serde_json::to_value(input)
+            .map_err(|e| supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string()))?;
+        crate::util::remap::remap_json_keys_checked(value, &forward)
+            .map_err(supercharge_tool_runtime::ToolError::invalid_arguments)
+    }
+
+    /// Whether a registered target is an MCP tool; absence permits a managed-catalog lookup.
+    pub fn is_mcp_target(&self, tool_name: &str) -> Option<bool> {
+        self.tools
+            .read()
+            .iter()
+            .find(|tool| tool.client_name == tool_name)
+            .map(|tool| tool.metadata.tool_namespace() == ToolNamespace::MCP)
+    }
+
     /// Execute a tool, returning only its raw output. Unlike [`call()`], this skips reminders and persistence. Used by `InnerDispatchForToolset` so
     /// that `use_tool`'s dispatch to a target tool does not double-run post-processing: the outer `call("use_tool")` does one round of
     /// post-processing over the target's output. Inner dispatch is intentionally **not** populated in the forwarded context.
@@ -1416,7 +1556,7 @@ impl FinalizedToolset {
         tool_args: serde_json::Value,
         parent_ctx: supercharge_tool_runtime::ToolCallContext,
     ) -> Result<crate::types::output::ToolOutput, supercharge_tool_runtime::ToolError> {
-        let (registry_id, output_converter, reverse_params) = {
+        let (registry_id, output_converter, reverse_params, is_mcp_wrapper) = {
             let tools = self.tools.read();
             let entry = tools
                 .iter()
@@ -1426,9 +1566,13 @@ impl FinalizedToolset {
                 entry.registry_id.clone(),
                 entry.output_converter.clone(),
                 entry.reverse_params.clone(),
+                entry.metadata.kind() == ToolKind::UseTool,
             )
         };
-        let canonical_params = if reverse_params.is_empty() {
+        let canonical_params = if is_mcp_wrapper {
+            crate::util::remap::remap_json_keys_checked(tool_args, &reverse_params)
+                .map_err(supercharge_tool_runtime::ToolError::invalid_arguments)?
+        } else if reverse_params.is_empty() {
             tool_args
         } else {
             remap_json_keys(tool_args, &reverse_params)
@@ -1455,8 +1599,9 @@ impl FinalizedToolset {
         })?;
         let stream = lr_handle.execute(ctx, canonical_params).await;
         let value = drain_value_stream(stream).await?;
-        (output_converter)(value)
-            .map_err(|e| supercharge_tool_runtime::ToolError::custom("output_decoding", e.to_string()))
+        (output_converter)(value).map_err(|e| {
+            supercharge_tool_runtime::ToolError::custom("output_decoding", e.to_string())
+        })
     }
     /// Dispatch a tool call by client-facing name with client-facing params. `cwd_override` — optional per-call working
     /// directory. When `Some`, tools will use this instead of the session `Cwd` from Resources. This is stack-local (not
@@ -1582,7 +1727,7 @@ impl FinalizedToolset {
         cwd_override: Option<std::path::PathBuf>,
         cancellation: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<DispatchParts, supercharge_tool_runtime::ToolError> {
-        let (registry_id, output_converter, reverse_params) = {
+        let (registry_id, output_converter, reverse_params, is_mcp_wrapper) = {
             let tools = self.tools.read();
             let entry = tools
                 .iter()
@@ -1592,19 +1737,23 @@ impl FinalizedToolset {
                 entry.registry_id.clone(),
                 entry.output_converter.clone(),
                 entry.reverse_params.clone(),
+                entry.metadata.kind() == ToolKind::UseTool,
             )
         };
-        let canonical_params = if reverse_params.is_empty() {
+        let canonical_params = if is_mcp_wrapper {
+            crate::util::remap::remap_json_keys_checked(tool_args, &reverse_params)
+                .map_err(supercharge_tool_runtime::ToolError::invalid_arguments)?
+        } else if reverse_params.is_empty() {
             tool_args
         } else {
             remap_json_keys(tool_args, &reverse_params)
         };
-        let effective_tool_name = if tool_name == "use_tool" {
+        let effective_tool_name = if is_mcp_wrapper {
             serde_json::from_value::<crate::implementations::use_tool::UseToolInput>(
                 canonical_params.clone(),
             )
             .ok()
-            .map(|input| input.tool_name)
+            .and_then(|input| input.target_name().map(str::to_owned))
         } else {
             None
         };
@@ -1661,8 +1810,9 @@ impl FinalizedToolset {
         output_converter: &OutputConverter,
         effective_tool_name: Option<String>,
     ) -> Result<ToolRunResult, supercharge_tool_runtime::ToolError> {
-        let output = (output_converter)(value)
-            .map_err(|e| supercharge_tool_runtime::ToolError::custom("output_decoding", e.to_string()))?;
+        let output = (output_converter)(value).map_err(|e| {
+            supercharge_tool_runtime::ToolError::custom("output_decoding", e.to_string())
+        })?;
         let reminders_enabled;
         {
             reminders_enabled = self
@@ -1736,13 +1886,15 @@ impl FinalizedToolset {
     {
         let mut tools = self.tools.write();
         if tools.iter().any(|t| t.client_name == name) {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "Tool already registered: {name}"
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("Tool already registered: {name}"),
+            ));
         }
         let description = tool.description_template().to_string();
         let kind = tool.kind();
-        let registry_id = supercharge_tool_runtime::Tool::id(&tool).as_str().to_owned();
+        let registry_id = supercharge_tool_runtime::Tool::id(&tool)
+            .as_str()
+            .to_owned();
         let input_schema = input_schema_override.unwrap_or_else(generate_schema_cached::<T::Args>);
         let definition = ToolDefinition::function(&name, Some(&description), input_schema.clone());
         self.local_registry.register(tool);
@@ -1762,6 +1914,7 @@ impl FinalizedToolset {
                 })
             }),
             definition,
+            inline_mcp_definition: None,
             effective_params: serde_json::Value::Object(Default::default()),
             input_schema,
             reverse_params: HashMap::new(),
@@ -3221,10 +3374,14 @@ mod tests {
             _input: serde_json::Value,
         ) -> supercharge_tool_runtime::ToolStream<String> {
             Box::pin(futures::stream::iter(vec![
-                supercharge_tool_runtime::ToolStreamItem::Progress(supercharge_tool_runtime::ToolProgress::Text {
-                    text: "progress-1".into(),
-                }),
-                supercharge_tool_runtime::ToolStreamItem::Terminal(Ok("terminal-value".to_string())),
+                supercharge_tool_runtime::ToolStreamItem::Progress(
+                    supercharge_tool_runtime::ToolProgress::Text {
+                        text: "progress-1".into(),
+                    },
+                ),
+                supercharge_tool_runtime::ToolStreamItem::Terminal(
+                    Ok("terminal-value".to_string()),
+                ),
             ]))
         }
     }
@@ -3289,7 +3446,10 @@ mod tests {
                         terminal.is_none(),
                         "progress must arrive before the terminal"
                     );
-                    assert!(matches!(p, supercharge_tool_runtime::ToolProgress::Text { .. }));
+                    assert!(matches!(
+                        p,
+                        supercharge_tool_runtime::ToolProgress::Text { .. }
+                    ));
                     progress_count += 1;
                 }
                 supercharge_tool_runtime::ToolStreamItem::Terminal(result) => {

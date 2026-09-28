@@ -268,10 +268,9 @@
         );
     }
 
-    /// A rate-limit exhaustion whose flattened reason carries the free-usage code sets both flags and pushes NO generic block.
-    /// The driver shows the paywall modal on PromptResponse; viewers keep no marker.
+    /// Legacy free-usage codes remain visible rate-limit errors.
     #[test]
-    fn retry_exhausted_free_usage_sets_paywall_flag_without_marker() {
+    fn retry_exhausted_free_usage_remains_visible() {
         let mut session = make_session(Some("s1"));
         let mut scrollback = ScrollbackState::new();
         session.in_flight_prompt = Some(InFlightPrompt {
@@ -296,11 +295,10 @@
             session.rate_limited,
             "free-usage keeps rate_limited (TurnFailed/toast suppression)"
         );
-        assert!(session.free_usage_blocked);
         assert_eq!(
             scrollback.len(),
-            0,
-            "no RetryFailed marker — the paywall modal shows instead"
+            1,
+            "the provider rate-limit error must remain visible"
         );
         assert!(
             session.in_flight_prompt.is_none(),
@@ -334,117 +332,37 @@
     }
 
     #[test]
-    fn apply_retry_state_credit_limit_exhausted_preserves_in_flight_prompt() {
-        let mut session = make_session(Some("s1"));
-        let mut scrollback = ScrollbackState::new();
-        session.in_flight_prompt = Some(InFlightPrompt {
-            text: "stash me".into(),
-            images: Vec::new(),
-            scrollback_entry: EntryId::new(2),
-            combined_scrollback_entries: Vec::new(),
-            chip_elements: Vec::new(),
-        });
-        apply_retry_state(
-            &RetryState::Exhausted {
+    fn provider_credit_errors_clear_in_flight_and_show_request_failure() {
+        for retry in [
+            RetryState::Exhausted {
                 attempts: 3,
-                reason: "status 403: run out of credits".into(),
+                reason: "status 403: fake provider has run out of credits".into(),
                 is_rate_limited: false,
             },
-            &mut session,
-            &mut scrollback, false);
-        assert!(
-            session.credit_limit_blocked,
-            "credit_limit_blocked must be set for credit-limit 403"
-        );
-        assert!(
-            session.in_flight_prompt.is_some(),
-            "in_flight_prompt must be preserved so PromptResponse handler can stash it"
-        );
-        assert_eq!(session.in_flight_prompt.unwrap().text, "stash me");
-    }
-
-    #[test]
-    fn apply_retry_state_credit_limit_failed_preserves_in_flight_prompt() {
-        let mut session = make_session(Some("s1"));
-        let mut scrollback = ScrollbackState::new();
-        session.in_flight_prompt = Some(InFlightPrompt {
-            text: "stash me too".into(),
-            images: Vec::new(),
-            scrollback_entry: EntryId::new(3),
-            combined_scrollback_entries: Vec::new(),
-            chip_elements: Vec::new(),
-        });
-        apply_retry_state(
-            &RetryState::Failed {
+            RetryState::Failed {
                 error_type: "api".into(),
-                message: "status 403: run out of credits".into(),
+                message: "Request failed (402): fake provider balance exhausted".into(),
             },
-            &mut session,
-            &mut scrollback, false);
-        assert!(
-            session.credit_limit_blocked,
-            "credit_limit_blocked must be set for credit-limit 403"
-        );
-        assert!(
-            session.in_flight_prompt.is_some(),
-            "in_flight_prompt must be preserved so PromptResponse handler can stash it"
-        );
-        assert_eq!(session.in_flight_prompt.unwrap().text, "stash me too");
-    }
-
-    #[test]
-    fn apply_retry_state_pool_402_sets_credit_limit_blocked() {
-        let mut session = make_session(Some("s1"));
-        let mut scrollback = ScrollbackState::new();
-        session.in_flight_prompt = Some(InFlightPrompt {
-            text: "pool blocked".into(),
-            images: Vec::new(),
-            scrollback_entry: EntryId::new(5),
-            combined_scrollback_entries: Vec::new(),
-            chip_elements: Vec::new(),
-        });
-        apply_retry_state(
-            &RetryState::Failed {
+            RetryState::Failed {
                 error_type: "api".into(),
-                message:
-                    "API error (status 402 Payment Required): Supercharge AI usage balance exhausted"
-                        .into(),
+                message: "Request failed (403): fake provider has run out of credits".into(),
             },
-            &mut session,
-            &mut scrollback, false);
-        assert!(
-            session.credit_limit_blocked,
-            "credit_limit_blocked must be set for pool 402 balance exhausted"
-        );
-        assert!(session.in_flight_prompt.is_some());
-    }
-
-    #[test]
-    fn apply_retry_state_non_credit_limit_failed_clears_in_flight_prompt() {
-        let mut session = make_session(Some("s1"));
-        let mut scrollback = ScrollbackState::new();
-        session.in_flight_prompt = Some(InFlightPrompt {
-            text: "gone".into(),
-            images: Vec::new(),
-            scrollback_entry: EntryId::new(4),
-            combined_scrollback_entries: Vec::new(),
-            chip_elements: Vec::new(),
-        });
-        apply_retry_state(
-            &RetryState::Failed {
-                error_type: "api".into(),
-                message: "internal server error".into(),
-            },
-            &mut session,
-            &mut scrollback, false);
-        assert!(
-            !session.credit_limit_blocked,
-            "credit_limit_blocked must NOT be set for non-credit-limit errors"
-        );
-        assert!(
-            session.in_flight_prompt.is_none(),
-            "in_flight_prompt must be cleared for non-credit-limit errors"
-        );
+        ] {
+            let mut session = make_session(Some("s1"));
+            let mut scrollback = ScrollbackState::new();
+            session.in_flight_prompt = Some(InFlightPrompt {
+                text: "fake provider prompt".into(),
+                images: Vec::new(),
+                scrollback_entry: EntryId::new(2),
+                combined_scrollback_entries: Vec::new(),
+                chip_elements: Vec::new(),
+            });
+            apply_retry_state(&retry, &mut session, &mut scrollback, false);
+            assert!(session.in_flight_prompt.is_none());
+            let event = last_session_event(&scrollback).expect("provider error must be visible");
+            assert!(event.message().contains("fake provider"));
+            assert!(!event.message().contains("supercharge.ai"));
+        }
     }
 
     #[test]
@@ -495,7 +413,6 @@
             ),
             "auth 401 must surface the actionable re-auth prompt"
         );
-        assert!(!session.credit_limit_blocked);
     }
 
     /// A recoverable auth failure preserves `in_flight_prompt` so the PromptResponse handler can stash it for auto-resubmit after re-auth.

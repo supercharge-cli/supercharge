@@ -368,6 +368,13 @@ pub const AUTH_ERROR_SESSION_EXPIRED: &str =
 pub const AUTH_ERROR_API_KEY: &str =
     "Authentication failed. Run `/setup` to configure the AI provider and model credentials.";
 
+/// Error when a session-based method is requested on a deployment that never
+/// configured OIDC, OAuth2, or an external auth command. Such a launch has no
+/// account session to offer, so it must route the user to `/setup` instead of
+/// falling through to the inherited first-party sign-in.
+pub const AUTH_ERROR_SESSION_DISABLED: &str =
+    "Account sign-in is not configured. Run `/setup` to configure the AI provider.";
+
 /// Next ACP method id when `cached_token` cannot proceed (missing / expired / legacy WebLogin), or `None` when fallthrough is forbidden.
 /// Unpinned: prefer non-interactive `xai.api_key` when advertiseable, else interactive `grok.com`. Pinned `oidc`: **no** fallthrough to api_key; return `None` so the caller fails auth.
 /// Pinned `api_key` should not reach this path (cached_token is not advertised).

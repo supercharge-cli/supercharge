@@ -30,6 +30,7 @@ pub struct AgentBuilder {
     prompt_working_directory: Option<String>,
     terminal_backend: Arc<dyn TerminalBackend>,
     fs_backend: Arc<dyn AsyncFileSystem>,
+    mcp_file_input_preparation: bool,
     notification_handle: ToolNotificationHandle,
     owner_session_id: Option<String>,
     parent_scheduler_handle:
@@ -172,6 +173,7 @@ impl AgentBuilder {
             prompt_working_directory: None,
             terminal_backend,
             fs_backend: Arc::new(supercharge_tools::computer::local::LocalFs),
+            mcp_file_input_preparation: false,
             notification_handle,
             owner_session_id: None,
             parent_scheduler_handle: None,
@@ -394,6 +396,11 @@ impl AgentBuilder {
     /// ACP-backed when the client advertises `clientCapabilities.fs.readTextFile`/`writeTextFile`; `LocalFs` default.
     pub fn with_fs(mut self, fs: Arc<dyn AsyncFileSystem>) -> Self {
         self.fs_backend = fs;
+        self
+    }
+    /// Opt in only when the host prepares file-backed MCP calls before tool dispatch.
+    pub fn with_mcp_file_input_preparation(mut self) -> Self {
+        self.mcp_file_input_preparation = true;
         self
     }
     /// Set the session ID that owns processes spawned by this session's tools.
@@ -699,7 +706,11 @@ impl AgentBuilder {
         } else {
             std::collections::HashSet::new()
         };
-        let tool_bridge_builder = ToolBridge::get_builder();
+        let tool_bridge_builder = if self.mcp_file_input_preparation {
+            ToolBridge::get_builder().with_mcp_file_input_preparation()
+        } else {
+            ToolBridge::get_builder()
+        };
         let state_path = self.state_path.clone().unwrap_or_default();
         let mut tool_config = definition.tool_config.clone();
         if !definition.inject_default_tools && tool_config.tools.is_empty() {

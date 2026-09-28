@@ -387,8 +387,6 @@ pub(in crate::app::dispatch) fn dispatch_new_session_inner_with_id(
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: app.bootstrap_acp_commands.clone(),
             available_commands_generation: 1,
             available_tools: None,
@@ -730,7 +728,7 @@ fn configure_agent_composer(app: &mut AppView, agent_id: AgentId) {
     let voice = app.voice_mode_enabled;
     let sharing_enabled = app.sharing_enabled;
     let usage_visible = app.usage_visible;
-    let usage_command_visible = !app.has_external_auth_provider;
+    let usage_command_visible = true;
     let chat_mode = app.chat_mode;
     let screen_mode = app.screen_mode;
     let announcements = app.active_announcements.clone();
@@ -1164,8 +1162,6 @@ pub(in crate::app::dispatch) fn dispatch_new_worktree_session(
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: app.bootstrap_acp_commands.clone(),
             available_commands_generation: 1,
             available_tools: None,
@@ -1210,7 +1206,7 @@ pub(in crate::app::dispatch) fn dispatch_new_worktree_session(
         agent.apply_app_scoped_gates(
             app.sharing_enabled,
             app.usage_visible,
-            !app.has_external_auth_provider,
+            true,
             app.chat_mode,
             app.screen_mode,
             &app.active_announcements,
@@ -1391,11 +1387,6 @@ pub(in crate::app::dispatch) fn handle_session_created(
                 session_id: session_id_clone.clone(),
             });
         }
-        effects.push(Effect::FetchBilling {
-            agent_id,
-            silent: true,
-            nonce: Default::default(),
-        });
         if let Some(switch) = deferred {
             effects.push(Effect::SwitchModel {
                 agent_id,
@@ -1530,11 +1521,6 @@ pub(in crate::app::dispatch) fn handle_worktree_session_created(
                 session_id: session_id_clone.clone(),
             });
         }
-        effects.push(Effect::FetchBilling {
-            agent_id,
-            silent: true,
-            nonce: Default::default(),
-        });
         if let Some(switch) = deferred {
             effects.push(Effect::SwitchModel {
                 agent_id,

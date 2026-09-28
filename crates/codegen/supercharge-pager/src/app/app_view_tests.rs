@@ -186,16 +186,10 @@ pub(crate) fn test_app() -> AppView {
         thinking_effort: None,
         ask_user_question_timeout_enabled: None,
         zdr_access_enabled: false,
-        usage_billing_redirect_url: None,
         access_gate_shown_logged: false,
         announcement_cta_impressions_logged: Default::default(),
         gate: None,
         subscription_tier: None,
-        paywall_check_started: None,
-        last_subscription_check_at: None,
-        subscription_watch_interval_secs: None,
-        pending_gate_verification: None,
-        gate_verify_gen: 0,
         bundle_state: BundleState::default(),
         scroll_debug_hud: crate::views::scroll_debug_hud::ScrollDebugHud::new(),
         fps_hud: crate::views::fps_hud::FpsHud::new(),
@@ -221,8 +215,6 @@ pub(crate) fn test_app() -> AppView {
         welcome_on_changelog_cta: false,
         welcome_announcement: WelcomeAnnouncementState::default(),
         welcome_auth_fallback_rect: None,
-        welcome_refresh_rect: None,
-        welcome_gate_url_rect: None,
         welcome_upgrade_cta_rect: None,
         welcome_privacy_banner_opt_in_rect: None,
         welcome_privacy_banner_opt_out_rect: None,
@@ -286,13 +278,11 @@ pub(crate) fn test_app() -> AppView {
         plugin_cta_marketplace: None,
         workspace_dashboard_enabled: false,
         usage_visible: true,
-        has_external_auth_provider: false,
         backend_billed: false,
         tier_restricted_commands: Vec::new(),
         leader_mode: true,
         credit_balance: None,
         auto_topup: None,
-        billing_poll_wanted: false,
         leader_roster: Vec::new(),
         dashboard_local_sessions: Vec::new(),
         dashboard_sessions_loading: false,
@@ -342,8 +332,6 @@ pub(crate) fn test_app_with_agent() -> AppView {
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: Vec::new(),
             available_commands_generation: 0,
             available_tools: None,
@@ -549,8 +537,6 @@ fn idle_child_view(app: &AppView, id_n: usize, sid: &str) -> Box<AgentView> {
         restore_degree: None,
         rate_limited: false,
         model_incompatible: false,
-        credit_limit_blocked: false,
-        free_usage_blocked: false,
         available_commands: Vec::new(),
         available_commands_generation: 0,
         available_tools: None,
@@ -2042,246 +2028,77 @@ fn resize_event_closes_tip_show_gate_until_redraw() {
     assert_eq!(counts.get("t_seen"), Some(&2));
 }
 #[test]
-fn external_auth_provider_keeps_billing_off_after_auth_meta() {
-    let mut app = test_app();
-    app.has_external_auth_provider = true;
-    app.usage_visible = false;
-    app.apply_auth_meta(&supercharge_login::AuthMeta::default());
-    assert!(!app.usage_visible);
-    assert!(app.tier_restricted_commands.is_empty());
-    assert!(
-        !app.welcome_prompt
-            .slash_controller
-            .registry()
-            .is_restricted("usage")
-    );
-    assert!(!app.welcome_prompt.slash_controller.usage_command_visible());
+fn byok_auth_metadata_keeps_tools_usage_and_composer_available() {
+    for tier in [None, Some("Free"), Some("X Basic"), Some("Supercharge")] {
+        let mut app = test_app();
+        app.tier_restricted_commands = vec!["usage".into(), "voice".into(), "imagine".into()];
+        app.welcome_prompt.slash_controller.registry_mut().set_available_tools(
+            ["image_gen", "image_to_video"].into_iter().map(str::to_string).collect(),
+        );
+        app.welcome_prompt.set_voice_visible(true);
+        let gate = supercharge_login::GateInfo {
+            message: "Buy credits".into(),
+            url: Some("https://supercharge.ai/upgrade".into()),
+            label: Some("Upgrade tier".into()),
+        };
+        app.gate = Some(gate.clone());
+        app.apply_auth_meta(&supercharge_login::AuthMeta {
+            subscription_tier: tier.map(str::to_owned),
+            gate: Some(gate),
+            ..Default::default()
+        });
+        assert!(app.gate.is_none());
+        assert!(app.has_access());
+        assert!(app.ready_for_startup_typeahead());
+        assert!(app.tier_restricted_commands.is_empty());
+        assert!(!app.usage_visible, "account billing stays disabled");
+        assert!(app.welcome_prompt.slash_controller.usage_command_visible());
+        let registry = app.welcome_prompt.slash_controller.registry();
+        for command in ["setup", "usage", "voice", "imagine", "imagine-video"] {
+            assert!(!registry.is_restricted(command), "/{command} was tier-restricted");
+            assert!(registry.get(command).is_some(), "/{command} was hidden");
+        }
+    }
 }
+
 #[test]
-fn apply_auth_meta_disables_billing_surface_for_team_users() {
+fn byok_auth_metadata_preserves_identity_and_security_policy() {
     let mut app = test_app();
-    assert!(app.usage_visible);
-    let meta = supercharge_login::AuthMeta {
+    app.apply_auth_meta(&supercharge_login::AuthMeta {
+        email: Some("fake@example.invalid".into()),
         team_id: Some("team-uuid".into()),
         team_name: Some("Acme Corp".into()),
+        is_zdr: true,
         ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert!(!app.usage_visible);
+    });
+    assert_eq!(app.account_email.as_deref(), Some("fake@example.invalid"));
     assert_eq!(app.team_id.as_deref(), Some("team-uuid"));
-    assert!(
-        !app.welcome_prompt
-            .slash_controller
-            .billing_surface_visible()
-    );
+    assert_eq!(app.team_name.as_deref(), Some("Acme Corp"));
+    assert!(app.is_zdr);
+    assert!(!app.usage_visible);
+    app.trust_state = TrustState::Pending { workspace: "/tmp/fake-workspace".into() };
+    assert!(!app.session_startup_allowed());
+    assert!(!app.ready_for_startup_typeahead());
 }
+
 #[test]
-fn apply_auth_meta_enables_billing_surface_for_personal_users() {
+fn apply_auth_meta_preserves_provider_authentication_mode() {
     let mut app = test_app();
-    app.usage_visible = false;
-    let meta = supercharge_login::AuthMeta::default();
-    app.apply_auth_meta(&meta);
-    assert!(app.usage_visible);
-}
-#[test]
-fn apply_auth_meta_clears_api_key_flag_and_restores_billing_on_personal_login() {
-    let mut app = test_app();
-    app.is_api_key_auth = true;
-    app.usage_visible = false;
-    app.apply_auth_meta(&supercharge_login::AuthMeta::default());
-    assert!(!app.is_api_key_auth);
-    assert!(app.usage_visible);
-}
-#[test]
-fn apply_auth_meta_api_key_enables_voice_and_skips_tier_gate() {
-    let mut app = test_app();
-    advertise_media_tools(&mut app);
-    assert!(!app.voice_mode_enabled);
     app.apply_auth_meta(&supercharge_login::AuthMeta {
         auth_mode: Some("ApiKey".into()),
-        subscription_tier: Some("API Key".into()),
         ..Default::default()
     });
     assert!(app.is_api_key_auth);
+    assert!(app.voice_mode_enabled);
     assert!(!app.usage_visible);
-    assert!(app.tier_restricted_commands.is_empty());
-    assert_tier_restricted_commands_present(&app);
-    assert!(!app.is_voice_tier_restricted());
-    assert!(app.voice_mode_enabled);
-    let mut app = test_app();
-    app.apply_auth_meta(&supercharge_login::AuthMeta {
-        subscription_tier: Some("api_key".into()),
-        ..Default::default()
-    });
-    assert!(app.is_api_key_auth);
-    assert!(app.voice_mode_enabled);
-    assert!(app.tier_restricted_commands.is_empty());
     app.apply_auth_meta(&supercharge_login::AuthMeta {
         auth_mode: Some("Oidc".into()),
-        subscription_tier: Some("Free".into()),
         ..Default::default()
     });
     assert!(!app.is_api_key_auth);
-    assert!(!app.voice_mode_enabled);
-    assert!(app.usage_visible);
-    assert!(!app.tier_restricted_commands.is_empty());
+    assert!(!app.usage_visible);
 }
-fn expected_tier_restricted_commands() -> Vec<String> {
-    TIER_RESTRICTED_COMMANDS
-        .iter()
-        .map(|n| (*n).to_string())
-        .collect()
-}
-/// The present/absent assertions must exercise the deny list, not incidental fail-closed hiding:
-/// `/imagine`, `/imagine-video` are `required_tools()`-gated, so advertise their tools (otherwise the registry fail-closes them).
-/// `/voice` is fail-closed hidden until the remote flag turns it on, so reveal it via the registry directly.
-fn advertise_media_tools(app: &mut AppView) {
-    app.welcome_prompt
-        .slash_controller
-        .registry_mut()
-        .set_available_tools(
-            ["image_gen", "image_to_video"]
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
-        );
-    app.welcome_prompt.set_voice_visible(true);
-}
-fn assert_tier_restricted_commands_absent(app: &AppView) {
-    let reg = app.welcome_prompt.slash_controller.registry();
-    for name in TIER_RESTRICTED_COMMANDS {
-        assert!(
-            reg.get(name).is_none(),
-            "/{name} must be denied on a restricted tier"
-        );
-    }
-    assert!(reg.get("cost").is_none(), "/cost alias must be denied");
-}
-fn assert_tier_restricted_commands_present(app: &AppView) {
-    let reg = app.welcome_prompt.slash_controller.registry();
-    for name in TIER_RESTRICTED_COMMANDS {
-        assert!(
-            reg.get(name).is_some(),
-            "/{name} must be available when not tier-restricted (tools advertised)"
-        );
-    }
-}
-#[test]
-fn apply_auth_meta_restricts_usage_for_free_tier() {
-    let mut app = test_app();
-    advertise_media_tools(&mut app);
-    app.apply_auth_meta(&supercharge_login::AuthMeta::default());
-    assert_eq!(
-        app.tier_restricted_commands,
-        expected_tier_restricted_commands()
-    );
-    assert_tier_restricted_commands_absent(&app);
-    assert!(app.usage_visible);
-}
-#[test]
-fn apply_auth_meta_restricts_usage_for_x_basic_tier() {
-    let mut app = test_app();
-    advertise_media_tools(&mut app);
-    let meta = supercharge_login::AuthMeta {
-        subscription_tier: Some("X Basic".into()),
-        ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert_eq!(
-        app.tier_restricted_commands,
-        expected_tier_restricted_commands()
-    );
-    assert_tier_restricted_commands_absent(&app);
-}
-#[test]
-fn apply_auth_meta_lifts_restrictions_for_paid_tiers_and_teams() {
-    let mut app = test_app();
-    advertise_media_tools(&mut app);
-    let meta = supercharge_login::AuthMeta {
-        subscription_tier: Some("Supercharge".into()),
-        ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert!(app.tier_restricted_commands.is_empty());
-    assert_tier_restricted_commands_present(&app);
-    let mut app = test_app();
-    advertise_media_tools(&mut app);
-    app.apply_auth_meta(&supercharge_login::AuthMeta::default());
-    assert!(!app.tier_restricted_commands.is_empty());
-    app.subscription_tier = Some("Supercharge".into());
-    app.apply_tier_restrictions();
-    assert!(app.tier_restricted_commands.is_empty());
-    assert_tier_restricted_commands_present(&app);
-    let mut app = test_app();
-    let meta = supercharge_login::AuthMeta {
-        team_id: Some("team-uuid".into()),
-        team_name: Some("Acme Corp".into()),
-        ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert!(app.tier_restricted_commands.is_empty());
-}
-#[test]
-fn is_restricted_tier_classification() {
-    assert!(is_restricted_tier(None));
-    assert!(is_restricted_tier(Some("")));
-    assert!(is_restricted_tier(Some("Free")));
-    assert!(is_restricted_tier(Some("X Basic")));
-    assert!(is_restricted_tier(Some("x_basic")));
-    assert!(!is_restricted_tier(Some("Supercharge")));
-    assert!(!is_restricted_tier(Some("Supercharge Heavy")));
-    assert!(!is_restricted_tier(Some("X Premium")));
-    assert!(!is_restricted_tier(Some("X Premium+")));
-    assert!(!is_restricted_tier(Some("SomeFutureTier")));
-}
-#[test]
-fn voice_included_in_tier_restricted_commands() {
-    assert!(TIER_RESTRICTED_COMMANDS.contains(&"voice"));
-}
-#[test]
-fn is_voice_tier_restricted_tracks_tier() {
-    let mut app = test_app();
-    app.apply_auth_meta(&supercharge_login::AuthMeta::default());
-    assert!(app.is_voice_tier_restricted());
-    let mut app = test_app();
-    let meta = supercharge_login::AuthMeta {
-        subscription_tier: Some("Supercharge".into()),
-        ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert!(!app.is_voice_tier_restricted());
-}
-#[test]
-fn apply_auth_meta_clears_gate_on_subscription() {
-    let mut app = test_app();
-    app.gate = Some(supercharge_login::GateInfo {
-        message: "Subscribe to use Supercharge AI".into(),
-        url: Some("https://supercharge.ai/upgrade?referrer=Supercharge AI-build".into()),
-        label: None,
-    });
-    assert!(app.is_access_blocked());
-    let meta = supercharge_login::AuthMeta::default();
-    app.apply_auth_meta(&meta);
-    assert!(app.gate.is_none());
-    assert!(app.has_access());
-}
-#[test]
-fn apply_auth_meta_gate_unchanged_when_still_gated() {
-    let mut app = test_app();
-    let gate = supercharge_login::GateInfo {
-        message: "Subscribe".into(),
-        url: None,
-        label: None,
-    };
-    app.gate = Some(gate.clone());
-    let meta = supercharge_login::AuthMeta {
-        gate: Some(gate),
-        ..Default::default()
-    };
-    app.apply_auth_meta(&meta);
-    assert!(app.gate.is_some());
-    assert!(app.is_access_blocked());
-}
+
 #[test]
 fn welcome_ctrl_q_requires_confirmation() {
     let mut app = test_app();
@@ -5778,13 +5595,7 @@ fn dashboard_usage_modal_is_scroll_blocking() {
     let mut d = crate::views::dashboard::DashboardState::new();
     d.usage_modal = Some(Box::new(UsageInfoModalState::new(
         UsageInfoTab::UsageLimit,
-        UsageInfoContext {
-            session_id: None,
-            usage_visible: true,
-            chat_kind: false,
-            billing_redirect_url: None,
-            subscription_tier: None,
-        },
+        UsageInfoContext { session_id: None },
     )));
     app.dashboard = Some(d);
     assert!(

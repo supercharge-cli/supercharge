@@ -665,6 +665,12 @@ async fn eager_auth_or_login_fallback(
                 return (false, login_label, login_method_id, auth_start_mode, None);
             }
             let (label, method_id, mode) = find_interactive_login_method(auth_methods);
+            if method_id.is_none() {
+                // Nothing interactive is advertised (a provider-only install before
+                // `/setup`). Keep the normal prompt, which reports the setup
+                // guidance when a request needs credentials.
+                return (false, None, None, AuthStartMode::Pending, None);
+            }
             (true, label, method_id, mode, None)
         }
     }
@@ -736,7 +742,9 @@ async fn authenticate(
 }
 /// Pick the method id for eager authenticate.
 /// 1. Agent's `defaultAuthMethodId` when present in the advertised list
-/// 2. Legacy: `cached_token` if advertised, else first method
+/// 2. Legacy: `cached_token` if advertised, else the first credential method
+/// `terminal-setup` is a login *action*, not a credential, so it is never
+/// selected eagerly: authenticating it at startup can only fail.
 pub fn select_eager_auth_method(
     auth_methods: &[acp::AuthMethod],
     default_auth_method_id: Option<&acp::AuthMethodId>,
@@ -750,7 +758,11 @@ pub fn select_eager_auth_method(
         .iter()
         .find(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::CachedToken);
     cached_token_method
-        .or_else(|| auth_methods.first())
+        .or_else(|| {
+            auth_methods.iter().find(|m| {
+                m.id().0.as_ref() != supercharge_shell::agent::auth_method::TERMINAL_SETUP_METHOD_ID
+            })
+        })
         .map(|m| m.id().clone())
 }
 #[cfg(test)]
@@ -873,6 +885,25 @@ mod tests {
     #[test]
     fn startup_auth_non_grok_com_no_login() {
         let methods = vec![make_auth_method("api-key", "API Key", None)];
+        let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
+        assert!(!needs);
+        assert!(label.is_none());
+        assert!(method_id.is_none());
+        assert_eq!(mode, AuthStartMode::Pending);
+    }
+    /// A provider-only install advertises `terminal-setup` alone before `/setup`
+    /// has run. It is a login action, not a credential: eager selection must
+    /// leave it alone (authenticating it could only fail) and startup must stay
+    /// on the normal prompt, where `/setup` guidance is reachable.
+    #[test]
+    fn terminal_setup_alone_is_not_eager_auth_and_needs_no_login() {
+        use supercharge_shell::agent::auth_method::TERMINAL_SETUP_METHOD_ID;
+        let methods = vec![make_auth_method(
+            TERMINAL_SETUP_METHOD_ID,
+            "Set up provider",
+            None,
+        )];
+        assert!(select_eager_auth_method(&methods, None).is_none());
         let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
         assert!(!needs);
         assert!(label.is_none());

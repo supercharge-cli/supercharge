@@ -685,13 +685,6 @@ pub struct AgentSession {
     /// Set when a `RetryState::Failed` with `error_type == "encrypted_content_mismatch"` fires, so the subsequent `TurnFailed` can be suppressed.
     /// The retry handler already displayed a user-friendly message. Cleared on `finish_turn`.
     pub model_incompatible: bool,
-    /// Set when a `RetryState::Failed` carries a 403 credit-limit error, so the error message is suppressed in favour of the upsell modal.
-    /// Cleared on `finish_turn`.
-    pub credit_limit_blocked: bool,
-    /// Set when a rate-limit `RetryState::Exhausted` carries the `subscription:free-usage-exhausted` code.
-    /// The PromptResponse handler then shows the free-usage paywall instead of the generic rate-limit message.
-    /// Always set together with [`Self::rate_limited`]. Cleared on `finish_turn`.
-    pub free_usage_blocked: bool,
     pub(crate) tracker: AcpUpdateTracker,
     /// ACP-advertised slash commands. Seeded from `InitializeResponse.meta`, updated by `AvailableCommandsUpdate`.
     /// The prompt-side registry syncs when the generation counter changes.
@@ -834,8 +827,6 @@ impl AgentSession {
         self.state = AgentState::Idle;
         self.rate_limited = false;
         self.model_incompatible = false;
-        self.credit_limit_blocked = false;
-        self.free_usage_blocked = false;
         self.in_flight_prompt = None;
         self.compact_held_prompt = None;
         self.current_prompt_id = None;
@@ -979,7 +970,9 @@ impl AgentSession {
     /// Pop the front entry, merging consecutive plain `Prompt` followers via [`supercharge_prompt_queue::combine_prefix_len`].
     /// `editing_id` is held out of the merge (composer draft must not vanish). Front may keep images.
     pub fn dequeue_combined_prompt(&mut self, editing_id: Option<u64>) -> Option<QueuedPrompt> {
-        use supercharge_prompt_queue::{CombineGate, TEXT_SEPARATOR, combine_prefix_len, join_texts};
+        use supercharge_prompt_queue::{
+            CombineGate, TEXT_SEPARATOR, combine_prefix_len, join_texts,
+        };
         if self.pending_prompts.is_empty() {
             return None;
         }
@@ -1082,8 +1075,6 @@ mod tests {
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: Vec::new(),
             available_commands_generation: 0,
             available_tools: None,

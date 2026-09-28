@@ -41,60 +41,41 @@
         assert!(app.voice_mode_enabled);
         assert!(app.voice_ui_active);
 
-        // Same update can stamp API Key while remote settings sends voice false.
-        let mut app = make_app_with_agent("sess-combined");
-        let notif = acp::ExtNotification::new(
-            "x.ai/settings/update",
-            std::sync::Arc::from(
-                serde_json::value::to_raw_value(&serde_json::json!({
-                    "voice_mode_enabled": false,
-                    "subscription_tier_display": "API Key"
-                }))
-                .unwrap(),
-            ),
-        );
-        assert!(handle_ext_notification(&notif, &mut app));
-        assert!(app.is_api_key_auth);
-        assert!(app.voice_mode_enabled);
-        assert!(app.tier_restricted_commands.is_empty());
     }
 
     #[test]
-    fn settings_non_api_key_tier_clears_stale_api_key_flag() {
-        let mut app = make_app_with_agent("sess-stale-key");
-        assert!(handle_ext_notification(
-            &tier_settings_update("API Key"),
-            &mut app
-        ));
-        assert!(app.is_api_key_auth);
+    fn byok_remote_subscription_metadata_cannot_restrict_tools_or_composer() {
+        let mut app = make_app_with_agent("sess-byok");
+        app.is_api_key_auth = true;
+        app.usage_visible = false;
+        app.apply_voice_mode_enabled(true);
+        app.tier_restricted_commands = vec!["usage".into(), "voice".into()];
+        app.gate = Some(supercharge_login::GateInfo {
+            message: "Buy credits".into(),
+            url: Some("https://supercharge.ai/upgrade".into()),
+            label: None,
+        });
+        let notification = acp::ExtNotification::new(
+            "x.ai/settings/update",
+            std::sync::Arc::from(serde_json::value::to_raw_value(&serde_json::json!({
+                "subscription_tier_display": "Free",
+                "gate_message": "Buy more credits",
+                "gate_url": "https://supercharge.ai/upgrade",
+                "usage_billing_redirect_url": "https://supercharge.ai/usage"
+            })).unwrap()),
+        );
+        assert!(handle_ext_notification(&notification, &mut app));
+        assert!(app.gate.is_none());
+        assert!(app.has_access());
+        assert!(app.is_api_key_auth, "subscription metadata must not change provider auth");
+        assert!(app.tier_restricted_commands.is_empty());
         assert!(!app.usage_visible);
-        assert!(app.tier_restricted_commands.is_empty());
         assert!(app.voice_mode_enabled);
-
-        // Later personal Free stamp must not keep API-key bypass or force-on voice.
-        assert!(handle_ext_notification(
-            &tier_settings_update("Free"),
-            &mut app
-        ));
-        assert!(!app.is_api_key_auth);
-        assert!(app.usage_visible);
-        assert!(!app.tier_restricted_commands.is_empty());
-        assert!(!app.voice_mode_enabled);
-
-        // Paid tier after API Key must not force voice off (omit voice field).
-        let mut app = make_app_with_agent("sess-paid-keep-voice");
-        assert!(handle_ext_notification(
-            &tier_settings_update("API Key"),
-            &mut app
-        ));
-        assert!(app.voice_mode_enabled);
-        assert!(handle_ext_notification(
-            &tier_settings_update("Supercharge"),
-            &mut app
-        ));
-        assert!(!app.is_api_key_auth);
-        assert!(app.voice_mode_enabled);
-        assert!(app.tier_restricted_commands.is_empty());
+        let agent = test_agent(&app, AgentId(0));
+        assert!(agent.question_view.is_none());
+        assert!(agent.active_modal.is_none());
+        assert!(agent.prompt.slash_controller.usage_command_visible());
+        assert!(!agent.prompt.slash_controller.registry().is_restricted("voice"));
     }
 
     #[test]

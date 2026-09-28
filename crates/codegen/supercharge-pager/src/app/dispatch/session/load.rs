@@ -202,8 +202,6 @@ fn dispatch_load_session_ungated(
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: app.bootstrap_acp_commands.clone(),
             available_commands_generation: 1,
             available_tools: None,
@@ -247,7 +245,7 @@ fn dispatch_load_session_ungated(
     agent_mut.apply_app_scoped_gates(
         app.sharing_enabled,
         app.usage_visible,
-        !app.has_external_auth_provider,
+        true,
         app.chat_mode,
         app.screen_mode,
         &app.active_announcements,
@@ -414,7 +412,8 @@ pub(in crate::app::dispatch) fn dispatch_pick_session(
     if supercharge_shell::session::resolve_local_session(&session_id, &local_cwd).is_some() {
         return dispatch_load_session(app, session_id, None, false);
     }
-    if let Some(original_cwd) = supercharge_shell::session::resolve_local_session_any_cwd(&session_id)
+    if let Some(original_cwd) =
+        supercharge_shell::session::resolve_local_session_any_cwd(&session_id)
     {
         return dispatch_load_session(
             app,
@@ -1033,7 +1032,8 @@ pub(in crate::app::dispatch) fn dispatch_pick_content_session(
     if supercharge_shell::session::resolve_local_session(&session_id, &local_cwd).is_some() {
         return dispatch_load_session(app, session_id, None, false);
     }
-    if let Some(original_cwd) = supercharge_shell::session::resolve_local_session_any_cwd(&session_id)
+    if let Some(original_cwd) =
+        supercharge_shell::session::resolve_local_session_any_cwd(&session_id)
     {
         return dispatch_load_session(
             app,
@@ -1113,8 +1113,6 @@ pub(in crate::app::dispatch) fn dispatch_load_session_with_restore(
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: app.bootstrap_acp_commands.clone(),
             available_commands_generation: 1,
             available_tools: None,
@@ -1150,7 +1148,7 @@ pub(in crate::app::dispatch) fn dispatch_load_session_with_restore(
         agent.apply_app_scoped_gates(
             app.sharing_enabled,
             app.usage_visible,
-            !app.has_external_auth_provider,
+            true,
             app.chat_mode,
             app.screen_mode,
             &app.active_announcements,
@@ -1315,11 +1313,6 @@ pub(in crate::app::dispatch) fn handle_session_loaded(
                 session_id: hydrate_sid.clone(),
             });
         }
-        effects.push(Effect::FetchBilling {
-            agent_id,
-            silent: true,
-            nonce: Default::default(),
-        });
         if let Some(switch) = deferred {
             agent.session.model_switch_pending = true;
             effects.push(Effect::SwitchModel {

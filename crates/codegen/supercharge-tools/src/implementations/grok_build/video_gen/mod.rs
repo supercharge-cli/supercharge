@@ -151,10 +151,6 @@ pub struct VideoGenClient {
     /// an `auth_401_attribution` event with `consumer` of `"VideoGen.start"` (start request) or
     /// `"VideoGen.poll"` (poll request) for unified auth-failure telemetry.
     attribution_callback: Option<SharedAttributionCallback>,
-    /// When `true`, the user is on a tier the Imagine server zero-limits
-    /// (free / X Basic). The video tools short-circuit before any HTTP call
-    /// and return the Supercharge upsell prose. See [`VideoGenClient::is_tier_restricted`].
-    tier_restricted: bool,
     /// See [`VideoGenConfig::Enabled`]'s `zdr_restricted`.
     zdr_restricted: bool,
     /// Per-request session-id header; kept off `default_headers` so the
@@ -173,7 +169,6 @@ impl VideoGenClient {
             base_url,
             extra_headers,
             zdr_video_output_s3,
-            tier_restricted,
             zdr_restricted,
         } = config
         else {
@@ -254,7 +249,6 @@ impl VideoGenClient {
                 .filter(ZdrVideoOutputS3Config::is_valid),
             api_key_provider,
             attribution_callback: None,
-            tier_restricted: *tier_restricted,
             zdr_restricted: *zdr_restricted,
             session_header: None,
             defaults_have_session_header,
@@ -287,13 +281,6 @@ impl VideoGenClient {
             self.session_header = Some(value);
         }
         self
-    }
-
-    /// Whether the current user's tier (free / X Basic) is zero-limited on
-    /// Imagine server-side. The video tools use this to short-circuit with the
-    /// Supercharge upsell instead of issuing a doomed request.
-    pub(crate) fn is_tier_restricted(&self) -> bool {
-        self.tier_restricted
     }
 
     /// See [`VideoGenConfig::Enabled`]'s `zdr_restricted`.
@@ -749,10 +736,6 @@ pub enum VideoGenConfig {
         base_url: String,
         extra_headers: indexmap::IndexMap<String, String>,
         zdr_video_output_s3: Option<Box<ZdrVideoOutputS3Config>>,
-        /// `true` when the user is on a tier the Imagine server zero-limits (free / X Basic). The video tools stay advertised
-        /// but short-circuit at call time with the SuperGrok upsell prose. Set by the host from the subscription tier; always
-        /// `false` for team / API-key / workspace.
-        tier_restricted: bool,
         /// `true` when `tools.disable_zdr_incompatible_tools` is set with no valid
         /// `[tools.zdr_video_output_s3]` bucket. The video tools stay advertised but fail at call
         /// time with [`ZDR_RESTRICTED_MESSAGE`] instead of being silently dropped.
@@ -765,12 +748,6 @@ impl VideoGenConfig {
         matches!(self, Self::Enabled { .. })
     }
 }
-
-/// Prose returned to the model (as a normal, successful tool result) when a
-/// free / X Basic user calls a video tool. The model relays it to the user;
-/// the deliberate `/imagine-video` slash command shows the Supercharge upsell
-/// modal instead.
-pub(crate) const TIER_RESTRICTED_UPSELL: &str = "Video generation is a Supercharge feature and isn't available on the free or X Basic tier. Let the user know they can unlock image and video generation by upgrading to Supercharge: https://supercharge.ai/supercharge?referrer=supercharge-core. Do not retry this tool.";
 
 /// Error for video tool calls in a ZDR session with no output bucket.
 /// A verbatim tool *error* (unlike the [`TIER_RESTRICTED_UPSELL`] prose):
@@ -1235,11 +1212,6 @@ impl supercharge_tool_runtime::Tool for ImageToVideoTool {
 
         let (client, session_folder) = acquire_video_client(&ctx).await?;
 
-        // Free / X Basic users are zero-limited on Imagine server-side; return
-        // the upsell prose instead of a doomed request.
-        if client.is_tier_restricted() {
-            return Ok(ToolOutput::Text(TIER_RESTRICTED_UPSELL.into()));
-        }
         if client.is_zdr_restricted() {
             return Err(zdr_restricted_error());
         }
@@ -1403,11 +1375,6 @@ impl supercharge_tool_runtime::Tool for ReferenceToVideoTool {
 
         let (client, session_folder) = acquire_video_client(&ctx).await?;
 
-        // Free / X Basic users are zero-limited on Imagine server-side; return
-        // the upsell prose instead of a doomed request.
-        if client.is_tier_restricted() {
-            return Ok(ToolOutput::Text(TIER_RESTRICTED_UPSELL.into()));
-        }
         if client.is_zdr_restricted() {
             return Err(zdr_restricted_error());
         }
@@ -1457,7 +1424,6 @@ mod tests {
             base_url: "https://api.x.ai/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             zdr_video_output_s3: None,
-            tier_restricted: false,
             zdr_restricted: false,
         };
         let client = VideoGenClient::new(&cfg, None)

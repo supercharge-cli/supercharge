@@ -1497,6 +1497,21 @@ impl MvpAgent {
         &self,
         arguments: acp::AuthenticateRequest,
     ) -> Result<AuthenticateResponse, acp::Error> {
+        // Without a configured session authority the fallthrough would end at the
+        // first-party sign-in, which this deployment never asked for. Fail with
+        // setup guidance instead.
+        if !self.cfg.borrow().grok_com_config.session_auth_enabled() {
+            tracing::info!(
+                "cached_token unavailable; account session auth is not configured"
+            );
+            supercharge_telemetry::unified_log::warn(
+                "auth cached_token fallthrough blocked by provider-only configuration",
+                None,
+                None,
+            );
+            return Err(acp::Error::auth_required()
+                .data(auth_method::AUTH_ERROR_SESSION_DISABLED));
+        }
         let Some(method_id) = self.cached_token_fallthrough_method_id() else {
             let preferred = self.cfg.borrow().grok_com_config.preferred_method;
             let msg = match preferred {
@@ -1547,20 +1562,6 @@ impl MvpAgent {
                 cfg.remote_settings.as_ref(),
                 &cfg.endpoints.proxy_url(),
             );
-        }
-        if let Some(identity) = self
-            .auth_manager
-            .current_or_expired()
-            .filter(|a| a.is_xai_auth())
-            .map(|a| a.user_id)
-        {
-            self.tier_allowed
-                .set(
-                    super::settings_allow_access(
-                        self.cfg.borrow().remote_settings.as_ref(),
-                    ),
-                );
-            *self.allow_access_resolved_for.borrow_mut() = Some(identity);
         }
         self.reapply_storage_mode();
         self.reapply_official_marketplace();
@@ -2220,25 +2221,6 @@ impl MvpAgent {
         );
         (id.clone(), new_config)
     }
-    /// Whether the current session is a personal grok.com account on a gated tier (free / X Basic). The Imagine tools stay advertised to the model but are flagged tier-restricted.
-    /// They then short-circuit at call time with the SuperGrok upsell prose (see `ImageGenConfig`/`VideoGenConfig`'s `tier_restricted`).
-    /// Fails **open** (returns `false`) whenever we can't positively confirm a restricted personal tier. So this client gate is a UX optimization (a clean in-chat upsell instead of a doomed request), never the security boundary. The only difference is the absent-tier policy (the pager hides on `None`, we fail open on `None`).
-    fn is_tier_restricted_capability(&self) -> bool {
-        let Some(auth) = self.auth_manager.current() else {
-            return false;
-        };
-        if !auth.is_xai_auth() || auth.team_id.is_some() {
-            return false;
-        }
-        let tier = self
-            .cfg
-            .borrow()
-            .remote_settings
-            .as_ref()
-            .and_then(|rs| rs.subscription_tier_display.clone())
-            .or_else(|| jwt_tier_claim(&auth.key));
-        tier.as_deref().is_some_and(crate::tier::is_restricted_tier_name)
-    }
     /// Both BYOK and session (OAuth) users go direct to `xai_api_base_url`.
     /// `sampling_config.api_key` carries the OAuth bearer for session users (the `api_key_provider` refreshes it per request).
     /// So IC authenticates and meters Imagine usage per-user.
@@ -2314,7 +2296,6 @@ impl MvpAgent {
         let Some(api_key) = self.sampling_config.borrow().api_key.clone() else {
             return VideoGenConfig::Disabled;
         };
-        let tier_restricted = self.is_tier_restricted_capability();
         let zdr_video_output_s3 = cfg
             .disable_zdr_incompatible_tools
             .then(|| cfg.zdr_video_output_s3.clone())
@@ -2344,7 +2325,6 @@ impl MvpAgent {
             base_url,
             extra_headers: headers,
             zdr_video_output_s3: zdr_video_output_s3.map(Box::new),
-            tier_restricted,
             zdr_restricted,
         }
     }
@@ -2519,8 +2499,6 @@ impl MvpAgent {
             interactive_trust_prompted: Rc::new(
                 RefCell::new(std::collections::HashSet::new()),
             ),
-            tier_allowed: std::cell::Cell::new(true),
-            allow_access_resolved_for: std::cell::RefCell::new(None),
             official_marketplace_register: std::cell::RefCell::new(None),
             storage_mode: std::cell::Cell::new(storage_mode),
             otel_gate: crate::agent::otel_gate::OtelGate::default(),
@@ -2558,10 +2536,6 @@ impl MvpAgent {
             ),
             monitor_event_buffer: supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer::default(),
             bundle_sync_in_flight: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            post_unblock_jwt_retry_in_flight: Arc::new(
-                std::sync::atomic::AtomicBool::new(false),
-            ),
-            tier_recheck_in_flight: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             workspace_ops: RefCell::new(None),
             #[cfg(all(feature = "local-workspace", unix))]
             local_workspace_supervisors: Rc::new(RefCell::new(HashMap::new())),
@@ -2598,8 +2572,6 @@ impl MvpAgent {
             auto_gc_spawn_count: std::cell::Cell::new(0),
             #[cfg(test)]
             post_auth_settings_spawn_count: std::cell::Cell::new(0),
-            #[cfg(test)]
-            tier_recheck_run_count: std::cell::Cell::new(0),
         };
         instance
             .auth_manager
@@ -3115,7 +3087,7 @@ impl MvpAgent {
                             &session_id.0,
                         );
                         RelaySyncStatus::Connected {
-                            share_url,
+                            share_url: share_url.unwrap_or_default(),
                         }
                     }
                     crate::relay::ConnectionState::Disconnected => {

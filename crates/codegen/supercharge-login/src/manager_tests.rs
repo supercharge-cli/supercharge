@@ -113,6 +113,88 @@ async fn lock_loss_revalidation_adopts_the_sibling_token() {
     assert_eq!(adopted.key, "fresh-key-from-sibling");
 }
 #[test]
+#[serial_test::serial]
+fn provider_only_config_never_adopts_an_inherited_scope_token() {
+    use supercharge_test_support::EnvGuard;
+    let _oidc_issuer = EnvGuard::unset("SUPERCHARGE_OIDC_ISSUER");
+    let _oauth2_issuer = EnvGuard::unset("SUPERCHARGE_OAUTH2_ISSUER");
+    let _command = EnvGuard::unset("SUPERCHARGE_AUTH_PROVIDER_COMMAND");
+
+    let dir = tempfile::tempdir().unwrap();
+    // A first-party session token written under the inherited legacy scope,
+    // exactly what an earlier `grok login` leaves behind.
+    let mut store = AuthStore::new();
+    store.insert(
+        LEGACY_SCOPE.to_owned(),
+        GrokAuth {
+            key: "inherited-first-party-token".into(),
+            auth_mode: AuthMode::Oidc,
+            refresh_token: Some("rt".into()),
+            expires_at: Some(Utc::now() + Duration::hours(1)),
+            ..GrokAuth::test_default()
+        },
+    );
+    write_auth_json(&dir.path().join("auth.json"), &store).unwrap();
+
+    let provider_only = Arc::new(AuthManager::new(
+        dir.path(),
+        GrokComConfig::provider_only_default(),
+    ));
+    assert!(
+        provider_only.current().is_none(),
+        "a provider-only launch must not adopt an inherited first-party token"
+    );
+    assert!(
+        provider_only.current_or_expired().is_none(),
+        "the inherited token must stay out of the wire path, expired or not"
+    );
+    assert!(!provider_only.has_usable_disk_token());
+
+    // Same file, same scope: once the deployment configures an account session
+    // authority, the inherited credential is used again.
+    let session_scoped = Arc::new(AuthManager::new(dir.path(), GrokComConfig::default()));
+    assert_eq!(
+        session_scoped.current().map(|a| a.key),
+        Some("inherited-first-party-token".to_owned()),
+        "an explicitly session-configured deployment keeps inheriting the token"
+    );
+}
+/// An explicit logout clears an inherited first-party scope even though this
+/// configuration would never adopt it.
+#[test]
+fn clear_inherited_scopes_removes_the_legacy_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = AuthStore::new();
+    store.insert(
+        LEGACY_SCOPE.to_owned(),
+        make_auth(Some(Utc::now() + Duration::hours(1)), Utc::now()),
+    );
+    write_auth_json(&dir.path().join("auth.json"), &store).unwrap();
+
+    let mgr = AuthManager::new(dir.path(), GrokComConfig::default());
+    assert!(mgr.clear_inherited_scopes(None).unwrap());
+    // Removing the last scope deletes the file, so an absent file is also a pass.
+    let remaining = match read_auth_json(&dir.path().join("auth.json")) {
+        Ok(store) => store,
+        Err(e) => {
+            assert_eq!(
+                e.kind(),
+                std::io::ErrorKind::NotFound,
+                "unexpected auth.json read error: {e}"
+            );
+            AuthStore::new()
+        }
+    };
+    assert!(
+        remaining.get(LEGACY_SCOPE).is_none(),
+        "logout must remove the inherited entry, not just report it"
+    );
+    assert!(
+        !mgr.clear_inherited_scopes(None).unwrap(),
+        "a second logout has nothing left to clear"
+    );
+}
+#[test]
 fn has_usable_disk_token_reads_disk_independent_of_memory() {
     let dir = tempfile::tempdir().unwrap();
     let cfg = GrokComConfig::default();

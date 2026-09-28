@@ -71,7 +71,7 @@ fn disabled_state_markdown(reason: Option<MemoryDisabledReason>) -> &'static str
 - Press **t** to turn it back on.
 - `/memory on` does the same from the prompt.
 
-While off, Grok isn't reading or saving notes; anything already remembered is kept on disk. \
+While off, Supercharge isn't reading or saving notes; anything already remembered is kept on disk. \
 Memory carries conventions, decisions, and project facts between sessions so you don't have \
 to repeat yourself."
         }
@@ -530,14 +530,22 @@ fn compute_filtered(entries: &[MemoryFileEntry], query: &str) -> Vec<usize> {
             }
             pending_header = Some(i);
             section_has_match = false;
-        } else if entry.label.to_lowercase().contains(&needle)
-            || entry.source.to_lowercase().contains(&needle)
-        {
-            if let Some(h) = pending_header.take() {
-                result.push(h);
-                section_has_match = true;
+        } else {
+            let label_matches = entry.label.to_lowercase().contains(&needle);
+            let source_matches = entry.source.to_lowercase().contains(&needle);
+            let content_matches = !label_matches
+                && !source_matches
+                && !entry.is_header
+                && std::fs::read_to_string(&entry.path)
+                    .ok()
+                    .is_some_and(|content| content.to_lowercase().contains(&needle));
+            if label_matches || source_matches || content_matches {
+                if let Some(h) = pending_header.take() {
+                    result.push(h);
+                    section_has_match = true;
+                }
+                result.push(i);
             }
-            result.push(i);
         }
     }
     // Same defensive no-op as the in-loop guard above.
@@ -1322,7 +1330,17 @@ fn handle_browse(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
             if let Some(entry) = state.selected_entry()
                 && !entry.is_header
             {
-                let _ = crate::clipboard::copy_text(&entry.path.to_string_lossy());
+                let delivery = state
+                    .preview_markdown
+                    .as_ref()
+                    .map(|content| crate::clipboard::copy_text_or_file(&content.text()))
+                    .unwrap_or_else(|| {
+                        crate::clipboard::copy_text_or_file(&entry.path.to_string_lossy())
+                    });
+                state.status = Some(MemoryStatusLine {
+                    text: delivery.toast_message().to_string(),
+                    is_error: matches!(delivery, crate::clipboard::CopyDelivery::Failed { .. }),
+                });
                 return InputOutcome::Changed;
             }
             InputOutcome::Unchanged
@@ -1479,8 +1497,8 @@ fn format_modified(epoch_secs: Option<u64>, now_secs: u64) -> String {
 }
 
 fn load_fullscreen_pref() -> bool {
-    let path =
-        supercharge_tools::util::grok_home::grok_home().join(supercharge_config::USER_CONFIG_FILENAME);
+    let path = supercharge_tools::util::grok_home::grok_home()
+        .join(supercharge_config::USER_CONFIG_FILENAME);
     let Some(doc) = crate::config_toml_edit::read_config_document_for_edit(&path) else {
         return false;
     };
@@ -2006,6 +2024,26 @@ mod tests {
         state.set_query("");
         state.invalidate_filter();
         assert_eq!(state.filtered_indices().len(), 4);
+    }
+
+    #[test]
+    fn filter_matches_note_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("conventions.md");
+        std::fs::write(&path, "Use the project formatter before sending changes.\n").unwrap();
+        let entries = vec![MemoryFileEntry {
+            path,
+            source: "workspace".to_owned(),
+            label: "conventions.md".to_owned(),
+            meta_display: String::new(),
+            is_header: false,
+            generated: false,
+            size_bytes: 52,
+        }];
+        let mut state = MemoryModalState::new(entries);
+        state.set_query("formatter");
+        state.invalidate_filter();
+        assert_eq!(state.filtered_indices(), &[0]);
     }
 
     #[test]

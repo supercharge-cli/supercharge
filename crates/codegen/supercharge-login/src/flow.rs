@@ -920,7 +920,7 @@ pub fn perform_logout(
 ) -> std::io::Result<LogoutResult> {
     let auth = auth_manager.current_or_expired();
     let email = auth.as_ref().and_then(|a| a.email.clone());
-    let was_logged_in = auth.is_some();
+    let mut was_logged_in = auth.is_some();
     supercharge_telemetry::unified_log::info(
         "auth: logout",
         None,
@@ -941,6 +941,15 @@ pub fn perform_logout(
             auth_manager.clear()?;
         }
         clear_orphan_managed_config();
+    } else {
+        // Nothing in the current scope. An explicit sign-out must still clear the
+        // scopes this backend inherits from a sibling configuration: a
+        // provider-only launch never adopts them, so they would otherwise outlive
+        // a `logout` the user asked for.
+        was_logged_in = auth_manager.clear_inherited_scopes(scope)?;
+        if was_logged_in {
+            clear_orphan_managed_config();
+        }
     }
     Ok(LogoutResult {
         was_logged_in,

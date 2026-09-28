@@ -217,7 +217,10 @@ pub enum PersistenceMsg {
     AppendCwdSwitchAndAck {
         item: ConversationItem,
         respond_to: tokio::sync::oneshot::Sender<
-            Result<supercharge_chat_state::StrictAppendAck, supercharge_chat_state::StrictAppendError>,
+            Result<
+                supercharge_chat_state::StrictAppendAck,
+                supercharge_chat_state::StrictAppendError,
+            >,
         >,
     },
     /// Replace the entire chat history (used for compaction)
@@ -973,7 +976,8 @@ pub(crate) fn next_session_identity(
     is_fork: bool,
     entropy: (u128, u128),
 ) -> SessionIdentity {
-    let previous_agent_id = previous_agent_id.and_then(supercharge_message_delivery_core::AgentId::parse);
+    let previous_agent_id =
+        previous_agent_id.and_then(supercharge_message_delivery_core::AgentId::parse);
     let action = supercharge_message_delivery_core::next_identity(
         previous_agent_id.as_ref(),
         is_fork,
@@ -983,7 +987,9 @@ pub(crate) fn next_session_identity(
     let (agent_id, attempt_id) = match action {
         supercharge_message_delivery_core::IdentityAction::Start { agent, attempt }
         | supercharge_message_delivery_core::IdentityAction::Resume { agent, attempt }
-        | supercharge_message_delivery_core::IdentityAction::Fork { agent, attempt } => (agent, attempt),
+        | supercharge_message_delivery_core::IdentityAction::Fork { agent, attempt } => {
+            (agent, attempt)
+        }
     };
     SessionIdentity {
         agent_id: agent_id.to_string(),
@@ -3210,8 +3216,6 @@ pub async fn list_recent_summaries(limit: usize) -> io::Result<Vec<Summary>> {
 
 static CLEANUP_SESSIONS_ONCE: std::sync::Once = std::sync::Once::new();
 
-const DEFAULT_CLEANUP_TTL_DAYS: u32 = 30;
-
 /// The only files swept inside a live session: everything else there is a write-once artifact
 /// `updates.jsonl` still references, so its own age says nothing about whether it is needed.
 const SWEPT_BLOB_DIRS: [&str; 4] = ["images", "videos", "downloads", "terminal"];
@@ -3223,7 +3227,13 @@ const SWEPT_BLOB_DIRS: [&str; 4] = ["images", "videos", "downloads", "terminal"]
 #[tracing::instrument(skip_all)]
 pub(crate) fn cleanup_stale_sessions(live_session_dir: &Path) {
     CLEANUP_SESSIONS_ONCE.call_once(|| {
-        let ttl_days = resolve_cleanup_ttl_days();
+        let Some(ttl_days) = resolve_cleanup_ttl_days() else {
+            tracing::info!(
+                target: "supercharge_shell::session::persistence",
+                "SESSION_CLEANUP_SKIPPED: no positive [storage] cleanup_ttl_days"
+            );
+            return;
+        };
         let sessions_root = grok_home().join("sessions");
 
         tracing::info!(
@@ -3284,19 +3294,23 @@ pub(crate) fn mark_session_live(session_dir: &Path) {
     }
 }
 
-/// Resolve TTL from config.toml `[storage] cleanup_ttl_days`, falling back to 30.
-fn resolve_cleanup_ttl_days() -> u32 {
-    if let Ok(layers) = crate::config::ConfigLayers::load() {
-        let effective = layers.effective_config_disk_only();
-        if let Some(storage) = effective.get("storage")
-            && let Some(ttl) = storage.get("cleanup_ttl_days")
-            && let Some(days) = ttl.as_integer()
-            && days > 0
-        {
-            return days as u32;
-        }
-    }
-    DEFAULT_CLEANUP_TTL_DAYS
+/// Resolve TTL from config.toml `[storage] cleanup_ttl_days`.
+/// Unset, zero, invalid, or unreadable configuration disables cleanup rather than
+/// silently deleting sessions under an implicit retention period.
+fn resolve_cleanup_ttl_days() -> Option<u32> {
+    let Ok(layers) = crate::config::ConfigLayers::load() else {
+        return None;
+    };
+    cleanup_ttl_days_from_effective(&layers.effective_config_disk_only())
+}
+
+fn cleanup_ttl_days_from_effective(effective: &toml::Value) -> Option<u32> {
+    effective
+        .get("storage")
+        .and_then(|storage| storage.get("cleanup_ttl_days"))
+        .and_then(toml::Value::as_integer)
+        .and_then(|days| u32::try_from(days).ok())
+        .filter(|days| *days > 0)
 }
 
 #[derive(Debug, Default, PartialEq)]

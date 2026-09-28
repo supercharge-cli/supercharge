@@ -170,7 +170,23 @@ pub fn is_xai_oauth2_issuer(issuer: &str) -> bool {
 /// auth.json scope key used by the pre-OIDC `grok login --legacy` flow.
 /// Matches the key format produced by the original `accounts.x.ai` relay auth.
 pub const LEGACY_AUTH_SCOPE: &str = "https://accounts.x.ai/sign-in";
+
+/// A deliberately non-provider scope used when session authentication has not
+/// been explicitly configured. It prevents a provider-based Supercharge launch
+/// from adopting a legacy first-party entry in `auth.json`.
+pub const DISABLED_SESSION_AUTH_SCOPE: &str = "supercharge::session-auth-disabled";
+
+/// Stable scope for an explicitly configured external auth command that does
+/// not declare an OIDC/OAuth issuer.
+const EXTERNAL_AUTH_SCOPE: &str = "supercharge::external-auth";
+
 impl GrokComConfig {
+    /// Whether an operator explicitly enabled session/OIDC authentication.
+    /// Provider API keys configured through `/setup` do not use this path.
+    pub fn session_auth_enabled(&self) -> bool {
+        self.oidc.is_some() || self.oauth2.is_some() || self.auth_provider_command.is_some()
+    }
+
     /// Pinning a team (`force_login_team_uuid`) disables `xai.api_key` auth: team membership can't be verified from a bare API key.
     /// The `SUPERCHARGE_DISABLE_API_KEY_AUTH` env lockdown is read at call time and OR-ed in, so a lower-trust user `config.toml` cannot turn it back off.
     /// `requirements.toml` already wins by layer precedence.
@@ -184,14 +200,16 @@ impl GrokComConfig {
     pub fn blocks_automatic_oidc(&self) -> bool {
         matches!(self.preferred_method, Some(PreferredAuthMethod::ApiKey))
     }
-    /// The auth.json scope key for this config.
+    /// The auth.json scope key for this configuration.
     pub fn auth_scope(&self) -> String {
         if let Some(ref oidc) = self.oidc {
             format!("{}::{}", oidc.issuer.trim_end_matches('/'), oidc.client_id)
         } else if let Some(ref oauth2) = self.oauth2 {
             oauth2.auth_scope()
+        } else if self.auth_provider_command.is_some() {
+            EXTERNAL_AUTH_SCOPE.to_owned()
         } else {
-            unreachable!("oauth2 config is always present (xAI default or env override)")
+            DISABLED_SESSION_AUTH_SCOPE.to_owned()
         }
     }
 }
@@ -238,22 +256,18 @@ impl OAuth2ProviderConfig {
         self.base_auth_scope()
     }
 }
-impl Default for GrokComConfig {
-    fn default() -> Self {
+impl GrokComConfig {
+    /// Default for Supercharge's provider-first CLI runtime.
+    ///
+    /// This never synthesizes the inherited xAI OAuth client. OIDC/OAuth and
+    /// external-command auth remain available only when their settings are
+    /// explicitly configured.
+    pub fn provider_only_default() -> Self {
         let oidc = OidcAuthConfig::from_env();
         let oauth2 = if oidc.is_some() {
             None
         } else {
-            Some(
-                OAuth2ProviderConfig::from_env().unwrap_or_else(|| OAuth2ProviderConfig {
-                    issuer: xai_oauth2_issuer().to_owned(),
-                    client_id: obfstr::obfstr!("b1a00492-073a-47ea-816f-4c329264a828").to_owned(),
-                    scopes: default_oauth2_scopes(),
-                    principal_type: None,
-                    principal_id: None,
-                    referrer: Some(DEFAULT_OAUTH2_REFERRER.to_owned()),
-                }),
-            )
+            OAuth2ProviderConfig::from_env()
         };
         Self {
             grok_ws_origin: std::env::var("SUPERCHARGE_WS_ORIGIN")
@@ -274,6 +288,23 @@ impl Default for GrokComConfig {
             force_login_team_uuid: None,
             preferred_method: None,
         }
+    }
+}
+
+impl Default for GrokComConfig {
+    fn default() -> Self {
+        let mut config = Self::provider_only_default();
+        if config.oidc.is_none() && config.oauth2.is_none() {
+            config.oauth2 = Some(OAuth2ProviderConfig {
+                issuer: xai_oauth2_issuer().to_owned(),
+                client_id: obfstr::obfstr!("b1a00492-073a-47ea-816f-4c329264a828").to_owned(),
+                scopes: default_oauth2_scopes(),
+                principal_type: None,
+                principal_id: None,
+                referrer: Some(DEFAULT_OAUTH2_REFERRER.to_owned()),
+            });
+        }
+        config
     }
 }
 /// Parses a boolean env-var value for grok's on/off flags.
@@ -375,6 +406,68 @@ impl OidcAuthConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// The provider-first runtime default must not carry any session authority:
+    /// no synthesized first-party OAuth client, no scope that could resolve an
+    /// inherited token, and no interactive login to advertise.
+    #[test]
+    #[serial_test::serial]
+    fn provider_only_default_has_no_session_authority() {
+        use supercharge_test_support::EnvGuard;
+        let _oidc_issuer = EnvGuard::unset("SUPERCHARGE_OIDC_ISSUER");
+        let _oidc_client = EnvGuard::unset("SUPERCHARGE_OIDC_CLIENT_ID");
+        let _oauth2_issuer = EnvGuard::unset("SUPERCHARGE_OAUTH2_ISSUER");
+        let _oauth2_client = EnvGuard::unset("SUPERCHARGE_OAUTH2_CLIENT_ID");
+        let _command = EnvGuard::unset("SUPERCHARGE_AUTH_PROVIDER_COMMAND");
+        let cfg = GrokComConfig::provider_only_default();
+        assert!(cfg.oidc.is_none(), "no OIDC issuer is synthesized");
+        assert!(
+            cfg.oauth2.is_none(),
+            "no first-party OAuth client is synthesized"
+        );
+        assert!(!cfg.session_auth_enabled());
+        assert_eq!(cfg.auth_scope(), DISABLED_SESSION_AUTH_SCOPE);
+    }
+    /// `session_auth_enabled` is the switch the runtime gates adoption and
+    /// advertising on, so pin every authority that turns it on.
+    #[test]
+    fn session_auth_enabled_tracks_configured_authorities() {
+        let base = || GrokComConfig {
+            oidc: None,
+            oauth2: None,
+            auth_provider_command: None,
+            ..GrokComConfig::provider_only_default()
+        };
+        assert!(!base().session_auth_enabled());
+        assert!(
+            GrokComConfig {
+                auth_provider_command: Some("provider-login".into()),
+                ..base()
+            }
+            .session_auth_enabled()
+        );
+        assert!(
+            GrokComConfig {
+                oidc: Some(OidcAuthConfig {
+                    issuer: "https://idp.example".into(),
+                    client_id: "client".into(),
+                    scopes: vec!["openid".into()],
+                    audience: None,
+                }),
+                ..base()
+            }
+            .session_auth_enabled()
+        );
+        // An external auth command owns a distinct scope key; it must never
+        // collapse onto the provider-only sentinel.
+        assert_ne!(
+            GrokComConfig {
+                auth_provider_command: Some("provider-login".into()),
+                ..base()
+            }
+            .auth_scope(),
+            DISABLED_SESSION_AUTH_SCOPE,
+        );
+    }
     #[test]
     fn team_auth_scope_is_base_scope() {
         let cfg = OAuth2ProviderConfig {

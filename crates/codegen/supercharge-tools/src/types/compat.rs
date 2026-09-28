@@ -15,6 +15,18 @@
 
 use serde::{Deserialize, Serialize};
 
+/// All project-instruction filenames recognized by the default compatibility registry.
+/// Read policies use this stable list so `AGENTS.md`-family files are never silently
+/// windowed when the model needs the complete instruction contract.
+pub const INSTRUCTION_FILENAMES: &[&str] = &[
+    "Agents.md",
+    "Claude.md",
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENT.md",
+    "AGENTS.md",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum CompatVendor {

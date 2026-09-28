@@ -7,7 +7,6 @@ use serde::Deserialize;
 
 use supercharge_login::AuthManager;
 
-const SUPERCHARGE_WEB_URL: &str = "https://supercharge.ai";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,7 +58,9 @@ pub struct ListModesResponse {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChatModelsError {
-    #[error("no supercharge.ai credentials")]
+    #[error("This optional service has no configured URL")]
+    NotConfigured,
+    #[error("no credentials for the configured service")]
     NoAuth,
     #[error("request timed out")]
     Timeout,
@@ -93,7 +94,7 @@ impl ChatModelsClient {
                     .ok()
                     .filter(|s| !s.is_empty())
             })
-            .unwrap_or_else(|| SUPERCHARGE_WEB_URL.to_string());
+            .unwrap_or_default();
         Self {
             http: crate::http::shared_client(),
             base_url,
@@ -107,6 +108,9 @@ impl ChatModelsClient {
         &self,
         locale: &str,
     ) -> Result<ListModesResponse, ChatModelsError> {
+        if self.base_url.trim().is_empty() {
+            return Err(ChatModelsError::NotConfigured);
+        }
         let auth = self
             .auth
             .auth()

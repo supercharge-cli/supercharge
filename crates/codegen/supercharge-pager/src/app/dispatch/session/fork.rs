@@ -182,7 +182,7 @@ pub(in crate::app::dispatch) fn dispatch_fork_resolved(
         agent.apply_app_scoped_gates(
             app.sharing_enabled,
             app.usage_visible,
-            !app.has_external_auth_provider,
+            true,
             app.chat_mode,
             app.screen_mode,
             &app.active_announcements,
@@ -268,8 +268,6 @@ fn build_fork_placeholder(
             restore_degree: None,
             rate_limited: false,
             model_incompatible: false,
-            credit_limit_blocked: false,
-            free_usage_blocked: false,
             available_commands: app.bootstrap_acp_commands.clone(),
             available_commands_generation: 1,
             available_tools: None,

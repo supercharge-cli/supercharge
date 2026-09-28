@@ -166,7 +166,8 @@ async fn run_user_info_enrichment(manager: &AuthManager, auth: GrokAuth) {
         );
         return;
     };
-    let Some(mut disk) = lookup_auth(&map, &manager.scope) else {
+    let Some(mut disk) = super::lookup_scoped(&map, &manager.scope, &manager.grok_com_config)
+    else {
         supercharge_telemetry::unified_log::info(
             "auth update enrichment skipped",
             None,

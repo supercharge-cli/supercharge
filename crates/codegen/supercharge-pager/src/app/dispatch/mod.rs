@@ -10,7 +10,6 @@
 //! Imports in this tree use at most one `super::` hop (absolute `crate::` paths otherwise); tests/ shares a fixture prelude via `use super::*;`.
 
 mod auth;
-mod billing;
 mod cta;
 mod ctx;
 mod dashboard;
@@ -38,9 +37,6 @@ mod voice;
 
 pub(crate) use auth::scrollback_has_recent_disk_full;
 pub(in crate::app) use auth::scrollback_has_recent_error_banner;
-pub(crate) use billing::{
-    CREDIT_LIMIT_RETRY_OPTION_ID, UPSELL_URL_PAYG, UPSELL_URL_UPGRADE, is_credit_limit_error,
-};
 pub(crate) use dashboard::{DashboardStopReadiness, dashboard_stop_readiness};
 pub(crate) use modes::{downgrade_displayed_auto_if_gated, effective_auto};
 pub(crate) use notes::FEEDBACK_TRACE_UPLOAD_TIMEOUT_MS;

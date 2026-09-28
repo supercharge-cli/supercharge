@@ -197,6 +197,19 @@ pub struct AuthManager {
     #[cfg(test)]
     dark_wake_override: parking_lot::Mutex<Option<bool>>,
 }
+/// Scoped `auth.json` lookup for a configuration.
+///
+/// [`lookup_auth`] falls back to the backend's inherited first-party scopes, which is right for
+/// account sessions but wrong for a provider-only launch: that fallback is how an unrelated
+/// first-party token in `auth.json` becomes this process's bearer without anyone configuring it.
+/// A configuration without OIDC, OAuth2, or an external auth command resolves only its own scope.
+fn lookup_scoped(map: &AuthStore, scope: &str, config: &GrokComConfig) -> Option<GrokAuth> {
+    config
+        .session_auth_enabled()
+        .then(|| lookup_auth(map, scope))
+        .flatten()
+}
+
 /// Discriminated outcome of a disk read, for transition logging.
 /// `Ok` means the entry is present (possibly expired); the rest explain *why* `read_disk_auth` returned `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -296,8 +309,12 @@ impl AuthManager {
         }
         let (auth, auth_read_detail, initial_disk_state) = match read_auth_json(&path) {
             Ok(map) => {
-                let found = lookup_auth(&map, &scope);
-                Self::prune_stale_inherited_scopes(&path, &map, found.is_none());
+                let found = lookup_scoped(&map, &scope, &grok_com_config);
+                Self::prune_stale_inherited_scopes(
+                    &path,
+                    &map,
+                    found.is_none() && grok_com_config.session_auth_enabled(),
+                );
                 let detail = serde_json::json!({
                     "read": "ok",
                     "resolved_path": path.display().to_string(),
@@ -447,6 +464,31 @@ impl AuthManager {
     }
     pub fn clear(&self) -> std::io::Result<()> {
         self.remove_scope(&self.scope)
+    }
+    /// Removes every scope this backend inherits from a sibling configuration
+    /// (for example a legacy first-party sign-in entry), skipping `except`.
+    ///
+    /// An explicit `logout` uses this so a credential this configuration would
+    /// never adopt is still cleared when the user asks to sign out, instead of
+    /// surviving on disk behind a "no cached session" message. Returns whether
+    /// any entry was actually removed.
+    pub fn clear_inherited_scopes(&self, except: Option<&str>) -> std::io::Result<bool> {
+        let Ok(map) = read_auth_json(&self.path) else {
+            return Ok(false);
+        };
+        let present: Vec<&'static str> = ActiveAuthBackend::default()
+            .inherited_scopes()
+            .iter()
+            .copied()
+            .filter(|scope| Some(*scope) != except && map.get(*scope).is_some())
+            .collect();
+        if present.is_empty() {
+            return Ok(false);
+        }
+        for scope in present {
+            self.remove_scope(scope)?;
+        }
+        Ok(true)
     }
     /// Remove a scope entry from auth.json. When `scope == self.scope`, also drops in-memory auth so a later `auth()` reports `NotLoggedIn`, not stale `invalid_grant`. (The scoped verdict reads inert with no credential.)
     /// When the last scope goes, the file is deleted. Best-effort: takes a non-blocking lock and skips the disk write if another process holds it (the stale entry is cleaned up on next launch).
@@ -1027,7 +1069,7 @@ impl AuthManager {
     fn read_disk_auth_silent(&self) -> Option<GrokAuth> {
         read_auth_json(&self.path)
             .ok()
-            .and_then(|map| lookup_auth(&map, &self.scope))
+            .and_then(|map| lookup_scoped(&map, &self.scope, &self.grok_com_config))
     }
     /// Wire-valid token present in on-disk `auth.json`, judged by actual expiry ([`Self::is_token_hard_expired`]).
     /// Never mutates in-memory state, unlike [`Self::force_reload_from_disk`].
@@ -1049,7 +1091,7 @@ impl AuthManager {
     pub fn read_disk_auth_with_state(&self) -> (Option<GrokAuth>, DiskAuthState) {
         let (auth, state, err_detail) = match read_auth_json(&self.path) {
             Ok(map) => {
-                let found = lookup_auth(&map, &self.scope);
+                let found = lookup_scoped(&map, &self.scope, &self.grok_com_config);
                 let state = if found.is_some() {
                     DiskAuthState::Ok
                 } else {
@@ -1413,7 +1455,7 @@ impl AuthManager {
     /// Callers can then log adoption truthfully instead of inferring it from "we have a token now". That inference is also true when our own token was fine all along. It made the proactive-refresh log actively misleading when reconstructing a rotation chain after an incident.
     pub fn pick_up_sibling_token(&self) -> bool {
         let auth = match read_auth_json(&self.path) {
-            Ok(map) => lookup_auth(&map, &self.scope),
+            Ok(map) => lookup_scoped(&map, &self.scope, &self.grok_com_config),
             _ => None,
         };
         let Some(auth) = auth.filter(|a| self.is_different_token(a)) else {

@@ -135,7 +135,9 @@ impl Default for ModelsManager {
         let grok_home = crate::util::grok_home::grok_home();
         let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
             &grok_home,
-            GrokComConfig::default(),
+            // Provider-first default: a catalog handle must never be the reason an
+            // inherited first-party account token becomes the process credential.
+            GrokComConfig::provider_only_default(),
             crate::agent::config::EndpointsConfig::from_effective_config().proxy_url(),
         ));
         Self::new(

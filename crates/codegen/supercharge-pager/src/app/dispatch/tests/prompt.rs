@@ -1314,12 +1314,8 @@ fn turn_end_drains_next_queued_prompt() {
         &mut app,
     );
 
-    // No re-send (the prompt was already sent at enqueue time): only the billing refresh effect
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // The prompt was already sent at enqueue time; do not re-send it.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_turn_running());
     // current_prompt_id was handed off to the second prompt for correlation.
     assert_eq!(
@@ -1396,12 +1392,8 @@ fn turn_end_with_empty_queue_stays_idle() {
         &mut app,
     );
 
-    // Silent billing refresh after turn completion.
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // An idle completed turn schedules no work.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_idle());
     // Session event "Worked for" added.
     assert_eq!(agent_ref(&app, id).scrollback.len(), 1);
@@ -1430,31 +1422,21 @@ fn multiple_queued_prompts_drain_one_per_turn() {
         })
     };
 
-    // Turn end: drain "b" and FetchBilling
+    // Turn end: drain "b"
     let effects = dispatch(end_turn(), &mut app);
     assert!(matches!(effects.first(), Some(Effect::SendPrompt { text, .. }) if text == "b"));
-    assert!(matches!(
-        effects.get(1),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    assert_eq!(effects.len(), 1);
     assert_eq!(agent_ref(&app, id).session.queue_len(), 1);
 
-    // Turn end: drain "c" and FetchBilling
+    // Turn end: drain "c"
     let effects = dispatch(end_turn(), &mut app);
     assert!(matches!(effects.first(), Some(Effect::SendPrompt { text, .. }) if text == "c"));
-    assert!(matches!(
-        effects.get(1),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    assert_eq!(effects.len(), 1);
     assert_eq!(agent_ref(&app, id).session.queue_len(), 0);
 
-    // Turn end: FetchBilling only
+    // Turn end: queue is empty
     let effects = dispatch(end_turn(), &mut app);
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_idle());
 }
 
@@ -1476,12 +1458,8 @@ fn prompt_response_resets_turn_state() {
         }),
         &mut app,
     );
-    // Silent billing refresh after turn completion.
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // An idle completed turn schedules no work.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_idle());
     assert!(agent_ref(&app, id).turn_started_at.is_none());
     // mark_turn_finished must stamp the activity anchor used by the dashboard relative-time label
@@ -1973,7 +1951,7 @@ fn prompt_response_formatted_401_suppresses_turn_failed_and_stashes_prompt() {
 }
 
 #[test]
-fn prompt_response_formatted_402_takes_credit_limit_path() {
+fn prompt_response_formatted_402_remains_an_ordinary_error() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);
     {
@@ -2000,43 +1978,8 @@ fn prompt_response_formatted_402_takes_credit_limit_path() {
         )
     });
     assert!(
-        !has_turn_failed,
-        "a credit-limit 402 shows the upsell, not TurnFailed"
-    );
-}
-
-#[test]
-fn credit_limit_402_does_not_overwrite_stash_when_in_flight_cleared() {
-    let mut app = test_app_with_agent();
-    let id = AgentId(0);
-    {
-        let agent = app.agents.get_mut(&id).unwrap();
-        agent.session.state = AgentState::TurnRunning;
-        agent.turn_started_at = Some(std::time::Instant::now());
-        agent.session.in_flight_prompt = None;
-        agent.credit_limit_stashed_prompt = Some(crate::app::agent::InFlightPrompt {
-            text: "kept".into(),
-            images: Vec::new(),
-            scrollback_entry: crate::scrollback::EntryId::new(0),
-            combined_scrollback_entries: Vec::new(),
-            chip_elements: Vec::new(),
-        });
-    }
-    dispatch(
-        Action::TaskComplete(TaskResult::PromptResponse {
-            agent_id: id,
-            result: Err("Request failed (402): Supercharge AI usage balance exhausted".to_string()),
-            http_status: Some(402),
-            prompt_id: None,
-        }),
-        &mut app,
-    );
-    assert_eq!(
-        agent_ref(&app, id)
-            .credit_limit_stashed_prompt
-            .as_ref()
-            .map(|p| p.text.as_str()),
-        Some("kept")
+        has_turn_failed,
+        "a provider 402 must remain a visible turn failure"
     );
 }
 
@@ -2178,12 +2121,8 @@ fn turn_complete_notification_suppressed_when_queue_non_empty() {
         }),
         &mut app,
     );
-    // No re-send; only billing refresh. The second prompt is adopted.
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // The second prompt is adopted without re-sending it.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_turn_running());
     assert!(
         app.deferred_notification.is_none(),
@@ -2481,12 +2420,8 @@ fn prompt_response_resets_cancelling_to_idle() {
         }),
         &mut app,
     );
-    // Silent billing refresh after turn completion.
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // An idle completed turn schedules no work.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_idle());
     // Cancellation produces a "Turn cancelled" session event.
     assert_eq!(agent_ref(&app, id).scrollback.len(), 1);
@@ -2523,12 +2458,8 @@ fn cancel_with_queued_prompt_drains_on_completion() {
         &mut app,
     );
 
-    assert_eq!(effects.len(), 2);
+    assert_eq!(effects.len(), 1);
     assert!(matches!(effects.first(), Some(Effect::SendPrompt { text, .. }) if text == "queued"));
-    assert!(matches!(
-        effects.get(1),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
     assert!(agent_ref(&app, id).session.state.is_turn_running());
     assert_eq!(agent_ref(&app, id).session.queue_len(), 0);
 }
@@ -2550,12 +2481,8 @@ fn cancel_with_empty_queue_stays_idle() {
         }),
         &mut app,
     );
-    // Silent billing refresh after turn completion.
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // An idle completed turn schedules no work.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_idle());
 }
 
@@ -2604,12 +2531,8 @@ fn cancel_with_multiple_queued_prompts_drains_only_front_prompt() {
         &mut app,
     );
 
-    assert_eq!(effects.len(), 2);
+    assert_eq!(effects.len(), 1);
     assert!(matches!(effects.first(), Some(Effect::SendPrompt { text, .. }) if text == "queued-1"));
-    assert!(matches!(
-        effects.get(1),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
     assert!(agent_ref(&app, id).session.state.is_turn_running());
     assert_eq!(agent_ref(&app, id).session.queue_len(), 1);
     assert_eq!(
@@ -2657,12 +2580,8 @@ fn cancel_drain_is_blocked_when_editing_front_prompt() {
         &mut app,
     );
 
-    // Drain blocked but billing refresh still happens.
-    assert_eq!(effects.len(), 1);
-    assert!(matches!(
-        effects.first(),
-        Some(Effect::FetchBilling { silent: true, .. })
-    ));
+    // Editing the queued prompt blocks the drain.
+    assert!(effects.is_empty());
     assert!(agent_ref(&app, id).session.state.is_idle());
     assert_eq!(agent_ref(&app, id).session.queue_len(), 2);
     assert_eq!(

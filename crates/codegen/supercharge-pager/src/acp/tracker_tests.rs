@@ -4933,22 +4933,19 @@ fn media_gen_ref_skips_uploaded_only_video() {
         "uploaded_url-only media must not claim a local open path"
     );
 }
-/// A tier-restricted (free / X Basic) imagine call short-circuits with the SuperGrok upsell as `ToolOutput::Text` on a `Completed` status.
-/// The media renderer has no file to open, so it must surface the upsell text in the card body (not a bare title).
-/// It must NOT mark the card as an error.
+/// A completed media response without a file keeps its explanatory text.
 #[test]
-fn tier_restricted_media_shows_upsell_text_not_error() {
-    let upsell = "Image generation is a Supercharge feature. Upgrade at \
-         https://supercharge.ai/upgrade";
-    let output = ToolOutput::Text(supercharge_tools::types::output::TextOutput::from(upsell));
+fn media_without_output_file_keeps_provider_explanation() {
+    let message = "Image generation canceled before a file was created.";
+    let output = ToolOutput::Text(supercharge_tools::types::output::TextOutput::from(message));
     let tc = acp::ToolCall::new(
-        acp::ToolCallId::new(Arc::from("tier-restricted-img")),
+        acp::ToolCallId::new(Arc::from("provider-img")),
         "image_gen",
     )
     .kind(acp::ToolKind::Other)
     .status(acp::ToolCallStatus::Completed)
     .content(vec![acp::ToolCallContent::Content(acp::Content::new(
-        acp::ContentBlock::Text(acp::TextContent::new(upsell)),
+        acp::ContentBlock::Text(acp::TextContent::new(message)),
     ))])
     .raw_input(Some(serde_json::json!({ "variant": "ImageGen" })))
     .raw_output(serde_json::to_value(output).ok())
@@ -4960,15 +4957,15 @@ fn tier_restricted_media_shows_upsell_text_not_error() {
     };
     assert!(
         block.is_success(),
-        "the upsell is a successful result, not an error"
+        "a completed provider response retains its status"
     );
     assert!(
         block
             .output
             .as_deref()
             .unwrap_or_default()
-            .contains("Supercharge"),
-        "upsell text must be shown in the card body, got: {:?}",
+            .contains("canceled before a file was created"),
+        "message text must be shown in the card body, got: {:?}",
         block.output
     );
 }
