@@ -12,6 +12,7 @@ browser_runtime_stage_dir="$template_dir/browser-runtime"
 mkdir -p "$bin_dir"
 
 builder_tag="${SUPERCHARGE_E2B_BUILDER_TAG:-supercharge-e2b-builder:24.04}"
+build_cache_root="${SUPERCHARGE_E2B_BUILD_CACHE_ROOT:-$repo_root}"
 daemon_only="${SUPERCHARGE_E2B_DAEMON_ONLY:-0}"
 # E2B builds from the template directory alone, so stage the source-controlled
 # localhost browser sidecar into that context beside the generated binaries.
@@ -64,8 +65,12 @@ build_in_docker() {
       /work/sandbox/e2b-agent-template/bin/supercharge --version
     '
   fi
+  mkdir -p "$build_cache_root/.cargo-docker" "$build_cache_root/.rustup-docker" "$build_cache_root/target-e2b-release"
   docker run --rm \
     -v "$repo_root:/work" \
+    -v "$build_cache_root/.cargo-docker:/work/.cargo-docker" \
+    -v "$build_cache_root/.rustup-docker:/work/.rustup-docker" \
+    -v "$build_cache_root/target-e2b-release:/work/target-e2b-release" \
     -w /work \
     -e CARGO_HOME=/work/.cargo-docker \
     -e RUSTUP_HOME=/work/.rustup-docker \

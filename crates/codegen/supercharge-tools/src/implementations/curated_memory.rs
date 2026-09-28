@@ -54,6 +54,12 @@ pub struct CuratedMemoryInput {
     pub operations: Option<Vec<MemoryOp>>,
 }
 
+impl From<CuratedMemoryInput> for crate::types::tool_io::ToolInput {
+    fn from(value: CuratedMemoryInput) -> Self {
+        Self::Dynamic(serde_json::to_value(value).expect("memory input serializes"))
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct CuratedMemoryTool;
 

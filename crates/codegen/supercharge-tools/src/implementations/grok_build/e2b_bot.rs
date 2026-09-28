@@ -1,4 +1,4 @@
-//! Instance-scoped persistent bot management for the E2B Main agent.
+//! Conversation-scoped persistent agent collaboration in E2B.
 
 use std::time::Duration;
 
@@ -18,6 +18,8 @@ pub enum BotAction {
     Create,
     Send,
     Get,
+    Group,
+    Mention,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -65,7 +67,7 @@ impl crate::types::tool_metadata::ToolMetadata for VectraBotTool {
     fn kind(&self) -> ToolKind { ToolKind::Other }
     fn tool_namespace(&self) -> ToolNamespace { ToolNamespace::GrokBuild }
     fn description_template(&self) -> &str {
-        "Manage the persistent bots of this Vectra E2B instance as Main: list bots, create a named bot with instructions and a folder, send a bot a task, or get a task result. A sent task is queued in the SAME sandbox and returns a job ID; use get to check its attributed response. Bot folders do not provide security isolation."
+        "Collaborate with persistent agents in this Vectra E2B workspace. list shows agents; create is Main-only; send privately delegates a task and automatically delivers its result back into this same originating conversation; get checks a task you sent or received. group reads the shared group history. mention sends a public group message to bot_id (only from a group turn); untagged public agent messages do not trigger replies. Never copy private DM content or secrets into the group. These agents share the SAME sandbox; folders are not security isolation."
     }
     fn requires_expr(&self) -> Expr<ToolRequirement> { Expr::True }
 }
@@ -81,7 +83,7 @@ impl supercharge_tool_runtime::Tool for VectraBotTool {
     }
     fn should_list(&self, _ctx: &supercharge_tool_runtime::ListToolsContext) -> bool {
         std::env::var("SUPERCHARGE_RUNTIME_MODE").ok().as_deref() == Some("e2b")
-            && std::env::var("VECTRA_BOT_ID").ok().as_deref() == Some("main")
+            && std::env::var("VECTRA_BOT_ID").is_ok_and(|value| !value.is_empty())
             && std::env::var("VECTRA_BOT_CAPABILITY").is_ok_and(|value| !value.is_empty())
     }
     fn capabilities(&self) -> supercharge_tool_protocol::ToolCapabilities {
@@ -92,14 +94,15 @@ impl supercharge_tool_runtime::Tool for VectraBotTool {
         }
     }
     async fn run(&self, _ctx: supercharge_tool_runtime::ToolCallContext, input: BotInput) -> Result<BotOutput, supercharge_tool_runtime::ToolError> {
-        if std::env::var("SUPERCHARGE_RUNTIME_MODE").ok().as_deref() != Some("e2b") ||
-            std::env::var("VECTRA_BOT_ID").ok().as_deref() != Some("main") {
-            return Err(supercharge_tool_runtime::ToolError::custom("bot_unavailable", "Only the Main bot in a Supercharge E2B instance can use this tool"));
+        let sender_bot_id = std::env::var("VECTRA_BOT_ID").unwrap_or_default();
+        let sender_session_id = std::env::var("VECTRA_BOT_CHAT_ID").unwrap_or_default();
+        if std::env::var("SUPERCHARGE_RUNTIME_MODE").ok().as_deref() != Some("e2b") || sender_bot_id.is_empty() || sender_session_id.is_empty() {
+            return Err(supercharge_tool_runtime::ToolError::custom("bot_unavailable", "This tool requires a persistent agent conversation in Supercharge E2B"));
         }
         let resources = crate::types::tool_metadata::shared_resources(&_ctx)?;
         let session = resources.lock().await.get::<crate::types::resources::OwnerSessionId>().map(|session| session.0.clone());
         if session.as_deref().is_none_or(|session| std::env::var("VECTRA_BOT_SESSION_ID").ok().as_deref() != Some(session)) {
-            return Err(supercharge_tool_runtime::ToolError::custom("bot_unavailable", "Persistent bot management is restricted to the Main conversation, not its task subagents"));
+            return Err(supercharge_tool_runtime::ToolError::custom("bot_unavailable", "Agent collaboration is restricted to the originating conversation, not its task subagents"));
         }
         let site = std::env::var("VECTRA_BOT_SITE").map_err(|_| supercharge_tool_runtime::ToolError::custom("bot_unavailable", "Bot service is not configured"))?;
         let instance_id = std::env::var("VECTRA_BOT_INSTANCE_ID").unwrap_or_default();
@@ -108,9 +111,12 @@ impl supercharge_tool_runtime::Tool for VectraBotTool {
             site.len() > 300 || instance_id.is_empty() || capability.len() < 32 {
             return Err(supercharge_tool_runtime::ToolError::custom("bot_unavailable", "Bot service identity is invalid"));
         }
-        let (route, body) = match input.action {
+        let (route, mut body) = match input.action {
             BotAction::List => ("bots", serde_json::json!({"action":"list","instanceId":instance_id})),
             BotAction::Create => {
+                if sender_bot_id != "main" {
+                    return Err(supercharge_tool_runtime::ToolError::custom("bot_forbidden", "Only Main can create agents"));
+                }
                 let name = input.name.as_deref().unwrap_or("").trim();
                 if name.is_empty() || name.chars().count() > 80 {
                     return Err(supercharge_tool_runtime::ToolError::invalid_arguments("Bot name must be 1–80 characters"));
@@ -135,7 +141,19 @@ impl supercharge_tool_runtime::Tool for VectraBotTool {
                 }
                 ("bots/jobs", serde_json::json!({"action":"get","instanceId":instance_id,"jobId":job_id}))
             }
+            BotAction::Group => ("bots/group", serde_json::json!({"action":"read","instanceId":instance_id})),
+            BotAction::Mention => {
+                let prompt = input.prompt.as_deref().unwrap_or("").trim();
+                if prompt.is_empty() || prompt.len() > 12_000 {
+                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments("A group message under 12,000 bytes is required"));
+                }
+                let mentions = input.bot_id.filter(|id| !id.is_empty()).into_iter().collect::<Vec<_>>();
+                ("bots/group", serde_json::json!({"action":"send","instanceId":instance_id,
+                    "text":prompt,"mentions":mentions,"requestId":_ctx.call_id.to_string()}))
+            }
         };
+        body["senderBotId"] = serde_json::json!(sender_bot_id);
+        body["senderSessionId"] = serde_json::json!(sender_session_id);
         let client = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(90)).build()
             .map_err(|error| supercharge_tool_runtime::ToolError::custom("bot_service", error.to_string()))?;
         let response = client.post(format!("{}/api/internal/{}", site.trim_end_matches('/'), route))

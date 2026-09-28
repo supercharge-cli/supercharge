@@ -73,6 +73,7 @@ pub struct BotToolEnvironment {
     pub bot_id: String,
     pub site: String,
     pub capability: String,
+    pub chat_id: String,
 }
 
 struct ProcessGroup(Option<u32>);
@@ -103,14 +104,15 @@ impl PersistentCli {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        for key in ["VECTRA_BOT_ID", "VECTRA_BOT_INSTANCE_ID", "VECTRA_BOT_SITE", "VECTRA_BOT_CAPABILITY", "VECTRA_BOT_SESSION_ID"] {
+        for key in ["VECTRA_BOT_ID", "VECTRA_BOT_INSTANCE_ID", "VECTRA_BOT_SITE", "VECTRA_BOT_CAPABILITY", "VECTRA_BOT_SESSION_ID", "VECTRA_BOT_CHAT_ID"] {
             command.env_remove(key);
         }
         command.env("VECTRA_BROWSER_OWNER", &config.session_id);
         if let Some(bot) = &config.bot_environment {
             command.env("VECTRA_BOT_ID", &bot.bot_id).env("VECTRA_BOT_SESSION_ID", &config.session_id);
-            if bot.bot_id == "main" && !bot.capability.is_empty() {
+            if !bot.capability.is_empty() {
                 command.env("VECTRA_BOT_INSTANCE_ID", &bot.instance_id)
+                    .env("VECTRA_BOT_CHAT_ID", &bot.chat_id)
                     .env("VECTRA_BOT_SITE", &bot.site)
                     .env("VECTRA_BOT_CAPABILITY", &bot.capability);
             }

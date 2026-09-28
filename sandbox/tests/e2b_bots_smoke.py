@@ -20,7 +20,8 @@ def reply(obj,result): emit({'jsonrpc':'2.0','id':obj['id'],'result':result})
 def prompt(obj,text):
     cancel.clear()
     if text.startswith('wait:'): cancel.wait(float(text.split(':')[1]))
-    summary={'bot':os.environ.get('VECTRA_BOT_ID'),'cwd':os.getcwd(),'rules':rules,'mainCredential':bool(os.environ.get('VECTRA_BOT_CAPABILITY'))}
+    if 'hold group turn' in text: cancel.wait(2)
+    summary={'bot':os.environ.get('VECTRA_BOT_ID'),'cwd':os.getcwd(),'rules':rules,'mainCredential':bool(os.environ.get('VECTRA_BOT_CAPABILITY')),'prompt':text,'chat':os.environ.get('VECTRA_BOT_CHAT_ID')}
     message=json.dumps(summary)
     emit({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':session,'update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':message}}}})
     reply(obj,{'stopReason':'cancelled' if cancel.is_set() else 'end_turn'})
@@ -99,7 +100,7 @@ def main():
             assert set(status['activeBotChats'])=={alpha,beta}
             a=json.loads(wait_for(lambda:messages(alpha))[-1]['content']);b=json.loads(wait_for(lambda:messages(beta))[-1]['content'])
             assert a['bot']=='alpha' and a['cwd']==str(workspace/'alpha') and 'alpha instructions' in a['rules']
-            assert b['bot']=='beta' and b['cwd']==str(workspace/'beta') and not b['mainCredential']
+            assert b['bot']=='beta' and b['cwd']==str(workspace/'beta') and b['mainCredential'] and b['chat']==beta
             wait_for(lambda:not request('/v1/status')['activeBotChats'])
             send('main',main_chat,'hello');m=json.loads(wait_for(lambda:messages(main_chat))[-1]['content']);assert m['mainCredential']
             wait_for(lambda:not request('/v1/status')['activeBotChats'])
@@ -123,12 +124,53 @@ def main():
             request('/v1/app/bot-jobs',job)
             wait_for(lambda:request('/v1/app/bot-jobs/job-smoke-1')['status']=='succeeded')
             request('/v1/app/bot-jobs',job);assert len(messages('bot-beta'))==1
+            before_main=len(messages(main_chat))
+            send('main',main_chat,'wait:1.5');wait_for(lambda:main_chat in request('/v1/status')['activeBotChats'])
+            delegated={'jobId':'job-callback-1','botId':'beta','chatId':'bot-beta','text':'private delegated work','senderBotId':'main','senderSessionId':main_chat}
+            request('/v1/app/bot-jobs',delegated)
+            returned=wait_for(lambda:messages(main_chat) if len(messages(main_chat))>=before_main+2 else None)
+            assert 'A delegated task has finished' in json.loads(returned[-1]['content'])['prompt']
+            wait_for(lambda:not request('/v1/status')['activeBotChats'])
+            shared={'requestId':'group-smoke-1','text':'hello shared group','mentions':[]}
+            assert request('/v1/app/group',shared)['recipients']==['main']
+            def group_replies():return [row for row in request('/v1/app/group')['messages'] if row.get('senderBotId')]
+            wait_for(group_replies)
+            first=group_replies()[-1];assert first['senderBotId']=='main'
+            assert 'private delegated work' not in first['text']
+            request('/v1/app/group',shared);assert len([row for row in request('/v1/app/group')['messages'] if row['id']=='group-smoke-1'])==1
+            tagged={'requestId':'group-smoke-2','text':'@alpha check this','mentions':['alpha']}
+            assert request('/v1/app/group',tagged)['recipients']==['alpha']
+            wait_for(lambda:any(row.get('senderBotId')=='alpha' for row in group_replies()))
+            assert all(row.get('senderBotId')!='beta' for row in group_replies())
+            wait_for(lambda:not request('/v1/status')['activeBotChats'])
+            request('/v1/app/group',{'requestId':'group-hold','text':'hold group turn','mentions':['alpha']})
+            wait_for(lambda:'group-alpha' in request('/v1/status')['activeBotChats'])
+            mention={'requestId':'agent-mention','text':'@beta check the shared topic','mentions':['beta'],'senderBotId':'alpha','senderSessionId':'group-alpha'}
+            assert request('/v1/app/group',mention)['recipients']==['beta']
+            wait_for(lambda:any(row.get('senderBotId')=='beta' for row in group_replies()))
+            wait_for(lambda:not request('/v1/status')['activeBotChats'])
+            send('main',main_chat,'wait:1.5');wait_for(lambda:main_chat in request('/v1/status')['activeBotChats'])
+            try:
+                request('/v1/app/group',{'requestId':'forbidden-dm-share','text':'private text','mentions':['beta'],'senderBotId':'main','senderSessionId':main_chat})
+                raise AssertionError('private DM published to group')
+            except urllib.error.HTTPError as error:assert error.code==403
+            wait_for(lambda:not request('/v1/status')['activeBotChats'])
+            import hmac,hashlib,base64
+            token=base64.urlsafe_b64encode(hmac.new(('s'*48).encode(),f'vectra-conversation-v1\nalpha\n{alpha}'.encode(),hashlib.sha256).digest()).decode().rstrip('=')
+            assert request('/v1/app/bots/authenticate',{'botId':'alpha','sessionId':alpha,'credential':token})['ok']
+            try:
+                request('/v1/app/bots/authenticate',{'botId':'beta','sessionId':beta,'credential':token})
+                raise AssertionError('cross-agent credential accepted')
+            except urllib.error.HTTPError as error:assert error.code==401
+            before_main=len(messages(main_chat))-2
             send('alpha',alpha,'wait:20');wait_for(lambda:alpha in request('/v1/status')['activeBotChats'])
             process.kill();process.wait(timeout=10);process=start()
             assert messages(alpha,'error'), 'interruption missing from history'
-            assert len(messages('bot-beta'))==1
+            assert len(messages('bot-beta'))==2
             assert request('/v1/conversations?botId=beta')['conversations']
-            print('PASS: concurrent bots, instructions/cwd, Main capability, targeting, cancellation, maintenance, delegation idempotency, restart recovery')
+            assert len(request('/v1/app/group')['messages'])>=4
+            assert len(messages(main_chat))==before_main+2
+            print('PASS: concurrent bots, scoped credentials, targeting, cancellation, group mentions/default Main, shared-only context, automatic result delivery, idempotency and restart recovery')
         except Exception:
             log.flush();print((root/'daemon.log').read_text()[-7000:]);raise
         finally:

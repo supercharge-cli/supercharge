@@ -65,7 +65,7 @@ name="supercharge-e2b"
             env={key:value for key,value in os.environ.items() if not any(word in key for word in ('TOKEN','KEY','SECRET','SUPERCHARGE','SUPERAGENT','VECTRA'))}
             env.update({'HOME':tmp,'SUPERCHARGE_HOME':str(home),'SUPERCHARGE_RUNTIME_MODE':'e2b','SUPERCHARGE_AGENT':'supercharge-e2b',
                 'SUPERCHARGE_DISABLE_AUTOUPDATER':'1','SMOKE_API_KEY':'local-fake-key','VECTRA_BOT_ID':'main','VECTRA_BOT_SESSION_ID':session,
-                'VECTRA_BOT_CAPABILITY':'s'*48,'VECTRA_BOT_SITE':'https://example.test','VECTRA_BOT_INSTANCE_ID':'smoke-instance',
+                'VECTRA_BOT_CAPABILITY':'s'*48,'VECTRA_BOT_CHAT_ID':'chat-local-smoke','VECTRA_BOT_SITE':'https://example.test','VECTRA_BOT_INSTANCE_ID':'smoke-instance',
                 'OTEL_SDK_DISABLED':'true','SUPERCHARGE_API_BASE_URL':base,'SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL':base})
             log=(root/'stderr').open('w')
             proc=subprocess.Popen([cli,'--no-auto-update','agent','--no-leader','--always-approve','--model','smoke',
