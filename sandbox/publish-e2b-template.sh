@@ -48,11 +48,46 @@ e2b_cli template create "$template_name" \
 
 e2b_cli template publish "$template_name" -y
 
+release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-iotserver24/supercharge-releases}"
+system_version="$(
+  python3 - "$release_repo" "$repo_root" <<'PY'
+import json, pathlib, sys, urllib.request
+repo, root = sys.argv[1], pathlib.Path(sys.argv[2])
+url = f"https://github.com/{repo}/releases/latest/download/sandbox-system.json"
+try:
+    with urllib.request.urlopen(url, timeout=15) as response:
+        current = json.load(response)["version"].lstrip("v")
+    major, minor, patch = (int(part) for part in current.split("."))
+    print(f"{major}.{minor}.{patch + 1}")
+except Exception:
+    text = (root / "crates/codegen/supercharge-pager-bin/Cargo.toml").read_text()
+    for line in text.splitlines():
+        if line.startswith("version = "):
+            print(line.split('"')[1])
+            break
+PY
+)"
+
+export SYSTEM_UPDATE_NOTES="Published with E2B template ${template_name}."
+"$template_dir/pack-system-bundle.sh" "$system_version"
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI is required to upload the system bundle for existing sandboxes" >&2
+  exit 1
+fi
+
+release_tag="$(gh release view --repo "$release_repo" --json tagName --jq .tagName)"
+gh release upload "$release_tag" --repo "$release_repo" --clobber \
+  "$template_dir/dist/sandbox-system.json" \
+  "$template_dir/dist/sandbox-system-${system_version}.tar.gz"
+
 cat <<EOF
 
 Published E2B template alias: ${template_name}
+System bundle ${system_version} uploaded to ${release_repo} release ${release_tag}.
 
-Set this on the Vectra gateway before creating Supercharge instances:
+New sandboxes get this template. Existing sandboxes install the bundle on their next wake.
+Workspace files stay on the same sandbox.
 
   SUPERCHARGE_E2B_TEMPLATE=${template_name}
 

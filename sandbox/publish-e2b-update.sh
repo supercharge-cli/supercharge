@@ -10,6 +10,11 @@ tag="${SUPERCHARGE_E2B_UPDATE_TAG:?Set SUPERCHARGE_E2B_UPDATE_TAG to a new relea
 release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-iotserver24/supercharge-releases}"
 
 "$repo_root/sandbox/prepare-e2b-agent-assets.sh"
+system_version="${tag#v}"
+if [[ "$system_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  export SYSTEM_UPDATE_NOTES="Published with Supercharge ${tag}."
+  "$template_dir/pack-system-bundle.sh" "$system_version"
+fi
 
 if [ ! -x "$bin_dir/supercharge-superagent-server" ] || [ ! -x "$bin_dir/supercharge" ]; then
   echo "Missing E2B binaries in $bin_dir" >&2
@@ -37,10 +42,16 @@ XibeCode instances are not affected.
 EOF
 )"
 
+assets=(
+  "$stage/supercharge-superagent-server-linux-x86_64"
+  "$stage/supercharge-linux-x86_64"
+  "$stage/e2b-manifest.json"
+)
+if [ -f "$template_dir/dist/sandbox-system.json" ]; then
+  assets+=("$template_dir/dist/sandbox-system.json" "$template_dir/dist/sandbox-system-${system_version}.tar.gz")
+fi
 gh release create "$tag" --repo "$release_repo" \
-  "$stage/supercharge-superagent-server-linux-x86_64" \
-  "$stage/supercharge-linux-x86_64" \
-  "$stage/e2b-manifest.json" \
+  "${assets[@]}" \
   --title "Supercharge E2B ${tag}" \
   --notes "$notes"
 
