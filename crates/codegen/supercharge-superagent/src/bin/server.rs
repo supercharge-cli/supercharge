@@ -3949,6 +3949,17 @@ async fn create_session(
     ))
 }
 
+fn app_status_conversation(session: &DaemonSession, active: bool, waiting: bool) -> Value {
+    let recent = session.messages.iter().rev().find(|message| {
+        (message.role == "user" || message.role == "assistant") && !message.content.trim().is_empty()
+    });
+    let preview = recent.map(|message| message.content.trim().chars().take(160).collect::<String>());
+    json!({"sessionId":session.id,"botId":session.bot_id,"updatedAt":session.updated_at.saturating_mul(1000),
+        "title":session.title,"createdAt":session.created_at.saturating_mul(1000),
+        "lastMessageId":recent.and_then(|message| message.id.as_ref()),"lastMessage":preview,
+        "busy":active,"queued":waiting})
+}
+
 async fn app_status(State(state): State<Arc<AppState>>, Query(query): Query<AppStatusQuery>) -> Json<Value> {
     let legacy_busy = state.app_turn_busy.load(Ordering::Relaxed);
     let sessions = state.sessions.lock().await;
@@ -3965,8 +3976,7 @@ async fn app_status(State(state): State<Arc<AppState>>, Query(query): Query<AppS
     let summary = sessions.values().map(|session| {
         let active = queue.in_flight.values().any(|work| work.session() == session.id);
         let waiting = queue.queued.iter().any(|work| work.session() == session.id);
-        json!({"sessionId":session.id,"botId":session.bot_id,"updatedAt":session.updated_at.saturating_mul(1000),
-            "lastMessageId":session.messages.last().and_then(|message| message.id.as_ref()),"busy":active,"queued":waiting})
+        app_status_conversation(session, active, waiting)
     }).collect::<Vec<_>>();
     Json(json!({"ok":true,"usage":{},"turn":{"busy":busy,"queued":queued,"startedAt":started,"tools":0},
         "activeBotChats":queue.in_flight.values().map(|work| work.session()).collect::<Vec<_>>(),
@@ -4521,7 +4531,7 @@ mod tests {
         DaemonSession, RateLimiter, agent_session_id, app_chat_id, app_events_for_replay,
         app_reply_completion_events, app_sse_data_frame, app_turn_completion_events,
         connection_readiness, default_session_status, headless_cli_args,
-        load_daemon_sessions, persist_daemon_sessions,
+        load_daemon_sessions, persist_daemon_sessions, app_status_conversation,
     };
     use std::collections::BTreeMap;
 
@@ -4577,6 +4587,27 @@ mod tests {
             args.windows(2)
                 .any(|pair| pair[0] == "--session-id" && pair[1] == "session-id")
         );
+    }
+
+    #[test]
+    fn bot_status_exposes_a_bounded_latest_message_preview_without_crossing_roles() {
+        let session = DaemonSession {
+            id: "chat-research".to_owned(), created_at: 1, updated_at: 2,
+            title: "Research".to_owned(), status: default_session_status(),
+            messages: vec![
+                super::ConversationMessage { role: "user".to_owned(), content: "question".to_owned(), id: Some("user-1".to_owned()) },
+                super::ConversationMessage { role: "assistant".to_owned(), content: "a".repeat(240), id: Some("answer-1".to_owned()) },
+                super::ConversationMessage { role: "error".to_owned(), content: "hidden diagnostic".to_owned(), id: Some("error-1".to_owned()) },
+            ],
+            bot_id: "research".to_owned(), cwd: None, instructions_revision: 0, runtime_home: None,
+        };
+        let status = app_status_conversation(&session, true, false);
+        assert_eq!(status["botId"], "research");
+        assert_eq!(status["lastMessageId"], "answer-1");
+        assert_eq!(status["lastMessage"].as_str().unwrap().chars().count(), 160);
+        assert_eq!(status["busy"], true);
+        assert_eq!(status["queued"], false);
+        assert!(!status.to_string().contains("hidden diagnostic"));
     }
 
     #[test]
