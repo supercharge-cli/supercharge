@@ -296,6 +296,7 @@ fn grok_build_core_toolset_with(
         (&search_tool::SearchTool).into(),
         (&use_tool::UseTool).into(),
         (&grok_build::UpdateGoalTool).into(),
+        (&supercharge_tools::implementations::curated_memory::CuratedMemoryTool).into(),
     ];
     if include_workflow {
         tools.push((&grok_build::WorkflowTool).into());

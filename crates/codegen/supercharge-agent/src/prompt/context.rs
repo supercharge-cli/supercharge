@@ -307,6 +307,10 @@ impl PromptContext {
             }
             PromptMode::Full => render(self.prompt_body.as_deref().unwrap_or(""))?,
         };
+        let mut prompt = prompt;
+        if prompt.contains("<work_policy>") {
+            prompt.push_str(&supercharge_tools::implementations::curated_memory::prompt_block());
+        }
         Some(prompt)
     }
 }
@@ -370,8 +374,11 @@ mod tests {
         let block_start = on
             .find("\n\n<browser_verification>")
             .expect("flagged standard template must render browser verification");
-        assert_eq!(on.get(..block_start), Some(off.as_str()));
-        assert!(on.ends_with("</browser_verification>"));
+        let head = on.get(..block_start).expect("prefix");
+        assert!(off.starts_with(head));
+        assert!(on.contains("</browser_verification>"));
+        assert!(on.contains("<curated_memory>"));
+        assert!(off.contains("<curated_memory>"));
         assert!(!off.contains("<browser_verification>"));
     }
     #[test]

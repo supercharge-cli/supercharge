@@ -1,4 +1,5 @@
 pub mod codex;
+pub mod curated_memory;
 pub mod cursor_rules_on_read;
 pub mod editor_infra;
 pub mod grok_build;
@@ -20,6 +21,7 @@ pub use grok_build::{
     SendSubagentMessageTool, TaskOutputTool, TaskTool, TodoWriteTool, WaitTasksTool, WebFetchTool,
     WebSearchTool,
 };
+pub use curated_memory::CuratedMemoryTool;
 pub use memory::{MemoryGetImpl, MemorySearchImpl};
 pub use opencode::{
     OpenCodeBashTool, OpenCodeEditTool, OpenCodeGlobTool, OpenCodeGrepTool, OpenCodeReadTool,
