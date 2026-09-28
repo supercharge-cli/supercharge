@@ -205,6 +205,11 @@ async function route(req, res, input = {}) {
 await ensureBrowser();
 const server = createServer(async (req, res) => {
   try {
+    const path = new URL(req.url || "/", `http://${host}:${port}`).pathname;
+    if (req.method === "GET" && (path === "/health" || path === "/status")) {
+      await route(req, res);
+      return;
+    }
     const input = req.method === "POST" ? await body(req) : {};
     const action = () => res.destroyed ? undefined : route(req, res, input);
     serial = serial.then(action, action);

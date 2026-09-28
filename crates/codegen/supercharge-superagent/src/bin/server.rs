@@ -2993,7 +2993,6 @@ async fn issue_browser_vnc_ticket() -> Result<Json<Value>, StatusCode> {
     if !browser::is_e2b_runtime() {
         return Err(StatusCode::NOT_FOUND);
     }
-    let _ = browser::ensure_stream(browser::stream_port()).await;
     Ok(Json(json!({
         "ticket": mint_vnc_ticket(),
         "expiresInSeconds": 300,
@@ -3056,7 +3055,6 @@ async fn browser_vnc(
     if ticket.is_empty() || !vnc_ticket_ok(&ticket) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let _ = browser::ensure_stream(browser::stream_port()).await;
     Ok(ws.on_upgrade(browser_vnc_relay).into_response())
 }
 
