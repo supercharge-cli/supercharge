@@ -103,7 +103,14 @@ pub(crate) fn raw_output_json(
     output: &ToolOutput,
     rewriter: Option<&PathRewriter>,
 ) -> Option<serde_json::Value> {
-    let value = serde_json::to_value(output).ok()?;
+    let value = match output {
+        ToolOutput::DesktopObservation(observation) => serde_json::json!({
+            "type": "DesktopObservation",
+            "metadata": &observation.metadata,
+            "mimeType": &observation.image.mime_type,
+        }),
+        _ => serde_json::to_value(output).ok()?,
+    };
     Some(match rewriter {
         Some(rw) => rw.rewrite_json(value),
         None => value,
@@ -120,6 +127,18 @@ pub(crate) fn acp_tool_update(
     tool_meta: Option<serde_json::Value>,
 ) -> Option<acp::ToolCallUpdate> {
     match output {
+        ToolOutput::DesktopObservation(observation) => {
+            Some(acp::ToolCallUpdate::new(
+                acp::ToolCallId::new(Arc::from(tool_call_id)),
+                acp::ToolCallUpdateFields::new()
+                    .status(Some(acp::ToolCallStatus::Completed))
+                    .content(Some(vec![
+                        acp::ToolCallContent::from(acp::ContentBlock::Text(acp::TextContent::new(output.to_prompt_format()))),
+                        acp::ToolCallContent::from(acp::ContentBlock::Image(acp::ImageContent::new(observation.image.data.clone(), observation.image.mime_type.clone()))),
+                    ]))
+                    .raw_output(raw_output_json(output, rewriter)),
+            ))
+        }
         ToolOutput::ReadFile(read_file_output) => {
             let (content, status) = match read_file_output {
                 ReadFileOutput::FileContent(file_content) => {
@@ -971,6 +990,24 @@ mod tests {
             }
             other => panic!("Expected ReadFile, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn desktop_image_stays_in_image_content_not_duplicated_in_raw_metadata() {
+        let output = ToolOutput::DesktopObservation(supercharge_tools::types::output::DesktopObservation {
+            image: supercharge_tools::types::output::ImageContent {
+                data: "aGVsbG8=".into(), mime_type: "image/jpeg".into(),
+                annotations: None, uri: None, meta: None,
+            },
+            metadata: serde_json::json!({"frameId":"frame-1", "imageWidth":1280,"imageHeight":800}),
+        });
+        let raw = raw_output_json(&output, None).unwrap();
+        assert_eq!(raw["metadata"]["frameId"], "frame-1");
+        assert!(!raw.to_string().contains("aGVsbG8="));
+        let update = acp_tool_update(&output, "call-desktop", None, None).unwrap();
+        let contents = update.fields.content.unwrap();
+        assert_eq!(contents.len(), 2);
+        assert!(matches!(contents[1], acp::ToolCallContent::Content(acp::Content { content: acp::ContentBlock::Image(_), .. })));
     }
 
     #[test]

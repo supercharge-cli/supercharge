@@ -48,18 +48,22 @@ for dirpath, _, names in os.walk(root):
 print("bundle paths ok")
 PY
 
-ARCHIVE="$OUT/sandbox-system-${VERSION}.tar.gz"
-tar -C "$STAGE" -czf "$ARCHIVE" opt
+ARCHIVE="$OUT/sandbox-desktop-${VERSION}.tar.gz"
+find "$STAGE" -type d -name __pycache__ -prune -exec rm -r {} +
+tar -C "$STAGE" -czf "$ARCHIVE" opt/vectra/wake-http opt/vectra/browser-runtime
 NOTES="${SYSTEM_UPDATE_NOTES:-System files updated on this sandbox. Your workspace was kept.}"
-python3 - "$OUT/sandbox-system.json" "$VERSION" "$NOTES" <<'PY'
-import json, sys
-path, version, notes = sys.argv[1:]
+python3 - "$OUT/sandbox-desktop.json" "$VERSION" "$NOTES" "$ARCHIVE" <<'PY'
+import hashlib, json, sys
+path, version, notes, archive = sys.argv[1:]
 json.dump({
     "version": version,
     "notes": [notes],
-    "archive": f"sandbox-system-{version}.tar.gz",
+    "archive": f"sandbox-desktop-{version}.tar.gz",
     "paths": ["/opt/vectra/wake-http/", "/opt/vectra/browser-runtime/"],
     "commands": [],
+    "desktopProtocol": 1,
+    "requiresOptIn": True,
+    "sha256": hashlib.sha256(open(archive, "rb").read()).hexdigest(),
 }, open(path, "w"), indent=2)
 print(path)
 PY

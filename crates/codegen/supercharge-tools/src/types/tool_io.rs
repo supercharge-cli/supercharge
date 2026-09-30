@@ -83,6 +83,8 @@ pub enum ToolInput {
     BrowserPress(BrowserPressInput),
     BrowserScreenshot(BrowserScreenshotInput),
     BrowserHandoff(BrowserHandoffInput),
+    DesktopObserve(crate::implementations::grok_build::e2b_desktop::DesktopObserveInput),
+    DesktopAction(crate::implementations::grok_build::e2b_desktop::DesktopActionInput),
     VectraBot(crate::implementations::grok_build::e2b_bot::BotInput),
     Write(WriteInput),
     ApplyPatch(ApplyPatchInput),

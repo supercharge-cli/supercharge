@@ -16,6 +16,7 @@ pub mod bash;
 pub mod deploy_app;
 pub mod enter_plan_mode;
 pub mod e2b_browser;
+pub mod e2b_desktop;
 pub mod e2b_bot;
 pub mod exit_plan_mode;
 pub mod grep;

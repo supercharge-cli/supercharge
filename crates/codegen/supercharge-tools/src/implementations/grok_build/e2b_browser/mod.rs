@@ -9,7 +9,7 @@ use std::time::Duration;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::types::output::{DynamicOutput, ToolOutput};
+use crate::types::output::{DesktopObservation, DynamicOutput, ImageContent, ToolOutput};
 use crate::types::requirements::{Expr, ToolRequirement};
 use crate::types::tool::{ToolKind, ToolNamespace};
 
@@ -53,7 +53,7 @@ pub struct BrowserScreenshotInput {}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BrowserHandoffInput {
     /// `start` asks the authenticated app user to take control through noVNC;
-    /// `stop` returns control to the agent.
+    /// `stop` cancels your pending request, but cannot end an active human handoff.
     pub action: BrowserHandoffAction,
     /// Optional expiry in minutes for a started handoff. Range: 1-30.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -73,14 +73,20 @@ pub struct BrowserToolOutput {
 }
 
 impl From<BrowserToolOutput> for ToolOutput {
-    fn from(value: BrowserToolOutput) -> Self {
+    fn from(mut value: BrowserToolOutput) -> Self {
+        if let Some(data) = value.result.as_object_mut().and_then(|result| result.remove("jpeg")).and_then(|jpeg| jpeg.as_str().map(str::to_owned)) {
+            return ToolOutput::DesktopObservation(DesktopObservation {
+                image: ImageContent { data, mime_type: "image/jpeg".into(), annotations: None, uri: None, meta: None },
+                metadata: value.result,
+            });
+        }
         ToolOutput::Dynamic(DynamicOutput::from(value.result))
     }
 }
 
 impl supercharge_tool_runtime::ToolOutput for BrowserToolOutput {}
 
-fn e2b_enabled() -> bool {
+pub(super) fn e2b_enabled() -> bool {
     std::env::var("SUPERCHARGE_RUNTIME_MODE")
         .ok()
         .or_else(|| std::env::var("SUPERAGENT_RUNTIME_MODE").ok())
@@ -113,7 +119,7 @@ fn sidecar_base_url() -> Result<String, supercharge_tool_runtime::ToolError> {
     Ok(format!("http://127.0.0.1:{port}"))
 }
 
-async fn call_sidecar(
+pub(super) async fn call_sidecar(
     method: reqwest::Method,
     path: &str,
     payload: Option<serde_json::Value>,
@@ -121,9 +127,11 @@ async fn call_sidecar(
     let url = format!("{}{}", sidecar_base_url()?, path);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .build()
         .map_err(|error| supercharge_tool_runtime::ToolError::custom("browser_sidecar", error.to_string()))?;
-    let owner = std::env::var("VECTRA_BROWSER_OWNER").unwrap_or_else(|_| "legacy".to_owned());
+    let owner = std::env::var("VECTRA_BROWSER_OWNER").map_err(|_| supercharge_tool_runtime::ToolError::custom("browser_owner", "This E2B conversation has no desktop owner identity; restart its agent runtime"))?;
     let request = client.request(method, url).header("x-vectra-browser-owner", owner);
     let response = match payload {
         Some(value) => request.json(&value).send().await,
@@ -263,7 +271,7 @@ pub struct BrowserHandoffTool;
 impl crate::types::tool_metadata::ToolMetadata for BrowserHandoffTool {
     fn kind(&self) -> ToolKind { ToolKind::Other }
     fn tool_namespace(&self) -> ToolNamespace { ToolNamespace::GrokBuild }
-    fn description_template(&self) -> &str { "Request an explicit authenticated user handoff for login, MFA, OAuth, CAPTCHA, or other user-only browser actions. Starting a handoff enables the app browser-tab noVNC view for up to 30 minutes; stopping returns control to the agent." }
+    fn description_template(&self) -> &str { "Request authenticated human help for login, MFA, OAuth, CAPTCHA or other user-only desktop actions. Start marks a help request; the user explicitly takes over in the app. Stop cancels only your pending request, never an active user's control. Wait for the user to return control, then observe again." }
     fn requires_expr(&self) -> Expr<ToolRequirement> { Expr::True }
 }
 
@@ -274,7 +282,14 @@ impl supercharge_tool_runtime::Tool for BrowserHandoffTool {
     fn description(&self, _ctx: &supercharge_tool_runtime::ListToolsContext) -> supercharge_tool_types::ToolDescription { supercharge_tool_types::ToolDescription::new("browser_handoff", crate::types::tool_metadata::ToolMetadata::sanitized_description_template(self)) }
     fn capabilities(&self) -> supercharge_tool_protocol::ToolCapabilities { supercharge_tool_protocol::ToolCapabilities { is_read_only: false, tool_scope: Some(supercharge_tool_protocol::ToolScope::Write), ..Default::default() } }
     async fn run(&self, _ctx: supercharge_tool_runtime::ToolCallContext, input: BrowserHandoffInput) -> Result<BrowserToolOutput, supercharge_tool_runtime::ToolError> {
-        let (path, body) = match input.action { BrowserHandoffAction::Start => ("/handoff/start", serde_json::json!({ "minutes": input.minutes.unwrap_or(10).clamp(1, 30) })), BrowserHandoffAction::Stop => ("/handoff/stop", serde_json::json!({})) };
+        let (path, body) = match input.action {
+            BrowserHandoffAction::Start => ("/handoff/request", serde_json::json!({
+                "minutes": input.minutes.unwrap_or(10).clamp(1, 30),
+                "botId": std::env::var("VECTRA_BOT_ID").ok(),
+                "sessionId": std::env::var("VECTRA_BOT_CHAT_ID").ok(),
+            })),
+            BrowserHandoffAction::Stop => ("/handoff/cancel", serde_json::json!({})),
+        };
         call_sidecar(reqwest::Method::POST, path, Some(body)).await
     }
 }
@@ -294,5 +309,21 @@ mod tests {
     fn rejects_invalid_browser_input() {
         assert!(valid_text("", "ref", 64).is_err());
         assert!(valid_text(&"x".repeat(MAX_TEXT_CHARS + 1), "text", MAX_TEXT_CHARS).is_err());
+    }
+
+    #[test]
+    fn jpeg_results_become_desktop_observations_and_other_results_stay_dynamic() {
+        let screenshot = BrowserToolOutput { result: serde_json::json!({"ok": true, "jpeg": "aGVsbG8=", "frameId": "f1", "url": "https://example.test"}) };
+        match ToolOutput::from(screenshot) {
+            ToolOutput::DesktopObservation(observation) => {
+                assert_eq!(observation.image.data, "aGVsbG8=");
+                assert_eq!(observation.image.mime_type, "image/jpeg");
+                assert_eq!(observation.metadata["frameId"], "f1");
+                assert!(observation.metadata.get("jpeg").is_none(), "raw jpeg must not be duplicated into prompt JSON");
+            }
+            other => panic!("expected desktop observation, got {other:?}"),
+        }
+        let plain = BrowserToolOutput { result: serde_json::json!({"ok": true, "url": "https://example.test"}) };
+        assert!(matches!(ToolOutput::from(plain), ToolOutput::Dynamic(_)));
     }
 }

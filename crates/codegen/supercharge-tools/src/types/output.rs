@@ -595,6 +595,12 @@ pub struct SearchToolOutput {
     pub result_count: usize,
     pub content: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesktopObservation {
+    pub image: ImageContent,
+    pub metadata: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, derive_more::From)]
 #[serde(tag = "type")]
 pub enum ToolOutput {
@@ -602,6 +608,7 @@ pub enum ToolOutput {
     BackgroundTaskStarted(BackgroundTaskStarted),
     GrepSearch(GrepSearchOutput),
     ReadFile(ReadFileOutput),
+    DesktopObservation(DesktopObservation),
     ListDir(ListDirOutput),
     SearchReplace(SearchReplaceOutput),
     Todo(TodoWriteOutput),
@@ -683,6 +690,10 @@ impl ToolOutput {
     /// Render tool output for inclusion in the model prompt with specified format.
     pub fn to_prompt_format(&self) -> String {
         match self {
+            ToolOutput::DesktopObservation(observation) => format!(
+                "Desktop screenshot attached. Use coordinates in imageWidth × imageHeight pixels and this frameId for desktop_action.\n{}",
+                serde_json::to_string(&observation.metadata).unwrap_or_default(),
+            ),
             ToolOutput::ReadFile(read_file_output) => match read_file_output {
                 ReadFileOutput::FileContent(file_content) if file_content.content.is_empty() => {
                     if file_content.total_lines == 0 {

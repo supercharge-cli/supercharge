@@ -2972,6 +2972,7 @@ impl SessionActor {
                 *output,
                 ToolsToolOutput::ReadFile(ReadFileOutput::ImageContent(_))
                     | ToolsToolOutput::ReadFile(ReadFileOutput::PdfPageImages(_))
+                    | ToolsToolOutput::DesktopObservation(_)
             ) {
             supercharge_tools::util::base64_images::extract_base64_images(prompt_text)
         } else {
@@ -2987,6 +2988,18 @@ impl SessionActor {
             tool_layer_images,
         );
         prompt_text = maybe_rewrite(path_rewriter, extraction.text);
+        if !self.is_cursor_harness()
+            && let ToolsToolOutput::DesktopObservation(ref observation) = *output
+        {
+            use crate::session::image_normalize::{InlineAttachVerdict, inline_attach_verdict};
+            if matches!(inline_attach_verdict(&observation.image.data), InlineAttachVerdict::Attach) {
+                inline_images.push(ContentPart::Image {
+                    url: std::sync::Arc::<str>::from(format!("data:{};base64,{}", observation.image.mime_type, observation.image.data)),
+                });
+            } else {
+                prompt_text = "Desktop image could not be attached. Do not act on unseen coordinates; request a new desktop observation.".to_owned();
+            }
+        }
         if !self.is_cursor_harness()
             && let ToolsToolOutput::ReadFile(ReadFileOutput::ImageContent(ref image_content)) =
                 *output

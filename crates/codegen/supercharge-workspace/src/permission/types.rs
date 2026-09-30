@@ -330,6 +330,8 @@ impl From<&supercharge_tools::types::ToolInput> for AccessKind {
             },
             ToolInput::UseTool(_) => AccessKind::Read(None),
             ToolInput::WebFetch(wf) => AccessKind::WebFetch(wf.url.clone()),
+            ToolInput::DesktopObserve(_) => AccessKind::Read(None),
+            ToolInput::DesktopAction(_) => AccessKind::Tool("desktop_action".to_owned()),
             ToolInput::Dynamic(value) => access_kind_from_dynamic(value),
             #[allow(unreachable_patterns)]
             _ => AccessKind::Tool("unclassified_tool".to_owned()),

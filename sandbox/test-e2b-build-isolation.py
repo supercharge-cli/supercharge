@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix="supercharge-build-isolation-") as direc
     (root / "sandbox/e2b-builder").mkdir()
     (root / ".cache/e2b-vendor").mkdir(parents=True)
     (root / "tools").mkdir()
-    for name in ["package.json", "server.mjs", "start.sh"]:
+    for name in ["package.json", "server.mjs", "lease.mjs", "handoff.mjs", "desktop.mjs", "capture.py", "release-input.py", "launch-browser.mjs", "start.sh"]:
         (root / "sandbox/browser-runtime" / name).write_text("fixture\n")
     (root / ".cache/e2b-vendor/rg-15.0.0-x86_64-unknown-linux-musl").write_text("fixture\n")
     script = root / "sandbox/prepare-e2b-agent-assets.sh"

@@ -24,6 +24,31 @@ pub struct StreamStatus {
     pub handoff: bool,
     #[serde(default)]
     pub error: Option<String>,
+    #[serde(flatten)]
+    pub desktop: DesktopStatus,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopStatus {
+    #[serde(default)]
+    pub desktop: bool,
+    #[serde(default)]
+    pub desktop_protocol: u8,
+    #[serde(default)]
+    pub handoff_protocol: u8,
+    #[serde(default)]
+    pub handoff_id: Option<String>,
+    #[serde(default)]
+    pub handoff_phase: String,
+    #[serde(default)]
+    pub expires_at: u64,
+    #[serde(default)]
+    pub help_requested: bool,
+    #[serde(default)]
+    pub bot_id: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
 }
 
 impl StreamStatus {
@@ -35,6 +60,7 @@ impl StreamStatus {
             screencasting: false,
             handoff: false,
             error: Some(error.into()),
+            desktop: DesktopStatus::default(),
         }
     }
 }
@@ -80,7 +106,9 @@ async fn sidecar_json(
         return Err("browser runtime is available only in E2B mode".to_owned());
     }
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(if path == "/status" { 2 } else { 20 }))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .build()
         .map_err(|error| error.to_string())?;
     let request = client.request(method, sidecar_url(path)).header("x-vectra-browser-observer", "1");
@@ -116,6 +144,7 @@ pub async fn read_stream_status(port: u16) -> StreamStatus {
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
             error: None,
+            desktop: serde_json::from_value(value).unwrap_or_default(),
         },
         Err(error) => StreamStatus::unavailable(port, error),
     }
@@ -141,6 +170,7 @@ struct StatusEvent<'a> {
     port: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    desktop: bool,
 }
 
 /// Passive daemon-owned JPEG observer stream. noVNC interaction is never
@@ -153,6 +183,7 @@ pub fn sse_stream(initial: StreamStatus) -> impl Stream<Item = BytesEvent> + Sen
             screencasting: initial.screencasting,
             port: initial.port,
             error: initial.error,
+            desktop: initial.desktop.desktop,
         });
         loop {
             match sidecar_json(reqwest::Method::GET, "/screenshot", None).await {
@@ -168,6 +199,7 @@ pub fn sse_stream(initial: StreamStatus) -> impl Stream<Item = BytesEvent> + Sen
                         screencasting: false,
                         port: stream_port(),
                         error: Some(error),
+                        desktop: false,
                     });
                     break;
                 }
@@ -260,8 +292,9 @@ fn action_payload(action: &BrowserAction) -> Result<(String, serde_json::Value),
     }
 }
 
-pub async fn execute_action(action: BrowserAction) -> Result<BrowserActionResult, String> {
-    let (name, payload) = action_payload(&action)?;
+pub async fn execute_action(action: BrowserAction, handoff_id: &str) -> Result<BrowserActionResult, String> {
+    let (name, mut payload) = action_payload(&action)?;
+    payload["handoffId"] = serde_json::json!(handoff_id);
     let response = sidecar_json(reqwest::Method::POST, "/control", Some(payload)).await;
     match response {
         Ok(value) => Ok(BrowserActionResult {
@@ -279,10 +312,26 @@ pub async fn execute_action(action: BrowserAction) -> Result<BrowserActionResult
     }
 }
 
-pub async fn handoff(start: bool, minutes: Option<u8>) -> Result<serde_json::Value, String> {
+pub async fn handoff(start: bool, minutes: Option<u8>, handoff_id: &str, bot_id: Option<&str>, session_id: Option<&str>) -> Result<serde_json::Value, String> {
     let path = if start { "/handoff/start" } else { "/handoff/stop" };
-    let payload = start.then(|| serde_json::json!({"minutes": minutes.unwrap_or(10).clamp(1, 30)}));
-    sidecar_json(reqwest::Method::POST, path, payload).await
+    let payload = serde_json::json!({"minutes": minutes.unwrap_or(10).clamp(1, 30), "handoffId":handoff_id, "botId":bot_id, "sessionId":session_id});
+    sidecar_json(reqwest::Method::POST, path, Some(payload)).await
+}
+
+pub async fn desktop_status() -> Result<DesktopStatus, String> {
+    serde_json::from_value(sidecar_json(reqwest::Method::GET, "/status", None).await?).map_err(|error| error.to_string())
+}
+
+pub async fn configure_desktop_environment(command: &mut tokio::process::Command, owner: &str) {
+    command.env("VECTRA_BROWSER_OWNER", owner).env_remove("SUPERCHARGE_DESKTOP_PROTOCOL");
+    if let Ok(status) = desktop_status().await
+        && status.desktop && status.desktop_protocol == 1 && status.handoff_protocol >= 2
+    {
+        command.env("SUPERCHARGE_DESKTOP_PROTOCOL", "1")
+            .env("DISPLAY", ":99")
+            .env("XAUTHORITY", "/tmp/supercharge-browser/Xauthority")
+            .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/tmp/supercharge-browser/bus");
+    }
 }
 
 pub async fn handoff_active() -> Result<bool, String> {

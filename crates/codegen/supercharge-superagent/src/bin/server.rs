@@ -6,6 +6,9 @@ mod app_bot_queue;
 mod app_group;
 #[path = "server/app_group_routes.rs"]
 mod app_group_routes;
+#[path = "server/desktop_control.rs"]
+mod desktop_control;
+use desktop_control::DesktopControl;
 
 use app_bots::{BotCatalog, BotDefinition, BotSyncRequest, MAIN_BOT_ID, validate_folder};
 use app_bot_queue::{BotQueue, BotWork};
@@ -1514,6 +1517,7 @@ async fn execute_headless_cli_turn(
         command
             .env("SUPERCHARGE_RUNTIME_MODE", "e2b")
             .env("SUPERCHARGE_AGENT", "supercharge-e2b");
+        browser::configure_desktop_environment(&mut command, cli_session_id).await;
     }
     command
         .stdout(Stdio::piped())
@@ -2917,6 +2921,8 @@ async fn browser_stream() -> Result<Response, StatusCode> {
 struct BrowserControlRequest {
     #[serde(default)]
     approved: bool,
+    #[serde(default, rename = "handoffId")]
+    handoff_id: String,
     #[serde(flatten)]
     action: browser::BrowserAction,
 }
@@ -2950,38 +2956,23 @@ async fn browser_control(
             }),
         ));
     }
-    let result = browser::execute_action(request.action)
+    let result = browser::execute_action(request.action, &request.handoff_id)
         .await
         .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
     Ok(Json(result))
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct BrowserHandoffRequest {
     action: String,
     #[serde(default)]
     minutes: Option<u8>,
-}
-
-fn vnc_tickets() -> &'static StdMutex<HashMap<String, Instant>> {
-    static TICKETS: OnceLock<StdMutex<HashMap<String, Instant>>> = OnceLock::new();
-    TICKETS.get_or_init(|| StdMutex::new(HashMap::new()))
-}
-
-fn mint_vnc_ticket() -> String {
-    let ticket = uuid::Uuid::new_v4().to_string();
-    let mut map = vnc_tickets().lock().unwrap_or_else(|error| error.into_inner());
-    let now = Instant::now();
-    map.retain(|_, expires| *expires > now);
-    map.insert(ticket.clone(), now + StdDuration::from_secs(300));
-    ticket
-}
-
-fn vnc_ticket_ok(ticket: &str) -> bool {
-    let mut map = vnc_tickets().lock().unwrap_or_else(|error| error.into_inner());
-    let now = Instant::now();
-    map.retain(|_, expires| *expires > now);
-    map.get(ticket).is_some_and(|expires| *expires > now)
+    handoff_id: String,
+    #[serde(default)]
+    bot_id: Option<String>,
+    #[serde(default)]
+    session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2989,15 +2980,24 @@ struct BrowserVncQuery {
     ticket: Option<String>,
 }
 
-async fn issue_browser_vnc_ticket() -> Result<Json<Value>, StatusCode> {
-    if !browser::is_e2b_runtime() {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    Ok(Json(json!({
-        "ticket": mint_vnc_ticket(),
-        "expiresInSeconds": 300,
-        "display": "playwright",
-    })))
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserTicketQuery {
+    handoff_id: String,
+}
+
+async fn issue_browser_vnc_ticket(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<BrowserTicketQuery>,
+) -> Result<Json<Value>, StatusCode> {
+    if !browser::is_e2b_runtime() { return Err(StatusCode::NOT_FOUND); }
+    let _dispatch = state.bot_dispatch.lock().await;
+    let status = browser::desktop_status().await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    if status.handoff_protocol < 2 || status.handoff_phase != "active" || status.handoff_id.as_deref() != Some(query.handoff_id.as_str()) || status.expires_at <= unix_millis() { return Err(StatusCode::CONFLICT); }
+    let control = DesktopControl::shared();
+    control.activate(&query.handoff_id, status.expires_at).await.map_err(|_| StatusCode::CONFLICT)?;
+    let ticket = control.mint(&query.handoff_id, unix_millis()).await.map_err(|_| StatusCode::CONFLICT)?;
+    Ok(Json(json!({"ticket":ticket,"expiresInSeconds":60,"display":"desktop","handoffId":query.handoff_id})))
 }
 
 async fn browser_handoff(
@@ -3012,7 +3012,9 @@ async fn browser_handoff(
             }),
         ));
     }
-    let _ = browser::ensure_stream(browser::stream_port()).await;
+    if request.handoff_id.len() < 16 || request.handoff_id.len() > 128 || !request.handoff_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "A unique handoffId is required; update the app before taking control".into() })));
+    }
     let start = match request.action.as_str() {
         "start" => true,
         "stop" => false,
@@ -3024,20 +3026,25 @@ async fn browser_handoff(
         if !queue.in_flight.is_empty() || !queue.queued.is_empty() || !background_snapshot(&state).is_empty() {
             return Err((StatusCode::CONFLICT, Json(ErrorResponse { error: "An agent is working or queued. Stop the relevant task before taking over.".into() })));
         }
-        if browser::handoff_active().await.unwrap_or(true) {
-            return Err((StatusCode::CONFLICT, Json(ErrorResponse { error: "Another viewer has control, or the handoff state is unavailable.".into() })));
-        }
     }
-    let value = browser::handoff(start, request.minutes)
+    let control = DesktopControl::shared();
+    if !start {
+        control.revoke(&request.handoff_id).await.map_err(|error| (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: error.into() })))?;
+    }
+    let value = browser::handoff(start, request.minutes, &request.handoff_id, request.bot_id.as_deref(), request.session_id.as_deref())
         .await
-        .map_err(|error| (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error })))?;
+        .map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error })))?;
     let expires = if start { value.get("expiresAt").and_then(Value::as_u64).unwrap_or(unix_millis() + 600_000) } else { 0 };
+    if start {
+        control.activate(&request.handoff_id, expires).await.map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error: error.into() })))?;
+    }
     state.human_control_until.store(expires, Ordering::SeqCst);
     drop(_dispatch);
     if !start { schedule_bot_queue(state); }
     else {
         tokio::spawn(async move {
             tokio::time::sleep(StdDuration::from_millis(expires.saturating_sub(unix_millis()) + 50)).await;
+            let _ = control.revoke(&request.handoff_id).await;
             schedule_bot_queue(state);
         });
     }
@@ -3051,17 +3058,20 @@ async fn browser_vnc(
     if !browser::is_e2b_runtime() {
         return Err(StatusCode::NOT_FOUND);
     }
-    let ticket = query.ticket.unwrap_or_default();
-    if ticket.is_empty() || !vnc_ticket_ok(&ticket) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-    Ok(ws.on_upgrade(browser_vnc_relay).into_response())
+    let control = DesktopControl::shared();
+    let handoff_id = control.consume(&query.ticket.unwrap_or_default()).ok_or(StatusCode::UNAUTHORIZED)?;
+    if !DesktopControl::allows(&*control.active.read().await, &handoff_id, unix_millis()) { return Err(StatusCode::UNAUTHORIZED); }
+    Ok(ws.on_upgrade(move |socket| browser_vnc_relay(socket, handoff_id)).into_response())
 }
 
-async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket) {
-    let Ok((upstream, _)) = connect_async("ws://127.0.0.1:6080/websockify").await else {
-        return;
+async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket, handoff_id: String) {
+    let control = DesktopControl::shared();
+    let Some((_guard, mut revoked)) = control.register(&handoff_id, unix_millis()).await else { return; };
+    let connection = tokio::select! {
+        value = tokio::time::timeout(StdDuration::from_secs(3), connect_async("ws://127.0.0.1:6080/websockify")) => value,
+        _ = revoked.changed() => return,
     };
+    let Ok(Ok((upstream, _))) = connection else { return; };
     let (mut client_send, mut client_recv) = socket.split();
     let (mut vnc_send, mut vnc_recv) = upstream.split();
     let client_to_vnc = async {
@@ -3074,7 +3084,9 @@ async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket) {
                 Message::Pong(value) => TungsteniteMessage::Pong(value),
                 Message::Close(_) => TungsteniteMessage::Close(None),
             };
-            if vnc_send.send(converted).await.is_err() { break; }
+            let active = control.active.read().await;
+            if !DesktopControl::allows(&active, &handoff_id, unix_millis()) { break; }
+            if !matches!(tokio::time::timeout(StdDuration::from_secs(1), vnc_send.send(converted)).await, Ok(Ok(()))) { break; }
         }
     };
     let vnc_to_client = async {
@@ -3091,9 +3103,21 @@ async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket) {
             if client_send.send(converted).await.is_err() { break; }
         }
     };
+    let policy = async {
+        loop {
+            if !DesktopControl::allows(&*control.active.read().await, &handoff_id, unix_millis()) { break; }
+            match browser::desktop_status().await {
+                Ok(status) if status.handoff_phase == "active" && status.handoff_id.as_deref() == Some(&handoff_id) && status.expires_at > unix_millis() => {},
+                _ => break,
+            }
+            tokio::time::sleep(StdDuration::from_millis(200)).await;
+        }
+    };
     tokio::select! {
         _ = client_to_vnc => {},
         _ = vnc_to_client => {},
+        _ = revoked.changed() => {},
+        _ = policy => {},
     }
 }
 
@@ -3174,6 +3198,17 @@ async fn app_maintenance(
         return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".to_owned() })));
     }
     match request.action.as_str() {
+        "prepare_update" => {
+            let _dispatch = state.bot_dispatch.lock().await;
+            let queue = state.bot_queue.lock().await;
+            if state.app_maintenance.load(Ordering::SeqCst) || state.app_turn_busy.load(Ordering::SeqCst) || !queue.in_flight.is_empty() || !queue.queued.is_empty() || !background_snapshot(&state).is_empty() || browser::handoff_active().await.unwrap_or(true) {
+                return Err((StatusCode::CONFLICT, Json(ErrorResponse { error: "Updates require an idle sandbox without human control or background work".into() })));
+            }
+            if let Some(parent) = state.maintenance_path.parent() { std::fs::create_dir_all(parent).map_err(internal_error)?; }
+            std::fs::write(&state.maintenance_path, b"updating\n").map_err(internal_error)?;
+            state.app_maintenance.store(true, Ordering::SeqCst);
+            Ok(Json(json!({"ok":true,"draining":true,"busy":false})))
+        }
         "drain" => {
             if let Some(parent) = state.maintenance_path.parent() {
                 std::fs::create_dir_all(parent).map_err(internal_error)?;
@@ -3201,7 +3236,13 @@ async fn app_maintenance(
             Ok(Json(json!({"ok":true,"busy":false})))
         }
         "resume" => {
-            let _ = browser::reset_after_resume().await;
+            if browser::is_e2b_runtime() {
+                browser::reset_after_resume().await.map_err(internal_error)?;
+                state.human_control_until.store(0, Ordering::SeqCst);
+                let control = DesktopControl::shared();
+                let old = control.active.read().await.clone();
+                if let Some(old) = old { control.revoke(&old.id).await.map_err(internal_error)?; }
+            }
             match std::fs::remove_file(&state.maintenance_path) {
                 Ok(()) => {},
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
@@ -3538,6 +3579,28 @@ fn schedule_bot_queue(state: Arc<AppState>) {
     tokio::spawn(async move {
         let _dispatch = state.bot_dispatch.lock().await;
         if state.app_maintenance.load(Ordering::SeqCst) || state.human_control_until.load(Ordering::SeqCst) > unix_millis() { return; }
+        if browser::is_e2b_runtime() {
+            let status = browser::desktop_status().await;
+            let blocked_until = match &status {
+                Ok(status) if status.handoff_phase == "active" => status.expires_at.max(unix_millis() + 1000),
+                Err(_) => unix_millis() + 2000,
+                _ => 0,
+            };
+            state.human_control_until.store(blocked_until, Ordering::SeqCst);
+            if blocked_until > 0 {
+                let retry = state.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(StdDuration::from_millis(blocked_until.saturating_sub(unix_millis()) + 100)).await;
+                    schedule_bot_queue(retry);
+                });
+                return;
+            }
+            let control = DesktopControl::shared();
+            let old = control.active.read().await.clone();
+            if let Some(old) = old {
+                if control.revoke(&old.id).await.is_err() { return; }
+            }
+        }
         loop {
             let permit = match state.bot_turn_budget.clone().try_acquire_owned() {
                 Ok(permit) => permit,

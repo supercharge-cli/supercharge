@@ -650,6 +650,8 @@ impl ToolRegistryBuilder {
         b.register::<grok_build::BrowserPressTool>();
         b.register::<grok_build::BrowserScreenshotTool>();
         b.register::<grok_build::BrowserHandoffTool>();
+        b.register::<grok_build::e2b_desktop::DesktopObserveTool>();
+        b.register::<grok_build::e2b_desktop::DesktopActionTool>();
         b.register::<grok_build::VectraBotTool>();
         b.register::<crate::implementations::curated_memory::CuratedMemoryTool>();
         b.register::<grok_build::LspTool>();

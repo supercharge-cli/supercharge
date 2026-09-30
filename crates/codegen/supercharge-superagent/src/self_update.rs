@@ -146,6 +146,13 @@ This does **not** rebuild the E2B template. XibeCode is not touched.",
 }
 
 async fn apply_update() -> String {
+    match crate::browser::desktop_status().await {
+        Ok(status) if status.desktop_protocol > 0 || status.handoff_phase == "active" => {
+            return "This sandbox uses coordinated desktop control. The legacy in-chat updater cannot safely restart its concurrent agents or browser. Use an explicit idle-sandbox maintenance update; no files or processes were changed.".to_owned();
+        }
+        Err(_) => return "Cannot verify desktop/handoff state. The update was not started; retry when the runtime is healthy.".to_owned(),
+        _ => {}
+    }
     let manifest = match fetch_manifest().await {
         Ok(manifest) => manifest,
         Err(error) => return format!("Update check failed: {error}"),

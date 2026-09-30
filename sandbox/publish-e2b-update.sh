@@ -37,7 +37,8 @@ fi
 notes="$(cat <<EOF
 Supercharge E2B hot-update (no new template).
 
-Existing Vectra Supercharge sandboxes can run /update yes or dashboard Update.
+CLI-only updates use the existing feed. The desktop bundle uses sandbox-desktop.json
+and requires explicit per-sandbox opt-in and desktop prerequisites; it is never installed on wake.
 XibeCode instances are not affected.
 EOF
 )"
@@ -47,8 +48,8 @@ assets=(
   "$stage/supercharge-linux-x86_64"
   "$stage/e2b-manifest.json"
 )
-if [ -f "$template_dir/dist/sandbox-system.json" ]; then
-  assets+=("$template_dir/dist/sandbox-system.json" "$template_dir/dist/sandbox-system-${system_version}.tar.gz")
+if [ -f "$template_dir/dist/sandbox-desktop.json" ]; then
+  assets+=("$template_dir/dist/sandbox-desktop.json" "$template_dir/dist/sandbox-desktop-${system_version}.tar.gz")
 fi
 gh release create "$tag" --repo "$release_repo" \
   "${assets[@]}" \

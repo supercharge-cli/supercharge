@@ -280,7 +280,9 @@ pub fn parse_cli_stream_line(line: &Value) -> Vec<LiveEvent> {
 
 pub fn tool_computer_kind(name: &str) -> &'static str {
     let name = name.to_ascii_lowercase();
-    if name.contains("browser")
+    if name.contains("desktop_observe")
+        || name.contains("desktop_action")
+        || name.contains("browser")
         || name.contains("navigate")
         || name.contains("screenshot")
     {
@@ -306,7 +308,9 @@ pub const E2B_BROWSER_RULES: &str = r#"Browser (E2B / native Playwright):
 - Use `browser_navigate`, then `browser_snapshot` for current accessible element references. Use `browser_click`, `browser_fill`, and `browser_press` only with current snapshot references. Prefer snapshots to screenshots, but use `browser_screenshot` when layout, rendering, images, charts, canvas, or other visual evidence matters.
 - The agent controls ordinary browsing and non-sensitive forms. Do not ask the user to take control merely because a page is complex. Keep using the same browser tab when practical so the live view and automation stay aligned.
 - For passwords, passkeys, MFA/OTP, CAPTCHA, OAuth/consent, payments, private messages, or other sensitive user-only input, do not enter or request the value. Call `browser_handoff` with `action: "start"`, explain the step, and wait for the authenticated user to complete it in the Browser tab.
-- Browser handoff is private, ticketed noVNC in the Browser tab only. It does not expose VNC, CDP, sidecar, gateway credentials, or a general remote desktop. Call `browser_handoff` with `action: "stop"` after the step, then resume from a fresh snapshot.
+- When available, `desktop_observe` and `desktop_action` control the SAME Ubuntu E2B desktop the user watches, never their local machine. You CAN move the pointer, click, type, drag, focus windows, and launch installed GUI apps, not just Chromium. `desktop_observe` lists app IDs; use `desktop_action` launch with a listed `.desktop` ID (for example `discord.desktop` when installed), or install a missing app in this VM before retrying. Observe first, use image-pixel coordinates and its frameId, and observe again after actions. Prefer DOM tools for ordinary web elements.
+- Browser and desktop input share an owner lease. Wait for another bot to release it; do not bypass with shell input, direct VNC, a second display or a second VM. Same-user shell access is not isolated by these coordination locks.
+- Human handoff uses private, ticketed noVNC. `browser_handoff` start requests help; the authenticated user explicitly takes over and returns control. Stop only cancels your pending request, never active user control. Do not capture or interact during takeover. After return, inspect a fresh desktop screenshot/current window and browser snapshot without replaying manual actions. Never expose VNC, CDP, sidecar or gateway credentials.
 - Never ask the user to paste passwords, MFA codes, cookies, or other secrets into chat.
 "#;
 
@@ -454,9 +458,9 @@ pub fn e2b_agent_rules_for(session_key: &str) -> String {
   - Generic 8080 → `{preview_8080}`
   - File shares (wake-http) 8788 → `{preview_8788}` and `{share}`
 - After you start a server, curl `http://127.0.0.1:PORT` **inside** the VM to confirm it is up, then send the user the matching `https://PORT-{sandbox}.{domain}` link. Never send localhost.
-- Installed: Node 20, npm/pnpm/bun, Python 3 + uv, git, GitHub CLI, ripgrep, fd, tmux, and Chromium managed by the private E2B browser sidecar.
+- Installed: Node 20, npm/pnpm/bun, Python 3 + uv, git, GitHub CLI, ripgrep, fd, tmux, Xfce desktop, Chromium, a terminal and a file manager.
 - Services in this VM: app inbox `:8790` (phone/Telegram), wake-http `:8788`, and private loopback browser-sidecar/VNC services. Do not bind or expose those browser services.
-- Tools: shell (`run_command` / bash), file read/write/edit, and native `browser_*` tools. Call tools in the same turn; do not only describe them.{id_hint}
+- Tools: shell (`run_command` / bash), file read/write/edit, native `browser_*` tools, and when the runtime reports desktop capability, native `desktop_observe` and `desktop_action`. Call tools in the same turn; do not only describe them.{id_hint}
 
 ## Files and links for the user
 - The user **cannot** open sandbox disk paths. Never say a file is “at /home/user/workspace/…”.

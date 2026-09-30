@@ -53,7 +53,7 @@ system_version="$(
   python3 - "$release_repo" "$repo_root" <<'PY'
 import json, pathlib, sys, urllib.request
 repo, root = sys.argv[1], pathlib.Path(sys.argv[2])
-url = f"https://github.com/{repo}/releases/latest/download/sandbox-system.json"
+url = f"https://github.com/{repo}/releases/latest/download/sandbox-desktop.json"
 try:
     with urllib.request.urlopen(url, timeout=15) as response:
         current = json.load(response)["version"].lstrip("v")
@@ -78,16 +78,17 @@ fi
 
 release_tag="$(gh release view --repo "$release_repo" --json tagName --jq .tagName)"
 gh release upload "$release_tag" --repo "$release_repo" --clobber \
-  "$template_dir/dist/sandbox-system.json" \
-  "$template_dir/dist/sandbox-system-${system_version}.tar.gz"
+  "$template_dir/dist/sandbox-desktop.json" \
+  "$template_dir/dist/sandbox-desktop-${system_version}.tar.gz"
 
 cat <<EOF
 
 Published E2B template alias: ${template_name}
 System bundle ${system_version} uploaded to ${release_repo} release ${release_tag}.
 
-New sandboxes get this template. Existing sandboxes install the bundle on their next wake.
-Workspace files stay on the same sandbox.
+New sandboxes get this template. Existing sandboxes are NOT migrated on wake.
+The desktop bundle uses a separate opt-in feed and requires an idle, explicitly prepared sandbox.
+Workspace files and the existing browser session stay on the same sandbox.
 
   SUPERCHARGE_E2B_TEMPLATE=${template_name}
 

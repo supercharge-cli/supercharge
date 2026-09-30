@@ -9,11 +9,14 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates openssl curl git git-lfs jq openssh-client \
     python3 python3-venv build-essential xz-utils tar ripgrep fd-find fzf tree \
-    tmux lsof psmisc unzip zip wget rsync procps less \
+    tmux lsof psmisc unzip zip wget rsync procps less sudo \
     fonts-liberation libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 \
     libcups2t64 libdbus-1-3 libdrm2 libgbm1 libgtk-3-0t64 libnspr4 libnss3 \
     libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 xdg-utils \
-    xvfb x11vnc novnc websockify \
+    xvfb x11vnc novnc websockify xauth x11-utils x11-xserver-utils \
+    xfce4-session xfwm4 xfdesktop4 xfce4-panel xfce4-settings xfce4-terminal thunar \
+    dbus-x11 xdotool wmctrl xclip libgtk-3-bin python3-pil python3-xlib \
+    fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 RUN ln -sf /usr/bin/fdfind /usr/local/bin/fd
 
@@ -60,7 +63,7 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     /opt/vectra/wake-http/server.py \
     /opt/vectra/browser-runtime/start.sh \
     && mkdir -p /var/lib/superagent \
-    && echo "1.3.22" > /var/lib/superagent/e2b-version \
+    && echo "1.3.23" > /var/lib/superagent/e2b-version \
     && chown -R 1000:1000 /opt/vectra /var/lib/superagent
 
 USER user
@@ -81,7 +84,7 @@ ENV SUPERAGENT_CONTROL_STATE=/home/user/.supercharge/state/controls.json
 ENV SUPERAGENT_GATEWAY_STATE=/home/user/.supercharge/state/gateway-state.json
 ENV SUPERAGENT_E2B_SESSION_STATE=/home/user/.supercharge/state/e2b-sessions.json
 ENV SUPERAGENT_E2B_WORKSPACE_ROOT=/home/user/workspace
-ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.3.22
+ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.3.23
 ENV SUPERCHARGE_RUNTIME_MODE=e2b
 ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/supercharge
 ENV SUPERAGENT_DAEMON_COMMAND=/usr/local/bin/supercharge-superagent-server
@@ -96,6 +99,10 @@ ENV SUPERAGENT_BROWSER_CONTROL_ENABLED=true
 ENV SUPERCHARGE_RUNTIME_MODE=e2b
 ENV SUPERAGENT_BROWSER_SIDECAR_PORT=9224
 ENV SUPERAGENT_BROWSER_PROFILE_DIR=/home/user/.supercharge/browser-profile
+ENV DISPLAY=:99
+ENV XAUTHORITY=/tmp/supercharge-browser/Xauthority
+ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/supercharge-browser/bus
+ENV SUPERCHARGE_DESKTOP_PROTOCOL=1
 
 EXPOSE 8788 8790 9224 5900 6080
 ENTRYPOINT ["/opt/vectra/entrypoint.sh"]
