@@ -63,9 +63,10 @@ fi
 start_service xfce xfce4-session
 
 if ! curl --max-time 2 -fsS http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
-  if alive chromium; then printf '%s\n' 'The existing Chromium is not ready; preserving its process and profile.' >&2; exit 1; fi
-  node "$base_dir/launch-browser.mjs" "$runtime_dir/chromium.pid" 9>&- >>"$runtime_dir/chromium.log" 2>&1
-  for _ in $(seq 1 100); do
+  if ! alive chromium; then
+    node "$base_dir/launch-browser.mjs" "$runtime_dir/chromium.pid" 9>&- >>"$runtime_dir/chromium.log" 2>&1
+  fi
+  for _ in $(seq 1 300); do
     curl --max-time 1 -fsS http://127.0.0.1:9222/json/version >/dev/null 2>&1 && break
     sleep 0.1
   done
@@ -84,14 +85,18 @@ if ! curl --max-time 2 -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1; the
   if [ -f "$runtime_dir/pid" ]; then
     read -r pid <"$runtime_dir/pid"
     if [[ "$pid" =~ ^[0-9]+$ ]] && [ -O "/proc/$pid" ] && kill -0 "$pid" 2>/dev/null && [[ "$(ps -o stat= -p "$pid")" != Z* ]]; then
-      printf '%s\n' 'Sidecar process is starting or unhealthy; refusing a duplicate.' >&2
+      for _ in $(seq 1 300); do
+        if curl --max-time 1 -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1; then exit 0; fi
+        sleep 0.1
+      done
+      printf '%s\n' 'Existing sidecar did not become ready; preserving its process rather than starting a duplicate.' >&2
       exit 1
     fi
   fi
   node "$base_dir/server.mjs" 9>&- >"$runtime_dir/sidecar.log" 2>&1 &
   printf '%s\n' "$!" >"$runtime_dir/pid"
 fi
-for _ in $(seq 1 100); do
+for _ in $(seq 1 300); do
   curl --max-time 1 -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
   sleep 0.1
  done

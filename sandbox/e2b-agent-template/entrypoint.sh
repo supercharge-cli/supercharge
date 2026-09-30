@@ -25,7 +25,7 @@ export SUPERAGENT_WAKE_PORT="${SUPERAGENT_WAKE_PORT:-8788}"
 export SUPERAGENT_DAEMON_COMMAND="${SUPERAGENT_DAEMON_COMMAND:-supercharge agent daemon --bind 0.0.0.0:8790}"
 export SUPERCHARGE_RUNTIME_MODE="${SUPERCHARGE_RUNTIME_MODE:-e2b}"
 
-/opt/vectra/browser-runtime/start.sh || true
+/opt/vectra/browser-runtime/start.sh
 
 PIDFILE=/tmp/supercharge-daemon.pid
 LOGFILE=/tmp/supercharge-daemon.log
