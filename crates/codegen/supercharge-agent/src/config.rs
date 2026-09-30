@@ -670,15 +670,15 @@ where
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum BuiltinAgentName {
-    #[strum(serialize = "supercharge-core", serialize = "grok-build", to_string = "supercharge-core")]
+    #[strum(serialize = "grok-build", to_string = "supercharge-core")]
     GrokBuild,
-    #[strum(serialize = "supercharge-core-concise", serialize = "grok-build-concise", to_string = "supercharge-core-concise")]
+    #[strum(serialize = "grok-build-concise", to_string = "supercharge-core-concise")]
     GrokBuildConcise,
-    #[strum(serialize = "supercharge-core-plan", serialize = "grok-build-plan", to_string = "supercharge-core-plan")]
+    #[strum(serialize = "grok-build-plan", to_string = "supercharge-core-plan")]
     GrokBuildPlan,
-    #[strum(serialize = "supercharge-core-plan-no-subagents", serialize = "grok-build-plan-no-subagents", to_string = "supercharge-core-plan-no-subagents")]
+    #[strum(serialize = "grok-build-plan-no-subagents", to_string = "supercharge-core-plan-no-subagents")]
     GrokBuildPlanNoSubagents,
-    #[strum(serialize = "supercharge-core-ask-user", serialize = "grok-build-ask-user", to_string = "supercharge-core-ask-user")]
+    #[strum(serialize = "grok-build-ask-user", to_string = "supercharge-core-ask-user")]
     GrokBuildAskUser,
     Codex,
     Opencode,
