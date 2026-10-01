@@ -4379,6 +4379,8 @@ async fn persistent_app_runtime(
     let listener_session = session_id.to_owned();
     let listening = accepting_events.clone();
     let rules = bot_rules(&bot, session_id, &cwd);
+    let managed_mcp = plugin_api::restore_for_launch(state, &bot.id, session_id, &cli_session_id)
+        .await?;
     let bot_environment = {
         let catalog = state.bot_catalog.lock().await;
         if catalog.capability.is_empty() {
@@ -4407,7 +4409,7 @@ async fn persistent_app_runtime(
             resume,
             rules,
             bot_environment,
-            mcp_servers: Vec::new(),
+            mcp_servers: managed_mcp.into_iter().collect(),
             workload_uid: None,
             workload_gid: None,
         },
@@ -4496,6 +4498,15 @@ async fn run_persistent_app_prompt(
         .lock()
         .await
         .insert(session_id.to_owned(), unix_millis());
+    let bot_id = state
+        .sessions
+        .lock()
+        .await
+        .get(session_id)
+        .map(|session| session.bot_id.clone());
+    if let Some(bot_id) = bot_id {
+        plugin_api::reconcile_after_turn(state, &bot_id, session_id).await;
+    }
     prompted?;
     let stream = runtime.stream.lock().unwrap_or_else(|e| e.into_inner());
     Ok(Some(stream.live_text.clone()))

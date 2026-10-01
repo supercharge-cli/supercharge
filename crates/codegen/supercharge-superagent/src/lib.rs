@@ -35,6 +35,7 @@ pub mod subagents;
 pub mod telegram;
 pub mod webhook;
 pub mod whatsapp;
+pub mod workload_identity;
 
 use sha2::{Digest, Sha256};
 

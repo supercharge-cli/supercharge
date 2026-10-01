@@ -385,6 +385,26 @@ impl PersistentCli {
         Ok(result)
     }
 
+    pub fn mcp_servers(&self) -> Vec<Value> {
+        self.mcp_servers
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+
+    pub async fn wait_until_idle(&self) -> Result<(), String> {
+        loop {
+            let notified = self.state.settled.notified();
+            if !self.is_alive() {
+                return Err("Agent runtime is not running".into());
+            }
+            if !self.is_prompting() {
+                return Ok(());
+            }
+            notified.await;
+        }
+    }
+
     pub async fn list_mcp(&self) -> Result<Value, String> {
         self.request(
             "x.ai/mcp/list",

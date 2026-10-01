@@ -28,6 +28,12 @@ set -a
 [ -f /home/user/.superagent/gateway.env ] && . /home/user/.superagent/gateway.env
 set +a
 
+if [ -n "${SUPERAGENT_INSTANCE_ID:-}" ]; then
+  umask 077
+  printf '%s\n' "$SUPERAGENT_INSTANCE_ID" > /home/user/.superagent/plugin-instance.id
+  chmod 600 /home/user/.superagent/plugin-instance.id
+fi
+
 export SUPERAGENT_BIND="${SUPERAGENT_BIND:-0.0.0.0:8790}"
 export SUPERAGENT_AGENT_BINARY="${SUPERAGENT_AGENT_BINARY:-/usr/local/bin/supercharge}"
 export SUPERAGENT_DAEMON_WORKDIR="${SUPERAGENT_DAEMON_WORKDIR:-/home/user/workspace}"

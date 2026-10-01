@@ -107,14 +107,15 @@ async fn request_for(
     .await
 }
 
-fn conversation(
+async fn conversation(
     state: &AppState,
     bot_id: &str,
     session_id: &str,
 ) -> Result<super::DaemonSession, (StatusCode, Json<ErrorResponse>)> {
     let session = state
         .sessions
-        .blocking_lock()
+        .lock()
+        .await
         .get(session_id)
         .cloned()
         .ok_or_else(|| {
@@ -134,6 +135,22 @@ fn conversation(
         ));
     }
     Ok(session)
+}
+
+fn merged_mcp_servers(
+    mut servers: Vec<Value>,
+    managed: Option<Value>,
+    name: &str,
+) -> Result<Vec<Value>, String> {
+    let previous = servers.iter().filter(|server| server.get("name").and_then(Value::as_str) == Some(name)).collect::<Vec<_>>();
+    if previous.len() > 1 || previous.iter().any(|server| server.get("env").and_then(Value::as_array).is_none_or(|env| !env.iter().any(|entry| entry.get("name").and_then(Value::as_str) == Some("SUPERCHARGE_PLUGIN_BRIDGE_BINDING")))) {
+        return Err("Managed MCP name conflicts with another server".into());
+    }
+    servers.retain(|server| server.get("name").and_then(Value::as_str) != Some(name));
+    if let Some(managed) = managed {
+        servers.push(managed);
+    }
+    Ok(servers)
 }
 
 fn ext_result(value: Value) -> Result<Value, String> {
@@ -205,7 +222,7 @@ async fn activate(
     session_id: &str,
     expected_revision: u64,
 ) -> Result<PluginBridgeStatus, (StatusCode, Json<ErrorResponse>)> {
-    let session = conversation(state, bot_id, session_id)?;
+    let session = conversation(state, bot_id, session_id).await?;
     let runtime = runtime_for(state, session_id).await?;
     if runtime.cli.is_prompting() {
         let marked = request_for(
@@ -237,9 +254,11 @@ async fn activate(
         .as_ref()
         .ok_or_else(|| internal_error("Plugin bridge descriptor is unavailable"))?;
     let mcp = descriptor_to_acp(descriptor).map_err(internal_error)?;
+    let servers = merged_mcp_servers(runtime.cli.mcp_servers(), Some(mcp), &descriptor.name)
+        .map_err(internal_error)?;
     runtime
         .cli
-        .update_mcp_servers(vec![mcp])
+        .update_mcp_servers(servers)
         .await
         .map_err(internal_error)?;
     let tools = discover(
@@ -266,6 +285,84 @@ async fn activate(
         .ok_or_else(|| internal_error("Plugin binding status missing"))
 }
 
+pub(super) async fn restore_for_launch(
+    state: &Arc<AppState>,
+    bot_id: &str,
+    session_id: &str,
+    agent_session_id: &str,
+) -> Result<Option<Value>, String> {
+    if !supercharge_superagent::plugin_control::available() || state.api_token.is_none() {
+        return Ok(None);
+    }
+    let status = request_for(state, bot_id, "status", json!({})).await?;
+    let Some(binding) = status.bindings.as_ref().and_then(|bindings| bindings.get(session_id)) else {
+        return Ok(None);
+    };
+    if matches!(binding.get("status").and_then(Value::as_str), Some("removed" | "removing")) {
+        return Ok(None);
+    }
+    if binding.get("agentSessionId").and_then(Value::as_str) != Some(agent_session_id) {
+        return Err("Saved managed MCP belongs to a different agent session".into());
+    }
+    let target = request_for(
+        state,
+        bot_id,
+        "activateBinding",
+        json!({"sessionId":session_id,"expectedRevision":binding.get("revision")}),
+    )
+    .await?;
+    let descriptor = target.descriptor.ok_or("Saved managed MCP descriptor is unavailable")?;
+    descriptor_to_acp(&descriptor).map(Some)
+}
+
+pub(super) async fn reconcile_after_turn(
+    state: &Arc<AppState>,
+    bot_id: &str,
+    session_id: &str,
+) {
+    if !supercharge_superagent::plugin_control::available() || state.api_token.is_none() {
+        return;
+    }
+    let status = match request_for(state, bot_id, "status", json!({})).await {
+        Ok(status) => status,
+        Err(_) => return,
+    };
+    let Some(binding) = status.bindings.as_ref().and_then(|bindings| bindings.get(session_id)) else {
+        return;
+    };
+    let Some(revision) = binding.get("revision").and_then(Value::as_u64) else {
+        return;
+    };
+    match binding.get("status").and_then(Value::as_str) {
+        Some("waiting") => {
+            let _ = activate(state, bot_id, session_id, revision).await;
+        }
+        Some("removing") => {
+            let runtime = state.app_runtimes.lock().await.get(session_id).cloned();
+            if let Some(runtime) = runtime {
+                if runtime.cli.is_prompting() {
+                    return;
+                }
+                let servers = match merged_mcp_servers(
+                    runtime.cli.mcp_servers(),
+                    None,
+                    binding.get("serverName").and_then(Value::as_str).unwrap_or_default(),
+                ) {
+                    Ok(servers) => servers,
+                    Err(_) => return,
+                };
+                if runtime.cli.update_mcp_servers(servers).await.is_err() {
+                    return;
+                }
+            }
+            if request_for(state, bot_id, "revokeBinding", json!({"sessionId":session_id})).await.is_ok() {
+                let _ = request_for(state, bot_id, "finishRemove", json!({"sessionId":session_id})).await;
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(super) async fn plugin_api(
     State(state): State<Arc<AppState>>,
     Path((bot_id,)): Path<(String,)>,
@@ -277,6 +374,20 @@ pub(super) async fn plugin_api(
             Json(ErrorResponse {
                 error: "Managed MCP is available only in Supercharge E2B".into(),
             }),
+        ));
+    }
+    if state.api_token.is_none() {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "Managed MCP requires authenticated sandbox control".into(),
+            }),
+        ));
+    }
+    if state.app_maintenance.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse { error: "Sandbox is pausing; retry after resume".into() }),
         ));
     }
     bot_definition(&state, &bot_id).await?;
@@ -320,7 +431,7 @@ pub(super) async fn plugin_api(
             server_id,
             expected_revision,
         } => {
-            let session = conversation(&state, &bot_id, &session_id)?;
+            let session = conversation(&state, &bot_id, &session_id).await?;
             let runtime = runtime_for(&state, &session_id).await?;
             let target = request_for(
                 &state,
@@ -364,7 +475,7 @@ pub(super) async fn plugin_api(
             session_id,
             expected_revision,
         } => {
-            conversation(&state, &bot_id, &session_id)?;
+            conversation(&state, &bot_id, &session_id).await?;
             let applied = activate(&state, &bot_id, &session_id, expected_revision).await?;
             Ok(PluginControlResult {
                 binding: Some(applied),
@@ -394,7 +505,7 @@ pub(super) async fn plugin_api(
                     }),
                 ));
             }
-            conversation(&state, &bot_id, &session_id)?;
+            conversation(&state, &bot_id, &session_id).await?;
             let runtime = runtime_for(&state, &session_id).await?;
             if runtime.cli.is_prompting() {
                 return Err((
@@ -466,7 +577,7 @@ pub(super) async fn plugin_api(
             session_id,
             expected_revision,
         } => {
-            conversation(&state, &bot_id, &session_id)?;
+            conversation(&state, &bot_id, &session_id).await?;
             let begun = request_for(
                 &state,
                 &bot_id,
@@ -485,11 +596,13 @@ pub(super) async fn plugin_api(
                         ..begun
                     })
                 } else {
-                    runtime
-                        .cli
-                        .update_mcp_servers(Vec::new())
-                        .await
-                        .map_err(internal_error)?;
+                    let servers = merged_mcp_servers(
+                        runtime.cli.mcp_servers(),
+                        None,
+                        binding.server_name.as_deref().unwrap_or_default(),
+                    )
+                    .map_err(internal_error)?;
+                    runtime.cli.update_mcp_servers(servers).await.map_err(internal_error)?;
                     request_for(
                         &state,
                         &bot_id,
@@ -526,5 +639,8 @@ pub(super) async fn plugin_api(
         }
     }
     .map_err(internal_error)?;
-    Ok(Json(serde_json::to_value(result).map_err(internal_error)?))
+    let mut public = result;
+    public.descriptor = None;
+    public.agent_uid = None;
+    Ok(Json(serde_json::to_value(public).map_err(internal_error)?))
 }

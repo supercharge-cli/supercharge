@@ -31,9 +31,7 @@ chmod +x "$browser_runtime_stage_dir/start.sh"
 plugin_api_dir="$template_dir/plugin-api"
 plugin_api_src="$repo_root/plugin-api"
 mkdir -p "$plugin_api_dir"
-for file in plugin-api-control.mjs; do
-  cp "$repo_root/sandbox/e2b-agent-template/$file" "$plugin_api_dir/$file"
-done
+cp "$template_dir/plugin-api-control.mjs" "$plugin_api_dir/control.mjs"
 for artifact in plugin-api-server-0.1.0.mjs plugin-api-server-0.1.0.mjs.sha256 plugin-bridge-0.1.0.mjs plugin-bridge-0.1.0.mjs.sha256; do
   if [ ! -s "$plugin_api_src/artifacts/$artifact" ]; then
     echo "Plugin API artifact missing: $artifact — run: npm --prefix $plugin_api_src run artifacts:pack" >&2
@@ -41,7 +39,7 @@ for artifact in plugin-api-server-0.1.0.mjs plugin-api-server-0.1.0.mjs.sha256 p
   fi
   cp "$plugin_api_src/artifacts/$artifact" "$plugin_api_dir/$artifact"
 done
-chmod 0755 "$plugin_api_dir/plugin-api-control.mjs"
+chmod 0755 "$plugin_api_dir/control.mjs"
 chmod 0644 "$plugin_api_dir"/plugin-*.mjs "$plugin_api_dir"/plugin-*.sha256
 
 # Pre-fetch the musl ripgrep the CLI build embeds. cargo's 60s GitHub download

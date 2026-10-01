@@ -19,11 +19,10 @@ import { dirname, join } from "node:path";
 const ROOT = process.env.SUPERAGENT_PLUGIN_CONTROL_ROOT || "/var/lib/superagent/plugin-control";
 const CAPABILITY_FILE = process.env.SUPERAGENT_PLUGIN_CONTROL_CAPABILITY_FILE || "/home/user/.superagent/plugin-control.capability";
 const BINDING_ROOT = process.env.SUPERAGENT_PLUGIN_BINDING_ROOT || "/run/vectra-plugin-bindings";
-const SERVER_ARTIFACT = process.env.SUPERAGENT_PLUGIN_API_SERVER || "/opt/vectra/plugin-api/plugin-api-server-0.1.0.mjs";
-const BRIDGE_ARTIFACT = process.env.SUPERAGENT_PLUGIN_API_BRIDGE || "/opt/vectra/plugin-api/plugin-bridge-0.1.0.mjs";
-const NODE = process.env.SUPERAGENT_PLUGIN_API_NODE || "/usr/bin/node";
+const SERVER_ARTIFACT = "/opt/vectra/plugin-api/plugin-api-server-0.1.0.mjs";
+const BRIDGE_ARTIFACT = "/opt/vectra/plugin-api/plugin-bridge-0.1.0.mjs";
+const NODE = "/opt/vectra/plugin-api/node/bin/node";
 const SERVICE_UID_BASE = Number(process.env.SUPERAGENT_PLUGIN_SERVICE_UID_BASE || 20000);
-const AGENT_UID_BASE = Number(process.env.SUPERAGENT_PLUGIN_AGENT_UID_BASE || 30000);
 const PORT_BASE = Number(process.env.SUPERAGENT_PLUGIN_PORT_BASE || 4400);
 const SLOT_COUNT = 128;
 const MAX_INPUT = 512 * 1024;
@@ -32,6 +31,14 @@ const targetIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function assertArtifact(path) {
+  const bytes = readFileSync(path);
+  const expected = readFileSync(`${path}.sha256`, "utf8").trim().split(/\s+/)[0];
+  if (!/^[a-f0-9]{64}$/.test(expected) || digest(bytes) !== expected) {
+    throw new Error("Plugin API artifact checksum mismatch");
+  }
 }
 
 function safeId(value, label, pattern = idPattern) {
@@ -96,6 +103,9 @@ function localSandboxId() {
 }
 
 function assertAuthority(request) {
+  if (process.env.SUDO_USER && (process.env.SUDO_USER !== "user" || process.env.SUDO_UID !== "1000")) {
+    throw new Error("Plugin control must be invoked by the sandbox daemon account");
+  }
   let expectedCapability = "";
   try {
     expectedCapability = readFileSync(CAPABILITY_FILE, "utf8").trim();
@@ -111,8 +121,8 @@ function assertAuthority(request) {
   ) {
     throw new Error("Plugin control capability is invalid");
   }
-  const expectedInstance = (process.env.SUPERAGENT_INSTANCE_ID || "").trim();
-  if (!expectedInstance || request.instanceId !== expectedInstance) {
+  const expectedInstance = readFileSync("/home/user/.superagent/plugin-instance.id", "utf8").trim();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(expectedInstance) || request.instanceId !== expectedInstance) {
     throw new Error("Plugin control instance identity mismatch");
   }
   const sandboxId = localSandboxId();
@@ -178,7 +188,7 @@ async function newState(request, workspace) {
     workspace,
     slot,
     serviceUid: SERVICE_UID_BASE + slot,
-    agentUid: AGENT_UID_BASE + slot,
+    agentUid: 1000,
     port: PORT_BASE + slot,
     managementToken: randomBytes(32).toString("hex"),
     bindings: {},
@@ -217,7 +227,7 @@ async function saveState(state) {
 
 function allowedCommands() {
   const defaults = {
-    node: "/usr/bin/node",
+    node: NODE,
     python3: "/usr/bin/python3",
     uv: "/usr/local/bin/uv",
     bun: "/usr/local/bin/bun",
@@ -579,6 +589,8 @@ async function stageBinding(state, request, plugin) {
 async function handle(request) {
   if (process.geteuid?.() !== 0) throw new Error("Plugin controller must run as root");
   assertAuthority(request);
+  assertArtifact(SERVER_ARTIFACT);
+  assertArtifact(BRIDGE_ARTIFACT);
   const workspace = await canonicalWorkspace(request.bot.defaultFolder);
   const state = await loadState(request, workspace);
   const action = request.action;
