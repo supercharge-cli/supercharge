@@ -24,6 +24,7 @@ pub mod self_update;
 pub mod media;
 pub mod memory;
 pub mod provider;
+pub mod plugin_control;
 pub mod redaction;
 pub mod schedule_store;
 mod scheduler;

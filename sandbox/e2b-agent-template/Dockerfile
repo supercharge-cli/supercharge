@@ -58,13 +58,34 @@ COPY bin/supercharge /usr/local/bin/supercharge
 RUN ln -sf /usr/local/bin/supercharge /usr/local/bin/sc
 COPY wake-http /opt/vectra/wake-http
 COPY entrypoint.sh /opt/vectra/entrypoint.sh
+# Isolated Plugin API: pinned Node 22 runtime (>=22.16), the root-only
+# controller, and checksum-verified server/bridge bundles. The sudoers entry
+# allows the sandbox user to run exactly this controller as root and nothing else.
+COPY plugin-api /opt/vectra/plugin-api
+RUN arch="$(dpkg --print-architecture)" \
+    && curl -fsSL --retry 5 -o /tmp/node.tar.xz \
+      "https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-${arch}.tar.xz" \
+    && mkdir -p /opt/vectra/plugin-api/node \
+    && tar -xJf /tmp/node.tar.xz -C /opt/vectra/plugin-api/node --strip-components=1 \
+    && rm -f /tmp/node.tar.xz \
+    && printf '%s\n' \
+      'user ALL=(root) NOPASSWD: /opt/vectra/plugin-api/node/bin/node /opt/vectra/plugin-api/control.mjs' \
+      > /etc/sudoers.d/vectra-plugin-control \
+    && chmod 0440 /etc/sudoers.d/vectra-plugin-control \
+    && visudo -c
 RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/supercharge \
     /opt/vectra/entrypoint.sh /opt/vectra/wake-http/start.sh \
     /opt/vectra/wake-http/server.py \
     /opt/vectra/browser-runtime/start.sh \
-    && mkdir -p /var/lib/superagent \
+    && chmod -R go-w /opt/vectra/plugin-api \
+    && mkdir -p /var/lib/superagent /var/lib/superagent/plugin-control /run/vectra-plugin-bindings \
     && echo "1.3.24" > /var/lib/superagent/e2b-version \
-    && chown -R 1000:1000 /opt/vectra /var/lib/superagent
+    && chown -R 1000:1000 /var/lib/superagent /opt/vectra/wake-http /opt/vectra/browser-runtime /home/user \
+    && chown root:root /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
+    && chmod -R go-w /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
+    && chmod 0711 /var/lib/superagent/plugin-control \
+    && chmod 0711 /run/vectra-plugin-bindings \
+    && chown root:root /run/vectra-plugin-bindings
 
 USER user
 WORKDIR /home/user

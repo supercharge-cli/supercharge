@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -64,37 +68,68 @@ impl BotCatalog {
         }
     }
 
-    pub fn sync(&mut self, request: BotSyncRequest, path: &Path, expected_instance_id: &str) -> Result<(), String> {
-        if expected_instance_id.is_empty() || expected_instance_id != request.instance_id ||
-            request.capability.len() < 32 || request.capability.len() > 128 ||
-            !request.site.starts_with("https://") || request.site.len() > 300 ||
-            request.site.contains(['\r', '\n']) {
+    pub fn sync(
+        &mut self,
+        request: BotSyncRequest,
+        path: &Path,
+        expected_instance_id: &str,
+    ) -> Result<(), String> {
+        if expected_instance_id.is_empty()
+            || expected_instance_id != request.instance_id
+            || request.capability.len() < 32
+            || request.capability.len() > 128
+            || !request.site.starts_with("https://")
+            || request.site.len() > 300
+            || request.site.contains(['\r', '\n'])
+        {
             return Err("invalid bot catalogue identity".to_owned());
         }
         if !self.instance_id.is_empty() && self.instance_id != request.instance_id {
             return Err("bot catalogue instance changed".to_owned());
         }
         let site = reqwest::Url::parse(&request.site).map_err(|_| "invalid bot service origin")?;
-        if site.scheme() != "https" || !site.username().is_empty() || site.password().is_some() ||
-            site.host_str().is_none() || site.path() != "/" || site.query().is_some() || site.fragment().is_some() {
+        if site.scheme() != "https"
+            || !site.username().is_empty()
+            || site.password().is_some()
+            || site.host_str().is_none()
+            || site.path() != "/"
+            || site.query().is_some()
+            || site.fragment().is_some()
+        {
             return Err("invalid bot service origin".into());
         }
         let mut next = self.bots.clone();
         let mut seen = std::collections::HashSet::new();
         for bot in request.bots {
-            if !seen.insert(bot.id.clone()) { return Err("duplicate bot identity".to_owned()); }
-            if bot.id.is_empty() || bot.id.len() > 80 || !bot.id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') ||
-                bot.name.trim().is_empty() || bot.name.len() > 160 || bot.instructions.len() > 16_000 ||
-                bot.icon.len() > 180_000 || bot.revision == 0 ||
-                validate_folder(&bot.default_folder).is_err() {
+            if !seen.insert(bot.id.clone()) {
+                return Err("duplicate bot identity".to_owned());
+            }
+            if bot.id.is_empty()
+                || bot.id.len() > 80
+                || !bot
+                    .id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+                || bot.name.trim().is_empty()
+                || bot.name.len() > 160
+                || bot.instructions.len() > 16_000
+                || bot.icon.len() > 180_000
+                || bot.revision == 0
+                || validate_folder(&bot.default_folder).is_err()
+            {
                 return Err("invalid bot definition".to_owned());
             }
             if let Some(previous) = self.bots.get(&bot.id) {
-                if bot.revision < previous.revision { continue; }
-                if bot.revision == previous.revision &&
-                    (bot.name != previous.name || bot.icon != previous.icon ||
-                     bot.instructions != previous.instructions || bot.default_folder != previous.default_folder ||
-                     bot.archived != previous.archived) {
+                if bot.revision < previous.revision {
+                    continue;
+                }
+                if bot.revision == previous.revision
+                    && (bot.name != previous.name
+                        || bot.icon != previous.icon
+                        || bot.instructions != previous.instructions
+                        || bot.default_folder != previous.default_folder
+                        || bot.archived != previous.archived)
+                {
                     return Err("conflicting bot catalogue revision".to_owned());
                 }
             }
@@ -116,17 +151,31 @@ impl BotCatalog {
 
     fn save(&self, path: &Path) -> Result<(), String> {
         let raw = serde_json::to_vec(self).map_err(|error| error.to_string())?;
-        supercharge_superagent::atomic_state::write_private(path, &raw).map_err(|error| error.to_string())
+        supercharge_superagent::atomic_state::write_private(path, &raw)
+            .map_err(|error| error.to_string())
     }
 }
 
 pub fn validate_folder(raw: &str) -> Result<PathBuf, String> {
-    let configured = std::env::var("SUPERAGENT_SHARE_WORKSPACE_ROOT").unwrap_or_else(|_| "/home/user/workspace".to_owned());
+    let configured = std::env::var("SUPERAGENT_SHARE_WORKSPACE_ROOT")
+        .unwrap_or_else(|_| "/home/user/workspace".to_owned());
     let root = Path::new(&configured);
     let folder = Path::new(raw);
-    if raw.len() > 256 || !folder.is_absolute() || !folder.starts_with(root) || raw.contains(['\0', '\n', '\r', '\\']) ||
-        folder.components().any(|component| matches!(component, std::path::Component::ParentDir | std::path::Component::CurDir)) ||
-        raw.split('/').skip(1).any(|component| component.is_empty() || component == "." || component == "..") {
+    if raw.len() > 256
+        || !folder.is_absolute()
+        || !folder.starts_with(root)
+        || raw.contains(['\0', '\n', '\r', '\\'])
+        || folder.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir | std::path::Component::CurDir
+            )
+        })
+        || raw
+            .split('/')
+            .skip(1)
+            .any(|component| component.is_empty() || component == "." || component == "..")
+    {
         return Err("bot folder must be inside the sandbox workspace".to_owned());
     }
     let checked_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
@@ -159,7 +208,12 @@ mod tests {
     #[test]
     fn paths_reject_escape_and_accept_unique_bot_folder() {
         assert!(validate_folder("/home/user/workspace/bots/a").is_ok());
-        for invalid in ["/home/user/workspace/../secret", "/tmp/x", "/home/user/workspace//bots", "/home/user/workspace/./bots"] {
+        for invalid in [
+            "/home/user/workspace/../secret",
+            "/tmp/x",
+            "/home/user/workspace//bots",
+            "/home/user/workspace/./bots",
+        ] {
             assert!(validate_folder(invalid).is_err(), "{invalid}");
         }
     }
@@ -171,11 +225,20 @@ mod tests {
         let mut catalog = BotCatalog::default();
         let main = default_main();
         let request = || BotSyncRequest {
-            instance_id: "inst-1".to_owned(), capability: "s".repeat(40), site: "https://example.test".to_owned(),
+            instance_id: "inst-1".to_owned(),
+            capability: "s".repeat(40),
+            site: "https://example.test".to_owned(),
             bots: vec![main.clone()],
         };
         catalog.sync(request(), &path, "inst-1").unwrap();
-        assert_eq!(BotCatalog::load(&path).unwrap().get(MAIN_BOT_ID).unwrap().name, "Main");
+        assert_eq!(
+            BotCatalog::load(&path)
+                .unwrap()
+                .get(MAIN_BOT_ID)
+                .unwrap()
+                .name,
+            "Main"
+        );
         let mut conflicting = request();
         conflicting.bots[0].name = "Changed".to_owned();
         assert!(catalog.sync(conflicting, &path, "inst-1").is_err());

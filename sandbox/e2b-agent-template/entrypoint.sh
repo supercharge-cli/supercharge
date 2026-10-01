@@ -8,6 +8,19 @@ mkdir -p \
   /home/user/workspace/.superagent-media \
   /home/user/.supercharge/browser-profile
 
+# Sandbox-local capability for the isolated Plugin API controller. The daemon
+# presents it on every controller invocation; the controller (root via the
+# fixed sudoers allowlist) verifies it before any privileged action.
+if [ ! -s /home/user/.superagent/plugin-control.capability ]; then
+  umask 077
+  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' \
+    > /home/user/.superagent/plugin-control.capability
+  chmod 600 /home/user/.superagent/plugin-control.capability
+fi
+export SUPERAGENT_PLUGIN_CONTROL="${SUPERAGENT_PLUGIN_CONTROL:-/opt/vectra/plugin-api/control.mjs}"
+export SUPERAGENT_PLUGIN_API_NODE="${SUPERAGENT_PLUGIN_API_NODE:-/opt/vectra/plugin-api/node/bin/node}"
+export SUPERAGENT_PLUGIN_CONTROL_CAPABILITY_FILE="${SUPERAGENT_PLUGIN_CONTROL_CAPABILITY_FILE:-/home/user/.superagent/plugin-control.capability}"
+
 /opt/vectra/wake-http/start.sh || true
 
 set -a

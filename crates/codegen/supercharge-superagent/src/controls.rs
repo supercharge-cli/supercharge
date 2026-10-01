@@ -248,6 +248,7 @@ async fn run_workspace_command(command: &str, cwd: Option<&std::path::Path>) -> 
         .kill_on_drop(true)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    crate::workload_identity::apply_tokio(&mut shell);
     match tokio::time::timeout(std::time::Duration::from_secs(120), shell.output()).await {
         Ok(Ok(output)) => {
             let mut text = String::new();

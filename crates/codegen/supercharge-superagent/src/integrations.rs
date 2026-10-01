@@ -300,11 +300,14 @@ async fn stdio_rpc(
             "stdio MCP endpoint is not present in SUPERAGENT_MCP_STDIO_ALLOWLIST".to_owned(),
         ));
     }
-    let mut child = Command::new(&server.endpoint)
+    let mut command = Command::new(&server.endpoint);
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    crate::workload_identity::apply_tokio(&mut command);
+    let mut child = command
         .spawn()
         .map_err(|error| IntegrationError::Http(format!("stdio MCP spawn failed: {error}")))?;
     let input = requests

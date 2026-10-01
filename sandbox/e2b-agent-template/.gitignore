@@ -1,5 +1,9 @@
 bin/*
 !bin/.gitkeep
 browser-runtime/
+plugin-api/plugin-api-server-*.mjs
+plugin-api/plugin-api-server-*.mjs.sha256
+plugin-api/plugin-bridge-*.mjs
+plugin-api/plugin-bridge-*.mjs.sha256
 __pycache__/
 *.pyc

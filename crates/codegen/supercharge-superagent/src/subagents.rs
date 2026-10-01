@@ -83,7 +83,8 @@ impl SubagentCoordinator {
             .map_err(|_| SubagentError::Busy)?;
         let subagent_id = Uuid::new_v4().to_string();
         let session_id = format!("{}:subagent:{}", request.parent_session, subagent_id);
-        let process = Command::new(&self.binary)
+        let mut command = Command::new(&self.binary);
+        command
             .arg("--single")
             .arg(&request.prompt)
             .arg("--session-id")
@@ -91,8 +92,9 @@ impl SubagentCoordinator {
             .env(
                 "SUPERAGENT_SUBAGENT_DEPTH",
                 request.depth.saturating_add(1).to_string(),
-            )
-            .output();
+            );
+        crate::workload_identity::apply_tokio(&mut command);
+        let process = command.output();
         let output = timeout(
             Duration::from_secs(request.timeout_seconds.clamp(1, 86_400)),
             process,
