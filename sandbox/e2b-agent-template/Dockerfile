@@ -63,8 +63,9 @@ COPY entrypoint.sh /opt/vectra/entrypoint.sh
 # allows the sandbox user to run exactly this controller as root and nothing else.
 COPY plugin-api /opt/vectra/plugin-api
 RUN arch="$(dpkg --print-architecture)" \
+    && case "$arch" in amd64) node_arch=x64;; arm64) node_arch=arm64;; *) exit 1;; esac \
     && curl -fsSL --retry 5 -o /tmp/node.tar.xz \
-      "https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-${arch}.tar.xz" \
+      "https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-${node_arch}.tar.xz" \
     && mkdir -p /opt/vectra/plugin-api/node \
     && tar -xJf /tmp/node.tar.xz -C /opt/vectra/plugin-api/node --strip-components=1 \
     && rm -f /tmp/node.tar.xz \
