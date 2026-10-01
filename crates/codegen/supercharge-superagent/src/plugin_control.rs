@@ -150,7 +150,10 @@ pub async fn request(
     // The daemon stays unprivileged; the template's sudoers allowlist permits
     // exactly this fixed node + controller invocation as root. When the daemon
     // already runs as root (tests / alternate deployments), exec directly.
+    #[cfg(unix)]
     let is_root = unsafe { libc::geteuid() } == 0;
+    #[cfg(not(unix))]
+    let is_root = false;
     let node = controller_node();
     let controller = controller_path();
     let mut command = if is_root {
