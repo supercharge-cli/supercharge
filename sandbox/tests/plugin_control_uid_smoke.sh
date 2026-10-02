@@ -50,7 +50,13 @@ if [ "${1:-}" = "--fixture" ]; then
   test "$(stat -c '%a' "$state")" = 600
   getfacl -cp /home/user | grep -qx 'user:20000:--x'
   test "$(stat -c '%u' /var/lib/superagent/plugin-control/services/fixture-bot/data)" = 20000
-  echo "PASS: authorized controller status, UID=$uid, isolated service UID=20000, rejected mismatched authority"
+  catalog_request="$(printf '%s' "$request" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);r.action="installCatalog";r.catalogId="vectra-echo";r.catalogSha256=process.argv[1];r.requestId="fixture-catalog-001";process.stdout.write(JSON.stringify(r))})' 'a0c6be6c2f292c1a1ecdcc55056147d1dd232b58c76522e77ad44016ee7c0072')"
+  bad_request="${catalog_request/a0c6be6c2f292c1a1ecdcc55056147d1dd232b58c76522e77ad44016ee7c0072/0000000000000000000000000000000000000000000000000000000000000000}"
+  output="$(invoke "$bad_request" || true)"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{if(!JSON.parse(s).error?.includes("Catalog release is unavailable"))process.exit(1)})'
+  output="$(invoke "$catalog_request")"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.ok||r.result.plugin?.id!=="vectra-echo"||r.result.plugin?.enabled!==false||r.result.plugin?.trusted!==false)process.exit(1)})'
+  echo "PASS: authorized controller catalog install, UID=$uid, isolated service UID=20000, rejected mismatched authority"
   exit 0
 fi
 
@@ -59,5 +65,6 @@ for uid in 1000 1001; do
     -e "TEST_AGENT_UID=$uid" \
     --mount "type=bind,source=$controller,target=/opt/vectra/plugin-api/control.mjs,readonly" \
     --mount "type=bind,source=$repo_root/sandbox/tests/plugin_control_uid_smoke.sh,target=/tmp/plugin-control-smoke.sh,readonly" \
+    --mount "type=bind,source=$repo_root/cloud-infra/apps/web/public/managed-mcp/catalog.json,target=/opt/vectra/plugin-api/catalog.json,readonly" \
     "$image" /tmp/plugin-control-smoke.sh --fixture
 done

@@ -24,6 +24,11 @@ pub(super) enum PluginRequest {
         manifest: Value,
         request_id: String,
     },
+    InstallCatalog {
+        catalog_id: String,
+        catalog_sha256: String,
+        request_id: String,
+    },
     PluginAction {
         plugin_id: String,
         plugin_action: Value,
@@ -405,6 +410,19 @@ pub(super) async fn plugin_api(
                 &bot_id,
                 "install",
                 json!({"manifest":manifest,"requestId":request_id}),
+            )
+            .await
+        }
+        PluginRequest::InstallCatalog {
+            catalog_id,
+            catalog_sha256,
+            request_id,
+        } => {
+            request_for(
+                &state,
+                &bot_id,
+                "installCatalog",
+                json!({"catalogId":catalog_id,"catalogSha256":catalog_sha256,"requestId":request_id}),
             )
             .await
         }

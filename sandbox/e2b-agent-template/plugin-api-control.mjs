@@ -21,6 +21,7 @@ const CAPABILITY_FILE = process.env.SUPERAGENT_PLUGIN_CONTROL_CAPABILITY_FILE ||
 const BINDING_ROOT = process.env.SUPERAGENT_PLUGIN_BINDING_ROOT || "/run/vectra-plugin-bindings";
 const SERVER_ARTIFACT = "/opt/vectra/plugin-api/plugin-api-server-0.1.0.mjs";
 const BRIDGE_ARTIFACT = "/opt/vectra/plugin-api/plugin-bridge-0.1.0.mjs";
+const CATALOG = "/opt/vectra/plugin-api/catalog.json";
 const NODE = "/opt/vectra/plugin-api/node/bin/node";
 const SERVICE_UID_BASE = Number(process.env.SUPERAGENT_PLUGIN_SERVICE_UID_BASE || 20000);
 const PORT_BASE = Number(process.env.SUPERAGENT_PLUGIN_PORT_BASE || 4400);
@@ -607,6 +608,22 @@ async function stageBinding(state, request, plugin) {
   return publicBinding(binding);
 }
 
+function catalogSource(request) {
+  safeId(request.catalogId, "catalog plugin ID");
+  if (typeof request.catalogSha256 !== "string" || !/^[a-f0-9]{64}$/.test(request.catalogSha256)) {
+    throw new Error("Invalid catalog release digest");
+  }
+  const catalog = JSON.parse(readFileSync(CATALOG, "utf8"));
+  if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.plugins)) {
+    throw new Error("Managed MCP catalog is unavailable");
+  }
+  const entry = catalog.plugins.find((plugin) => plugin.id === request.catalogId && plugin.source?.sha256 === request.catalogSha256);
+  if (!entry || entry.source.type !== "archive" || !/^https:\/\/raw\.githubusercontent\.com\/iotserver24\/supercharge-app\/[a-f0-9]{40}\/public\/managed-mcp\/[a-z][a-z0-9-]*-\d+\.\d+\.\d+\.tar\.gz$/.test(entry.source.url)) {
+    throw new Error("Catalog release is unavailable for this sandbox");
+  }
+  return { type: "archive", url: entry.source.url, sha256: entry.source.sha256 };
+}
+
 async function handle(request) {
   if (process.geteuid?.() !== 0) throw new Error("Plugin controller must run as root");
   assertAuthority(request);
@@ -628,13 +645,16 @@ async function handle(request) {
       body: { manifest: request.manifest },
     });
   }
-  if (action === "install") {
+  if (action === "install" || action === "installCatalog") {
+    const source = action === "installCatalog"
+      ? catalogSource(request)
+      : { type: "inline", manifest: request.manifest };
     await ensureService(state);
     safeId(request.requestId, "request ID", /^[A-Za-z0-9_-]{8,128}$/);
     const initial = await api(state, "/v1/plugins/install", {
       method: "POST",
       headers: { "idempotency-key": request.requestId },
-      body: { source: { type: "inline", manifest: request.manifest } },
+      body: { source },
     });
     return { plugin: await operation(state, initial) };
   }
@@ -642,9 +662,18 @@ async function handle(request) {
     await ensureService(state);
     safeId(request.pluginId, "plugin ID");
     safeId(request.requestId, "request ID", /^[A-Za-z0-9_-]{8,128}$/);
-    const allowed = new Set(["configure", "trust", "enable", "disable", "uninstall", "rollback"]);
+    const allowed = new Set(["configure", "trust", "enable", "disable", "uninstall", "rollback", "update"]);
     if (!request.pluginAction || !allowed.has(request.pluginAction.action)) {
       throw new Error("Unsupported Plugin API action");
+    }
+    if (request.pluginAction.action === "update") {
+      const source = catalogSource(request);
+      if (request.pluginId !== request.catalogId) throw new Error("Catalog update target mismatch");
+      request.pluginAction = {
+        action: "update",
+        expectedRevision: request.pluginAction.expectedRevision,
+        source,
+      };
     }
     if (
       request.pluginAction.action === "uninstall" &&

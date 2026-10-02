@@ -32,6 +32,7 @@ plugin_api_dir="$template_dir/plugin-api"
 plugin_api_src="$repo_root/plugin-api"
 mkdir -p "$plugin_api_dir"
 cp "$template_dir/plugin-api-control.mjs" "$plugin_api_dir/control.mjs"
+cp "$repo_root/cloud-infra/apps/web/public/managed-mcp/catalog.json" "$plugin_api_dir/catalog.json"
 for artifact in plugin-api-server-0.1.0.mjs plugin-api-server-0.1.0.mjs.sha256 plugin-bridge-0.1.0.mjs plugin-bridge-0.1.0.mjs.sha256; do
   if [ ! -s "$plugin_api_src/artifacts/$artifact" ]; then
     echo "Plugin API artifact missing: $artifact — run: npm --prefix $plugin_api_src run artifacts:pack" >&2
