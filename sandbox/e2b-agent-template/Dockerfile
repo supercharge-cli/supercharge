@@ -51,7 +51,7 @@ RUN set -e; \
     fi; \
     mkdir -p /home/user/workspace /home/user/.cache /home/user/.supercharge/browser-profile /home/user/.supercharge/state; \
     cp -a /root/.cache/. /home/user/.cache/ 2>/dev/null || true; \
-    chown -R 1000:1000 /home/user
+    chown -R user:$(id -gn user) /home/user
 
 COPY bin/supercharge-superagent-server /usr/local/bin/supercharge-superagent-server
 COPY bin/supercharge /usr/local/bin/supercharge
@@ -81,7 +81,7 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     && chmod -R go-w /opt/vectra/plugin-api \
     && mkdir -p /var/lib/superagent /var/lib/superagent/plugin-control /run/vectra-plugin-bindings \
     && echo "1.3.26" > /var/lib/superagent/e2b-version \
-    && chown -R 1000:1000 /var/lib/superagent /opt/vectra/wake-http /opt/vectra/browser-runtime /home/user \
+    && chown -R user:$(id -gn user) /var/lib/superagent /opt/vectra/wake-http /opt/vectra/browser-runtime /home/user \
     && chown root:root /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
     && chmod -R go-w /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
     && chmod 0711 /var/lib/superagent/plugin-control \

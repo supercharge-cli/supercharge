@@ -102,8 +102,24 @@ function localSandboxId() {
   }
 }
 
+function sandboxAccount() {
+  const ids = ["-u", "-g"].map((flag) => {
+    const account = spawnSync("/usr/bin/id", [flag, "user"], { encoding: "utf8" });
+    const id = Number(account.stdout.trim());
+    if (account.status !== 0 || !Number.isSafeInteger(id) || id <= 0) {
+      throw new Error("Sandbox daemon account is unavailable");
+    }
+    return id;
+  });
+  return { uid: ids[0], gid: ids[1] };
+}
+
 function assertAuthority(request) {
-  if (process.env.SUDO_USER && (process.env.SUDO_USER !== "user" || process.env.SUDO_UID !== "1000")) {
+  const { uid } = sandboxAccount();
+  if (
+    process.env.SUDO_USER &&
+    (process.env.SUDO_USER !== "user" || process.env.SUDO_UID !== String(uid))
+  ) {
     throw new Error("Plugin control must be invoked by the sandbox daemon account");
   }
   let expectedCapability = "";
@@ -188,7 +204,7 @@ async function newState(request, workspace) {
     workspace,
     slot,
     serviceUid: SERVICE_UID_BASE + slot,
-    agentUid: 1000,
+    agentUid: sandboxAccount().uid,
     port: PORT_BASE + slot,
     managementToken: randomBytes(32).toString("hex"),
     bindings: {},
@@ -206,7 +222,7 @@ async function loadState(request, workspace) {
     state.sandboxId !== request.sandboxId ||
     state.botId !== request.bot.id ||
     !Number.isSafeInteger(state.serviceUid) ||
-    !Number.isSafeInteger(state.agentUid) ||
+    state.agentUid !== sandboxAccount().uid ||
     !Number.isSafeInteger(state.port) ||
     !state.managementToken ||
     !state.bindings ||
@@ -339,7 +355,10 @@ async function stopService(state) {
 }
 
 async function grantWorkspace(state) {
-  for (const uid of [state.agentUid, state.serviceUid, 1000]) {
+  if (spawnSync("setfacl", ["-m", `u:${state.serviceUid}:--x`, "/home/user"], { stdio: "ignore" }).status !== 0) {
+    throw new Error("Could not grant isolated bot traversal to its workspace");
+  }
+  for (const uid of [state.agentUid, state.serviceUid]) {
     for (const args of [
       ["-m", `u:${uid}:rwx`, state.workspace],
       ["-m", `d:u:${uid}:rwx`, state.workspace],
@@ -502,6 +521,7 @@ function publicState(state) {
 }
 
 async function ensureBindingDirectory(state, sessionId, generation) {
+  const { gid } = sandboxAccount();
   await mkdir(BINDING_ROOT, { recursive: true, mode: 0o711 });
   await chmod(BINDING_ROOT, 0o711);
   const botRoot = join(BINDING_ROOT, state.botId);
@@ -510,7 +530,7 @@ async function ensureBindingDirectory(state, sessionId, generation) {
   for (const path of [botRoot, sessionRoot, root]) {
     await mkdir(path, { recursive: true, mode: 0o700 });
     await chmod(path, 0o700);
-    await chown(path, state.agentUid, state.agentUid);
+    await chown(path, state.agentUid, gid);
   }
   return root;
 }
@@ -545,8 +565,9 @@ async function materializeBinding(state, binding) {
       ],
     },
   };
-  await writePrivate(tokenFile, Buffer.from(binding.bridgeToken), state.agentUid, state.agentUid);
-  await writePrivate(bindingFile, Buffer.from(JSON.stringify(value, null, 2)), state.agentUid, state.agentUid);
+  const { gid } = sandboxAccount();
+  await writePrivate(tokenFile, Buffer.from(binding.bridgeToken), state.agentUid, gid);
+  await writePrivate(bindingFile, Buffer.from(JSON.stringify(value, null, 2)), state.agentUid, gid);
   binding.descriptor = {
     name: binding.serverName,
     command: NODE,
