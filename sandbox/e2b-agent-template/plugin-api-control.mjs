@@ -618,7 +618,7 @@ function catalogSource(request) {
     throw new Error("Managed MCP catalog is unavailable");
   }
   const entry = catalog.plugins.find((plugin) => plugin.id === request.catalogId && plugin.source?.sha256 === request.catalogSha256);
-  if (!entry || entry.source.type !== "archive" || !/^https:\/\/raw\.githubusercontent\.com\/iotserver24\/supercharge-app\/[a-f0-9]{40}\/public\/managed-mcp\/[a-z][a-z0-9-]*-\d+\.\d+\.\d+\.tar\.gz$/.test(entry.source.url)) {
+  if (!entry || (Array.isArray(entry.targets) && !entry.targets.includes("supercharge-e2b")) || entry.source.type !== "archive" || !/^https:\/\/raw\.githubusercontent\.com\/iotserver24\/supercharge-app\/[a-f0-9]{40}\/public\/managed-mcp\/[a-z][a-z0-9-]*-\d+\.\d+\.\d+\.tar\.gz$/.test(entry.source.url)) {
     throw new Error("Catalog release is unavailable for this sandbox");
   }
   return { type: "archive", url: entry.source.url, sha256: entry.source.sha256 };

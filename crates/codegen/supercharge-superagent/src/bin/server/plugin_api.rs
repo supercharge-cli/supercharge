@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::{AppRuntime, AppState, ErrorResponse, bot_definition, internal_error};
@@ -13,8 +13,8 @@ use supercharge_superagent::plugin_control::{
     BotIdentity, PluginBridgeStatus, PluginControlResult, descriptor_to_acp, request as control,
 };
 
-#[derive(Debug, Deserialize)]
-#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "action", rename_all = "camelCase", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub(super) enum PluginRequest {
     Status,
     Validate {
@@ -33,6 +33,10 @@ pub(super) enum PluginRequest {
         plugin_id: String,
         plugin_action: Value,
         request_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        catalog_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        catalog_sha256: Option<String>,
     },
     Apply {
         session_id: String,
@@ -397,51 +401,17 @@ pub(super) async fn plugin_api(
     }
     bot_definition(&state, &bot_id).await?;
     let result = match request {
-        PluginRequest::Status => request_for(&state, &bot_id, "status", json!({})).await,
-        PluginRequest::Validate { manifest } => {
-            request_for(&state, &bot_id, "validate", json!({"manifest":manifest})).await
-        }
-        PluginRequest::Install {
-            manifest,
-            request_id,
-        } => {
-            request_for(
-                &state,
-                &bot_id,
-                "install",
-                json!({"manifest":manifest,"requestId":request_id}),
-            )
-            .await
-        }
-        PluginRequest::InstallCatalog {
-            catalog_id,
-            catalog_sha256,
-            request_id,
-        } => {
-            request_for(
-                &state,
-                &bot_id,
-                "installCatalog",
-                json!({"catalogId":catalog_id,"catalogSha256":catalog_sha256,"requestId":request_id}),
-            )
-            .await
-        }
-        PluginRequest::PluginAction {
-            plugin_id,
-            plugin_action,
-            request_id,
-        } => {
-            request_for(
-                &state,
-                &bot_id,
-                "pluginAction",
-                json!({
-                    "pluginId":plugin_id,
-                    "pluginAction":plugin_action,
-                    "requestId":request_id,
-                }),
-            )
-            .await
+        request @ (PluginRequest::Status
+        | PluginRequest::Validate { .. }
+        | PluginRequest::Install { .. }
+        | PluginRequest::InstallCatalog { .. }
+        | PluginRequest::PluginAction { .. }) => {
+            let body = serde_json::to_value(request).map_err(internal_error)?;
+            let action = body["action"]
+                .as_str()
+                .ok_or_else(|| internal_error("Plugin control action missing"))?
+                .to_owned();
+            request_for(&state, &bot_id, &action, body).await
         }
         PluginRequest::Apply {
             session_id,
@@ -661,4 +631,42 @@ pub(super) async fn plugin_api(
     public.descriptor = None;
     public.agent_uid = None;
     Ok(Json(serde_json::to_value(public).map_err(internal_error)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn camel_case_requests_preserve_controller_fields() {
+        let digest = "a".repeat(64);
+        let requests = [
+            json!({"action":"status"}),
+            json!({"action":"validate","manifest":{}}),
+            json!({"action":"install","manifest":{},"requestId":"request-001"}),
+            json!({"action":"installCatalog","catalogId":"vectra-echo","catalogSha256":digest,"requestId":"request-002"}),
+            json!({"action":"pluginAction","pluginId":"vectra-echo","catalogId":"vectra-echo","catalogSha256":digest,"requestId":"request-003","pluginAction":{"action":"update","expectedRevision":2}}),
+            json!({"action":"pluginAction","pluginId":"vectra-echo","requestId":"request-004","pluginAction":{"action":"enable","expectedRevision":2}}),
+            json!({"action":"apply","sessionId":"session-1","pluginId":"vectra-echo","serverId":"echo","expectedRevision":null}),
+            json!({"action":"retry","sessionId":"session-1","expectedRevision":1}),
+            json!({"action":"verify","sessionId":"session-1","expectedRevision":1,"tool":"echo","arguments":{},"consent":true}),
+            json!({"action":"remove","sessionId":"session-1","expectedRevision":1}),
+        ];
+        for body in requests {
+            let request: PluginRequest = serde_json::from_value(body.clone()).unwrap();
+            assert_eq!(serde_json::to_value(request).unwrap(), body);
+        }
+    }
+
+    #[test]
+    fn plugin_requests_reject_unknown_fields_and_missing_pins() {
+        for body in [
+            json!({"action":"installCatalog","catalogId":"vectra-echo","requestId":"request-001"}),
+            json!({"action":"installCatalog","catalog_id":"vectra-echo","catalog_sha256":"a".repeat(64),"request_id":"request-001"}),
+            json!({"action":"installCatalog","catalogId":"vectra-echo","catalogSha256":"a".repeat(64),"requestId":"request-001","source":{"url":"https://unreviewed.example/plugin.tar.gz"}}),
+            json!({"action":"pluginAction","pluginId":"vectra-echo","requestId":"request-001","pluginAction":{"action":"update"},"catalogId":42}),
+        ] {
+            assert!(serde_json::from_value::<PluginRequest>(body).is_err());
+        }
+    }
 }

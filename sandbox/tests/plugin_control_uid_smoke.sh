@@ -56,7 +56,16 @@ if [ "${1:-}" = "--fixture" ]; then
   printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{if(!JSON.parse(s).error?.includes("Catalog release is unavailable"))process.exit(1)})'
   output="$(invoke "$catalog_request")"
   printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.ok||r.result.plugin?.id!=="vectra-echo"||r.result.plugin?.enabled!==false||r.result.plugin?.trusted!==false)process.exit(1)})'
-  echo "PASS: authorized controller catalog install, UID=$uid, isolated service UID=20000, rejected mismatched authority"
+  update_request="$(printf '%s' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(process.argv[1]);r.action="pluginAction";r.pluginId=r.catalogId;r.requestId="fixture-update-001";r.pluginAction={action:"update",expectedRevision:JSON.parse(s).result.plugin.revision,source:{type:"archive",url:"https://unreviewed.example/plugin.tar.gz",sha256:"0".repeat(64)}};process.stdout.write(JSON.stringify(r))})' "$catalog_request")"
+  bad_update="${update_request/a0c6be6c2f292c1a1ecdcc55056147d1dd232b58c76522e77ad44016ee7c0072/0000000000000000000000000000000000000000000000000000000000000000}"
+  output="$(invoke "$bad_update" || true)"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{if(!JSON.parse(s).error?.includes("Catalog release is unavailable"))process.exit(1)})'
+  mismatched_update="${update_request/\"pluginId\":\"vectra-echo\"/\"pluginId\":\"other-plugin\"}"
+  output="$(invoke "$mismatched_update" || true)"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{if(!JSON.parse(s).error?.includes("Catalog update target mismatch"))process.exit(1)})'
+  output="$(invoke "$update_request")"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.ok||r.result.plugin?.id!=="vectra-echo"||r.result.plugin?.revision!==2||r.result.plugin?.enabled!==false||r.result.plugin?.trusted!==false)process.exit(1)})'
+  echo "PASS: authorized controller catalog install/update, UID=$uid, isolated service UID=20000, rejected mismatched authority and catalog pins"
   exit 0
 fi
 
