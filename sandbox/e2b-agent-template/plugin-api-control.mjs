@@ -263,10 +263,13 @@ function allowedCommands() {
 }
 
 function allowedOrigins() {
-  return (process.env.SUPERAGENT_PLUGIN_API_ALLOWED_ORIGINS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  return [
+    "https://api.githubcopilot.com",
+    ...(process.env.SUPERAGENT_PLUGIN_API_ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ];
 }
 
 function activeBindings(state) {

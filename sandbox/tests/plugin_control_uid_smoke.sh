@@ -65,7 +65,15 @@ if [ "${1:-}" = "--fixture" ]; then
   printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{if(!JSON.parse(s).error?.includes("Catalog update target mismatch"))process.exit(1)})'
   output="$(invoke "$update_request")"
   printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.ok||r.result.plugin?.id!=="vectra-echo"||r.result.plugin?.revision!==2||r.result.plugin?.enabled!==false||r.result.plugin?.trusted!==false)process.exit(1)})'
-  echo "PASS: authorized controller catalog install/update, UID=$uid, isolated service UID=20000, rejected mismatched authority and catalog pins"
+  github_request="$(printf '%s' "$request" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);r.action="installCatalog";r.catalogId="vectra-github";r.catalogSha256="15f78177f39a2955d4a8cd462b135ea3c7d764f2e59da5be226f6c1fc4d724e6";r.requestId="fixture-github-001";process.stdout.write(JSON.stringify(r))})')"
+  output="$(invoke "$github_request")"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const p=JSON.parse(s).result?.plugin;if(p?.id!=="vectra-github"||p.enabled||p.trusted||p.activeDigest!=="bef5d2b97bad049ea95e1a05170fc9a91fcabc1585b9b3c5896e86cc2a30b5e9")process.exit(1)})'
+  configure_request="$(printf '%s' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(process.argv[1]);r.action="pluginAction";r.pluginId="vectra-github";r.requestId="fixture-github-config-001";r.pluginAction={action:"configure",expectedRevision:JSON.parse(s).result.plugin.revision,values:{"github-token":"test-token-not-real"}};process.stdout.write(JSON.stringify(r))})' "$request")"
+  output="$(invoke "$configure_request")"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.ok||JSON.stringify(r).includes("test-token-not-real")||!r.result?.plugin?.configuredKeys?.includes("github-token"))process.exit(1)})'
+  output="$(invoke "$request")"
+  printf '%s\n' "$output" | /opt/vectra/plugin-api/node/bin/node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s).result;if(!r?.service?.allowedMcpOrigins?.includes("https://api.githubcopilot.com")||JSON.stringify(r).includes("test-token-not-real"))process.exit(1)})'
+  echo "PASS: authorized Echo and GitHub catalog installs, write-only GitHub token, UID=$uid, isolated service UID=20000"
   exit 0
 fi
 
