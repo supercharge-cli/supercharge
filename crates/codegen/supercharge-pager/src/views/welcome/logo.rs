@@ -12,6 +12,7 @@ use crate::theme::Theme;
 
 const WORDMARK: &str = "SUPERCHARGE";
 const TAGLINE: &str = "AI coding workspace";
+const LOGO_ART: &str = "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⢾⣶⣄⣀⣤⣶⣶⣦⣄⡀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⣨⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀\n⠀⠠⠤⠤⠄⢡⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀\n⠀⢀⣠⣭⣥⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀\n⠐⠊⠉⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀\n⠀⠀⠈⠠⠈⢻⣿⡿⣿⣿⣿⣿⣿⣿⣿⣽⣷⡀⠀⠀\n⠀⠀⠀⠀⠀⢐⣴⣿⡿⢻⣿⣿⠟⠈⠛⠛⠋⠀⠀⠀\n⠀⠀⠀⠀⠠⠬⣭⣅⣀⣘⣛⣋⠀⠀⠀⠀⠀⠀⠀⠀";
 const COIN_FRAMES: [&str; 5] = [
     "      .-========-.      \n    .'      ⚡      `.    \n   /        ⚡        \\   \n  |         ⚡         |  \n   \\        ⚡        /   \n    `.              .'    \n      `-========-'      ",
     "       .-======-.       \n     .'    ⚡    `.     \n    /      ⚡      \\    \n   |       ⚡       |   \n    \\      ⚡      /    \n     `.          .'     \n       `-======-'       ",
@@ -19,8 +20,8 @@ const COIN_FRAMES: [&str; 5] = [
     "       .-======-.       \n     .'    ⚡    `.     \n    /      ⚡      \\    \n   |       ⚡       |   \n    \\      ⚡      /    \n     `.          .'     \n       `-======-'       ",
     "      .-========-.      \n    .'      ⚡      `.    \n   /        ⚡        \\   \n  |         ⚡         |  \n   \\        ⚡        /   \n    `.              .'    \n      `-========-'      ",
 ];
-const LOGO: &str = "⚡  SUPERCHARGE\nAI coding workspace\n";
-const LOGO_SMALL: &str = "⚡  SUPERCHARGE\n";
+const LOGO: &str = "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⢾⣶⣄⣀⣤⣶⣶⣦⣄⡀⠀⠀⠀\n⠀⠀⠀⠀⠀⠀⠀⣨⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀\n⠀⠠⠤⠤⠄⢡⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀\n⠀⢀⣠⣭⣥⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀\n⠐⠊⠉⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀\n⠀⠀⠈⠠⠈⢻⣿⡿⣿⣿⣿⣿⣿⣿⣿⣽⣷⡀⠀⠀\n⠀⠀⠀⠀⠀⢐⣴⣿⡿⢻⣿⣿⠟⠈⠛⠛⠋⠀⠀⠀\n⠀⠀⠀⠀⠠⠬⣭⣅⣀⣘⣛⣋⠀⠀⠀⠀⠀⠀⠀⠀\nSUPERCHARGE\nAI coding workspace\n";
+const LOGO_SMALL: &str = "⠀⠀⠀⠀⢀⡀⠀⣀⣀⠀⠀⠀\n⠀⠀⠀⠀⣨⣿⣿⣿⣿⣿⣦⠀\n⠀⢉⣟⣸⣿⣿⣿⣿⣿⣿⣿⠁\n⠀⠉⠻⢿⣿⣿⣿⣿⣿⣿⡃⠀\n⠀⠀⠀⢨⡿⠟⣿⠟⠙⠛⠁⠀\n⠀⠀⠀⠉⠁⠀⠉⠀⠀⠀⠀⠀\nSUPERCHARGE\n";
 
 /// Height at or above which the small logo is shown (below it, no logo).
 const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
@@ -110,12 +111,11 @@ pub fn shimmer_frame() -> u64 {
 }
 
 fn animated_logo(frame: u64) -> String {
-    format!(
-        "{}\n{}\n{}\n",
-        COIN_FRAMES[(frame as usize) % COIN_FRAMES.len()],
-        WORDMARK,
-        TAGLINE
-    )
+    let coin = COIN_FRAMES
+        .get((frame as usize) % COIN_FRAMES.len())
+        .copied()
+        .unwrap_or_default();
+    format!("{coin}\n{WORDMARK}\n{TAGLINE}\n")
 }
 
 fn animated_logo_layout() -> String {
