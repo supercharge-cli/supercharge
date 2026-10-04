@@ -6,6 +6,7 @@ import {
   chown,
   lstat,
   mkdir,
+  mkdtemp,
   open,
   readFile,
   readdir,
@@ -22,6 +23,8 @@ const BINDING_ROOT = process.env.SUPERAGENT_PLUGIN_BINDING_ROOT || "/run/vectra-
 const SERVER_ARTIFACT = "/opt/vectra/plugin-api/plugin-api-server-0.1.0.mjs";
 const BRIDGE_ARTIFACT = "/opt/vectra/plugin-api/plugin-bridge-0.1.0.mjs";
 const CATALOG = "/opt/vectra/plugin-api/catalog.json";
+const SKILLMD_API = "https://api.skillmd.com";
+const SKILLMD_LIMIT = 16 * 1024 * 1024;
 const NODE = "/opt/vectra/plugin-api/node/bin/node";
 const SERVICE_UID_BASE = Number(process.env.SUPERAGENT_PLUGIN_SERVICE_UID_BASE || 20000);
 const PORT_BASE = Number(process.env.SUPERAGENT_PLUGIN_PORT_BASE || 4400);
@@ -166,6 +169,8 @@ async function canonicalWorkspace(raw) {
 
 const statePath = (botId) => join(ROOT, "bots", botId, "control.json");
 const serviceRoot = (botId) => join(ROOT, "services", botId);
+const importRoot = (botId) => join(ROOT, "imports", botId);
+const skillRoot = (botId) => join(ROOT, "skillmd", botId);
 const serviceConfigPath = (botId) => join(serviceRoot(botId), "config.json");
 const servicePidPath = (botId) => join(serviceRoot(botId), "service.pid.json");
 const conversationRoot = (botId, sessionId) => join(BINDING_ROOT, botId, sessionId);
@@ -303,7 +308,7 @@ function serviceConfig(state) {
       })),
     ],
     workspaces: { workspace: state.workspace },
-    localSourceRoots: [],
+    localSourceRoots: [importRoot(state.botId)],
     allowedCommands: allowedCommands(),
     allowedMcpOrigins: allowedOrigins(),
   };
@@ -386,6 +391,11 @@ async function ensureService(state, forceRestart = false) {
     await chmod(path, 0o700);
   }
   await grantWorkspace(state);
+  await mkdir(importRoot(state.botId), { recursive: true, mode: 0o711 });
+  await chown(join(ROOT, "imports"), 0, 0);
+  await chown(importRoot(state.botId), 0, 0);
+  await chmod(join(ROOT, "imports"), 0o711);
+  await chmod(importRoot(state.botId), 0o711);
   await chownTree(serviceRoot(state.botId), state.serviceUid, state.serviceUid);
   const config = Buffer.from(JSON.stringify(serviceConfig(state), null, 2));
   const configDigest = digest(config);
@@ -611,6 +621,147 @@ async function stageBinding(state, request, plugin) {
   return publicBinding(binding);
 }
 
+const SKILLMD_UNZIP = `
+import os, pathlib, stat, sys, zipfile
+archive, target = sys.argv[1:]
+with zipfile.ZipFile(archive) as bundle:
+    entries = bundle.infolist()
+    if len(entries) > 4096: raise ValueError('SKILLMD_ARCHIVE_INVALID: too many entries')
+    seen, total = set(), 0
+    for entry in entries:
+        name = entry.filename
+        parts = name.rstrip('/').split('/')
+        mode = entry.external_attr >> 16
+        if (not name or len(name) > 512 or name.startswith('/') or '\\\\' in name
+            or any(part in ('', '.', '..') or ':' in part or '\\x00' in part for part in parts)
+            or name.rstrip('/') in seen or entry.flag_bits & 1
+            or (mode and stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR))):
+            raise ValueError('SKILLMD_ARCHIVE_PATH_TRAVERSAL: unsafe bundle entry')
+        seen.add(name.rstrip('/'))
+        total += entry.file_size
+        if entry.file_size > 16 * 1024 * 1024 or total > 64 * 1024 * 1024:
+            raise ValueError('SKILLMD_ARCHIVE_INVALID: expanded bundle exceeds limit')
+    if 'SKILL.md' not in seen or 'plugin.json' in seen:
+        raise ValueError('SKILLMD_ARCHIVE_INVALID: missing skill or reserved plugin manifest')
+    for entry in entries:
+        path = pathlib.Path(target, entry.filename)
+        if entry.is_dir():
+            path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            with bundle.open(entry) as source, open(path, 'xb') as output:
+                while True:
+                    chunk = source.read(65536)
+                    if not chunk: break
+                    output.write(chunk)
+            os.chmod(path, 0o400)
+`;
+
+async function skillMdBytes(url, limit) {
+  const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(12000), headers: { accept: "application/json, application/zip" } });
+  if (!response.ok || Number(response.headers.get("content-length") || 0) > limit) throw new Error("SKILLMD_DOWNLOAD_FAILED: artifact unavailable or too large");
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (size > limit) { await response.body.cancel().catch(() => {}); throw new Error("SKILLMD_DOWNLOAD_FAILED: artifact exceeds limit"); }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function skillMdSource(state, request) {
+  const owner = safeId(request.owner, "SkillMD owner", /^[A-Za-z0-9_.-]{1,80}$/);
+  const name = safeId(request.name, "SkillMD name", /^[A-Za-z0-9_.-]{1,120}$/);
+  if ([".", ".."].includes(owner) || [".", ".."].includes(name)) throw new Error("Invalid SkillMD item identifier");
+  const base = `${SKILLMD_API}/api/skills/${owner}/${name}`;
+  const detail = JSON.parse((await skillMdBytes(`${SKILLMD_API}/v1/skills/${owner}/${name}`, 2 * 1024 * 1024)).toString("utf8"));
+  if (detail.slug !== `${owner}/${name}` || !["single", "pack"].includes(detail.type) || detail.bundle_url !== `${base}/bundle`) {
+    throw new Error("SKILLMD_UNSUPPORTED_ARTIFACT: no complete bundle for this item");
+  }
+  const bytes = await skillMdBytes(detail.bundle_url, SKILLMD_LIMIT);
+  const imports = importRoot(state.botId);
+  const staging = await mkdtemp(join(imports, "skillmd-"));
+  try {
+    const archive = join(staging, "bundle.zip");
+    const source = join(staging, "release");
+    await mkdir(source, { mode: 0o700 });
+    await writePrivate(archive, bytes);
+    const extracted = spawnSync("/usr/bin/python3", ["-c", SKILLMD_UNZIP, archive, source], { encoding: "utf8", timeout: 20000, maxBuffer: 65536 });
+    if (extracted.status !== 0) throw new Error((extracted.stderr || "SKILLMD_ARCHIVE_INVALID: bundle could not be validated").trim().slice(0, 300));
+    const skill = await readFile(join(source, "SKILL.md"));
+    if (!skill.length || skill.length > 512 * 1024 || skill.includes(0)) throw new Error("SKILLMD_ARCHIVE_INVALID: invalid SKILL.md");
+    new TextDecoder("utf-8", { fatal: true }).decode(skill);
+    const id = `skillmd-${digest(`${owner}/${name}`).slice(0, 24)}`;
+    const manifest = {
+      schemaVersion: 1, apiVersion: "1", id,
+      name: `${owner}/${name}`.slice(0, 120), version: "0.0.0",
+      description: typeof detail.description === "string" ? detail.description.slice(0, 4096) : "SkillMD skill bundle",
+      permissions: [], components: [{ id: "skill", kind: "skill", path: "SKILL.md" }],
+      mcpServers: {}, hooks: [], userConfig: {},
+    };
+    await writePrivate(join(source, "plugin.json"), Buffer.from(JSON.stringify(manifest)));
+    await rm(archive);
+    await chownTree(staging, state.serviceUid, state.serviceUid);
+    return { path: source, staging };
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function publishSkillMd(state, plugin) {
+  if (!plugin?.id?.startsWith("skillmd-") || !plugin.enabled || !plugin.trusted) return;
+  safeId(plugin.id, "SkillMD plugin ID", /^skillmd-[a-f0-9]{24}$/);
+  safeId(plugin.activeDigest, "release digest", /^[a-f0-9]{64}$/);
+  if (plugin.manifest?.id !== plugin.id || plugin.manifest?.components?.length !== 1 ||
+      plugin.manifest.components[0]?.path !== "SKILL.md" ||
+      plugin.manifest.components[0]?.kind !== "skill" ||
+      plugin.manifest.permissions?.length !== 0 ||
+      Object.keys(plugin.manifest.mcpServers || {}).length || plugin.manifest.hooks?.length) {
+    throw new Error("SKILLMD_SECURITY_CHECK_FAILED: unexpected installed release");
+  }
+  const parent = skillRoot(state.botId);
+  await mkdir(parent, { recursive: true, mode: 0o711 });
+  await chown(join(ROOT, "skillmd"), 0, 0);
+  await chown(parent, 0, 0);
+  await chmod(join(ROOT, "skillmd"), 0o711);
+  await chmod(parent, 0o711);
+  const source = join(serviceRoot(state.botId), "data", "releases", plugin.activeDigest);
+  const staging = await mkdtemp(join(parent, "stage-"));
+  let total = 0;
+  async function copy(directory, target, depth) {
+    if (depth > 32) throw new Error("SKILLMD_SECURITY_CHECK_FAILED: bundle nesting limit");
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (!/^[^\\/:*?"<>|\x00]+$/.test(entry.name) || entry.name === "." || entry.name === "..") throw new Error("SKILLMD_SECURITY_CHECK_FAILED: unsafe release path");
+      const from = join(directory, entry.name);
+      const to = join(target, entry.name);
+      const info = await lstat(from);
+      if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile()) || (info.isFile() && info.nlink !== 1)) throw new Error("SKILLMD_SECURITY_CHECK_FAILED: unsafe release entry");
+      if (info.isDirectory()) {
+        await mkdir(to, { mode: 0o700 });
+        await copy(from, to, depth + 1);
+        await chmod(to, 0o555);
+      } else {
+        total += info.size;
+        if (info.size > 16 * 1024 * 1024 || total > 64 * 1024 * 1024) throw new Error("SKILLMD_SECURITY_CHECK_FAILED: bundle size limit");
+        await writePrivate(to, await readFile(from));
+        await chmod(to, 0o444);
+      }
+    }
+  }
+  try {
+    await copy(source, staging, 0);
+    if (digest(await readFile(join(staging, "SKILL.md"))) !== digest(await readFile(join(source, "SKILL.md")))) throw new Error("SKILLMD_SECURITY_CHECK_FAILED: release changed");
+    await chmod(staging, 0o555);
+    const target = join(parent, plugin.id);
+    await rm(target, { recursive: true, force: true });
+    await rename(staging, target);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
 function catalogSource(request) {
   safeId(request.catalogId, "catalog plugin ID");
   if (typeof request.catalogSha256 !== "string" || !/^[a-f0-9]{64}$/.test(request.catalogSha256)) {
@@ -641,12 +792,61 @@ async function handle(request) {
     result.inventory = await api(state, "/v1/plugins");
     return result;
   }
+  if (action === "syncSkillMd") {
+    await ensureService(state);
+    const inventory = await api(state, "/v1/plugins");
+    const plugins = Array.isArray(inventory) ? inventory : inventory.plugins;
+    if (!Array.isArray(plugins)) throw new Error("Plugin inventory is unavailable");
+    const ids = [];
+    for (const plugin of plugins) {
+      if (!/^skillmd-[a-f0-9]{24}$/.test(plugin.id || "")) continue;
+      if (plugin.enabled && plugin.trusted) {
+        try {
+          await publishSkillMd(state, plugin);
+          ids.push(plugin.id);
+        } catch (error) {
+          await rm(join(skillRoot(state.botId), plugin.id), { recursive: true, force: true });
+          const disabled = await api(state, `/v1/plugins/${encodeURIComponent(plugin.id)}/actions`, {
+            method: "POST", headers: { "idempotency-key": randomUUID() },
+            body: { action: "disable", expectedRevision: plugin.revision },
+          });
+          await operation(state, disabled);
+          throw error;
+        }
+      }
+    }
+    const parent = skillRoot(state.botId);
+    for (const entry of await readdir(parent).catch((error) => {
+      if (error?.code === "ENOENT") return [];
+      throw error;
+    })) {
+      if (entry.startsWith("stage-") || (/^skillmd-[a-f0-9]{24}$/.test(entry) && !ids.includes(entry))) {
+        await rm(join(parent, entry), { recursive: true, force: true });
+      }
+    }
+    return { skillMdIds: ids };
+  }
   if (action === "validate") {
     await ensureService(state);
     return api(state, "/v1/plugins/validate", {
       method: "POST",
       body: { manifest: request.manifest },
     });
+  }
+  if (action === "installSkillMd") {
+    safeId(request.requestId, "request ID", /^[A-Za-z0-9_-]{8,128}$/);
+    await ensureService(state);
+    const imported = await skillMdSource(state, request);
+    try {
+      const initial = await api(state, "/v1/plugins/install", {
+        method: "POST",
+        headers: { "idempotency-key": request.requestId },
+        body: { source: { type: "local", path: imported.path } },
+      });
+      return { plugin: await operation(state, initial) };
+    } finally {
+      await rm(imported.staging, { recursive: true, force: true });
+    }
   }
   if (action === "install" || action === "installCatalog") {
     const source = action === "installCatalog"
@@ -689,7 +889,22 @@ async function handle(request) {
       headers: { "idempotency-key": request.requestId },
       body: request.pluginAction,
     });
-    return { plugin: await operation(state, initial) };
+    const plugin = await operation(state, initial);
+    if (/^skillmd-[a-f0-9]{24}$/.test(request.pluginId)) {
+      if (plugin?.enabled && plugin?.trusted) {
+        try { await publishSkillMd(state, plugin); }
+        catch (error) {
+          await rm(join(skillRoot(state.botId), request.pluginId), { recursive: true, force: true });
+          const disabled = await api(state, `/v1/plugins/${encodeURIComponent(request.pluginId)}/actions`, {
+            method: "POST", headers: { "idempotency-key": randomUUID() },
+            body: { action: "disable", expectedRevision: plugin.revision },
+          });
+          await operation(state, disabled);
+          throw error;
+        }
+      } else await rm(join(skillRoot(state.botId), request.pluginId), { recursive: true, force: true });
+    }
+    return { plugin };
   }
   if (action === "stageBinding") {
     await ensureService(state);

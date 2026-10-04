@@ -1,4 +1,12 @@
-use std::sync::Arc;
+use std::{
+    collections::HashSet,
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock},
+};
+
+static PENDING_SKILL_REFRESH: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 
 use axum::{
     Json,
@@ -32,6 +40,11 @@ pub(super) enum PluginRequest {
     InstallCatalog {
         catalog_id: String,
         catalog_sha256: String,
+        request_id: String,
+    },
+    InstallSkillMd {
+        owner: String,
+        name: String,
         request_id: String,
     },
     PluginAction {
@@ -314,15 +327,168 @@ async fn activate(
         .ok_or_else(|| internal_error("Plugin binding status missing"))
 }
 
+fn skillmd_publication(bot_id: &str) -> Result<PathBuf, String> {
+    if bot_id.is_empty()
+        || !bot_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("Invalid bot ID for skill publication".into());
+    }
+    Ok(PathBuf::from(
+        std::env::var_os("SUPERAGENT_PLUGIN_CONTROL_ROOT")
+            .unwrap_or_else(|| "/var/lib/superagent/plugin-control".into()),
+    )
+    .join("skillmd")
+    .join(bot_id))
+}
+
+#[cfg(unix)]
+fn link_skillmd(
+    home: &std::path::Path,
+    publication: &std::path::Path,
+    ids: &[String],
+) -> Result<bool, String> {
+    let skills = home.join("skills");
+    std::fs::create_dir_all(&skills).map_err(|e| e.to_string())?;
+    let desired = ids.iter().cloned().collect::<HashSet<_>>();
+    if desired.len() != ids.len() || desired.iter().any(|id| !is_skillmd_id(id)) {
+        return Err("Invalid approved skill inventory".into());
+    }
+    let mut changed = false;
+    for entry in std::fs::read_dir(&skills).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !is_skillmd_id(&name) || desired.contains(&name) {
+            continue;
+        }
+        let path = entry.path();
+        if path
+            .symlink_metadata()
+            .map_err(|e| e.to_string())?
+            .file_type()
+            .is_symlink()
+            && std::fs::read_link(&path).map_err(|e| e.to_string())? == publication.join(&name)
+        {
+            std::fs::remove_file(path).map_err(|e| e.to_string())?;
+            changed = true;
+        }
+    }
+    for id in ids {
+        let source = publication.join(id);
+        if !source.join("SKILL.md").is_file() {
+            return Err("Approved skill publication is missing".into());
+        }
+        let path = skills.join(id);
+        match path.symlink_metadata() {
+            Ok(meta)
+                if meta.file_type().is_symlink()
+                    && std::fs::read_link(&path).map_err(|e| e.to_string())? == source =>
+            {
+                continue;
+            }
+            Ok(_) => return Err(format!("Skill path already exists: {id}")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.to_string()),
+        }
+        symlink(source, path).map_err(|e| e.to_string())?;
+        changed = true;
+    }
+    Ok(changed)
+}
+
+fn is_skillmd_id(id: &str) -> bool {
+    id.len() == 32
+        && id.starts_with("skillmd-")
+        && id[8..]
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+async fn sync_skillmd(
+    state: &Arc<AppState>,
+    bot_id: &str,
+    extra_home: Option<&std::path::Path>,
+    force_refresh: bool,
+) -> Result<(), String> {
+    let response = request_for(state, bot_id, "syncSkillMd", json!({}))
+        .await
+        .and_then(|result| {
+            result
+                .skill_md_ids
+                .ok_or_else(|| "Approved skill inventory is missing".into())
+        });
+    let ids = response.clone().unwrap_or_default();
+    let publication = skillmd_publication(bot_id)?;
+    let base_config = std::env::var("SUPERAGENT_PROVIDER_CONFIG_PATH")
+        .or_else(|_| std::env::var("SUPERCHARGE_CONFIG_PATH"))
+        .unwrap_or_else(|_| "./runtime/provider-config.toml".to_owned());
+    let stable = PathBuf::from(base_config)
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("agent-runtime")
+        .join("bots")
+        .join(bot_id);
+    let runtimes = state.app_runtimes.lock().await.clone();
+    let sessions = state.sessions.lock().await;
+    let active = runtimes
+        .into_iter()
+        .filter_map(|(session_id, runtime)| {
+            sessions
+                .get(&session_id)
+                .is_some_and(|session| session.bot_id == bot_id)
+                .then_some((session_id, runtime))
+        })
+        .collect::<Vec<_>>();
+    drop(sessions);
+    let mut homes = vec![stable];
+    if let Some(home) = extra_home {
+        homes.push(home.to_path_buf());
+    }
+    homes.extend(
+        active
+            .iter()
+            .map(|(_, runtime)| runtime.cli.home().to_path_buf()),
+    );
+    let mut seen = HashSet::new();
+    for home in homes {
+        if !seen.insert(home.clone()) {
+            continue;
+        }
+        #[cfg(unix)]
+        let changed = link_skillmd(&home, &publication, &ids)?;
+        #[cfg(not(unix))]
+        let changed = false;
+        if changed || force_refresh {
+            for (session_id, runtime) in &active {
+                if runtime.cli.home() == home {
+                    if runtime.cli.is_prompting() {
+                        PENDING_SKILL_REFRESH
+                            .get_or_init(Default::default)
+                            .lock()
+                            .unwrap()
+                            .insert(session_id.clone());
+                    } else {
+                        runtime.cli.refresh_plugins().await?;
+                    }
+                }
+            }
+        }
+    }
+    response.map(|_| ())
+}
+
 pub(super) async fn restore_for_launch(
     state: &Arc<AppState>,
     bot_id: &str,
     session_id: &str,
     agent_session_id: &str,
+    home: &std::path::Path,
 ) -> Result<Option<Value>, String> {
     if !supercharge_superagent::plugin_control::available() || state.api_token.is_none() {
         return Ok(None);
     }
+    sync_skillmd(state, bot_id, Some(home), false).await?;
     let status = request_for(state, bot_id, "status", json!({})).await?;
     let Some(binding) = status
         .bindings
@@ -356,6 +522,23 @@ pub(super) async fn restore_for_launch(
 pub(super) async fn reconcile_after_turn(state: &Arc<AppState>, bot_id: &str, session_id: &str) {
     if !supercharge_superagent::plugin_control::available() || state.api_token.is_none() {
         return;
+    }
+    let pending = PENDING_SKILL_REFRESH
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .contains(session_id);
+    if pending {
+        let runtime = state.app_runtimes.lock().await.get(session_id).cloned();
+        if let Some(runtime) = runtime {
+            if !runtime.cli.is_prompting() && runtime.cli.refresh_plugins().await.is_ok() {
+                PENDING_SKILL_REFRESH
+                    .get_or_init(Default::default)
+                    .lock()
+                    .unwrap()
+                    .remove(session_id);
+            }
+        }
     }
     let status = match request_for(state, bot_id, "status", json!({})).await {
         Ok(status) => status,
@@ -451,11 +634,16 @@ pub(super) async fn plugin_api(
         ));
     }
     bot_definition(&state, &bot_id).await?;
+    let sync_after = matches!(
+        &request,
+        PluginRequest::PluginAction { .. } | PluginRequest::InstallSkillMd { .. }
+    );
     let result = match request {
         request @ (PluginRequest::Status
         | PluginRequest::Validate { .. }
         | PluginRequest::Install { .. }
         | PluginRequest::InstallCatalog { .. }
+        | PluginRequest::InstallSkillMd { .. }
         | PluginRequest::PluginAction { .. }) => {
             let body = serde_json::to_value(request).map_err(internal_error)?;
             let action = body["action"]
@@ -526,6 +714,7 @@ pub(super) async fn plugin_api(
                 plugin: None,
                 valid: None,
                 manifest: None,
+                skill_md_ids: None,
             })
         }
         PluginRequest::Verify {
@@ -680,9 +869,13 @@ pub(super) async fn plugin_api(
                 .await
             }
         }
+    };
+    if sync_after {
+        sync_skillmd(&state, &bot_id, None, true)
+            .await
+            .map_err(internal_error)?;
     }
-    .map_err(internal_error)?;
-    let mut public = result;
+    let mut public = result.map_err(internal_error)?;
     public.descriptor = None;
     public.agent_uid = None;
     Ok(Json(serde_json::to_value(public).map_err(internal_error)?))
@@ -692,6 +885,33 @@ pub(super) async fn plugin_api(
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    #[test]
+    fn approved_skill_links_are_added_and_removed_without_touching_user_skills() {
+        let root = tempfile::tempdir().unwrap();
+        let publication = root.path().join("published");
+        let home = root.path().join("bot");
+        let id = format!("skillmd-{}", "a".repeat(24));
+        std::fs::create_dir_all(publication.join(&id)).unwrap();
+        std::fs::write(
+            publication.join(&id).join("SKILL.md"),
+            "---\nname: test\n---\n",
+        )
+        .unwrap();
+        assert!(link_skillmd(&home, &publication, std::slice::from_ref(&id)).unwrap());
+        assert_eq!(
+            std::fs::read_link(home.join("skills").join(&id)).unwrap(),
+            publication.join(&id)
+        );
+        std::fs::create_dir(home.join("skills").join("own-skill")).unwrap();
+        assert!(link_skillmd(&home, &publication, &[]).unwrap());
+        assert!(!home.join("skills").join(&id).exists());
+        assert!(home.join("skills").join("own-skill").exists());
+        std::fs::create_dir(home.join("skills").join(&id)).unwrap();
+        assert!(link_skillmd(&home, &publication, &[id]).is_err());
+        assert!(home.join("skills").join("own-skill").exists());
+    }
+
     #[test]
     fn camel_case_requests_preserve_controller_fields() {
         let digest = "a".repeat(64);
@@ -700,6 +920,7 @@ mod tests {
             json!({"action":"validate","manifest":{}}),
             json!({"action":"install","manifest":{},"requestId":"request-001"}),
             json!({"action":"installCatalog","catalogId":"vectra-echo","catalogSha256":digest,"requestId":"request-002"}),
+            json!({"action":"installSkillMd","owner":"anthropic","name":"pdf","requestId":"request-005"}),
             json!({"action":"pluginAction","pluginId":"vectra-echo","catalogId":"vectra-echo","catalogSha256":digest,"requestId":"request-003","pluginAction":{"action":"update","expectedRevision":2}}),
             json!({"action":"pluginAction","pluginId":"vectra-echo","requestId":"request-004","pluginAction":{"action":"enable","expectedRevision":2}}),
             json!({"action":"apply","sessionId":"session-1","pluginId":"vectra-echo","serverId":"echo","expectedRevision":null}),
@@ -716,6 +937,7 @@ mod tests {
     #[test]
     fn plugin_requests_reject_unknown_fields_and_missing_pins() {
         for body in [
+            json!({"action":"installSkillMd","owner":"acme","name":"skill","requestId":"request-001","url":"https://attacker.example/skill.zip"}),
             json!({"action":"installCatalog","catalogId":"vectra-echo","requestId":"request-001"}),
             json!({"action":"installCatalog","catalog_id":"vectra-echo","catalog_sha256":"a".repeat(64),"request_id":"request-001"}),
             json!({"action":"installCatalog","catalogId":"vectra-echo","catalogSha256":"a".repeat(64),"requestId":"request-001","source":{"url":"https://unreviewed.example/plugin.tar.gz"}}),

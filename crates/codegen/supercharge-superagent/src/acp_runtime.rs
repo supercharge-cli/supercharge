@@ -387,6 +387,23 @@ impl PersistentCli {
         Ok(result)
     }
 
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
+    pub async fn refresh_plugins(&self) -> Result<(), String> {
+        if self.is_prompting() {
+            return Err("Cannot refresh plugins during a turn".into());
+        }
+        self.request(
+            "x.ai/plugins/reload",
+            json!({}),
+            Some(Duration::from_secs(45)),
+        )
+        .await?;
+        Ok(())
+    }
+
     pub fn mcp_servers(&self) -> Vec<Value> {
         self.mcp_servers
             .lock()

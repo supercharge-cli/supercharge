@@ -779,7 +779,9 @@ fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
     }
     let merged_config = agent.cfg.borrow().clone();
 
-    agent.models_manager.on_setup_config_reloaded(merged_config.clone());
+    agent
+        .models_manager
+        .on_setup_config_reloaded(merged_config.clone());
     agent.sync_process_static_api_key(None);
     if merged_config.endpoints.has_custom_endpoint()
         && agent
@@ -849,6 +851,7 @@ async fn handle_plugins_reload(agent: &MvpAgent) -> ExtResult {
     // Eagerly fan out the new registry to every live session: each adopts a cwd-correct snapshot (hooks, MCP, skills, client slash-command catalog)
     // This is the same refresh the originating session of a reload gets
     agent.broadcast_plugin_registry_to_sessions(None);
+    agent.reload_skills_all_sessions();
 
     super::to_ext_response(Ok(serde_json::json!({"ok": true})))
 }

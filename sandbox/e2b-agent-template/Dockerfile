@@ -80,7 +80,7 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     /opt/vectra/browser-runtime/start.sh \
     && chmod -R go-w /opt/vectra/plugin-api \
     && mkdir -p /var/lib/superagent /var/lib/superagent/plugin-control /run/vectra-plugin-bindings \
-    && echo "1.3.28" > /var/lib/superagent/e2b-version \
+    && echo "1.3.29" > /var/lib/superagent/e2b-version \
     && chown -R user:$(id -gn user) /var/lib/superagent /opt/vectra/wake-http /opt/vectra/browser-runtime /home/user \
     && chown root:root /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
     && chmod -R go-w /var/lib/superagent/plugin-control /opt/vectra/plugin-api \

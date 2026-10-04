@@ -4384,7 +4384,7 @@ async fn persistent_app_runtime(
     let listening = accepting_events.clone();
     let rules = bot_rules(&bot, session_id, &cwd);
     let managed_mcp =
-        plugin_api::restore_for_launch(state, &bot.id, session_id, &cli_session_id).await?;
+        plugin_api::restore_for_launch(state, &bot.id, session_id, &cli_session_id, &home).await?;
     let bot_environment = {
         let catalog = state.bot_catalog.lock().await;
         if catalog.capability.is_empty() {

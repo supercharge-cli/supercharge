@@ -72,6 +72,8 @@ pub struct PluginControlResult {
     pub valid: Option<bool>,
     #[serde(default)]
     pub manifest: Option<Value>,
+    #[serde(default)]
+    pub skill_md_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
