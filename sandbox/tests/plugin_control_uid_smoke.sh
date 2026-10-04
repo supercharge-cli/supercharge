@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
-image="${SUPERCHARGE_PLUGIN_TEST_IMAGE:-supercharge-plugin-e2b-scratch:1.3.29}"
+image="${SUPERCHARGE_PLUGIN_TEST_IMAGE:-supercharge-plugin-e2b-scratch:1.3.30}"
 controller="$repo_root/sandbox/e2b-agent-template/plugin-api-control.mjs"
 
 if [ "${1:-}" = "--fixture" ]; then
