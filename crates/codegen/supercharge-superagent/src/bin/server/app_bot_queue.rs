@@ -520,6 +520,34 @@ mod tests {
     }
 
     #[test]
+    fn group_steer_is_persisted_without_scheduling_a_second_turn() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("queue.json");
+        let mut queue = BotQueue::default();
+        let mut running = work("running", "group-main");
+        running.group_message_id = Some("question".into());
+        queue.enqueue(running, &path).unwrap();
+        queue
+            .start_next(&HashSet::new(), &HashSet::new(), &path)
+            .unwrap();
+        let steer = super::super::app_group::GroupMessage {
+            id: "steer-one".into(),
+            text: "focus on this".into(),
+            mentions: vec!["main".into()],
+            reply_to: Some("question".into()),
+            kind: "steer".into(),
+            ..Default::default()
+        };
+        assert!(queue.enqueue_group(steer.clone(), Vec::new(), &path).unwrap());
+        assert!(!queue.enqueue_group(steer, Vec::new(), &path).unwrap());
+        let loaded = BotQueue::load(&path).unwrap();
+        assert!(loaded.queued.is_empty());
+        assert_eq!(loaded.in_flight.len(), 1);
+        assert_eq!(loaded.group_messages.len(), 1);
+        assert_eq!(loaded.group_messages[0].kind, "steer");
+    }
+
+    #[test]
     fn handoff_blocks_only_its_bot_without_claiming_its_queued_work() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("queue.json");

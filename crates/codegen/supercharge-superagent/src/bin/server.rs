@@ -910,6 +910,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/chat", post(app_chat))
         .route("/v1/chat/events", get(app_chat_events))
         .route("/v1/chat/stop", post(app_chat_stop))
+        .route("/v1/chat/steer", post(app_chat_steer))
         .route("/v1/chat/approve", post(app_chat_approve))
         .route("/v1/chat/answer", post(app_chat_answer))
         .route("/v1/chat/pick", post(app_chat_pick))
@@ -3472,6 +3473,14 @@ struct AppChatRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppSteerRequest {
+    text: String,
+    chat_id: String,
+    bot_id: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct SwitchConversationRequest {
     #[serde(rename = "sessionId")]
     session_id: String,
@@ -4483,6 +4492,7 @@ async fn persistent_app_runtime(
         runtime.cli.close().await;
     }
     runtimes.remove(session_id);
+    drop(runtimes);
     write_runtime_config(home.join("config.toml"), &profile).map_err(|e| e.to_string())?;
     let resume = session_has_history(&home, &cli_session_id, &cwd);
     let stream = Arc::new(StdMutex::new(CliStreamState::default()));
@@ -4560,7 +4570,11 @@ async fn persistent_app_runtime(
         chat_id: current_chat,
         accepting_events,
     });
-    runtimes.insert(session_id.to_owned(), runtime.clone());
+    state
+        .app_runtimes
+        .lock()
+        .await
+        .insert(session_id.to_owned(), runtime.clone());
     Ok(runtime)
 }
 
@@ -5600,6 +5614,70 @@ async fn stop_legacy_app_turn(state: &AppState, chat_id: &str) {
         let _ = running.cancel.send(());
         let _ = running.task.await;
     }
+}
+
+async fn app_chat_steer(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AppSteerRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+    if !browser::is_e2b_runtime() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".into() })));
+    }
+    let text = request.text.trim();
+    if text.is_empty() || text.len() > 64_000 {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Steer text must be 1–64000 bytes".into() })));
+    }
+    if state.app_maintenance.load(Ordering::SeqCst) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "Sandbox is pausing".into() })));
+    }
+    bot_definition(&state, &request.bot_id).await?;
+    if state.sessions.lock().await.get(&request.chat_id).is_none_or(|session| session.bot_id != request.bot_id) {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Conversation not found".into() })));
+    }
+    let work = state.bot_queue.lock().await.in_flight.values()
+        .find(|work| work.session() == request.chat_id && work.bot_id == request.bot_id)
+        .cloned()
+        .ok_or_else(|| (StatusCode::CONFLICT, Json(ErrorResponse { error: "No running turn to steer".into() })))?;
+    let runtime = state.app_runtimes.lock().await.get(&request.chat_id).cloned()
+        .filter(|runtime| runtime.cli.is_prompting())
+        .ok_or_else(|| (StatusCode::CONFLICT, Json(ErrorResponse { error: "Agent is not ready to steer yet".into() })))?;
+    let id = uuid::Uuid::new_v4().to_string();
+    let response = runtime.cli.steer(text, &id).await
+        .map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error })))?;
+    if response.get("status").and_then(Value::as_str) != Some("queued") {
+        return Err((StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: "Agent did not accept the steer".into() })));
+    }
+    if let Some(group_message_id) = &work.group_message_id {
+        state
+            .bot_queue
+            .lock()
+            .await
+            .enqueue_group(
+                app_group::GroupMessage {
+                    id: id.clone(),
+                    sender_bot_id: None,
+                    sender_session_id: None,
+                    text: text.to_owned(),
+                    mentions: vec![request.bot_id.clone()],
+                    created_at: unix_millis(),
+                    reply_to: Some(group_message_id.clone()),
+                    work_id: Some(work.id.clone()),
+                    session_id: Some(request.chat_id.clone()),
+                    kind: "steer".to_owned(),
+                },
+                Vec::new(),
+                &state.bot_queue_path,
+            )
+            .map_err(internal_error)?;
+    }
+    let mut message = work;
+    message.id = id.clone();
+    record_bot_message(&state, &message, "user", text).await.map_err(internal_error)?;
+    app_emit(&state, &request.chat_id, json!({
+        "type":"user","role":"user","text":text,"steer":true,
+        "sessionId":request.chat_id,"botId":request.bot_id,"turnId":message.id,
+    }));
+    Ok(Json(json!({"ok":true,"steered":true,"turnId":message.id})))
 }
 
 async fn app_chat_stop(

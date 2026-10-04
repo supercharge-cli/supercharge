@@ -473,6 +473,18 @@ impl PersistentCli {
         .await
     }
 
+    pub async fn steer(&self, text: &str, interjection_id: &str) -> Response {
+        if !self.is_alive() || !self.is_prompting() {
+            return Err("No active agent turn to steer".to_owned());
+        }
+        self.request(
+            "x.ai/interject",
+            json!({"sessionId":self.session_id,"text":text,"interjectionId":interjection_id}),
+            Some(Duration::from_secs(10)),
+        )
+        .await
+    }
+
     async fn request(&self, method: &str, params: Value, timeout: Option<Duration>) -> Response {
         if !self.is_alive() {
             return Err("Agent runtime is not running".to_owned());
@@ -571,6 +583,9 @@ for line in sys.stdin:
     if method=='session/cancel':
         if active: active.set()
         continue
+    if method=='x.ai/interject':
+        send({'jsonrpc':'2.0','id':obj['id'],'result':{'status':'queued'}})
+        continue
     if method=='session/prompt':
         text=obj['params']['prompt'][0]['text']
         if text=='exit': sys.exit(4)
@@ -645,6 +660,44 @@ for line in sys.stdin:
         assert!(runtime.is_alive());
         runtime.prompt("next", "second").await.unwrap();
         runtime.close().await;
+    }
+
+    #[tokio::test]
+    async fn steer_reaches_active_prompt_without_ending_it() {
+        let (writer, mut requests) = mpsc::unbounded_channel();
+        let (shutdown, _shutdown_rx) = mpsc::unbounded_channel();
+        let state = Arc::new(RuntimeState {
+            pending: Mutex::new(HashMap::new()),
+            alive: AtomicBool::new(true),
+            prompting: AtomicBool::new(false),
+            settled: Notify::new(),
+            sequence: AtomicU64::new(1),
+            on_event: Arc::new(|_| {}),
+        });
+        let runtime = Arc::new(PersistentCli {
+            state: state.clone(),
+            writer,
+            shutdown,
+            session_id: "test-session".into(),
+            pid: 0,
+            home: PathBuf::new(),
+            mcp_servers: Mutex::new(Vec::new()),
+        });
+        assert!(runtime.steer("too early", "early").await.is_err());
+        state.prompting.store(true, Ordering::SeqCst);
+        let copy = runtime.clone();
+        let steer = tokio::spawn(async move { copy.steer("change direction", "steer-1").await });
+        let request = requests.recv().await.unwrap();
+        assert_eq!(request["method"], "x.ai/interject");
+        assert_eq!(request["params"], json!({
+            "sessionId":"test-session","text":"change direction","interjectionId":"steer-1"
+        }));
+        let id = request["id"].as_u64().unwrap();
+        let pending = state.pending.lock().unwrap().remove(&id).unwrap();
+        assert!(!pending.prompt);
+        pending.response.send(Ok(json!({"status":"queued"}))).unwrap();
+        assert_eq!(steer.await.unwrap().unwrap()["status"], "queued");
+        assert!(runtime.is_prompting());
     }
 
     #[tokio::test]
