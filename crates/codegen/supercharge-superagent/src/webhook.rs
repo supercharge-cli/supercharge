@@ -53,7 +53,7 @@ pub struct WebhookClient {
 impl WebhookClient {
     pub fn new() -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
         }
     }
 

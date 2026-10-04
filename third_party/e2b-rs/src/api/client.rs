@@ -47,6 +47,7 @@ impl ApiClient {
     /// Build a client from a [`ConnectionConfig`]. Validates the API key format
     /// when present and `validate_api_key` is enabled; errors when
     /// `require_api_key` is set but no key is configured.
+    #[allow(clippy::disallowed_methods)] // Vendored SDK uses reqwest 0.13; the project TLS helper currently wraps reqwest 0.12.
     pub(crate) fn new(config: &ConnectionConfig, require_api_key: bool) -> Result<Self> {
         if require_api_key && config.api_key.is_none() {
             return Err(Error::Authentication(
@@ -222,11 +223,14 @@ mod tests {
 
     #[test]
     fn new_requires_api_key_when_asked() {
-        let config = ConnectionConfig::new(ConnectionConfigOpts {
-            api_key: None,
-            api_url: Some("https://api.example".to_string()),
-            ..Default::default()
-        });
+        let config = ConnectionConfig::from_env(
+            ConnectionConfigOpts {
+                api_key: None,
+                api_url: Some("https://api.example".to_string()),
+                ..Default::default()
+            },
+            |_| None,
+        );
         assert!(matches!(
             ApiClient::new(&config, true),
             Err(crate::errors::Error::Authentication(_))

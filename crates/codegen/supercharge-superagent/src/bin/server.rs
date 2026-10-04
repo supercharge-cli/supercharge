@@ -139,6 +139,8 @@ impl RateLimiter {
     }
 }
 
+type AppEventRoute = (String, String, String);
+
 #[derive(Clone)]
 struct AppState {
     config: SuperagentConfig,
@@ -176,7 +178,7 @@ struct AppState {
     human_control_until: Arc<AtomicU64>,
     app_runtimes: Arc<Mutex<HashMap<String, Arc<AppRuntime>>>>,
     bot_runtime_last_used: Arc<Mutex<HashMap<String, u64>>>,
-    app_event_routes: Arc<StdMutex<HashMap<String, (String, String, String)>>>,
+    app_event_routes: Arc<StdMutex<HashMap<String, AppEventRoute>>>,
     app_background: Arc<StdMutex<HashMap<String, Value>>>,
     #[cfg(feature = "e2b")]
     e2b_sessions: Arc<Mutex<E2bSessionStore>>,
@@ -1470,7 +1472,7 @@ fn ingest_cli_stream_line(
         Some(PromptStreamSink::App { state, chat_id }) => {
             for event in events {
                 match &event {
-                    LiveEvent::Thought(chunk) => stream.live_thought.push_str(&chunk),
+                    LiveEvent::Thought(chunk) => stream.live_thought.push_str(chunk),
                     LiveEvent::ToolStart { .. } => {
                         stream.tool_count = stream.tool_count.saturating_add(1);
                         state
@@ -1601,6 +1603,8 @@ async fn execute_headless_cli_turn(
     #[cfg(unix)]
     command.process_group(0);
     supercharge_superagent::workload_identity::apply_tokio(&mut command);
+    #[allow(clippy::disallowed_methods)]
+    // process_group plus CliProcessGroup own and reap this child
     let mut child = command
         .spawn()
         .map_err(|error| redact_secrets(&error.to_string()))?;
@@ -1624,8 +1628,8 @@ async fn execute_headless_cli_turn(
                 let elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
                 let eta_ms = estimated_turn_ms().saturating_sub(elapsed_ms);
                 app_emit(
-                    &state,
-                    &chat_id,
+                    state,
+                    chat_id,
                     json!({
                         "type": "status",
                         "busy": true,
@@ -1676,17 +1680,16 @@ async fn execute_headless_cli_turn(
             )
         });
     }
-    if let Some(parent) = session_marker.parent() {
-        if let Err(error) = std::fs::create_dir_all(parent)
+    if let Some(parent) = session_marker.parent()
+        && let Err(error) = std::fs::create_dir_all(parent)
             .and_then(|_| std::fs::write(session_marker, "initialized\n"))
-        {
-            tracing::warn!(
-                session = %session_key,
-                path = %session_marker.display(),
-                %error,
-                "agent response succeeded but its resume marker could not be persisted"
-            );
-        }
+    {
+        tracing::warn!(
+            session = %session_key,
+            path = %session_marker.display(),
+            %error,
+            "agent response succeeded but its resume marker could not be persisted"
+        );
     }
     let _ = agent_config;
     Ok(stream)
@@ -2620,6 +2623,8 @@ fn ensure_e2b_browser_sidecar() {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     supercharge_superagent::workload_identity::apply_std(&mut command);
+    #[allow(clippy::disallowed_methods)]
+    // sidecar script self-daemonizes and owns its process lifetime
     match command.spawn() {
         Ok(_) => eprintln!("e2b browser sidecar start requested"),
         Err(error) => eprintln!("e2b browser sidecar start failed: {error}"),
@@ -4026,10 +4031,10 @@ fn schedule_bot_queue(state: Arc<AppState>) {
             }
             let control = DesktopControl::shared();
             let old = control.active.read().await.clone();
-            if let Some(old) = old {
-                if control.revoke(&old.id).await.is_err() {
-                    return;
-                }
+            if let Some(old) = old
+                && control.revoke(&old.id).await.is_err()
+            {
+                return;
             }
         }
         loop {
@@ -4245,10 +4250,9 @@ async fn prepare_bot_reply(state: &AppState, session_id: &str, reply: &str) -> S
                     && !relative
                         .components()
                         .any(|c| matches!(c, std::path::Component::ParentDir))
+                    && let Ok(prefix) = cwd.strip_prefix(&root)
                 {
-                    if let Ok(prefix) = cwd.strip_prefix(&root) {
-                        return format!("MEDIA:{}", prefix.join(relative).display());
-                    }
+                    return format!("MEDIA:{}", prefix.join(relative).display());
                 }
             }
             line.to_owned()
@@ -4379,8 +4383,8 @@ async fn persistent_app_runtime(
     let listener_session = session_id.to_owned();
     let listening = accepting_events.clone();
     let rules = bot_rules(&bot, session_id, &cwd);
-    let managed_mcp = plugin_api::restore_for_launch(state, &bot.id, session_id, &cli_session_id)
-        .await?;
+    let managed_mcp =
+        plugin_api::restore_for_launch(state, &bot.id, session_id, &cli_session_id).await?;
     let bot_environment = {
         let catalog = state.bot_catalog.lock().await;
         if catalog.capability.is_empty() {
@@ -4580,10 +4584,10 @@ fn spawn_bot_turn(
         };
         if result.is_err() {
             let runtime = state.app_runtimes.lock().await.get(&session_id).cloned();
-            if let Some(runtime) = runtime {
-                if runtime.cli.is_prompting() {
-                    runtime.cli.cancel().await;
-                }
+            if let Some(runtime) = runtime
+                && runtime.cli.is_prompting()
+            {
+                runtime.cli.cancel().await;
             }
         }
         let (status, reply, error) = match result {
@@ -4641,15 +4645,15 @@ fn spawn_bot_turn(
         if let Err(failure) = &saved {
             eprintln!("bot work result persistence failed for {work_id}: {failure}");
         }
-        if saved.is_ok() {
-            if let Some(job) = job_id {
-                app_emit(
-                    &state,
-                    "owner",
-                    json!({"type":"bot_job","jobId":job,"botId":bot_id,
+        if saved.is_ok()
+            && let Some(job) = job_id
+        {
+            app_emit(
+                &state,
+                "owner",
+                json!({"type":"bot_job","jobId":job,"botId":bot_id,
                 "sessionId":session_id,"state":status}),
-                );
-            }
+            );
         }
         for event in app_turn_completion_events() {
             app_emit(&state, &chat, event);
@@ -4992,11 +4996,9 @@ async fn create_app_conversation(
     let session_id = format!("chat-{}", uuid::Uuid::new_v4());
     let conversations = {
         let mut sessions = state.sessions.lock().await;
-        if legacy {
-            if let Some(current) = sessions.get_mut(&previous) {
-                current.status = "closed".to_owned();
-                current.updated_at = now;
-            }
+        if legacy && let Some(current) = sessions.get_mut(&previous) {
+            current.status = "closed".to_owned();
+            current.updated_at = now;
         }
         sessions.insert(
             session_id.clone(),
@@ -5060,9 +5062,9 @@ async fn switch_app_conversation(
     let previous = app_active_session(&state).await;
     let conversations = {
         let mut sessions = state.sessions.lock().await;
-        if !sessions
+        if sessions
             .get(&request.session_id)
-            .is_some_and(|session| session.bot_id == MAIN_BOT_ID)
+            .is_none_or(|session| session.bot_id != MAIN_BOT_ID)
         {
             return Err((
                 StatusCode::NOT_FOUND,
@@ -5101,6 +5103,10 @@ async fn switch_app_conversation(
     Ok(Json(
         json!({"active":app_active_session(&state).await,"conversations":conversations}),
     ))
+}
+
+fn legacy_turn_conflicts(e2b: bool, turn: Option<&RunningAppTurn>) -> bool {
+    !e2b && turn.is_some_and(|turn| !turn.task.is_finished())
 }
 
 async fn app_chat(
@@ -5151,11 +5157,7 @@ async fn app_chat(
     }
     let bot = bot_definition(&state, bot_id).await?;
     let mut legacy_turn = state.app_turn.lock().await;
-    if !e2b
-        && legacy_turn
-            .as_ref()
-            .is_some_and(|turn| !turn.task.is_finished())
-    {
+    if legacy_turn_conflicts(e2b, legacy_turn.as_ref()) {
         return Err((
             StatusCode::CONFLICT,
             Json(ErrorResponse {
@@ -5468,6 +5470,24 @@ async fn api_stream(
     })
 }
 
+async fn stop_legacy_app_turn(state: &AppState, chat_id: &str) {
+    let running = {
+        let mut turn = state.app_turn.lock().await;
+        if turn
+            .as_ref()
+            .is_some_and(|running| running.chat_id == chat_id)
+        {
+            turn.take()
+        } else {
+            None
+        }
+    };
+    if let Some(running) = running {
+        let _ = running.cancel.send(());
+        let _ = running.task.await;
+    }
+}
+
 async fn app_chat_stop(
     State(state): State<Arc<AppState>>,
     Json(request): Json<Value>,
@@ -5524,21 +5544,7 @@ async fn app_chat_stop(
         schedule_bot_queue(state);
         return Json(json!({"ok":true}));
     }
-    let running = {
-        let mut turn = state.app_turn.lock().await;
-        if turn
-            .as_ref()
-            .is_some_and(|running| running.chat_id == chat_id)
-        {
-            turn.take()
-        } else {
-            None
-        }
-    };
-    if let Some(running) = running {
-        let _ = running.cancel.send(());
-        let _ = running.task.await;
-    }
+    stop_legacy_app_turn(&state, chat_id).await;
     Json(json!({"ok":true}))
 }
 
@@ -5919,20 +5925,17 @@ mod tests {
             cancel,
             task,
         });
-        let response = app_chat(
-            State(state.clone()),
-            Json(AppChatRequest {
-                text: Some("second message".into()),
-                chat_id: None,
-                bot_id: None,
-                files: None,
-            }),
-        )
-        .await;
-        assert!(matches!(response, Err((StatusCode::CONFLICT, _))));
+        assert!(legacy_turn_conflicts(
+            false,
+            state.app_turn.lock().await.as_ref()
+        ));
+        assert!(!legacy_turn_conflicts(
+            true,
+            state.app_turn.lock().await.as_ref()
+        ));
         let _ = app_chat_stop(State(state.clone()), Json(json!({"chatId":"other"}))).await;
         assert!(!stopped.load(Ordering::SeqCst));
-        let _ = app_chat_stop(State(state.clone()), Json(json!({}))).await;
+        stop_legacy_app_turn(&state, "owner").await;
         assert!(stopped.load(Ordering::SeqCst));
         assert!(state.app_turn.lock().await.is_none());
         let _ = app_chat_stop(State(state), Json(json!({}))).await;

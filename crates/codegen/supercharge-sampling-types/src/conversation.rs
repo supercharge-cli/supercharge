@@ -51,6 +51,22 @@ fn sanitize_tool_arguments(id: &str, name: &str, arguments: Arc<str>) -> Arc<str
     }
 }
 
+/// Project a function schema onto the root shape accepted by strict provider APIs.
+/// Nested constraints and the runtime parser remain authoritative; only unsupported root combinators are removed.
+fn portable_function_parameters(parameters: &serde_json::Value) -> serde_json::Value {
+    const FORBIDDEN_ROOT_KEYWORDS: [&str; 6] = ["oneOf", "anyOf", "allOf", "enum", "const", "not"];
+
+    let mut object = parameters.as_object().cloned().unwrap_or_default();
+    object.insert(
+        "type".to_owned(),
+        serde_json::Value::String("object".to_owned()),
+    );
+    for keyword in FORBIDDEN_ROOT_KEYWORDS {
+        object.remove(keyword);
+    }
+    serde_json::Value::Object(object)
+}
+
 use serde::{Deserialize, Serialize};
 
 use crate::rs;

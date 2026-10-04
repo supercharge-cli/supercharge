@@ -66,7 +66,7 @@ pub struct WhatsAppClient {
 impl WhatsAppClient {
     pub fn new(config: WhatsAppConfig) -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
             config,
         }
     }

@@ -5,8 +5,8 @@
 //! pieces incrementally without creating a second agent implementation.
 
 pub mod acp_runtime;
-pub mod atomic_state;
 mod approval;
+pub mod atomic_state;
 pub mod browser;
 mod capabilities;
 pub mod commands;
@@ -20,14 +20,14 @@ pub mod integrations;
 pub mod jobs;
 pub mod live;
 pub mod matrix;
-pub mod self_update;
 pub mod media;
 pub mod memory;
-pub mod provider;
 pub mod plugin_control;
+pub mod provider;
 pub mod redaction;
 pub mod schedule_store;
 mod scheduler;
+pub mod self_update;
 pub mod sharing;
 pub mod signal;
 pub mod slack;
@@ -45,6 +45,16 @@ pub use capabilities::CapabilityProfile;
 pub use e2b::E2bExecutor;
 pub use e2b::{E2bError, ExecutionResult, PersistentExecutionRequest, SandboxPlan, SandboxStatus};
 pub use scheduler::ScheduledJob;
+
+pub(crate) fn http_client(
+    configure: impl Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
+) -> reqwest::Result<reqwest::Client> {
+    supercharge_extra_ca::build_reqwest_client(configure)
+}
+
+pub(crate) fn default_http_client() -> reqwest::Client {
+    http_client(std::convert::identity).expect("failed to build shared-policy HTTP client")
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SuperagentConfig {

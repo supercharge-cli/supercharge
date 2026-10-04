@@ -105,13 +105,16 @@ async fn sidecar_json(
     if !is_e2b_runtime() {
         return Err("browser runtime is available only in E2B mode".to_owned());
     }
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(if path == "/status" { 2 } else { 20 }))
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-        .map_err(|error| error.to_string())?;
-    let request = client.request(method, sidecar_url(path)).header("x-vectra-browser-observer", "1");
+    let client = crate::http_client(|builder| {
+        builder
+            .timeout(Duration::from_secs(if path == "/status" { 2 } else { 20 }))
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+    })
+    .map_err(|error| error.to_string())?;
+    let request = client
+        .request(method, sidecar_url(path))
+        .header("x-vectra-browser-observer", "1");
     let response = match payload {
         Some(value) => request.json(&value).send().await,
         None => request.send().await,
@@ -157,7 +160,8 @@ pub async fn ensure_stream(port: u16) -> StreamStatus {
 type BytesEvent = Result<bytes::Bytes, Infallible>;
 
 fn sse(value: &impl Serialize) -> BytesEvent {
-    let encoded = serde_json::to_string(value).unwrap_or_else(|_| "{\"type\":\"error\"}".to_owned());
+    let encoded =
+        serde_json::to_string(value).unwrap_or_else(|_| "{\"type\":\"error\"}".to_owned());
     Ok(bytes::Bytes::from(format!("data: {encoded}\n\n")))
 }
 
@@ -212,14 +216,34 @@ pub fn sse_stream(initial: StreamStatus) -> impl Stream<Item = BytesEvent> + Sen
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum BrowserAction {
-    Navigate { url: String },
-    Click { selector: String },
-    Fill { selector: String, text: String },
-    Type { selector: String, text: String },
-    Press { key: String },
-    Select { selector: String, value: String },
-    Scroll { direction: String, pixels: Option<u32> },
-    Wait { milliseconds: Option<u64> },
+    Navigate {
+        url: String,
+    },
+    Click {
+        selector: String,
+    },
+    Fill {
+        selector: String,
+        text: String,
+    },
+    Type {
+        selector: String,
+        text: String,
+    },
+    Press {
+        key: String,
+    },
+    Select {
+        selector: String,
+        value: String,
+    },
+    Scroll {
+        direction: String,
+        pixels: Option<u32>,
+    },
+    Wait {
+        milliseconds: Option<u64>,
+    },
     Back,
     Forward,
     Reload,
@@ -239,7 +263,9 @@ const MAX_URL_CHARS: usize = 2_048;
 
 fn validate_text(value: &str, label: &str, max: usize) -> Result<(), String> {
     if value.trim().is_empty() || value.chars().count() > max || value.contains('\0') {
-        return Err(format!("{label} is empty, too long, or contains a null byte"));
+        return Err(format!(
+            "{label} is empty, too long, or contains a null byte"
+        ));
     }
     Ok(())
 }
@@ -257,42 +283,73 @@ fn action_payload(action: &BrowserAction) -> Result<(String, serde_json::Value),
     match action {
         BrowserAction::Navigate { url } => {
             validate_url(url)?;
-            Ok(("navigate".to_owned(), serde_json::json!({"action":"navigate", "url":url})))
+            Ok((
+                "navigate".to_owned(),
+                serde_json::json!({"action":"navigate", "url":url}),
+            ))
         }
         BrowserAction::Click { selector } => {
             validate_text(selector, "selector", MAX_SELECTOR_CHARS)?;
-            Ok(("click".to_owned(), serde_json::json!({"action":"click", "selector":selector})))
+            Ok((
+                "click".to_owned(),
+                serde_json::json!({"action":"click", "selector":selector}),
+            ))
         }
         BrowserAction::Fill { selector, text } | BrowserAction::Type { selector, text } => {
             validate_text(selector, "selector", MAX_SELECTOR_CHARS)?;
             validate_text(text, "text", MAX_TEXT_CHARS)?;
-            let name = if matches!(action, BrowserAction::Fill { .. }) { "fill" } else { "type" };
-            Ok((name.to_owned(), serde_json::json!({"action":name, "selector":selector, "text":text})))
+            let name = if matches!(action, BrowserAction::Fill { .. }) {
+                "fill"
+            } else {
+                "type"
+            };
+            Ok((
+                name.to_owned(),
+                serde_json::json!({"action":name, "selector":selector, "text":text}),
+            ))
         }
         BrowserAction::Press { key } => {
             validate_text(key, "key", 80)?;
-            Ok(("press".to_owned(), serde_json::json!({"action":"press", "key":key})))
+            Ok((
+                "press".to_owned(),
+                serde_json::json!({"action":"press", "key":key}),
+            ))
         }
         BrowserAction::Select { selector, value } => {
             validate_text(selector, "selector", MAX_SELECTOR_CHARS)?;
             validate_text(value, "value", MAX_TEXT_CHARS)?;
-            Ok(("select".to_owned(), serde_json::json!({"action":"select", "selector":selector, "value":value})))
+            Ok((
+                "select".to_owned(),
+                serde_json::json!({"action":"select", "selector":selector, "value":value}),
+            ))
         }
         BrowserAction::Scroll { direction, pixels } => {
             let direction = direction.to_ascii_lowercase();
             if !matches!(direction.as_str(), "up" | "down" | "left" | "right") {
                 return Err("scroll direction must be up, down, left, or right".to_owned());
             }
-            Ok(("scroll".to_owned(), serde_json::json!({"action":"scroll", "direction":direction, "pixels":pixels.unwrap_or(700).clamp(1,3000)})))
+            Ok((
+                "scroll".to_owned(),
+                serde_json::json!({"action":"scroll", "direction":direction, "pixels":pixels.unwrap_or(700).clamp(1,3000)}),
+            ))
         }
-        BrowserAction::Wait { milliseconds } => Ok(("wait".to_owned(), serde_json::json!({"action":"wait", "milliseconds":milliseconds.unwrap_or(500).clamp(0,30000)}))),
+        BrowserAction::Wait { milliseconds } => Ok((
+            "wait".to_owned(),
+            serde_json::json!({"action":"wait", "milliseconds":milliseconds.unwrap_or(500).clamp(0,30000)}),
+        )),
         BrowserAction::Back => Ok(("back".to_owned(), serde_json::json!({"action":"back"}))),
-        BrowserAction::Forward => Ok(("forward".to_owned(), serde_json::json!({"action":"forward"}))),
+        BrowserAction::Forward => Ok((
+            "forward".to_owned(),
+            serde_json::json!({"action":"forward"}),
+        )),
         BrowserAction::Reload => Ok(("reload".to_owned(), serde_json::json!({"action":"reload"}))),
     }
 }
 
-pub async fn execute_action(action: BrowserAction, handoff_id: &str) -> Result<BrowserActionResult, String> {
+pub async fn execute_action(
+    action: BrowserAction,
+    handoff_id: &str,
+) -> Result<BrowserActionResult, String> {
     let (name, mut payload) = action_payload(&action)?;
     payload["handoffId"] = serde_json::json!(handoff_id);
     let response = sidecar_json(reqwest::Method::POST, "/control", Some(payload)).await;
@@ -312,46 +369,81 @@ pub async fn execute_action(action: BrowserAction, handoff_id: &str) -> Result<B
     }
 }
 
-pub async fn handoff(start: bool, minutes: Option<u8>, handoff_id: &str, bot_id: Option<&str>, session_id: Option<&str>) -> Result<serde_json::Value, String> {
-    let path = if start { "/handoff/start" } else { "/handoff/stop" };
+pub async fn handoff(
+    start: bool,
+    minutes: Option<u8>,
+    handoff_id: &str,
+    bot_id: Option<&str>,
+    session_id: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let path = if start {
+        "/handoff/start"
+    } else {
+        "/handoff/stop"
+    };
     let payload = serde_json::json!({"minutes": minutes.unwrap_or(10).clamp(1, 30), "handoffId":handoff_id, "botId":bot_id, "sessionId":session_id});
     sidecar_json(reqwest::Method::POST, path, Some(payload)).await
 }
 
 pub async fn desktop_status() -> Result<DesktopStatus, String> {
-    serde_json::from_value(sidecar_json(reqwest::Method::GET, "/status", None).await?).map_err(|error| error.to_string())
+    serde_json::from_value(sidecar_json(reqwest::Method::GET, "/status", None).await?)
+        .map_err(|error| error.to_string())
 }
 
 pub async fn configure_desktop_environment(command: &mut tokio::process::Command, owner: &str) {
-    command.env("VECTRA_BROWSER_OWNER", owner).env_remove("SUPERCHARGE_DESKTOP_PROTOCOL");
+    command
+        .env("VECTRA_BROWSER_OWNER", owner)
+        .env_remove("SUPERCHARGE_DESKTOP_PROTOCOL");
     if let Ok(status) = desktop_status().await
-        && status.desktop && status.desktop_protocol == 1 && status.handoff_protocol >= 2
+        && status.desktop
+        && status.desktop_protocol == 1
+        && status.handoff_protocol >= 2
     {
-        command.env("SUPERCHARGE_DESKTOP_PROTOCOL", "1")
+        command
+            .env("SUPERCHARGE_DESKTOP_PROTOCOL", "1")
             .env("DISPLAY", ":99")
             .env("XAUTHORITY", "/tmp/supercharge-browser/Xauthority")
-            .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/tmp/supercharge-browser/bus");
+            .env(
+                "DBUS_SESSION_BUS_ADDRESS",
+                "unix:path=/tmp/supercharge-browser/bus",
+            );
     }
 }
 
 pub async fn handoff_active() -> Result<bool, String> {
     let value = sidecar_json(reqwest::Method::GET, "/status", None).await?;
-    Ok(value.get("handoff").and_then(serde_json::Value::as_bool).unwrap_or(false))
+    Ok(value
+        .get("handoff")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false))
 }
 
 pub async fn release_owner(owner: &str) -> Result<(), String> {
-    sidecar_json(reqwest::Method::POST, "/lease/release", Some(serde_json::json!({"owner":owner}))).await?;
+    sidecar_json(
+        reqwest::Method::POST,
+        "/lease/release",
+        Some(serde_json::json!({"owner":owner})),
+    )
+    .await?;
     Ok(())
 }
 
 pub async fn reset_after_resume() -> Result<(), String> {
-    sidecar_json(reqwest::Method::POST, "/lease/reset", Some(serde_json::json!({}))).await?;
+    sidecar_json(
+        reqwest::Method::POST,
+        "/lease/reset",
+        Some(serde_json::json!({})),
+    )
+    .await?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{BrowserAction, DEFAULT_MAX_FPS, DEFAULT_SIDECAR_PORT, DEFAULT_STREAM_PORT, StreamStatus, action_payload, stream_port};
+    use super::{
+        BrowserAction, DEFAULT_MAX_FPS, DEFAULT_SIDECAR_PORT, DEFAULT_STREAM_PORT, StreamStatus,
+        action_payload, stream_port,
+    };
 
     #[test]
     fn defaults_match_the_computer_pane_contract() {
@@ -363,8 +455,18 @@ mod tests {
 
     #[test]
     fn browser_actions_reject_invalid_urls() {
-        assert!(action_payload(&BrowserAction::Navigate { url: "file:///etc/passwd".to_owned() }).is_err());
-        assert!(action_payload(&BrowserAction::Navigate { url: "https://example.com".to_owned() }).is_ok());
+        assert!(
+            action_payload(&BrowserAction::Navigate {
+                url: "file:///etc/passwd".to_owned()
+            })
+            .is_err()
+        );
+        assert!(
+            action_payload(&BrowserAction::Navigate {
+                url: "https://example.com".to_owned()
+            })
+            .is_ok()
+        );
     }
 
     #[test]

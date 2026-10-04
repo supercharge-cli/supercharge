@@ -267,9 +267,9 @@ pub async fn fetch_github_api_latest() -> Result<String> {
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| GH_RELEASE_REPO.to_string());
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
-    let client = reqwest::Client::builder()
-        .user_agent("supercharge-cli")
-        .build()?;
+    let client = supercharge_extra_ca::build_reqwest_client(|builder| {
+        builder.user_agent("supercharge-cli")
+    })?;
     let resp = client.get(&url).send().await?;
     if !resp.status().is_success() {
         anyhow::bail!("GitHub releases/latest HTTP {}", resp.status());

@@ -11,6 +11,46 @@ fn messages_test_request(reasoning_effort: Option<crate::ReasoningEffort>) -> Co
 }
 
 #[test]
+fn strict_messages_tool_schema_keeps_properties_without_root_combinators() {
+    let original = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "tool_name": {"type": "string"},
+            "tool_input": {"type": "object"},
+            "tool_input_file": {"type": "string"},
+            "file": {"type": "string"}
+        },
+        "oneOf": [
+            {"required": ["tool_name", "tool_input"]},
+            {"required": ["tool_name", "tool_input_file"]},
+            {"required": ["file"]}
+        ]
+    });
+    let req =
+        ConversationRequest::from_items(vec![ConversationItem::user("test")]).with_tools(vec![
+            ToolSpec {
+                name: "use_tool".to_owned(),
+                description: Some("Invoke an MCP tool".to_owned()),
+                parameters: original.clone(),
+            },
+        ]);
+
+    let messages = build_messages_request(&req);
+    let parameters = &messages.tools.expect("tools")[0].input_schema;
+    assert_eq!(
+        parameters.get("type").and_then(|value| value.as_str()),
+        Some("object")
+    );
+    assert_eq!(parameters.get("properties"), original.get("properties"));
+    for keyword in ["oneOf", "anyOf", "allOf", "enum", "const", "not"] {
+        assert!(
+            parameters.get(keyword).is_none(),
+            "root keyword {keyword} must be omitted: {parameters:#}"
+        );
+    }
+}
+
+#[test]
 fn json_schema_and_reasoning_effort_are_orthogonal_in_output_config() {
     let schema = serde_json::json!({
         "type": "object",

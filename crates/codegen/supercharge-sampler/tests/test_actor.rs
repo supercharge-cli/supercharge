@@ -208,6 +208,45 @@ async fn submit_emits_started_first_token_channel_completed() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn chat_completions_transport_keepalives_are_ignored_before_typed_decoding() {
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(|| async {
+            let mut events =
+                sse::chat_completion_events("heartbeat-compatible answer", "test-model");
+            events.insert(
+                1,
+                Event::default()
+                    .event("keepalive")
+                    .data(json!({"type": "keepalive"}).to_string()),
+            );
+            events.insert(
+                2,
+                Event::default().data(json!({"type": "heartbeat"}).to_string()),
+            );
+            Sse::new(stream::iter(
+                events.into_iter().map(Ok::<_, std::convert::Infallible>),
+            ))
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    let handle = SamplerActor::spawn(
+        test_config(server.base_url(), "test-model"),
+        RetryPolicy::default(),
+        event_tx,
+    );
+
+    let result = handle
+        .submit_and_collect(RequestId::from("req-chat-keepalive"), user_request("hi"))
+        .await;
+    server.shutdown();
+
+    let (response, _metrics) = result.expect("transport keepalives must not fail the response");
+    assert_eq!(response.assistant_text(), "heartbeat-compatible answer");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn submit_and_collect_returns_response() {
     let app = Router::new().route(
         "/v1/chat/completions",
@@ -1093,6 +1132,48 @@ fn messages_config(base_url: String) -> SamplerConfig {
 /// Regression for the refusal-stop_reason incident.
 /// A well-formed stream terminated by `stop_reason: "refusal"` must produce a successful completion from EXACTLY ONE request, no retry storm.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn messages_transport_keepalives_are_ignored_before_typed_decoding() {
+    let app = Router::new().route(
+        "/v1/messages",
+        post(|| async {
+            let mut events =
+                sse::messages_api_events("heartbeat-compatible answer", "test-model", "end_turn");
+            events.insert(
+                1,
+                Event::default()
+                    .event("keepalive")
+                    .data(json!({"type": "keepalive"}).to_string()),
+            );
+            events.insert(
+                2,
+                Event::default().data(json!({"type": "heartbeat"}).to_string()),
+            );
+            Sse::new(stream::iter(
+                events.into_iter().map(Ok::<_, std::convert::Infallible>),
+            ))
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    let handle = SamplerActor::spawn(
+        messages_config(server.base_url()),
+        RetryPolicy::default(),
+        event_tx,
+    );
+
+    let result = handle
+        .submit_and_collect(
+            RequestId::from("req-messages-keepalive"),
+            user_request("hi"),
+        )
+        .await;
+    server.shutdown();
+
+    let (response, _metrics) = result.expect("transport keepalives must not fail the response");
+    assert_eq!(response.assistant_text(), "heartbeat-compatible answer");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn messages_refusal_stream_completes_with_single_request() {
     let counter = Arc::new(AtomicU32::new(0));
     let counter_handler = Arc::clone(&counter);
@@ -1307,6 +1388,89 @@ fn responses_config(base_url: String, doom_loop: Option<DoomLoopRecoveryPolicy>)
     cfg.api_backend = ApiBackend::Responses;
     cfg.doom_loop_recovery = doom_loop;
     cfg
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn responses_transport_keepalives_are_ignored_before_typed_decoding() {
+    let app = Router::new().route(
+        "/v1/responses",
+        post(|| async {
+            let mut events = sse::responses_api_reasoning_and_text_events(
+                "working",
+                "keepalive-compatible answer",
+                "test-model",
+            );
+            events.insert(
+                1,
+                SseEvent::with_event("keepalive", json!({"type": "keepalive"}).to_string()),
+            );
+            events.insert(2, SseEvent::data(json!({"type": "heartbeat"}).to_string()));
+            let events = sse_events_to_axum(events);
+            Sse::new(stream::iter(
+                events.into_iter().map(Ok::<_, std::convert::Infallible>),
+            ))
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    let handle = SamplerActor::spawn(
+        responses_config(server.base_url(), None),
+        RetryPolicy::default(),
+        event_tx,
+    );
+
+    let result = handle
+        .submit_and_collect(RequestId::from("req-keepalive"), user_request("hi"))
+        .await;
+    server.shutdown();
+
+    let (response, _metrics) = result.expect("transport keepalives must not fail the response");
+    assert_eq!(response.assistant_text(), "keepalive-compatible answer");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn responses_unknown_non_transport_event_remains_a_serialization_failure() {
+    let counter = Arc::new(AtomicU32::new(0));
+    let counter_handler = Arc::clone(&counter);
+    let app = Router::new().route(
+        "/v1/responses",
+        post(move || {
+            let counter = Arc::clone(&counter_handler);
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                let events =
+                    vec![
+                        Event::default().data(
+                            json!({"type": "response.future_terminal", "sequence_number": 0})
+                                .to_string(),
+                        ),
+                    ];
+                Sse::new(stream::iter(
+                    events.into_iter().map(Ok::<_, std::convert::Infallible>),
+                ))
+            }
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+    let mut config = responses_config(server.base_url(), None);
+    config.max_retries = Some(0);
+    let handle = SamplerActor::spawn(config, RetryPolicy::default(), event_tx);
+
+    handle.submit(
+        RequestId::from("req-unknown-response-event"),
+        user_request("hi"),
+    );
+    let events = drain_until_terminal(&mut event_rx, Duration::from_secs(5)).await;
+    server.shutdown();
+
+    assert_eq!(counter.load(Ordering::SeqCst), 1);
+    match events.last().expect("terminal event") {
+        SamplingEvent::Failed { error, .. } => {
+            assert_eq!(error.kind, SamplingErrorKind::Serialization);
+        }
+        other => panic!("expected serialization failure, got {other:?}"),
+    }
 }
 
 /// Server-reported doom-loop triggers flow through the actor rung onto the completed response, without retries.

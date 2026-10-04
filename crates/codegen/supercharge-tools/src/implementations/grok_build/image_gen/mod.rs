@@ -268,11 +268,19 @@ impl ImageGenClient {
             "n": 1,
             "response_format": "b64_json",
         });
-        if let Some(size) = size_from_aspect_ratio(aspect_ratio) {
-            payload["size"] = serde_json::Value::String(size.to_owned());
-        }
-        if self.format == ImageProviderFormat::Custom && !aspect_ratio.trim().is_empty() {
-            payload["aspect_ratio"] = serde_json::Value::String(aspect_ratio.to_owned());
+        if let Some(object) = payload.as_object_mut() {
+            if let Some(size) = size_from_aspect_ratio(aspect_ratio) {
+                object.insert(
+                    "size".to_owned(),
+                    serde_json::Value::String(size.to_owned()),
+                );
+            }
+            if self.format == ImageProviderFormat::Custom && !aspect_ratio.trim().is_empty() {
+                object.insert(
+                    "aspect_ratio".to_owned(),
+                    serde_json::Value::String(aspect_ratio.to_owned()),
+                );
+            }
         }
 
         // Capture the bearer once so the request and the 401-attribution

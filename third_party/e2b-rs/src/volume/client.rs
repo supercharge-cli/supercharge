@@ -42,6 +42,7 @@ impl VolumeApiClient {
     /// `request_timeout_ms` is applied to JSON API requests as a default client
     /// timeout; file operations always use the internal 1-hour `file_timeout_ms`.
     /// `proxy` is an optional HTTP/HTTPS proxy URL.
+    #[allow(clippy::disallowed_methods)] // Vendored SDK uses reqwest 0.13; the project TLS helper currently wraps reqwest 0.12.
     pub(crate) fn new(
         api_url: &str,
         token: &str,

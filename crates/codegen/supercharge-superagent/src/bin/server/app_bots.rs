@@ -135,7 +135,7 @@ impl BotCatalog {
             }
             next.insert(bot.id.clone(), bot);
         }
-        if !next.get(MAIN_BOT_ID).is_some_and(|main| !main.archived) {
+        if next.get(MAIN_BOT_ID).is_none_or(|main| main.archived) {
             return Err("missing or invalid Main bot".to_owned());
         }
         let updated = Self {
@@ -178,15 +178,15 @@ pub fn validate_folder(raw: &str) -> Result<PathBuf, String> {
     {
         return Err("bot folder must be inside the sandbox workspace".to_owned());
     }
-    let checked_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let checked_root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let mut prefix = root.to_path_buf();
     if let Ok(relative) = folder.strip_prefix(root) {
         for component in relative.components() {
             prefix.push(component);
-            if let Ok(canonical) = prefix.canonicalize() {
-                if !canonical.starts_with(&checked_root) {
-                    return Err("bot folder resolves outside the sandbox workspace".to_owned());
-                }
+            if let Ok(canonical) = dunce::canonicalize(&prefix)
+                && !canonical.starts_with(&checked_root)
+            {
+                return Err("bot folder resolves outside the sandbox workspace".to_owned());
             }
         }
     }

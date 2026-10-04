@@ -48,7 +48,9 @@ fn setup(editor: &str, print: bool) -> Result<()> {
     write_zed_settings(&path, snippet)?;
     println!("Wrote Supercharge ACP agent to {}", path.display());
     println!("In Zed: open the Agent Panel (cmd-? / ctrl-?) and start a Supercharge thread.");
-    println!("If you are not signed in yet, authenticate in the thread or run `supercharge login`.");
+    println!(
+        "If you are not signed in yet, authenticate in the thread or run `supercharge login`."
+    );
     Ok(())
 }
 
@@ -107,16 +109,14 @@ fn write_zed_settings(path: &Path, agent: Value) -> Result<()> {
             .with_context(|| format!("failed to read {}", path.display()))?;
         if looks_like_jsonc(&raw) {
             let next = insert_agent_server_jsonc(&raw, AGENT_NAME, &agent)?;
-            fs::write(path, next)
-                .with_context(|| format!("failed to write {}", path.display()))?;
+            fs::write(path, next).with_context(|| format!("failed to write {}", path.display()))?;
             return Ok(());
         }
         let mut root = if raw.trim().is_empty() {
             Value::Object(Map::new())
         } else {
-            serde_json::from_str(raw.trim()).with_context(|| {
-                format!("{} is not valid JSON", path.display())
-            })?
+            serde_json::from_str(raw.trim())
+                .with_context(|| format!("{} is not valid JSON", path.display()))?
         };
         merge_agent_server(&mut root, agent)?;
         let serialized = serde_json::to_string_pretty(&root)?;
@@ -163,7 +163,9 @@ fn insert_agent_server_jsonc(raw: &str, name: &str, agent: &Value) -> Result<Str
     if let Some(start) = raw.find(&format!("\"{name}\"")) {
         // Replace existing Supercharge object: from the key through its matching braces.
         let rest = &raw[start..];
-        let brace = rest.find('{').context("existing agent entry has no object")?;
+        let brace = rest
+            .find('{')
+            .context("existing agent entry has no object")?;
         let obj_start = start + brace;
         let obj_end = matching_brace_end(raw, obj_start)?;
         let mut out = String::with_capacity(raw.len() + entry.len());
@@ -177,9 +179,7 @@ fn insert_agent_server_jsonc(raw: &str, name: &str, agent: &Value) -> Result<Str
         .find(marker)
         .context("settings.json has comments but no agent_servers object; use --print")?;
     let after = &raw[idx + marker.len()..];
-    let rel_brace = after
-        .find('{')
-        .context("agent_servers is not an object")?;
+    let rel_brace = after.find('{').context("agent_servers is not an object")?;
     let insert_at = idx + marker.len() + rel_brace + 1;
     let mut out = String::with_capacity(raw.len() + entry.len() + 2);
     out.push_str(&raw[..insert_at]);
@@ -195,8 +195,8 @@ fn matching_brace_end(s: &str, open: usize) -> Result<usize> {
     anyhow::ensure!(bytes.get(open) == Some(&b'{'), "expected '{{'");
     let mut depth = 0i32;
     let mut i = open;
-    while i < bytes.len() {
-        match bytes[i] {
+    while let Some(byte) = bytes.get(i).copied() {
+        match byte {
             b'{' => depth += 1,
             b'}' => {
                 depth -= 1;
@@ -206,12 +206,12 @@ fn matching_brace_end(s: &str, open: usize) -> Result<usize> {
             }
             b'"' => {
                 i += 1;
-                while i < bytes.len() {
-                    if bytes[i] == b'\\' {
+                while let Some(byte) = bytes.get(i).copied() {
+                    if byte == b'\\' {
                         i += 2;
                         continue;
                     }
-                    if bytes[i] == b'"' {
+                    if byte == b'"' {
                         break;
                     }
                     i += 1;
@@ -235,14 +235,8 @@ mod tests {
         let path = dir.path().join("settings.json");
         write_zed_settings(&path, supercharge_agent_server_entry()).unwrap();
         let parsed: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(
-            parsed["agent_servers"]["Supercharge"]["args"][1],
-            "stdio"
-        );
-        assert_eq!(
-            parsed["agent_servers"]["Supercharge"]["args"][0],
-            "agent"
-        );
+        assert_eq!(parsed["agent_servers"]["Supercharge"]["args"][1], "stdio");
+        assert_eq!(parsed["agent_servers"]["Supercharge"]["args"][0], "agent");
     }
 
     #[test]
@@ -258,10 +252,7 @@ mod tests {
         let parsed: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(parsed["theme"], "dark");
         assert_eq!(parsed["agent_servers"]["Other"]["command"], "x");
-        assert_eq!(
-            parsed["agent_servers"]["Supercharge"]["type"],
-            "custom"
-        );
+        assert_eq!(parsed["agent_servers"]["Supercharge"]["type"], "custom");
     }
 
     #[test]

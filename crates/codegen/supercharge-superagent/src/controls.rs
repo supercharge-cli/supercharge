@@ -109,11 +109,9 @@ impl ControlStore {
             }
             AgentCommand::Help => return Ok(help_text().to_owned()),
             AgentCommand::Setup => {
-                return Ok(
-                    "Chat provider is configured in Vectra instance settings \
+                return Ok("Chat provider is configured in Vectra instance settings \
 (provider, model, API key, base URL). In the Supercharge TUI use /setup."
-                        .to_owned(),
-                );
+                    .to_owned());
             }
             AgentCommand::ISetup => {
                 return Ok(
@@ -189,7 +187,11 @@ pub async fn handle_text(session_key: &str, text: &str) -> Result<Option<String>
     handle_text_in(session_key, text, None).await
 }
 
-pub async fn handle_text_in(session_key: &str, text: &str, cwd: Option<&std::path::Path>) -> Result<Option<String>, std::io::Error> {
+pub async fn handle_text_in(
+    session_key: &str,
+    text: &str,
+    cwd: Option<&std::path::Path>,
+) -> Result<Option<String>, std::io::Error> {
     let Some(command) = parse_command(text) else {
         return Ok(None);
     };
@@ -235,10 +237,12 @@ async fn run_workspace_command(command: &str, cwd: Option<&std::path::Path>) -> 
     if command.len() > 4000 {
         return "Command is too long (max 4000 characters).".to_owned();
     }
-    let cwd = cwd.unwrap_or_else(|| if std::path::Path::new("/home/user/workspace").is_dir() {
-        std::path::Path::new("/home/user/workspace")
-    } else {
-        std::path::Path::new("/home/user")
+    let cwd = cwd.unwrap_or_else(|| {
+        if std::path::Path::new("/home/user/workspace").is_dir() {
+            std::path::Path::new("/home/user/workspace")
+        } else {
+            std::path::Path::new("/home/user")
+        }
     });
     let mut shell = tokio::process::Command::new("bash");
     shell
@@ -361,47 +365,45 @@ fn persist_chat_format(format: crate::provider::ProviderFormat) -> Result<(), St
 
     let home = PathBuf::from("/home/user/.superagent");
     let env_path = home.join("daemon.env");
-    if env_path.exists() {
-        if let Ok(raw) = std::fs::read_to_string(&env_path) {
-            let mut lines = Vec::new();
-            let mut wrote = false;
-            for line in raw.lines() {
-                if line.starts_with("SUPERAGENT_PROVIDER_FORMAT=") {
-                    lines.push(format!(
-                        "SUPERAGENT_PROVIDER_FORMAT={}",
-                        format.api_backend()
-                    ));
-                    wrote = true;
-                } else {
-                    lines.push(line.to_owned());
-                }
-            }
-            if !wrote {
+    if env_path.exists()
+        && let Ok(raw) = std::fs::read_to_string(&env_path)
+    {
+        let mut lines = Vec::new();
+        let mut wrote = false;
+        for line in raw.lines() {
+            if line.starts_with("SUPERAGENT_PROVIDER_FORMAT=") {
                 lines.push(format!(
                     "SUPERAGENT_PROVIDER_FORMAT={}",
                     format.api_backend()
                 ));
+                wrote = true;
+            } else {
+                lines.push(line.to_owned());
             }
-            lines.push(String::new());
-            let _ = std::fs::write(env_path, lines.join("\n"));
         }
+        if !wrote {
+            lines.push(format!(
+                "SUPERAGENT_PROVIDER_FORMAT={}",
+                format.api_backend()
+            ));
+        }
+        lines.push(String::new());
+        let _ = std::fs::write(env_path, lines.join("\n"));
     }
     let profile_path = home.join("profile-default.json");
-    if profile_path.exists() {
-        if let Ok(raw) = std::fs::read_to_string(&profile_path) {
-            if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&raw) {
-                if let Some(obj) = json.as_object_mut() {
-                    obj.insert(
-                        "format".to_owned(),
-                        serde_json::Value::String(format.api_backend().to_owned()),
-                    );
-                    let _ = std::fs::write(
-                        profile_path,
-                        serde_json::to_string_pretty(&json).unwrap_or(raw),
-                    );
-                }
-            }
-        }
+    if profile_path.exists()
+        && let Ok(raw) = std::fs::read_to_string(&profile_path)
+        && let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&raw)
+        && let Some(obj) = json.as_object_mut()
+    {
+        obj.insert(
+            "format".to_owned(),
+            serde_json::Value::String(format.api_backend().to_owned()),
+        );
+        let _ = std::fs::write(
+            profile_path,
+            serde_json::to_string_pretty(&json).unwrap_or(raw),
+        );
     }
     Ok(())
 }
@@ -410,11 +412,14 @@ fn persist_image_model(model: &str) -> Result<(), String> {
     let path = PathBuf::from("/home/user/.supercharge/config.toml");
     let mut value = if path.exists() {
         let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        raw.parse::<toml::Value>().unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()))
+        raw.parse::<toml::Value>()
+            .unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()))
     } else {
         toml::Value::Table(toml::map::Map::new())
     };
-    let table = value.as_table_mut().ok_or_else(|| "config.toml is not a table".to_owned())?;
+    let table = value
+        .as_table_mut()
+        .ok_or_else(|| "config.toml is not a table".to_owned())?;
     let image = table
         .entry("image_provider".to_owned())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
@@ -425,8 +430,11 @@ fn persist_image_model(model: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    std::fs::write(&path, toml::to_string_pretty(&value).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    std::fs::write(
+        &path,
+        toml::to_string_pretty(&value).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

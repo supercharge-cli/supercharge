@@ -84,7 +84,7 @@ pub struct SlackClient {
 impl SlackClient {
     pub fn new(config: SlackConfig) -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
             config,
         }
     }

@@ -185,10 +185,11 @@ fn download_release_bytes(
     label: &str,
     override_env: &str,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let client = reqwest::blocking::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(30))
-        .timeout(std::time::Duration::from_secs(300))
-        .build()?;
+    let client = supercharge_extra_ca::build_blocking_reqwest_client(|builder| {
+        builder
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(300))
+    })?;
     let mut last_err = None;
     for attempt in 1..=8 {
         match client.get(url).send() {
@@ -345,11 +346,7 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
         t = asset_triple
     );
 
-    let bytes = download_release_bytes(
-        &url,
-        "ripgrep",
-        "SUPERCHARGE_TOOLS_BUNDLE_RG_PATH",
-    )?;
+    let bytes = download_release_bytes(&url, "ripgrep", "SUPERCHARGE_TOOLS_BUNDLE_RG_PATH")?;
 
     let gz = flate2::read::GzDecoder::new(bytes.as_slice());
     let mut ar = tar::Archive::new(gz);

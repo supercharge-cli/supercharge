@@ -1228,10 +1228,8 @@ mod tests {
     }
     #[test]
     fn remote_settings_image_description_model_round_trip() {
-pub use supercharge_superagent as superagent;
         let json = r#"{"image_description_model": "grok-4.6"}"#;
         let s: RemoteSettings = serde_json::from_str(json).unwrap();
-pub use supercharge_superagent as superagent;
         assert_eq!(s.image_description_model.as_deref(), Some("grok-4.6"));
         let out = serde_json::to_string(&s).unwrap();
         let s2: RemoteSettings = serde_json::from_str(&out).unwrap();
@@ -1239,10 +1237,8 @@ pub use supercharge_superagent as superagent;
     }
     #[test]
     fn remote_settings_prompt_suggestion_model_round_trip() {
-pub use supercharge_superagent as superagent;
         let json = r#"{"prompt_suggestion_model": "grok-4.6"}"#;
         let s: RemoteSettings = serde_json::from_str(json).unwrap();
-pub use supercharge_superagent as superagent;
         assert_eq!(s.prompt_suggestion_model.as_deref(), Some("grok-4.6"));
         let out = serde_json::to_string(&s).unwrap();
         let s2: RemoteSettings = serde_json::from_str(&out).unwrap();

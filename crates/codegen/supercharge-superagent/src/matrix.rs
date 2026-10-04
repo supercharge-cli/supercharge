@@ -69,7 +69,7 @@ pub struct MatrixClient {
 impl MatrixClient {
     pub fn new(config: MatrixConfig) -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
             config,
         }
     }

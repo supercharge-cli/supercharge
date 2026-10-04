@@ -166,6 +166,8 @@ impl PersistentCli {
         }
         let mut retries = 0;
         let mut child = loop {
+            #[allow(clippy::disallowed_methods)]
+            // process_group plus the supervisor below own and reap this child
             match command.spawn() {
                 Ok(child) => break child,
                 Err(error) if error.raw_os_error() == Some(26) && retries < 3 => {
@@ -667,10 +669,10 @@ pub fn session_has_history(home: &Path, session_id: &str, cwd: &Path) -> bool {
 
 fn load_system_prompt(home: &Path, session_id: &str, cwd: &Path) -> Option<String> {
     let directory = session_directory(home, session_id, cwd)?;
-    if let Ok(system) = std::fs::read_to_string(directory.join("system_prompt.txt")) {
-        if !system.trim().is_empty() {
-            return Some(system);
-        }
+    if let Ok(system) = std::fs::read_to_string(directory.join("system_prompt.txt"))
+        && !system.trim().is_empty()
+    {
+        return Some(system);
     }
     let history = std::fs::read_to_string(directory.join("chat_history.jsonl")).ok()?;
     history
@@ -695,15 +697,15 @@ fn managed_rules(rules: &str) -> String {
 }
 
 fn replace_managed_rules(system: &str, rules: &str) -> String {
-    if let Some(start) = system.find(BOT_RULES_START) {
-        if let Some(end) = system[start..].find(BOT_RULES_END) {
-            let mut next = system.to_owned();
-            next.replace_range(
-                start..start + end + BOT_RULES_END.len(),
-                &managed_rules(rules),
-            );
-            return next;
-        }
+    if let Some(start) = system.find(BOT_RULES_START)
+        && let Some(end) = system[start..].find(BOT_RULES_END)
+    {
+        let mut next = system.to_owned();
+        next.replace_range(
+            start..start + end + BOT_RULES_END.len(),
+            &managed_rules(rules),
+        );
+        return next;
     }
     format!("{system}\n\n{}", managed_rules(rules))
 }

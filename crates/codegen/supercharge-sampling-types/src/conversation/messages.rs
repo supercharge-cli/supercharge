@@ -297,7 +297,7 @@ pub fn build_messages_request(req: &ConversationRequest) -> crate::messages::Mes
                 .map(|t| ToolParam {
                     name: t.name.clone(),
                     description: t.description.clone(),
-                    input_schema: t.parameters.clone(),
+                    input_schema: portable_function_parameters(&t.parameters),
                 })
                 .collect(),
         )

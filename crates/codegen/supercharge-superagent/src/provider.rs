@@ -182,10 +182,9 @@ pub async fn health_check(profile: &ProviderProfile) -> ProviderHealth {
     let started = Instant::now();
     let endpoint = format!("{}/models", profile.base_url.trim_end_matches('/'));
     let result = async {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(8))
-            .build()
-            .map_err(|error| error.to_string())?;
+        let client =
+            crate::http_client(|builder| builder.timeout(std::time::Duration::from_secs(8)))
+                .map_err(|error| error.to_string())?;
         let mut request = client.get(endpoint);
         if let Ok(key) = std::env::var(&profile.api_key_env)
             && !key.trim().is_empty()
@@ -373,7 +372,10 @@ pub fn write_runtime_config(
     document.insert("model".to_owned(), toml::Value::Table(model_section));
     if agent_type == "supercharge-e2b" {
         let mut agent = toml::map::Map::new();
-        agent.insert("name".to_owned(), toml::Value::String(agent_type.to_owned()));
+        agent.insert(
+            "name".to_owned(),
+            toml::Value::String(agent_type.to_owned()),
+        );
         document.insert("agent".to_owned(), toml::Value::Table(agent));
     }
     let rendered = toml::to_string_pretty(&toml::Value::Table(document))?;
@@ -418,12 +420,7 @@ impl ProviderFormat {
 }
 
 pub fn parse_format(value: &str) -> Option<ProviderFormat> {
-    match value
-        .trim()
-        .to_ascii_lowercase()
-        .replace('-', "_")
-        .as_str()
-    {
+    match value.trim().to_ascii_lowercase().replace('-', "_").as_str() {
         "openai" | "openai_compatible" | "chat_completions" | "chat_completion"
         | "chatcompletions" => Some(ProviderFormat::Openai),
         "anthropic" | "messages" | "anthropic_messages" => Some(ProviderFormat::Anthropic),
@@ -446,12 +443,9 @@ mod tests {
         let profiles = builtin_profiles();
         assert!(profiles.iter().any(|profile| profile.id == "pollinations"));
         assert!(profiles.iter().any(|profile| profile.id == "openrouter"));
-        assert!(
-            profiles
-                .iter()
-                .any(|profile| profile.id == "anthropic"
-                    && profile.format == ProviderFormat::Anthropic)
-        );
+        assert!(profiles.iter().any(
+            |profile| profile.id == "anthropic" && profile.format == ProviderFormat::Anthropic
+        ));
         assert!(
             profiles
                 .iter()

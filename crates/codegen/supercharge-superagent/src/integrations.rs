@@ -212,9 +212,7 @@ pub async fn invoke_http_tool(
         ));
     }
     let timeout = std::time::Duration::from_secs(timeout_seconds.unwrap_or(30).clamp(1, 120));
-    let client = reqwest::Client::builder()
-        .timeout(timeout)
-        .build()
+    let client = crate::http_client(|builder| builder.timeout(timeout))
         .map_err(|error| IntegrationError::Http(error.to_string()))?;
     let initialize = serde_json::json!({
         "jsonrpc": "2.0",
@@ -480,9 +478,7 @@ pub async fn discover_http_tools(
             "only HTTP and SSE MCP discovery is enabled".to_owned(),
         ));
     }
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
+    let client = crate::http_client(|builder| builder.timeout(std::time::Duration::from_secs(10)))
         .map_err(|error| IntegrationError::Http(error.to_string()))?;
     let initialize = serde_json::json!({
         "jsonrpc": "2.0",

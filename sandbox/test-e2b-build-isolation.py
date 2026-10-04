@@ -12,6 +12,15 @@ with tempfile.TemporaryDirectory(prefix="supercharge-build-isolation-") as direc
     root = Path(directory)
     (root / "sandbox/browser-runtime").mkdir(parents=True)
     (root / "sandbox/e2b-builder").mkdir()
+    (root / "sandbox/e2b-agent-template").mkdir()
+    (root / "sandbox/e2b-agent-template/plugin-api-control.mjs").write_text("fixture\n")
+    catalog = root / "cloud-infra/apps/web/public/managed-mcp/catalog.json"
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text("{}\n")
+    artifacts = root / "plugin-api/artifacts"
+    artifacts.mkdir(parents=True)
+    for name in ["plugin-api-server-0.1.0.mjs", "plugin-api-server-0.1.0.mjs.sha256", "plugin-bridge-0.1.0.mjs", "plugin-bridge-0.1.0.mjs.sha256"]:
+        (artifacts / name).write_text("fixture\n")
     (root / ".cache/e2b-vendor").mkdir(parents=True)
     (root / "tools").mkdir()
     for name in ["package.json", "server.mjs", "lease.mjs", "handoff.mjs", "desktop.mjs", "capture.py", "release-input.py", "launch-browser.mjs", "start.sh"]:

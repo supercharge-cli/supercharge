@@ -2335,12 +2335,12 @@ fn switch_session_to_setup_model(app: &mut AppView, model_id: &str) -> Vec<Effec
             .available
             .insert(id.clone(), info.clone());
         let prev_id = agent.session.models.current.clone();
-        agent.session.models.set_current(id.clone(), effort.clone());
+        agent.session.models.set_current(id.clone(), effort);
         agent.session.user_model_preference = Some(id.clone());
         (agent.session.session_id.clone(), prev_id, effort)
     };
     app.models.available.insert(id.clone(), info);
-    app.models.set_current(id.clone(), effort.clone());
+    app.models.set_current(id.clone(), effort);
     app.show_toast(&format!("Using {model_id}"));
 
     if let Some(session_id) = session_id {

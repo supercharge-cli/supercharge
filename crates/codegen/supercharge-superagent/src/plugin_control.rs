@@ -170,6 +170,8 @@ pub async fn request(
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .kill_on_drop(true);
+    #[allow(clippy::disallowed_methods)]
+    // kill_on_drop plus the bounded wait below own and reap this controller
     let mut child = command
         .spawn()
         .map_err(|error| format!("Plugin controller could not start: {error}"))?;

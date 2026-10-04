@@ -63,13 +63,9 @@ fn manual_install_cmd(channel: &str) -> String {
         };
     }
     if cfg!(windows) {
-        format!(
-            "$env:SUPERCHARGE_CHANNEL='{channel}'; irm https://cli.grok.com/install.ps1 | iex"
-        )
+        format!("$env:SUPERCHARGE_CHANNEL='{channel}'; irm https://cli.grok.com/install.ps1 | iex")
     } else {
-        format!(
-            "curl -fsSL https://cli.grok.com/install.sh | SUPERCHARGE_CHANNEL='{channel}' bash"
-        )
+        format!("curl -fsSL https://cli.grok.com/install.sh | SUPERCHARGE_CHANNEL='{channel}' bash")
     }
 }
 
@@ -348,8 +344,10 @@ async fn fetch_update_plan(
     update_config: &UpdateConfig,
     policy: &config::VersionPolicy,
 ) -> Result<UpdatePlan> {
-    let _check_span =
-        supercharge_telemetry::region!("update.check", supercharge_telemetry::region::Parent::Inherit);
+    let _check_span = supercharge_telemetry::region!(
+        "update.check",
+        supercharge_telemetry::region::Parent::Inherit
+    );
     let latest = fetch_latest_version(installer, update_config).await?;
     Ok(plan_for(policy, latest))
 }
@@ -430,8 +428,10 @@ pub async fn ensure_latest_on_disk(update_config: &UpdateConfig) -> Result<Ensur
         .await?;
         // The leader relaunches right after a successful converge and would die with the event still in flight
         // Failures keep it alive, so successes would under-report. The install is already done.
-        supercharge_telemetry::session_ctx::drain_pending(supercharge_telemetry::session_ctx::CLI_DRAIN)
-            .await;
+        supercharge_telemetry::session_ctx::drain_pending(
+            supercharge_telemetry::session_ctx::CLI_DRAIN,
+        )
+        .await;
         outcome.installed = Some(target.clone());
     }
 
@@ -622,8 +622,9 @@ pub async fn check_update_background(update_config: &UpdateConfig) -> Background
     // means "show the restart hint". The quit-for-update path's `grok update` child resolves to "Already up to date" against
     // the same disk state. For npm a leftover symlink would wrongly suppress the download (see `disk_version_for_installer`)
     let disk_needs_download = match disk_version_for_installer(installer) {
-        Some(disk) => needs_update(&disk, &target_version, &update_config.channel, false)
-            .unwrap_or(true),
+        Some(disk) => {
+            needs_update(&disk, &target_version, &update_config.channel, false).unwrap_or(true)
+        }
         None => true,
     };
 
@@ -1705,7 +1706,11 @@ async fn swap_managed_bin_links(
     binary_path: &std::path::Path,
     bin_dir: &std::path::Path,
 ) -> Result<std::path::PathBuf> {
-    let grok_name = if cfg!(windows) { "supercharge.exe" } else { "supercharge" };
+    let grok_name = if cfg!(windows) {
+        "supercharge.exe"
+    } else {
+        "supercharge"
+    };
     let agent_name = if cfg!(windows) { "sc.exe" } else { "sc" };
     let grok_link = bin_dir.join(grok_name);
     let pairs = [
@@ -2266,7 +2271,7 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
         version, platform
     );
 
-    if let Err(e) = download_github_release_asset(&version, &os, &arch, &binary_path).await {
+    if let Err(e) = download_github_release_asset(&version, os, arch, &binary_path).await {
         tracing::warn!("HTTP GitHub asset failed ({e:#}); trying gh CLI");
         // Mirror `download_github_release_asset`'s two asset-name patterns: the current
         // `supercharge-{os}-{arch}` name (no version segment — the tag already carries it),
@@ -2312,7 +2317,9 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
         let system_link = std::path::PathBuf::from(format!("/usr/local/bin/{name}"));
         if let Ok(existing_target) = tokio::fs::read_link(&system_link).await {
             let target_str = existing_target.to_string_lossy();
-            if target_str.contains(".supercharge/downloads/") && !target_str.ends_with("grok-latest") {
+            if target_str.contains(".supercharge/downloads/")
+                && !target_str.ends_with("grok-latest")
+            {
                 let _ = atomic_symlink_swap(&binary_path, &system_link).await;
             }
         }

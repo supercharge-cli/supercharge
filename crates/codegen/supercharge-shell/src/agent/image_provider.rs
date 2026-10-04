@@ -2,9 +2,7 @@
 
 use std::path::Path;
 
-use super::provider_setup::{
-    ProviderSetup, ProviderSetupError, normalize_provider_base_url,
-};
+use super::provider_setup::{ProviderSetup, ProviderSetupError, normalize_provider_base_url};
 use supercharge_tools::implementations::grok_build::image_gen::ImageProviderFormat;
 
 const MAX_API_KEY_LEN: usize = 8192;
@@ -55,18 +53,26 @@ pub fn persist_image_provider_setup_at(
         Err(error) => return Err(error.into()),
     };
 
-    document["image_provider"]["id"] = toml_edit::value(provider_id);
-    document["image_provider"]["base_url"] = toml_edit::value(base_url.as_str());
-    document["image_provider"]["model"] = toml_edit::value(model_id);
-    document["image_provider"]["format"] = toml_edit::value(format.as_str());
+    let image_provider = document
+        .entry("image_provider")
+        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| ProviderSetupError::Io("[image_provider] is not a table".to_owned()))?;
+    image_provider.insert("id", toml_edit::value(provider_id));
+    image_provider.insert("base_url", toml_edit::value(base_url.as_str()));
+    image_provider.insert("model", toml_edit::value(model_id));
+    image_provider.insert("format", toml_edit::value(format.as_str()));
     if api_key.is_empty() {
-        if let Some(table) = document["image_provider"].as_table_mut() {
-            table.remove("api_key");
-        }
+        image_provider.remove("api_key");
     } else {
-        document["image_provider"]["api_key"] = toml_edit::value(api_key);
+        image_provider.insert("api_key", toml_edit::value(api_key));
     }
-    document["features"]["image_gen"] = toml_edit::value(true);
+    let features = document
+        .entry("features")
+        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| ProviderSetupError::Io("[features] is not a table".to_owned()))?;
+    features.insert("image_gen", toml_edit::value(true));
 
     crate::util::config::atomic_write_string(path, &document.to_string())?;
     Ok(())
@@ -88,7 +94,12 @@ pub fn persist_image_model_at(path: &Path, model_id: &str) -> Result<(), Provide
         Ok(_) => toml_edit::DocumentMut::new(),
         Err(error) => return Err(error.into()),
     };
-    document["image_provider"]["model"] = toml_edit::value(model_id);
+    let image_provider = document
+        .entry("image_provider")
+        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| ProviderSetupError::Io("[image_provider] is not a table".to_owned()))?;
+    image_provider.insert("model", toml_edit::value(model_id));
     crate::util::config::atomic_write_string(path, &document.to_string())?;
     Ok(())
 }
@@ -124,8 +135,8 @@ pub fn load_existing_image_provider_setup() -> Option<(String, String, String)> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::provider_setup::SetupWireFormat;
+    use super::*;
 
     #[test]
     fn persist_writes_image_provider_table() {

@@ -63,11 +63,12 @@ fn oauth_path() -> std::path::PathBuf {
 }
 
 fn http_client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
-        .user_agent(USER_AGENT)
-        .timeout(Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())
+    supercharge_extra_ca::build_blocking_reqwest_client(|builder| {
+        builder
+            .user_agent(USER_AGENT)
+            .timeout(Duration::from_secs(20))
+    })
+    .map_err(|e| e.to_string())
 }
 
 pub fn request_device_code() -> Result<DeviceCodePending, String> {
@@ -82,7 +83,10 @@ pub fn request_device_code() -> Result<DeviceCodePending, String> {
     let status = resp.status();
     let body = resp.text().map_err(|e| e.to_string())?;
     if !status.is_success() {
-        return Err(format!("Nous device-code HTTP {status}: {}", snippet(&body)));
+        return Err(format!(
+            "Nous device-code HTTP {status}: {}",
+            snippet(&body)
+        ));
     }
     let v: serde_json::Value =
         serde_json::from_str(&body).map_err(|e| format!("Nous device-code JSON: {e}"))?;
@@ -104,7 +108,11 @@ pub fn request_device_code() -> Result<DeviceCodePending, String> {
             .unwrap_or("")
             .to_owned(),
         expires_in: v.get("expires_in").and_then(|x| x.as_u64()).unwrap_or(900),
-        interval: v.get("interval").and_then(|x| x.as_u64()).unwrap_or(5).max(1),
+        interval: v
+            .get("interval")
+            .and_then(|x| x.as_u64())
+            .unwrap_or(5)
+            .max(1),
     })
 }
 
@@ -122,10 +130,7 @@ pub fn poll_for_token(pending: &DeviceCodePending) -> Result<NousOauthState, Str
             .post(format!("{PORTAL_BASE}/api/oauth/token"))
             .header("Accept", "application/json")
             .form(&[
-                (
-                    "grant_type",
-                    "urn:ietf:params:oauth:grant-type:device_code",
-                ),
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                 ("client_id", cid.as_str()),
                 ("device_code", pending.device_code.as_str()),
             ])
@@ -137,10 +142,7 @@ pub fn poll_for_token(pending: &DeviceCodePending) -> Result<NousOauthState, Str
         if status.is_success() {
             return state_from_token_json(&v, &cid);
         }
-        let err = v
-            .get("error")
-            .and_then(|x| x.as_str())
-            .unwrap_or("");
+        let err = v.get("error").and_then(|x| x.as_str()).unwrap_or("");
         match err {
             "authorization_pending" | "slow_down" => {
                 if err == "slow_down" {
@@ -152,10 +154,7 @@ pub fn poll_for_token(pending: &DeviceCodePending) -> Result<NousOauthState, Str
                 return Err(format!("Nous login {err}"));
             }
             _ => {
-                return Err(format!(
-                    "Nous token HTTP {status}: {}",
-                    snippet(&body)
-                ));
+                return Err(format!("Nous token HTTP {status}: {}", snippet(&body)));
             }
         }
     }
@@ -173,9 +172,8 @@ fn state_from_token_json(v: &serde_json::Value, cid: &str) -> Result<NousOauthSt
         .unwrap_or("")
         .to_owned();
     let expires_in = v.get("expires_in").and_then(|x| x.as_u64());
-    let expires_at = jwt_exp(access).or_else(|| {
-        expires_in.map(|secs| now_unix().saturating_add(secs))
-    });
+    let expires_at =
+        jwt_exp(access).or_else(|| expires_in.map(|secs| now_unix().saturating_add(secs)));
     Ok(NousOauthState {
         access_token: access.to_owned(),
         refresh_token: refresh,
@@ -250,11 +248,7 @@ pub fn refresh_state(state: &NousOauthState) -> Result<NousOauthState, String> {
     if !status.is_success() {
         let err = serde_json::from_str::<serde_json::Value>(&body)
             .ok()
-            .and_then(|v| {
-                v.get("error")
-                    .and_then(|x| x.as_str())
-                    .map(str::to_owned)
-            })
+            .and_then(|v| v.get("error").and_then(|x| x.as_str()).map(str::to_owned))
             .unwrap_or_default();
         if err == "invalid_grant" || err == "refresh_token_reused" {
             let _ = std::fs::remove_file(oauth_path());

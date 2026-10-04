@@ -799,6 +799,50 @@ fn test_conversation_request_with_tools_to_responses_api() {
 }
 
 #[test]
+fn strict_responses_tool_schema_keeps_properties_without_root_combinators() {
+    let original = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "target": {"type": "string"},
+            "args": {"type": "object"},
+            "args_path": {"type": "string"},
+            "source": {"type": "string"}
+        },
+        "oneOf": [
+            {"required": ["target", "args"]},
+            {"required": ["target", "args_path"]},
+            {"required": ["source"]}
+        ]
+    });
+    let req =
+        ConversationRequest::from_items(vec![ConversationItem::user("test")]).with_tools(vec![
+            ToolSpec {
+                name: "invoke_remote".to_owned(),
+                description: Some("Invoke an MCP tool".to_owned()),
+                parameters: original.clone(),
+            },
+        ]);
+
+    let responses_req: rs::CreateResponse = (&req).into();
+    let tools = responses_req.tools.expect("tools");
+    let Some(rs::Tool::Function(tool)) = tools.first() else {
+        panic!("expected function tool: {tools:?}");
+    };
+    let parameters = tool.parameters.as_ref().expect("parameters");
+    assert_eq!(
+        parameters.get("type").and_then(|v| v.as_str()),
+        Some("object")
+    );
+    assert_eq!(parameters.get("properties"), original.get("properties"));
+    for keyword in ["oneOf", "anyOf", "allOf", "enum", "const", "not"] {
+        assert!(
+            parameters.get(keyword).is_none(),
+            "root keyword {keyword} must be omitted: {parameters:#}"
+        );
+    }
+}
+
+#[test]
 fn test_tool_choice_to_responses_api() {
     // Test Auto
     let req = ConversationRequest::from_items(vec![ConversationItem::user("test")])

@@ -5,8 +5,8 @@ use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
-use tokio_util::sync::CancellationToken;
 use supercharge_auth::bearer_suffix;
+use tokio_util::sync::CancellationToken;
 #[path = "manager/enrichment.rs"]
 mod enrichment;
 #[path = "manager/lock.rs"]
@@ -305,7 +305,9 @@ impl AuthManager {
                     None,
                 );
             }
-            tracing::warn!("SUPERCHARGE_AUTH set but failed to parse as JSON, falling back to file");
+            tracing::warn!(
+                "SUPERCHARGE_AUTH set but failed to parse as JSON, falling back to file"
+            );
         }
         let (auth, auth_read_detail, initial_disk_state) = match read_auth_json(&path) {
             Ok(map) => {
@@ -480,7 +482,7 @@ impl AuthManager {
             .inherited_scopes()
             .iter()
             .copied()
-            .filter(|scope| Some(*scope) != except && map.get(*scope).is_some())
+            .filter(|scope| Some(*scope) != except && map.contains_key(*scope))
             .collect();
         if present.is_empty() {
             return Ok(false);

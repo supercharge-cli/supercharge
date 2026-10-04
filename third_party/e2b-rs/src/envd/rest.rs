@@ -60,6 +60,7 @@ pub(crate) struct EnvdApiClient {
 impl EnvdApiClient {
     /// Build the client, baking the sandbox/access headers into the underlying
     /// `reqwest::Client` as default headers.
+    #[allow(clippy::disallowed_methods)] // Vendored SDK uses reqwest 0.13; the project TLS helper currently wraps reqwest 0.12.
     pub(crate) fn new(opts: EnvdApiClientOpts) -> Result<Self> {
         let mut headers = HeaderMap::new();
         if let Ok(v) = HeaderValue::from_str(&opts.user_agent) {

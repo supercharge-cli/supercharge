@@ -121,6 +121,21 @@ pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStrea
     Ok(event)
 }
 
+fn is_transport_event(event_name: &str, data: &str) -> bool {
+    fn is_transport_type(value: &str) -> bool {
+        matches!(value, "keepalive" | "ping" | "heartbeat")
+    }
+
+    let data = data.trim();
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(data)
+        && let Some(event_type) = value.get("type").and_then(|value| value.as_str())
+    {
+        return is_transport_type(event_type);
+    }
+
+    is_transport_type(data.trim_matches('"')) || is_transport_type(event_name.trim())
+}
+
 /// On `response.completed` / `response.incomplete`, rewrite `usage.total_tokens` to the live context length from `context_details`.
 /// Billing fields stay on the cumulative wire values, so telemetry is unaffected.
 fn apply_terminal_event_overrides(event: &mut rs::ResponseStreamEvent, data: &str) {
@@ -1172,9 +1187,8 @@ impl SamplingClient {
 
         let event_stream = byte_stream.eventsource();
 
-        // Map SSE events into ChatCompletionChunk.
-        // Uses `scan` so that `[DONE]` and transport errors both terminate the stream (`None`)
-        // The first transport error is emitted to the consumer, then subsequent polls return `None`
+        // The scan item is an `Option`: `Some(None)` skips a transport-only heartbeat without ending the stream.
+        // An outer `None` still ends the stream after `[DONE]` or a transport failure.
         let chunks = event_stream
             .scan(false, |had_transport_error, event_res| {
                 if *had_transport_error {
@@ -1195,9 +1209,11 @@ impl SamplingClient {
                         );
 
                         if let Some(stream_error) = try_parse_stream_error(data) {
-                            Some(Err(stream_error))
+                            Some(Some(Err(stream_error)))
+                        } else if is_transport_event(&event.event, data) {
+                            Some(None)
                         } else {
-                            Some(
+                            Some(Some(
                                 serde_json::from_str::<ChatCompletionChunk>(data).map_err(|e| {
                                     tracing::error!(
                                         error = %e,
@@ -1206,16 +1222,17 @@ impl SamplingClient {
                                     );
                                     SamplingError::Serialization(e)
                                 }),
-                            )
+                            ))
                         }
                     }
                     Err(e) => {
                         *had_transport_error = true;
-                        Some(Err(SamplingError::EventStreamError(e.to_string())))
+                        Some(Some(Err(SamplingError::EventStreamError(e.to_string()))))
                     }
                 };
                 std::future::ready(item)
             })
+            .filter_map(std::future::ready)
             .boxed();
 
         Ok((
@@ -1593,6 +1610,8 @@ impl SamplingClient {
                             Some(None)
                         } else if let Some(stream_error) = try_parse_stream_error(data) {
                             Some(Some(Err(stream_error)))
+                        } else if is_transport_event(&event.event, data) {
+                            Some(None)
                         } else {
                             Some(Some(deserialize_response_event(data)))
                         }
@@ -1886,8 +1905,8 @@ impl SamplingClient {
 
         let event_stream = byte_stream.eventsource();
 
-        // Map SSE events into MessageStreamEvent.
-        // Uses `scan` so transport errors terminate the stream after the first error (same pattern as `chat_completion_stream`)
+        // The scan item is an `Option`: `Some(None)` skips non-model transport frames without ending the stream.
+        // An outer `None` still ends the stream after `[DONE]` or a transport failure.
         let events = event_stream
             .scan(false, |had_transport_error, event_res| {
                 if *had_transport_error {
@@ -1908,9 +1927,11 @@ impl SamplingClient {
                         );
 
                         if let Some(stream_error) = try_parse_stream_error(data) {
-                            Some(Err(stream_error))
+                            Some(Some(Err(stream_error)))
+                        } else if is_transport_event(&event.event, data) {
+                            Some(None)
                         } else {
-                            Some(
+                            Some(Some(
                                 serde_json::from_str::<messages::MessageStreamEvent>(data).map_err(
                                     |e| {
                                         tracing::error!(
@@ -1921,16 +1942,17 @@ impl SamplingClient {
                                         SamplingError::Serialization(e)
                                     },
                                 ),
-                            )
+                            ))
                         }
                     }
                     Err(e) => {
                         *had_transport_error = true;
-                        Some(Err(SamplingError::EventStreamError(e.to_string())))
+                        Some(Some(Err(SamplingError::EventStreamError(e.to_string()))))
                     }
                 };
                 std::future::ready(item)
             })
+            .filter_map(std::future::ready)
             .boxed();
 
         Ok((
@@ -2251,10 +2273,10 @@ mod tests {
     }
     use axum::{Router, body::Bytes, routing::post};
     use indexmap::IndexMap;
-    use tokio::net::TcpListener;
-    use tokio::sync::oneshot;
     use supercharge_sampling_types::ApiErrorCode;
     use supercharge_sampling_types::types::ChatRequestMessage;
+    use tokio::net::TcpListener;
+    use tokio::sync::oneshot;
 
     #[test]
     fn splice_extra_tool_entries_extends_existing_tools_array() {
@@ -3298,6 +3320,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn response_transport_events_are_narrowly_classified() {
+        for event_name in ["keepalive", "ping", "heartbeat"] {
+            assert!(is_transport_event(event_name, ""), "{event_name}");
+        }
+        for event_type in ["keepalive", "ping", "heartbeat"] {
+            let data = serde_json::json!({"type": event_type}).to_string();
+            assert!(is_transport_event("message", &data), "{event_type}");
+        }
+        assert!(!is_transport_event(
+            "message",
+            r#"{"type":"response.future_terminal"}"#
+        ));
+        assert!(!is_transport_event(
+            "keepalive",
+            r#"{"type":"response.failed"}"#
+        ));
+        assert!(!is_transport_event("message", "not json"));
+    }
+
+    #[test]
+    fn deserialize_response_event_rejects_keepalive_without_boundary_filtering() {
+        let error = deserialize_response_event(r#"{"type":"keepalive"}"#)
+            .expect_err("transport events must be filtered before typed deserialization");
+        assert!(matches!(error, SamplingError::Serialization(_)));
+    }
+
     /// `response.completed` carrying `usage.context_details.{input_tokens, output_tokens}` rewrites `usage.total_tokens` in place.
     /// The new value is the live context length (`ctx.input + ctx.output`).
     /// Billing fields stay on the wire's cumulative values.
@@ -3519,7 +3568,8 @@ mod tests {
 
     #[test]
     fn reasoning_summary_override_replaces_the_built_value() {
-        let client = client_with_summary(Some(supercharge_sampling_types::ReasoningSummary::Detailed));
+        let client =
+            client_with_summary(Some(supercharge_sampling_types::ReasoningSummary::Detailed));
         let mut request = built_response_request();
         client.apply_response_defaults(&mut request).unwrap();
         assert_eq!(

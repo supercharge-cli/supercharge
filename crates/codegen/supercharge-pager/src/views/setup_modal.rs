@@ -6,11 +6,11 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
-use unicode_width::UnicodeWidthStr;
 use supercharge_shell::agent::provider_setup::{
     CUSTOM_MODEL_ID, CUSTOM_PROVIDER_ID, ProviderModel, ProviderSetup, SetupProviderProfile,
     SetupWireFormat, find_setup_provider, normalize_provider_base_url, setup_provider_profiles,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::input::line_editor::{LineEditOutcome, LineEditor};
 use crate::theme::Theme;
@@ -42,7 +42,9 @@ pub enum SetupStep {
     /// Nous Portal RFC 8628 device-code login (free-tier JWTs).
     DeviceAuth,
     Fetching,
-    FetchError { message: String },
+    FetchError {
+        message: String,
+    },
     PickModel,
     PickEffort,
     CustomModel,
@@ -125,6 +127,12 @@ enum ProviderRow {
     Custom,
 }
 
+impl Default for SetupModalState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SetupModalState {
     pub fn new() -> Self {
         Self::with_kind(SetupKind::Chat)
@@ -142,7 +150,8 @@ impl SetupModalState {
         let mut provider_id = CUSTOM_PROVIDER_ID.to_owned();
         match kind {
             SetupKind::Chat => {
-                if let Some(existing) = supercharge_shell::agent::provider_setup::load_existing_provider_setup_details()
+                if let Some(existing) =
+                    supercharge_shell::agent::provider_setup::load_existing_provider_setup_details()
                 {
                     base_url.set_text(existing.base_url);
                     api_key.set_text(existing.api_key);
@@ -574,7 +583,10 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
 }
 
 const API_FORMATS: [(SetupWireFormat, &str); 3] = [
-    (SetupWireFormat::Openai, "Chat Completions  ·  /chat/completions"),
+    (
+        SetupWireFormat::Openai,
+        "Chat Completions  ·  /chat/completions",
+    ),
     (SetupWireFormat::Anthropic, "Messages  ·  /messages"),
     (SetupWireFormat::Responses, "Responses  ·  /responses"),
 ];
@@ -584,7 +596,10 @@ fn pick_format_or_api_key(state: &mut SetupModalState) {
         state.step = SetupStep::ApiKey;
         return;
     }
-    state.selected = API_FORMATS.iter().position(|(format, _)| *format == state.format).unwrap_or(0);
+    state.selected = API_FORMATS
+        .iter()
+        .position(|(format, _)| *format == state.format)
+        .unwrap_or(0);
     state.step = SetupStep::PickFormat;
 }
 
@@ -593,7 +608,10 @@ fn handle_pick_format(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutco
         KeyCode::Up => state.selected = state.selected.saturating_sub(1),
         KeyCode::Down => state.selected = (state.selected + 1).min(API_FORMATS.len() - 1),
         KeyCode::Enter => {
-            state.format = API_FORMATS[state.selected.min(API_FORMATS.len() - 1)].0;
+            state.format = API_FORMATS
+                .get(state.selected.min(API_FORMATS.len() - 1))
+                .map(|(format, _)| *format)
+                .unwrap_or_default();
             if state.format_only {
                 let Some(model) = state.pending_model.clone() else {
                     return SetupOutcome::Close;
@@ -773,21 +791,22 @@ fn handle_pick_model(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcom
                 return SetupOutcome::Changed;
             };
             if model.id == CUSTOM_MODEL_ID {
-                if state.custom_model.text().trim().is_empty() {
-                    if let Some(profile) = find_setup_provider(&state.provider_id) {
-                        state.custom_model.set_text(profile.default_model);
-                    }
+                if state.custom_model.text().trim().is_empty()
+                    && let Some(profile) = find_setup_provider(&state.provider_id)
+                {
+                    state.custom_model.set_text(profile.default_model);
                 }
                 state.step = SetupStep::CustomModel;
                 return SetupOutcome::Changed;
             }
             if state.picker_only && model.supports_thinking {
-                state.effort_levels = supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
-                    &model.id,
-                )
-                .iter()
-                .map(|s| (*s).to_owned())
-                .collect();
+                state.effort_levels =
+                    supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
+                        &model.id,
+                    )
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect();
                 if state.effort_levels.is_empty() {
                     state.effort_levels = ["high", "medium", "low"]
                         .into_iter()
@@ -999,7 +1018,10 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
                 inner,
                 &theme,
                 "API key (leave blank for local endpoints)",
-                &format!("{} API  ·  Ctrl+R reveals the key", state.format.display_name()),
+                &format!(
+                    "{} API  ·  Ctrl+R reveals the key",
+                    state.format.display_name()
+                ),
                 &display,
                 true,
             );
@@ -1031,9 +1053,21 @@ fn shortcuts_for(step: &SetupStep) -> Vec<Shortcut<'static>> {
             },
         ],
         SetupStep::PickFormat => vec![
-            Shortcut { label: "↑/↓ choose", clickable: false, id: 3 },
-            Shortcut { label: "Enter continue", clickable: false, id: 1 },
-            Shortcut { label: "Esc back", clickable: false, id: 2 },
+            Shortcut {
+                label: "↑/↓ choose",
+                clickable: false,
+                id: 3,
+            },
+            Shortcut {
+                label: "Enter continue",
+                clickable: false,
+                id: 1,
+            },
+            Shortcut {
+                label: "Esc back",
+                clickable: false,
+                id: 2,
+            },
         ],
         SetupStep::BaseUrl | SetupStep::CustomModel => vec![
             Shortcut {
@@ -1244,13 +1278,16 @@ fn render_format_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &Setup
             break;
         }
         let style = if index == state.selected {
-            Style::default().fg(theme.fuzzy_accent).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(theme.fuzzy_accent)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(theme.text_primary)
         };
         let marker = if index == state.selected { "> " } else { "  " };
         Line::from(Span::styled(
-            truncate_to_width(&format!("{marker}{label}"), area.width as usize), style,
+            truncate_to_width(&format!("{marker}{label}"), area.width as usize),
+            style,
         ))
         .render(Rect::new(area.x, area.y + row, area.width, 1), buf);
     }
@@ -1337,10 +1374,8 @@ fn render_effort_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &Setup
         } else {
             Style::default().fg(theme.text_primary)
         };
-        Line::from(Span::styled(level.as_str(), style)).render(
-            Rect::new(area.x, list_y + index as u16, area.width, 1),
-            buf,
-        );
+        Line::from(Span::styled(level.as_str(), style))
+            .render(Rect::new(area.x, list_y + index as u16, area.width, 1), buf);
     }
 }
 
@@ -1400,14 +1435,17 @@ mod tests {
     }
 
     fn saved_format_picker(format: SetupWireFormat) -> SetupModalState {
-        SetupModalState::format_picker(ProviderSetup {
-            base_url: "https://api.example.com/v1".to_owned(),
-            api_key: "saved-key".to_owned(),
-            model_id: "saved-model".to_owned(),
-            model_name: "Saved Model".to_owned(),
-            provider_id: "custom".to_owned(),
-            format,
-        }, Some("high".to_owned()))
+        SetupModalState::format_picker(
+            ProviderSetup {
+                base_url: "https://api.example.com/v1".to_owned(),
+                api_key: "saved-key".to_owned(),
+                model_id: "saved-model".to_owned(),
+                model_name: "Saved Model".to_owned(),
+                provider_id: "custom".to_owned(),
+                format,
+            },
+            Some("high".to_owned()),
+        )
     }
 
     #[test]
@@ -1417,7 +1455,8 @@ mod tests {
             assert!(matches!(state.step, SetupStep::PickFormat));
             assert_eq!(state.selected, index);
             assert!(state.models.is_empty());
-            let SetupOutcome::Save { setup, generation } = handle_setup_key(&mut state, &enter()) else {
+            let SetupOutcome::Save { setup, generation } = handle_setup_key(&mut state, &enter())
+            else {
                 panic!("format picker must save without fetching or asking for credentials");
             };
             assert_eq!(setup.format, *format);
@@ -1436,18 +1475,33 @@ mod tests {
     #[test]
     fn format_only_navigation_cancel_and_retry_never_enter_setup() {
         let mut state = saved_format_picker(SetupWireFormat::Anthropic);
-        assert!(matches!(handle_setup_paste(&mut state, "secret"), SetupOutcome::Unchanged));
-        handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert!(matches!(
+            handle_setup_paste(&mut state, "secret"),
+            SetupOutcome::Unchanged
+        ));
+        handle_setup_key(
+            &mut state,
+            &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+        );
         assert_eq!(state.selected, 2);
-        let SetupOutcome::Save { setup, generation } = handle_setup_key(&mut state, &enter()) else { panic!() };
+        let SetupOutcome::Save { setup, generation } = handle_setup_key(&mut state, &enter())
+        else {
+            panic!()
+        };
         assert_eq!(setup.format, SetupWireFormat::Responses);
         assert!(!state.apply_saved(generation, Err("cannot write config".to_owned())));
-        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Changed
+        ));
         assert!(matches!(state.step, SetupStep::PickFormat));
         assert_eq!(state.selected, 2);
         handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert_eq!(state.selected, 1);
-        assert!(matches!(handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)), SetupOutcome::Close));
+        assert!(matches!(
+            handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            SetupOutcome::Close
+        ));
         assert_eq!(state.selected_effort.as_deref(), Some("high"));
     }
 
@@ -1462,7 +1516,10 @@ mod tests {
         assert!(matches!(state.step, SetupStep::PickFormat));
         assert_eq!(state.format, SetupWireFormat::Openai);
         assert_eq!(state.selected, 0);
-        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Changed
+        ));
         assert!(matches!(state.step, SetupStep::ApiKey));
         assert_eq!(state.provider_id, "pollinations");
         assert_eq!(state.base_url.text(), "https://gen.pollinations.ai/v1");
@@ -1484,7 +1541,10 @@ mod tests {
             SetupOutcome::Changed
         ));
         assert!(matches!(state.step, SetupStep::PickFormat));
-        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Changed
+        ));
         assert!(matches!(state.step, SetupStep::ApiKey));
         for ch in "sk-test".chars() {
             let _ = handle_setup_key(&mut state, &char_key(ch));
@@ -1519,7 +1579,10 @@ mod tests {
             assert_eq!(state.format, *format);
             assert!(matches!(state.step, SetupStep::ApiKey));
             match handle_setup_key(&mut state, &enter()) {
-                SetupOutcome::Fetch { format: fetched_format, .. } => assert_eq!(fetched_format, *format),
+                SetupOutcome::Fetch {
+                    format: fetched_format,
+                    ..
+                } => assert_eq!(fetched_format, *format),
                 other => panic!("expected fetch, got {other:?}"),
             }
             state.apply_fetched_models(state.generation, Ok(vec![model("provider-model")]));
@@ -1587,7 +1650,9 @@ mod tests {
         assert!(matches!(state.step, SetupStep::Fetching));
         assert!(state.models.is_empty());
         match outcome {
-            SetupOutcome::Fetch { base_url, api_key, .. } => {
+            SetupOutcome::Fetch {
+                base_url, api_key, ..
+            } => {
                 assert_eq!(base_url, "https://provider.example/v1");
                 assert_eq!(api_key, "saved-key");
             }
@@ -1620,9 +1685,15 @@ mod tests {
         let mut thinking_model = model("reasoning-model");
         thinking_model.supports_thinking = true;
         state.apply_fetched_models(state.generation, Ok(vec![thinking_model]));
-        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Changed));
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Changed
+        ));
         assert!(matches!(state.step, SetupStep::PickEffort));
-        assert!(matches!(handle_setup_key(&mut state, &enter()), SetupOutcome::Save { .. }));
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Save { .. }
+        ));
         assert_eq!(state.selected_effort.as_deref(), Some("high"));
     }
 
@@ -1672,7 +1743,9 @@ mod tests {
     fn failed_live_fetch_is_visible() {
         let mut state = SetupModalState::new();
         state.apply_fetched_models(state.generation, Err("HTTP 401".to_owned()));
-        assert!(matches!(state.step, SetupStep::FetchError { ref message } if message == "HTTP 401"));
+        assert!(
+            matches!(state.step, SetupStep::FetchError { ref message } if message == "HTTP 401")
+        );
     }
 
     #[test]

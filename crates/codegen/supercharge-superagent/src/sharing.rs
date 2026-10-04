@@ -80,9 +80,7 @@ pub async fn create_share(
 ) -> Result<ShareLink, ShareError> {
     let relative = workspace_relative(&attachment.path, workspace_root.as_ref())?;
     let endpoint = share_endpoint().ok_or(ShareError::ServiceNotConfigured)?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .build()
+    let client = crate::http_client(|builder| builder.timeout(Duration::from_secs(20)))
         .map_err(|error| ShareError::Request(error.to_string()))?;
     let mut request = client.post(endpoint).json(&serde_json::json!({
         "path": relative,

@@ -46,14 +46,15 @@ fn grok_home_in(home: &Path) -> PathBuf {
     let legacy = home.join(".grok");
     // Supercharge modification: preserve migration from pre-rebrand installs.
     // Never merge over an existing current home or migrate an explicit override.
-    if !current.exists() && legacy.exists() {
-        if let Err(error) = std::fs::rename(&legacy, &current) {
-            tracing::warn!(
-                from = %legacy.display(), to = %current.display(), %error,
-                "could not migrate legacy home; using it temporarily"
-            );
-            return legacy;
-        }
+    if !current.exists()
+        && legacy.exists()
+        && let Err(error) = std::fs::rename(&legacy, &current)
+    {
+        tracing::warn!(
+            from = %legacy.display(), to = %current.display(), %error,
+            "could not migrate legacy home; using it temporarily"
+        );
+        return legacy;
     }
     current
 }

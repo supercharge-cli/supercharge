@@ -36,14 +36,26 @@ fn cap_text(text: &str, max: usize) -> String {
     if count <= max {
         return trimmed.to_owned();
     }
-    trimmed.chars().take(max.saturating_sub(1)).collect::<String>() + "…"
+    trimmed
+        .chars()
+        .take(max.saturating_sub(1))
+        .collect::<String>()
+        + "…"
 }
 
 fn bytes_array_to_string(items: &[Value]) -> Option<String> {
-    if items.is_empty() || !items.iter().all(|value| value.as_u64().is_some_and(|n| n <= 255)) {
+    if items.is_empty()
+        || !items
+            .iter()
+            .all(|value| value.as_u64().is_some_and(|n| n <= 255))
+    {
         return None;
     }
-    let bytes: Vec<u8> = items.iter().filter_map(Value::as_u64).map(|n| n as u8).collect();
+    let bytes: Vec<u8> = items
+        .iter()
+        .filter_map(Value::as_u64)
+        .map(|n| n as u8)
+        .collect();
     let text = String::from_utf8_lossy(&bytes);
     let text = text.trim();
     if text.is_empty() {
@@ -122,7 +134,7 @@ fn push_output_text(value: &Value, out: &mut String) {
                     if key == "type" || key == "command" {
                         continue;
                     }
-                    push_output_text(&item, out);
+                    push_output_text(item, out);
                     if !out.is_empty() {
                         break;
                     }
@@ -241,7 +253,10 @@ pub fn parse_cli_stream_line(line: &Value) -> Vec<LiveEvent> {
             vec![LiveEvent::ToolStart { id, name, title }]
         }
         "tool_call_update" => {
-            let status = line.get("status").and_then(Value::as_str).unwrap_or_default();
+            let status = line
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             if status != "completed" && status != "failed" {
                 return Vec::new();
             }
@@ -507,10 +522,7 @@ pub fn rewrite_localhost_for_user(text: &str) -> String {
         .min()
     {
         out.push_str(&rest[..idx]);
-        let after_scheme = rest[idx..]
-            .find("://")
-            .map(|n| idx + n + 3)
-            .unwrap_or(idx);
+        let after_scheme = rest[idx..].find("://").map(|n| idx + n + 3).unwrap_or(idx);
         let host = if rest[after_scheme..].starts_with("localhost") {
             "localhost"
         } else {
@@ -620,7 +632,11 @@ pub fn app_events_for(
                 "terminal"
             };
             let summary = if stdout.is_empty() {
-                if *success { "done".to_owned() } else { "failed".to_owned() }
+                if *success {
+                    "done".to_owned()
+                } else {
+                    "failed".to_owned()
+                }
             } else {
                 cap_text(stdout, 240)
             };
@@ -697,11 +713,18 @@ pub fn messenger_progress(event: &LiveEvent, tool_count: u32) -> Option<String> 
             ..
         } => {
             let mark = if *success { "ok" } else { "fail" };
-            let cmd = if command.is_empty() { "tool" } else { command.as_str() };
+            let cmd = if command.is_empty() {
+                "tool"
+            } else {
+                command.as_str()
+            };
             if stdout.is_empty() {
                 Some(format!("[{tool_count}] {cmd} {mark}"))
             } else {
-                Some(format!("[{tool_count}] {cmd} {mark}\n{}", cap_text(stdout, 280)))
+                Some(format!(
+                    "[{tool_count}] {cmd} {mark}\n{}",
+                    cap_text(stdout, 280)
+                ))
             }
         }
         LiveEvent::TextDelta(_) | LiveEvent::Usage { .. } => None,
@@ -798,7 +821,10 @@ mod tests {
             "type": "thinking",
             "content": [{"type": "text", "text": "consider the tests"}]
         }));
-        assert_eq!(nested, vec![LiveEvent::Thought("consider the tests".into())]);
+        assert_eq!(
+            nested,
+            vec![LiveEvent::Thought("consider the tests".into())]
+        );
 
         let browser = parse_cli_stream_line(&json!({
             "type": "tool_call",

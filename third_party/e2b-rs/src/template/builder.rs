@@ -1379,6 +1379,7 @@ impl Template {
     /// Returns `(api_client, build_info)`.  The caller either spawns a poll
     /// task on top (`build`) or returns `build_info` immediately
     /// (`build_in_background`).
+    #[allow(clippy::disallowed_methods)] // Vendored SDK uses reqwest 0.13; the project TLS helper currently wraps reqwest 0.12.
     async fn setup_build(
         self,
         name: &str,

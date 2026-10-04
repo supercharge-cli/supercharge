@@ -47,7 +47,11 @@ fn test_conversation_request_to_chat_completion() {
     let chat_req: ChatCompletionRequest = req.into();
     assert_eq!(chat_req.model, Some("grok-3".to_string()));
     assert_eq!(chat_req.temperature, Some(0.7));
-    assert_eq!(chat_req.messages.len(), 2);
+    let [message] = chat_req.messages.as_slice() else {
+        panic!("system content should fold into one user message");
+    };
+    assert_eq!(message.role, Role::User);
+    assert_eq!(message.text_content(), "System prompt\n\nUser message");
 }
 
 #[test]
@@ -280,6 +284,68 @@ fn test_conversation_request_with_tools_to_chat_completion() {
     };
     assert_eq!(t0.function.name, "read_file");
     assert_eq!(t1.function.name, "bash");
+}
+
+#[test]
+fn strict_openai_tool_schema_keeps_properties_without_root_combinators() {
+    let original = serde_json::json!({
+        "type": "object",
+        "description": "choose one supported input form",
+        "properties": {
+            "tool_name": {"type": "string"},
+            "tool_input": {"type": "object"},
+            "tool_input_file": {"type": "string"},
+            "file": {"type": "string"}
+        },
+        "oneOf": [
+            {"required": ["tool_name", "tool_input"]},
+            {"required": ["tool_name", "tool_input_file"]},
+            {"required": ["file"]}
+        ]
+    });
+    let req =
+        ConversationRequest::from_items(vec![ConversationItem::user("test")]).with_tools(vec![
+            ToolSpec {
+                name: "use_tool".to_owned(),
+                description: Some("Invoke an MCP tool".to_owned()),
+                parameters: original.clone(),
+            },
+        ]);
+
+    let chat_req: ChatCompletionRequest = req.into();
+    let parameters = &chat_req.tools.unwrap()[0].function.parameters;
+    assert_eq!(
+        parameters.get("type").and_then(|v| v.as_str()),
+        Some("object")
+    );
+    assert_eq!(parameters.get("properties"), original.get("properties"));
+    for keyword in ["oneOf", "anyOf", "allOf", "enum", "const", "not"] {
+        assert!(
+            parameters.get(keyword).is_none(),
+            "root keyword {keyword} must be omitted: {parameters:#}"
+        );
+    }
+}
+
+#[test]
+fn ordinary_openai_tool_schema_is_unchanged() {
+    let original = serde_json::json!({
+        "type": "object",
+        "properties": {"path": {"type": "string", "enum": ["a", "b"]}},
+        "required": ["path"],
+        "additionalProperties": false
+    });
+    let req =
+        ConversationRequest::from_items(vec![ConversationItem::user("test")]).with_tools(vec![
+            ToolSpec {
+                name: "read_file".to_owned(),
+                description: None,
+                parameters: original.clone(),
+            },
+        ]);
+
+    let chat_req: ChatCompletionRequest = req.into();
+    assert_eq!(chat_req.tools.unwrap()[0].function.parameters, original);
 }
 
 #[test]

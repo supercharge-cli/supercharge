@@ -280,7 +280,13 @@ impl From<ConversationRequest> for ChatCompletionRequest {
             Some(
                 req.tools
                     .into_iter()
-                    .map(|t| ToolDefinition::function(t.name, t.description, t.parameters))
+                    .map(|t| {
+                        ToolDefinition::function(
+                            t.name,
+                            t.description,
+                            portable_function_parameters(&t.parameters),
+                        )
+                    })
                     .collect(),
             )
         };

@@ -74,7 +74,7 @@ pub struct TelegramClient {
 impl TelegramClient {
     pub fn new(config: TelegramConfig) -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
             config,
         }
     }

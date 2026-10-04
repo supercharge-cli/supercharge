@@ -21,7 +21,9 @@ fn chat_chunk_has_content(chunk: &ChatCompletionChunk) -> bool {
                 .is_some_and(|text| !text.is_empty())
             || function_call.as_ref().is_some_and(|function| {
                 ["name", "arguments"].iter().any(|key| {
-                    function.get(key).and_then(serde_json::Value::as_str)
+                    function
+                        .get(key)
+                        .and_then(serde_json::Value::as_str)
                         .is_some_and(|value| !value.is_empty())
                 })
             })
@@ -166,30 +168,6 @@ fn message_event_is_end(event: &messages::MessageStreamEvent) -> bool {
     matches!(event, messages::MessageStreamEvent::MessageStop)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn legacy_function_call_counts_only_nonempty_function_content() {
-        for (function_call, content) in [
-            (serde_json::json!({"name": "search"}), true),
-            (serde_json::json!({"arguments": "{"}), true),
-            (serde_json::json!({"name": "", "arguments": ""}), false),
-            (serde_json::json!({"name": null}), false),
-            (serde_json::Value::Null, false),
-        ] {
-            let chunk: ChatCompletionChunk = serde_json::from_value(serde_json::json!({
-                "id": "legacy", "object": "chat.completion.chunk", "created": 0,
-                "model": "test", "choices": [{"index": 0, "delta": {
-                    "function_call": function_call
-                }, "finish_reason": null}]
-            })).unwrap();
-            assert_eq!(chat_chunk_has_content(&chunk), content);
-        }
-    }
-}
-
 pub(crate) fn chat_chunk_class(chunk: &ChatCompletionChunk) -> ItemClass {
     if chat_chunk_has_content(chunk) {
         ItemClass::Content
@@ -219,5 +197,30 @@ pub(crate) fn message_event_class(event: &messages::MessageStreamEvent) -> ItemC
         ItemClass::End
     } else {
         ItemClass::Other
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_function_call_counts_only_nonempty_function_content() {
+        for (function_call, content) in [
+            (serde_json::json!({"name": "search"}), true),
+            (serde_json::json!({"arguments": "{"}), true),
+            (serde_json::json!({"name": "", "arguments": ""}), false),
+            (serde_json::json!({"name": null}), false),
+            (serde_json::Value::Null, false),
+        ] {
+            let chunk: ChatCompletionChunk = serde_json::from_value(serde_json::json!({
+                "id": "legacy", "object": "chat.completion.chunk", "created": 0,
+                "model": "test", "choices": [{"index": 0, "delta": {
+                    "function_call": function_call
+                }, "finish_reason": null}]
+            }))
+            .unwrap();
+            assert_eq!(chat_chunk_has_content(&chunk), content);
+        }
     }
 }

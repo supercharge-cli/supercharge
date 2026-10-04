@@ -65,11 +65,12 @@ fn current_version() -> String {
 
 async fn fetch_manifest() -> Result<Manifest, String> {
     let url = format!("{}/e2b-manifest.json", update_base_url());
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent("supercharge-e2b-update")
-        .build()
-        .map_err(|error| error.to_string())?;
+    let client = crate::http_client(|builder| {
+        builder
+            .timeout(Duration::from_secs(20))
+            .user_agent("supercharge-e2b-update")
+    })
+    .map_err(|error| error.to_string())?;
     let response = client
         .get(&url)
         .send()
@@ -239,6 +240,8 @@ nohup {command} >>/tmp/supercharge-daemon.log 2>&1 &
 echo $! > /tmp/supercharge-daemon.pid
 "#
     );
+    #[allow(clippy::disallowed_methods)]
+    // detached self-update relaunch intentionally outlives this daemon
     let _ = std::process::Command::new("bash")
         .arg("-c")
         .arg(script)
@@ -254,7 +257,9 @@ pub fn is_e2b_runtime() -> bool {
         .or_else(|| env::var("SUPERAGENT_RUNTIME_MODE").ok())
         .is_some_and(|value| value.trim().eq_ignore_ascii_case("e2b"))
         || Path::new("/run/e2b/.E2B_SANDBOX_ID").exists()
-        || env::var("E2B_SANDBOX_ID").ok().is_some_and(|value| !value.trim().is_empty())
+        || env::var("E2B_SANDBOX_ID")
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
 }
 
 #[cfg(test)]

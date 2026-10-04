@@ -55,7 +55,7 @@ pub struct SignalClient {
 impl SignalClient {
     pub fn new(config: SignalConfig) -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
             config,
         }
     }

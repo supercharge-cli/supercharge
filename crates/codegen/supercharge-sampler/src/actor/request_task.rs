@@ -560,8 +560,8 @@ async fn run_one_attempt(
                 length_policy,
             )
             .await;
-            if matches!(outcome, AttemptOutcome::Empty { .. }) {
-                if let Some(fallback) = non_streaming_chat_fallback(
+            if matches!(outcome, AttemptOutcome::Empty { .. })
+                && let Some(fallback) = non_streaming_chat_fallback(
                     client,
                     fallback_request,
                     request_id,
@@ -570,9 +570,8 @@ async fn run_one_attempt(
                     output_observed,
                 )
                 .await
-                {
-                    return fallback;
-                }
+            {
+                return fallback;
             }
             outcome
         }
@@ -663,8 +662,7 @@ async fn non_streaming_chat_fallback(
         },
     };
 
-    let (conversation, text, reasoning, tool_calls) =
-        chat_completion_to_conversation(response);
+    let (conversation, text, reasoning, tool_calls) = chat_completion_to_conversation(response);
     let mut chunk_index = 0u64;
     if !text.is_empty() || !reasoning.is_empty() {
         output_observed.store(true, Ordering::Relaxed);
@@ -1244,9 +1242,11 @@ mod tests {
             usage: None,
             cost_usd_ticks: None,
             message_chunks_emitted: u64::from(!content.is_empty()),
-            doom_loop_signals: vec![supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
-                "exact_repetition:42x3@thinking",
-            )],
+            doom_loop_signals: vec![
+                supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
+                    "exact_repetition:42x3@thinking",
+                ),
+            ],
             stop_message: None,
             message_id: None,
             raw_stop_reason: None,
@@ -1337,16 +1337,17 @@ mod tests {
             Some(supercharge_sampling_types::StopReason::Length),
             "truncated",
         );
-        response.doom_loop_signals =
-            std::iter::once(supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
+        response.doom_loop_signals = std::iter::once(
+            supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
                 &"x".repeat(MAX_DOOM_LOOP_SIGNAL_BYTES + 1),
+            ),
+        )
+        .chain((0..MAX_COLLECTED_DOOM_LOOP_SIGNALS + 20).map(|index| {
+            supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(&format!(
+                "unknown_{index}@thinking"
             ))
-            .chain((0..MAX_COLLECTED_DOOM_LOOP_SIGNALS + 20).map(|index| {
-                supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(&format!(
-                    "unknown_{index}@thinking"
-                ))
-            }))
-            .collect();
+        }))
+        .collect();
 
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
         let outcome = drive_l2(

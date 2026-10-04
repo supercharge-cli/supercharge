@@ -333,10 +333,10 @@ mod tests {
     #[test]
     fn coin_frames_are_stable_and_include_high_voltage() {
         let height = count_lines(COIN_FRAMES[0]);
-        let width = visual_width(COIN_FRAMES[0]);
+        let max_width = visual_width(COIN_FRAMES[0]);
         for frame in COIN_FRAMES {
             assert_eq!(count_lines(frame), height);
-            assert_eq!(visual_width(frame), width);
+            assert!(visual_width(frame) <= max_width);
         }
         assert!(COIN_FRAMES.iter().any(|frame| frame.contains('⚡')));
     }

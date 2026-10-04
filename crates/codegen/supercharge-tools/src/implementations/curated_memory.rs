@@ -169,10 +169,9 @@ fn store_file(home: &Path, target: &str) -> PathBuf {
 
 fn universal_memories_dir(home: &Path) -> PathBuf {
     match home.parent() {
-        Some(parent) if parent.file_name().is_some_and(|name| name == "bots") => parent
-            .parent()
-            .unwrap_or(parent)
-            .join("memories"),
+        Some(parent) if parent.file_name().is_some_and(|name| name == "bots") => {
+            parent.parent().unwrap_or(parent).join("memories")
+        }
         _ => home.join("memories"),
     }
 }
@@ -188,7 +187,12 @@ fn prompt_block_at(home: &Path) -> String {
          profile), `memory` for notes that belong only to this bot. Do not store secrets, task \
          progress, or one-off details.\n",
     );
-    push_section(&mut block, "MEMORY (environment notes)", &memory, MEMORY_CHAR_LIMIT);
+    push_section(
+        &mut block,
+        "MEMORY (environment notes)",
+        &memory,
+        MEMORY_CHAR_LIMIT,
+    );
     push_section(&mut block, "USER PROFILE", &user, USER_CHAR_LIMIT);
     block.push_str("</curated_memory>\n");
     block
@@ -212,7 +216,9 @@ fn push_section(block: &mut String, title: &str, entries: &[String], limit: usiz
 fn apply(home: &Path, input: &CuratedMemoryInput) -> Result<String, String> {
     let target = input.target.trim();
     if target != "memory" && target != "user" {
-        return Err(format!("Invalid target '{target}'. Use 'memory' or 'user'."));
+        return Err(format!(
+            "Invalid target '{target}'. Use 'memory' or 'user'."
+        ));
     }
     let ops: Vec<MemoryOp> = if let Some(ops) = &input.operations {
         if ops.is_empty() {
@@ -239,7 +245,11 @@ fn apply(home: &Path, input: &CuratedMemoryInput) -> Result<String, String> {
     } else {
         "this bot only"
     };
-    let limit = if target == "user" { USER_CHAR_LIMIT } else { MEMORY_CHAR_LIMIT };
+    let limit = if target == "user" {
+        USER_CHAR_LIMIT
+    } else {
+        MEMORY_CHAR_LIMIT
+    };
     let _lock = Lock::acquire(&path)?;
     let existing = read_entries(&path)?;
     let mut entries = existing;
@@ -274,7 +284,10 @@ fn apply_one(entries: &mut Vec<String>, op: &MemoryOp) -> Result<(), String> {
         "replace" => {
             let content = clean_content(op.content.as_deref())?;
             let idx = locate(entries, op.old_text.as_deref(), "replace")?;
-            entries[idx] = content;
+            let entry = entries
+                .get_mut(idx)
+                .ok_or_else(|| "matched memory entry disappeared before replacement".to_owned())?;
+            *entry = content;
             Ok(())
         }
         "remove" => {
@@ -282,7 +295,9 @@ fn apply_one(entries: &mut Vec<String>, op: &MemoryOp) -> Result<(), String> {
             entries.remove(idx);
             Ok(())
         }
-        other => Err(format!("Unknown action '{other}'. Use add, replace, or remove.")),
+        other => Err(format!(
+            "Unknown action '{other}'. Use add, replace, or remove."
+        )),
     }
 }
 
@@ -326,12 +341,19 @@ fn locate(entries: &[String], old_text: Option<&str>, verb: &str) -> Result<usiz
             .map(|(i, _)| i)
             .collect()
     };
-    let distinct: std::collections::BTreeSet<&str> =
-        matches.iter().map(|i| entries[*i].as_str()).collect();
+    let distinct: std::collections::BTreeSet<&str> = matches
+        .iter()
+        .filter_map(|index| entries.get(*index).map(String::as_str))
+        .collect();
     match distinct.len() {
-        1 => Ok(matches[0]),
+        1 => matches
+            .first()
+            .copied()
+            .ok_or_else(|| format!("No entry matched old_text for {verb}.")),
         0 => Err(format!("No entry matched old_text for {verb}.")),
-        _ => Err(format!("old_text matched more than one entry for {verb}. Quote a longer unique substring.")),
+        _ => Err(format!(
+            "old_text matched more than one entry for {verb}. Quote a longer unique substring."
+        )),
     }
 }
 
@@ -415,15 +437,14 @@ impl Lock {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         for _ in 0..50 {
-            if let Some(meta) = fs::metadata(&path).ok() {
-                if meta
+            if let Ok(meta) = fs::metadata(&path)
+                && meta
                     .modified()
                     .ok()
                     .and_then(|t| SystemTime::now().duration_since(t).ok())
                     .is_some_and(|age| age > Duration::from_secs(30))
-                {
-                    let _ = fs::remove_file(&path);
-                }
+            {
+                let _ = fs::remove_file(&path);
             }
             match OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(_) => return Ok(Self { path }),
@@ -471,7 +492,11 @@ mod tests {
         let home = std::env::temp_dir().join(format!("sc-mem-drift-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(home.join("memories")).unwrap();
-        fs::write(home.join("memories/MEMORY.md"), "# free form notes\nstill prose\n").unwrap();
+        fs::write(
+            home.join("memories/MEMORY.md"),
+            "# free form notes\nstill prose\n",
+        )
+        .unwrap();
         let err = apply(
             &home,
             &CuratedMemoryInput {

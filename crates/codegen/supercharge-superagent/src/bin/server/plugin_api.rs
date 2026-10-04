@@ -14,7 +14,12 @@ use supercharge_superagent::plugin_control::{
 };
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(tag = "action", rename_all = "camelCase", rename_all_fields = "camelCase", deny_unknown_fields)]
+#[serde(
+    tag = "action",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub(super) enum PluginRequest {
     Status,
     Validate {
@@ -151,8 +156,23 @@ fn merged_mcp_servers(
     managed: Option<Value>,
     name: &str,
 ) -> Result<Vec<Value>, String> {
-    let previous = servers.iter().filter(|server| server.get("name").and_then(Value::as_str) == Some(name)).collect::<Vec<_>>();
-    if previous.len() > 1 || previous.iter().any(|server| server.get("env").and_then(Value::as_array).is_none_or(|env| !env.iter().any(|entry| entry.get("name").and_then(Value::as_str) == Some("SUPERCHARGE_PLUGIN_BRIDGE_BINDING")))) {
+    let previous = servers
+        .iter()
+        .filter(|server| server.get("name").and_then(Value::as_str) == Some(name))
+        .collect::<Vec<_>>();
+    if previous.len() > 1
+        || previous.iter().any(|server| {
+            server
+                .get("env")
+                .and_then(Value::as_array)
+                .is_none_or(|env| {
+                    !env.iter().any(|entry| {
+                        entry.get("name").and_then(Value::as_str)
+                            == Some("SUPERCHARGE_PLUGIN_BRIDGE_BINDING")
+                    })
+                })
+        })
+    {
         return Err("Managed MCP name conflicts with another server".into());
     }
     servers.retain(|server| server.get("name").and_then(Value::as_str) != Some(name));
@@ -163,17 +183,17 @@ fn merged_mcp_servers(
 }
 
 fn ext_result(value: Value) -> Result<Value, String> {
-    if let Some(error) = value.get("error") {
-        if !error.is_null() {
-            return Err(error
-                .get("message")
-                .and_then(Value::as_str)
-                .or_else(|| error.as_str())
-                .unwrap_or("Agent MCP request failed")
-                .chars()
-                .take(240)
-                .collect());
-        }
+    if let Some(error) = value.get("error")
+        && !error.is_null()
+    {
+        return Err(error
+            .get("message")
+            .and_then(Value::as_str)
+            .or_else(|| error.as_str())
+            .unwrap_or("Agent MCP request failed")
+            .chars()
+            .take(240)
+            .collect());
     }
     Ok(value.get("result").cloned().unwrap_or(value))
 }
@@ -304,10 +324,17 @@ pub(super) async fn restore_for_launch(
         return Ok(None);
     }
     let status = request_for(state, bot_id, "status", json!({})).await?;
-    let Some(binding) = status.bindings.as_ref().and_then(|bindings| bindings.get(session_id)) else {
+    let Some(binding) = status
+        .bindings
+        .as_ref()
+        .and_then(|bindings| bindings.get(session_id))
+    else {
         return Ok(None);
     };
-    if matches!(binding.get("status").and_then(Value::as_str), Some("removed" | "removing")) {
+    if matches!(
+        binding.get("status").and_then(Value::as_str),
+        Some("removed" | "removing")
+    ) {
         return Ok(None);
     }
     if binding.get("agentSessionId").and_then(Value::as_str) != Some(agent_session_id) {
@@ -320,15 +347,13 @@ pub(super) async fn restore_for_launch(
         json!({"sessionId":session_id,"expectedRevision":binding.get("revision")}),
     )
     .await?;
-    let descriptor = target.descriptor.ok_or("Saved managed MCP descriptor is unavailable")?;
+    let descriptor = target
+        .descriptor
+        .ok_or("Saved managed MCP descriptor is unavailable")?;
     descriptor_to_acp(&descriptor).map(Some)
 }
 
-pub(super) async fn reconcile_after_turn(
-    state: &Arc<AppState>,
-    bot_id: &str,
-    session_id: &str,
-) {
+pub(super) async fn reconcile_after_turn(state: &Arc<AppState>, bot_id: &str, session_id: &str) {
     if !supercharge_superagent::plugin_control::available() || state.api_token.is_none() {
         return;
     }
@@ -336,7 +361,11 @@ pub(super) async fn reconcile_after_turn(
         Ok(status) => status,
         Err(_) => return,
     };
-    let Some(binding) = status.bindings.as_ref().and_then(|bindings| bindings.get(session_id)) else {
+    let Some(binding) = status
+        .bindings
+        .as_ref()
+        .and_then(|bindings| bindings.get(session_id))
+    else {
         return;
     };
     let Some(revision) = binding.get("revision").and_then(Value::as_u64) else {
@@ -355,7 +384,10 @@ pub(super) async fn reconcile_after_turn(
                 let servers = match merged_mcp_servers(
                     runtime.cli.mcp_servers(),
                     None,
-                    binding.get("serverName").and_then(Value::as_str).unwrap_or_default(),
+                    binding
+                        .get("serverName")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
                 ) {
                     Ok(servers) => servers,
                     Err(_) => return,
@@ -364,8 +396,22 @@ pub(super) async fn reconcile_after_turn(
                     return;
                 }
             }
-            if request_for(state, bot_id, "revokeBinding", json!({"sessionId":session_id})).await.is_ok() {
-                let _ = request_for(state, bot_id, "finishRemove", json!({"sessionId":session_id})).await;
+            if request_for(
+                state,
+                bot_id,
+                "revokeBinding",
+                json!({"sessionId":session_id}),
+            )
+            .await
+            .is_ok()
+            {
+                let _ = request_for(
+                    state,
+                    bot_id,
+                    "finishRemove",
+                    json!({"sessionId":session_id}),
+                )
+                .await;
             }
         }
         _ => {}
@@ -393,10 +439,15 @@ pub(super) async fn plugin_api(
             }),
         ));
     }
-    if state.app_maintenance.load(std::sync::atomic::Ordering::SeqCst) {
+    if state
+        .app_maintenance
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "Sandbox is pausing; retry after resume".into() }),
+            Json(ErrorResponse {
+                error: "Sandbox is pausing; retry after resume".into(),
+            }),
         ));
     }
     bot_definition(&state, &bot_id).await?;
@@ -590,7 +641,11 @@ pub(super) async fn plugin_api(
                         binding.server_name.as_deref().unwrap_or_default(),
                     )
                     .map_err(internal_error)?;
-                    runtime.cli.update_mcp_servers(servers).await.map_err(internal_error)?;
+                    runtime
+                        .cli
+                        .update_mcp_servers(servers)
+                        .await
+                        .map_err(internal_error)?;
                     request_for(
                         &state,
                         &bot_id,

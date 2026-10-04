@@ -84,7 +84,7 @@ pub struct DiscordClient {
 impl DiscordClient {
     pub fn new(config: DiscordConfig) -> Self {
         Self {
-            http: Client::new(),
+            http: crate::default_http_client(),
             config,
         }
     }

@@ -50,17 +50,12 @@ pub const SETUP_PROVIDER_ID: &str = "setup";
 pub const CUSTOM_PROVIDER_ID: &str = "custom";
 pub const CUSTOM_MODEL_ID: &str = "__custom__";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SetupWireFormat {
+    #[default]
     Openai,
     Anthropic,
     Responses,
-}
-
-impl Default for SetupWireFormat {
-    fn default() -> Self {
-        Self::Openai
-    }
 }
 
 impl SetupWireFormat {
@@ -309,7 +304,11 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         base_url: "https://inference-api.nousresearch.com/v1",
         default_model: "Hermes-4.3-36B",
         format: SetupWireFormat::Openai,
-        curated: &["Hermes-4.3-36B", "Hermes-4-70B", "deepseek/deepseek-v4-flash"],
+        curated: &[
+            "Hermes-4.3-36B",
+            "Hermes-4-70B",
+            "deepseek/deepseek-v4-flash",
+        ],
     },
     SetupProviderProfile {
         id: "ollama",
@@ -504,7 +503,10 @@ pub fn provider_models_to_catalog(
             laziness_detector: config::LazinessDetectorPerModelConfig::default(),
             ..Default::default()
         };
-        catalog.insert(model.id.clone(), ModelEntry::from_config_entry(&entry_config));
+        catalog.insert(
+            model.id.clone(),
+            ModelEntry::from_config_entry(&entry_config),
+        );
     }
     catalog
 }
@@ -525,13 +527,13 @@ pub fn fetch_setup_provider_catalog(
     let api_key = provider_setup_api_key_from_toml(&toml_config).unwrap_or_default();
     let format = setup_wire_format_from_config(&toml_config);
     let provider_id = setup_profile_id_from_config(&toml_config);
-    let models = fetch_provider_models(
+    let models = fetch_provider_models(&normalized, &api_key, format, provider_id.as_deref())?;
+    Ok(provider_models_to_catalog(
+        models,
         &normalized,
         &api_key,
         format,
-        provider_id.as_deref(),
-    )?;
-    Ok(provider_models_to_catalog(models, &normalized, &api_key, format))
+    ))
 }
 
 pub fn provider_models_list_url(base_url: &str) -> String {
@@ -620,7 +622,10 @@ fn model_entry_supports_thinking(entry: &Value, id: &str, name: &str) -> bool {
                 return true;
             }
         }
-        if obj.get("reasoning_efforts").and_then(Value::as_array).is_some_and(|a| !a.is_empty())
+        if obj
+            .get("reasoning_efforts")
+            .and_then(Value::as_array)
+            .is_some_and(|a| !a.is_empty())
             || obj
                 .get("reasoningEfforts")
                 .and_then(Value::as_array)
@@ -715,8 +720,7 @@ fn apply_catalog_auth(
     } else {
         request = request.bearer_auth(key);
         if base_url.contains("openrouter.ai") {
-            request = request
-                .header("X-Title", "Supercharge AI");
+            request = request.header("X-Title", "Supercharge AI");
         }
     }
     request
@@ -829,9 +833,32 @@ pub fn persist_provider_setup_at(
         model_name,
         setup.format,
         setup.provider_id.trim(),
-    );
+    )?;
     crate::util::config::atomic_write_string(path, &document.to_string())?;
     Ok(())
+}
+
+fn document_table_mut<'a>(
+    document: &'a mut toml_edit::DocumentMut,
+    name: &str,
+) -> Result<&'a mut toml_edit::Table, ProviderSetupError> {
+    document
+        .entry(name)
+        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| ProviderSetupError::Io(format!("[{name}] is not a table")))
+}
+
+fn child_table_mut<'a>(
+    table: &'a mut toml_edit::Table,
+    name: &str,
+    path: &str,
+) -> Result<&'a mut toml_edit::Table, ProviderSetupError> {
+    table
+        .entry(name)
+        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| ProviderSetupError::Io(format!("[{path}] is not a table")))
 }
 
 fn apply_provider_setup_to_document(
@@ -842,45 +869,62 @@ fn apply_provider_setup_to_document(
     model_name: &str,
     format: SetupWireFormat,
     provider_id: &str,
-) {
-    document["endpoints"]["api_base_url"] = toml_edit::value(base_url);
-    document["endpoints"]["models_base_url"] = toml_edit::value(base_url);
-    document["endpoints"]["models_list_url"] = toml_edit::value(provider_models_list_url(base_url));
+) -> Result<(), ProviderSetupError> {
+    {
+        let endpoints = document_table_mut(document, "endpoints")?;
+        endpoints.insert("api_base_url", toml_edit::value(base_url));
+        endpoints.insert("models_base_url", toml_edit::value(base_url));
+        endpoints.insert(
+            "models_list_url",
+            toml_edit::value(provider_models_list_url(base_url)),
+        );
+    }
+    document_table_mut(document, "models")?.insert("default", toml_edit::value(model_id));
 
-    document["models"]["default"] = toml_edit::value(model_id);
-
-    document["model_providers"][SETUP_PROVIDER_ID]["base_url"] = toml_edit::value(base_url);
-    document["model_providers"][SETUP_PROVIDER_ID]["api_backend"] =
-        toml_edit::value(format.api_backend());
-    document["model_providers"][SETUP_PROVIDER_ID]["id"] =
-        toml_edit::value(if provider_id.is_empty() {
-            CUSTOM_PROVIDER_ID
+    {
+        let providers = document_table_mut(document, "model_providers")?;
+        let provider = child_table_mut(providers, SETUP_PROVIDER_ID, "model_providers.setup")?;
+        provider.insert("base_url", toml_edit::value(base_url));
+        provider.insert("api_backend", toml_edit::value(format.api_backend()));
+        provider.insert(
+            "id",
+            toml_edit::value(if provider_id.is_empty() {
+                CUSTOM_PROVIDER_ID
+            } else {
+                provider_id
+            }),
+        );
+        if api_key.is_empty() {
+            provider.remove("api_key");
         } else {
-            provider_id
-        });
-    if api_key.is_empty() {
-        if let Some(table) = document["model_providers"][SETUP_PROVIDER_ID].as_table_mut() {
-            table.remove("api_key");
+            provider.insert("api_key", toml_edit::value(api_key));
         }
-    } else {
-        document["model_providers"][SETUP_PROVIDER_ID]["api_key"] = toml_edit::value(api_key);
     }
 
-    document["model"][model_id]["model"] = toml_edit::value(model_id);
-    document["model"][model_id]["base_url"] = toml_edit::value(base_url);
-    document["model"][model_id]["name"] = toml_edit::value(model_name);
-    document["model"][model_id]["api_backend"] = toml_edit::value(format.api_backend());
-    document["model"][model_id]["auth_scheme"] = toml_edit::value(format.auth_scheme());
-    document["model"][model_id]["model_provider"] = toml_edit::value(SETUP_PROVIDER_ID);
+    let models = document_table_mut(document, "model")?;
+    let model = child_table_mut(models, model_id, &format!("model.{model_id}"))?;
+    model.insert("model", toml_edit::value(model_id));
+    model.insert("base_url", toml_edit::value(base_url));
+    model.insert("name", toml_edit::value(model_name));
+    model.insert("api_backend", toml_edit::value(format.api_backend()));
+    model.insert("auth_scheme", toml_edit::value(format.auth_scheme()));
+    model.insert("model_provider", toml_edit::value(SETUP_PROVIDER_ID));
     if format == SetupWireFormat::Anthropic {
-        document["model"][model_id]["extra_headers"]["anthropic-version"] =
-            toml_edit::value("2023-06-01");
-    } else if let Some(headers) = document["model"][model_id]
+        let headers = model
+            .entry("extra_headers")
+            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+            .as_table_like_mut()
+            .ok_or_else(|| {
+                ProviderSetupError::Io(format!("[model.{model_id}.extra_headers] is not a table"))
+            })?;
+        headers.insert("anthropic-version", toml_edit::value("2023-06-01"));
+    } else if let Some(headers) = model
         .get_mut("extra_headers")
         .and_then(toml_edit::Item::as_table_like_mut)
     {
         // HTTP header names are case-insensitive; retain all unrelated headers.
-        let stale: Vec<String> = headers.iter()
+        let stale: Vec<String> = headers
+            .iter()
             .filter(|(name, _)| name.eq_ignore_ascii_case("anthropic-version"))
             .map(|(name, _)| name.to_owned())
             .collect();
@@ -889,12 +933,11 @@ fn apply_provider_setup_to_document(
         }
     }
     if api_key.is_empty() {
-        if let Some(table) = document["model"][model_id].as_table_mut() {
-            table.remove("api_key");
-        }
+        model.remove("api_key");
     } else {
-        document["model"][model_id]["api_key"] = toml_edit::value(api_key);
+        model.insert("api_key", toml_edit::value(api_key));
     }
+    Ok(())
 }
 
 /// Credential written by `/setup` for custom-endpoint catalog fetches.
@@ -964,37 +1007,60 @@ pub fn saved_format_target_from_toml(
     let base_url = normalize_provider_base_url(provider.get("base_url")?.as_str()?).ok()?;
     let models = config.get("model")?;
     let belongs_to_provider = |id: &str| {
-        let Some(model) = models.get(id) else { return false };
+        let Some(model) = models.get(id) else {
+            return false;
+        };
         let binding = model.get("model_provider").and_then(toml::Value::as_str);
         if binding.is_some_and(|binding| binding != SETUP_PROVIDER_ID) {
             return false;
         }
         match model.get("base_url").and_then(toml::Value::as_str) {
-            Some(url) => normalize_provider_base_url(url).ok().as_deref() == Some(base_url.as_str()),
+            Some(url) => {
+                normalize_provider_base_url(url).ok().as_deref() == Some(base_url.as_str())
+            }
             None => binding == Some(SETUP_PROVIDER_ID),
         }
     };
-    let model_id = active_model.filter(|id| belongs_to_provider(id)).or_else(|| {
-        config.get("models")?.get("default")?.as_str().filter(|id| belongs_to_provider(id))
-    })?;
+    let model_id = active_model
+        .filter(|id| belongs_to_provider(id))
+        .or_else(|| {
+            config
+                .get("models")?
+                .get("default")?
+                .as_str()
+                .filter(|id| belongs_to_provider(id))
+        })?;
     if model_id.trim().is_empty() {
         return None;
     }
     let model = models.get(model_id)?;
     // Only this provider or the validated target may supply credentials.
-    let api_key = provider.get("api_key").or_else(|| model.get("api_key"))
-        .and_then(toml::Value::as_str).unwrap_or_default().to_owned();
+    let api_key = provider
+        .get("api_key")
+        .or_else(|| model.get("api_key"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
     Some(ProviderSetup {
         base_url,
         api_key,
         model_id: model_id.to_owned(),
-        model_name: model.get("name").and_then(toml::Value::as_str)
-            .unwrap_or(model_id).to_owned(),
-        format: model.get("api_backend").or_else(|| provider.get("api_backend"))
+        model_name: model
+            .get("name")
             .and_then(toml::Value::as_str)
-            .map(SetupWireFormat::from_api_backend).unwrap_or_default(),
-        provider_id: provider.get("id").and_then(toml::Value::as_str)
-            .unwrap_or(CUSTOM_PROVIDER_ID).to_owned(),
+            .unwrap_or(model_id)
+            .to_owned(),
+        format: model
+            .get("api_backend")
+            .or_else(|| provider.get("api_backend"))
+            .and_then(toml::Value::as_str)
+            .map(SetupWireFormat::from_api_backend)
+            .unwrap_or_default(),
+        provider_id: provider
+            .get("id")
+            .and_then(toml::Value::as_str)
+            .unwrap_or(CUSTOM_PROVIDER_ID)
+            .to_owned(),
     })
 }
 
@@ -1334,7 +1400,8 @@ mod tests {
     }
 
     fn format_target_config() -> toml::Value {
-        toml::from_str(r#"
+        toml::from_str(
+            r#"
             [models]
             default = "saved"
             [model_providers.setup]
@@ -1354,7 +1421,9 @@ mod tests {
             [model.stale]
             model_provider = "setup"
             base_url = "https://other.example.com/v1"
-        "#).unwrap()
+        "#,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -1364,7 +1433,8 @@ mod tests {
         assert!(load_saved_format_target_at(&path, None).is_none());
         let mut config = format_target_config();
         config["model"]["saved"].as_table_mut().unwrap().insert(
-            "api_backend".to_owned(), toml::Value::String("responses".to_owned()),
+            "api_backend".to_owned(),
+            toml::Value::String("responses".to_owned()),
         );
         std::fs::write(&path, toml::to_string(&config).unwrap()).unwrap();
         let setup = load_saved_format_target_at(&path, Some("foreign")).unwrap();
@@ -1399,18 +1469,32 @@ mod tests {
             assert_eq!(target.format, SetupWireFormat::Anthropic);
             assert_eq!(target.provider_id, "custom");
         }
-        assert_eq!(saved_format_target_from_toml(&config, None).unwrap().model_name, "Saved Model");
+        assert_eq!(
+            saved_format_target_from_toml(&config, None)
+                .unwrap()
+                .model_name,
+            "Saved Model"
+        );
     }
 
     #[test]
     fn saved_format_target_requires_saved_setup_and_safe_default() {
-        assert!(saved_format_target_from_toml(&toml::Value::Table(Default::default()), Some("active")).is_none());
+        assert!(
+            saved_format_target_from_toml(&toml::Value::Table(Default::default()), Some("active"))
+                .is_none()
+        );
         let mut config = format_target_config();
         config["models"]["default"] = toml::Value::String("foreign".to_owned());
         assert!(saved_format_target_from_toml(&config, None).is_none());
         assert!(saved_format_target_from_toml(&config, Some("stale")).is_none());
-        assert_eq!(saved_format_target_from_toml(&config, Some("active")).unwrap().model_id, "active");
-        config["model_providers"]["setup"]["base_url"] = toml::Value::String("not a URL".to_owned());
+        assert_eq!(
+            saved_format_target_from_toml(&config, Some("active"))
+                .unwrap()
+                .model_id,
+            "active"
+        );
+        config["model_providers"]["setup"]["base_url"] =
+            toml::Value::String("not a URL".to_owned());
         assert!(saved_format_target_from_toml(&config, Some("active")).is_none());
     }
 
@@ -1420,7 +1504,10 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("config.toml");
             let config = format_target_config();
-            let mut document = toml::to_string(&config).unwrap().parse::<toml_edit::DocumentMut>().unwrap();
+            let mut document = toml::to_string(&config)
+                .unwrap()
+                .parse::<toml_edit::DocumentMut>()
+                .unwrap();
             document["model"]["saved"]["temperature"] = toml_edit::value(0.4);
             if inline_headers {
                 let mut headers = toml_edit::InlineTable::new();
@@ -1428,15 +1515,23 @@ mod tests {
                 headers.insert("Anthropic-Version", "old".into());
                 document["model"]["saved"]["extra_headers"] = toml_edit::value(headers);
             } else {
-                document["model"]["saved"]["extra_headers"]["X-Tenant"] = toml_edit::value("tenant");
+                document["model"]["saved"]["extra_headers"]["X-Tenant"] =
+                    toml_edit::value("tenant");
             }
             std::fs::write(&path, document.to_string()).unwrap();
-            for format in [SetupWireFormat::Anthropic, SetupWireFormat::Responses, SetupWireFormat::Anthropic, SetupWireFormat::Openai] {
-                let before: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            for format in [
+                SetupWireFormat::Anthropic,
+                SetupWireFormat::Responses,
+                SetupWireFormat::Anthropic,
+                SetupWireFormat::Openai,
+            ] {
+                let before: toml::Value =
+                    toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
                 let mut target = saved_format_target_from_toml(&before, Some("foreign")).unwrap();
                 target.format = format;
                 persist_provider_setup_at(&path, &target).unwrap();
-                let after: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+                let after: toml::Value =
+                    toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
                 let restored = saved_format_target_from_toml(&after, Some("saved")).unwrap();
                 assert_eq!(restored.format, format);
                 assert_eq!(restored.api_key, "saved-key");
@@ -1444,11 +1539,22 @@ mod tests {
                 assert_eq!(restored.model_name, "Saved Model");
                 assert_eq!(after["model"]["foreign"], before["model"]["foreign"]);
                 assert_eq!(after["model"]["saved"]["temperature"].as_float(), Some(0.4));
-                assert_eq!(after["model"]["saved"]["auth_scheme"].as_str(), Some(format.auth_scheme()));
-                assert_eq!(after["model"]["saved"]["api_backend"].as_str(), Some(format.api_backend()));
+                assert_eq!(
+                    after["model"]["saved"]["auth_scheme"].as_str(),
+                    Some(format.auth_scheme())
+                );
+                assert_eq!(
+                    after["model"]["saved"]["api_backend"].as_str(),
+                    Some(format.api_backend())
+                );
                 let headers = after["model"]["saved"]["extra_headers"].as_table().unwrap();
                 assert_eq!(headers["X-Tenant"].as_str(), Some("tenant"));
-                assert_eq!(headers.keys().any(|name| name.eq_ignore_ascii_case("anthropic-version")), format == SetupWireFormat::Anthropic);
+                assert_eq!(
+                    headers
+                        .keys()
+                        .any(|name| name.eq_ignore_ascii_case("anthropic-version")),
+                    format == SetupWireFormat::Anthropic
+                );
             }
         }
     }
