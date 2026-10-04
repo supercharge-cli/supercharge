@@ -331,6 +331,7 @@ impl BotQueue {
     pub fn start_next(
         &mut self,
         active_chats: &HashSet<String>,
+        blocked_bots: &HashSet<String>,
         path: &Path,
     ) -> Result<Option<BotWork>, String> {
         if !self.notifications.is_empty() {
@@ -341,6 +342,7 @@ impl BotQueue {
         }
         let Some(index) = self.queued.iter().position(|work| {
             !active_chats.contains(work.session())
+                && !blocked_bots.contains(&work.bot_id)
                 && !self.in_flight.values().any(|running| {
                     running.session() == work.session() || running.bot_id == work.bot_id
                 })
@@ -489,7 +491,7 @@ mod tests {
         queue.enqueue(work("other", "two"), &path).unwrap();
         assert_eq!(
             queue
-                .start_next(&HashSet::new(), &path)
+                .start_next(&HashSet::new(), &HashSet::new(), &path)
                 .unwrap()
                 .unwrap()
                 .id,
@@ -497,7 +499,7 @@ mod tests {
         );
         assert_eq!(
             queue
-                .start_next(&HashSet::from(["one".to_owned()]), &path)
+                .start_next(&HashSet::from(["one".to_owned()]), &HashSet::new(), &path)
                 .unwrap()
                 .unwrap()
                 .id,
@@ -509,12 +511,26 @@ mod tests {
         assert_eq!(loaded.interrupted["first"].status, "interrupted");
         assert_eq!(
             loaded
-                .start_next(&HashSet::new(), &path)
+                .start_next(&HashSet::new(), &HashSet::new(), &path)
                 .unwrap()
                 .unwrap()
                 .id,
             "second"
         );
+    }
+
+    #[test]
+    fn handoff_blocks_only_its_bot_without_claiming_its_queued_work() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("queue.json");
+        let mut queue = BotQueue::default();
+        queue.enqueue(work("first", "research"), &path).unwrap();
+        queue.enqueue(work("second", "design"), &path).unwrap();
+        let blocked = HashSet::from(["research".to_owned()]);
+        assert_eq!(queue.start_next(&HashSet::new(), &blocked, &path).unwrap().unwrap().id, "second");
+        assert!(queue.start_next(&HashSet::new(), &blocked, &path).unwrap().is_none());
+        assert_eq!(queue.queued.front().unwrap().id, "first");
+        assert_eq!(queue.start_next(&HashSet::new(), &HashSet::new(), &path).unwrap().unwrap().id, "first");
     }
 
     #[test]
@@ -529,14 +545,14 @@ mod tests {
         delegated.origin_session_id = Some("main-original-dm".into());
         delegated.origin_work_id = Some("original-turn".into());
         queue.enqueue(delegated.clone(), &path).unwrap();
-        queue.start_next(&HashSet::new(), &path).unwrap();
+        queue.start_next(&HashSet::new(), &HashSet::new(), &path).unwrap();
         queue
             .finish("job-one", "succeeded", "answer from worker", "", 9, &path)
             .unwrap();
         let mut loaded = BotQueue::load(&path).unwrap();
         assert!(!loaded.enqueue(delegated, &path).unwrap());
         assert_eq!(loaded.queued.len(), 1);
-        let notification = loaded.start_next(&HashSet::new(), &path).unwrap().unwrap();
+        let notification = loaded.start_next(&HashSet::new(), &HashSet::new(), &path).unwrap().unwrap();
         assert_eq!(notification.session(), "main-original-dm");
         assert_eq!(notification.bot_id, "main");
         assert!(notification.prompt.contains("answer from worker"));

@@ -133,7 +133,15 @@ impl PersistentCli {
         ] {
             command.env_remove(key);
         }
-        crate::browser::configure_desktop_environment(&mut command, &config.session_id).await;
+        crate::browser::configure_desktop_environment(
+            &mut command,
+            &config.session_id,
+            config
+                .bot_environment
+                .as_ref()
+                .map_or("main", |bot| bot.bot_id.as_str()),
+        )
+        .await?;
         if let Some(bot) = &config.bot_environment {
             command
                 .env("VECTRA_BOT_ID", &bot.bot_id)

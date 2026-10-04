@@ -73,7 +73,28 @@ try {
   execFileSync("bash", ["/opt/vectra/browser-runtime/start.sh"]);
   assert.equal(await readFile("/tmp/supercharge-browser/chromium.pid", "utf8"), pid);
   assert.ok(browser.contexts()[0].pages().some((page) => page.url().includes("18677")));
-  console.log("PASS: full-display image, Unicode/multiline typing, shortcuts, drag, terminal/file windows, owner exclusion, handoff privacy, stale stop rejection and idempotent startup");
+  for (const bot of ["research", "design"]) {
+    execFileSync("bash", ["/opt/vectra/browser-runtime/start.sh"], { env: { ...process.env, SUPERAGENT_DESKTOP_BOT_ID: bot } });
+  }
+  const slots = await Promise.all(["research", "design"].map(async (bot) => Number((await readFile(`/tmp/supercharge-browser/bots/${bot}/slot`, "utf8")).trim())));
+  assert.notEqual(slots[0], slots[1]);
+  for (const [index, bot] of ["research", "design"].entries()) {
+    const status = await (await fetch(`http://127.0.0.1:${13000 + slots[index]}/status`)).json();
+    assert.equal(status.desktopBotId, bot);
+    assert.equal(status.display, `:${99 + slots[index]}`);
+    assert.equal(status.vncPort, 11000 + slots[index]);
+    const observation = await (await fetch(`http://127.0.0.1:${13000 + slots[index]}/desktop/observe`, { headers: { "x-vectra-browser-owner": `integration-${bot}` } })).json();
+    assert.equal(observation.display, status.display);
+    assert.ok(observation.jpeg.length > 1000);
+    const isolated = await chromium.connectOverCDP(`http://127.0.0.1:${12000 + slots[index]}`);
+    assert.notEqual(isolated.contexts()[0].pages()[0]?.url(), "http://127.0.0.1:18677/");
+    await isolated.close();
+  }
+  const botPid = await readFile("/tmp/supercharge-browser/bots/research/chromium.pid", "utf8");
+  execFileSync("bash", ["/opt/vectra/browser-runtime/start.sh"], { env: { ...process.env, SUPERAGENT_DESKTOP_BOT_ID: "research" } });
+  assert.equal(await readFile("/tmp/supercharge-browser/bots/research/chromium.pid", "utf8"), botPid);
+  assert.equal((await call("/status")).desktopBotId, "main");
+  console.log("PASS: desktop input, handoff, restart and two isolated bot displays/CDP/sidecars");
 } finally {
   await call("/lease/reset", {}, { observer: true }).catch(() => {});
   site.close();

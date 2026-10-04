@@ -37,7 +37,7 @@ export function keyChord(value) {
 
 function command(file, args, { signal, input, timeout = 5000 } = {}) {
   return new Promise((resolve, reject) => {
-    const child = execFile(file, args, { env: { ...process.env, DISPLAY: ":99" }, signal, timeout, maxBuffer: 1024 * 1024, encoding: "utf8" }, (error, stdout) => error ? reject(new Error(`${file} failed: ${error.message}`)) : resolve(stdout));
+    const child = execFile(file, args, { env: { ...process.env, DISPLAY: process.env.DISPLAY || ":99" }, signal, timeout, maxBuffer: 1024 * 1024, encoding: "utf8" }, (error, stdout) => error ? reject(new Error(`${file} failed: ${error.message}`)) : resolve(stdout));
     child.stdin.on("error", () => {});
     child.stdin.end(input);
   });
@@ -52,7 +52,7 @@ export class DisplayCapture {
 
   start() {
     if (this.child) return;
-    const child = spawn("python3", ["-u", fileURLToPath(new URL("./capture.py", import.meta.url))], { env: { ...process.env, DISPLAY: ":99" }, stdio: ["pipe", "pipe", "inherit"] });
+    const child = spawn("python3", ["-u", fileURLToPath(new URL("./capture.py", import.meta.url))], { env: { ...process.env, DISPLAY: process.env.DISPLAY || ":99" }, stdio: ["pipe", "pipe", "inherit"] });
     this.child = child;
     const fail = (error) => {
       if (this.child !== child) return;
@@ -132,7 +132,7 @@ export class Desktop {
   async observe(owner, leaseGeneration, { passive = false } = {}) {
     const image = await this.image();
     const frameId = randomUUID();
-    const metadata = { frameId, displayGeneration: this.generation, leaseGeneration, display: ":99", displayWidth: image.displayWidth, displayHeight: image.displayHeight, imageWidth: image.imageWidth, imageHeight: image.imageHeight, scaleX: image.displayWidth / image.imageWidth, scaleY: image.displayHeight / image.imageHeight, originX: 0, originY: 0 };
+    const metadata = { frameId, displayGeneration: this.generation, leaseGeneration, display: process.env.DISPLAY || ":99", displayWidth: image.displayWidth, displayHeight: image.displayHeight, imageWidth: image.imageWidth, imageHeight: image.imageHeight, scaleX: image.displayWidth / image.imageWidth, scaleY: image.displayHeight / image.imageHeight, originX: 0, originY: 0 };
     if (!passive) {
       for (const [id, frame] of this.frames) if (this.now() - frame.at > 45_000) this.frames.delete(id);
       while (this.frames.size >= 32) this.frames.delete(this.frames.keys().next().value);
@@ -300,7 +300,7 @@ export class Desktop {
 
   async launch(file, args, signal) {
     signal?.throwIfAborted();
-    const child = spawn(file, args, { env: { ...process.env, DISPLAY: ":99" }, detached: true, stdio: "ignore" });
+    const child = spawn(file, args, { env: { ...process.env, DISPLAY: process.env.DISPLAY || ":99" }, detached: true, stdio: "ignore" });
     await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
     child.unref();
   }

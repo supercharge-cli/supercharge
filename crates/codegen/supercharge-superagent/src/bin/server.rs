@@ -175,7 +175,6 @@ struct AppState {
     bot_turn_budget: Arc<tokio::sync::Semaphore>,
     bot_dispatch: Arc<Mutex<()>>,
     app_maintenance: Arc<AtomicBool>,
-    human_control_until: Arc<AtomicU64>,
     app_runtimes: Arc<Mutex<HashMap<String, Arc<AppRuntime>>>>,
     bot_runtime_last_used: Arc<Mutex<HashMap<String, u64>>>,
     app_event_routes: Arc<StdMutex<HashMap<String, AppEventRoute>>>,
@@ -712,7 +711,6 @@ async fn main() -> anyhow::Result<()> {
         bot_turn_budget: Arc::new(tokio::sync::Semaphore::new(4)),
         bot_dispatch: Arc::new(Mutex::new(())),
         app_maintenance: Arc::new(AtomicBool::new(maintenance_path.exists())),
-        human_control_until: Arc::new(AtomicU64::new(0)),
         app_runtimes: Arc::new(Mutex::new(HashMap::new())),
         bot_runtime_last_used: Arc::new(Mutex::new(HashMap::new())),
         app_event_routes: Arc::new(StdMutex::new(HashMap::new())),
@@ -1594,7 +1592,7 @@ async fn execute_headless_cli_turn(
         command
             .env("SUPERCHARGE_RUNTIME_MODE", "e2b")
             .env("SUPERCHARGE_AGENT", "supercharge-e2b");
-        browser::configure_desktop_environment(&mut command, cli_session_id).await;
+        browser::configure_desktop_environment(&mut command, cli_session_id, MAIN_BOT_ID).await?;
     }
     command
         .stdout(Stdio::piped())
@@ -2986,25 +2984,54 @@ async fn enqueue_job(
     Ok(Json(job))
 }
 
-async fn browser_status() -> Result<Json<StreamStatus>, StatusCode> {
-    if !browser::is_e2b_runtime() {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    Ok(Json(
-        browser::read_stream_status(browser::stream_port()).await,
-    ))
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ComputerBotQuery {
+    bot_id: Option<String>,
 }
 
-async fn browser_stream() -> Result<Response, StatusCode> {
+async fn computer_target(
+    state: &AppState,
+    bot_id: Option<&str>,
+) -> Result<browser::BotDesktop, StatusCode> {
+    let id = bot_id.unwrap_or(MAIN_BOT_ID);
+    if state.bot_catalog.lock().await.get(id).is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    browser::bot_desktop(id)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
+}
+
+async fn browser_status(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ComputerBotQuery>,
+) -> Result<Json<StreamStatus>, StatusCode> {
     if !browser::is_e2b_runtime() {
         return Err(StatusCode::NOT_FOUND);
     }
-    let port = browser::stream_port();
-    let status = browser::ensure_stream(port).await;
+    if query.bot_id.as_deref().unwrap_or(MAIN_BOT_ID) == MAIN_BOT_ID {
+        return Ok(Json(
+            browser::read_stream_status(browser::stream_port()).await,
+        ));
+    }
+    let target = computer_target(&state, query.bot_id.as_deref()).await?;
+    Ok(Json(browser::read_bot_stream_status(&target).await))
+}
+
+async fn browser_stream(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ComputerBotQuery>,
+) -> Result<Response, StatusCode> {
+    if !browser::is_e2b_runtime() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let target = computer_target(&state, query.bot_id.as_deref()).await?;
+    let status = browser::read_bot_stream_status(&target).await;
     if !status.connected {
         return Err(StatusCode::SERVICE_UNAVAILABLE);
     }
-    let mut response = Response::new(Body::from_stream(browser::sse_stream(status)));
+    let mut response = Response::new(Body::from_stream(browser::sse_stream(status, target)));
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/event-stream; charset=utf-8"),
@@ -3021,6 +3048,8 @@ async fn browser_stream() -> Result<Response, StatusCode> {
 
 #[derive(Debug, Deserialize)]
 struct BrowserControlRequest {
+    #[serde(default, rename = "botId")]
+    bot_id: Option<String>,
     #[serde(default)]
     approved: bool,
     #[serde(default, rename = "handoffId")]
@@ -3030,6 +3059,7 @@ struct BrowserControlRequest {
 }
 
 async fn browser_control(
+    State(state): State<Arc<AppState>>,
     Json(request): Json<BrowserControlRequest>,
 ) -> Result<Json<browser::BrowserActionResult>, (StatusCode, Json<ErrorResponse>)> {
     if !browser::is_e2b_runtime() {
@@ -3060,7 +3090,30 @@ async fn browser_control(
             }),
         ));
     }
-    let result = browser::execute_action(request.action, &request.handoff_id)
+    let target = computer_target(&state, request.bot_id.as_deref())
+        .await
+        .map_err(|code| {
+            (
+                code,
+                Json(ErrorResponse {
+                    error: "bot desktop unavailable".into(),
+                }),
+            )
+        })?;
+    if !DesktopControl::allows(
+        &*DesktopControl::shared().active.read().await,
+        &request.handoff_id,
+        &target.bot_id,
+        unix_millis(),
+    ) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "No current handoff for this bot".into(),
+            }),
+        ));
+    }
+    let result = browser::execute_action(request.action, &request.handoff_id, &target)
         .await
         .map_err(|error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error })))?;
     Ok(Json(result))
@@ -3088,6 +3141,7 @@ struct BrowserVncQuery {
 #[serde(rename_all = "camelCase")]
 struct BrowserTicketQuery {
     handoff_id: String,
+    bot_id: Option<String>,
 }
 
 async fn issue_browser_vnc_ticket(
@@ -3098,7 +3152,8 @@ async fn issue_browser_vnc_ticket(
         return Err(StatusCode::NOT_FOUND);
     }
     let _dispatch = state.bot_dispatch.lock().await;
-    let status = browser::desktop_status()
+    let target = computer_target(&state, query.bot_id.as_deref()).await?;
+    let status = browser::desktop_status_for(&target)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     if status.handoff_protocol < 2
@@ -3110,16 +3165,35 @@ async fn issue_browser_vnc_ticket(
     }
     let control = DesktopControl::shared();
     control
-        .activate(&query.handoff_id, status.expires_at)
+        .activate(&query.handoff_id, &target.bot_id, status.expires_at)
         .await
         .map_err(|_| StatusCode::CONFLICT)?;
     let ticket = control
-        .mint(&query.handoff_id, unix_millis())
+        .mint(&query.handoff_id, &target.bot_id, unix_millis())
         .await
         .map_err(|_| StatusCode::CONFLICT)?;
     Ok(Json(
-        json!({"ticket":ticket,"expiresInSeconds":60,"display":"desktop","handoffId":query.handoff_id}),
+        json!({"ticket":ticket,"expiresInSeconds":60,"display":"desktop","handoffId":query.handoff_id,"botId":target.bot_id}),
     ))
+}
+
+async fn bot_handoff_busy(state: &AppState, bot_id: &str) -> bool {
+    let queue = state.bot_queue.lock().await;
+    if queue.in_flight.values().any(|work| work.bot_id == bot_id)
+        || queue.queued.iter().any(|work| work.bot_id == bot_id)
+        || (bot_id == MAIN_BOT_ID && state.app_turn_busy.load(Ordering::SeqCst))
+    {
+        return true;
+    }
+    drop(queue);
+    let tasks = background_snapshot(state);
+    if tasks.is_empty() { return false; }
+    let sessions = state.sessions.lock().await;
+    tasks.iter().any(|task| {
+        task.get("sessionId").and_then(Value::as_str)
+            .and_then(|id| sessions.get(id))
+            .is_none_or(|session| session.bot_id == bot_id)
+    })
 }
 
 async fn browser_handoff(
@@ -3161,13 +3235,34 @@ async fn browser_handoff(
             ));
         }
     };
+    let target = computer_target(&state, request.bot_id.as_deref())
+        .await
+        .map_err(|code| {
+            (
+                code,
+                Json(ErrorResponse {
+                    error: "bot desktop unavailable".into(),
+                }),
+            )
+        })?;
     let _dispatch = state.bot_dispatch.lock().await;
+    if !start
+        && !DesktopControl::allows(
+            &*DesktopControl::shared().active.read().await,
+            &request.handoff_id,
+            &target.bot_id,
+            unix_millis(),
+        )
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "No current handoff for this bot".into(),
+            }),
+        ));
+    }
     if start {
-        let queue = state.bot_queue.lock().await;
-        if !queue.in_flight.is_empty()
-            || !queue.queued.is_empty()
-            || !background_snapshot(&state).is_empty()
-        {
+        if bot_handoff_busy(&state, &target.bot_id).await {
             return Err((
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
@@ -3180,7 +3275,7 @@ async fn browser_handoff(
     }
     let control = DesktopControl::shared();
     if !start {
-        control.revoke(&request.handoff_id).await.map_err(|error| {
+        control.revoke(&target.bot_id, &request.handoff_id).await.map_err(|error| {
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
@@ -3193,8 +3288,9 @@ async fn browser_handoff(
         start,
         request.minutes,
         &request.handoff_id,
-        request.bot_id.as_deref(),
+        Some(&target.bot_id),
         request.session_id.as_deref(),
+        &target,
     )
     .await
     .map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error })))?;
@@ -3208,7 +3304,7 @@ async fn browser_handoff(
     };
     if start {
         control
-            .activate(&request.handoff_id, expires)
+            .activate(&request.handoff_id, &target.bot_id, expires)
             .await
             .map_err(|error| {
                 (
@@ -3219,7 +3315,6 @@ async fn browser_handoff(
                 )
             })?;
     }
-    state.human_control_until.store(expires, Ordering::SeqCst);
     drop(_dispatch);
     if !start {
         schedule_bot_queue(state);
@@ -3229,7 +3324,7 @@ async fn browser_handoff(
                 expires.saturating_sub(unix_millis()) + 50,
             ))
             .await;
-            let _ = control.revoke(&request.handoff_id).await;
+            let _ = control.revoke(&target.bot_id, &request.handoff_id).await;
             schedule_bot_queue(state);
         });
     }
@@ -3237,6 +3332,7 @@ async fn browser_handoff(
 }
 
 async fn browser_vnc(
+    State(state): State<Arc<AppState>>,
     Query(query): Query<BrowserVncQuery>,
     ws: WebSocketUpgrade,
 ) -> Result<Response, StatusCode> {
@@ -3244,24 +3340,37 @@ async fn browser_vnc(
         return Err(StatusCode::NOT_FOUND);
     }
     let control = DesktopControl::shared();
-    let handoff_id = control
+    let (handoff_id, bot_id) = control
         .consume(&query.ticket.unwrap_or_default())
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    if !DesktopControl::allows(&*control.active.read().await, &handoff_id, unix_millis()) {
+    if !DesktopControl::allows(
+        &*control.active.read().await,
+        &handoff_id,
+        &bot_id,
+        unix_millis(),
+    ) {
         return Err(StatusCode::UNAUTHORIZED);
     }
+    let target = computer_target(&state, Some(&bot_id)).await?;
     Ok(ws
-        .on_upgrade(move |socket| browser_vnc_relay(socket, handoff_id))
+        .on_upgrade(move |socket| browser_vnc_relay(socket, handoff_id, target))
         .into_response())
 }
 
-async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket, handoff_id: String) {
+async fn browser_vnc_relay(
+    socket: axum::extract::ws::WebSocket,
+    handoff_id: String,
+    target: browser::BotDesktop,
+) {
     let control = DesktopControl::shared();
-    let Some((_guard, mut revoked)) = control.register(&handoff_id, unix_millis()).await else {
+    let Some((_guard, mut revoked)) = control
+        .register(&handoff_id, &target.bot_id, unix_millis())
+        .await
+    else {
         return;
     };
     let connection = tokio::select! {
-        value = tokio::time::timeout(StdDuration::from_secs(3), connect_async("ws://127.0.0.1:6080/websockify")) => value,
+        value = tokio::time::timeout(StdDuration::from_secs(3), connect_async(format!("ws://127.0.0.1:{}/websockify", target.vnc_port))) => value,
         _ = revoked.changed() => return,
     };
     let Ok(Ok((upstream, _))) = connection else {
@@ -3280,7 +3389,7 @@ async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket, handoff_id: Str
                 Message::Close(_) => TungsteniteMessage::Close(None),
             };
             let active = control.active.read().await;
-            if !DesktopControl::allows(&active, &handoff_id, unix_millis()) {
+            if !DesktopControl::allows(&active, &handoff_id, &target.bot_id, unix_millis()) {
                 break;
             }
             if !matches!(
@@ -3309,10 +3418,15 @@ async fn browser_vnc_relay(socket: axum::extract::ws::WebSocket, handoff_id: Str
     };
     let policy = async {
         loop {
-            if !DesktopControl::allows(&*control.active.read().await, &handoff_id, unix_millis()) {
+            if !DesktopControl::allows(
+                &*control.active.read().await,
+                &handoff_id,
+                &target.bot_id,
+                unix_millis(),
+            ) {
                 break;
             }
-            match browser::desktop_status().await {
+            match browser::desktop_status_for(&target).await {
                 Ok(status)
                     if status.handoff_phase == "active"
                         && status.handoff_id.as_deref() == Some(&handoff_id)
@@ -3478,11 +3592,10 @@ async fn app_maintenance(
                 browser::reset_after_resume()
                     .await
                     .map_err(internal_error)?;
-                state.human_control_until.store(0, Ordering::SeqCst);
                 let control = DesktopControl::shared();
                 let old = control.active.read().await.clone();
-                if let Some(old) = old {
-                    control.revoke(&old.id).await.map_err(internal_error)?;
+                for handoff in old.values() {
+                    control.revoke(&handoff.bot_id, &handoff.id).await.map_err(internal_error)?;
                 }
             }
             match std::fs::remove_file(&state.maintenance_path) {
@@ -3994,47 +4107,52 @@ fn save_app_uploads(files: &[AppChatFile], root: &FsPath) -> Result<Vec<String>,
 }
 
 fn schedule_bot_queue(state: Arc<AppState>) {
-    if state.app_maintenance.load(Ordering::SeqCst)
-        || state.human_control_until.load(Ordering::SeqCst) > unix_millis()
-    {
+    if state.app_maintenance.load(Ordering::SeqCst) {
         return;
     }
     tokio::spawn(async move {
         let _dispatch = state.bot_dispatch.lock().await;
-        if state.app_maintenance.load(Ordering::SeqCst)
-            || state.human_control_until.load(Ordering::SeqCst) > unix_millis()
-        {
+        if state.app_maintenance.load(Ordering::SeqCst) {
             return;
         }
+        let mut blocked_bots = HashSet::new();
         if browser::is_e2b_runtime() {
-            let status = browser::desktop_status().await;
-            let blocked_until = match &status {
-                Ok(status) if status.handoff_phase == "active" => {
-                    status.expires_at.max(unix_millis() + 1000)
+            let queued_bots = state.bot_queue.lock().await.queued.iter()
+                .map(|work| work.bot_id.clone()).collect::<HashSet<_>>();
+            let control = DesktopControl::shared();
+            for bot_id in queued_bots {
+                let status = match browser::bot_desktop(&bot_id).await {
+                    Ok(target) => browser::desktop_status_for(&target).await,
+                    Err(error) => Err(error),
+                };
+                match status {
+                    Ok(status) if status.handoff_phase == "active" => {
+                        blocked_bots.insert(bot_id.clone());
+                        if let Some(id) = status.handoff_id.as_deref() {
+                            let previous = control.active.read().await.get(&bot_id).cloned();
+                            if let Some(previous) = previous.filter(|previous| previous.id != id) {
+                                if control.revoke(&bot_id, &previous.id).await.is_err() { continue; }
+                            }
+                            let _ = control.activate(id, &bot_id, status.expires_at).await;
+                        }
+                    }
+                    Ok(_) => {
+                        let old = { control.active.read().await.get(&bot_id).cloned() };
+                        if let Some(old) = old {
+                            if control.revoke(&bot_id, &old.id).await.is_err() {
+                                blocked_bots.insert(bot_id);
+                            }
+                        }
+                    }
+                    Err(_) => { blocked_bots.insert(bot_id); }
                 }
-                Err(_) => unix_millis() + 2000,
-                _ => 0,
-            };
-            state
-                .human_control_until
-                .store(blocked_until, Ordering::SeqCst);
-            if blocked_until > 0 {
+            }
+            if !blocked_bots.is_empty() {
                 let retry = state.clone();
                 tokio::spawn(async move {
-                    tokio::time::sleep(StdDuration::from_millis(
-                        blocked_until.saturating_sub(unix_millis()) + 100,
-                    ))
-                    .await;
+                    tokio::time::sleep(StdDuration::from_secs(2)).await;
                     schedule_bot_queue(retry);
                 });
-                return;
-            }
-            let control = DesktopControl::shared();
-            let old = control.active.read().await.clone();
-            if let Some(old) = old
-                && control.revoke(&old.id).await.is_err()
-            {
-                return;
             }
         }
         loop {
@@ -4053,7 +4171,7 @@ fn schedule_bot_queue(state: Arc<AppState>) {
                 .bot_queue
                 .lock()
                 .await
-                .start_next(&active, &state.bot_queue_path)
+                .start_next(&active, &blocked_bots, &state.bot_queue_path)
             {
                 Ok(Some(work)) => work,
                 Ok(None) => break,
@@ -4387,21 +4505,17 @@ async fn persistent_app_runtime(
         plugin_api::restore_for_launch(state, &bot.id, session_id, &cli_session_id, &home).await?;
     let bot_environment = {
         let catalog = state.bot_catalog.lock().await;
-        if catalog.capability.is_empty() {
-            None
-        } else {
-            Some(BotToolEnvironment {
-                bot_id: bot.id.clone(),
-                instance_id: catalog.instance_id.clone(),
-                site: catalog.site.clone(),
-                capability: app_group_routes::conversation_capability(
-                    &catalog.capability,
-                    &bot.id,
-                    session_id,
-                ),
-                chat_id: session_id.to_owned(),
-            })
-        }
+        Some(BotToolEnvironment {
+            bot_id: bot.id.clone(),
+            instance_id: catalog.instance_id.clone(),
+            site: catalog.site.clone(),
+            capability: if catalog.capability.is_empty() {
+                String::new()
+            } else {
+                app_group_routes::conversation_capability(&catalog.capability, &bot.id, session_id)
+            },
+            chat_id: session_id.to_owned(),
+        })
     };
     let cli = PersistentCli::launch(
         CliLaunch {
@@ -5893,7 +6007,6 @@ mod tests {
             bot_turn_budget: Arc::new(tokio::sync::Semaphore::new(4)),
             bot_dispatch: Arc::new(Mutex::new(())),
             app_maintenance: Arc::new(AtomicBool::new(false)),
-            human_control_until: Arc::new(AtomicU64::new(0)),
             app_runtimes: Arc::new(Mutex::new(HashMap::new())),
             bot_runtime_last_used: Arc::new(Mutex::new(HashMap::new())),
             app_event_routes: Arc::new(StdMutex::new(HashMap::new())),

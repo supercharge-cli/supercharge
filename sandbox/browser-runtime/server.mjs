@@ -133,6 +133,7 @@ async function expire() {
 async function control(path, input, owner, observer) {
   return authorityAction(async () => {
     await expire();
+    if ((path === "/handoff/request" || path === "/handoff/start") && (input.botId || "main") !== (process.env.SUPERAGENT_DESKTOP_BOT_ID || "main")) throw new Error("Handoff bot does not match this desktop");
     if (path === "/handoff/request" || path === "/handoff/cancel") {
       if (observer) throw new Error("Human-help requests belong to the originating agent");
       if (lease.acquire(owner, handoff.active())) invalidate();
@@ -201,7 +202,7 @@ async function browserAction(path, input) {
 await handoff.load();
 await desktop.resetInput();
 await desktop.image();
-browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
+browser = await chromium.connectOverCDP(`http://127.0.0.1:${process.env.SUPERAGENT_BROWSER_CDP_PORT || "9222"}`);
 context = browser.contexts()[0];
 if (!context) throw new Error("The persistent browser context is unavailable");
 page = context.pages()[0] || await context.newPage();
@@ -212,7 +213,7 @@ const server = createServer(async (req, res) => {
     const observer = req.headers["x-vectra-browser-observer"] === "1";
     if (req.method === "GET" && ["/health", "/status"].includes(path)) {
       await authorityAction(expire);
-      return json(res, 200, { ok: true, browser: browser.isConnected(), desktop: true, desktopProtocol: 1, handoffProtocol: 2, display: ":99", url: page?.isClosed() ? "" : page?.url(), vncPort: 6080, owner: lease.owner, generation: lease.generation, ...handoff.publicState() });
+      return json(res, 200, { ok: true, browser: browser.isConnected(), desktop: true, desktopProtocol: 1, handoffProtocol: 2, display: process.env.DISPLAY || ":99", botId: process.env.SUPERAGENT_DESKTOP_BOT_ID || "main", url: page?.isClosed() ? "" : page?.url(), vncPort: Number(process.env.SUPERAGENT_BROWSER_NOVNC_PORT || 6080), owner: lease.owner, generation: lease.generation, ...handoff.publicState(), desktopBotId: process.env.SUPERAGENT_DESKTOP_BOT_ID || "main" });
     }
     const input = req.method === "POST" ? await body(req) : {};
     if (req.method === "POST" && (path.startsWith("/lease/") || path.startsWith("/handoff/"))) return json(res, 200, await control(path, input, owner, observer));

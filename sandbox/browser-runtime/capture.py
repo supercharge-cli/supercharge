@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import os
 import sys
 
 from PIL import Image, ImageGrab
@@ -11,7 +12,7 @@ for line in sys.stdin:
     request = {}
     try:
         request = json.loads(line)
-        image = ImageGrab.grab(xdisplay=":99").convert("RGB")
+        image = ImageGrab.grab(xdisplay=os.environ.get("DISPLAY", ":99")).convert("RGB")
         width, height = image.size
         if not (1 <= width <= 8192 and 1 <= height <= 8192):
             raise ValueError("unsupported display geometry")
