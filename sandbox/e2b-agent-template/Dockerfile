@@ -80,7 +80,7 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     /opt/vectra/browser-runtime/start.sh \
     && chmod -R go-w /opt/vectra/plugin-api \
     && mkdir -p /var/lib/superagent /var/lib/superagent/plugin-control /run/vectra-plugin-bindings \
-    && echo "1.3.30" > /var/lib/superagent/e2b-version \
+    && echo "1.3.31" > /var/lib/superagent/e2b-version \
     && chown -R user:$(id -gn user) /var/lib/superagent /opt/vectra/wake-http /opt/vectra/browser-runtime /home/user \
     && chown root:root /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
     && chmod -R go-w /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
@@ -106,7 +106,7 @@ ENV SUPERAGENT_CONTROL_STATE=/home/user/.supercharge/state/controls.json
 ENV SUPERAGENT_GATEWAY_STATE=/home/user/.supercharge/state/gateway-state.json
 ENV SUPERAGENT_E2B_SESSION_STATE=/home/user/.supercharge/state/e2b-sessions.json
 ENV SUPERAGENT_E2B_WORKSPACE_ROOT=/home/user/workspace
-ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.3.30
+ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.3.31
 ENV SUPERCHARGE_RUNTIME_MODE=e2b
 ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/supercharge
 ENV SUPERAGENT_DAEMON_COMMAND=/usr/local/bin/supercharge-superagent-server

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
-image="${SUPERCHARGE_PLUGIN_TEST_IMAGE:-supercharge-plugin-e2b-scratch:1.3.30}"
+image="${SUPERCHARGE_PLUGIN_TEST_IMAGE:-supercharge-plugin-e2b-scratch:1.3.31}"
 
 if [ "${1:-}" = "--fixture" ]; then
   install -d -o user -g "$(id -gn user)" -m 0700 /home/user/.superagent /home/user/workspace
