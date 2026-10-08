@@ -1603,6 +1603,12 @@ pub(crate) async fn run(
     let reader_paused = input_paused.clone();
     let reader_parked = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let reader_parked_thread = reader_parked.clone();
+    #[cfg(windows)]
+    let image_paste_focused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    #[cfg(windows)]
+    crate::windows_image_paste::install(image_paste_focused.clone());
+    #[cfg(windows)]
+    let reader_image_paste_focused = image_paste_focused;
     std::thread::spawn(move || {
         use std::sync::atomic::Ordering;
         const POLL_TIMEOUT: Duration = Duration::from_millis(20);
@@ -1617,6 +1623,19 @@ pub(crate) async fn run(
                 continue;
             }
             reader_parked_thread.store(false, Ordering::Release);
+            #[cfg(windows)]
+            if crate::windows_image_paste::take_paste_request() {
+                let paste = Event::Key(KeyEvent::new(
+                    KeyCode::Char('v'),
+                    KeyModifiers::CONTROL,
+                ));
+                if reader_input_tx
+                    .send(TimedInputEvent::now(paste))
+                    .is_err()
+                {
+                    break;
+                }
+            }
             let event = match crossterm::event::poll(POLL_TIMEOUT) {
                 Ok(true) => crossterm::event::read(),
                 Ok(false) => continue,
@@ -1625,6 +1644,16 @@ pub(crate) async fn run(
             match event {
                 Ok(ev) => {
                     consecutive_event_errors = 0;
+                    #[cfg(windows)]
+                    match &ev {
+                        Event::FocusGained => {
+                            reader_image_paste_focused.store(true, Ordering::Release)
+                        }
+                        Event::FocusLost => {
+                            reader_image_paste_focused.store(false, Ordering::Release)
+                        }
+                        _ => {}
+                    }
                     let timed = TimedInputEvent::now(ev);
                     if reader_input_tx.send(timed).is_err() {
                         break;
