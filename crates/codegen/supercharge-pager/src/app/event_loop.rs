@@ -3163,6 +3163,7 @@ async fn drain_and_process(
         live_events =
             super::xt_filter::filter_with_fragment_wait(xt_filter, live_events, input_rx).await;
     }
+    absorb_bracketed_paste(&mut live_events, input_rx).await;
     if should_extend_for_paste(&live_events) && detect_paste(&mut live_events, input_rx).await {
         collect_remaining_paste(&mut live_events, input_rx).await;
         if xt_filter.armed() {
@@ -3373,9 +3374,21 @@ async fn drain_and_process(
 }
 /// Timeout for the first extension round (detection).
 /// If no event arrives within this window the batch was a normal keystroke.
+/// Windows console delivery often gaps a paste by one scheduler tick (~15ms), so the
+/// short Unix window drops the rest of the paste and the first Enter submits early.
+#[cfg(windows)]
+const PASTE_DETECT_TIMEOUT: Duration = Duration::from_millis(20);
+#[cfg(not(windows))]
 const PASTE_DETECT_TIMEOUT: Duration = Duration::from_millis(2);
 /// Timeout for subsequent rounds once paste has been detected.
+#[cfg(windows)]
+const PASTE_CONTINUE_TIMEOUT: Duration = Duration::from_millis(30);
+#[cfg(not(windows))]
 const PASTE_CONTINUE_TIMEOUT: Duration = Duration::from_millis(10);
+/// How long to wait for the rest of a bracketed-paste introducer before treating Escape as Escape.
+const BRACKETED_INTRO_WAIT: Duration = Duration::from_millis(25);
+/// Quiet gap that ends a bracketed paste whose closing `ESC[201~` never arrived.
+const BRACKETED_BODY_WAIT: Duration = Duration::from_millis(40);
 /// Safety cap on events accumulated in one extension pass.
 const PASTE_EXTEND_MAX_EVENTS: usize = 5_000;
 /// Returns `true` when the batch contains pasteable key events but no `Event::Paste` (i.e. bracketed paste is not handling it).
@@ -3383,6 +3396,47 @@ const PASTE_EXTEND_MAX_EVENTS: usize = 5_000;
 fn should_extend_for_paste(events: &[TimedInputEvent]) -> bool {
     !events.iter().any(|e| matches!(e.event, Event::Paste(_)))
         && events.iter().any(|e| is_pasteable_key_event(&e.event))
+}
+/// Pull a split `ESC[200~` … `ESC[201~` into one `Event::Paste` before Escape is handled.
+/// A lone Escape is released after [`BRACKETED_INTRO_WAIT`] with no matching introducer.
+async fn absorb_bracketed_paste(
+    batch: &mut Vec<TimedInputEvent>,
+    input_rx: &mut tokio::sync::mpsc::UnboundedReceiver<TimedInputEvent>,
+) {
+    let mut body_quiet = 0u8;
+    loop {
+        match super::bracketed_paste::rewrite(std::mem::take(batch)) {
+            Ok(done) => {
+                *batch = done;
+                return;
+            }
+            Err(held) => {
+                let wait = if held.in_body {
+                    BRACKETED_BODY_WAIT
+                } else {
+                    BRACKETED_INTRO_WAIT
+                };
+                match tokio::time::timeout(wait, input_rx.recv()).await {
+                    Ok(Some(event)) => {
+                        body_quiet = 0;
+                        *batch = held.ready;
+                        batch.extend(held.held);
+                        batch.push(event);
+                        drain_immediate(batch, input_rx);
+                    }
+                    _ => {
+                        if !held.in_body || body_quiet >= 2 {
+                            *batch = super::bracketed_paste::finish_timeout(held);
+                            return;
+                        }
+                        body_quiet += 1;
+                        *batch = held.ready;
+                        batch.extend(held.held);
+                    }
+                }
+            }
+        }
+    }
 }
 /// Wait [`PASTE_DETECT_TIMEOUT`] for a follow-up event.
 /// Returns `true` if a **pasteable key event** arrives within the window.

@@ -29,6 +29,7 @@ pub mod mermaid_worker;
 pub(crate) mod prompt_ack;
 pub use supercharge_prompt_queue as prompt_queue;
 mod acp_handler;
+mod bracketed_paste;
 mod connect_timeout;
 mod csi_filter;
 mod dashboard_session_picker;
