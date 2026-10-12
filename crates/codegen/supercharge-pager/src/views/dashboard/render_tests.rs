@@ -313,6 +313,42 @@ fn dashboard_toast_paints_while_peek_is_open() {
 }
 
 #[test]
+fn disabled_dashboard_preview_keeps_list_and_dispatch_without_peek() {
+    let area = Rect::new(0, 0, 100, 30);
+    let mut buf = Buffer::empty(area);
+    let mut state = DashboardState::new();
+    state.preview_enabled = false;
+    let row = DashboardRowId::TopLevel(crate::app::agent::AgentId(0));
+    state.focus_row(row);
+    let mut provisional = crate::app::agent_view::test_fixtures::make_agent();
+    provisional.session.enqueue_prompt("fix the bug".into());
+    let mut agents = IndexMap::from([(crate::app::agent::AgentId(0), provisional)]);
+
+    let _ = render_dashboard(
+        &mut buf,
+        area,
+        &mut state,
+        &mut agents,
+        &crate::actions::ActionRegistry::defaults(),
+        None,
+        &[],
+        true,
+        crate::views::dashboard::WorkspaceRowInputs {
+            workspace: None,
+            provisional: &[crate::app::agent::AgentId(0)],
+        },
+        None,
+        false,
+        None,
+        None,
+    );
+
+    assert!(state.peek.is_none(), "disabled preview must not compute a peek");
+    assert!(state.dispatch_rect.is_some(), "dispatch remains available");
+    assert!(buf_to_text(&buf).contains("fix the bug"), "list remains visible");
+}
+
+#[test]
 fn narrow_workspace_dashboard_keeps_archive_hit_target() {
     let area = Rect::new(0, 0, 30, 20);
     let mut buf = Buffer::empty(area);

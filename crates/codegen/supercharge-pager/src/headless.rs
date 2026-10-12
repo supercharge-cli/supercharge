@@ -38,15 +38,23 @@ use crate::app::worktree_session::{
 use crate::best_effort_stderr::eprint_line;
 use crate::client_identity::{HEADLESS_CLIENT_TYPE, PAGER_CLIENT_VERSION};
 use crate::headless::reducer::{
-    Lifecycle, McpServer, Reducer, SessionContext, StreamEvent, TurnEnd, map_session_update,
+    Lifecycle, Reducer, SessionContext, StreamEvent, TurnEnd, map_session_update,
     reducer_for,
 };
 
 mod ext_protocol;
+mod mcp_init;
 mod prompt_ack;
 mod reducer;
+mod signals;
 use ext_protocol::{ExtEvent, handle_ext_notification, reply_headless_ext_method};
+use mcp_init::resolve_mcp_servers_until;
+#[cfg(test)]
+use mcp_init::{decode_mcp_list, servers_from_list};
 use prompt_ack::{abort_unacknowledged_prompt, headless_ack_signal};
+use signals::HeadlessSignals;
+#[cfg(test)]
+use signals::{SignalRoute, SignalSource, forced_exit_code, route_signal, spawn_watcher};
 
 mod cli;
 pub use cli::{HeadlessPrompt, OutputFormat, parse_json_schema, parse_permission_rules_lenient};
@@ -422,27 +430,6 @@ fn stop_reason_wire(reason: acp::StopReason) -> String {
         }
     }
     .to_string()
-}
-
-/// Configured MCP servers for the `init` line; all report `"connected"` (status is not resolved here).
-fn mcp_server_names(cwd: &Path) -> Vec<McpServer> {
-    let servers =
-        cli_config::load_mcp_servers(cwd, &supercharge_tools::types::compat::CompatConfig::default());
-    servers
-        .iter()
-        .filter_map(|s| {
-            let name = match s {
-                acp::McpServer::Http(h) => h.name.clone(),
-                acp::McpServer::Sse(h) => h.name.clone(),
-                acp::McpServer::Stdio(h) => h.name.clone(),
-                _ => return None,
-            };
-            Some(McpServer {
-                name,
-                status: "connected".to_string(),
-            })
-        })
-        .collect()
 }
 
 fn auto_respond_to_permissions(
@@ -860,6 +847,41 @@ pub async fn run_single_turn(
     verbatim: bool,
     options: HeadlessOptions,
 ) -> Result<()> {
+    let cancel = CancellationToken::new();
+    let signals = HeadlessSignals::install(cancel.clone())?;
+    let deferred = signals.defer_exit();
+    let active_session = std::sync::Arc::new(parking_lot::Mutex::new(None));
+    let mut turn = Box::pin(run_single_turn_inner(
+        prompt, verbatim, options, cancel, active_session.clone(),
+    ));
+    let result = tokio::select! {
+        biased;
+        _ = deferred.signalled() => {
+            drop(turn);
+            if let Some(id) = active_session.lock().take() {
+                let _ = supercharge_active_sessions::try_unregister(&id);
+            }
+            let _ = tokio::time::timeout(Duration::from_secs(2),
+                crate::unified_log::flush_blocking()).await;
+            let _ = tokio::time::timeout(Duration::from_secs(2),
+                supercharge_shell::upload::drain_pending_uploads_at_exit()).await;
+            Err(anyhow::anyhow!("headless turn interrupted"))
+        }
+        result = &mut turn => result,
+    };
+    if let Some(code) = deferred.release() {
+        std::process::exit(code);
+    }
+    result
+}
+
+async fn run_single_turn_inner(
+    prompt: Option<HeadlessPrompt>,
+    verbatim: bool,
+    options: HeadlessOptions,
+    cancel: CancellationToken,
+    active_session: std::sync::Arc<parking_lot::Mutex<Option<acp::SessionId>>>,
+) -> Result<()> {
     // Stamp proxy requests as headless before the agent issues its first request.
     supercharge_shell::http::set_process_client_mode_headless();
 
@@ -944,7 +966,6 @@ pub async fn run_single_turn(
         report_cli_trust_grant(&grant_folder_trust(&cwd));
     }
 
-    let cancel = CancellationToken::new();
     let memory_config = agent_config.memory_config.clone();
     let mut pending_startup = Some(PendingStartup::new());
     let timer = supercharge_telemetry::startup::begin(crate::acp::Owner::Client);
@@ -1153,12 +1174,14 @@ pub async fn run_single_turn(
 
     let track_active = std::env::var("SUPERCHARGE_TRACK_HEADLESS").is_ok();
     if track_active {
-        let _ = supercharge_active_sessions::register(supercharge_active_sessions::ActiveSession {
+        if supercharge_active_sessions::register(supercharge_active_sessions::ActiveSession {
             session_id: session_id.clone(),
             pid: std::process::id(),
             cwd: cwd.display().to_string(),
             opened_at: chrono::Utc::now(),
-        });
+        }).is_ok() {
+            *active_session.lock() = Some(session_id.clone());
+        }
     }
 
     // Seed the reducer's session context BEFORE applying model/effort so a later failure carries it.
@@ -1171,12 +1194,23 @@ pub async fn run_single_turn(
             .permission_mode_flag
             .clone()
             .or_else(|| options.yolo.then(|| "bypassPermissions".to_string()));
+        let mcp_servers = if emitter.reducer.is_some() {
+            resolve_mcp_servers_until(
+                &acp_tx,
+                &session_id,
+                &session_cwd,
+                tokio::time::Instant::now() + Duration::from_millis(750),
+            )
+            .await
+        } else {
+            Vec::new()
+        };
         emitter.begin_session(SessionContext {
             session_id: session_id.0.to_string(),
             model,
             cwd: session_cwd.to_string_lossy().to_string(),
             permission_mode,
-            mcp_servers: mcp_server_names(&session_cwd),
+            mcp_servers,
             include_partial_messages: options.include_partial_messages,
             api_key_auth: is_api_key_auth,
             context_window: session_models.get_context_window(),
@@ -1450,9 +1484,9 @@ pub async fn run_single_turn(
         crate::unified_log::flush_blocking().await;
     }
 
-    if track_active {
+    if let Some(id) = active_session.lock().take() {
         // Non-blocking flock so a slow/network ~/.supercharge can't hang exit.
-        let _ = supercharge_active_sessions::try_unregister(&session_id);
+        let _ = supercharge_active_sessions::try_unregister(&id);
     }
     let outcome: Result<()> = match prompt_result {
         // Mid-turn close skips the partial result; the shared drain below still runs.
@@ -1929,6 +1963,14 @@ fn handle_headless_acp_message(
         _ => {}
     }
 }
+
+#[cfg(test)]
+#[path = "headless/mcp_init_tests.rs"]
+mod mcp_init_tests;
+
+#[cfg(test)]
+#[path = "headless/signals_tests.rs"]
+mod signals_tests;
 
 #[cfg(test)]
 #[path = "headless/background_lifecycle_tests.rs"]

@@ -51,6 +51,7 @@ pub struct ModelState {
     /// When set, `get_context_window()` returns this instead of reading from the current model's metadata.
     /// Used for subagent views where SubagentProgress reports the actual window size.
     context_window_override: Option<u64>,
+    pub(crate) context_window_selection: Option<u64>,
 }
 
 impl ModelState {
@@ -76,16 +77,6 @@ impl ModelState {
         Some(self.current.as_ref()?.0.as_ref())
     }
 
-    /// Total context window tokens for the current model (if available).
-    fn current_context_window_tokens(&self) -> Option<u64> {
-        let meta = self.available.get(self.current.as_ref()?)?.meta.as_ref()?;
-        meta.get("totalContextTokens")
-            .and_then(|value| match value {
-                serde_json::Value::Number(number) => number.as_u64(),
-                _ => None,
-            })
-    }
-
     /// Whether the current model accepts image input, read from the model's `meta` (the ACP extension point, same
     /// source as `totalContextTokens`). Honors an explicit `acceptsImages` bool, else an `inputModalities` array
     /// containing `"image"`. Once the ACP server populates the key, non-vision models get suppressed.
@@ -109,10 +100,57 @@ impl ModelState {
         true
     }
 
-    /// The effective context window size (tokens): the override if set, else the current model's metadata.
+    /// The effective context window, preferring a reported override and a supported selection.
     pub fn get_context_window(&self) -> Option<u64> {
-        self.context_window_override
-            .or_else(|| self.current_context_window_tokens())
+        if let Some(window) = self.context_window_override {
+            return Some(window);
+        }
+        let id = self.current.as_ref()?;
+        let default = self.model_default_window(id);
+        match self.context_window_selection {
+            Some(window)
+                if default == Some(window)
+                    || self.context_window_options_for(id).contains(&window) =>
+            {
+                Some(window)
+            }
+            _ => default,
+        }
+    }
+
+    pub(crate) fn model_default_window(&self, id: &acp::ModelId) -> Option<u64> {
+        self.available
+            .get(id)?
+            .meta
+            .as_ref()?
+            .get("totalContextTokens")?
+            .as_u64()
+            .filter(|&window| window > 0)
+    }
+
+    pub fn context_window_options(&self) -> Vec<u64> {
+        self.current
+            .as_ref()
+            .map(|id| self.context_window_options_for(id))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn context_window_options_for(&self, id: &acp::ModelId) -> Vec<u64> {
+        let mut options = Vec::new();
+        if let Some(windows) = self
+            .available
+            .get(id)
+            .and_then(|info| info.meta.as_ref())
+            .and_then(|meta| meta.get("contextWindows"))
+            .and_then(serde_json::Value::as_array)
+        {
+            for window in windows.iter().filter_map(serde_json::Value::as_u64) {
+                if window > 0 && !options.contains(&window) {
+                    options.push(window);
+                }
+            }
+        }
+        options
     }
 
     /// Used for subagent views where SubagentProgress reports an actual window that may differ from the inherited model's metadata.
@@ -159,17 +197,17 @@ impl ModelState {
         let Some(info) = self.available.get(id) else {
             return Vec::new();
         };
-        let inferred = supercharge_shell::agent::provider_setup::infer_thinking_from_id(id.0.as_ref())
-            || supercharge_shell::agent::provider_setup::infer_thinking_from_id(&info.name);
+        let inferred =
+            supercharge_shell::agent::provider_setup::infer_thinking_from_id(id.0.as_ref())
+                || supercharge_shell::agent::provider_setup::infer_thinking_from_id(&info.name);
         if !supports_reasoning_effort_meta(info.meta.as_ref()) && !inferred {
             return Vec::new();
         }
         if let Some(list) = parse_reasoning_efforts_meta(info.meta.as_ref()) {
             return list;
         }
-        let from_id = supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
-            id.0.as_ref(),
-        );
+        let from_id =
+            supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(id.0.as_ref());
         if !from_id.is_empty() {
             return effort_options_from_ids(from_id.iter().copied());
         }
@@ -293,11 +331,19 @@ impl From<Option<acp::SessionModelState>> for ModelState {
                     .as_ref()
                     .and_then(|id| models.get(id))
                     .and_then(|info| parse_reasoning_effort_meta(info.meta.as_ref()));
+                let context_window_selection = current_model
+                    .as_ref()
+                    .and_then(|id| models.get(id))
+                    .and_then(|info| info.meta.as_ref())
+                    .and_then(|meta| meta.get("contextWindow"))
+                    .and_then(serde_json::Value::as_u64)
+                    .filter(|&window| window > 0);
                 Self {
                     available: models,
                     current: current_model,
                     reasoning_effort,
                     context_window_override: None,
+                    context_window_selection,
                 }
             })
             .unwrap_or_default()
@@ -394,6 +440,28 @@ mod tests {
         assert_eq!(first.value, ReasoningEffort::Medium);
         assert_eq!(second.id, "deep");
         assert_eq!(second.description.as_deref(), Some("Max"));
+    }
+
+    #[test]
+    fn context_window_catalog_and_selection() {
+        let mut state = state_with_meta(Some(serde_json::json!({
+            "totalContextTokens": 256_000,
+            "contextWindows": [256_000, 500_000, 0, 500_000, "invalid"],
+        })));
+        assert_eq!(state.context_window_options(), vec![256_000, 500_000]);
+        assert_eq!(state.get_context_window(), Some(256_000));
+        state.context_window_selection = Some(500_000);
+        assert_eq!(state.get_context_window(), Some(500_000));
+        state.context_window_selection = Some(1_000_000);
+        assert_eq!(state.get_context_window(), Some(256_000));
+        let second = acp::ModelId::new(Arc::from("second"));
+        state.available.insert(second.clone(), acp::ModelInfo::new(second.clone(), "Second").meta(
+            serde_json::json!({"totalContextTokens": 128_000, "contextWindows": [128_000, 512_000]}).as_object().cloned(),
+        ));
+        state.set_current(second, None);
+        assert_eq!(state.get_context_window(), Some(128_000));
+        state.override_context_window(64_000);
+        assert_eq!(state.get_context_window(), Some(64_000));
     }
 
     #[test]

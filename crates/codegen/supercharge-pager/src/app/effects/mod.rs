@@ -1912,6 +1912,56 @@ pub(crate) fn execute(
                     TaskResult::CancelComplete
                 });
         }
+        Effect::MemoryFlush { agent_id, session_id } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let params = serde_json::json!({ "session_id": session_id.0.to_string() });
+                let req = acp::ExtRequest::new("x.ai/memory/flush",
+                    serde_json::value::to_raw_value(&params).expect("serialize memory flush").into());
+                let result = acp_send(req, &tx).await.map_err(|e| sanitize_user_error(&e.to_string()))
+                    .and_then(|resp| {
+                        let value: serde_json::Value = serde_json::from_str(resp.0.get())
+                            .map_err(|_| "Invalid memory flush response".to_string())?;
+                        value.get("flushed").and_then(serde_json::Value::as_bool)
+                            .or_else(|| value.get("result").and_then(|r| r.get("flushed")).and_then(serde_json::Value::as_bool))
+                            .ok_or_else(|| "Invalid memory flush response".to_string())
+                    });
+                TaskResult::MemoryFlushComplete { agent_id, result }
+            });
+        }
+        Effect::MemoryDream { agent_id, session_id } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let params = serde_json::json!({ "session_id": session_id.0.to_string() });
+                let req = acp::ExtRequest::new("x.ai/memory/dream",
+                    serde_json::value::to_raw_value(&params).expect("serialize memory dream").into());
+                let result = acp_send(req, &tx).await.map_err(|e| sanitize_user_error(&e.to_string()))
+                    .and_then(|resp| {
+                        let value: serde_json::Value = serde_json::from_str(resp.0.get())
+                            .map_err(|_| "Invalid memory dream response".to_string())?;
+                        let outcome = value.get("outcome")
+                            .or_else(|| value.get("result").and_then(|r| r.get("outcome")))
+                            .ok_or_else(|| "Invalid memory dream response".to_string())?;
+                        serde_json::from_value(outcome.clone())
+                            .map_err(|_| "Invalid memory dream outcome".to_string())
+                    });
+                TaskResult::MemoryDreamComplete { agent_id, result }
+            });
+        }
+        Effect::SwitchContextWindow { agent_id, session_id, model_id, effort, window } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let mut meta = acp::Meta::new();
+                meta.insert("contextWindow".to_string(), serde_json::json!(window.get()));
+                if let Some(eff) = effort {
+                    use supercharge_shell::sampling::types::{REASONING_EFFORT_META_KEY, reasoning_effort_meta_value};
+                    meta.insert(REASONING_EFFORT_META_KEY.to_string(), reasoning_effort_meta_value(eff));
+                }
+                let req = acp::SetSessionModelRequest::new(session_id, model_id.clone()).meta(Some(meta));
+                let result = acp_send(req, &tx).await.map(|_| ()).map_err(|e| SwitchModelError::Other(sanitize_user_error(&e.to_string())));
+                TaskResult::SwitchContextWindowComplete { agent_id, model_id, effort, window, result }
+            });
+        }
         Effect::SwitchModel {
             agent_id,
             session_id,

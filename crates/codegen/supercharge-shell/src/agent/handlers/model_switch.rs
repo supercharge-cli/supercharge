@@ -8,8 +8,8 @@ use crate::agent::mvp_agent::{
 use crate::sampling::EffortTarget;
 use crate::session::{SessionCommand, SessionModelSwitch};
 use agent_client_protocol::{self as acp};
-use tokio::sync::oneshot;
 use supercharge_sampling_types::ReasoningEffort;
+use tokio::sync::oneshot;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfigNotice {
     Send,
@@ -23,6 +23,48 @@ pub(crate) enum SwitchEffort {
     /// Use this effort; `None` falls back to the new model's default (session setup and restore).
     Set(Option<ReasoningEffort>),
 }
+fn resolve_switch_window(
+    meta: Option<&acp::Meta>,
+    model: &config::ModelInfo,
+) -> Result<Option<std::num::NonZeroU64>, acp::Error> {
+    let Some(value) = meta.and_then(|meta| meta.get("contextWindow")) else {
+        return Ok(None);
+    };
+    let window = value
+        .as_u64()
+        .and_then(std::num::NonZeroU64::new)
+        .filter(|window| model.supports_context_window(*window))
+        .ok_or_else(|| acp::Error::invalid_params().data("unsupported contextWindow"))?;
+    Ok(Some(window))
+}
+
+#[cfg(test)]
+mod context_window_tests {
+    use super::*;
+
+    #[test]
+    fn switch_window_accepts_advertised_choice_and_rejects_unsupported_values() {
+        let model = config::ModelInfo {
+            context_window: std::num::NonZeroU64::new(200_000).unwrap(),
+            context_windows: vec![std::num::NonZeroU64::new(100_000).unwrap()],
+            ..Default::default()
+        };
+        let mut meta = acp::Meta::new();
+        meta.insert("contextWindow".to_owned(), serde_json::json!(100_000));
+        assert_eq!(
+            resolve_switch_window(Some(&meta), &model)
+                .unwrap()
+                .unwrap()
+                .get(),
+            100_000
+        );
+        meta.insert("contextWindow".to_owned(), serde_json::json!(123));
+        assert!(resolve_switch_window(Some(&meta), &model).is_err());
+        meta.insert("contextWindow".to_owned(), serde_json::json!(0));
+        assert!(resolve_switch_window(Some(&meta), &model).is_err());
+    }
+}
+
 /// Apply a model switch to a session (no gate; `set_session_model` gates first).
 pub(crate) async fn apply(
     agent: &MvpAgent,
@@ -40,6 +82,7 @@ pub(crate) async fn apply(
     let acp::SetSessionModelRequest {
         session_id,
         model_id,
+        meta,
         ..
     } = args;
     let handle = agent
@@ -101,15 +144,17 @@ pub(crate) async fn apply(
                 turn_count,
                 "set_session_model: agent type mismatch rejected"
             );
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::ModelSwitched {
-                session_id: session_id.0.to_string(),
-                previous_model_id: previous_model_id.to_string(),
-                new_model_id: model_id.0.to_string(),
-                success: false,
-                error_code: Some(config::MODEL_SWITCH_INCOMPATIBLE_AGENT.to_string()),
-                required_agent_type: Some(required.clone()),
-                current_agent_type: active_agent_type.clone(),
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::ModelSwitched {
+                    session_id: session_id.0.to_string(),
+                    previous_model_id: previous_model_id.to_string(),
+                    new_model_id: model_id.0.to_string(),
+                    success: false,
+                    error_code: Some(config::MODEL_SWITCH_INCOMPATIBLE_AGENT.to_string()),
+                    required_agent_type: Some(required.clone()),
+                    current_agent_type: active_agent_type.clone(),
+                },
+            );
             let err_payload = config::ModelSwitchIncompatibleAgentError {
                 code: config::MODEL_SWITCH_INCOMPATIBLE_AGENT.to_string(),
                 active_agent_type: active_agent_type.unwrap_or_else(|| "unknown".to_owned()),
@@ -158,6 +203,24 @@ pub(crate) async fn apply(
     };
     let mut model_sampling =
         agent.prepare_sampling_config_for_model(&model, handle.origin_client.clone());
+    let requested_window = resolve_switch_window(meta.as_ref(), model.info())?;
+    let previous_window = handle
+        .chat_state_handle
+        .get_sampling_config()
+        .await
+        .map(|cfg| cfg.context_window);
+    let previous_default =
+        config::find_model_by_id(&agent.models_manager.models(), &previous_model_id)
+            .map(|entry| entry.info.context_window);
+    let selected_window = requested_window.or_else(|| {
+        previous_window.filter(|window| {
+            model.info().supports_context_window(*window)
+                && (previous_model_id == model_id.0 || Some(*window) != previous_default)
+        })
+    });
+    if let Some(window) = selected_window {
+        model_sampling.context_window = window.get();
+    }
     agent.models_manager.apply_supported_effort(
         &mut model_sampling,
         effective_effort,
@@ -235,6 +298,7 @@ pub(crate) async fn apply(
     let _ = handle.cmd_tx.send(SessionCommand::SetSessionModel {
         switch: SessionModelSwitch {
             sampling_config: model_sampling,
+            context_window_selected: selected_window.is_some(),
             use_concise,
             is_family_switch,
             apply_prompt_override,

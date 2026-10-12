@@ -42,6 +42,9 @@ pub struct UiConfig {
     /// `None` means off (client default; opt-in). Written by the pager's settings modal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_timeline: Option<bool>,
+    /// Show the selected session's preview and reply panel in the dashboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dashboard_preview: Option<bool>,
     /// Snap a just-sent prompt to the viewport top. `None` means on (default).
     /// Written by the pager's settings modal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -260,6 +263,7 @@ impl Default for UiConfig {
             default_selected_permission: None,
             show_timestamps: None,
             show_timeline: None,
+            dashboard_preview: None,
             page_flip_on_send: None,
             confirm_before_rewind: None,
             auto_dark_theme: None,
@@ -308,6 +312,10 @@ impl UiConfig {
         self.show_timeline.unwrap_or(Self::SHOW_TIMELINE_DEFAULT)
     }
 
+    pub fn dashboard_preview_enabled(&self) -> bool {
+        self.dashboard_preview.unwrap_or(true)
+    }
+
     /// Default for [`Self::page_flip_on_send`] when unset.
     pub const PAGE_FLIP_ON_SEND_DEFAULT: bool = true;
 
@@ -353,6 +361,17 @@ impl UiConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dashboard_preview_defaults_on_and_round_trips_off() {
+        assert!(UiConfig::default().dashboard_preview_enabled());
+        let ui: UiConfig = serde_json::from_str(r#"{"dashboard_preview":false}"#).unwrap();
+        assert!(!ui.dashboard_preview_enabled());
+        let saved = serde_json::to_value(&ui).unwrap();
+        assert_eq!(saved.get("dashboard_preview"), Some(&serde_json::json!(false)));
+        let restored: UiConfig = serde_json::from_value(saved).unwrap();
+        assert!(!restored.dashboard_preview_enabled());
+    }
 
     /// The leniency lives in `StatusLineConfig`'s own `Deserialize`.
     /// This pins that the real `[ui]` table gets it, and that `skip_serializing_if` keeps a section we misread out of a save that merges per key.

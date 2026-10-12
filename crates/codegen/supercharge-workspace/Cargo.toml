@@ -40,6 +40,7 @@ supercharge-tools = { path = "../supercharge-tools" }
 supercharge-tools-api = { path = "../supercharge-tools-api" }
 # `DiagHandle`, held by the hub config and threaded through `connect_hub`.
 supercharge-diag-server = { workspace = true }
+supercharge-lifecycle = { workspace = true }
 supercharge-workspace-client = { path = "../supercharge-workspace-client" }
 # Daemon/process-lifecycle machinery for `bin/workspace_server.rs` only; the
 # library never references it.

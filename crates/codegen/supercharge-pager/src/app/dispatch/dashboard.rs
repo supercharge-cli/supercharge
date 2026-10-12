@@ -94,6 +94,7 @@ pub(super) fn ensure_dashboard_state(app: &mut AppView) {
         return;
     }
     let mut state = dashboard_state_for_mode(app);
+    state.set_preview_enabled(app.current_ui.dashboard_preview_enabled(), &mut app.agents);
     let workspace = app.workspace_membership.view();
     state.gc_stale_refs(&dashboard_alive_fn(&app.agents, workspace.as_ref()));
     state.adopt_slash_mru(app.slash_mru.clone());
@@ -137,6 +138,7 @@ fn configure_dashboard_state(app: &mut AppView) {
     let cwd_has_git_ancestor = app.cwd_has_git_ancestor;
     let has_agents = !app.agents.is_empty();
     if let Some(d) = app.dashboard.as_mut() {
+        d.set_preview_enabled(app.current_ui.dashboard_preview_enabled(), &mut app.agents);
         d.close_popup();
         d.location_picker = None;
         d.usage_modal = None;
@@ -1519,6 +1521,12 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
         }
         CommandResult::Action(Action::SetDefaultModel(model_id)) => {
             stage_dashboard_model(app, model_id, None);
+            vec![]
+        }
+        CommandResult::Action(Action::SwitchContextWindow { .. }) => {
+            if let Some(d) = app.dashboard.as_mut() {
+                d.error_toast = Some("Context window requires an active session".into());
+            }
             vec![]
         }
         // `/plan` toggles whether the next spawned agent starts in plan mode

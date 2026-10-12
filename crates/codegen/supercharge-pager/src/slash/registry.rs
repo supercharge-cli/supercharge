@@ -145,6 +145,9 @@ impl CommandRegistry {
         hidden.insert("voice".to_string());
         // `/auto` is fail-closed: hidden until `set_auto_mode_available(true)`.
         hidden.insert("auto".to_string());
+        for name in ["memory", "flush", "dream"] {
+            hidden.insert(name.to_string());
+        }
         // `/share` starts menu-hidden (still dispatchable) until `set_share_visible(true)`
         // Menu-only so a typed `/share` can show a client disable message rather than PassThrough
         let mut menu_hidden = HashSet::new();
@@ -388,6 +391,7 @@ impl CommandRegistry {
         tools: Option<HashSet<String>>,
     ) {
         self.apply_acp_commands(commands);
+        self.apply_memory_availability(commands);
         if let Some(tools) = tools {
             self.apply_available_tools(tools);
         }
@@ -399,7 +403,23 @@ impl CommandRegistry {
     /// (`acme:login`). Triggers a full `rebuild_triggers()`.
     pub fn set_acp_commands(&mut self, commands: &[agent_client_protocol::AvailableCommand]) {
         self.apply_acp_commands(commands);
+        self.apply_memory_availability(commands);
         self.rebuild_triggers();
+    }
+
+    fn apply_memory_availability(&mut self, commands: &[agent_client_protocol::AvailableCommand]) {
+        for name in ["memory", "flush", "dream"] {
+            let advertised = commands.iter().any(|cmd| {
+                cmd.name.eq_ignore_ascii_case(name)
+                    && matches!(SkillMeta::parse(cmd.meta.as_ref()), SkillMeta::Absent)
+                    && WorkflowChoice::from_acp(cmd).is_none()
+            });
+            if advertised {
+                self.hidden.remove(name);
+            } else {
+                self.hidden.insert(name.to_string());
+            }
+        }
     }
 
     /// Saved / built-in workflow definitions from the last ACP catalog.
@@ -659,6 +679,37 @@ mod tests {
         // 1 canonical + 2 aliases = 3 triggers.
         assert_eq!(registry.triggers().len(), 3);
         assert_eq!(registry.command_count(), 1);
+    }
+
+    #[test]
+    fn memory_commands_follow_advertised_shell_catalog() {
+        let builtins: Vec<Arc<dyn SlashCommand>> = ["memory", "flush", "dream"]
+            .into_iter()
+            .map(|name| Arc::new(DummyCommand { name, aliases: &[] }) as Arc<dyn SlashCommand>)
+            .collect();
+        let mut registry = CommandRegistry::new(builtins);
+        assert!(registry.get_for_dispatch("memory").is_none());
+        registry.set_acp_state(
+            &[agent_client_protocol::AvailableCommand::new(
+                "memory".to_string(),
+                "Browse memory".to_string(),
+            )],
+            None,
+        );
+        assert!(registry.get_for_dispatch("memory").is_some());
+        assert!(registry.get_for_dispatch("flush").is_none());
+        registry.set_acp_commands(&[]);
+        assert!(registry.get_for_dispatch("memory").is_none());
+        let skill =
+            agent_client_protocol::AvailableCommand::new("dream".to_string(), "Skill".to_string())
+                .meta(Some(
+                    serde_json::json!({"scope": "workspace", "path": "/tmp/dream/SKILL.md"})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ));
+        registry.set_acp_commands(&[skill]);
+        assert!(registry.get_for_dispatch("dream").is_none());
     }
 
     #[test]

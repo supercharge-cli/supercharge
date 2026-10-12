@@ -2,8 +2,8 @@ use super::support::*;
 use super::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::mpsc;
 use supercharge_login::{AuthManager, AuthMode, GrokAuth, GrokComConfig};
+use tokio::sync::mpsc;
 
 /// Test refresher that returns a fresh token and records that it was invoked.
 /// Used to drive the auth-arm success path.
@@ -392,7 +392,9 @@ async fn mid_salvage_credential_less_401_still_parks() {
                         max_completion_tokens: None,
                         models_etag: None,
                     }),
-                    ..auth_error_with_credential(supercharge_sampling_types::SentCredential::Missing)
+                    ..auth_error_with_credential(
+                        supercharge_sampling_types::SentCredential::Missing,
+                    )
                 };
                 let result = actor
                     .handle_sampling_failure(error, 0, transient_state(0, true), true, park)
@@ -1491,6 +1493,7 @@ async fn model_switch_preserves_existing_conversation_group() {
             actor
                 .handle_set_session_model(crate::session::SessionModelSwitch {
                     sampling_config: incoming,
+                    context_window_selected: false,
                     use_concise: false,
                     is_family_switch: false,
                     apply_prompt_override: false,
@@ -1564,6 +1567,7 @@ async fn set_session_model_invalidates_byok_memo_for_same_model_id() {
             let _ = actor
                 .handle_set_session_model(crate::session::SessionModelSwitch {
                     sampling_config: cfg,
+                    context_window_selected: false,
                     use_concise: false,
                     is_family_switch: false,
                     apply_prompt_override: false,
@@ -1596,7 +1600,10 @@ async fn set_session_model_invalidates_byok_memo_for_same_model_id() {
 use supercharge_login::test_counting_provider as counting_provider;
 
 /// Seed the per-model memo so `model_auth_provider` resolves without a config load.
-async fn seed_provider_memo(actor: &Arc<SessionActor>, provider: supercharge_login::AuthProviderRef) {
+async fn seed_provider_memo(
+    actor: &Arc<SessionActor>,
+    provider: supercharge_login::AuthProviderRef,
+) {
     let model = actor
         .chat_state_handle
         .get_sampling_config()
@@ -1628,9 +1635,12 @@ async fn switch_to_first_party_model_drops_minted_provider_token() {
             let token = provider.ensure_fresh_token(None).await.rotated().unwrap();
             assert_eq!(token, "tok-1");
 
-            let (actor, _rx) =
-                make_actor_with_auth_and_credentials(None, supercharge_chat_state::AuthType::ApiKey, token)
-                    .await;
+            let (actor, _rx) = make_actor_with_auth_and_credentials(
+                None,
+                supercharge_chat_state::AuthType::ApiKey,
+                token,
+            )
+            .await;
             seed_provider_memo(&actor, provider).await;
 
             let model = actor
@@ -1650,6 +1660,7 @@ async fn switch_to_first_party_model_drops_minted_provider_token() {
             let _ = actor
                 .handle_set_session_model(crate::session::SessionModelSwitch {
                     sampling_config: cfg,
+                    context_window_selected: false,
                     use_concise: false,
                     is_family_switch: false,
                     apply_prompt_override: false,
@@ -1681,9 +1692,12 @@ async fn sampler_401_on_provider_model_remints_and_resubmits() {
             let token = provider.ensure_fresh_token(None).await.rotated().unwrap();
             assert_eq!(token, "tok-1");
 
-            let (actor, _rx) =
-                make_actor_with_auth_and_credentials(None, supercharge_chat_state::AuthType::ApiKey, token)
-                    .await;
+            let (actor, _rx) = make_actor_with_auth_and_credentials(
+                None,
+                supercharge_chat_state::AuthType::ApiKey,
+                token,
+            )
+            .await;
             seed_provider_memo(&actor, provider).await;
             supercharge_login::test_backdate_provider_mint(
                 "test-4c-recover",
@@ -1729,9 +1743,12 @@ async fn sampler_non_auth_kind_401_on_provider_model_still_recovers() {
             let provider = counting_provider("test-4c-non-auth-kind", dir.path());
             let token = provider.ensure_fresh_token(None).await.rotated().unwrap();
 
-            let (actor, _rx) =
-                make_actor_with_auth_and_credentials(None, supercharge_chat_state::AuthType::ApiKey, token)
-                    .await;
+            let (actor, _rx) = make_actor_with_auth_and_credentials(
+                None,
+                supercharge_chat_state::AuthType::ApiKey,
+                token,
+            )
+            .await;
             seed_provider_memo(&actor, provider).await;
             supercharge_login::test_backdate_provider_mint(
                 "test-4c-non-auth-kind",

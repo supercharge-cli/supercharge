@@ -893,6 +893,28 @@ pub(in crate::app::dispatch) fn set_timeline(app: &mut AppView, new: bool) -> Ve
     }]
 }
 
+pub(super) fn set_dashboard_preview_inner(app: &mut AppView, enabled: bool) {
+    app.current_ui.dashboard_preview = Some(enabled);
+    if let Some(dashboard) = app.dashboard.as_mut() {
+        dashboard.set_preview_enabled(enabled, &mut app.agents);
+    }
+}
+
+pub(in crate::app::dispatch) fn set_dashboard_preview(app: &mut AppView, enabled: bool) -> Vec<Effect> {
+    let previous = app.current_ui.dashboard_preview_enabled();
+    if previous == enabled {
+        return vec![];
+    }
+    set_dashboard_preview_inner(app, enabled);
+    refresh_open_settings_modals(app);
+    tracing::info!(target: "settings", key = "dashboard_preview", value = enabled, "setting changed");
+    vec![Effect::PersistSetting {
+        key: "dashboard_preview",
+        value: crate::settings::SettingValue::Bool(enabled),
+        rollback_value: crate::settings::SettingValue::Bool(previous),
+    }]
+}
+
 pub(super) fn set_page_flip_on_send_inner(app: &mut AppView, new: bool) {
     app.current_ui.page_flip_on_send = Some(new);
     crate::appearance::cache::set_page_flip_on_send(new);

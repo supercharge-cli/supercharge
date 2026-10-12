@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "vectra-echo",
+      "name": "Echo MCP",
+      "version": "1.0.0",
+      "description": "A local, non-destructive echo tool for verifying an agent's MCP connection.",
+      "icon": "/managed-mcp/icons/vectra-echo.svg",
+      "publisher": "Vectra",
+      "category": "Developer tools",
+      "auth": "none",
+      "capabilities": ["mcp"],
+      "targets": ["supercharge-e2b", "supercharge-desktop"],
+      "source": {
+        "type": "archive",
+        "url": "https://raw.githubusercontent.com/iotserver24/supercharge-app/379e0d2789ac918e327e5ef1fef5cc2991a431a7/public/managed-mcp/vectra-echo-1.0.0.tar.gz",
+        "sha256": "a0c6be6c2f292c1a1ecdcc55056147d1dd232b58c76522e77ad44016ee7c0072"
+      }
+    },
+    {
+      "id": "vectra-github",
+      "name": "GitHub MCP",
+      "version": "1.0.0",
+      "description": "Connect a bot to GitHub's remote MCP server with a personal access token.",
+      "publisher": "Vectra",
+      "category": "Developer tools",
+      "auth": "secrets",
+      "capabilities": ["mcp"],
+      "targets": ["supercharge-e2b"],
+      "source": {
+        "type": "archive",
+        "url": "https://raw.githubusercontent.com/iotserver24/supercharge-app/08edbdc554b2665496743ae1c7a11f5570f6851e/public/managed-mcp/vectra-github-1.0.0.tar.gz",
+        "sha256": "15f78177f39a2955d4a8cd462b135ea3c7d764f2e59da5be226f6c1fc4d724e6"
+      }
+    }
+  ]
+}

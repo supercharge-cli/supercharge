@@ -270,8 +270,8 @@ mod tests {
             let items = cmd.suggest_args(&ctx, "").expect("should return items");
             let voltage_dark = items
                 .iter()
-                .find(|i| i.insert_text == "voltage-dark")
-                .expect("voltage-dark should be in list");
+                .find(|i| i.insert_text == "voltage_dark")
+                .expect("voltage_dark should be in list");
             assert!(
                 voltage_dark.description.contains("(active)"),
                 "explicit theme should show (active), got: {}",
@@ -370,12 +370,12 @@ mod tests {
                     ..crate::settings::PagerLocalSnapshot::default()
                 },
             };
-            let result = cmd.run(&mut ctx, "voltage-dark");
+            let result = cmd.run(&mut ctx, "catppuccin-mocha");
             match result {
                 CommandResult::Action(Action::SetTheme(name)) => {
-                    assert_eq!(name, "voltage-dark");
+                    assert_eq!(name, "catppuccin-mocha");
                 }
-                other => panic!("expected Action::SetTheme(\"voltage-dark\"), got {other:?}"),
+                other => panic!("expected Action::SetTheme(\"catppuccin-mocha\"), got {other:?}"),
             }
         });
     }
@@ -469,12 +469,15 @@ mod tests {
             let result = cmd.run(&mut ctx, "");
             match result {
                 CommandResult::Action(Action::SetTheme(name)) => {
-                    // available[0] is VoltageDark; next is available[1]
-                    let Some(expected) = ThemeKind::available().get(1).map(|k| k.display_name())
-                    else {
-                        panic!("expected at least two themes");
-                    };
-                    assert_eq!(name, expected);
+                    let available = ThemeKind::available();
+                    let current_idx = available
+                        .iter()
+                        .position(|kind| *kind == ThemeKind::VoltageDark)
+                        .expect("VoltageDark should be available");
+                    assert_eq!(
+                        name,
+                        available[(current_idx + 1) % available.len()].display_name()
+                    );
                 }
                 other => panic!("expected Action::SetTheme(...), got {other:?}"),
             }
@@ -534,9 +537,9 @@ mod tests {
             let result = cmd.run(&mut ctx, "dark");
             match result {
                 CommandResult::Action(Action::SetTheme(name)) => {
-                    assert_eq!(name, "voltage-dark", "alias must normalise to canonical");
+                    assert_eq!(name, "voltage_dark", "alias must normalise to canonical");
                 }
-                other => panic!("expected Action::SetTheme(\"voltage-dark\"), got {other:?}"),
+                other => panic!("expected Action::SetTheme(\"voltage_dark\"), got {other:?}"),
             }
         });
     }

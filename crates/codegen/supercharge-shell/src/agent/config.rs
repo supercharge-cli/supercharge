@@ -3277,15 +3277,16 @@ pub(crate) fn resolve_external_otel_config_with(
 ) -> Option<supercharge_telemetry::external::ExternalOtelConfig> {
     let pins =
         crate::agent::external_otel_pin::RequirementOtelPins::from_requirements(requirements);
-    let file_cfg: Option<supercharge_telemetry::external::ExternalOtelFileConfig> = effective_config
-        .and_then(|cfg| cfg.get("telemetry"))
-        .cloned()
-        .map(|mut telemetry| {
-            if let Some(table) = telemetry.as_table_mut() {
-                pins.hide_unlisted_file_siblings(table);
-            }
-            telemetry_otel_file_config(&telemetry)
-        });
+    let file_cfg: Option<supercharge_telemetry::external::ExternalOtelFileConfig> =
+        effective_config
+            .and_then(|cfg| cfg.get("telemetry"))
+            .cloned()
+            .map(|mut telemetry| {
+                if let Some(table) = telemetry.as_table_mut() {
+                    pins.hide_unlisted_file_siblings(table);
+                }
+                telemetry_otel_file_config(&telemetry)
+            });
     let getenv_pinned = crate::agent::external_otel_pin::getenv_with_pins(&pins, getenv);
     let mut resolved = supercharge_telemetry::external::ExternalOtelConfig::resolve_with(
         getenv_pinned,
@@ -3368,6 +3369,9 @@ pub(crate) fn resolve_model_list(
         for (key, entry) in prefetched.iter_mut() {
             let donor = resolved.get(key);
             if let Some(donor) = donor {
+                if entry.info.context_windows.is_empty() {
+                    entry.info.context_windows.clone_from(&donor.info.context_windows);
+                }
                 if entry.info.context_window.get() == default_cw
                     && donor.info.context_window.get() != default_cw
                 {
@@ -3620,6 +3624,7 @@ struct DefaultModelJson {
     name: Option<String>,
     description: Option<String>,
     context_window: Option<NonZeroU64>,
+    context_windows: Vec<NonZeroU64>,
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_completion_tokens: Option<u32>,
@@ -3685,6 +3690,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 name: m.name,
                 description: m.description,
                 context_window,
+                context_windows: m.context_windows,
                 auto_compact_threshold_percent: m.auto_compact_threshold_percent,
                 system_prompt_label: m.system_prompt_label,
                 temperature: m.temperature,
@@ -3777,6 +3783,8 @@ pub struct ModelEntryConfig {
     /// Used for auto-compact threshold calculations.
     /// Required: BYOK users must explicitly set this in config.toml.
     pub context_window: NonZeroU64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_windows: Vec<NonZeroU64>,
     /// Per-model auto-compact threshold (0-100). When the session's token usage exceeds this percentage of `context_window`, the conversation is summarized.
     /// Resolver precedence: requirements > env > user (per-model > global) > managed (per-model > global). Below those: remote per-model (this field) > remote global > 85.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3868,6 +3876,7 @@ impl Default for ModelEntryConfig {
             variants: Vec::new(),
             extra_headers: IndexMap::new(),
             context_window: NonZeroU64::MIN,
+            context_windows: Vec::new(),
             auto_compact_threshold_percent: None,
             system_prompt_label: None,
             api_base_url: None,
@@ -3929,6 +3938,7 @@ pub struct ConfigModelOverride {
     #[serde(default)]
     pub env_http_headers: IndexMap<String, String>,
     pub context_window: Option<u64>,
+    pub context_windows: Option<Vec<NonZeroU64>>,
     /// Per-model auto-compact threshold override (0-100) from `[model.<id>]`.
     /// Read directly by `resolve_auto_compact_threshold_percent`.
     /// Intentionally NOT merged into `ModelInfo.auto_compact_threshold_percent` so the resolver can keep user-per-model distinct from GB-per-model.
@@ -4011,6 +4021,9 @@ impl ConfigModelOverride {
         if let Some(cw) = self.context_window.and_then(NonZeroU64::new) {
             entry.info.context_window = cw;
         }
+        if let Some(ref windows) = self.context_windows {
+            entry.info.context_windows.clone_from(windows);
+        }
         if let Some(v) = self.use_concise {
             entry.info.use_concise = v;
         }
@@ -4076,7 +4089,8 @@ impl ConfigModelOverride {
             entry.env_key.clone_from(&self.env_key);
         }
         if let Some(ref name) = self.auth_provider {
-            entry.auth_provider = Some(supercharge_login::AuthProviderRef::unresolved(name.clone()));
+            entry.auth_provider =
+                Some(supercharge_login::AuthProviderRef::unresolved(name.clone()));
         }
         if self.api_base_url.is_some() {
             entry.api_base_url.clone_from(&self.api_base_url);
@@ -4118,6 +4132,8 @@ pub struct ModelInfo {
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub env_http_headers: IndexMap<String, String>,
     pub context_window: NonZeroU64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_windows: Vec<NonZeroU64>,
     /// Per-model auto-compact threshold (0-100).
     /// `None` defers to the global / default tiers in `resolve_auto_compact_threshold_percent`.
     pub auto_compact_threshold_percent: Option<u8>,
@@ -4182,6 +4198,10 @@ impl Default for ModelInfo {
     }
 }
 impl ModelInfo {
+    pub(crate) fn supports_context_window(&self, window: NonZeroU64) -> bool {
+        window == self.context_window || self.context_windows.contains(&window)
+    }
+
     /// Minimal fallback descriptor for an unknown model slug.
     /// Used when a configured model ID isn't found in presets or remote models.
     pub fn fallback(slug: &str) -> Self {
@@ -4202,6 +4222,7 @@ impl ModelInfo {
             query_params: IndexMap::new(),
             env_http_headers: IndexMap::new(),
             context_window: NonZeroU64::new(200_000).unwrap(),
+            context_windows: Vec::new(),
             auto_compact_threshold_percent: None,
             system_prompt_label: None,
             use_concise: false,
@@ -4244,6 +4265,7 @@ impl ModelInfo {
             query_params: IndexMap::new(),
             env_http_headers: IndexMap::new(),
             context_window: entry.context_window,
+            context_windows: entry.context_windows.clone(),
             auto_compact_threshold_percent: entry.auto_compact_threshold_percent,
             system_prompt_label: entry.system_prompt_label.clone(),
             use_concise: entry.use_concise,
@@ -4940,6 +4962,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
                 query_params: IndexMap::new(),
                 env_http_headers: IndexMap::new(),
                 context_window: NonZeroU64::new(200_000).unwrap(),
+                context_windows: Vec::new(),
                 auto_compact_threshold_percent: None,
                 system_prompt_label: None,
                 use_concise: false,
@@ -5171,6 +5194,7 @@ fn resolve_hidden_default_web_search_sampling_config(
             query_params: IndexMap::new(),
             env_http_headers: IndexMap::new(),
             context_window: NonZeroU64::new(200_000).unwrap(),
+            context_windows: Vec::new(),
             auto_compact_threshold_percent: None,
             system_prompt_label: None,
             use_concise: false,
@@ -5272,6 +5296,13 @@ pub(crate) fn to_acp_model_info(
                     "totalContextTokens".to_string(),
                     serde_json::Value::Number(total_context_tokens.into()),
                 );
+                let mut windows: Vec<u64> = info.context_windows.iter().map(|w| w.get()).collect();
+                windows.push(total_context_tokens);
+                windows.sort_unstable();
+                windows.dedup();
+                if windows.len() > 1 {
+                    map.insert("contextWindows".to_string(), serde_json::json!(windows));
+                }
                 map.insert(
                     "agentType".to_string(),
                     serde_json::Value::String(info.agent_type.clone()),

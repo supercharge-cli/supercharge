@@ -6,6 +6,7 @@ const V2_DREAM_MODEL_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 const V2_DREAM_MODEL_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 const V2_DREAM_MIN_PENDING_COUNT: usize = 20;
 const V2_DREAM_MAX_PENDING_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+const V2_DREAM_MAX_BATCHES: usize = 8;
 const V2_PROMOTION_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 const V2_PROMOTION_MAX_RETRIES: usize = 120;
 const DREAM_BUSY_NOTICE: &str = "busy";
@@ -15,6 +16,10 @@ const DREAM_RECOVERED_NOTICE: &str = "recovered";
 const DREAM_RETRY_NOTICE: &str = "retry required";
 const DREAM_SHADOW_NOTICE: &str = "shadow complete";
 const DREAM_COMPLETED_NOTICE: &str = "completed";
+
+fn continue_v2_batch_run(completed: usize, succeeded: bool) -> bool {
+    succeeded && completed < V2_DREAM_MAX_BATCHES
+}
 
 struct V2DreamModelFailure {
     class: supercharge_telemetry::memory_telemetry::MemoryV2FailureClass,
@@ -569,7 +574,8 @@ impl SessionActor {
         }
         match eligibility {
             Ok(Ok(eligibility))
-                if eligibility.disposition == supercharge_memory::DreamTriggerDisposition::Ready =>
+                if eligibility.disposition
+                    == supercharge_memory::DreamTriggerDisposition::Ready =>
             {
                 emit_v2_dream_lifecycle(
                     supercharge_telemetry::memory_telemetry::MemoryV2DreamDisposition::Ready,
@@ -610,13 +616,15 @@ impl SessionActor {
         }
     }
 
-    pub(super) async fn run_v2_dream_slash_command(self: &Arc<Self>) {
+    pub(super) async fn run_v2_dream_slash_command(
+        self: &Arc<Self>,
+    ) -> crate::extensions::memory::MemoryDreamOutcome {
         self.run_v2_dream_with_cancel(
             V2DreamInvocation::Manual,
             self.memory.dream_workers.cancellation_token(),
             supercharge_memory::system_v2_clock(),
         )
-        .await;
+        .await
     }
 
     async fn run_v2_dream_with_cancel(
@@ -624,7 +632,7 @@ impl SessionActor {
         invocation: V2DreamInvocation,
         cancel: tokio_util::sync::CancellationToken,
         clock: supercharge_memory::SharedV2Clock,
-    ) {
+    ) -> crate::extensions::memory::MemoryDreamOutcome {
         use supercharge_telemetry::memory_telemetry::{
             MemoryV2Component, MemoryV2FailClosed, MemoryV2FailureClass,
         };
@@ -639,36 +647,57 @@ impl SessionActor {
                 )
                 .await;
             }
-            return;
+            return crate::extensions::memory::MemoryDreamOutcome::Disabled;
         }
         let cancel = cancel.child_token();
         if cancel.is_cancelled() {
-            return;
+            return crate::extensions::memory::MemoryDreamOutcome::Failed;
         }
         let cancel_on_drop = V2DreamCancellationGuard(cancel.clone());
         let (completed_tx, completed_rx) = tokio::sync::oneshot::channel();
         let session = Arc::clone(self);
         let task = supercharge_telemetry::session_ctx::spawn_local_in_session_ctx(async move {
+            let mut completed = 0;
+            let mut outcome = crate::extensions::memory::MemoryDreamOutcome::NoWork;
             loop {
                 if cancel.is_cancelled() {
+                    outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                     break;
                 }
-                let coalesced = session.execute_v2_dream(&cancel, clock.clone()).await;
+                let mut batch_outcome = crate::extensions::memory::MemoryDreamOutcome::NoWork;
+                let coalesced = session
+                    .execute_v2_dream(&cancel, clock.clone(), &mut batch_outcome)
+                    .await;
+                if outcome != crate::extensions::memory::MemoryDreamOutcome::Completed
+                    || batch_outcome == crate::extensions::memory::MemoryDreamOutcome::Failed
+                {
+                    outcome = batch_outcome;
+                }
+                completed += 1;
                 // Promotion can be deferred by the lease this Dream just released.
                 // Retrying here makes rollout activation converge without requiring
                 // a session restart or another completed turn.
                 session
                     .promote_v2_hidden_observations(false, clock.clone())
                     .await;
-                if !coalesced {
+                if session.memory.v2_config.batch_dream_enabled {
+                    if !continue_v2_batch_run(completed, coalesced)
+                        || completed >= session.memory.v2_config.batch_dream_max_batches
+                    {
+                        break;
+                    }
+                } else if !coalesced {
                     break;
                 }
             }
-            let _ = completed_tx.send(());
+            let _ = completed_tx.send(outcome);
         });
         self.memory.dream_workers.track(task);
-        let _ = completed_rx.await;
+        let outcome = completed_rx
+            .await
+            .unwrap_or(crate::extensions::memory::MemoryDreamOutcome::Failed);
         drop(cancel_on_drop);
+        outcome
     }
 
     /// Execute one claim. Returns true when a coalesced trigger requires
@@ -677,15 +706,18 @@ impl SessionActor {
         &self,
         cancel: &tokio_util::sync::CancellationToken,
         clock: supercharge_memory::SharedV2Clock,
+        outcome: &mut crate::extensions::memory::MemoryDreamOutcome,
     ) -> bool {
         use supercharge_telemetry::memory_telemetry::{
             MemoryV2DreamDisposition, MemoryV2FailureClass,
         };
         let started_at = std::time::Instant::now();
         if cancel.is_cancelled() {
+            *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
             return false;
         }
         let Some(storage) = self.memory.storage() else {
+            *outcome = crate::extensions::memory::MemoryDreamOutcome::Disabled;
             return false;
         };
         self.send_xai_notification(XaiSessionUpdate::MemoryDreamQueued)
@@ -695,6 +727,8 @@ impl SessionActor {
         let global = storage.global_dir().to_path_buf();
         let workspace = storage.workspace_dir().to_path_buf();
         let is_shadow = self.memory.v2_config.rollout == crate::config::MemoryV2Rollout::Shadow;
+        let batch_enabled = self.memory.v2_config.batch_dream_enabled;
+        let max_batch_note_bytes = self.memory.v2_config.batch_dream_max_note_bytes;
         let claimed = tokio::task::spawn_blocking({
             let global = global.clone();
             let workspace = workspace.clone();
@@ -712,7 +746,13 @@ impl SessionActor {
                     now,
                     duration: V2_DREAM_MODEL_TIMEOUT.saturating_mul(2),
                 };
-                let lease = if is_shadow {
+                let lease = if batch_enabled {
+                    if is_shadow {
+                        store.claim_shadow_batch_with_limit(&request, max_batch_note_bytes)?
+                    } else {
+                        store.claim_batch_with_limit(&request, max_batch_note_bytes)?
+                    }
+                } else if is_shadow {
                     store.claim_shadow(&request)?
                 } else {
                     store.claim(&request)?
@@ -745,7 +785,7 @@ impl SessionActor {
             }
         })
         .await;
-        let outcome = match claimed {
+        let claim = match claimed {
             Ok(Ok(claimed)) => claimed,
             Ok(Err(supercharge_memory::V2ConsolidationError::Busy)) => {
                 emit_v2_dream_lifecycle(
@@ -755,6 +795,7 @@ impl SessionActor {
                     started_at,
                     Some(MemoryV2FailureClass::Lease),
                 );
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Busy;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_BUSY_NOTICE.to_owned(),
                     path: None,
@@ -771,6 +812,7 @@ impl SessionActor {
                     Some(classify_consolidation_error(&error)),
                 );
                 tracing::warn!(error = %error, "memory-v2 Dream claim failed");
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_FAILED_NOTICE.to_owned(),
                     path: None,
@@ -787,6 +829,7 @@ impl SessionActor {
                     Some(MemoryV2FailureClass::Convergence),
                 );
                 tracing::warn!(error = %error, "memory-v2 Dream claim task panicked");
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_FAILED_NOTICE.to_owned(),
                     path: None,
@@ -795,10 +838,11 @@ impl SessionActor {
                 return false;
             }
         };
-        let (guard, input) = match outcome {
+        let (guard, input) = match claim {
             V2DreamClaimOutcome::NoWork => {
                 emit_v2_dream_lifecycle(MemoryV2DreamDisposition::Noop, 0, 0, started_at, None);
                 self.memory.record_dream_neutral();
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::NoWork;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_NO_WORK_NOTICE.to_owned(),
                     path: None,
@@ -815,17 +859,19 @@ impl SessionActor {
                     None,
                 );
                 self.memory.record_dream_result(true);
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Completed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_RECOVERED_NOTICE.to_owned(),
                     path: None,
                 })
                 .await;
-                return false;
+                return batch_enabled;
             }
             V2DreamClaimOutcome::Fresh { guard, input } => (guard, input),
         };
         if cancel.is_cancelled() {
             guard.fail_retryable("Dream task cancelled").await;
+            *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
             return true;
         }
         self.send_xai_notification(XaiSessionUpdate::MemoryDreamStarted {
@@ -843,6 +889,7 @@ impl SessionActor {
             biased;
             () = cancel.cancelled() => {
                 guard.fail_retryable("Dream task cancelled").await;
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                 return true;
             },
             response = self.run_v2_dream_model_call(&prompt) => response,
@@ -871,6 +918,7 @@ impl SessionActor {
                 guard.fail_retryable(detail.clone()).await;
                 self.memory.record_dream_result(false);
                 tracing::warn!(error = %detail, "memory-v2 Dream model or plan failed");
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_RETRY_NOTICE.to_owned(),
                     path: None,
@@ -881,6 +929,7 @@ impl SessionActor {
         };
         if cancel.is_cancelled() {
             guard.fail_retryable("Dream task cancelled").await;
+            *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
             return true;
         }
         let (store, lease) = guard.into_parts();
@@ -918,12 +967,13 @@ impl SessionActor {
                         None,
                         usage.clone(),
                     );
+                    *outcome = crate::extensions::memory::MemoryDreamOutcome::Completed;
                     self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                         result: DREAM_SHADOW_NOTICE.to_owned(),
                         path: None,
                     })
                     .await;
-                    coalesced
+                    batch_enabled || coalesced
                 }
                 Ok((Err(error), _)) => {
                     self.memory.record_dream_result(false);
@@ -937,6 +987,7 @@ impl SessionActor {
                         usage.clone(),
                     );
                     tracing::warn!(error = %error, "memory-v2 shadow completion failed");
+                    *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                     self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                         result: DREAM_RETRY_NOTICE.to_owned(),
                         path: None,
@@ -956,6 +1007,7 @@ impl SessionActor {
                         usage.clone(),
                     );
                     tracing::warn!(error = %error, "memory-v2 shadow completion task panicked");
+                    *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                     self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                         result: DREAM_FAILED_NOTICE.to_owned(),
                         path: None,
@@ -990,12 +1042,13 @@ impl SessionActor {
                     usage.clone(),
                 );
                 self.memory.record_dream_result(true);
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Completed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_COMPLETED_NOTICE.to_owned(),
                     path: None,
                 })
                 .await;
-                coalesced
+                batch_enabled || coalesced
             }
             Ok((Err(error), _)) => {
                 emit_v2_dream_lifecycle_with_usage(
@@ -1009,6 +1062,7 @@ impl SessionActor {
                 );
                 self.memory.record_dream_result(false);
                 tracing::warn!(error = %error, "memory-v2 Dream commit failed");
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_RETRY_NOTICE.to_owned(),
                     path: None,
@@ -1028,6 +1082,7 @@ impl SessionActor {
                 );
                 self.memory.record_dream_result(false);
                 tracing::warn!(error = %error, "memory-v2 Dream commit task panicked");
+                *outcome = crate::extensions::memory::MemoryDreamOutcome::Failed;
                 self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
                     result: DREAM_FAILED_NOTICE.to_owned(),
                     path: None,

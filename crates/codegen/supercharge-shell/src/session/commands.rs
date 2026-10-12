@@ -5,8 +5,8 @@ use super::plan_mode::PromptMode;
 use crate::extensions::notification::SessionNotification;
 use crate::session::signals::TurnDeltaSnapshot;
 use agent_client_protocol as acp;
-use tokio::sync::oneshot;
 use supercharge_tools::types::skill_discovery_tracker::SkillUpdateKind;
+use tokio::sync::oneshot;
 /// Structured context for a cancelled turn.
 /// Clients deserialize into this same type.
 /// Absent fields are skipped.
@@ -304,6 +304,7 @@ impl From<SkillUpdateKind> for AdvertiseTrigger {
 }
 pub struct SessionModelSwitch {
     pub sampling_config: supercharge_sampler::SamplerConfig,
+    pub context_window_selected: bool,
     pub use_concise: bool,
     /// The two models declare differing `model_family`s, so a lossy compaction runs at switch end.
     pub is_family_switch: bool,
@@ -463,6 +464,9 @@ pub enum SessionCommand {
     /// Otherwise returns `Ok(true/false)`: whether a flush actually ran (false if another flush was already in progress).
     FlushMemory {
         respond_to: oneshot::Sender<acp::Result<bool>>,
+    },
+    DreamMemory {
+        respond_to: oneshot::Sender<crate::extensions::memory::MemoryDreamOutcome>,
     },
     /// Delete one memory note for `x.ai/memory/forget`.
     MemoryForget {

@@ -11117,6 +11117,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercharge-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "nix 0.30.1",
+ "parking_lot",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "supercharge-diag-server",
+ "supercharge-tty-utils",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tracing",
+]
+
+[[package]]
 name = "supercharge-login"
 version = "0.1.0"
 dependencies = [
@@ -12126,7 +12147,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "supercharge-diag-server",
  "supercharge-extra-ca",
+ "supercharge-lifecycle",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -12582,6 +12605,7 @@ dependencies = [
  "supercharge-fuzzy-file-search",
  "supercharge-hooks",
  "supercharge-hunk-tracker",
+ "supercharge-lifecycle",
  "supercharge-mcp",
  "supercharge-paths",
  "supercharge-sandbox",

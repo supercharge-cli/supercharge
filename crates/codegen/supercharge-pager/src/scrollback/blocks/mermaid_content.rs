@@ -11,8 +11,8 @@
 use std::ops::Range;
 
 use ratatui::text::Line;
-use unicode_width::UnicodeWidthStr;
 use supercharge_markdown::MarkdownRenderView;
+use unicode_width::UnicodeWidthStr;
 
 use crate::appearance::RenderMermaid;
 use crate::scrollback::types::{BlockLine, BlockOutput};
@@ -120,11 +120,11 @@ pub fn mermaid_block_ranges(view: &MarkdownRenderView) -> Vec<Range<usize>> {
         .collect()
 }
 
-/// `VoltageLight` is the only light theme. `Terminal` has no polarity of its own — a rendered diagram is a raster with a
+/// `Terminal` has no polarity of its own — a rendered diagram is a raster with a
 /// baked background, so it takes the dark treatment that minimal mode already gets. It lives here (not in the
 /// engine crate) so the always-compiled detection module stays independent of the optional `mermaid` feature.
 pub fn theme_is_dark(theme: ThemeKind) -> bool {
-    !matches!(theme, ThemeKind::VoltageLight)
+    !matches!(theme, ThemeKind::VoltageLight | ThemeKind::SolarizedLight)
 }
 
 /// Cache key for a rendered diagram: content hash, theme, quality tier, and (for the terminal tier) bucketed width.
@@ -750,11 +750,10 @@ mod tests {
     // -- theme mapping and cache filename -------------------------------------
 
     #[test]
-    fn theme_is_dark_maps_voltage_light_to_light_only() {
-        assert!(
-            !theme_is_dark(ThemeKind::VoltageLight),
-            "VoltageLight is the light theme"
-        );
+    fn theme_is_dark_maps_light_palettes_to_light() {
+        for light in [ThemeKind::VoltageLight, ThemeKind::SolarizedLight] {
+            assert!(!theme_is_dark(light), "{light:?} should be light");
+        }
         for dark in [
             ThemeKind::VoltageDark,
             ThemeKind::TokyoNight,
@@ -762,6 +761,12 @@ mod tests {
             ThemeKind::OscuraMidnight,
             ThemeKind::NavyCyan,
             ThemeKind::BlackCrimson,
+            ThemeKind::CatppuccinMocha,
+            ThemeKind::GruvboxDark,
+            ThemeKind::Nord,
+            ThemeKind::SolarizedDark,
+            ThemeKind::Dracula,
+            ThemeKind::OneDark,
         ] {
             assert!(theme_is_dark(dark), "{dark:?} should be dark");
         }

@@ -22,6 +22,7 @@ use crate::views::prompt_widget::{PromptFlag, PromptInfo, PromptWidget};
 use crate::views::session_picker_surface::{
     SessionPickerRenderCtx, SessionPickerRenderMode, render_session_picker,
 };
+mod ascii_logo;
 mod consent;
 mod hero_box;
 pub(crate) mod logo;
@@ -246,8 +247,15 @@ impl StackedColumn {
     }
 
     /// The tier the terminal height allows, stepped down only while the column would overflow beside the draft and the reserved rows.
-    fn logo_tier(&self, reserved: u16) -> LogoTier {
-        let mut tier = LogoTier::for_height(self.content_height);
+    fn logo_tier(&self, reserved: u16, ascii_fits_width: bool) -> LogoTier {
+        let mut tier = if ascii_fits_width
+            && self.content_height >= 50
+            && self.fits(LogoTier::Ascii, reserved)
+        {
+            LogoTier::Ascii
+        } else {
+            LogoTier::for_height(self.content_height)
+        };
         while !self.fits(tier, reserved) {
             match tier.step_down() {
                 Some(smaller) => tier = smaller,
@@ -398,7 +406,10 @@ impl WelcomeLayout {
         let logo_tier = if compact {
             LogoTier::Hidden
         } else {
-            column.logo_tier(reserved)
+            column.logo_tier(
+                reserved,
+                allow_hero_box && content_area.width >= ascii_logo::COLS + H_MARGIN * 2,
+            )
         };
         let fixed_above = column.fixed_above(logo_tier);
 
@@ -3448,6 +3459,26 @@ mod tests {
         let tall = WelcomeLayout::compute(input(Some(max)));
         assert_eq!(tall.logo_tier, LogoTier::Hidden);
         assert_places_every_row(&tall, &input(Some(max)));
+    }
+
+    #[test]
+    fn tall_home_uses_ascii_art_without_clipping_the_prompt() {
+        for width in [80, HERO_BOX_MIN_WIDTH] {
+            let input = WelcomeLayoutInput {
+                content_area: Rect::new(0, 0, width, 70),
+                menu_height: 4,
+                ..Default::default()
+            };
+            let layout = WelcomeLayout::compute(input);
+            let logo = if layout.has_hero_box() {
+                layout.hero_logo
+            } else {
+                layout.logo
+            };
+            assert!(logo.width >= ascii_logo::COLS);
+            assert!(logo.height >= ascii_logo::ROWS);
+            assert!(layout.prompt.y > logo.bottom());
+        }
     }
 
     /// 80x33: the full logo fits beside every draft up to the cap, so it never steps down.

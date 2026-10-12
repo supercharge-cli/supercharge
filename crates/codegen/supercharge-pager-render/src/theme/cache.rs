@@ -43,6 +43,13 @@ fn theme_kind_from_u8(byte: u8) -> ThemeKind {
         x if x == ThemeKind::OscuraMidnight as u8 => ThemeKind::OscuraMidnight,
         x if x == ThemeKind::NavyCyan as u8 => ThemeKind::NavyCyan,
         x if x == ThemeKind::BlackCrimson as u8 => ThemeKind::BlackCrimson,
+        x if x == ThemeKind::CatppuccinMocha as u8 => ThemeKind::CatppuccinMocha,
+        x if x == ThemeKind::GruvboxDark as u8 => ThemeKind::GruvboxDark,
+        x if x == ThemeKind::Nord as u8 => ThemeKind::Nord,
+        x if x == ThemeKind::SolarizedDark as u8 => ThemeKind::SolarizedDark,
+        x if x == ThemeKind::Dracula as u8 => ThemeKind::Dracula,
+        x if x == ThemeKind::OneDark as u8 => ThemeKind::OneDark,
+        x if x == ThemeKind::SolarizedLight as u8 => ThemeKind::SolarizedLight,
         x if x == ThemeKind::Terminal as u8 => ThemeKind::Terminal,
         x if x == ThemeKind::Auto as u8 => ThemeKind::Auto,
         _ => ThemeKind::NavyCyan,
@@ -380,6 +387,38 @@ mod tests {
                 .expect("apply_kind blocked on the stderr lock");
             assert_eq!(applied, ThemeKind::VoltageLight);
             assert_eq!(current_kind(), ThemeKind::VoltageLight);
+        });
+    }
+
+    #[test]
+    fn added_themes_survive_cache_roundtrip_and_render_their_palettes() {
+        with_test_env(|| {
+            for (kind, palette) in [
+                (
+                    ThemeKind::CatppuccinMocha,
+                    super::super::Theme::catppuccin_mocha(),
+                ),
+                (ThemeKind::GruvboxDark, super::super::Theme::gruvbox_dark()),
+                (ThemeKind::Nord, super::super::Theme::nord()),
+                (
+                    ThemeKind::SolarizedDark,
+                    super::super::Theme::solarized_dark(),
+                ),
+                (ThemeKind::Dracula, super::super::Theme::dracula()),
+                (ThemeKind::OneDark, super::super::Theme::one_dark()),
+                (
+                    ThemeKind::SolarizedLight,
+                    super::super::Theme::solarized_light(),
+                ),
+            ] {
+                assert_eq!(super::super::Theme::apply_kind(kind), kind);
+                assert_eq!(current_kind(), kind, "{kind:?} must survive the cache");
+                assert_eq!(
+                    super::super::Theme::current().bg_base,
+                    palette.bg_base,
+                    "{kind:?} must render its selected canvas"
+                );
+            }
         });
     }
 

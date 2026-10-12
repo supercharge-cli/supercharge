@@ -6,8 +6,8 @@ use crate::{
     CaptureOutcomeDraft, CaptureRange, ClaimRequest, ObservationDraft, ObservationType,
     V2CaptureStore, ensure_scope_initialized,
 };
-use tempfile::TempDir;
 use supercharge_sqlite_journal::JournalMode;
+use tempfile::TempDir;
 
 struct Fixture {
     _temp: TempDir,
@@ -100,6 +100,119 @@ impl Fixture {
             .unwrap()
             .unwrap()
     }
+}
+
+#[test]
+fn bounded_batch_claims_are_durable_and_drain_in_order() {
+    let fixture = Fixture::new();
+    let paths: Vec<_> = (0..23)
+        .map(|turn| {
+            fixture.add_observation("batch", turn + 1, "durable fact", 10 + i64::from(turn))
+        })
+        .collect();
+    let request = |owner: &str, now| DreamClaimRequest {
+        owner: owner.to_owned(),
+        now,
+        duration: Duration::from_secs(60),
+    };
+    let first = fixture
+        .dream
+        .claim_batch(&request("first", 50))
+        .unwrap()
+        .unwrap();
+    assert_eq!(first.observations.len(), 20);
+    assert_eq!(first.observations[0].relative_path, paths[0]);
+    let other = V2ConsolidationStore::open(
+        &fixture.workspace,
+        V2MemoryScope::Workspace,
+        &fixture.global,
+        &fixture.workspace,
+    )
+    .unwrap();
+    assert!(matches!(
+        other.claim_batch(&request("blocked", 51)),
+        Err(V2ConsolidationError::Busy)
+    ));
+    fixture
+        .dream
+        .fail_retryable(&first, 51, "model failed")
+        .unwrap();
+    let retry = other.claim_batch(&request("retry", 52)).unwrap().unwrap();
+    assert_eq!(retry.operation_id, first.operation_id);
+    assert!(retry.generation > first.generation);
+    let stale_operation = TopicOperation::Create {
+        path: PathBuf::from("topics/batch.md"),
+        content: "# Batch\n\nDurable facts.".to_owned(),
+        evidence: first
+            .observations
+            .iter()
+            .map(|item| item.relative_path.clone())
+            .collect(),
+    };
+    assert!(matches!(
+        fixture.dream.commit(&first, &[stale_operation], 52),
+        Err(V2ConsolidationError::StaleLease)
+    ));
+    fixture
+        .dream
+        .commit(
+            &retry,
+            &[TopicOperation::Create {
+                path: PathBuf::from("topics/batch.md"),
+                content: "# Batch\n\nDurable facts.".to_owned(),
+                evidence: retry
+                    .observations
+                    .iter()
+                    .map(|item| item.relative_path.clone())
+                    .collect(),
+            }],
+            53,
+        )
+        .unwrap();
+    let remaining = other
+        .claim_batch(&request("remaining", 54))
+        .unwrap()
+        .unwrap();
+    assert_eq!(remaining.observations.len(), 3);
+    assert_eq!(remaining.observations[0].relative_path, paths[20]);
+    assert!(fixture.workspace.join("topics/batch.md").exists());
+    assert!(!fixture.workspace.join(&paths[0]).exists());
+}
+
+#[test]
+fn bounded_batch_respects_total_note_bytes() {
+    let fixture = Fixture::new();
+    for turn in 1..=20 {
+        fixture.add_observation(
+            &format!("s{turn}"),
+            turn,
+            &"x".repeat(900),
+            10 + i64::from(turn),
+        );
+    }
+    let lease = fixture
+        .dream
+        .claim_batch_with_limit(
+            &DreamClaimRequest {
+                owner: "bounded".to_owned(),
+                now: 50,
+                duration: Duration::from_secs(60),
+            },
+            16 * 1024,
+        )
+        .unwrap()
+        .unwrap();
+    assert!(!lease.observations.is_empty());
+    assert!(lease.observations.len() < 20);
+    let input = fixture.dream.consolidation_input(&lease, 51).unwrap();
+    assert!(
+        input
+            .observations
+            .iter()
+            .map(|(_, content)| content.len())
+            .sum::<usize>()
+            <= 16 * 1024
+    );
 }
 
 #[test]

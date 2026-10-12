@@ -512,6 +512,7 @@ async fn acp_clients_are_not_liveness_watched() {
         HttpConfig {
             url: "http://localhost/api/mcp".to_string(),
             headers: vec![],
+            bearer_token_file: None,
             local_agent_endpoint: false,
         },
         None,
@@ -763,6 +764,7 @@ fn test_tool_timeout_for_returns_per_tool_override() {
         HttpConfig {
             url: String::new(),
             headers: vec![],
+            bearer_token_file: None,
             local_agent_endpoint: false,
         },
         Some(&overrides),
@@ -787,6 +789,7 @@ fn test_tool_timeout_for_empty_map_returns_default() {
         HttpConfig {
             url: String::new(),
             headers: vec![],
+            bearer_token_file: None,
             local_agent_endpoint: false,
         },
         Some(&overrides),
@@ -1547,6 +1550,7 @@ async fn recover_and_retry_surfaces_original_error_when_recover_fails() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -2086,6 +2090,7 @@ fn fake_http_client_with_overrides(
         HttpConfig {
             url: url.to_string(),
             headers: vec![],
+            bearer_token_file: None,
             local_agent_endpoint: false,
         },
         Some(&overrides),
@@ -2711,6 +2716,7 @@ async fn probe_connect_failure_surfaces_instead_of_legacy_fallback() {
     let config = HttpConfig {
         url: url.clone(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let http_client = McpClient::build_http_client(
@@ -3214,6 +3220,7 @@ async fn test_reset_transport_succeeds_for_http_client() {
     let config = HttpConfig {
         url: "http://127.0.0.1:9/api/mcp".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let client = McpClient::new_http("example-mcp".to_string(), config, None, None);
@@ -3231,6 +3238,7 @@ async fn test_reset_transport_is_idempotent() {
     let config = HttpConfig {
         url: "http://127.0.0.1:9/api/mcp".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let client = McpClient::new_http("example-mcp".to_string(), config, None, None);
@@ -3245,6 +3253,7 @@ async fn test_reset_transport_makes_ensure_initialized_retry_handshake() {
     let config = HttpConfig {
         url: "http://127.0.0.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let client = McpClient::new_http("test".to_string(), config, None, None);
@@ -3543,6 +3552,7 @@ async fn watched_live_client(name: &str) -> Arc<McpClient> {
         HttpConfig {
             url: "http://127.0.0.1:0/".to_string(),
             headers: Vec::new(),
+            bearer_token_file: None,
             local_agent_endpoint: false,
         },
         None,
@@ -3870,6 +3880,7 @@ fn new_http_propagates_expose_image_base64_override_to_getter() {
     let config = HttpConfig {
         url: "http://localhost/api/mcp".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -3910,6 +3921,7 @@ async fn ensure_initialized_concurrent_callers_never_see_legacy_fast_fail() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -3952,6 +3964,7 @@ async fn ensure_initialized_parked_caller_retries_after_notify() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -4002,6 +4015,7 @@ async fn ensure_initialized_inflight_wait_times_out_when_holder_silent() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -4029,6 +4043,7 @@ async fn ensure_initialized_drop_guard_restores_state_after_holder_aborted() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -4167,6 +4182,7 @@ async fn is_healthy_pending_returns_false() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let client = McpClient::new_http("pending".to_string(), config, None, None);
@@ -4191,6 +4207,7 @@ async fn is_healthy_pending_does_not_block_on_handshake() {
     let config = HttpConfig {
         url: "http://192.0.2.1:1/unreachable".to_string(),
         headers: vec![],
+        bearer_token_file: None,
         local_agent_endpoint: false,
     };
     let overrides = McpClientTimeoutOverrides {
@@ -4379,6 +4396,35 @@ fn probe_ctx<'a>(
         discovery: McpOauthDiscovery::Network,
         send_grok_agent_id_header: false,
     }
+}
+
+#[tokio::test]
+async fn bearer_token_file_meta_validates_path_and_overrides_static_authorization() {
+    let event_writer = supercharge_session_events::EventWriter::noop();
+    let ctx = session_test_ctx(&event_writer);
+    let make_server = |path: &str| {
+        acp::McpServer::Http(
+            acp::McpServerHttp::new("file-auth", "http://127.0.0.1:9/mcp")
+                .headers(vec![acp::HttpHeader::new("Authorization", "Bearer stale")])
+                .meta(Some(acp::Meta::from_iter([(
+                    crate::bearer_token_file::META_KEY.to_owned(),
+                    serde_json::json!(path),
+                )]))),
+        )
+    };
+    let err = match start_mcp_server(make_server("relative/token"), None, None, None, &ctx).await {
+        Ok(_) => panic!("relative token path must fail"),
+        Err(err) => err,
+    };
+    assert!(err.to_string().contains("absolute or ~/ path"));
+
+    let client = start_mcp_server(make_server("/missing/token"), None, None, None, &ctx)
+        .await
+        .unwrap();
+    let config = client.http_config.as_ref().unwrap();
+    assert!(config.bearer_token_file.is_some());
+    assert!(!config.has_authorization_header());
+    assert!(!client.has_auth());
 }
 
 fn session_test_ctx(event_writer: &supercharge_session_events::EventWriter) -> McpSpawnCtx<'_> {

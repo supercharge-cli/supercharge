@@ -701,15 +701,15 @@ pub fn diagnose_clipboard_from_values(
     warnings
 }
 
-/// Warns only when the session is Wayland and the compositor lacks the data-control protocol. That is a partial
-/// mitigation: its verified write is the most reliable route without data-control. No warning when data-control is
-/// present (copies are focus-free) or off Wayland.
+/// Warns only when the session is Wayland, the compositor lacks data-control, and `wl-copy` is missing.
+/// With `wl-copy` installed, copies work while the terminal stays focused. GNOME never exposes data-control,
+/// so that case is not a startup issue the user can clear.
 pub fn diagnose_wayland_data_control(
     is_wayland: bool,
     data_control: bool,
     wl_copy_available: bool,
 ) -> Option<TerminalWarning> {
-    if !is_wayland || data_control {
+    if !is_wayland || data_control || wl_copy_available {
         return None;
     }
     let fix = (!wl_copy_available).then_some("sudo apt install wl-clipboard");
@@ -1428,11 +1428,11 @@ mod tests {
     // =====================================================================
 
     #[test]
-    fn wayland_no_data_control_warns() {
-        let w = diagnose_wayland_data_control(true, false, true).expect("must warn");
-        assert_eq!(w.category, WarningCategory::WaylandNoDataControl);
-        assert!(w.message.contains("switch away"));
-        assert!(w.fix.is_none(), "wl-copy present: nothing to install");
+    fn wayland_no_data_control_with_wl_copy_is_quiet() {
+        assert!(
+            diagnose_wayland_data_control(true, false, true).is_none(),
+            "wl-copy present: GNOME has no data-control and the banner cannot be cleared"
+        );
     }
 
     #[test]
@@ -1982,7 +1982,7 @@ mod tests {
     #[test]
     fn wayland_banner_surfaces_without_ssh_gate() {
         // `summarize_warnings` is SSH-gated, so the Wayland warning reaches the welcome banner through the assemble bypass instead
-        let w = diagnose_wayland_data_control(true, false, true).unwrap();
+        let w = diagnose_wayland_data_control(true, false, false).unwrap();
         let out = assemble_startup_warnings(None, Some(&w), None, vec![clipboard_banner()]);
         assert_eq!(out.len(), 2);
         assert!(
@@ -1996,7 +1996,7 @@ mod tests {
     #[test]
     fn wezterm_banner_outranks_wayland_banner() {
         let wez = wezterm_kitty_keyboard_warning(&wezterm_ctx(), false, None).unwrap();
-        let way = diagnose_wayland_data_control(true, false, true).unwrap();
+        let way = diagnose_wayland_data_control(true, false, false).unwrap();
         let out = assemble_startup_warnings(Some(&wez), Some(&way), None, vec![clipboard_banner()]);
         assert_eq!(out.len(), 3);
         assert!(nth(&out, 0).message.contains("WezTerm"));
@@ -2029,7 +2029,7 @@ mod tests {
     #[test]
     fn actionable_startup_banners_keep_severity_order_and_share_doctor_cta() {
         let wezterm = wezterm_kitty_keyboard_warning(&wezterm_ctx(), false, None).unwrap();
-        let wayland = diagnose_wayland_data_control(true, false, true).unwrap();
+        let wayland = diagnose_wayland_data_control(true, false, false).unwrap();
         let sandbox = sandbox_profile_conflict_warning_from(vec!["dev".to_string()]).unwrap();
         let out = assemble_startup_warnings(
             Some(&wezterm),

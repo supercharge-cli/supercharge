@@ -100,6 +100,9 @@ impl QueuedPrompt {
 pub enum AgentCommand {
     /// `/compact`: compact conversation history.
     Compact,
+    /// `/flush`: save session memory.
+    MemoryFlush,
+    MemoryDream,
     /// Creating a git worktree (from the welcome screen `w` action).
     CreateWorktree,
     /// Resuming a session in a worktree (worktree + code restore).
@@ -115,6 +118,8 @@ impl AgentCommand {
     pub fn display_name(&self) -> &'static str {
         match self {
             Self::Compact => "Compacting",
+            Self::MemoryFlush => "Saving memory",
+            Self::MemoryDream => "Consolidating memory",
             Self::CreateWorktree => "Creating worktree",
             Self::RestoreWorktree => "Restoring session in worktree",
             Self::RestoreCode => "Restoring code",
@@ -125,6 +130,8 @@ impl AgentCommand {
     pub fn command_text(&self) -> &'static str {
         match self {
             Self::Compact => "/compact",
+            Self::MemoryFlush => "/flush",
+            Self::MemoryDream => "/dream",
             Self::CreateWorktree => "worktree",
             Self::RestoreWorktree => "worktree",
             Self::RestoreCode => "restore",

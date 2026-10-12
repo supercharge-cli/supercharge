@@ -536,6 +536,67 @@ fn connection_readiness(
     }
 }
 
+#[cfg(unix)]
+async fn start_lifecycle_listener(
+    home: &FsPath,
+) -> anyhow::Result<supercharge_diag_server::BoundDiag> {
+    std::fs::create_dir_all(home.join("handlers"))?;
+    let broker =
+        supercharge_lifecycle::LifecycleBroker::new(supercharge_lifecycle::LifecycleConfig {
+            image_dir: PathBuf::from(supercharge_lifecycle::DEFAULT_IMAGE_HANDLER_DIR),
+            state_dir: Some(home.join("handlers")),
+            exec_log: home.join("pre-stop.log"),
+        });
+    supercharge_diag_server::serve_with(
+        supercharge_diag_server::DiagListener::Unix(home.join("pre-stop.sock")),
+        supercharge_diag_server::DiagHandle::new(None),
+        supercharge_diag_server::DiagServeOptions {
+            log_file: None,
+            extra_routes: Some(broker.router()),
+        },
+    )
+    .await
+}
+
+#[cfg(all(test, unix))]
+#[tokio::test]
+async fn e2b_lifecycle_route_is_owner_only_and_unix_only() {
+    use std::os::unix::fs::PermissionsExt as _;
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let bound = start_lifecycle_listener(dir.path())
+        .await
+        .expect("listener");
+    assert!(bound.port.is_none());
+    let socket = dir.path().join("pre-stop.sock");
+    assert_eq!(
+        std::fs::metadata(&socket)
+            .expect("socket")
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    let mut stream = tokio::net::UnixStream::connect(&socket)
+        .await
+        .expect("connect");
+    let body = r#"{"v":1,"reason":"terminate","disk":"discarded","deadline_ms":1000}"#;
+    let request = format!(
+        "POST /lifecycle/pre-stop HTTP/1.1\r\nHost: local\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(request.as_bytes()).await.expect("write");
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .await
+        .expect("response");
+    assert!(response.contains("200 OK"), "{response}");
+    assert!(response.contains("no_handlers"), "{response}");
+    bound.task.abort();
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let filter = env::var("SUPERAGENT_LOG_FILTER").unwrap_or_else(|_| "info".to_owned());
@@ -1031,6 +1092,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    // Lifecycle control is never merged into the public daemon router.
+    #[cfg(unix)]
+    let _lifecycle_listener = if browser::is_e2b_runtime() {
+        Some(start_lifecycle_listener(FsPath::new("/home/user/.superagent/lifecycle")).await?)
+    } else {
+        None
+    };
     println!("superagent server listening on {addr}");
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {

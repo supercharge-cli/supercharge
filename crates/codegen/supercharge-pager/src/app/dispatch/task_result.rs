@@ -14,7 +14,7 @@ use super::prompt::{
     defer_to_open_reload_window, handle_compact_complete, handle_prompt_response,
     handle_suggestion_debounce_expired,
 };
-use super::queue::push_and_page_flip;
+use super::queue::{maybe_drain_queue, note_peek_page_flip, push_and_page_flip};
 use super::rewind::{
     dispatch_rewind_success, handle_rewind_execute_failed, handle_rewind_points_loaded,
 };
@@ -886,6 +886,105 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         }
         TaskResult::CompactComplete { agent_id, result } => {
             handle_compact_complete(app, agent_id, result)
+        }
+        TaskResult::MemoryFlushComplete { agent_id, result } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                if agent.session.state.command_in_flight()
+                    != Some(&crate::app::agent::AgentCommand::MemoryFlush)
+                {
+                    return vec![];
+                }
+                agent.session.finish_command();
+                let message = match result {
+                    Ok(true) => "Memory saved".to_string(),
+                    Ok(false) => {
+                        "Memory save skipped (not started or already in progress)".to_string()
+                    }
+                    Err(error) => format!("Memory save failed: {error}"),
+                };
+                agent
+                    .scrollback
+                    .push_block(crate::scrollback::block::RenderBlock::system(message));
+                let drain = maybe_drain_queue(agent);
+                let effects = drain.effects;
+                note_peek_page_flip(app, agent_id, drain.page_flip_entry);
+                effects
+            } else {
+                vec![]
+            }
+        }
+        TaskResult::MemoryDreamComplete { agent_id, result } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                if agent.session.state.command_in_flight()
+                    != Some(&crate::app::agent::AgentCommand::MemoryDream)
+                {
+                    return vec![];
+                }
+                agent.session.finish_command();
+                use supercharge_shell::extensions::memory::MemoryDreamOutcome;
+                let message = match result {
+                    Ok(MemoryDreamOutcome::Completed) => {
+                        "Memory consolidation completed".to_string()
+                    }
+                    Ok(MemoryDreamOutcome::NoWork) => {
+                        "Memory consolidation skipped (no work)".to_string()
+                    }
+                    Ok(MemoryDreamOutcome::Busy) => {
+                        "Memory consolidation skipped (already running)".to_string()
+                    }
+                    Ok(MemoryDreamOutcome::Disabled) => "Memory consolidation disabled".to_string(),
+                    Ok(MemoryDreamOutcome::Failed) => "Memory consolidation failed".to_string(),
+                    Err(error) => format!("Memory consolidation failed: {error}"),
+                };
+                agent
+                    .scrollback
+                    .push_block(crate::scrollback::block::RenderBlock::system(message));
+                let drain = maybe_drain_queue(agent);
+                let effects = drain.effects;
+                note_peek_page_flip(app, agent_id, drain.page_flip_entry);
+                effects
+            } else {
+                vec![]
+            }
+        }
+        TaskResult::SwitchContextWindowComplete {
+            agent_id,
+            model_id,
+            effort,
+            window,
+            result,
+        } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                agent.session.model_switch_pending = false;
+                match result {
+                    Ok(()) => {
+                        agent.session.models.set_current(model_id, effort);
+                        agent.session.models.context_window_selection = Some(window.get());
+                        if let Some(used) = agent.context_state.as_ref().map(|c| c.used) {
+                            agent.apply_context_used(used, window.get());
+                        }
+                        agent
+                            .scrollback
+                            .push_block(crate::scrollback::block::RenderBlock::system(format!(
+                                "Context window set to {} tokens",
+                                window.get()
+                            )));
+                    }
+                    Err(err) => {
+                        agent
+                            .scrollback
+                            .push_block(crate::scrollback::block::RenderBlock::system(format!(
+                                "Couldn't set context window: {err:?}"
+                            )));
+                    }
+                }
+                let drain = maybe_drain_queue(agent);
+                let effects = drain.effects;
+                note_peek_page_flip(app, agent_id, drain.page_flip_entry);
+                effects
+            } else {
+                vec![]
+            }
         }
         TaskResult::SwitchModelComplete {
             agent_id,

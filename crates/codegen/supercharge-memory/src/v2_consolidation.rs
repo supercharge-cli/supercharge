@@ -21,6 +21,8 @@ use crate::{MemoryIndex, SharedV2Clock, V2MemoryAccessPolicy, V2PathClass, syste
 
 const MAX_OWNER_BYTES: usize = 128;
 const MAX_CLAIMED_OBSERVATIONS: usize = 512;
+pub const MAX_BATCH_OBSERVATIONS: usize = 20;
+pub const MAX_BATCH_OBSERVATION_BYTES: usize = 256 * 1024;
 const MAX_OBSERVATION_BYTES: u64 = 16 * 1024;
 const MAX_TOPIC_BYTES: usize = 256 * 1024;
 const MAX_TOPIC_INPUT_COUNT: usize = 128;
@@ -226,18 +228,54 @@ impl V2ConsolidationStore {
 
     /// Atomically claim the exact set of observations pending at this instant.
     pub fn claim(&self, request: &DreamClaimRequest) -> Result<Option<ConsolidationLease>> {
-        self.claim_with_visibility(request, false)
+        self.claim_with_visibility(request, false, None)
+    }
+
+    /// Claim at most twenty observations and 256 KiB of source notes.
+    pub fn claim_batch(&self, request: &DreamClaimRequest) -> Result<Option<ConsolidationLease>> {
+        self.claim_batch_with_limit(request, MAX_BATCH_OBSERVATION_BYTES)
+    }
+
+    pub fn claim_batch_with_limit(
+        &self,
+        request: &DreamClaimRequest,
+        max_bytes: usize,
+    ) -> Result<Option<ConsolidationLease>> {
+        self.claim_bounded(request, false, max_bytes)
+    }
+
+    pub fn claim_shadow_batch_with_limit(
+        &self,
+        request: &DreamClaimRequest,
+        max_bytes: usize,
+    ) -> Result<Option<ConsolidationLease>> {
+        self.claim_bounded(request, true, max_bytes)
+    }
+
+    fn claim_bounded(
+        &self,
+        request: &DreamClaimRequest,
+        include_hidden: bool,
+        max_bytes: usize,
+    ) -> Result<Option<ConsolidationLease>> {
+        if max_bytes == 0 || max_bytes > MAX_BATCH_OBSERVATION_BYTES {
+            return Err(V2ConsolidationError::Invalid(
+                "batch note budget is out of range".to_owned(),
+            ));
+        }
+        self.claim_with_visibility(request, include_hidden, Some(max_bytes))
     }
 
     /// Claim non-exposed observations for a shadow evaluation.
     pub fn claim_shadow(&self, request: &DreamClaimRequest) -> Result<Option<ConsolidationLease>> {
-        self.claim_with_visibility(request, true)
+        self.claim_with_visibility(request, true, None)
     }
 
     fn claim_with_visibility(
         &self,
         request: &DreamClaimRequest,
         include_hidden: bool,
+        batch_bytes: Option<usize>,
     ) -> Result<Option<ConsolidationLease>> {
         self.reconcile()?;
         validate_text("lease owner", &request.owner, MAX_OWNER_BYTES)?;
@@ -330,16 +368,51 @@ impl V2ConsolidationStore {
                            = REPLACE(f.path, char(92), '/')
                          AND co.status IN ('claimed','planned','topics_written','archived')
                    )
-                 ORDER BY f.path LIMIT ?1",
+                 ORDER BY CASE WHEN ?3 THEN o.committed_at END, f.path LIMIT ?1",
             )?;
-            statement
-                .query_map(params![MAX_CLAIMED_OBSERVATIONS, include_hidden], |row| {
-                    Ok(ClaimedObservation {
-                        relative_path: PathBuf::from(row.get::<_, String>(0)?),
-                        content_hash: row.get(1)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?
+            let candidates = statement
+                .query_map(
+                    params![
+                        batch_bytes.map_or(MAX_CLAIMED_OBSERVATIONS, |_| MAX_BATCH_OBSERVATIONS),
+                        include_hidden,
+                        batch_bytes.is_some()
+                    ],
+                    |row| {
+                        Ok(ClaimedObservation {
+                            relative_path: PathBuf::from(row.get::<_, String>(0)?),
+                            content_hash: row.get(1)?,
+                        })
+                    },
+                )?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            if let Some(budget) = batch_bytes {
+                let mut selected = Vec::new();
+                let mut total = 0usize;
+                for candidate in candidates {
+                    let bytes = self.read_policy_file(
+                        &self.scope_dir.join(&candidate.relative_path),
+                        MAX_OBSERVATION_BYTES,
+                    )?;
+                    if content_hash(bytes.as_bytes()) != candidate.content_hash {
+                        return Err(V2ConsolidationError::Conflict(
+                            "pending observation changed".to_owned(),
+                        ));
+                    }
+                    if total + bytes.len() > budget {
+                        if selected.is_empty() {
+                            return Err(V2ConsolidationError::Invalid(
+                                "first observation exceeds batch note budget".to_owned(),
+                            ));
+                        }
+                        break;
+                    }
+                    total += bytes.len();
+                    selected.push(candidate);
+                }
+                selected
+            } else {
+                candidates
+            }
         } else {
             Vec::new()
         };

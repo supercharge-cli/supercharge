@@ -3381,3 +3381,85 @@ fn compact_complete_renders_one_failure_line_per_completion() {
         "compact state must be exited after the first completion"
     );
 }
+
+#[test]
+fn selected_context_window_applies_only_after_success() {
+    let mut app = test_app_with_agent();
+    let id = AgentId(0);
+    let model_id = acp::ModelId::new(std::sync::Arc::from("selectable"));
+    let agent = app.agents.get_mut(&id).unwrap();
+    agent.session.models.available.insert(model_id.clone(), acp::ModelInfo::new(model_id.clone(), "Selectable")
+        .meta(serde_json::json!({"totalContextTokens": 256_000, "contextWindows": [256_000, 500_000]}).as_object().cloned()));
+    agent.session.models.set_current(model_id.clone(), None);
+    let window = std::num::NonZeroU64::new(500_000).unwrap();
+    let invalid = std::num::NonZeroU64::new(1_000_000).unwrap();
+    assert!(
+        dispatch(
+            Action::SwitchContextWindow {
+                model_id: model_id.clone(),
+                effort: None,
+                window: invalid
+            },
+            &mut app
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        expect_agent(&app, id).session.models.get_context_window(),
+        Some(256_000)
+    );
+    let effects = dispatch(
+        Action::SwitchContextWindow {
+            model_id: model_id.clone(),
+            effort: None,
+            window,
+        },
+        &mut app,
+    );
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::SwitchContextWindow { .. }]
+    ));
+    assert_eq!(
+        expect_agent(&app, id).session.models.get_context_window(),
+        Some(256_000)
+    );
+    dispatch_task_result(
+        TaskResult::SwitchContextWindowComplete {
+            agent_id: id,
+            model_id: model_id.clone(),
+            effort: None,
+            window,
+            result: Err(crate::app::actions::SwitchModelError::Other(
+                "rejected".into(),
+            )),
+        },
+        &mut app,
+    );
+    assert_eq!(
+        expect_agent(&app, id).session.models.get_context_window(),
+        Some(256_000)
+    );
+    dispatch(
+        Action::SwitchContextWindow {
+            model_id: model_id.clone(),
+            effort: None,
+            window,
+        },
+        &mut app,
+    );
+    dispatch_task_result(
+        TaskResult::SwitchContextWindowComplete {
+            agent_id: id,
+            model_id,
+            effort: None,
+            window,
+            result: Ok(()),
+        },
+        &mut app,
+    );
+    assert_eq!(
+        expect_agent(&app, id).session.models.get_context_window(),
+        Some(500_000)
+    );
+}

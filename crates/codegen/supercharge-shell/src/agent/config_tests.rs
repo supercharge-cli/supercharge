@@ -1100,6 +1100,18 @@ fn provider_model_fails_closed_on_prefetched_custom_base_url() {
         "a prefetched custom base_url must fail closed, not leak the session token",
     );
 }
+#[test]
+fn catalog_advertises_configured_context_windows() {
+    let mut model = test_model_entry("window-model", "https://x/v1", None, None, None);
+    model.info.context_windows = vec![NonZeroU64::new(100_000).unwrap()];
+    let catalog = to_acp_model_info(&IndexMap::from([("window-model".to_string(), model)]));
+    let meta = catalog.values().next().unwrap().meta.as_ref().unwrap();
+    assert_eq!(
+        meta.get("contextWindows"),
+        Some(&serde_json::json!([100_000, 200_000]))
+    );
+}
+
 fn test_model_entry(
     model: &str,
     base_url: &str,
@@ -3235,13 +3247,7 @@ fn e2e_user_config_overrides_prefetched_model() {
     let mut prefetched = IndexMap::new();
     prefetched.insert(
         dm.to_string(),
-        test_model_entry(
-            dm,
-            "https://cli-chat-proxy.grok.com/v1",
-            None,
-            None,
-            None,
-        ),
+        test_model_entry(dm, "https://cli-chat-proxy.grok.com/v1", None, None, None),
     );
     let (_, models) = resolve_models_from_toml(
         &format!(
@@ -3355,10 +3361,7 @@ fn e2e_duplicate_model_field_both_entries_survive() {
     assert_eq!(sampling.base_url, "https://inference.example.com/v1");
     let sampling = resolve_sampling(default, Some("session-key"));
     assert_eq!(sampling.api_key.as_deref(), Some("session-key"));
-    assert_eq!(
-        sampling.base_url,
-        "https://cli-chat-proxy.grok.com/v1",
-    );
+    assert_eq!(sampling.base_url, "https://cli-chat-proxy.grok.com/v1",);
 }
 #[test]
 fn e2e_enterprise_custom_endpoint_skips_xai_defaults() {

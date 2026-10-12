@@ -585,7 +585,7 @@ pub fn app_events_for(
                 "tools": tool_count
             })]
         }
-        LiveEvent::ToolStart { name, title, .. } => {
+        LiveEvent::ToolStart { id, name, title } => {
             let computer_kind = tool_computer_kind(&format!("{name} {title}"));
             let tab = if computer_kind == "browser" {
                 "browser"
@@ -597,6 +597,7 @@ pub fn app_events_for(
             vec![
                 json!({
                     "type": "tool",
+                    "toolCallId": id,
                     "name": name,
                     "state": "start",
                     "summary": title,
@@ -618,12 +619,12 @@ pub fn app_events_for(
             ]
         }
         LiveEvent::ToolDone {
+            id,
             name,
             command,
             stdout,
             success,
             exit_code,
-            ..
         } => {
             let computer_kind = tool_computer_kind(&format!("{name} {command}"));
             let tab = if computer_kind == "browser" {
@@ -643,6 +644,7 @@ pub fn app_events_for(
             let mut events = vec![
                 json!({
                     "type": "tool",
+                    "toolCallId": id,
                     "name": name,
                     "state": "done",
                     "summary": summary,
@@ -785,6 +787,7 @@ mod tests {
         );
         let events = app_events_for(&start[0], 1, "", "");
         assert_eq!(events[0]["type"], "tool");
+        assert_eq!(events[0]["toolCallId"], "t1");
         assert_eq!(events[0]["state"], "start");
         assert_eq!(events[0]["command"], "ls workspace");
         assert_eq!(events[1]["type"], "computer");
@@ -801,6 +804,7 @@ mod tests {
             *command = "ls workspace".into();
         }
         let finished = app_events_for(&done_event, 1, "", "");
+        assert_eq!(finished[0]["toolCallId"], "t1");
         assert_eq!(finished[0]["stdout"], "a.txt\nb.txt");
         assert_eq!(finished[1]["command"], "ls workspace");
         assert_eq!(finished[1]["stdout"], "a.txt\nb.txt");

@@ -669,6 +669,7 @@ fn rows_contain_categories_and_settings_through_pr_14() {
             "screen_mode",
             "show_timestamps",
             "show_timeline",
+            "dashboard_preview",
             // PAGER-owned page_flip_on_send (Appearance).
             "page_flip_on_send",
             "simple_mode",
@@ -6759,6 +6760,13 @@ fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
         crate::theme::ThemeKind::OscuraMidnight => crate::theme::Theme::current(),
         crate::theme::ThemeKind::NavyCyan => crate::theme::Theme::navy_cyan(),
         crate::theme::ThemeKind::BlackCrimson => crate::theme::Theme::black_crimson(),
+        crate::theme::ThemeKind::CatppuccinMocha => crate::theme::Theme::catppuccin_mocha(),
+        crate::theme::ThemeKind::GruvboxDark => crate::theme::Theme::gruvbox_dark(),
+        crate::theme::ThemeKind::Nord => crate::theme::Theme::nord(),
+        crate::theme::ThemeKind::SolarizedDark => crate::theme::Theme::solarized_dark(),
+        crate::theme::ThemeKind::Dracula => crate::theme::Theme::dracula(),
+        crate::theme::ThemeKind::OneDark => crate::theme::Theme::one_dark(),
+        crate::theme::ThemeKind::SolarizedLight => crate::theme::Theme::solarized_light(),
         // Both bg tokens are Reset (bandless palette), so the two-tone
         // assertion below does not apply — the preview reads via the
         // underline cue instead.

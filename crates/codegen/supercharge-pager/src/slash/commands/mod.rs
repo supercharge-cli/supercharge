@@ -8,6 +8,7 @@ pub mod compact;
 pub mod compact_mode;
 pub mod config_agents;
 pub mod context;
+pub mod context_window;
 pub mod copy;
 pub mod dashboard;
 pub mod debug;
@@ -39,6 +40,8 @@ pub mod login;
 pub mod logout;
 pub mod loop_cmd;
 pub mod mcps;
+pub mod memory;
+pub mod memory_ops;
 pub mod model;
 pub mod multiline;
 pub mod new;
@@ -103,6 +106,10 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(plan::PlanCommand),
         Arc::new(view_plan::ViewPlanCommand),
         Arc::new(remember::RememberCommand),
+        Arc::new(context_window::ContextWindowCommand),
+        Arc::new(memory::MemoryCommand),
+        Arc::new(memory_ops::FlushCommand),
+        Arc::new(memory_ops::DreamCommand),
         Arc::new(recap::RecapCommand),
         Arc::new(rewind::RewindCommand),
         Arc::new(jump::JumpCommand),
@@ -195,6 +202,34 @@ mod tests {
         models.current = Some(id_fast);
         models
     }
+    #[test]
+    fn memory_operations_are_pager_commands() {
+        let mut registry = CommandRegistry::new(builtin_commands());
+        registry.set_acp_commands(
+            &["memory", "flush", "dream"]
+                .map(|name| acp::AvailableCommand::new(name.to_string(), name.to_string())),
+        );
+        for name in ["memory", "mem", "flush", "dream"] {
+            assert!(registry.get(name).is_some(), "missing /{name}");
+        }
+        let models = ModelState::default();
+        let mut ctx = make_ctx(&models);
+        assert!(matches!(
+            registry.get("memory").unwrap().run(&mut ctx, ""),
+            CommandResult::Action(Action::OpenMemoryModal)
+        ));
+        assert!(matches!(registry.get("flush").unwrap().run(&mut ctx, ""),
+            CommandResult::QueueCommand(text) if text == "/flush"));
+        assert!(matches!(registry.get("dream").unwrap().run(&mut ctx, ""),
+            CommandResult::QueueCommand(text) if text == "/dream"));
+        for name in ["flush", "dream"] {
+            assert!(matches!(
+                registry.get(name).unwrap().run(&mut ctx, "extra"),
+                CommandResult::Error(_)
+            ));
+        }
+    }
+
     static DEFAULT_BUNDLE_STATE: crate::app::bundle::BundleState =
         crate::app::bundle::BundleState {
             has_cache: false,
@@ -541,13 +576,23 @@ mod tests {
             ctx.billing_surface_visible = enabled;
             ctx.usage_command_visible = enabled;
             for args in ["", "show"] {
-                assert!(matches!(usage::UsageCommand.run(&mut ctx, args), CommandResult::Action(Action::ShowUsage)));
+                assert!(matches!(
+                    usage::UsageCommand.run(&mut ctx, args),
+                    CommandResult::Action(Action::ShowUsage)
+                ));
             }
             for args in ["manage", "  manage  ", "delete"] {
-                assert!(matches!(usage::UsageCommand.run(&mut ctx, args), CommandResult::Error(_)));
+                assert!(matches!(
+                    usage::UsageCommand.run(&mut ctx, args),
+                    CommandResult::Error(_)
+                ));
             }
         }
-        assert!(CommandRegistry::new(builtin_commands()).get("usage").is_some());
+        assert!(
+            CommandRegistry::new(builtin_commands())
+                .get("usage")
+                .is_some()
+        );
         let ctx = crate::slash::command::AppCtx {
             models: &models,
             cwd: std::path::Path::new("."),

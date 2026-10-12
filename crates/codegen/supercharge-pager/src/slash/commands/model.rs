@@ -9,6 +9,7 @@ use crate::app::actions::Action;
 use crate::slash::command::{
     AppCtx, ArgItem, CommandExecCtx, CommandResult, SlashCommand, slash_meta,
 };
+use crate::slash::commands::context_window::{supported_window, window_arg_items};
 use crate::slash::commands::effort_levels::build_effort_arg_items;
 
 /// Switch the active model (and optionally its reasoning effort).
@@ -19,13 +20,13 @@ impl SlashCommand for ModelCommand {
         name: "model",
         aliases: ["m", "models"],
         description: "Switch the active model",
-        usage: "/model <name> [effort]",
+        usage: "/model <name> [window] [effort]",
         takes_args: true,
         args_required: false,
         session_scoped: true,
         // The dashboard offers `/model` to pick the model for the next spawned agent (intercepted in `dispatch_dashboard_dispatch_slash`).
         offered_when_session_less: true,
-        arg_placeholder: "<model> [effort]",
+        arg_placeholder: "<model> [window] [effort]",
     }
 
     fn suggest_args(&self, ctx: &AppCtx, args_query: &str) -> Option<Vec<ArgItem>> {
@@ -33,9 +34,39 @@ impl SlashCommand for ModelCommand {
             return None;
         }
 
-        // Effort phase if input is "<reasoning-model> ", else model phase.
-        if let Some(model_id) = detect_effort_phase(ctx.models, args_query) {
-            return Some(build_effort_items(ctx.models, &model_id));
+        if let Some((model_id, prefix, rest)) = chained_model_prefix(ctx.models, args_query) {
+            let windows = ctx.models.context_window_options_for(&model_id);
+            if let Some((window, _remainder)) = rest.split_once(char::is_whitespace)
+                && supported_window(window, &windows).is_some()
+                && supports_reasoning_effort(ctx.models.available.get(&model_id)?)
+            {
+                return Some(build_effort_items_with_prefix(
+                    ctx.models,
+                    &model_id,
+                    &format!("{prefix} {window}"),
+                ));
+            }
+            if windows.len() > 1
+                && (rest.is_empty()
+                    || windows.iter().any(|&w| {
+                        crate::slash::commands::context_window::format_window(w).starts_with(rest)
+                    }))
+            {
+                let mut items = window_arg_items(
+                    &windows,
+                    ctx.models.get_context_window(),
+                    &format!("{prefix} "),
+                );
+                if supports_reasoning_effort(ctx.models.available.get(&model_id)?) {
+                    for item in &mut items {
+                        item.insert_text.push(' ');
+                    }
+                }
+                return Some(items);
+            }
+            if supports_reasoning_effort(ctx.models.available.get(&model_id)?) {
+                return Some(build_effort_items(ctx.models, &model_id));
+            }
         }
         Some(build_model_items(ctx.models))
     }
@@ -50,6 +81,43 @@ impl SlashCommand for ModelCommand {
         // If we split on the last token first, a shorter catalog entry ("Grok") would steal the prefix and treat "4.5" as an effort level
         if let Some(id) = ctx.models.resolve_by_name_or_id(trimmed) {
             return CommandResult::Action(Action::SetDefaultModel(id));
+        }
+
+        if let Some((id, rest)) = split_model_rest(ctx.models, trimmed) {
+            let windows = ctx.models.context_window_options_for(&id);
+            let (window_token, effort_token) = rest
+                .split_once(char::is_whitespace)
+                .map_or((rest, None), |(window, effort)| {
+                    (window, Some(effort.trim()))
+                });
+            if let Some(window) = supported_window(window_token, &windows) {
+                let effort = match effort_token {
+                    Some(token) if !token.is_empty() => {
+                        match ctx.models.resolve_effort_for_model(&id, token) {
+                            Ok(effort) => Some(effort),
+                            Err(err) => return CommandResult::Error(err.message()),
+                        }
+                    }
+                    Some(_) => return CommandResult::Error("Select a reasoning effort".into()),
+                    None => ctx
+                        .models
+                        .reasoning_effort
+                        .filter(|_| ctx.models.current.as_ref() == Some(&id)),
+                };
+                return CommandResult::Action(Action::SwitchContextWindow {
+                    model_id: id,
+                    effort,
+                    window,
+                });
+            }
+            if windows.len() > 1
+                && window_token
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit())
+            {
+                return CommandResult::Error(format!("unknown context window '{window_token}'"));
+            }
         }
 
         // A trailing effort token on a reasoning model makes a session-scoped switch (not persisted as default)
@@ -80,6 +148,35 @@ impl SlashCommand for ModelCommand {
 /// Look up a model by case-insensitive display name OR model id match.
 fn resolve_model(models: &ModelState, name: &str) -> Option<acp::ModelId> {
     models.resolve_by_name_or_id(name)
+}
+
+fn split_model_rest<'a>(models: &ModelState, input: &'a str) -> Option<(acp::ModelId, &'a str)> {
+    models
+        .available
+        .iter()
+        .filter_map(|(id, info)| {
+            [info.name.as_str(), id.0.as_ref()]
+                .into_iter()
+                .find_map(|name| {
+                    input
+                        .get(..name.len())
+                        .filter(|prefix| prefix.eq_ignore_ascii_case(name))
+                        .and_then(|_| input.get(name.len()..))
+                        .and_then(|rest| rest.strip_prefix(char::is_whitespace))
+                        .map(|rest| (id.clone(), rest, name.len()))
+                })
+        })
+        .max_by_key(|(_, _, len)| *len)
+        .map(|(id, rest, _)| (id, rest))
+}
+
+fn chained_model_prefix<'a>(
+    models: &ModelState,
+    input: &'a str,
+) -> Option<(acp::ModelId, &'a str, &'a str)> {
+    let (id, rest) = split_model_rest(models, input)?;
+    let prefix = input.get(..input.len() - rest.len() - 1)?;
+    Some((id, prefix, rest))
 }
 
 fn supports_reasoning_effort(info: &acp::ModelInfo) -> bool {
@@ -130,7 +227,8 @@ fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
     let mut items: Vec<ArgItem> = Vec::with_capacity(models.available.len());
     for (id, info) in &models.available {
         let is_current = current_id == Some(id);
-        let supports = supports_reasoning_effort(info);
+        let supports =
+            supports_reasoning_effort(info) || models.context_window_options_for(id).len() > 1;
 
         let display = if is_current {
             format!("{} (current)", info.name)
@@ -163,14 +261,21 @@ fn build_effort_items(models: &ModelState, model_id: &acp::ModelId) -> Vec<ArgIt
         Some(info) => info,
         None => return Vec::new(),
     };
-    let model_name = info.name.clone();
+    build_effort_items_with_prefix(models, model_id, &info.name)
+}
+
+fn build_effort_items_with_prefix(
+    models: &ModelState,
+    model_id: &acp::ModelId,
+    prefix: &str,
+) -> Vec<ArgItem> {
     let is_current_model = models.current.as_ref() == Some(model_id);
     let options = models.reasoning_effort_options_for(model_id);
     build_effort_arg_items(
         &options,
         models.reasoning_effort,
         is_current_model,
-        |option| format!("{model_name} {}", option.id),
+        |option| format!("{prefix} {}", option.id),
     )
 }
 
@@ -223,6 +328,43 @@ mod tests {
                 ..crate::settings::PagerLocalSnapshot::default()
             },
         }
+    }
+
+    #[test]
+    fn window_picker_and_validation_preserve_effort() {
+        let mut state = ModelState::default();
+        let (id, mut info) = model_with_reasoning("reasoning-x", "Reasoning X");
+        info.meta.as_mut().unwrap().insert(
+            "contextWindows".into(),
+            serde_json::json!([256_000, 500_000]),
+        );
+        state.available.insert(id.clone(), info);
+        state.current = Some(id);
+        state.reasoning_effort = Some(ReasoningEffort::High);
+        let app_ctx = AppCtx {
+            models: &state,
+            cwd: std::path::Path::new("."),
+            has_session_announcements: false,
+            billing_surface_visible: true,
+            usage_command_visible: true,
+            workflows_available: true,
+            saved_workflows: &[],
+            workflow_runs: &[],
+            screen_mode: crate::app::ScreenMode::Fullscreen,
+            current_title: None,
+        };
+        let items = ModelCommand.suggest_args(&app_ctx, "Reasoning X ").unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[1].insert_text, "Reasoning X 500k ");
+        let mut ctx = dummy_exec_ctx(&state);
+        assert!(matches!(
+            ModelCommand.run(&mut ctx, "Reasoning X 1m"),
+            CommandResult::Error(_)
+        ));
+        assert!(matches!(ModelCommand.run(&mut ctx, "Reasoning X 500k"),
+            CommandResult::Action(Action::SwitchContextWindow { window, effort: Some(ReasoningEffort::High), .. }) if window.get() == 500_000));
+        assert!(matches!(ModelCommand.run(&mut ctx, "Reasoning X 500k low"),
+            CommandResult::Action(Action::SwitchContextWindow { window, effort: Some(ReasoningEffort::Low), .. }) if window.get() == 500_000));
     }
 
     #[test]

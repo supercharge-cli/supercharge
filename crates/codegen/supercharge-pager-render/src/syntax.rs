@@ -124,11 +124,17 @@ pub fn get_syntect() -> &'static Syntect {
         | ThemeKind::Terminal
         | ThemeKind::NavyCyan
         | ThemeKind::BlackCrimson
+        | ThemeKind::CatppuccinMocha
+        | ThemeKind::GruvboxDark
+        | ThemeKind::Nord
+        | ThemeKind::SolarizedDark
+        | ThemeKind::Dracula
+        | ThemeKind::OneDark
         | ThemeKind::Auto => SYNTECT_VOLTAGE_DARK
             .get_or_init(|| Syntect::new(include_bytes!("../assets/voltage-dark.tmTheme"))),
         ThemeKind::TokyoNight => SYNTECT_TOKYONIGHT
             .get_or_init(|| Syntect::new(include_bytes!("../assets/tokyo-night.tmTheme"))),
-        ThemeKind::VoltageLight => SYNTECT_VOLTAGE_LIGHT
+        ThemeKind::VoltageLight | ThemeKind::SolarizedLight => SYNTECT_VOLTAGE_LIGHT
             .get_or_init(|| Syntect::new(include_bytes!("../assets/voltage-light.tmTheme"))),
     }
 }

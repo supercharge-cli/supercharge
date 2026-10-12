@@ -2389,6 +2389,8 @@ async fn decide_http_auth_over_network(
 pub struct HttpConfig {
     pub url: String,
     pub headers: Vec<(String, String)>,
+    /// Re-read for every transport request, including reconnects and session deletion.
+    pub bearer_token_file: Option<crate::bearer_token_file::BearerTokenFile>,
     /// This server is a first-party local app endpoint addressed by [`SUPERCHARGE_AGENT_ID_HEADER`]. Set only from the spawn context — never inferred from headers — and it keys the transport hardening (no proxy, no redirects) and the OAuth skip.
     pub local_agent_endpoint: bool,
 }
@@ -4129,11 +4131,10 @@ impl McpClient {
         let client = builder
             .build()
             .map_err(|e| McpError::ClientError(format!("Failed to build HTTP client: {e}")))?;
-        Ok(crate::mcp_http_client::McpHttpClient::new(
-            client,
-            server_name,
-            warn_budget,
-        ))
+        Ok(
+            crate::mcp_http_client::McpHttpClient::new(client, server_name, warn_budget)
+                .with_bearer_token_file(config.bearer_token_file.clone()),
+        )
     }
 
     /// Cheap, non-blocking liveness predicate.
@@ -4796,16 +4797,30 @@ pub async fn start_mcp_server(
             ))
         }
         acp::McpServer::Http(acp::McpServerHttp {
-            name, url, headers, ..
+            name,
+            url,
+            headers,
+            meta,
+            ..
         })
         | acp::McpServer::Sse(acp::McpServerSse {
-            name, url, headers, ..
+            name,
+            url,
+            headers,
+            meta,
+            ..
         }) => {
             if let Some(mc) = meta_config {
                 tracing::info!(server = %name, %url, ?mc, "MCP http: meta config override");
             }
 
+            let bearer_token_file =
+                crate::bearer_token_file::BearerTokenFile::from_meta(meta.as_ref())
+                    .map_err(McpError::ClientError)?;
             let mut headers = expand_session_id_headers(headers, ctx.session_id);
+            if bearer_token_file.is_some() {
+                headers.retain(|(key, _)| !key.eq_ignore_ascii_case("authorization"));
+            }
             // Stripped unconditionally: the agent-id header identifies the session to first-party app endpoints, and a caller-supplied config must not be able to impersonate one (see
             // [`SUPERCHARGE_AGENT_ID_HEADER`]). Re-added only from the spawn context, like `SUPERCHARGE_SESSION_ID` on stdio servers.
             headers.retain(|(name, _)| !name.eq_ignore_ascii_case(SUPERCHARGE_AGENT_ID_HEADER));
@@ -4819,13 +4834,16 @@ pub async fn start_mcp_server(
             let http_config = HttpConfig {
                 url: url.clone(),
                 headers,
+                bearer_token_file,
                 local_agent_endpoint,
             };
 
-            let auth_decision = if http_config.has_authorization_header() {
+            let auth_decision = if http_config.bearer_token_file.is_some()
+                || http_config.has_authorization_header()
+            {
                 tracing::debug!(
                     server = %name,
-                    "Skipping OAuth discovery: server already has Authorization header"
+                    "Skipping OAuth discovery: server has configured authorization"
                 );
                 HttpAuthDecision::NoOauthSupport
             } else if http_config.local_agent_endpoint {
@@ -4970,6 +4988,7 @@ impl McpClient {
             PendingTransport::Http(HttpConfig {
                 url: String::new(),
                 headers: Vec::new(),
+                bearer_token_file: None,
                 local_agent_endpoint: false,
             }),
             Some(&overrides),

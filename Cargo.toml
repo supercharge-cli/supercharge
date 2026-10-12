@@ -13,6 +13,7 @@ members = [
     "crates/codegen/ptyctl-cli",
     "crates/codegen/supercharge-acp-lib",
     "crates/codegen/supercharge-agent-lifecycle",
+    "crates/codegen/supercharge-lifecycle",
     "crates/codegen/supercharge-chat-state",
     "crates/codegen/supercharge-codebase-graph",
     "crates/codegen/supercharge-compaction-transcript",
@@ -319,6 +320,7 @@ wiremock = "0.6"
 wl-clipboard-rs = "0.9"
 supercharge-acp-lib = { path = "crates/codegen/supercharge-acp-lib" }
 supercharge-agent-lifecycle = { path = "crates/codegen/supercharge-agent-lifecycle" }
+supercharge-lifecycle = { path = "crates/codegen/supercharge-lifecycle" }
 supercharge-circuit-breaker = { path = "crates/common/supercharge-circuit-breaker" }
 supercharge-compaction-transcript = { path = "crates/codegen/supercharge-compaction-transcript" }
 supercharge-computer-hub-core = { path = "crates/common/supercharge-computer-hub-core" }

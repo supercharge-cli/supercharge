@@ -8,6 +8,7 @@ impl SessionActor {
     ) -> Result<acp::ModelId, acp::Error> {
         let crate::session::SessionModelSwitch {
             mut sampling_config,
+            context_window_selected,
             use_concise,
             is_family_switch,
             apply_prompt_override,
@@ -21,12 +22,21 @@ impl SessionActor {
             sampling_config.conversation_group_id = Some(id);
         }
         let model_id = acp::ModelId::new(sampling_config.model.clone());
-        let new_context_window = self.compaction.context_window_override.unwrap_or_else(|| {
-            std::num::NonZeroU64::new(sampling_config.context_window).unwrap_or_else(|| {
+        let configured_window = std::num::NonZeroU64::new(sampling_config.context_window)
+            .unwrap_or_else(|| {
                 std::num::NonZeroU64::new(DEFAULT_CONTEXT_WINDOW)
                     .expect("DEFAULT_CONTEXT_WINDOW is non-zero")
-            })
-        });
+            });
+        let new_context_window = if context_window_selected {
+            configured_window
+        } else {
+            self.compaction
+                .context_window_override
+                .unwrap_or(configured_window)
+        };
+        self.compaction
+            .selected_context_window
+            .set(context_window_selected.then_some(new_context_window));
         let prev_threshold = self.compaction.threshold_percent.get();
         if prev_threshold != auto_compact_threshold_percent {
             tracing::info!(

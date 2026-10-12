@@ -232,13 +232,15 @@ async fn shutdown_workflows(session: &SessionActor, timer: &SharedSessionEndTime
 async fn log_session_ended(session: &SessionActor) {
     let model_id = session.current_model_id().await;
     if let Some(signals) = session.signals_handle().snapshot().await {
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::SessionEnded {
-            duration_secs: session.session_start.elapsed().as_secs(),
-            turn_count: signals.turn_count as u64,
-            tool_call_count: signals.tool_call_count as u64,
-            compaction_count: signals.compaction_count as u64,
-            model_id,
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::SessionEnded {
+                duration_secs: session.session_start.elapsed().as_secs(),
+                turn_count: signals.turn_count as u64,
+                tool_call_count: signals.tool_call_count as u64,
+                compaction_count: signals.compaction_count as u64,
+                model_id,
+            },
+        );
     }
 }
 const SESSION_END_EMIT_BUDGET: Duration = Duration::from_secs(1);
@@ -1245,6 +1247,17 @@ pub(super) async fn run_session(
                                             .data("memory is not enabled for this session".to_string())
                                     ));
                                 }
+                            });
+                        }
+                        SessionCommand::DreamMemory { respond_to } => {
+                            let s = session.clone();
+                            tokio::task::spawn_local(async move {
+                                let outcome = if s.memory.is_enabled() {
+                                    s.run_dream_slash_command().await
+                                } else {
+                                    crate::extensions::memory::MemoryDreamOutcome::Disabled
+                                };
+                                let _ = respond_to.send(outcome);
                             });
                         }
                         SessionCommand::MemoryForget {

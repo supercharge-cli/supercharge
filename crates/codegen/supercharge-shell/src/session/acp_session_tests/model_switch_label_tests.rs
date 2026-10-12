@@ -30,8 +30,10 @@ async fn model_switch_relabels_live_agent_and_system_head() {
                     sampling_config: supercharge_sampler::SamplerConfig {
                         model: "switch-target".to_owned(),
                         context_window: 256_000,
+                        reasoning_effort: Some(supercharge_sampling_types::ReasoningEffort::High),
                         ..supercharge_sampler::SamplerConfig::default()
                     },
+                    context_window_selected: true,
                     use_concise: false,
                     is_family_switch: false,
                     apply_prompt_override: true,
@@ -41,6 +43,21 @@ async fn model_switch_relabels_live_agent_and_system_head() {
                 })
                 .await
                 .expect("model switch succeeds");
+            let sampling = actor.chat_state_handle.get_sampling_config().await.unwrap();
+            assert_eq!(sampling.context_window.get(), 256_000);
+            actor
+                .handle_model_metadata_update(crate::sampling::ResponseModelMetadata {
+                    context_window: Some(512_000),
+                    max_completion_tokens: None,
+                    models_etag: None,
+                })
+                .await;
+            let sampling = actor.chat_state_handle.get_sampling_config().await.unwrap();
+            assert_eq!(sampling.context_window.get(), 256_000);
+            assert_eq!(
+                sampling.reasoning_effort,
+                Some(supercharge_sampling_types::ReasoningEffort::High)
+            );
 
             let conv = actor.chat_state_handle.get_conversation().await;
             let head = head_text(&conv);

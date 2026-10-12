@@ -23,6 +23,8 @@ hmac = { workspace = true }
 libc = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 supercharge-extra-ca = { workspace = true }
+supercharge-diag-server = { workspace = true }
+supercharge-lifecycle = { workspace = true }
 rustls = { workspace = true }
 rustls-native-certs = "0.8"
 serde = { workspace = true, features = ["derive"] }

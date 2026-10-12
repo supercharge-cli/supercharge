@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::bearer_token_file::BearerTokenFile;
 use futures::stream::BoxStream;
 use http::{HeaderName, HeaderValue};
 use rmcp::model::ClientJsonRpcMessage;
@@ -130,6 +131,7 @@ pub struct McpHttpClient<C> {
     inner: C,
     server_name: Arc<str>,
     state: Arc<parking_lot::Mutex<ThrottleState>>,
+    bearer_token_file: Option<BearerTokenFile>,
 }
 // No `Debug` derive: rmcp's `AuthClient` (an inner type) is not `Debug`.
 
@@ -141,6 +143,22 @@ impl<C> McpHttpClient<C> {
             state: Arc::new(parking_lot::Mutex::new(ThrottleState::with_budget(
                 warn_budget,
             ))),
+            bearer_token_file: None,
+        }
+    }
+
+    pub(crate) fn with_bearer_token_file(mut self, file: Option<BearerTokenFile>) -> Self {
+        self.bearer_token_file = file;
+        self
+    }
+
+    async fn resolve_auth_token<E: std::error::Error + Send + Sync + 'static>(
+        &self,
+        auth_token: Option<String>,
+    ) -> Result<Option<String>, StreamableHttpError<E>> {
+        match &self.bearer_token_file {
+            Some(file) => Ok(Some(file.read().await?)),
+            None => Ok(auth_token),
         }
     }
 }
@@ -161,8 +179,11 @@ impl<C: StreamableHttpClient + Sync> StreamableHttpClient for McpHttpClient<C> {
         session_id: Option<Arc<str>>,
         last_event_id: Option<String>,
         auth_token: Option<String>,
-        custom_headers: HashMap<HeaderName, HeaderValue>,
+        mut custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<BoxStream<'static, Result<Sse, SseError>>, StreamableHttpError<Self::Error>> {
+        if self.bearer_token_file.is_some() {
+            custom_headers.remove(&http::header::AUTHORIZATION);
+        }
         let plan = {
             let mut st = self.state.lock();
             st.plan_on_get_stream(now())
@@ -196,6 +217,7 @@ impl<C: StreamableHttpClient + Sync> StreamableHttpClient for McpHttpClient<C> {
             tokio::time::sleep(plan.delay).await;
         }
 
+        let auth_token = self.resolve_auth_token(auth_token).await?;
         let result = self
             .inner
             .get_stream(uri, session_id, last_event_id, auth_token, custom_headers)
@@ -212,8 +234,12 @@ impl<C: StreamableHttpClient + Sync> StreamableHttpClient for McpHttpClient<C> {
         message: ClientJsonRpcMessage,
         session_id: Option<Arc<str>>,
         auth_token: Option<String>,
-        custom_headers: HashMap<HeaderName, HeaderValue>,
+        mut custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<StreamableHttpPostResponse, StreamableHttpError<Self::Error>> {
+        if self.bearer_token_file.is_some() {
+            custom_headers.remove(&http::header::AUTHORIZATION);
+        }
+        let auth_token = self.resolve_auth_token(auth_token).await?;
         self.inner
             .post_message(uri, message, session_id, auth_token, custom_headers)
             .await
@@ -224,8 +250,12 @@ impl<C: StreamableHttpClient + Sync> StreamableHttpClient for McpHttpClient<C> {
         uri: Arc<str>,
         session_id: Arc<str>,
         auth_token: Option<String>,
-        custom_headers: HashMap<HeaderName, HeaderValue>,
+        mut custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<(), StreamableHttpError<Self::Error>> {
+        if self.bearer_token_file.is_some() {
+            custom_headers.remove(&http::header::AUTHORIZATION);
+        }
+        let auth_token = self.resolve_auth_token(auth_token).await?;
         self.inner
             .delete_session(uri, session_id, auth_token, custom_headers)
             .await
@@ -235,6 +265,141 @@ impl<C: StreamableHttpClient + Sync> StreamableHttpClient for McpHttpClient<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn token_file_rotates_and_overrides_other_auth() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("token");
+        std::fs::write(&path, " first \n").unwrap();
+        let client = McpHttpClient::new(reqwest::Client::new(), "test", WarnBudget::default())
+            .with_bearer_token_file(Some(crate::bearer_token_file::BearerTokenFile::new(
+                path.clone(),
+            )));
+        assert_eq!(
+            client
+                .resolve_auth_token::<std::io::Error>(Some("old".into()))
+                .await
+                .unwrap(),
+            Some("first".into())
+        );
+        std::fs::write(&path, "second").unwrap();
+        assert_eq!(
+            client
+                .resolve_auth_token::<std::io::Error>(None)
+                .await
+                .unwrap(),
+            Some("second".into())
+        );
+    }
+
+    #[derive(Clone, Default)]
+    struct RecordingInner(Arc<parking_lot::Mutex<Vec<Option<String>>>>);
+
+    impl StreamableHttpClient for RecordingInner {
+        type Error = std::io::Error;
+
+        async fn get_stream(
+            &self,
+            _uri: Arc<str>,
+            _session_id: Option<Arc<str>>,
+            _last_event_id: Option<String>,
+            auth_token: Option<String>,
+            headers: HashMap<HeaderName, HeaderValue>,
+        ) -> Result<BoxStream<'static, Result<Sse, SseError>>, StreamableHttpError<Self::Error>>
+        {
+            assert!(!headers.contains_key(&http::header::AUTHORIZATION));
+            self.0.lock().push(auth_token);
+            Ok(Box::pin(futures::stream::empty()))
+        }
+
+        async fn post_message(
+            &self,
+            _uri: Arc<str>,
+            _message: ClientJsonRpcMessage,
+            _session_id: Option<Arc<str>>,
+            auth_token: Option<String>,
+            headers: HashMap<HeaderName, HeaderValue>,
+        ) -> Result<StreamableHttpPostResponse, StreamableHttpError<Self::Error>> {
+            assert!(!headers.contains_key(&http::header::AUTHORIZATION));
+            self.0.lock().push(auth_token);
+            Ok(StreamableHttpPostResponse::Accepted)
+        }
+
+        async fn delete_session(
+            &self,
+            _uri: Arc<str>,
+            _session_id: Arc<str>,
+            auth_token: Option<String>,
+            headers: HashMap<HeaderName, HeaderValue>,
+        ) -> Result<(), StreamableHttpError<Self::Error>> {
+            assert!(!headers.contains_key(&http::header::AUTHORIZATION));
+            self.0.lock().push(auth_token);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn file_precedes_custom_auth_on_requests_and_missing_file_blocks_dispatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("token");
+        std::fs::write(&path, "first").unwrap();
+        let inner = RecordingInner::default();
+        let client = McpHttpClient::new(inner.clone(), "test", WarnBudget::default())
+            .with_bearer_token_file(Some(BearerTokenFile::new(path.clone())));
+        let headers = HashMap::from([(
+            http::header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer stale"),
+        )]);
+        let _stream = client
+            .get_stream(
+                "http://mock".into(),
+                None,
+                None,
+                Some("oauth".into()),
+                headers.clone(),
+            )
+            .await
+            .unwrap();
+        std::fs::write(&path, "second").unwrap();
+        client
+            .post_message(
+                "http://mock".into(),
+                ClientJsonRpcMessage::notification(
+                    rmcp::model::ClientNotification::InitializedNotification(Default::default()),
+                ),
+                None,
+                None,
+                headers.clone(),
+            )
+            .await
+            .unwrap();
+        std::fs::write(&path, "third").unwrap();
+        client
+            .delete_session(
+                "http://mock".into(),
+                "session".into(),
+                None,
+                headers.clone(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            *inner.0.lock(),
+            vec![
+                Some("first".into()),
+                Some("second".into()),
+                Some("third".into())
+            ]
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert!(
+            client
+                .get_stream("http://mock".into(), None, None, None, headers)
+                .await
+                .is_err()
+        );
+        assert_eq!(inner.0.lock().len(), 3);
+    }
 
     /// Simulates rapid stream deaths starting at `start` until the throttle engages (attempt 2).
     /// Returns the throttle-entry time and its plan.

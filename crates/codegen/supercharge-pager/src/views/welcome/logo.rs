@@ -5,8 +5,10 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
+
+use super::ascii_logo;
 
 use crate::theme::Theme;
 
@@ -32,6 +34,7 @@ const FULL_LOGO_MIN_HEIGHT: u16 = 26;
 /// The terminal height picks the tier; the stacked layout steps it down only while the column would not fit beside the draft.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogoTier {
+    Ascii,
     Full,
     Compact,
     Hidden,
@@ -55,6 +58,7 @@ impl LogoTier {
 
     fn art(self) -> Option<&'static str> {
         match self {
+            Self::Ascii => None,
             Self::Full => Some(LOGO),
             Self::Compact => Some(LOGO_SMALL),
             Self::Hidden => None,
@@ -62,12 +66,17 @@ impl LogoTier {
     }
 
     pub fn rows(self) -> u16 {
-        self.art().map_or(0, count_lines)
+        if self == Self::Ascii {
+            ascii_logo::ROWS
+        } else {
+            self.art().map_or(0, count_lines)
+        }
     }
 
     /// The next smaller tier; `None` once hidden.
     pub fn step_down(self) -> Option<Self> {
         match self {
+            Self::Ascii => Some(Self::Full),
             Self::Full => Some(Self::Compact),
             Self::Compact => Some(Self::Hidden),
             Self::Hidden => None,
@@ -103,11 +112,26 @@ fn visual_width(logo: &str) -> u16 {
         .unwrap_or(24) as u16
 }
 
-/// Low-frequency phase for the coin turning left-to-right.
+static ANIMATION_START: OnceLock<Mutex<Instant>> = OnceLock::new();
+
+fn animation_elapsed() -> Duration {
+    ANIMATION_START
+        .get_or_init(|| Mutex::new(Instant::now()))
+        .lock()
+        .unwrap()
+        .elapsed()
+}
+
+pub fn restart_animation() {
+    *ANIMATION_START
+        .get_or_init(|| Mutex::new(Instant::now()))
+        .lock()
+        .unwrap() = Instant::now();
+}
+
+/// Low-frequency phase for the welcome logo.
 pub fn shimmer_frame() -> u64 {
-    static START: OnceLock<Instant> = OnceLock::new();
-    let elapsed = START.get_or_init(Instant::now).elapsed();
-    (elapsed.as_millis() / Duration::from_millis(140).as_millis()) as u64
+    (animation_elapsed().as_millis() / Duration::from_millis(83).as_millis()) as u64
 }
 
 fn animated_logo(frame: u64) -> String {
@@ -195,7 +219,9 @@ pub fn render_logo(area: Rect, buf: &mut Buffer, theme: &Theme, window_height: u
 
 /// Paint the tier the layout reserved rows for, so the art can never outgrow its slot.
 pub fn render_logo_tier(area: Rect, buf: &mut Buffer, theme: &Theme, tier: LogoTier) {
-    if let Some(logo) = tier.art() {
+    if tier == LogoTier::Ascii {
+        ascii_logo::render(area, buf, theme, animation_elapsed().as_secs_f64());
+    } else if let Some(logo) = tier.art() {
         render_into(area, buf, theme, logo);
     }
 }
@@ -229,8 +255,11 @@ fn full_logo_visual_width_for(hidden: bool) -> u16 {
 
 pub fn render_full_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     if !logo_hidden() {
-        let logo = animated_logo(shimmer_frame());
-        render_into(area, buf, theme, &logo);
+        if area.width >= ascii_logo::COLS && area.height >= ascii_logo::ROWS {
+            ascii_logo::render(area, buf, theme, animation_elapsed().as_secs_f64());
+        } else {
+            render_into(area, buf, theme, &animated_logo(shimmer_frame()));
+        }
     }
 }
 
@@ -275,6 +304,16 @@ mod tests {
         for h in [0, SMALL_LOGO_MIN_HEIGHT, FULL_LOGO_MIN_HEIGHT, u16::MAX] {
             assert!(pick_logo_for(h, true).is_none(), "height {h}");
         }
+    }
+
+    #[test]
+    fn full_logo_renders_ascii_art_in_its_reserved_area() {
+        assert_eq!(LogoTier::Ascii.rows(), 28);
+        let area = Rect::new(0, 0, 63, 28);
+        let mut buf = Buffer::empty(area);
+        render_full_logo(area, &mut buf, &Theme::tokyonight());
+        let row: String = (0..63).map(|x| buf[(x, 1)].symbol()).collect();
+        assert!(row.contains(".qq__             .__."), "{row}");
     }
 
     #[test]

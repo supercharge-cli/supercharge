@@ -395,6 +395,12 @@ pub enum Action {
         model_id: acp::ModelId,
         effort: Option<ReasoningEffort>,
     },
+    /// Select a model-supported window for this session.
+    SwitchContextWindow {
+        model_id: acp::ModelId,
+        effort: Option<ReasoningEffort>,
+        window: std::num::NonZeroU64,
+    },
     /// Cancel the currently running turn.
     CancelTurn,
     /// User confirmed a cancel-turn choice from the panel.
@@ -507,6 +513,8 @@ pub enum Action {
     SetTimestamps(bool),
     /// Set timeline sidebar visibility (per-turn tick rail).
     SetTimeline(bool),
+    /// Show the selected session's dashboard preview and reply panel.
+    SetDashboardPreview(bool),
     /// Set `[ui].page_flip_on_send` (default ON). Persists via `Effect::PersistSetting`.
     SetPageFlipOnSend(bool),
     /// Set `[ui].confirm_before_rewind` (default ON). Persists via `Effect::PersistSetting`.
@@ -1640,6 +1648,21 @@ pub enum Effect {
         tool_call_id: String,
     },
     /// Switch active model.
+    MemoryFlush {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+    },
+    MemoryDream {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+    },
+    SwitchContextWindow {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+        model_id: acp::ModelId,
+        effort: Option<ReasoningEffort>,
+        window: std::num::NonZeroU64,
+    },
     SwitchModel {
         agent_id: AgentId,
         session_id: acp::SessionId,
@@ -2694,6 +2717,21 @@ pub enum TaskResult {
         error: String,
     },
     /// Model switch completed (effort, if any, was applied in the same request).
+    MemoryFlushComplete {
+        agent_id: AgentId,
+        result: Result<bool, String>,
+    },
+    MemoryDreamComplete {
+        agent_id: AgentId,
+        result: Result<supercharge_shell::extensions::memory::MemoryDreamOutcome, String>,
+    },
+    SwitchContextWindowComplete {
+        agent_id: AgentId,
+        model_id: acp::ModelId,
+        effort: Option<ReasoningEffort>,
+        window: std::num::NonZeroU64,
+        result: Result<(), SwitchModelError>,
+    },
     SwitchModelComplete {
         agent_id: AgentId,
         model_id: acp::ModelId,

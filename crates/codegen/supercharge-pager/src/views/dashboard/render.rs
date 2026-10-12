@@ -164,7 +164,7 @@ pub(crate) fn render_dashboard(
     let fixed = super::layout::chrome_overhead(area);
     let reply_text_w = layout.dispatch.width.saturating_sub(6);
 
-    if !state.search_mode {
+    if state.preview_enabled && !state.search_mode {
         match state.selected.clone() {
             Some(sel) => match super::peek::compute_peek_fields(&sel, agents) {
                 Some(fields) => {

@@ -644,6 +644,29 @@ fn set_timeline_toggles_displayed_state_when_current_ui_diverges() {
     assert_eq!(app.current_ui.show_timeline, Some(false));
 }
 #[test]
+fn dashboard_preview_setting_updates_live_state_and_rolls_back() {
+    use crate::settings::SettingValue;
+    let mut app = test_app_with_agent();
+    app.dashboard = Some(crate::views::dashboard::DashboardState::new());
+    let effects = dispatch(Action::SetDashboardPreview(false), &mut app);
+    assert!(matches!(effects.as_slice(), [Effect::PersistSetting {
+        key: "dashboard_preview",
+        value: SettingValue::Bool(false),
+        rollback_value: SettingValue::Bool(true),
+    }]));
+    assert!(!app.dashboard.as_ref().unwrap().preview_enabled);
+    assert!(!app.current_ui.dashboard_preview_enabled());
+
+    let _ = super::super::settings::ui::apply_setting_rollback(
+        &mut app,
+        "dashboard_preview",
+        &SettingValue::Bool(true),
+    );
+    assert!(app.dashboard.as_ref().unwrap().preview_enabled);
+    assert!(app.current_ui.dashboard_preview_enabled());
+}
+
+#[test]
 fn set_confirm_before_rewind_emits_persist_setting_with_correct_payload() {
     use crate::settings::SettingValue;
     let mut app = test_app_with_agent();
@@ -1567,6 +1590,10 @@ fn move_setting_away_from_default(app: &mut AppView, key: crate::settings::Setti
         "show_timeline" => {
             let away = !app.current_ui.show_timeline_enabled();
             let _ = dispatch(Action::SetTimeline(away), app);
+        }
+        "dashboard_preview" => {
+            let away = !app.current_ui.dashboard_preview_enabled();
+            let _ = dispatch(Action::SetDashboardPreview(away), app);
         }
         "page_flip_on_send" => {
             let away = !crate::appearance::cache::load_page_flip_on_send();

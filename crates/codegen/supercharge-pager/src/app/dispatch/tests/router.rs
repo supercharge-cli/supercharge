@@ -1224,7 +1224,7 @@ fn acp_bootstrap_command_appears_in_autocomplete() {
     );
 }
 #[test]
-fn acp_bootstrap_command_executes_as_passthrough() {
+fn acp_bootstrap_flush_uses_tracked_extension() {
     let mut app = test_app();
     app.bootstrap_acp_commands = vec![acp::AvailableCommand::new(
         "flush".to_string(),
@@ -1244,8 +1244,8 @@ fn acp_bootstrap_command_executes_as_passthrough() {
     let effects = dispatch(Action::SendPrompt("/flush".into()), &mut app);
     assert_eq!(effects.len(), 1);
     assert!(
-        matches!(effects.first(), Some(Effect::SendPrompt { text, .. }) if text == "/flush"),
-        "ACP command should passthrough, got: {effects:?}"
+        matches!(effects.first(), Some(Effect::MemoryFlush { .. })),
+        "advertised /flush should use tracked extension, got: {effects:?}"
     );
 }
 #[test]

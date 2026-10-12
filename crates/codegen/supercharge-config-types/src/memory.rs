@@ -115,6 +115,9 @@ pub struct MemoryV2Settings {
     pub capture_enabled: Option<bool>,
     pub automatic_dream_enabled: Option<bool>,
     pub manual_dream_enabled: Option<bool>,
+    pub batch_dream_enabled: Option<bool>,
+    pub batch_dream_max_batches: Option<usize>,
+    pub batch_dream_max_note_bytes: Option<usize>,
     pub file_writes_enabled: Option<bool>,
     pub archived_retention_days: Option<u64>,
     pub job_retention_days: Option<u64>,
@@ -129,6 +132,9 @@ pub struct MemoryV2Config {
     pub capture_enabled: bool,
     pub automatic_dream_enabled: bool,
     pub manual_dream_enabled: bool,
+    pub batch_dream_enabled: bool,
+    pub batch_dream_max_batches: usize,
+    pub batch_dream_max_note_bytes: usize,
     pub file_writes_enabled: bool,
     pub archived_retention_days: u64,
     pub job_retention_days: u64,
@@ -142,6 +148,9 @@ impl Default for MemoryV2Config {
             capture_enabled: true,
             automatic_dream_enabled: true,
             manual_dream_enabled: true,
+            batch_dream_enabled: false,
+            batch_dream_max_batches: 8,
+            batch_dream_max_note_bytes: 96 * 1024,
             file_writes_enabled: true,
             archived_retention_days: 30,
             job_retention_days: 14,
@@ -933,6 +942,23 @@ impl MemoryConfig {
                         remote_v2.and_then(|settings| settings.manual_dream_enabled),
                         defaults.v2.manual_dream_enabled,
                     ),
+                    batch_dream_enabled: restrict_flag(
+                        memory_v2.batch_dream_enabled,
+                        remote_v2.and_then(|settings| settings.batch_dream_enabled),
+                        defaults.v2.batch_dream_enabled,
+                    ),
+                    batch_dream_max_batches: memory_v2
+                        .batch_dream_max_batches
+                        .or_else(|| remote_v2.and_then(|settings| settings.batch_dream_max_batches))
+                        .unwrap_or(defaults.v2.batch_dream_max_batches)
+                        .clamp(1, 8),
+                    batch_dream_max_note_bytes: memory_v2
+                        .batch_dream_max_note_bytes
+                        .or_else(|| {
+                            remote_v2.and_then(|settings| settings.batch_dream_max_note_bytes)
+                        })
+                        .unwrap_or(defaults.v2.batch_dream_max_note_bytes)
+                        .clamp(16 * 1024, 256 * 1024),
                     file_writes_enabled: restrict_flag(
                         memory_v2.file_writes_enabled,
                         remote_v2.and_then(|settings| settings.file_writes_enabled),
@@ -1040,6 +1066,27 @@ mod tests {
         assert_eq!(f.semantic_dedup_threshold, Some(1.0));
         let f: MemoryFlushConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(f.semantic_dedup_threshold, None);
+    }
+
+    #[test]
+    fn batch_dream_controls_are_opt_in_and_bounded() {
+        let defaults = MemoryV2Config::default();
+        assert!(!defaults.batch_dream_enabled);
+        let settings: MemoryV2Settings = toml::from_str(
+            "batch_dream_enabled = true\nbatch_dream_max_batches = 999\nbatch_dream_max_note_bytes = 999999",
+        )
+        .unwrap();
+        let resolved = MemoryConfig::resolve_settings(
+            None,
+            &Default::default(),
+            &settings,
+            &Default::default(),
+            &Default::default(),
+            None,
+        );
+        assert!(resolved.v2.batch_dream_enabled);
+        assert_eq!(resolved.v2.batch_dream_max_batches, 8);
+        assert_eq!(resolved.v2.batch_dream_max_note_bytes, 256 * 1024);
     }
 
     #[test]

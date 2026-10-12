@@ -740,6 +740,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             context_window: Some(200_000),
+            context_windows: Some(vec![std::num::NonZeroU64::new(100_000).unwrap()]),
             auto_compact_threshold_percent: Some(80),
             system_prompt_label: Some("label".into()),
             use_concise: Some(true),

@@ -6,7 +6,6 @@
 use clap::Parser;
 use std::path::PathBuf;
 use std::time::Duration;
-use url::Url;
 use supercharge_diag_server::{self as diag_server, DiagHandle, ErrorClass};
 use supercharge_workspace::WorkspaceHostKind;
 use supercharge_workspace::config::{
@@ -17,6 +16,7 @@ use supercharge_workspace_daemon::daemonize;
 use supercharge_workspace_daemon::preview_supervisor::{
     self, PreviewActivitySink, PreviewArgs, PreviewVisibility,
 };
+use url::Url;
 /// OTLP `service.name` for this binary's exported traces/logs/metrics and direct-OTLP fastrace export.
 /// Single source so the call sites can't drift.
 const SERVICE_NAME: &str = "prod_grok_workspace";
@@ -25,6 +25,28 @@ const INVALID_SERVER_ID_MARKER: &str = "workspace-server: invalid --server-id";
 const WORKSPACE_HUB_AUTH_FAILED_MARKER: &str = "workspace hub auth failed";
 /// Post-failure dwell so the host can poll `/ready` before exit ([500ms, 2s]).
 const HUB_CONNECT_FAILED_DWELL: Duration = Duration::from_millis(750);
+#[cfg(unix)]
+const LIFECYCLE_BROKER_START_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(unix)]
+const LIFECYCLE_EXEC_LOG_FILE: &str = "workspace-server-lifecycle.log";
+
+#[cfg(unix)]
+fn lifecycle_broker(
+    image_dir: &std::path::Path,
+    workspace_home: &std::path::Path,
+    temp_dir: &std::path::Path,
+) -> anyhow::Result<supercharge_lifecycle::LifecycleBroker> {
+    let state_dir = workspace_home.join("lifecycle").join("handlers");
+    std::fs::create_dir_all(&state_dir)?;
+    std::fs::read_dir(&state_dir)?;
+    Ok(supercharge_lifecycle::LifecycleBroker::new(
+        supercharge_lifecycle::LifecycleConfig {
+            image_dir: image_dir.to_path_buf(),
+            state_dir: Some(state_dir),
+            exec_log: temp_dir.join(LIFECYCLE_EXEC_LOG_FILE),
+        },
+    ))
+}
 fn server_id_startup_error(id: &str) -> Option<String> {
     id.parse::<supercharge_tool_protocol::ServerId>()
         .err()
@@ -333,7 +355,11 @@ async fn run(
     }
     let direct_otlp = match std::env::var("SUPERCHARGE_WORKSPACE_OTLP_ENDPOINT") {
         Ok(endpoint) if !endpoint.is_empty() => {
-            match supercharge_tracing::init_fastrace(endpoint.clone(), SERVICE_NAME.to_owned(), None) {
+            match supercharge_tracing::init_fastrace(
+                endpoint.clone(),
+                SERVICE_NAME.to_owned(),
+                None,
+            ) {
                 Ok(()) => {
                     tracing::info!(%endpoint, "trace export enabled (direct OTLP)");
                     true
@@ -431,8 +457,37 @@ async fn run(
     #[cfg(windows)]
     let diag_listener = diag_server::DiagListener::Tcp(args.diag_port);
     let diag_log_file = args.daemonize.then_some(args.log_file);
-    let _diag_server = match diag_server::serve(diag_listener, diag_handle.clone(), diag_log_file)
-        .await
+    #[cfg(unix)]
+    let broker = tokio::time::timeout(
+        LIFECYCLE_BROKER_START_TIMEOUT,
+        tokio::task::spawn_blocking(|| {
+            lifecycle_broker(
+                std::path::Path::new(supercharge_lifecycle::DEFAULT_IMAGE_HANDLER_DIR),
+                &supercharge_workspace::handle::resolve_workspace_home(),
+                &std::env::temp_dir(),
+            )
+        }),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("pre-stop lifecycle broker startup timed out"))?
+    .map_err(|e| anyhow::anyhow!("pre-stop lifecycle broker startup task failed: {e}"))?
+    .map_err(|e| anyhow::anyhow!("pre-stop lifecycle broker startup failed: {e}"))?;
+    #[cfg(unix)]
+    let diag_options = diag_server::DiagServeOptions {
+        log_file: diag_log_file,
+        extra_routes: Some(broker.router()),
+    };
+    #[cfg(windows)]
+    let diag_options = diag_server::DiagServeOptions {
+        log_file: diag_log_file,
+        ..diag_server::DiagServeOptions::default()
+    };
+    let _diag_server = match diag_server::serve_with(
+        diag_listener,
+        diag_handle.clone(),
+        diag_options,
+    )
+    .await
     {
         Ok(bound) => {
             tracing::info!(addr = %bound.addr, "diagnostics server listening");
@@ -557,6 +612,8 @@ async fn run(
     }
     diag_handle.set_shutting_down();
     tracing::info!("Received shutdown signal, draining...");
+    #[cfg(unix)]
+    broker.quiesce().await;
     let tracker = ws_handle.activity_tracker().clone();
     let grace_budget = supercharge_workspace::handle::termination_grace_from_env();
     ws_handle
@@ -585,6 +642,57 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_broker_refuses_unusable_registration_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let home = dir.path().join("blocked");
+        std::fs::write(&home, "not a directory").expect("create blocker");
+        assert!(lifecycle_broker(&dir.path().join("image"), &home, dir.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn lifecycle_route_stops_accepting_triggers_before_workspace_drain() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let broker = lifecycle_broker(&dir.path().join("image"), dir.path(), dir.path())
+            .expect("start lifecycle broker");
+        let socket = dir.path().join("diag.sock");
+        let bound = diag_server::serve_with(
+            diag_server::DiagListener::Unix(socket.clone()),
+            DiagHandle::new(None),
+            diag_server::DiagServeOptions {
+                log_file: None,
+                extra_routes: Some(broker.router()),
+            },
+        )
+        .await
+        .expect("bind diagnostics");
+        let request = b"POST /lifecycle/pre-stop HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nContent-Length: 61\r\nConnection: close\r\n\r\n{\"v\":1,\"reason\":\"terminate\",\"disk\":\"kept\",\"deadline_ms\":1000}";
+        async fn status(socket: &std::path::Path, request: &[u8]) -> String {
+            let mut stream = tokio::net::UnixStream::connect(socket)
+                .await
+                .expect("connect");
+            stream.write_all(request).await.expect("send trigger");
+            let mut response = String::new();
+            stream
+                .read_to_string(&mut response)
+                .await
+                .expect("response");
+            response
+        }
+        let first = status(&socket, request).await;
+        assert!(first.starts_with("HTTP/1.1 200"), "{first}");
+        broker.quiesce().await;
+        let after = status(&socket, request).await;
+        assert!(after.starts_with("HTTP/1.1 409"), "{after}");
+        assert!(dir.path().join("lifecycle/handlers").exists());
+        bound.task.abort();
+    }
+
     /// Only the launcher's `sandbox_id` opts in; a session id alone (which a hook- or MCP-spawned
     /// server inherits from its environment) or no metadata at all is a daemon.
     #[test]
@@ -689,7 +797,8 @@ mod tests {
             WORKSPACE_HUB_AUTH_FAILED_MARKER
         );
         let auth = WorkspaceError::HubError(
-            supercharge_computer_hub_sdk::ClientError::AuthError("token rejected".into()).to_string(),
+            supercharge_computer_hub_sdk::ClientError::AuthError("token rejected".into())
+                .to_string(),
         );
         assert_eq!(
             classify_hub_connect_failure(&auth.to_string()),
@@ -868,7 +977,8 @@ mod tests {
     fn capabilities_flag_parses_and_defaults_off() {
         let args = Args::try_parse_from(["supercharge-workspace-server"]).unwrap();
         assert!(!args.capabilities);
-        let args = Args::try_parse_from(["supercharge-workspace-server", "--capabilities"]).unwrap();
+        let args =
+            Args::try_parse_from(["supercharge-workspace-server", "--capabilities"]).unwrap();
         assert!(args.capabilities);
     }
     #[test]
@@ -876,8 +986,12 @@ mod tests {
         unsafe { std::env::remove_var("SUPERCHARGE_WORKSPACE_PROJECT_LSP_TRUSTED") };
         let args = Args::try_parse_from(["supercharge-workspace-server"]).unwrap();
         assert!(!args.project_lsp_trusted);
-        let args = Args::try_parse_from(["supercharge-workspace-server", "--project-lsp-trusted", "true"])
-            .unwrap();
+        let args = Args::try_parse_from([
+            "supercharge-workspace-server",
+            "--project-lsp-trusted",
+            "true",
+        ])
+        .unwrap();
         assert!(args.project_lsp_trusted);
     }
     #[test]
@@ -935,8 +1049,12 @@ mod tests {
     }
     #[test]
     fn ready_file_is_accepted_as_a_deprecated_no_op() {
-        let args =
-            Args::try_parse_from(["supercharge-workspace-server", "--ready-file", "/tmp/x.ready"]).unwrap();
+        let args = Args::try_parse_from([
+            "supercharge-workspace-server",
+            "--ready-file",
+            "/tmp/x.ready",
+        ])
+        .unwrap();
         assert_eq!(args.ready_file, Some(PathBuf::from("/tmp/x.ready")));
     }
     #[test]

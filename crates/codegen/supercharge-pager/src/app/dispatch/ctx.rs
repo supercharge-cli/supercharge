@@ -144,6 +144,8 @@ pub(super) fn reseed_tip_for_new_session(app: &mut AppView) {
 /// Use for every return-to-welcome transition so a previously-expanded announcement can't leak into the freshly-shown screen.
 pub(super) fn show_welcome(app: &mut AppView) {
     app.active_view = ActiveView::Welcome;
+    crate::views::welcome::logo::restart_animation();
+    app.welcome_shimmer_frame = 0;
     app.welcome_announcement = WelcomeAnnouncementState::default();
     // Drop stale welcome workspace one-shot / ACK so a later create/load cannot inherit an override from a deferred or abandoned NewSession
     #[cfg(feature = "local-workspace")]

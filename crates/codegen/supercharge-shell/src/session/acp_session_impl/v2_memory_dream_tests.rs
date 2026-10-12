@@ -33,6 +33,14 @@ fn dream_controls(
 }
 
 #[test]
+fn batch_runner_stops_after_bounded_number_of_claims() {
+    assert!(super::continue_v2_batch_run(0, true));
+    assert!(super::continue_v2_batch_run(7, true));
+    assert!(!super::continue_v2_batch_run(8, true));
+    assert!(!super::continue_v2_batch_run(1, false));
+}
+
+#[test]
 fn automatic_and_manual_dream_gates_are_independent() {
     for (automatic, manual) in [(false, false), (false, true), (true, false), (true, true)] {
         let controls = dream_controls(automatic, manual);

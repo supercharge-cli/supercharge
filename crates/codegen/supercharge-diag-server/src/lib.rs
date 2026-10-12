@@ -376,7 +376,7 @@ fn tail_file(path: &Path, max: u64) -> io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-fn router(ctx: DiagContext) -> Router {
+fn router(ctx: DiagContext, extra_routes: Option<Router>) -> Router {
     Router::new()
         .route(
             "/ready",
@@ -398,6 +398,14 @@ fn router(ctx: DiagContext) -> Router {
         )
         .route("/logs", get(logs))
         .with_state(ctx)
+        .fallback_service(extra_routes.unwrap_or_default())
+}
+
+/// Caller-owned routes may only be served on an owner-only Unix socket.
+#[derive(Debug, Default)]
+pub struct DiagServeOptions {
+    pub log_file: Option<PathBuf>,
+    pub extra_routes: Option<Router>,
 }
 
 /// Bind the listener and spawn the server task.
@@ -408,10 +416,31 @@ pub async fn serve(
     handle: DiagHandle,
     log_file: Option<PathBuf>,
 ) -> anyhow::Result<BoundDiag> {
+    serve_with(
+        listener,
+        handle,
+        DiagServeOptions {
+            log_file,
+            ..DiagServeOptions::default()
+        },
+    )
+    .await
+}
+
+/// Serve caller-owned routes alongside diagnostics, only on an owner-only Unix socket.
+pub async fn serve_with(
+    listener: DiagListener,
+    handle: DiagHandle,
+    options: DiagServeOptions,
+) -> anyhow::Result<BoundDiag> {
+    if matches!(listener, DiagListener::Tcp(_)) && options.extra_routes.is_some() {
+        return Err(anyhow!("extra routes require a Unix diagnostics socket"));
+    }
     let ctx = DiagContext {
         handle,
-        log_file: log_file.map(Arc::new),
+        log_file: options.log_file.map(Arc::new),
     };
+    let app = router(ctx, options.extra_routes);
     match listener {
         #[cfg(unix)]
         DiagListener::Unix(path) => {
@@ -420,14 +449,14 @@ pub async fn serve(
                 UnixListener::bind(&path).map_err(|e| anyhow!("bind {}: {e}", path.display()))?;
             use std::os::unix::fs::PermissionsExt as _;
             if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %e,
-                    "failed to restrict diagnostics socket permissions"
-                );
+                let _ = fs::remove_file(&path);
+                return Err(anyhow!(
+                    "failed to restrict diagnostics socket permissions {}: {e}",
+                    path.display()
+                ));
             }
             let task = tokio::spawn(async move {
-                if let Err(e) = axum::serve(listener, router(ctx)).await {
+                if let Err(e) = axum::serve(listener, app).await {
                     tracing::warn!(error = %e, "diagnostics server exited");
                 }
             });
@@ -443,7 +472,7 @@ pub async fn serve(
                 .map_err(|e| anyhow!("bind 127.0.0.1:{port}: {e}"))?;
             let local = listener.local_addr()?;
             let task = tokio::spawn(async move {
-                if let Err(e) = axum::serve(listener, router(ctx)).await {
+                if let Err(e) = axum::serve(listener, app).await {
                     tracing::warn!(error = %e, "diagnostics server exited");
                 }
             });
@@ -483,6 +512,63 @@ mod tests {
 
     fn at<'a>(v: &'a Value, k: &str) -> &'a Value {
         v.get(k).unwrap_or(&Value::Null)
+    }
+
+    #[tokio::test]
+    async fn extra_fallback_cannot_be_exposed_on_tcp() {
+        let options = DiagServeOptions {
+            log_file: None,
+            extra_routes: Some(Router::new().fallback(|| async { "unexpected" })),
+        };
+        assert!(
+            serve_with(DiagListener::Tcp(0), DiagHandle::new(None), options)
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn lifecycle_routes_require_owner_only_unix_socket() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("diag.sock");
+        let options = DiagServeOptions {
+            log_file: None,
+            extra_routes: Some(Router::new().route(
+                "/lifecycle/pre-stop",
+                axum::routing::post(|| async { "ok" }),
+            )),
+        };
+        assert!(
+            serve_with(DiagListener::Tcp(0), DiagHandle::new(None), options)
+                .await
+                .is_err()
+        );
+        let bound = serve_with(
+            DiagListener::Unix(socket.clone()),
+            DiagHandle::new(None),
+            DiagServeOptions {
+                log_file: None,
+                extra_routes: Some(Router::new().route(
+                    "/lifecycle/pre-stop",
+                    axum::routing::post(|| async { "ok" }),
+                )),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::UnixStream::connect(&socket).await.unwrap();
+        stream.write_all(b"POST /lifecycle/pre-stop HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await.unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+        bound.task.abort();
     }
 
     #[tokio::test]

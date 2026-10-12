@@ -11,6 +11,7 @@ mod black_crimson;
 pub mod cache;
 pub mod color_support;
 pub mod env_appearance;
+mod extra_palettes;
 pub mod md_style;
 mod navy_cyan;
 pub mod osc11;
@@ -36,6 +37,13 @@ pub enum ThemeKind {
     OscuraMidnight = 5,
     NavyCyan = 6,
     BlackCrimson = 7,
+    CatppuccinMocha = 9,
+    GruvboxDark = 10,
+    Nord = 11,
+    SolarizedDark = 12,
+    Dracula = 13,
+    OneDark = 14,
+    SolarizedLight = 15,
     /// Every bg is `Reset` so the terminal canvas shows through; legible on both polarities without appearance detection.
     /// Hidden and unparseable while `cache::terminal_theme_enabled()` is off.
     Terminal = 8,
@@ -53,6 +61,13 @@ impl ThemeKind {
         ThemeKind::TokyoNight,
         ThemeKind::RosePineMoon,
         ThemeKind::OscuraMidnight,
+        ThemeKind::CatppuccinMocha,
+        ThemeKind::GruvboxDark,
+        ThemeKind::Nord,
+        ThemeKind::SolarizedDark,
+        ThemeKind::Dracula,
+        ThemeKind::OneDark,
+        ThemeKind::SolarizedLight,
         ThemeKind::Terminal,
     ];
 
@@ -109,6 +124,13 @@ impl ThemeKind {
             Self::OscuraMidnight => "oscura-midnight",
             Self::NavyCyan => "navy-cyan",
             Self::BlackCrimson => "black-crimson",
+            Self::CatppuccinMocha => "catppuccin-mocha",
+            Self::GruvboxDark => "gruvbox-dark",
+            Self::Nord => "nord",
+            Self::SolarizedDark => "solarized-dark",
+            Self::Dracula => "dracula",
+            Self::OneDark => "one-dark",
+            Self::SolarizedLight => "solarized-light",
             Self::Terminal => "terminal",
             Self::Auto => "auto",
         }
@@ -124,6 +146,13 @@ impl ThemeKind {
             Self::OscuraMidnight => true,
             Self::NavyCyan => false,
             Self::BlackCrimson => false,
+            Self::CatppuccinMocha
+            | Self::GruvboxDark
+            | Self::Nord
+            | Self::SolarizedDark
+            | Self::Dracula
+            | Self::OneDark
+            | Self::SolarizedLight => true,
             // Reset plus named ANSI-16 entries only — nothing to quantize.
             Self::Terminal => false,
             // Auto is resolved to a concrete theme before rendering.
@@ -147,6 +176,13 @@ impl ThemeKind {
             Self::VoltageLight => &["voltage-light", "grok-day", "light", "day"],
             Self::RosePineMoon => &["rosepine", "rose-pine", "rose-pine-moon"],
             Self::OscuraMidnight => &["oscura"],
+            Self::CatppuccinMocha => &["catppuccin", "mocha"],
+            Self::GruvboxDark => &["gruvbox"],
+            Self::Nord => &[],
+            Self::SolarizedDark => &[],
+            Self::Dracula => &[],
+            Self::OneDark => &["onedark"],
+            Self::SolarizedLight => &[],
             Self::Terminal => &["terminal-default", "transparent", "native"],
             Self::Auto => &["system"],
         }
@@ -201,8 +237,16 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "voltage_light" => "Voltage Light",
         "tokyonight" => "Tokyo Night",
         "rosepine-moon" => "Rose Pine Moon",
+        "oscura-midnight" => "Oscura Midnight",
         "navy-cyan" => "Navy Cyan",
         "black-crimson" => "Black Crimson",
+        "catppuccin-mocha" => "Catppuccin Mocha",
+        "gruvbox-dark" => "Gruvbox Dark",
+        "nord" => "Nord",
+        "solarized-dark" => "Solarized Dark",
+        "dracula" => "Dracula",
+        "one-dark" => "One Dark",
+        "solarized-light" => "Solarized Light",
         "terminal" => "Terminal",
         other => other,
     }
@@ -322,6 +366,13 @@ impl Theme {
             ThemeKind::OscuraMidnight => Self::oscura_midnight(),
             ThemeKind::NavyCyan => Self::navy_cyan(),
             ThemeKind::BlackCrimson => Self::black_crimson(),
+            ThemeKind::CatppuccinMocha => Self::catppuccin_mocha(),
+            ThemeKind::GruvboxDark => Self::gruvbox_dark(),
+            ThemeKind::Nord => Self::nord(),
+            ThemeKind::SolarizedDark => Self::solarized_dark(),
+            ThemeKind::Dracula => Self::dracula(),
+            ThemeKind::OneDark => Self::one_dark(),
+            ThemeKind::SolarizedLight => Self::solarized_light(),
             // Handled by the early return above.
             ThemeKind::Terminal => Self::terminal(),
             // Auto is resolved to a concrete theme before being stored; if reached, fall back to VoltageDark
@@ -1059,6 +1110,13 @@ mod tests {
                 ThemeKind::OscuraMidnight => Theme::oscura_midnight(),
                 ThemeKind::NavyCyan => Theme::navy_cyan(),
                 ThemeKind::BlackCrimson => Theme::black_crimson(),
+                ThemeKind::CatppuccinMocha => Theme::catppuccin_mocha(),
+                ThemeKind::GruvboxDark => Theme::gruvbox_dark(),
+                ThemeKind::Nord => Theme::nord(),
+                ThemeKind::SolarizedDark => Theme::solarized_dark(),
+                ThemeKind::Dracula => Theme::dracula(),
+                ThemeKind::OneDark => Theme::one_dark(),
+                ThemeKind::SolarizedLight => Theme::solarized_light(),
                 // Reset plus named ANSI entries: the scrollbar rides the
                 // terminal's own fg/bg contrast, so there is no RGB delta.
                 ThemeKind::Terminal => continue,
@@ -1119,6 +1177,54 @@ mod tests {
         assert_eq!(t_light.gray_bright, Color::DarkGray);
         assert_eq!(t_light.gray_dim, Color::Gray);
         assert_ne!(t_light.gray, t_light.gray_dim);
+    }
+
+    #[test]
+    fn expanded_theme_catalog_has_fifteen_distinct_names() {
+        let names: std::collections::HashSet<_> = ThemeKind::ALL
+            .iter()
+            .map(|kind| kind.display_name())
+            .collect();
+        assert_eq!(ThemeKind::ALL.len(), 15);
+        assert_eq!(names.len(), 15);
+        for name in [
+            "catppuccin-mocha",
+            "gruvbox-dark",
+            "nord",
+            "solarized-dark",
+            "dracula",
+            "one-dark",
+            "solarized-light",
+        ] {
+            assert!(names.contains(name), "missing {name}");
+            assert_eq!(ThemeKind::from_name(name).unwrap().display_name(), name);
+        }
+    }
+
+    #[test]
+    fn extra_palettes_have_distinct_canvas_and_accent_colors() {
+        let palettes = [
+            Theme::catppuccin_mocha(),
+            Theme::gruvbox_dark(),
+            Theme::nord(),
+            Theme::solarized_dark(),
+            Theme::dracula(),
+            Theme::one_dark(),
+            Theme::solarized_light(),
+        ];
+        let identities: std::collections::HashSet<_> = palettes
+            .iter()
+            .map(|theme| (theme.bg_base, theme.accent_user))
+            .collect();
+        assert_eq!(identities.len(), palettes.len());
+        for palette in palettes {
+            assert_ne!(palette.bg_base, palette.bg_highlight);
+            assert_ne!(palette.bg_visual, palette.bg_highlight);
+            assert_ne!(palette.text_primary, palette.bg_base);
+            assert_ne!(palette.accent_user, palette.bg_base);
+        }
+        assert!(!Theme::solarized_light().is_dark());
+        assert!(Theme::solarized_dark().is_dark());
     }
 
     #[test]

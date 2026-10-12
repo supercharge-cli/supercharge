@@ -16,6 +16,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     match args.method.as_ref() {
         m if m.starts_with("x.ai/compact_conversation") => handle_compact(agent, args).await,
         "x.ai/memory/flush" => handle_flush(agent, args).await,
+        "x.ai/memory/dream" => handle_dream(agent, args).await,
         "x.ai/memory/rewrite" => handle_rewrite(agent, args).await,
         MEMORY_FORGET_METHOD => handle_forget(agent, args).await,
         _ => Err(acp::Error::method_not_found()),
@@ -125,6 +126,60 @@ async fn handle_flush(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
 #[derive(Serialize)]
 struct MemoryFlushResponse {
     flushed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryDreamOutcome {
+    Completed,
+    NoWork,
+    Busy,
+    Failed,
+    Disabled,
+}
+
+#[cfg(test)]
+mod dream_response_tests {
+    use super::*;
+
+    #[test]
+    fn dream_outcomes_serialize_as_typed_dispositions() {
+        for (outcome, label) in [
+            (MemoryDreamOutcome::Completed, "completed"),
+            (MemoryDreamOutcome::NoWork, "no_work"),
+            (MemoryDreamOutcome::Busy, "busy"),
+            (MemoryDreamOutcome::Failed, "failed"),
+            (MemoryDreamOutcome::Disabled, "disabled"),
+        ] {
+            let value = serde_json::to_value(outcome).unwrap();
+            assert_eq!(value, label);
+            assert_eq!(
+                serde_json::from_value::<MemoryDreamOutcome>(value).unwrap(),
+                outcome
+            );
+        }
+    }
+}
+
+async fn handle_dream(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
+    #[derive(Deserialize)]
+    struct Request {
+        session_id: String,
+    }
+    let req: Request = parse_params(args)?;
+    let sid: acp::SessionId = req.session_id.into();
+    let session = agent
+        .resident_handle(&sid)
+        .ok_or_else(|| acp::Error::invalid_params().data("unknown session id"))?;
+    let (tx, rx) = oneshot::channel();
+    session
+        .cmd_tx
+        .send(SessionCommand::DreamMemory { respond_to: tx })
+        .map_err(|_| acp::Error::internal_error().data("session closed"))?;
+    let outcome = rx
+        .await
+        .map_err(|_| acp::Error::internal_error().data("session failed to respond"))?;
+    to_raw_response(&serde_json::json!({ "outcome": outcome }))
 }
 
 async fn handle_rewrite(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {

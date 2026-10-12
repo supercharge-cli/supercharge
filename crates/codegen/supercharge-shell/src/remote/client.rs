@@ -10,9 +10,14 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Sharing needs an explicitly configured web frontend.
 pub fn share_url(permission_id: &str) -> Result<String, BackendError> {
     let web_url = std::env::var("SUPERCHARGE_CODE_WEB_URL")
-        .ok().filter(|url| !url.trim().is_empty())
+        .ok()
+        .filter(|url| !url.trim().is_empty())
         .ok_or_else(|| BackendError::Auth("Sharing requires SUPERCHARGE_CODE_WEB_URL".into()))?;
-    Ok(format!("{}/build/share/{}", web_url.trim_end_matches('/'), permission_id))
+    Ok(format!(
+        "{}/build/share/{}",
+        web_url.trim_end_matches('/'),
+        permission_id
+    ))
 }
 
 fn add_cli_chat_proxy_headers_blocking(
@@ -692,6 +697,11 @@ pub(crate) fn parse_remote_model_value(
         env_key: get_env_keys(obj, "envKey").or_else(|| get_env_keys(obj, "env_key")),
         api_backend,
         context_window,
+        context_windows: obj.get("contextWindows")
+            .or_else(|| obj.get("context_windows"))
+            .and_then(|v| v.as_array())
+            .map(|values| values.iter().filter_map(|v| v.as_u64().and_then(std::num::NonZeroU64::new)).collect())
+            .unwrap_or_default(),
         auto_compact_threshold_percent: get_u64(obj, "autoCompactThresholdPercent")
             .or_else(|| get_u64(obj, "auto_compact_threshold_percent"))
             .and_then(|v| u8::try_from(v).ok()),

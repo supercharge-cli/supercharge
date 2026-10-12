@@ -12,10 +12,10 @@ use crate::terminal::AsyncTerminalRunner;
 use crate::terminal::runner::{TerminalError, TerminalRunRequest, TerminalRunResult};
 use std::sync::OnceLock;
 use std::sync::atomic::Ordering::Relaxed;
-use tokio::sync::mpsc;
 use supercharge_paths::AbsPathBuf;
 use supercharge_workspace::file_system::MockFs;
 use supercharge_workspace::permission::PermissionHandle;
+use tokio::sync::mpsc;
 #[derive(Debug)]
 struct DummyTerminal;
 #[async_trait::async_trait]
@@ -124,6 +124,7 @@ async fn create_test_actor(
             threshold_percent: std::cell::Cell::new(threshold_percent),
             force_compact: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             context_window_override: None,
+            selected_context_window: std::cell::Cell::new(None),
             count: std::sync::atomic::AtomicU64::new(0),
             auto_compact_suppressed: std::sync::atomic::AtomicU8::new(0),
             previous_model: std::cell::Cell::new(None),
@@ -839,11 +840,13 @@ async fn family_switch_compacts_lossy_with_new_model() {
                     encrypted_content: Some("tco_SEALEDCIPHERTEXT".to_string()),
                     status: None,
                 }),
-                ConversationItem::assistant_tool_calls(vec![supercharge_sampling_types::ToolCall {
-                    id: std::sync::Arc::<str>::from("call_xai_minted_id"),
-                    name: "run_terminal_command".to_string(),
-                    arguments: std::sync::Arc::<str>::from(r#"{"command":"ls"}"#),
-                }]),
+                ConversationItem::assistant_tool_calls(vec![
+                    supercharge_sampling_types::ToolCall {
+                        id: std::sync::Arc::<str>::from("call_xai_minted_id"),
+                        name: "run_terminal_command".to_string(),
+                        arguments: std::sync::Arc::<str>::from(r#"{"command":"ls"}"#),
+                    },
+                ]),
                 ConversationItem::ToolResult(supercharge_sampling_types::ToolResultItem {
                     tool_call_id: "call_xai_minted_id".to_string(),
                     content: std::sync::Arc::<str>::from("file listing"),
@@ -857,6 +860,7 @@ async fn family_switch_compacts_lossy_with_new_model() {
             actor
                 .handle_set_session_model(crate::session::SessionModelSwitch {
                     sampling_config: switch_target_config("new-model", server.url()),
+                    context_window_selected: false,
                     use_concise: false,
                     is_family_switch: true,
                     apply_prompt_override: false,
@@ -1008,11 +1012,13 @@ async fn e2e_auto_compact_413_steps_ladder_then_sticky_size_suppress() {
             actor.chat_state_handle.replace_conversation(vec![
                 ConversationItem::system("sys"),
                 ConversationItem::user("hello"),
-                ConversationItem::assistant_tool_calls(vec![supercharge_sampling_types::ToolCall {
-                    id: std::sync::Arc::<str>::from("call_1"),
-                    name: "run_terminal_command".to_string(),
-                    arguments: std::sync::Arc::<str>::from(r#"{"command":"ls"}"#),
-                }]),
+                ConversationItem::assistant_tool_calls(vec![
+                    supercharge_sampling_types::ToolCall {
+                        id: std::sync::Arc::<str>::from("call_1"),
+                        name: "run_terminal_command".to_string(),
+                        arguments: std::sync::Arc::<str>::from(r#"{"command":"ls"}"#),
+                    },
+                ]),
                 ConversationItem::ToolResult(supercharge_sampling_types::ToolResultItem {
                     tool_call_id: "call_1".to_string(),
                     content: std::sync::Arc::<str>::from("file listing"),
@@ -1832,7 +1838,8 @@ async fn test_pre_sampling_uses_estimated_tokens() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(80_000, 100_000, 85, gateway_tx, persistence_tx).await;
             let result = actor.check_auto_compact_needed().await;
@@ -1850,7 +1857,8 @@ async fn test_model_switch_compaction_triggers_on_downgrade() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(86_000, 100_000, 85, gateway_tx, persistence_tx).await;
             actor.compaction.previous_model.set(Some(

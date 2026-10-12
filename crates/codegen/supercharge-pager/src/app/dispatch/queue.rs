@@ -468,8 +468,37 @@ pub(super) fn maybe_drain_queue(agent: &mut AgentView) -> QueueDrain {
                 page_flip_entry: flip.then_some(prompt_entry_id),
             }
         }
+        QueueEntryKind::Command if queued.text.trim() == "/dream" => {
+            agent.session.start_command(AgentCommand::MemoryDream);
+            agent.running_wake_turn = None;
+            agent.turn_started_at = Some(Instant::now());
+            agent
+                .scrollback
+                .push_block(RenderBlock::system("Consolidating memory…"));
+            QueueDrain {
+                effects: vec![Effect::MemoryDream {
+                    agent_id,
+                    session_id,
+                }],
+                page_flip_entry: None,
+            }
+        }
+        QueueEntryKind::Command if queued.text.trim() == "/flush" => {
+            agent.session.start_command(AgentCommand::MemoryFlush);
+            agent.running_wake_turn = None;
+            agent.turn_started_at = Some(Instant::now());
+            agent
+                .scrollback
+                .push_block(RenderBlock::system("Saving memory…"));
+            QueueDrain {
+                effects: vec![Effect::MemoryFlush {
+                    agent_id,
+                    session_id,
+                }],
+                page_flip_entry: None,
+            }
+        }
         QueueEntryKind::Command => {
-            // Currently only `/compact`; future slash commands will branch here
             agent.session.start_command(AgentCommand::Compact);
             // Compact owns the pane; a leftover wake marker must not shadow stop.
             agent.running_wake_turn = None;
@@ -1209,6 +1238,95 @@ mod tests {
             is_monitor: false,
             restored_from_replay: false,
         }
+    }
+
+    #[test]
+    fn memory_flush_is_tracked_and_releases_next_queued_prompt() {
+        use crate::app::actions::TaskResult;
+        use crate::app::dispatch::task_result::dispatch_task_result;
+        let mut app = test_app_with_agent();
+        let id = AgentId(0);
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.enqueue_command("/flush".into());
+        agent.session.enqueue_prompt("next".into());
+        let drain = maybe_drain_queue(agent);
+        assert!(matches!(
+            drain.effects.as_slice(),
+            [Effect::MemoryFlush { .. }]
+        ));
+        assert_eq!(
+            agent.session.state.command_in_flight(),
+            Some(&AgentCommand::MemoryFlush)
+        );
+        let effects = dispatch_task_result(
+            TaskResult::MemoryFlushComplete {
+                agent_id: id,
+                result: Ok(true),
+            },
+            &mut app,
+        );
+        assert!(matches!(effects.as_slice(), [Effect::SendPrompt { text, .. }] if text == "next"));
+    }
+
+    #[test]
+    fn memory_dream_completion_releases_queue_and_failure_releases_state() {
+        use crate::app::actions::TaskResult;
+        use crate::app::dispatch::task_result::dispatch_task_result;
+        use supercharge_shell::extensions::memory::MemoryDreamOutcome;
+        let mut app = test_app_with_agent();
+        let id = AgentId(0);
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.enqueue_command("/dream".into());
+        agent.session.enqueue_prompt("next".into());
+        assert!(matches!(
+            maybe_drain_queue(agent).effects.as_slice(),
+            [Effect::MemoryDream { .. }]
+        ));
+        let effects = dispatch_task_result(
+            TaskResult::MemoryDreamComplete {
+                agent_id: id,
+                result: Ok(MemoryDreamOutcome::Completed),
+            },
+            &mut app,
+        );
+        assert!(matches!(effects.as_slice(), [Effect::SendPrompt { text, .. }] if text == "next"));
+        let mut app = test_app_with_agent();
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.enqueue_command("/dream".into());
+        assert!(matches!(
+            maybe_drain_queue(agent).effects.as_slice(),
+            [Effect::MemoryDream { .. }]
+        ));
+        dispatch_task_result(
+            TaskResult::MemoryDreamComplete {
+                agent_id: id,
+                result: Err("failed".into()),
+            },
+            &mut app,
+        );
+        assert!(app.agents.get(&id).unwrap().session.state.is_idle());
+    }
+
+    #[test]
+    fn memory_flush_failure_releases_command_state() {
+        use crate::app::actions::TaskResult;
+        use crate::app::dispatch::task_result::dispatch_task_result;
+        let mut app = test_app_with_agent();
+        let id = AgentId(0);
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.enqueue_command("/flush".into());
+        assert!(matches!(
+            maybe_drain_queue(agent).effects.as_slice(),
+            [Effect::MemoryFlush { .. }]
+        ));
+        dispatch_task_result(
+            TaskResult::MemoryFlushComplete {
+                agent_id: id,
+                result: Err("failed".into()),
+            },
+            &mut app,
+        );
+        assert!(app.agents.get(&id).unwrap().session.state.is_idle());
     }
 
     #[test]
@@ -2905,10 +3023,12 @@ mod tests {
             ))),
         );
         let _ = crate::app::acp_handler::handle(
-            supercharge_acp_lib::AcpClientMessage::SessionNotification(supercharge_acp_lib::AcpArgs {
-                request,
-                response_tx: tx,
-            }),
+            supercharge_acp_lib::AcpClientMessage::SessionNotification(
+                supercharge_acp_lib::AcpArgs {
+                    request,
+                    response_tx: tx,
+                },
+            ),
             app,
         );
     }

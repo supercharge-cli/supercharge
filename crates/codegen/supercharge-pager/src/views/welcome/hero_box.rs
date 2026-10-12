@@ -54,8 +54,7 @@ pub(super) fn min_content_height(
     info_height: u16,
     prompt_height: u16,
 ) -> u16 {
-    let inner =
-        super::logo::full_logo_line_count().max(right_col_height(input.menu_height, info_height));
+    let inner = logo_rows(input).max(right_col_height(input.menu_height, info_height));
     let hero_box_height = 2 + V_PAD * 2 + inner;
     let gap_after_error = if input.error_height > 0 { 1u16 } else { 0 };
     gap_after_error
@@ -77,8 +76,28 @@ fn clamp_info_height(desired: u16, input: &WelcomeLayoutInput<'_>, one_line_prom
 
 /// Width (cols) of the hero box's left (logo) column, including padding.
 /// Collapses to a small inset when the logo is hidden.
-fn left_col_width() -> u16 {
-    let logo_width = super::logo::full_logo_visual_width();
+fn ascii_logo(input: &WelcomeLayoutInput<'_>) -> bool {
+    input.content_area.height >= 70 && input.content_area.width >= HERO_BOX_MIN_WIDTH
+}
+
+fn logo_rows(input: &WelcomeLayoutInput<'_>) -> u16 {
+    if ascii_logo(input) {
+        super::ascii_logo::ROWS
+    } else {
+        super::logo::full_logo_line_count()
+    }
+}
+
+fn logo_width(input: &WelcomeLayoutInput<'_>) -> u16 {
+    if ascii_logo(input) {
+        super::ascii_logo::COLS
+    } else {
+        super::logo::full_logo_visual_width()
+    }
+}
+
+fn left_col_width(input: &WelcomeLayoutInput<'_>) -> u16 {
+    let logo_width = logo_width(input);
     if logo_width == 0 {
         H_INSET
     } else {
@@ -103,7 +122,7 @@ pub(super) fn compute_hero_box(input: &WelcomeLayoutInput<'_>) -> Option<Welcome
     // `hero_info.width == info_slot_width`, so the measured width is the drawn width
     let box_width = content_area.width.saturating_sub(6).min(120);
     let inner_width = box_width.saturating_sub(2);
-    let left_col_width = left_col_width();
+    let left_col_width = left_col_width(input);
     let right_width = inner_width.saturating_sub(left_col_width);
     let info_slot_width = right_width.saturating_sub(H_INSET);
     let info_height = match input.announcement {
@@ -118,7 +137,7 @@ pub(super) fn compute_hero_box(input: &WelcomeLayoutInput<'_>) -> Option<Welcome
         return None;
     }
 
-    let logo_rows = super::logo::full_logo_line_count();
+    let logo_rows = logo_rows(input);
     let info_gap = if info_height > 0 { 1u16 } else { 0 };
     let inner_height = logo_rows.max(right_col_height(menu_height, info_height));
     let hero_box_height = 2 + V_PAD * 2 + inner_height;
@@ -187,7 +206,7 @@ pub(super) fn compute_hero_box(input: &WelcomeLayoutInput<'_>) -> Option<Welcome
     };
 
     // Left column: balanced padding around the logo; collapses to a small inset when the logo is hidden
-    let logo_width = super::logo::full_logo_visual_width();
+    let logo_width = logo_width(input);
     // Logo body leans right; shave a column off the left pad to optically center.
     let logo_left_pad = LOGO_H_PAD.saturating_sub(1);
 

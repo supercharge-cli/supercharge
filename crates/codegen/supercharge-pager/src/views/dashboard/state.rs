@@ -444,6 +444,8 @@ pub struct DashboardState {
     pub(crate) deferred_peek_send: Option<DeferredPeekSend>,
     /// Peek panel state (Space toggles).
     pub peek: Option<PeekPanelState>,
+    /// Whether the selected session's preview and reply panel are visible.
+    pub preview_enabled: bool,
     /// Session-scoped guest viewport for the live-tail peek (capture once on select; sticky while the same row is peeked; restore on leave).
     pub(crate) peek_viewport: Option<PeekViewportLease>,
     /// Owned here (NOT inside [`PeekPanelState`]) because a widget carries a fuzzy-file-matcher daemon
@@ -1202,6 +1204,7 @@ impl DashboardState {
             deferred_dispatch_send: None,
             deferred_peek_send: None,
             peek: None,
+            preview_enabled: true,
             peek_viewport: None,
             peek_reply,
             peek_reply_rect: None,
@@ -1259,6 +1262,20 @@ impl DashboardState {
             // Fresh dashboard with no rows seeded, so the `+ New Agent` button is the default cursor target
             // Open sites that want a specific row seeded call `focus_row` after construction, which clears this atomically
             actions_focus: Some(ActionsFocus::NewAgent),
+        }
+    }
+
+    pub(crate) fn set_preview_enabled(
+        &mut self,
+        enabled: bool,
+        agents: &mut indexmap::IndexMap<AgentId, crate::app::agent_view::AgentView>,
+    ) {
+        self.preview_enabled = enabled;
+        if !enabled {
+            self.set_peek(None);
+            self.set_peek_reply_target_cwd(None);
+            self.file_search_dropdown_items_area = None;
+            self.restore_peek_viewport(agents);
         }
     }
 

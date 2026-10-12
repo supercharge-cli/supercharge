@@ -10,7 +10,7 @@ const DREAM_LOCK_STALE_FLOOR_SECS: u64 = DREAM_MODEL_TIMEOUT.as_secs() * 2;
 /// Whether a dream attempt reached the model call. `Ran` reports its own result; `Skipped` returned
 /// before the model call, so a user-initiated caller surfaces the reason and `/dream` is never silent.
 enum DreamAttempt {
-    Ran,
+    Ran(crate::extensions::memory::MemoryDreamOutcome),
     Skipped(&'static str),
 }
 
@@ -248,15 +248,16 @@ impl SessionActor {
     }
 
     /// Run dream from the `/dream` slash command, bypassing the time and session gates.
-    pub(super) async fn run_dream_slash_command(self: &Arc<Self>) {
+    pub(super) async fn run_dream_slash_command(
+        self: &Arc<Self>,
+    ) -> crate::extensions::memory::MemoryDreamOutcome {
         if self.memory.mode() == Some(crate::config::MemoryMode::V2) {
-            self.run_v2_dream_slash_command().await;
-            return;
+            return self.run_v2_dream_slash_command().await;
         }
         use crate::session::memory::dream_lock::sessions_since;
 
         let Some((storage, lock, sessions_dir, sid8)) = self.dream_context() else {
-            return;
+            return crate::extensions::memory::MemoryDreamOutcome::Disabled;
         };
 
         let sessions = match sessions_since(
@@ -269,7 +270,7 @@ impl SessionActor {
                     target: supercharge_telemetry::memory_log::TARGET,
                     "MEMORY_DREAM_SLASH: no session logs found, nothing to consolidate"
                 );
-                return;
+                return crate::extensions::memory::MemoryDreamOutcome::NoWork;
             }
             Ok(s) => s,
             Err(e) => {
@@ -278,7 +279,7 @@ impl SessionActor {
                     error = %e,
                     "MEMORY_DREAM_SLASH: failed to list sessions"
                 );
-                return;
+                return crate::extensions::memory::MemoryDreamOutcome::Failed;
             }
         };
 
@@ -289,7 +290,7 @@ impl SessionActor {
         );
 
         // `/dream` is user-initiated, so a skip must be surfaced rather than logged silently.
-        if let DreamAttempt::Skipped(reason) = self
+        let attempt = self
             .run_dream_inner(
                 &storage,
                 &lock,
@@ -298,13 +299,21 @@ impl SessionActor {
                 None,
                 "MEMORY_DREAM_SLASH",
             )
-            .await
-        {
-            self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
-                result: format!("skipped: {reason}"),
-                path: None,
-            })
             .await;
+        match attempt {
+            DreamAttempt::Ran(outcome) => outcome,
+            DreamAttempt::Skipped(reason) => {
+                self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
+                    result: format!("skipped: {reason}"),
+                    path: None,
+                })
+                .await;
+                match reason {
+                    "another consolidation is already running" => crate::extensions::memory::MemoryDreamOutcome::Busy,
+                    "nothing new to consolidate" | "no readable session content" => crate::extensions::memory::MemoryDreamOutcome::NoWork,
+                    _ => crate::extensions::memory::MemoryDreamOutcome::Failed,
+                }
+            }
         }
     }
 
@@ -399,7 +408,7 @@ impl SessionActor {
                     "{log_prefix}: model call failed"
                 );
                 self.memory.record_dream_result(false);
-                return DreamAttempt::Ran;
+                return DreamAttempt::Ran(crate::extensions::memory::MemoryDreamOutcome::Failed);
             }
             Err(_) => {
                 tracing::warn!(
@@ -407,7 +416,7 @@ impl SessionActor {
                     "{log_prefix}: model call timed out (30m)"
                 );
                 self.memory.record_dream_result(false);
-                return DreamAttempt::Ran;
+                return DreamAttempt::Ran(crate::extensions::memory::MemoryDreamOutcome::Failed);
             }
         };
 
@@ -417,6 +426,7 @@ impl SessionActor {
         // uncommitted so its drop releases the mutex and reopens the gate for a retry. A commit that
         // cannot durably write the marker returns false: leave the gate open and do not claim success.
         let mut cleaned_stems: Vec<String> = Vec::new();
+        let mut marker_committed = false;
         let dream_path = match &result.status {
             DreamStatus::Completed { .. } => {
                 let path = storage.workspace_memory_file();
@@ -436,6 +446,7 @@ impl SessionActor {
                 // Commit last, after reindex and cleanup, so a mid-run cancel or failure releases the
                 // lock without stamping the marker. Only record success once the marker lands.
                 if guard.commit() {
+                    marker_committed = true;
                     self.memory.record_dream_result(true);
                     Some(path.display().to_string())
                 } else {
@@ -448,6 +459,7 @@ impl SessionActor {
             }
             DreamStatus::NothingToConsolidate => {
                 if guard.commit() {
+                    marker_committed = true;
                     self.memory.record_dream_neutral();
                 } else {
                     tracing::warn!(
@@ -464,8 +476,15 @@ impl SessionActor {
         };
 
         let dream_result_str = match &result.status {
-            DreamStatus::Completed { chars_written } => format!("written ({chars_written} chars)"),
-            DreamStatus::NothingToConsolidate => "nothing to consolidate".into(),
+            DreamStatus::Completed { chars_written } if marker_committed => {
+                format!("written ({chars_written} chars)")
+            }
+            DreamStatus::NothingToConsolidate if marker_committed => {
+                "nothing to consolidate".into()
+            }
+            DreamStatus::Completed { .. } | DreamStatus::NothingToConsolidate => {
+                "failed: consolidation marker not committed".into()
+            }
             DreamStatus::Failed(err) => format!("failed: {err}"),
         };
         self.send_xai_notification(XaiSessionUpdate::MemoryDreamCompleted {
@@ -482,7 +501,16 @@ impl SessionActor {
             "{log_prefix}: consolidation complete"
         );
 
-        DreamAttempt::Ran
+        let outcome = match result.status {
+            DreamStatus::Completed { .. } if marker_committed => {
+                crate::extensions::memory::MemoryDreamOutcome::Completed
+            }
+            DreamStatus::NothingToConsolidate if marker_committed => {
+                crate::extensions::memory::MemoryDreamOutcome::NoWork
+            }
+            _ => crate::extensions::memory::MemoryDreamOutcome::Failed,
+        };
+        DreamAttempt::Ran(outcome)
     }
 
     /// Make the dream model call using the session's sampling client.
@@ -790,12 +818,14 @@ impl SessionActor {
             "pre_compaction" => supercharge_telemetry::events::MemoryFlushTrigger::PreCompaction,
             _ => supercharge_telemetry::events::MemoryFlushTrigger::UserRequested,
         };
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::MemoryFlushed {
-            trigger: flush_trigger,
-            success: flush_outcome == "written",
-            duration_ms: flush_start.elapsed().as_millis() as u64,
-            response_length: response_len,
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::MemoryFlushed {
+                trigger: flush_trigger,
+                success: flush_outcome == "written",
+                duration_ms: flush_start.elapsed().as_millis() as u64,
+                response_length: response_len,
+            },
+        );
 
         self.memory.release_flush_lock();
         self.send_xai_notification(XaiSessionUpdate::MemoryFlushCompleted {
@@ -813,7 +843,9 @@ impl SessionActor {
             self.chat_state_handle.get_conversation(),
         );
         let chat_history =
-            supercharge_chat_state::compaction_utils::prepare_conversation_for_summarization(conversation);
+            supercharge_chat_state::compaction_utils::prepare_conversation_for_summarization(
+                conversation,
+            );
         MemoryFlushSnapshot {
             counts,
             chat_history,

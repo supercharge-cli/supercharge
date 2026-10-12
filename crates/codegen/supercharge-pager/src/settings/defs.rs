@@ -70,6 +70,41 @@ const THEME_CHOICES: &[EnumChoice] = &[
         description: "Deep dark with purple accents; needs truecolor.",
     },
     EnumChoice {
+        canonical: "catppuccin-mocha",
+        display: "Catppuccin Mocha",
+        description: "Soft dark with lavender and pink accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "gruvbox-dark",
+        display: "Gruvbox Dark",
+        description: "Warm charcoal with amber accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "nord",
+        display: "Nord",
+        description: "Cool slate with frost-blue accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "solarized-dark",
+        display: "Solarized Dark",
+        description: "Deep teal with blue accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "dracula",
+        display: "Dracula",
+        description: "Dark charcoal with violet and pink accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "one-dark",
+        display: "One Dark",
+        description: "Graphite with blue and purple accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "solarized-light",
+        display: "Solarized Light",
+        description: "Warm light canvas with blue accents; needs truecolor.",
+    },
+    EnumChoice {
         canonical: "terminal",
         display: "Terminal",
         description: "Terminal's own background and text colors.",
@@ -466,6 +501,41 @@ const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
         display: "Oscura Midnight",
         description: "Deep dark with purple accents; needs truecolor.",
     },
+    EnumChoice {
+        canonical: "catppuccin-mocha",
+        display: "Catppuccin Mocha",
+        description: "Soft dark with lavender and pink accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "gruvbox-dark",
+        display: "Gruvbox Dark",
+        description: "Warm charcoal with amber accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "nord",
+        display: "Nord",
+        description: "Cool slate with frost-blue accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "solarized-dark",
+        display: "Solarized Dark",
+        description: "Deep teal with blue accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "dracula",
+        display: "Dracula",
+        description: "Dark charcoal with violet and pink accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "one-dark",
+        display: "One Dark",
+        description: "Graphite with blue and purple accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "solarized-light",
+        display: "Solarized Light",
+        description: "Warm light canvas with blue accents; needs truecolor.",
+    },
 ];
 
 const THINKING_EFFORT_CHOICES: &[EnumChoice] = &[
@@ -596,6 +666,19 @@ pub fn default_settings() -> Vec<SettingMeta> {
             },
             restart_required: false,
             // Minimal mode has no interactive scrollback pane for the rail.
+            hidden_in_minimal: true,
+        },
+        SettingMeta {
+            key: "dashboard_preview",
+            category: SettingCategory::Appearance,
+            owner: SettingOwner::Shared,
+            label: "Dashboard preview",
+            description: "Show the selected session's preview and reply panel in the dashboard. Turn off to give the session list more space; open a session to reply or answer permissions.",
+            keywords: &["dashboard", "peek", "preview", "reply", "panel"],
+            kind: SettingKind::Bool {
+                default: ui_default.dashboard_preview_enabled(),
+            },
+            restart_required: false,
             hidden_in_minimal: true,
         },
         SettingMeta {
@@ -1644,4 +1727,42 @@ pub fn default_settings() -> Vec<SettingMeta> {
             hidden_in_minimal: false,
         },
     ]
+}
+
+#[cfg(test)]
+mod theme_catalog_tests {
+    use super::*;
+    use crate::theme::ThemeKind;
+    use std::collections::HashSet;
+
+    #[test]
+    fn theme_pickers_include_every_concrete_theme() {
+        let expected: HashSet<_> = ThemeKind::ALL
+            .iter()
+            .map(|kind| kind.display_name())
+            .collect();
+        let full: HashSet<_> = THEME_CHOICES
+            .iter()
+            .skip(1)
+            .map(|choice| choice.canonical)
+            .collect();
+        let concrete: HashSet<_> = CONCRETE_THEME_CHOICES
+            .iter()
+            .map(|choice| choice.canonical)
+            .collect();
+        assert_eq!(full, expected);
+        assert_eq!(
+            concrete,
+            expected
+                .difference(&HashSet::from(["terminal"]))
+                .copied()
+                .collect()
+        );
+        for choice in THEME_CHOICES.iter().chain(CONCRETE_THEME_CHOICES) {
+            assert_eq!(
+                crate::theme::display_name_for_canonical(choice.canonical),
+                choice.display
+            );
+        }
+    }
 }
