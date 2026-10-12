@@ -87,9 +87,9 @@ pub(super) fn request(home: &Path, shell: &str) -> FixRequest {
 fn canonical_and_short_ids_resolve_to_canonical_id() {
     assert_eq!(resolve_fix_id("terminal.ssh-wrap").unwrap(), SSH_WRAP_ID);
     let command = human_fix_command(SSH_WRAP_ID).expect("SSH fix command");
-    assert_eq!(command, "grok doctor fix ssh-wrap");
+    assert_eq!(command, "supercharge doctor fix ssh-wrap");
     assert_eq!(
-        resolve_fix_id(command.strip_prefix("grok doctor fix ").unwrap()).unwrap(),
+        resolve_fix_id(command.strip_prefix("supercharge doctor fix ").unwrap()).unwrap(),
         SSH_WRAP_ID
     );
     assert!(human_fix_command(DiagnosticId::new("terminal", "unknown")).is_none());
@@ -211,7 +211,7 @@ fn tmux_fix_registry_resolves_every_short_and_canonical_id() {
         assert_eq!(resolve_fix_id(&id.to_string()).unwrap(), id);
         assert_eq!(
             human_fix_command(id).unwrap(),
-            format!("grok doctor fix {handle}")
+            format!("supercharge doctor fix {handle}")
         );
     }
 }
@@ -442,7 +442,7 @@ fn tmux_managed_items_coexist_and_each_apply_is_one_transaction() {
         assert!(std::fs::read_to_string(&path).unwrap().contains(line));
     }
     let content = std::fs::read_to_string(&path).unwrap();
-    assert_eq!(content.matches("# >>> grok doctor >>>").count(), 1);
+    assert_eq!(content.matches("# >>> supercharge doctor >>>").count(), 1);
     for id in [
         TMUX_CLIPBOARD_ID,
         DCS_PASSTHROUGH_ID,
@@ -580,7 +580,7 @@ fn conflicting_direct_form_after_managed_block_fails_persistent_verification() {
         std::fs::write(
             &path,
             format!(
-                "# >>> grok doctor >>>\n# >>> terminal.tmux-clipboard >>>\nset -g set-clipboard on\n# <<< terminal.tmux-clipboard <<<\n# <<< grok doctor <<<\n{conflict}\n"
+                "# >>> supercharge doctor >>>\n# >>> terminal.tmux-clipboard >>>\nset -g set-clipboard on\n# <<< terminal.tmux-clipboard <<<\n# <<< supercharge doctor <<<\n{conflict}\n"
             ),
         )
         .unwrap();
@@ -597,8 +597,8 @@ fn healthy_direct_does_not_suppress_repair_of_noncanonical_managed_item() {
     let path = temp.path().join(".tmux.conf");
     let report = tmux_report(TMUX_CLIPBOARD_ID, TmuxEvidence::Clipboard);
     for content in [
-        "set -g set-clipboard on\n# >>> grok doctor >>>\n# >>> terminal.tmux-clipboard >>>\nset -g set-clipboard off\n# <<< terminal.tmux-clipboard <<<\n# <<< grok doctor <<<\n",
-        "# >>> grok doctor >>>\n# >>> terminal.tmux-clipboard >>>\nset -g set-clipboard off\n# <<< terminal.tmux-clipboard <<<\n# <<< grok doctor <<<\nset -g set-clipboard on\n",
+        "set -g set-clipboard on\n# >>> supercharge doctor >>>\n# >>> terminal.tmux-clipboard >>>\nset -g set-clipboard off\n# <<< terminal.tmux-clipboard <<<\n# <<< supercharge doctor <<<\n",
+        "# >>> supercharge doctor >>>\n# >>> terminal.tmux-clipboard >>>\nset -g set-clipboard off\n# <<< terminal.tmux-clipboard <<<\n# <<< supercharge doctor <<<\nset -g set-clipboard on\n",
     ] {
         std::fs::write(&path, content).unwrap();
         let plan = plan_fix(
@@ -720,12 +720,12 @@ fn tmux_stale_plan_and_idempotence_reuse_managed_writer_safety() {
 fn bash_zsh_and_fish_plans_use_exact_paths_and_aliases() {
     let temp = tempfile::tempdir().unwrap();
     for (shell, relative, alias) in [
-        ("/bin/bash", ".bashrc", "alias ssh='grok wrap ssh'"),
-        ("/bin/zsh", ".zshrc", "alias ssh='grok wrap ssh'"),
+        ("/bin/bash", ".bashrc", "alias ssh='supercharge wrap ssh'"),
+        ("/bin/zsh", ".zshrc", "alias ssh='supercharge wrap ssh'"),
         (
             "/usr/local/bin/fish",
             ".config/fish/config.fish",
-            "alias ssh 'grok wrap ssh'",
+            "alias ssh 'supercharge wrap ssh'",
         ),
     ] {
         let plan = plan_fix(request(temp.path(), shell), &report(), &terminal()).unwrap();
@@ -734,7 +734,7 @@ fn bash_zsh_and_fish_plans_use_exact_paths_and_aliases() {
         assert_eq!(
             plan.change().block,
             format!(
-                "# >>> grok doctor >>>\n# >>> terminal.ssh-wrap >>>\n{alias}\n# <<< terminal.ssh-wrap <<<\n# <<< grok doctor <<<"
+                "# >>> supercharge doctor >>>\n# >>> terminal.ssh-wrap >>>\n{alias}\n# <<< terminal.ssh-wrap <<<\n# <<< supercharge doctor <<<"
             )
         );
         assert!(
@@ -949,7 +949,7 @@ fn comments_and_managed_alias_do_not_create_false_conflicts() {
     let path = temp.path().join(".zshrc");
     std::fs::write(
         &path,
-        "# alias ssh='ssh -A'\n# >>> grok doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh='grok wrap ssh'\n# <<< terminal.ssh-wrap <<<\n# <<< grok doctor <<<\n",
+        "# alias ssh='ssh -A'\n# >>> supercharge doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh='supercharge wrap ssh'\n# <<< terminal.ssh-wrap <<<\n# <<< supercharge doctor <<<\n",
     )
     .unwrap();
     let plan = plan_fix(request(temp.path(), "/bin/zsh"), &report(), &terminal()).unwrap();
@@ -963,11 +963,11 @@ fn managed_alias_with_later_unmanaged_conflict_is_not_configured() {
     let cases = [
         (
             ShellKind::Bash,
-            "# >>> grok doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh='grok wrap ssh'\n# <<< terminal.ssh-wrap <<<\n# <<< grok doctor <<<\nalias ssh='ssh -A'\n",
+            "# >>> supercharge doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh='supercharge wrap ssh'\n# <<< terminal.ssh-wrap <<<\n# <<< supercharge doctor <<<\nalias ssh='ssh -A'\n",
         ),
         (
             ShellKind::Fish,
-            "# >>> grok doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh 'grok wrap ssh'\n# <<< terminal.ssh-wrap <<<\n# <<< grok doctor <<<\nfunction ssh\n  command ssh -A $argv\nend\n",
+            "# >>> supercharge doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh 'supercharge wrap ssh'\n# <<< terminal.ssh-wrap <<<\n# <<< supercharge doctor <<<\nfunction ssh\n  command ssh -A $argv\nend\n",
         ),
     ];
     for (shell, content) in cases {
@@ -1067,9 +1067,9 @@ fn configured_report_reaches_pass_state_only_for_exact_managed_alias() {
 fn shell_aliases_expand_to_exact_argv_and_bypass_is_explicit() {
     let temp = tempfile::tempdir().unwrap();
     let capture = temp.path().join("capture");
-    let grok = temp.path().join("grok");
+    let cli = temp.path().join("supercharge");
     std::fs::write(
-        &grok,
+        &cli,
         format!(
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n",
             capture.display()
@@ -1077,13 +1077,14 @@ fn shell_aliases_expand_to_exact_argv_and_bypass_is_explicit() {
     )
     .unwrap();
     use std::os::unix::fs::PermissionsExt as _;
-    std::fs::set_permissions(&grok, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     if let Some(bash) = find_on_path("bash") {
         let rc = temp.path().join("bashrc");
-        std::fs::write(&rc, "alias ssh='grok wrap ssh'\n").unwrap();
+        std::fs::write(&rc, "alias ssh='supercharge wrap ssh'\n").unwrap();
         let command = format!(
-            "source '{}'; source '{}'; eval 'ssh -p 2222 host'",
+            "export PATH='{}':$PATH; source '{}'; source '{}'; eval 'ssh -p 2222 host'",
+            temp.path().display(),
             rc.display(),
             rc.display()
         );
@@ -1112,9 +1113,10 @@ fn shell_aliases_expand_to_exact_argv_and_bypass_is_explicit() {
     }
     if let Some(zsh) = find_on_path("zsh") {
         let rc = temp.path().join("zshrc");
-        std::fs::write(&rc, "alias ssh='grok wrap ssh'\n").unwrap();
+        std::fs::write(&rc, "alias ssh='supercharge wrap ssh'\n").unwrap();
         let command = format!(
-            "source '{}'; source '{}'; eval 'ssh -p 2222 host'",
+            "export PATH='{}':$PATH; source '{}'; source '{}'; eval 'ssh -p 2222 host'",
+            temp.path().display(),
             rc.display(),
             rc.display()
         );
@@ -1152,7 +1154,7 @@ fn shell_aliases_expand_to_exact_argv_and_bypass_is_explicit() {
     };
     let mut shell = std::process::Command::new(bash);
     shell
-        .args(["-ic", "alias ssh='grok wrap ssh'; command ssh host"])
+        .args(["-ic", "alias ssh='supercharge wrap ssh'; command ssh host"])
         .env("CAPTURE", &capture)
         .env(
             "PATH",

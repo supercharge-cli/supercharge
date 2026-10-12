@@ -5,15 +5,15 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AuthError {
-    #[error("Not logged in. Run `grok login`.")]
+    #[error("Not logged in. Run `supercharge login`.")]
     NotLoggedIn,
 
     /// The token expired and no refresh authority is available.
-    #[error("Token expired. Run `grok login` to re-authenticate.")]
+    #[error("Token expired. Run `supercharge login` to re-authenticate.")]
     TokenExpiredNoRefresh,
 
     /// Server rejected the token (401) with no recovery path.
-    #[error("Authentication rejected by server. Run `grok login` to re-authenticate.")]
+    #[error("Authentication rejected by server. Run `supercharge login` to re-authenticate.")]
     ServerRejectedNoRecovery,
 
     /// All recovery strategies are exhausted.
@@ -22,11 +22,11 @@ pub enum AuthError {
 
     /// A session's team principal violates the `force_login_team_uuid` pin.
     /// `message` states which team is required and which was returned.
-    #[error("{message} Run `grok login` to sign in with the required team.")]
+    #[error("{message} Run `supercharge login` to sign in with the required team.")]
     PinnedTeamMismatch { message: String },
 
     /// The cached API-key session was rejected because API-key auth is disabled.
-    #[error("API-key auth is disabled by your administrator. Run `grok login` to authenticate.")]
+    #[error("API-key auth is disabled by your administrator. Run `supercharge login` to authenticate.")]
     ApiKeyAuthDisabled,
 
     /// Outcome of a refresh-authority attempt.
@@ -108,15 +108,15 @@ impl RefreshTokenFailedReason {
     pub fn user_message(self) -> Cow<'static, str> {
         match self {
             Self::RefreshTokenRejected => {
-                "Your session has expired. Run `grok login` to sign in again.".into()
+                "Your session has expired. Run `supercharge login` to sign in again.".into()
             }
             Self::ClientRejected => {
-                "Authentication is temporarily unavailable. Run `grok login` if this persists."
+                "Authentication is temporarily unavailable. Run `supercharge login` if this persists."
                     .into()
             }
             Self::ProviderInteractiveRequired => provider_login_message(None),
             Self::Other => {
-                "Authentication could not be refreshed. Run `grok login` to sign in again.".into()
+                "Authentication could not be refreshed. Run `supercharge login` to sign in again.".into()
             }
         }
     }
@@ -160,5 +160,28 @@ impl AuthError {
     /// Permanent failures, NotLoggedIn, and policy rejects are not transient.
     pub fn is_transient(&self) -> bool {
         matches!(self, AuthError::Refresh(RefreshTokenError::Transient(_)))
+    }
+}
+
+#[cfg(test)]
+mod branding_tests {
+    use super::{AuthError, RefreshTokenFailedReason};
+
+    #[test]
+    fn auth_guidance_uses_the_supercharge_command() {
+        let messages = [
+            AuthError::NotLoggedIn.to_string(),
+            AuthError::TokenExpiredNoRefresh.to_string(),
+            AuthError::ServerRejectedNoRecovery.to_string(),
+            AuthError::PinnedTeamMismatch { message: "Wrong team.".into() }.to_string(),
+            AuthError::ApiKeyAuthDisabled.to_string(),
+            RefreshTokenFailedReason::RefreshTokenRejected.user_message().to_string(),
+            RefreshTokenFailedReason::ClientRejected.user_message().to_string(),
+            RefreshTokenFailedReason::Other.user_message().to_string(),
+        ];
+        for message in messages {
+            assert!(message.contains("supercharge login"), "{message}");
+            assert!(!message.contains("grok"), "{message}");
+        }
     }
 }

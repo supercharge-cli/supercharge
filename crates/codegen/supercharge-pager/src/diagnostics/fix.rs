@@ -311,7 +311,7 @@ impl std::fmt::Display for FixError {
         match self {
             Self::UnknownId(id) => write!(
                 formatter,
-                "`{id}` is not an available Doctor fix. Run `grok doctor fix` to list available fixes."
+                "`{id}` is not an available Doctor fix. Run `supercharge doctor fix` to list available fixes."
             ),
             Self::PlatformUnsupported => write!(
                 formatter,
@@ -333,7 +333,7 @@ impl std::fmt::Display for FixError {
             ),
             Self::UnsafeDirectory { label, path } => write!(
                 formatter,
-                "Grok refused unsafe {label} `{}`. Use a non-root absolute directory without control characters, `~`, `.` or `..` components.",
+                "Supercharge refused unsafe {label} `{}`. Use a non-root absolute directory without control characters, `~`, `.` or `..` components.",
                 path.display()
             ),
             Self::ExistingCustomization { path, detail }
@@ -489,28 +489,28 @@ const FIX_REGISTRY: &[FixSpec] = &[
         id: TMUX_CLIPBOARD_ID,
         handle: "tmux-clipboard",
         label: TMUX_CLIPBOARD_SPEC.label,
-        command: "grok doctor fix terminal.tmux-clipboard",
+        command: "supercharge doctor fix terminal.tmux-clipboard",
         kind: FixKind::TmuxOption(&TMUX_CLIPBOARD_SPEC),
     },
     FixSpec {
         id: DCS_PASSTHROUGH_ID,
         handle: "dcs-passthrough",
         label: DCS_PASSTHROUGH_SPEC.label,
-        command: "grok doctor fix terminal.dcs-passthrough",
+        command: "supercharge doctor fix terminal.dcs-passthrough",
         kind: FixKind::TmuxOption(&DCS_PASSTHROUGH_SPEC),
     },
     FixSpec {
         id: TMUX_EXTENDED_KEYS_ID,
         handle: "tmux-extended-keys",
         label: TMUX_EXTENDED_KEYS_SPEC.label,
-        command: "grok doctor fix terminal.tmux-extended-keys",
+        command: "supercharge doctor fix terminal.tmux-extended-keys",
         kind: FixKind::TmuxOption(&TMUX_EXTENDED_KEYS_SPEC),
     },
     FixSpec {
         id: TMUX_TRUECOLOR_ID,
         handle: "tmux-truecolor",
         label: TMUX_TRUECOLOR_SPEC.label,
-        command: "grok doctor fix terminal.tmux-truecolor",
+        command: "supercharge doctor fix terminal.tmux-truecolor",
         kind: FixKind::TmuxOption(&TMUX_TRUECOLOR_SPEC),
     },
 ];
@@ -528,7 +528,7 @@ pub fn resolve_fix_id(value: &str) -> Result<DiagnosticId, FixError> {
 }
 
 pub(crate) fn human_fix_command(id: DiagnosticId) -> Option<String> {
-    fix_spec(id).map(|spec| format!("grok doctor fix {}", spec.handle))
+    fix_spec(id).map(|spec| format!("supercharge doctor fix {}", spec.handle))
 }
 
 pub(crate) fn automatic_fix_choices()
@@ -609,10 +609,10 @@ pub(crate) fn format_applicable_automatic_fixes(
         output.push_str(&format!("  {handle:<20} {label}\n"));
         match availability {
             AutomaticFixAvailability::Here => output.push_str(&format!(
-                "    Run: grok doctor fix {handle}\n    In Grok: /doctor fix {handle}\n"
+                "    Run: supercharge doctor fix {handle}\n    In Supercharge: /doctor fix {handle}\n"
             )),
             AutomaticFixAvailability::RunLocally => output.push_str(&format!(
-                "    On your local computer, run: grok doctor fix {handle}\n"
+                "    On your local computer, run: supercharge doctor fix {handle}\n"
             )),
         }
     }
@@ -645,7 +645,7 @@ pub(crate) fn format_fix_preview(plan: &FixPlan) -> String {
         Some(path) => {
             let _ = writeln!(
                 output,
-                "\nBackup will be saved to: {}\nIf that file exists, Grok will choose a unique name.",
+                "\nBackup will be saved to: {}\nIf that file exists, Supercharge will choose a unique name.",
                 preview_path(path)
             );
         }

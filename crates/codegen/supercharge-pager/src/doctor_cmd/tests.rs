@@ -343,7 +343,7 @@ fn human_wayland_error_includes_detail_once() {
     assert_eq!(
         human::format(&report),
         concat!(
-            "Grok Doctor\n",
+            "Supercharge Doctor\n",
             "\n",
             "Environment\n",
             "  · terminal                     Ghostty\n",
@@ -452,7 +452,7 @@ fn human_healthy_fixture_is_exact() {
     assert_eq!(
         human::format(&healthy_report()),
         concat!(
-            "Grok Doctor\n",
+            "Supercharge Doctor\n",
             "\n",
             "Environment\n",
             "  · terminal                     Ghostty\n",
@@ -479,7 +479,7 @@ fn human_mixed_fixture_is_exact() {
     assert_eq!(
         human::format(&mixed_report()),
         concat!(
-            "Grok Doctor\n",
+            "Supercharge Doctor\n",
             "\n",
             "Environment\n",
             "  · terminal                     Ghostty\n",
@@ -488,7 +488,7 @@ fn human_mixed_fixture_is_exact() {
             "  · byobu                        tmux\n",
             "  · ssh                          yes\n",
             "  · color                        256\n",
-            "  · themes                       2/8: navy-cyan, black-crimson\n",
+            "  · themes                       2/15: navy-cyan, black-crimson\n",
             "  · keyboard                     cmd=dropped, opt=native (OS rescue active)\n",
             "  · newline                      Alt+Enter (Cursor: xterm.js cannot distinguish Shift+Enter)\n",
             "\n",
@@ -501,11 +501,11 @@ fn human_mixed_fixture_is_exact() {
             "\n",
             "Findings\n",
             "  ! terminal.tmux-clipboard      OSC 52 clipboard passthrough is disabled\n",
-            "    → Automatic setup: `grok doctor fix tmux-clipboard`\n",
+            "    → Automatic setup: `supercharge doctor fix tmux-clipboard`\n",
             "    → Add `set -g set-clipboard on` to ~/.tmux.conf\n",
             "      Reload tmux after editing.\n",
             "  i terminal.ssh-wrap            Use local SSH wrapping\n",
-            "    → Automatic setup: `grok doctor fix ssh-wrap`\n",
+            "    → Automatic setup: `supercharge doctor fix ssh-wrap`\n",
             "    → One-off: `supercharge wrap ssh <host>`\n",
             "\n",
             "Checks not completed\n",
@@ -516,7 +516,7 @@ fn human_mixed_fixture_is_exact() {
             "  ? tmux.control-mode            error: server unavailable\n",
             "\n",
             "Needs a running session\n",
-            "  Some checks only run in Grok. Start Grok and run /doctor.\n",
+            "  Some checks only run in Supercharge. Start Supercharge and run /doctor.\n",
             "\n",
             "1 issue, 1 recommendation\n",
         )
@@ -539,7 +539,7 @@ fn fix_preview_contains_exact_change_and_caveats() {
     assert_eq!(preview, crate::diagnostics::format_fix_preview(&plan));
     assert!(preview.contains("File: "));
     assert!(preview.contains(
-        "# >>> grok doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh='supercharge wrap ssh'"
+        "# >>> supercharge doctor >>>\n# >>> terminal.ssh-wrap >>>\nalias ssh='supercharge wrap ssh'"
     ));
     assert!(preview.contains("To use once without changing config: `supercharge wrap ssh <host>`"));
     assert!(preview.contains("Use `command ssh ...` to bypass the alias."));
@@ -637,7 +637,7 @@ fn human_incomplete_fixture_is_exact_without_duplicate_probe_rows() {
     assert_eq!(
         human::format(&report),
         concat!(
-            "Grok Doctor\n",
+            "Supercharge Doctor\n",
             "\n",
             "Environment\n",
             "  · terminal                     Ghostty\n",
@@ -655,7 +655,7 @@ fn human_incomplete_fixture_is_exact_without_duplicate_probe_rows() {
             "  · status                       confirmed\n",
             "\n",
             "Needs a running session\n",
-            "  Some checks only run in Grok. Start Grok and run /doctor.\n",
+            "  Some checks only run in Supercharge. Start Supercharge and run /doctor.\n",
             "\n",
             "0 issues, 0 recommendations\n",
         )
@@ -686,7 +686,7 @@ fn json_empty_fixture_pins_null_policy() {
                 "color": {
                     "level": {"status": "unavailable", "value": null},
                     "availableThemes": [],
-                    "totalThemes": 8
+                    "totalThemes": 15
                 },
                 "keyboard": null,
                 "newline": null,
@@ -734,7 +734,7 @@ fn json_contract_is_structural_stable_ordered_and_ansi_free() {
                 "color": {
                     "level": {"status": "available", "value": "256"},
                     "availableThemes": ["navy-cyan", "black-crimson"],
-                    "totalThemes": 8
+                    "totalThemes": 15
                 },
                 "keyboard": {"cmd": "dropped", "opt": "native", "os": "macos"},
                 "newline": {"kind": "xterm_js", "terminalName": "cursor"},
@@ -764,7 +764,7 @@ fn json_contract_is_structural_stable_ordered_and_ansi_free() {
                     },
                     "automaticRemediation": {
                         "fixId": "terminal.tmux-clipboard",
-                        "command": "grok doctor fix terminal.tmux-clipboard"
+                        "command": "supercharge doctor fix terminal.tmux-clipboard"
                     },
                     "note": "Reload tmux after editing."
                 },
@@ -775,7 +775,7 @@ fn json_contract_is_structural_stable_ordered_and_ansi_free() {
                     "remediation": {"fix": "supercharge wrap ssh <host>", "configPath": null},
                     "automaticRemediation": {
                         "fixId": "terminal.ssh-wrap",
-                        "command": "grok doctor fix terminal.ssh-wrap"
+                        "command": "supercharge doctor fix terminal.ssh-wrap"
                     },
                     "note": null
                 }
@@ -803,7 +803,7 @@ fn json_contract_is_structural_stable_ordered_and_ansi_free() {
     assert!(issue < recommendation);
     assert!(version < extended && extended < unsupported && unsupported < unavailable);
     assert!(!text.contains("\u{1b}"));
-    assert!(!text.contains("Grok Doctor"));
+    assert!(!text.contains("Supercharge Doctor"));
 }
 
 #[test]
@@ -852,7 +852,7 @@ fn stable_mapping_tables_are_complete() {
             "rio",
             "foot",
             "jetbrains",
-            "grok_desktop",
+            "supercharge_desktop",
             "vte",
             "terminator",
             "windows_terminal",

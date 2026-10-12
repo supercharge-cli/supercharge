@@ -276,14 +276,14 @@ fn doctor_planning_opens_refuses_remote_and_rejects_stale_identity() {
         TaskResult::DoctorFixPlanned {
             target: target.clone(),
             result: Ok(crate::app::actions::DoctorPlanningOutcome::RunLocally(
-                "grok doctor fix ssh-wrap".to_owned(),
+                "supercharge doctor fix ssh-wrap".to_owned(),
             )),
         },
         &mut app,
     );
     assert!(
         last_system_text(&app, id)
-            .contains("On your local computer, run: grok doctor fix ssh-wrap")
+            .contains("On your local computer, run: supercharge doctor fix ssh-wrap")
     );
 
     app.agents

@@ -13,7 +13,7 @@ use supercharge_mcp::servers::parse_mcp_qualified_name;
 use supercharge_session_events::{Event, EventWriter, PermissionDecision};
 use supercharge_tools::implementations::grok_build::web_fetch::domain_from_url;
 
-const REJECT_ONCE_LABEL: &str = "No, and tell Grok what to do differently";
+const REJECT_ONCE_LABEL: &str = "No, and tell Supercharge what to do differently";
 
 /// Stable option id for "allow all edits this session", distinct from `"always-allow"` so it maps to [`PromptOutcome::AllowEditsForSession`].
 /// Session-only and never persisted; exposed so the pager does not record it as a sticky cursor target.
@@ -1214,6 +1214,14 @@ mod tests {
         id: &str,
     ) -> bool {
         opts.contains_key(&acp::PermissionOptionId::new(id))
+    }
+
+    #[test]
+    fn reject_option_names_supercharge_for_visible_prompts() {
+        let p = prompter(ClientType::GrokPager);
+        let options = p.build_options(&AccessKind::Bash("echo test".to_owned()));
+        let label = &options[&acp::PermissionOptionId::new("reject-once")].name;
+        assert_eq!(label, "No, and tell Supercharge what to do differently");
     }
 
     #[test]

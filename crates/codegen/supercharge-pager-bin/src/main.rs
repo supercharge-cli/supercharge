@@ -350,7 +350,7 @@ async fn run_setup_command(json: bool) {
         }
         SetupOutcome::Staged => {
             eprintln!(
-                "Managed configuration update verified; it takes effect the next time Grok starts."
+                "Managed configuration update verified; it takes effect the next time Supercharge starts."
             );
         }
         SetupOutcome::Failed(e) => {

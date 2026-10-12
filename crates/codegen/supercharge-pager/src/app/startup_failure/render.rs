@@ -19,7 +19,7 @@ pub(super) fn render(failure: &StartupFailure) -> String {
             }
             let explanation = fill_indented(&advice.explanation(), "  ", "  ");
             format!(
-                "Couldn't start Grok: startup timed out after {}.\n\n{explanation}",
+                "Couldn't start Supercharge: startup timed out after {}.\n\n{explanation}",
                 whole_seconds(*waited)
             )
         }
@@ -63,7 +63,7 @@ impl Advice {
             let target = agent_name(earlier.target);
             let _ = write!(
                 explanation,
-                " Grok spent the first {} on the {target}.",
+                " Supercharge spent the first {} on the {target}.",
                 whole_seconds(earlier.wait)
             );
         }
@@ -137,11 +137,11 @@ enum NextStep {
 impl NextStep {
     fn text(self) -> &'static str {
         match self {
-            Self::Retry => "Start Grok again.",
-            Self::CheckNetworkThenRetry => "Check your network connection, then start Grok again.",
+            Self::Retry => "Start Supercharge again.",
+            Self::CheckNetworkThenRetry => "Check your network connection, then start Supercharge again.",
             Self::RestartSharedLeader => {
-                "Stop it with the command below, which also stops any other Grok \
-                 session using it, then start Grok again."
+                "Stop it with the command below, which also stops any other Supercharge \
+                 session using it, then start Supercharge again."
             }
         }
     }
@@ -149,7 +149,7 @@ impl NextStep {
     fn command(self) -> Option<&'static str> {
         match self {
             Self::Retry | Self::CheckNetworkThenRetry => Some(CONNECT_UI_TIMEOUT_TRY_COMMAND),
-            Self::RestartSharedLeader => Some("grok leader kill"),
+            Self::RestartSharedLeader => Some("supercharge leader kill"),
         }
     }
 }

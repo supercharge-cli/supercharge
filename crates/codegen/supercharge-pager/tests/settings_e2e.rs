@@ -3783,7 +3783,7 @@ fn reset_overlay_dims_all_rows_except_target() {
     }
 }
 
-/// The settings modal renders a 1-line "Ask Grok" tip footer at the bottom of the content area. It shows in Browse,
+/// The settings modal renders a 1-line "Ask Supercharge" tip footer at the bottom of the content area. It shows in Browse,
 /// FilterFocused, and PickingEnum modes (always-on tip). The footer is suppressed in `EditingValue` because the
 /// editor needs every line for input and validation.
 #[test]
@@ -3817,8 +3817,8 @@ fn docs_footer_renders_for_browse_and_picker() {
             all_text.push('\n');
         }
         assert!(
-            all_text.contains("Ask Grok"),
-            "[{fixture_label}] docs footer (`Ask Grok`) must appear in the rendered modal:\n\
+            all_text.contains("Ask Supercharge"),
+            "[{fixture_label}] docs footer (`Ask Supercharge`) must appear in the rendered modal:\n\
              {all_text}"
         );
         assert!(

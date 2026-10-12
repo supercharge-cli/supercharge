@@ -43,7 +43,7 @@ fn doctor_json_bypasses_unrelated_startup_state() {
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("stdout is one JSON document");
     assert_eq!(json["schemaVersion"], "1");
-    assert!(!String::from_utf8_lossy(&output.stdout).contains("Grok Doctor"));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("Supercharge Doctor"));
 
     let after = directory_entries(&grok_home);
     assert_eq!(after, before, "doctor must not create startup artifacts");
@@ -356,7 +356,7 @@ fn doctor_fix_without_id_lists_only_applicable_automatic_fixes() {
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("On your local computer, run: grok doctor fix ssh-wrap"),
+        stdout.contains("On your local computer, run: supercharge doctor fix ssh-wrap"),
         "{stdout}"
     );
     assert!(!home.join(".bashrc").exists());

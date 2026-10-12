@@ -408,10 +408,10 @@ impl ProtectedEditReason {
                 "Note: This edit contains changes under `/etc`, which is system configuration and can affect this machine beyond the current project.",
             ),
             Self::GrokConfig => Some(
-                "Note: This edit contains changes to Grok config, which can alter permissions, tools, and other behavior in later sessions.",
+                "Note: This edit contains changes to Supercharge config, which can alter permissions, tools, and other behavior in later sessions.",
             ),
             Self::GrokSandbox => Some(
-                "Note: This edit contains changes to the Grok sandbox config, which can loosen filesystem and network restrictions on commands.",
+                "Note: This edit contains changes to the Supercharge sandbox config, which can loosen filesystem and network restrictions on commands.",
             ),
             Self::ClaudeSettings => Some(
                 "Note: This edit contains changes to Claude-compatible settings, which can install hooks or change permission mode without a separate execution approval.",

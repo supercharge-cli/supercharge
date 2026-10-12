@@ -463,7 +463,7 @@ pub struct PagerArgs {
     pub cwd: Option<PathBuf>,
     /// Use a custom leader socket path instead of the default `~/.supercharge/leader.sock`.
     /// A local/branch build can thus run an isolated leader without colliding with the default one already running on the machine
-    /// Name it `~/.supercharge/leader-*.sock` to keep `grok leader list/kill` able to find it; any other location works but won't be auto-discovered
+    /// Name it `~/.supercharge/leader-*.sock` to keep `supercharge leader list/kill` able to find it; any other location works but won't be auto-discovered
     #[arg(
         long = "leader-socket",
         value_name = "PATH",

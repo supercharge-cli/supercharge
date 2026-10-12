@@ -194,17 +194,17 @@ impl fmt::Display for GrantRefuse {
             Self::NoHome => write!(
                 f,
                 "error: folder trust was not saved (no home directory for the trust store). \
-                 Set SUPERCHARGE_HOME to an absolute directory, or unset it, then start Grok again."
+                 Set SUPERCHARGE_HOME to an absolute directory, or unset it, then start Supercharge again."
             ),
             Self::Unreadable => write!(
                 f,
                 "error: folder trust was not saved (trust store could not be read). \
-                 Fix or delete ~/.supercharge/trusted_folders.toml, then start Grok again and press y."
+                 Fix or delete ~/.supercharge/trusted_folders.toml, then start Supercharge again and press y."
             ),
             Self::KeyMoved => write!(
                 f,
                 "error: folder trust was not saved (folder path changed). \
-                 Start Grok again from the folder you want to trust."
+                 Start Supercharge again from the folder you want to trust."
             ),
         }
     }

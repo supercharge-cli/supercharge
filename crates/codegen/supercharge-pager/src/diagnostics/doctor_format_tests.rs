@@ -202,17 +202,17 @@ fn tmux_config_and_reload_notes_output_is_stable() {
             "Issues (3)\n",
             "\n",
             "  ! terminal.tmux-clipboard  `set-clipboard` is off in tmux, so OSC 52 clipboard copies are blocked\n",
-            "      Automatic setup: `grok doctor fix tmux-clipboard`\n",
+            "      Automatic setup: `supercharge doctor fix tmux-clipboard`\n",
             "      Add `set -g set-clipboard on` to ~/.byobu/.tmux.conf\n",
             "      Note: Reload tmux with `tmux source-file ~/.byobu/.tmux.conf`, or restart the tmux server.\n",
             "\n",
             "  ! terminal.dcs-passthrough  `allow-passthrough` is off in tmux, which can block clipboard copies in nested sessions\n",
-            "      Automatic setup: `grok doctor fix dcs-passthrough`\n",
+            "      Automatic setup: `supercharge doctor fix dcs-passthrough`\n",
             "      Add `set -wg allow-passthrough on` to ~/.byobu/.tmux.conf\n",
             "      Note: Reload tmux with `tmux source-file ~/.byobu/.tmux.conf`, or restart the tmux server.\n",
             "\n",
             "  ! terminal.tmux-extended-keys  `extended-keys` is off in tmux, so some shortcuts may not work\n",
-            "      Automatic setup: `grok doctor fix tmux-extended-keys`\n",
+            "      Automatic setup: `supercharge doctor fix tmux-extended-keys`\n",
             "      Add `set -g extended-keys on` to ~/.byobu/.tmux.conf\n",
             "      Note: Reload tmux with `tmux source-file ~/.byobu/.tmux.conf`, or restart the tmux server.\n",
         )
@@ -240,7 +240,7 @@ fn limited_color_output_is_stable() {
             "  multiplexer  None detected\n",
             "  ssh          no\n",
             "  color        256\n",
-            "  themes       5/8: navy-cyan, black-crimson, voltage_dark, voltage_light, terminal\n",
+            "  themes       4/14: navy-cyan, black-crimson, voltage_dark, voltage_light\n",
             "\n",
             "Clipboard\n",
             "  native       local (pbcopy)\n",
@@ -253,7 +253,7 @@ fn limited_color_output_is_stable() {
             "\n",
             "  ! terminal.limited-color  This terminal reports 256 color, so truecolor themes are unavailable\n",
             "      Run: `export COLORTERM=truecolor`\n",
-            "      Note: Add this export to your shell startup file, such as `~/.zshrc` or `~/.bashrc`, then restart Grok.\n",
+            "      Note: Add this export to your shell startup file, such as `~/.zshrc` or `~/.bashrc`, then restart Supercharge AI.\n",
         )
     );
 }
@@ -293,8 +293,8 @@ fn unwrapped_ssh_recommendation_with_no_issues_output_is_stable() {
             "Recommendations\n",
             "\n",
             "  i terminal.ssh-wrap  Use local SSH wrapping for more reliable clipboard copy and terminal recovery\n",
-            "      Automatic setup: `grok doctor fix ssh-wrap`\n",
-            "      One-off: `grok wrap ssh <host>`\n",
+            "      Automatic setup: `supercharge doctor fix ssh-wrap`\n",
+            "      One-off: `supercharge wrap ssh <host>`\n",
             "      Note: Run this on your local computer instead of plain `ssh`. It forwards copies to your local clipboard and restores terminal modes if the connection drops.\n",
         )
     );
@@ -372,7 +372,7 @@ fn wezterm_xtversion_runtime_evidence_output_is_stable() {
             "Issues (1)\n",
             "\n",
             "  ! terminal.wezterm-kitty  Shift+Enter can't insert a newline in WezTerm over SSH\n",
-            "      Note: For this session, type `\\` and then press Enter. Grok can't negotiate the Kitty keyboard protocol over SSH yet. `enable_kitty_keyboard = true` applies only to local WezTerm sessions.\n",
+            "      Note: For this session, type `\\` and then press Enter. Supercharge AI can't negotiate the Kitty keyboard protocol over SSH yet. `enable_kitty_keyboard = true` applies only to local WezTerm sessions.\n",
         )
     );
 }

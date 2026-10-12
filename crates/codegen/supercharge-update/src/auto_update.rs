@@ -30,7 +30,7 @@ pub enum UpdateRunMode {
 
 const PROMPT_UPDATE_NOW: &str = "Update now? [Y/n/d]";
 const MSG_AUTO_UPDATE_BACKGROUND: &str = "Auto-update running in background.";
-const MSG_RUN_UPDATE_MANUAL: &str = "Run `grok update` to get the latest version.";
+const MSG_RUN_UPDATE_MANUAL: &str = "Run `supercharge update` to get the latest version.";
 /// An empty or `"stable"` channel means stable, the installers' default (`CHANNEL="${SUPERCHARGE_CHANNEL:-stable}"` in install.sh).
 fn is_stable_channel(channel: &str) -> bool {
     channel.is_empty() || channel == "stable"
@@ -816,7 +816,7 @@ async fn run_update_subcommand(
             // The atomic install protocol makes mid-download kills safe
             let status = cmd.status().await?;
             if !status.success() {
-                anyhow::bail!("grok update failed with {}", status);
+                anyhow::bail!("supercharge update failed with {}", status);
             }
             Ok(None)
         }
@@ -853,7 +853,7 @@ pub fn restart_grok() -> Result<()> {
     }
     cmd.env_clear();
     cmd.envs(std::env::vars_os().filter(|(k, _)| k != "SUPERCHARGE_AUTO_UPDATE"));
-    eprintln!("Restarting Grok...");
+    eprintln!("Restarting Supercharge...");
 
     // Use exec on Unix to replace the current process, avoiding stdio issues when the parent exits
     // On Windows, fall back to spawn and exit
@@ -1564,7 +1564,7 @@ async fn download_verified_from_base(
     let binary_name = format!("grok-{}-{}", version, platform);
     let binary_path = download_dir.join(&binary_name);
 
-    eprintln!("  Downloading grok v{} ({})...", version, platform);
+    eprintln!("  Downloading Supercharge v{} ({})...", version, platform);
 
     // The downloaded binary is already +x (see `publish_downloaded_artifact`)
     download_cli_artifact_from_gcs(gcs_base_url, &binary_name, &binary_path, true).await?;
@@ -2531,7 +2531,7 @@ pub async fn run_update(
             anyhow::bail!("{e}");
         }
         eprintln!(
-            "Installing Grok {} (current: {})...",
+            "Installing Supercharge {} (current: {})...",
             version, current_version
         );
         eprintln!();
@@ -2544,8 +2544,8 @@ pub async fn run_update(
         {
             tracing::warn!("Failed to persist auto_update=false for pinned install: {e}");
         }
-        eprintln!("  ✓ grok v{} installed successfully!", version);
-        eprintln!("  Please restart Grok.");
+        eprintln!("  ✓ Supercharge v{} installed successfully!", version);
+        eprintln!("  Please restart Supercharge.");
         return Ok(Some(version.to_string()));
     }
 
@@ -2652,12 +2652,12 @@ pub async fn run_update(
         .unwrap_or(true)
     {
         eprintln!(
-            "Forcing reinstall of Grok {} (already up to date)",
+            "Forcing reinstall of Supercharge {} (already up to date)",
             effective_current
         );
         &effective_current
     } else {
-        eprintln!("Updating Grok {} → {}", effective_current, install_target);
+        eprintln!("Updating Supercharge {} → {}", effective_current, install_target);
         &install_target
     };
 
@@ -2668,10 +2668,10 @@ pub async fn run_update(
     let stable_ptr = try_fetch_stable_pointer().await;
     write_version_cache(target_version, stable_ptr.as_deref()).await;
     refresh_deployment_config().await;
-    eprintln!("  ✓ grok v{} installed successfully!", target_version);
+    eprintln!("  ✓ Supercharge v{} installed successfully!", target_version);
 
     if !force && std::env::var_os("SUPERCHARGE_AUTO_UPDATE").is_none() {
-        eprintln!("  Please restart Grok.");
+        eprintln!("  Please restart Supercharge.");
     }
     Ok(Some(target_version.to_string()))
 }

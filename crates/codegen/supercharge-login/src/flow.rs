@@ -606,11 +606,9 @@ pub(super) async fn run_auth_flow_steps(
         )
         .await;
     }
-    tracing::error!(
-        "auth: no OAuth2 configuration available (neither enterprise OIDC nor xAI OAuth2 configured)"
-    );
+    tracing::error!("auth: no authentication provider configured (OIDC and OAuth2 unavailable)");
     anyhow::bail!(
-        "No OAuth2 configuration available. Run `grok login` to authenticate, or contact your administrator if you use enterprise SSO."
+        "No authentication provider configured. Run `supercharge login` to set up a provider, or contact your administrator if you use enterprise SSO."
     )
 }
 /// Non-interactive auth refresh: returns valid credentials if available without ever triggering interactive login (browser, device code, etc.).

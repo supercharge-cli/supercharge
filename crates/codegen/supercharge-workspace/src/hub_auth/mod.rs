@@ -143,13 +143,13 @@ pub fn login_session_at(auth_path: &Path, scope_key: &str) -> anyhow::Result<Opt
 fn read_auth_entry(path: &Path) -> anyhow::Result<(String, AuthEntry)> {
     let Some(entries) = read_auth_entries_if_present(path)? else {
         anyhow::bail!(
-            "No auth credentials found at {}. Run `grok login` first.",
+            "No auth credentials found at {}. Run `supercharge login` first.",
             path.display()
         );
     };
     select_login_entry(entries).ok_or_else(|| {
         anyhow::anyhow!(
-            "no OIDC auth entry found in {}. Run `grok login` first.",
+            "no OIDC auth entry found in {}. Run `supercharge login` first.",
             path.display()
         )
     })

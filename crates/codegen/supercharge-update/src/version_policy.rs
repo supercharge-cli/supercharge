@@ -16,8 +16,8 @@ enum RequiredRangeDecision {
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum VersionPolicyError {
     #[error(
-        "Cannot install Grok {target}: the minimum allowed version is {minimum}. \
-         Run `grok update` to install the latest allowed version."
+        "Cannot install Supercharge {target}: the minimum allowed version is {minimum}. \
+         Run `supercharge update` to install the latest allowed version."
     )]
     TargetBelowFloor { target: String, minimum: String },
 }
@@ -78,16 +78,16 @@ fn required_range_message(decision: &RequiredRangeDecision) -> Option<String> {
     match decision {
         RequiredRangeDecision::InRange => None,
         RequiredRangeDecision::Below { current, minimum } => Some(format!(
-            "This version of Grok ({current}) is older than the minimum required \
+            "This version of Supercharge ({current}) is older than the minimum required \
              by your organization ({minimum}).\n\n\
              Update to an approved version through your organization's approved \
-             method (for example, run `grok update`)."
+             method (for example, run `supercharge update`)."
         )),
         RequiredRangeDecision::Above { current, maximum } => Some(format!(
-            "This version of Grok ({current}) is newer than the maximum allowed \
+            "This version of Supercharge ({current}) is newer than the maximum allowed \
              by your organization ({maximum}).\n\n\
              Install an approved version through your organization's approved \
-             method (for example, run `grok update --version {maximum}`)."
+             method (for example, run `supercharge update --version {maximum}`)."
         )),
     }
 }

@@ -8,7 +8,7 @@ pub const GITHUB_REPO_MAPPING_FILE: &str = ".github_repo";
 const EXPORT_BUDGET: Duration = Duration::from_secs(120);
 
 const DEFAULT_BRANCH: &str = "main";
-const AUTHOR_NAME: &str = "Grok";
+const AUTHOR_NAME: &str = "Supercharge";
 const AUTHOR_EMAIL: &str = "grok-export@users.noreply.github.com";
 
 const SEED_GITIGNORE: &str = "node_modules/\n.project_id\n.github_repo\n.env\n.env.*\n";
@@ -255,7 +255,7 @@ async fn commit_if_dirty(dir: &Path, message: Option<&str>) -> Result<bool, Expo
     if status.is_empty() {
         return Ok(true);
     }
-    let message = message.unwrap_or("Export from Grok");
+    let message = message.unwrap_or("Export from Supercharge");
     git(dir, &["commit", "-m", message]).await?;
     Ok(false)
 }

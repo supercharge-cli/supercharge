@@ -80,7 +80,7 @@ fn voice_missing_finding(error: String) -> DiagnosticFinding {
         automatic_remediation: None,
         note: Some(
             "Connect or select a microphone in your system sound settings. On Linux, install a \
-             supported audio recorder if none was found on PATH. Then run `/doctor` or `Supercharge AI \
+             supported audio recorder if none was found on PATH. Then run `/doctor` or `supercharge \
              doctor` again. Doctor can't detect denied macOS microphone access when the system \
              returns silence; follow the message shown when dictation fails."
                 .to_owned(),
@@ -882,7 +882,7 @@ pub fn color_support_warning(
         warning.note = Some(format!(
             "Run `tmux source-file {tmux_config_path}`, then detach and reattach: the server \
              reads the option only on reload, and a client fixes its color depth only at attach. \
-             If Grok still reports less than truecolor afterwards, also add `set -g \
+             If Supercharge still reports less than truecolor afterwards, also add `set -g \
              default-terminal \"tmux-256color\"` and `export COLORTERM=truecolor` to your shell \
              startup file."
         ));
@@ -2502,7 +2502,7 @@ mod tests {
         assert!(finding.note.as_deref().is_some_and(|note| {
             note.contains("install a supported audio recorder")
                 && note.contains("supercharge doctor")
-                && note.contains("can't detect denied macOS microphone access")
+                && note.contains("Doctor can't detect denied macOS microphone access")
         }));
     }
 
