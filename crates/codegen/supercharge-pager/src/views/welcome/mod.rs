@@ -248,10 +248,7 @@ impl StackedColumn {
 
     /// The tier the terminal height allows, stepped down only while the column would overflow beside the draft and the reserved rows.
     fn logo_tier(&self, reserved: u16, ascii_fits_width: bool) -> LogoTier {
-        let mut tier = if ascii_fits_width
-            && self.content_height >= 50
-            && self.fits(LogoTier::Ascii, reserved)
-        {
+        let mut tier = if ascii_fits_width && self.fits(LogoTier::Ascii, reserved) {
             LogoTier::Ascii
         } else {
             LogoTier::for_height(self.content_height)
@@ -3462,6 +3459,45 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_terminal_home_uses_ascii_when_rows_fit() {
+        for (width, height) in [(167, 41), (238, 47)] {
+            let layout = WelcomeLayout::compute(WelcomeLayoutInput {
+                content_area: Rect::new(0, 0, width, height),
+                menu_height: 4,
+                tip_height: 1,
+                prompt_height: Some(PROMPT_HEIGHT),
+                ..Default::default()
+            });
+            let logo = if layout.has_hero_box() {
+                layout.hero_logo
+            } else {
+                layout.logo
+            };
+            assert!(logo.width >= ascii_logo::COLS, "{width}x{height}: {logo:?}");
+            assert!(
+                logo.height >= ascii_logo::ROWS,
+                "{width}x{height}: {logo:?}"
+            );
+            assert!(layout.prompt.y > logo.bottom(), "{width}x{height}");
+        }
+    }
+
+    #[test]
+    fn short_home_keeps_prompt_visible_without_ascii_art() {
+        for width in [80, 238] {
+            let layout = WelcomeLayout::compute(WelcomeLayoutInput {
+                content_area: Rect::new(0, 0, width, 24),
+                menu_height: 4,
+                prompt_height: Some(PROMPT_HEIGHT),
+                ..Default::default()
+            });
+            assert!(layout.logo.height < ascii_logo::ROWS);
+            assert!(layout.prompt.height > 0);
+            assert!(layout.prompt.bottom() <= 24);
+        }
+    }
+
+    #[test]
     fn tall_home_uses_ascii_art_without_clipping_the_prompt() {
         for width in [80, HERO_BOX_MIN_WIDTH] {
             let input = WelcomeLayoutInput {
@@ -3964,10 +4000,9 @@ mod tests {
     }
 
     #[test]
-    fn hero_box_keeps_one_bottom_pad_below_actions() {
-        // With a changelog/announcement the subtitle is hidden, but there's
-        // still exactly one padding row between the actions and the bottom
-        // border. (menu=4 + info=3 fills the inner, so the menu reaches the pad.)
+    fn hero_box_keeps_bottom_pad_below_actions() {
+        // The taller ASCII logo may leave more blank rows below the menu, but
+        // the actions must never touch the bottom border.
         let area = Rect::new(0, 0, HERO_BOX_MIN_WIDTH, 50);
         let a = long_ann();
         let no_info = WelcomeLayout::compute(WelcomeLayoutInput {
@@ -3985,11 +4020,7 @@ mod tests {
         assert_eq!(with_info.hero_subtitle.height, 0);
         let menu_bottom = with_info.hero_menu.y + with_info.hero_menu.height;
         let border_bottom = with_info.hero_box.y + with_info.hero_box.height - 1;
-        assert_eq!(
-            border_bottom - menu_bottom,
-            1,
-            "one pad row below the actions"
-        );
+        assert!(border_bottom - menu_bottom >= 1, "pad below the actions");
     }
 
     /// Flatten a rendered buffer into one string for substring assertions.

@@ -77,7 +77,16 @@ fn clamp_info_height(desired: u16, input: &WelcomeLayoutInput<'_>, one_line_prom
 /// Width (cols) of the hero box's left (logo) column, including padding.
 /// Collapses to a small inset when the logo is hidden.
 fn ascii_logo(input: &WelcomeLayoutInput<'_>) -> bool {
-    input.content_area.height >= 70 && input.content_area.width >= HERO_BOX_MIN_WIDTH
+    let prompt_height = input.prompt_height.unwrap_or(super::PROMPT_HEIGHT);
+    let gap_after_error = u16::from(input.error_height > 0);
+    let needed = gap_after_error
+        + input.error_height
+        + 2
+        + V_PAD * 2
+        + super::ascii_logo::ROWS.max(right_col_height(input.menu_height, 0))
+        + 1
+        + WelcomeLayout::fixed_below(input.tip_height, prompt_height);
+    input.content_area.width >= HERO_BOX_MIN_WIDTH && input.content_area.height >= needed
 }
 
 fn logo_rows(input: &WelcomeLayoutInput<'_>) -> u16 {
