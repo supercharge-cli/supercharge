@@ -9,6 +9,8 @@ use crate::theme::Theme;
 
 pub(super) const COLS: u16 = 63;
 pub(super) const ROWS: u16 = 28;
+pub(super) const SMALL_COLS: u16 = 48;
+pub(super) const SMALL_ROWS: u16 = 20;
 const START: f64 = 0.5;
 const PASS: f64 = 2.0;
 const EVERY: f64 = 5.0;
@@ -182,12 +184,20 @@ fn palette_offset(theme: &Theme) -> Option<usize> {
 }
 
 pub(super) fn render(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64) {
-    if area.width < COLS || area.height < ROWS {
+    render_sized(area, buf, theme, elapsed, COLS, ROWS);
+}
+
+pub(super) fn render_small(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64) {
+    render_sized(area, buf, theme, elapsed, SMALL_COLS, SMALL_ROWS);
+}
+
+fn render_sized(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64, cols: u16, rows: u16) {
+    if area.width < cols || area.height < rows {
         return;
     }
     let offset = palette_offset(theme);
     let pic = if offset.is_some() { ART } else { MONO };
-    let x0 = area.x + (area.width - COLS) / 2;
+    let x0 = area.x + (area.width - cols) / 2;
     let y0 = area.y;
     static EXTENTS: OnceLock<(f64, f64)> = OnceLock::new();
     let (lo, span) = *EXTENTS.get_or_init(|| {
@@ -212,13 +222,21 @@ pub(super) fn render(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64) 
         f64::NEG_INFINITY
     };
 
-    for (y, (art, ink)) in lines(pic).zip(lines(INK)).enumerate() {
-        debug_assert!(y < ROWS as usize && art.len() <= COLS as usize);
-        for (x, &original) in art.as_bytes().iter().enumerate() {
+    let source: Vec<_> = lines(pic).zip(lines(INK)).collect();
+    for y in 0..rows {
+        let source_y = (y * (ROWS - 1) + (rows - 1) / 2) / (rows - 1);
+        let (art, ink) = source[source_y as usize];
+        for x in 0..cols {
+            let source_x = (x * (COLS - 1) + (cols - 1) / 2) / (cols - 1);
+            let original = art
+                .as_bytes()
+                .get(source_x as usize)
+                .copied()
+                .unwrap_or(b' ');
             if original == b' ' {
                 continue;
             }
-            let distance = (x as f64 + LEAN * y as f64 - at).abs();
+            let distance = (source_x as f64 + LEAN * source_y as f64 - at).abs();
             let k = if distance < HALF {
                 1.0 - distance / HALF
             } else {
@@ -230,10 +248,10 @@ pub(super) fn render(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64) 
             } else {
                 original
             };
-            let cell = &mut buf[(x0 + x as u16, y0 + y as u16)];
+            let cell = &mut buf[(x0 + x, y0 + y)];
             cell.set_char(ch as char);
             if let Some(offset) = offset {
-                let index = ink.as_bytes()[x] - b'0';
+                let index = ink.as_bytes()[source_x as usize] - b'0';
                 debug_assert!(index < 8);
                 let level = if k > 0.6 {
                     2
@@ -269,6 +287,23 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[test]
+    fn smaller_art_keeps_its_shape_and_glint() {
+        let area = Rect::new(0, 0, SMALL_COLS, SMALL_ROWS);
+        let theme = Theme::tokyonight();
+        let mut initial = Buffer::empty(area);
+        let mut moving = Buffer::empty(area);
+        render_small(area, &mut initial, &theme, 0.0);
+        render_small(area, &mut moving, &theme, 1.5);
+        let ink = initial
+            .content
+            .iter()
+            .filter(|cell| cell.symbol() != " ")
+            .count();
+        assert!(ink > 200, "small art must remain recognizable");
+        assert_ne!(initial.content, moving.content);
     }
 
     #[test]

@@ -3460,7 +3460,7 @@ mod tests {
 
     #[test]
     fn ordinary_terminal_home_uses_ascii_when_rows_fit() {
-        for (width, height) in [(167, 41), (238, 47)] {
+        for (width, height) in [(167, 41)] {
             let layout = WelcomeLayout::compute(WelcomeLayoutInput {
                 content_area: Rect::new(0, 0, width, height),
                 menu_height: 4,
@@ -3480,6 +3480,22 @@ mod tests {
             );
             assert!(layout.prompt.y > logo.bottom(), "{width}x{height}");
         }
+    }
+
+    #[test]
+    fn wide_home_uses_smaller_ascii_logo() {
+        let layout = WelcomeLayout::compute(WelcomeLayoutInput {
+            content_area: Rect::new(0, 0, 238, 47),
+            menu_height: 4,
+            tip_height: 1,
+            prompt_height: Some(PROMPT_HEIGHT),
+            ..Default::default()
+        });
+        assert!(layout.has_hero_box());
+        assert_eq!(layout.hero_logo.width, 48);
+        assert_eq!(layout.hero_logo.height, 20);
+        assert!(layout.hero_menu.x > layout.hero_logo.right());
+        assert!(layout.prompt.y > layout.hero_box.bottom());
     }
 
     #[test]
@@ -3511,8 +3527,13 @@ mod tests {
             } else {
                 layout.logo
             };
-            assert!(logo.width >= ascii_logo::COLS);
-            assert!(logo.height >= ascii_logo::ROWS);
+            let (cols, rows) = if layout.has_hero_box() {
+                (ascii_logo::SMALL_COLS, ascii_logo::SMALL_ROWS)
+            } else {
+                (ascii_logo::COLS, ascii_logo::ROWS)
+            };
+            assert!(logo.width >= cols);
+            assert!(logo.height >= rows);
             assert!(layout.prompt.y > logo.bottom());
         }
     }

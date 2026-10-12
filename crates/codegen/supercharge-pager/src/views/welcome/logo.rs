@@ -263,6 +263,17 @@ pub fn render_full_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
     }
 }
 
+pub fn render_hero_logo(area: Rect, buf: &mut Buffer, theme: &Theme) {
+    if logo_hidden() {
+        return;
+    }
+    if area.width >= ascii_logo::SMALL_COLS && area.height >= ascii_logo::SMALL_ROWS {
+        ascii_logo::render_small(area, buf, theme, animation_elapsed().as_secs_f64());
+    } else {
+        render_full_logo(area, buf, theme);
+    }
+}
+
 /// Line count of the small logo used in minimal's committed welcome card (0 on a legacy Windows console, where the braille art is suppressed).
 pub fn compact_logo_line_count() -> u16 {
     if logo_hidden() {

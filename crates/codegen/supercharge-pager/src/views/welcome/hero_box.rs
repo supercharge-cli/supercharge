@@ -83,7 +83,7 @@ fn ascii_logo(input: &WelcomeLayoutInput<'_>) -> bool {
         + input.error_height
         + 2
         + V_PAD * 2
-        + super::ascii_logo::ROWS.max(right_col_height(input.menu_height, 0))
+        + super::ascii_logo::SMALL_ROWS.max(right_col_height(input.menu_height, 0))
         + 1
         + WelcomeLayout::fixed_below(input.tip_height, prompt_height);
     input.content_area.width >= HERO_BOX_MIN_WIDTH && input.content_area.height >= needed
@@ -91,7 +91,7 @@ fn ascii_logo(input: &WelcomeLayoutInput<'_>) -> bool {
 
 fn logo_rows(input: &WelcomeLayoutInput<'_>) -> u16 {
     if ascii_logo(input) {
-        super::ascii_logo::ROWS
+        super::ascii_logo::SMALL_ROWS
     } else {
         super::logo::full_logo_line_count()
     }
@@ -99,7 +99,7 @@ fn logo_rows(input: &WelcomeLayoutInput<'_>) -> u16 {
 
 fn logo_width(input: &WelcomeLayoutInput<'_>) -> u16 {
     if ascii_logo(input) {
-        super::ascii_logo::COLS
+        super::ascii_logo::SMALL_COLS
     } else {
         super::logo::full_logo_visual_width()
     }
@@ -339,7 +339,7 @@ pub(super) fn render_hero_box(
         .border_style(Style::default().fg(border_color));
     border_block.render(layout.hero_box, buf);
 
-    super::logo::render_full_logo(layout.hero_logo, buf, theme);
+    super::logo::render_hero_logo(layout.hero_logo, buf, theme);
 
     super::render_version_badge(
         layout.hero_version,
