@@ -1182,17 +1182,16 @@ async fn run_single_turn_inner(
     );
 
     let track_active = std::env::var("SUPERCHARGE_TRACK_HEADLESS").is_ok();
-    if track_active {
-        if supercharge_active_sessions::register(supercharge_active_sessions::ActiveSession {
+    if track_active
+        && supercharge_active_sessions::register(supercharge_active_sessions::ActiveSession {
             session_id: session_id.clone(),
             pid: std::process::id(),
             cwd: cwd.display().to_string(),
             opened_at: chrono::Utc::now(),
         })
         .is_ok()
-        {
-            *active_session.lock() = Some(session_id.clone());
-        }
+    {
+        *active_session.lock() = Some(session_id.clone());
     }
 
     // Seed the reducer's session context BEFORE applying model/effort so a later failure carries it.

@@ -65,7 +65,7 @@ pub(super) fn rewrite(events: Vec<TimedInputEvent>) -> Result<Vec<TimedInputEven
                 Body::Open => {
                     return Err(HeldPaste {
                         ready,
-                        held: events[index..].to_vec(),
+                        held: events.get(index..).unwrap_or_default().to_vec(),
                         in_body: true,
                     });
                 }
@@ -73,11 +73,13 @@ pub(super) fn rewrite(events: Vec<TimedInputEvent>) -> Result<Vec<TimedInputEven
         } else if marker_prefix_at_end(&events, index, &INTRO) {
             return Err(HeldPaste {
                 ready,
-                held: events[index..].to_vec(),
+                held: events.get(index..).unwrap_or_default().to_vec(),
                 in_body: false,
             });
         } else {
-            ready.push(events[index].clone());
+            if let Some(event) = events.get(index) {
+                ready.push(event.clone());
+            }
             index += 1;
         }
     }
@@ -101,7 +103,7 @@ pub(super) fn finish_timeout(held: HeldPaste) -> Vec<TimedInputEvent> {
         ready.extend(held.held);
         return ready;
     };
-    let text = body_text(&held.held[body_at..]);
+    let text = body_text(held.held.get(body_at..).unwrap_or_default());
     ready.push(TimedInputEvent {
         event: Event::Paste(text),
         arrived_at,
@@ -137,7 +139,9 @@ fn take_body(events: &[TimedInputEvent], body_at: usize) -> Body {
         if marker_prefix_at_end(events, index, &END) {
             return Body::Open;
         }
-        let event = &events[index];
+        let Some(event) = events.get(index) else {
+            break;
+        };
         if is_key_release(&event.event) {
             index += 1;
             continue;
@@ -173,7 +177,9 @@ fn body_text(events: &[TimedInputEvent]) -> String {
         if marker_prefix_at_end(events, index, &END) {
             break;
         }
-        let event = &events[index];
+        let Some(event) = events.get(index) else {
+            break;
+        };
         if is_key_release(&event.event) {
             index += 1;
             continue;

@@ -225,7 +225,9 @@ fn render_sized(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64, cols:
     let source: Vec<_> = lines(pic).zip(lines(INK)).collect();
     for y in 0..rows {
         let source_y = (y * (ROWS - 1) + (rows - 1) / 2) / (rows - 1);
-        let (art, ink) = source[source_y as usize];
+        let Some(&(art, ink)) = source.get(source_y as usize) else {
+            continue;
+        };
         for x in 0..cols {
             let source_x = (x * (COLS - 1) + (cols - 1) / 2) / (cols - 1);
             let original = art
@@ -251,7 +253,10 @@ fn render_sized(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64, cols:
             let cell = &mut buf[(x0 + x, y0 + y)];
             cell.set_char(ch as char);
             if let Some(offset) = offset {
-                let index = ink.as_bytes()[source_x as usize] - b'0';
+                let index = ink
+                    .as_bytes()
+                    .get(source_x as usize)
+                    .map_or(0, |b| b.saturating_sub(b'0'));
                 debug_assert!(index < 8);
                 let level = if k > 0.6 {
                     2
@@ -260,8 +265,9 @@ fn render_sized(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64, cols:
                 } else {
                     0
                 };
-                let [r, g, b] = PALETTE[offset + level * 8 + usize::from(index)];
-                cell.fg = Color::Rgb(r, g, b);
+                cell.fg = PALETTE
+                    .get(offset + level * 8 + usize::from(index))
+                    .map_or(theme.gray, |&[r, g, b]| Color::Rgb(r, g, b));
             } else {
                 cell.fg = theme.gray;
             }
