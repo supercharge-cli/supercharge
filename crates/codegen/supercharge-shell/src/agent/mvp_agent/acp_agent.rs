@@ -1055,6 +1055,12 @@ impl acp::Agent for MvpAgent {
             .session_handle_waiting_for_load(&arguments.session_id)
             .await
             .ok_or_else(|| acp::Error::invalid_params().data("unknown session id"))?;
+        if let Some(err) = crate::agent::remote_config::model_not_configured_error(
+            &self.models_manager.models(),
+            &self.models_manager.current_model_id(),
+        ) {
+            return Err(err);
+        }
         if self.models_manager.allowlist_excludes_all() {
             let deny = crate::agent::remote_config::allowlist_excludes_all_message(
                 &self.cfg.borrow(),

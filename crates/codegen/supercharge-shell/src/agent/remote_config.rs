@@ -54,10 +54,10 @@ pub(crate) use prefetch::{
     ResolvedModels, fetch_initial_models_blocking, start_initial_models_load,
 };
 pub(crate) use resolution::{
-    ModelGlobSet, allowlist_denied_message, allowlist_excludes_all_message,
-    allowlist_matches_nothing, available_models, is_campaign_only_flip, resolve_catalog_key,
-    resolve_default_model, resolve_model_catalog, selectable_catalog_key_for_persisted,
-    validate_selectable,
+    MODEL_NOT_CONFIGURED_ERROR_CODE, ModelGlobSet, allowlist_denied_message,
+    allowlist_excludes_all_message, allowlist_matches_nothing, available_models,
+    is_campaign_only_flip, model_not_configured_error, resolve_catalog_key, resolve_default_model,
+    resolve_model_catalog, selectable_catalog_key_for_persisted, validate_selectable,
 };
 pub(in crate::agent::remote_config) use scope::{
     Commit, evaluate_commit, evaluate_models_commit, resolve_disk_auth,

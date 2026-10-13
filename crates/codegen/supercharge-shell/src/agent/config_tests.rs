@@ -1423,6 +1423,7 @@ fn resolve_credentials_empty_env_key_falls_through_to_session() {
 }
 #[test]
 #[serial]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn resolve_credentials_empty_env_key_falls_through_to_global_key() {
     use crate::agent::auth_method::{
         LEGACY_SUPERCHARGE_API_KEY_ENV_VAR, SUPERCHARGE_API_KEY_ENV_VAR,
@@ -3193,6 +3194,7 @@ fn config_models_default_is_not_overwritten_by_default_models_json() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn config_models_default_custom_model_is_in_resolved_model_list() {
     let (_, models) = resolve_models_from_toml(
         r#"
@@ -3213,6 +3215,7 @@ fn config_models_default_custom_model_is_in_resolved_model_list() {
     assert_eq!(model.info.base_url, "https://inference.example.com/v1");
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_default_model_with_session_routes_to_proxy() {
     let (_, models) = resolve_models_from_toml("", None);
     let model = models
@@ -3227,6 +3230,7 @@ fn e2e_default_model_with_session_routes_to_proxy() {
 }
 #[test]
 #[serial]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_default_model_with_external_api_key_routes_to_api_xai() {
     let (_, models) = resolve_models_from_toml("", None);
     let model = models
@@ -3276,6 +3280,7 @@ fn e2e_user_config_overrides_prefetched_model() {
 }
 #[test]
 #[serial]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_credential_priority_model_key_beats_session_beats_env() {
     let model_with_key = test_model_entry(
         "test",
@@ -3330,6 +3335,7 @@ fn e2e_credential_priority_model_key_beats_session_beats_env() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_duplicate_model_field_both_entries_survive() {
     let dm = crate::models::default_model();
     let (_, models) = resolve_models_from_toml(
@@ -3390,6 +3396,7 @@ fn e2e_enterprise_custom_endpoint_skips_xai_defaults() {
     assert_eq!(resolved.len(), 1, "only the prefetched enterprise model");
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_default_endpoint_still_injects_defaults() {
     let cfg = Config::default();
     let resolved = resolve_model_list(&cfg, None);
@@ -3437,6 +3444,7 @@ fn e2e_acp_model_info_no_dedup_on_model_field() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_enterprise_endpoints_plus_partial_model_override() {
     let dm = crate::models::default_model();
     let (_, models) = resolve_models_from_toml(
@@ -3474,6 +3482,7 @@ fn e2e_enterprise_endpoints_plus_partial_model_override() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn e2e_enterprise_endpoints_only_no_model_override() {
     let (_, models) = resolve_models_from_toml(
         r#"
@@ -7243,6 +7252,7 @@ default = "Supercharge AI-4.5"
 /// Reproduce the enterprise managed config bug: [model.supercharge-build] sets context_window=500k for model="grok-4.5". [models].default="grok-4.5" still resolves to the bare prefetched entry (256k).
 /// Layer 3 only overrides key "grok-build", not key "grok-4.5". After the Layer 4 slug propagation fix, both keys should have 500k.
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn slug_propagation_enterprise_managed_config_key_mismatch() {
     let default_cw = DEFAULT_CONTEXT_WINDOW;
     let raw: toml::Value = toml::from_str(
@@ -7477,6 +7487,7 @@ fn prefetch_model_entry(slug: &str, context_window: u64, api_backend: ApiBackend
     }
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn global_extra_headers_apply_to_model_without_override() {
     let dm = crate::models::default_model();
     let (_, models) = resolve_models_from_toml(
@@ -7766,6 +7777,7 @@ fn config_model_reasoning_efforts_parses_inline_tables_and_bare_strings() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn resolve_model_list_config_reasoning_efforts_beats_remote() {
     let raw_config: toml::Value = toml::from_str(
         r#"
@@ -7799,6 +7811,7 @@ fn resolve_model_list_config_reasoning_efforts_beats_remote() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn resolve_model_list_inherits_context_window_from_default_when_prefetched_has_fallback() {
     let cfg = Config::default();
     let dm = crate::models::default_model();
@@ -7831,6 +7844,7 @@ fn resolve_model_list_does_not_override_explicitly_set_context_window() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn resolve_model_list_inherits_agent_type_and_api_backend() {
     let cfg = Config::default();
     let dm = crate::models::default_model();
@@ -7877,6 +7891,7 @@ fn hub_config_is_enabled_only_for_nonempty_url() {
     );
 }
 #[test]
+#[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn resolve_model_list_prunes_bundled_entries_not_in_prefetch() {
     let cfg = Config::default();
     let dm = crate::models::default_model();

@@ -974,7 +974,9 @@ impl ModelsManager {
         let all_models = self.models();
         let fallback;
         let selected = all_models.get(current_model_id.0.as_ref());
-        let current_model = if selected.is_some_and(ModelEntry::has_own_credentials) {
+        // Never swap the user's selection for another model; prompts with an unconfigured
+        // selection are rejected up front with `model_not_configured`.
+        let current_model = if selected.is_some() {
             selected
         } else {
             config

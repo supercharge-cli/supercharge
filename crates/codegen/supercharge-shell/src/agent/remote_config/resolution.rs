@@ -446,3 +446,93 @@ pub(crate) fn validate_selectable(
     }
     Ok(())
 }
+
+/// JSON-RPC error code for a prompt that has no usable, configured model.
+pub(crate) const MODEL_NOT_CONFIGURED_ERROR_CODE: i32 = -32050;
+
+/// `Some(error)` when `current` is not a configured, credentialed model in `catalog`.
+/// The error data carries `code: "model_not_configured"`, the requested id, and the configured list.
+pub(crate) fn model_not_configured_error(
+    catalog: &IndexMap<String, ModelEntry>,
+    current: &acp::ModelId,
+) -> Option<acp::Error> {
+    let configured: Vec<&str> = catalog
+        .iter()
+        .filter(|(_, e)| e.info.user_selectable && e.has_own_credentials())
+        .map(|(k, _)| k.as_str())
+        .collect();
+    let requested = current.0.as_ref();
+    let ok = !requested.is_empty()
+        && catalog
+            .get(requested)
+            .or_else(|| catalog.values().find(|m| m.has_model_id(requested)))
+            .is_some_and(|e| e.has_own_credentials());
+    if ok {
+        return None;
+    }
+    let message = if configured.is_empty() {
+        "No model is configured. Run /setup to connect a provider.".to_string()
+    } else {
+        format!("Model '{requested}' is not configured. Pick one with /model.")
+    };
+    Some(
+        acp::Error::new(MODEL_NOT_CONFIGURED_ERROR_CODE, message).data(serde_json::json!({
+            "code": "model_not_configured",
+            "requested": requested,
+            "configured": configured,
+        })),
+    )
+}
+
+#[cfg(test)]
+mod model_not_configured_tests {
+    use super::*;
+    use crate::agent::provider_setup::{
+        ProviderModel, SetupWireFormat, provider_models_to_catalog,
+    };
+
+    fn catalog(key: &str) -> IndexMap<String, ModelEntry> {
+        provider_models_to_catalog(
+            vec![ProviderModel {
+                id: "m-1".into(),
+                name: "Model One".into(),
+                supports_thinking: false,
+            }],
+            "https://provider.example/v1",
+            key,
+            SetupWireFormat::Openai,
+        )
+    }
+
+    #[test]
+    fn configured_selection_passes() {
+        assert!(model_not_configured_error(&catalog("k"), &acp::ModelId::new("m-1")).is_none());
+    }
+
+    #[test]
+    fn empty_catalog_rejects_with_code_and_empty_list() {
+        let err = model_not_configured_error(&IndexMap::new(), &acp::ModelId::new("m-1"))
+            .expect("must reject");
+        assert_eq!(
+            err.code,
+            acp::ErrorCode::from(MODEL_NOT_CONFIGURED_ERROR_CODE)
+        );
+        let data = err.data.expect("data");
+        assert_eq!(data["code"], "model_not_configured");
+        assert_eq!(data["configured"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn unknown_selection_lists_configured_models() {
+        let err = model_not_configured_error(&catalog("k"), &acp::ModelId::new("other"))
+            .expect("must reject");
+        let data = err.data.expect("data");
+        assert_eq!(data["requested"], "other");
+        assert_eq!(data["configured"], serde_json::json!(["m-1"]));
+    }
+
+    #[test]
+    fn model_without_credentials_is_not_configured() {
+        assert!(model_not_configured_error(&catalog(""), &acp::ModelId::new("m-1")).is_some());
+    }
+}

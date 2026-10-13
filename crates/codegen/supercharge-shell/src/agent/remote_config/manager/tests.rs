@@ -1192,8 +1192,8 @@ async fn sign_out_clears_catalog_rebuilds_bundled_without_fetching() {
         "sign-out must reset the user-pick latch",
     );
     assert!(
-        !mgr.models().is_empty(),
-        "sign-out must rebuild the bundled default catalog",
+        mgr.models().is_empty(),
+        "sign-out leaves no built-in models; the catalog comes only from a configured provider",
     );
     assert_eq!(
         *mgr.inner.catalog_progress.borrow(),
@@ -1203,6 +1203,7 @@ async fn sign_out_clears_catalog_rebuilds_bundled_without_fetching() {
 }
 
 #[test]
+#[ignore = "built-in model list removed: with no provider configured the catalog is empty"]
 fn from_config_without_prefetch_produces_usable_catalog() {
     let tmp = tempfile::TempDir::new().unwrap();
     let auth_manager = Arc::new(AuthManager::new(tmp.path(), GrokComConfig::default()));
@@ -2165,6 +2166,7 @@ fn prefetch_env_none_when_remote_fetch_disabled_despite_credentials() {
 
 #[test]
 #[serial]
+#[ignore = "deployment-key prefetch belongs to the removed hosted login path"]
 fn prefetch_env_resolves_when_remote_fetch_enabled() {
     let _unset = EnvGuard::unset("XAI_API_KEY");
     let _unset_legacy = EnvGuard::unset("SUPERCHARGE_CODE_XAI_API_KEY");

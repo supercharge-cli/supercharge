@@ -135,6 +135,11 @@ pub(in crate::agent::remote_config) fn fetch_models_uncommitted(
             .map(|cached| ModelsPrefetch::Cached(cached.models))
             .unwrap_or(ModelsPrefetch::Unavailable);
     }
+    if !endpoints.has_custom_endpoint() {
+        // No provider configured: there is no catalog to fetch. `/setup` configures one.
+        tracing::info!("models fetch skipped: no provider configured");
+        return ModelsPrefetch::Unavailable;
+    }
     match source.fetch(auth) {
         Ok(FetchModelsResult { models, etag }) if !models.is_empty() => {
             let api_base_url_override = match fetch_auth {

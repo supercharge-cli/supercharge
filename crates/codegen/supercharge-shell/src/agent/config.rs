@@ -3352,17 +3352,8 @@ pub(crate) fn resolve_model_list(
     prefetched: Option<IndexMap<String, ModelEntry>>,
 ) -> IndexMap<String, ModelEntry> {
     let mut resolved: IndexMap<String, ModelEntry> = IndexMap::new();
-    if cfg.endpoints.has_custom_endpoint() {
-        tracing::info!(
-            models_base_url = ?cfg.endpoints.models_base_url,
-            models_list_url = ?cfg.endpoints.models_list_url,
-            "custom models endpoint active, skipping built-in defaults",
-        );
-    } else {
-        let defaults = default_model_entries(&cfg.endpoints);
-        tracing::debug!(count = defaults.len(), "loaded default models");
-        resolved.extend(defaults);
-    }
+    // Models come only from the configured provider's API (via `prefetched`) and the user's own
+    // `[[models]]` config; there is no built-in model list.
     if let Some(mut prefetched) = prefetched {
         tracing::debug!(count = prefetched.len(), "loaded prefetched models");
         let default_cw = DEFAULT_CONTEXT_WINDOW;
@@ -3581,7 +3572,8 @@ fn apply_global_scalar_defaults(
         }
     }
 }
-/// Built-in default models. Prefer `resolve_model_list()`.
+/// Bundled model metadata (tests only; the runtime catalog comes from the configured provider).
+#[cfg(test)]
 pub(crate) fn default_model_entries(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntry> {
     default_models(endpoints)
         .into_iter()
@@ -3659,6 +3651,7 @@ struct DefaultModelJson {
     #[serde(default)]
     system_prompt_label: Option<String>,
 }
+#[cfg(test)]
 fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryConfig> {
     let root: serde_json::Value = serde_json::from_str(crate::models::DEFAULT_MODELS_JSON)
         .expect("default_models.json: invalid JSON");
