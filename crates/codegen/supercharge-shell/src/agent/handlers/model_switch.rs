@@ -38,33 +38,6 @@ fn resolve_switch_window(
     Ok(Some(window))
 }
 
-#[cfg(test)]
-mod context_window_tests {
-    use super::*;
-
-    #[test]
-    fn switch_window_accepts_advertised_choice_and_rejects_unsupported_values() {
-        let model = config::ModelInfo {
-            context_window: std::num::NonZeroU64::new(200_000).unwrap(),
-            context_windows: vec![std::num::NonZeroU64::new(100_000).unwrap()],
-            ..Default::default()
-        };
-        let mut meta = acp::Meta::new();
-        meta.insert("contextWindow".to_owned(), serde_json::json!(100_000));
-        assert_eq!(
-            resolve_switch_window(Some(&meta), &model)
-                .unwrap()
-                .unwrap()
-                .get(),
-            100_000
-        );
-        meta.insert("contextWindow".to_owned(), serde_json::json!(123));
-        assert!(resolve_switch_window(Some(&meta), &model).is_err());
-        meta.insert("contextWindow".to_owned(), serde_json::json!(0));
-        assert!(resolve_switch_window(Some(&meta), &model).is_err());
-    }
-}
-
 /// Apply a model switch to a session (no gate; `set_session_model` gates first).
 pub(crate) async fn apply(
     agent: &MvpAgent,
@@ -429,4 +402,31 @@ async fn notify_config_options(agent: &MvpAgent, session_id: &acp::SessionId) {
             session_id.clone(),
             acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(options)),
         ));
+}
+
+#[cfg(test)]
+mod context_window_tests {
+    use super::*;
+
+    #[test]
+    fn switch_window_accepts_advertised_choice_and_rejects_unsupported_values() {
+        let model = config::ModelInfo {
+            context_window: std::num::NonZeroU64::new(200_000).unwrap(),
+            context_windows: vec![std::num::NonZeroU64::new(100_000).unwrap()],
+            ..Default::default()
+        };
+        let mut meta = acp::Meta::new();
+        meta.insert("contextWindow".to_owned(), serde_json::json!(100_000));
+        assert_eq!(
+            resolve_switch_window(Some(&meta), &model)
+                .unwrap()
+                .unwrap()
+                .get(),
+            100_000
+        );
+        meta.insert("contextWindow".to_owned(), serde_json::json!(123));
+        assert!(resolve_switch_window(Some(&meta), &model).is_err());
+        meta.insert("contextWindow".to_owned(), serde_json::json!(0));
+        assert!(resolve_switch_window(Some(&meta), &model).is_err());
+    }
 }

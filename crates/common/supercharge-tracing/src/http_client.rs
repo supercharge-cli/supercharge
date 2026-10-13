@@ -102,6 +102,7 @@ mod tests {
             .mount(&server)
             .await;
 
+        #[allow(clippy::disallowed_methods)] // plain client against a local mock server
         let client = traced_client(reqwest::Client::new());
         let parent = tracing::info_span!("parent_handler");
         let parent_span_id = otel_span_id_hex(&parent);

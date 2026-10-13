@@ -186,7 +186,7 @@ fn clear_inherited_scopes_removes_the_legacy_entry() {
         }
     };
     assert!(
-        remaining.get(LEGACY_SCOPE).is_none(),
+        !remaining.contains_key(LEGACY_SCOPE),
         "logout must remove the inherited entry, not just report it"
     );
     assert!(

@@ -138,29 +138,6 @@ pub enum MemoryDreamOutcome {
     Disabled,
 }
 
-#[cfg(test)]
-mod dream_response_tests {
-    use super::*;
-
-    #[test]
-    fn dream_outcomes_serialize_as_typed_dispositions() {
-        for (outcome, label) in [
-            (MemoryDreamOutcome::Completed, "completed"),
-            (MemoryDreamOutcome::NoWork, "no_work"),
-            (MemoryDreamOutcome::Busy, "busy"),
-            (MemoryDreamOutcome::Failed, "failed"),
-            (MemoryDreamOutcome::Disabled, "disabled"),
-        ] {
-            let value = serde_json::to_value(outcome).unwrap();
-            assert_eq!(value, label);
-            assert_eq!(
-                serde_json::from_value::<MemoryDreamOutcome>(value).unwrap(),
-                outcome
-            );
-        }
-    }
-}
-
 async fn handle_dream(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     #[derive(Deserialize)]
     struct Request {
@@ -208,4 +185,27 @@ async fn handle_rewrite(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         .map_err(|_| acp::Error::internal_error().data("session failed to respond"))?
         .map_err(|e| acp::Error::internal_error().data(e))?;
     to_raw_response(&serde_json::json!({ "rewritten": rewritten }))
+}
+
+#[cfg(test)]
+mod dream_response_tests {
+    use super::*;
+
+    #[test]
+    fn dream_outcomes_serialize_as_typed_dispositions() {
+        for (outcome, label) in [
+            (MemoryDreamOutcome::Completed, "completed"),
+            (MemoryDreamOutcome::NoWork, "no_work"),
+            (MemoryDreamOutcome::Busy, "busy"),
+            (MemoryDreamOutcome::Failed, "failed"),
+            (MemoryDreamOutcome::Disabled, "disabled"),
+        ] {
+            let value = serde_json::to_value(outcome).unwrap();
+            assert_eq!(value, label);
+            assert_eq!(
+                serde_json::from_value::<MemoryDreamOutcome>(value).unwrap(),
+                outcome
+            );
+        }
+    }
 }

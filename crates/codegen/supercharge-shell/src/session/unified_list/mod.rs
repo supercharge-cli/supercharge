@@ -980,7 +980,7 @@ mod tests {
                 "SUPERCHARGE_SESSION_LIST_CONVERSATIONS",
                 "1",
             );
-            assert_eq!(conversations_lane_enabled(), false);
+            assert!(!conversations_lane_enabled());
         }
         {
             let _off = supercharge_test_support::EnvGuard::set(
@@ -1007,13 +1007,12 @@ mod tests {
                 "SUPERCHARGE_SESSION_LIST_CONVERSATIONS",
                 "1",
             );
-            assert_eq!(conversations_lane_active(), false);
+            assert!(!conversations_lane_active());
         }
         {
             let _chat = supercharge_test_support::EnvGuard::set(SUPERCHARGE_CHAT_MODE_ENV, "1");
-            assert_eq!(
-                conversations_lane_active(),
-                false,
+            assert!(
+                !conversations_lane_active(),
                 "process chat mode must enable the lane (chat feature only)"
             );
         }
@@ -1041,11 +1040,7 @@ mod tests {
             let _on = supercharge_test_support::EnvGuard::set(SUPERCHARGE_CHAT_MODE_ENV, "1");
             let req = parse_list_req(&raw).expect("parse");
             let parsed = ParsedMeta::parse(req.meta.as_ref());
-            let expected_build = if cfg!(feature = "local-workspace") {
-                Some(&vec![serde_json::json!("build")])
-            } else {
-                Some(&vec![serde_json::json!("build")])
-            };
+            let expected_build = Some(&vec![serde_json::json!("build")]);
             assert_eq!(
                 parsed.facet_filters.get(KIND_FACET_KEY),
                 expected_build,
