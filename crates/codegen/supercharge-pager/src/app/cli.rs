@@ -111,7 +111,7 @@ See ~/.supercharge/README.md for more information.
         /// Switch to the enterprise release channel.
         #[arg(long, conflicts_with_all = ["alpha", "stable"], hide = true)]
         enterprise: bool,
-        /// Internal: what spawned this `grok update` (`user_command`, `auto_background`, `leader_converge`). Hidden.
+        /// Internal: what spawned this `supercharge update` (`user_command`, `auto_background`, `leader_converge`). Hidden.
         #[arg(long, hide = true)]
         trigger: Option<String>,
         /// Internal compat alias for `--trigger=auto_background` (older parents still spawn children with it).
@@ -367,7 +367,8 @@ pub struct ServeArgs {
     /// Address for the server to listen on
     #[arg(long, default_value = "127.0.0.1:2419")]
     pub bind: SocketAddr,
-    /// Secret token for client authentication (auto-generated if not provided)
+    /// Secret token for client authentication. When omitted, a key is generated once and
+    /// persisted to `<SUPERCHARGE_HOME>/agent-serve.key` (mode 0600) so it survives restarts.
     #[arg(long, env = "SUPERCHARGE_AGENT_SECRET")]
     pub secret: Option<String>,
     /// Remote agent URL for proxy mode
@@ -378,11 +379,67 @@ pub struct ServeArgs {
     pub headless: HeadlessArgs,
 }
 impl ServeArgs {
-    /// Get the secret, generating a random one if not provided.
+    /// Get the secret: `--secret`/env first, then the persisted key file, else generate and persist one.
     pub fn get_secret(&self) -> String {
-        self.secret
-            .clone()
-            .unwrap_or_else(|| generate_random_key(12))
+        if let Some(secret) = self.secret.clone().filter(|s| !s.trim().is_empty()) {
+            return secret;
+        }
+        let path = serve_key_path();
+        load_or_create_serve_key(&path).unwrap_or_else(|err| {
+            tracing::warn!(path = %path.display(), %err, "could not persist agent serve key; using an ephemeral one");
+            generate_random_key(32)
+        })
+    }
+}
+/// Location of the persisted `agent serve` key.
+pub fn serve_key_path() -> std::path::PathBuf {
+    supercharge_dirs::grok_home().join("agent-serve.key")
+}
+/// Read the key at `path`, or create it with owner-only permissions.
+fn load_or_create_serve_key(path: &std::path::Path) -> std::io::Result<String> {
+    if let Ok(existing) = std::fs::read_to_string(path) {
+        let existing = existing.trim();
+        if !existing.is_empty() {
+            return Ok(existing.to_string());
+        }
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let key = generate_random_key(32);
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut file = opts.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    std::io::Write::write_all(&mut file, format!("{key}\n").as_bytes())?;
+    Ok(key)
+}
+#[cfg(test)]
+mod serve_key_tests {
+    use super::load_or_create_serve_key;
+
+    #[test]
+    fn serve_key_is_created_once_and_reused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested").join("agent-serve.key");
+        let first = load_or_create_serve_key(&path).unwrap();
+        assert_eq!(first.len(), 32);
+        assert_eq!(load_or_create_serve_key(&path).unwrap(), first);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
     }
 }
 /// Arguments for `supercharge daemon` (HTTP inbox for phone / Vectra / Docker).
@@ -415,7 +472,7 @@ pub struct LeaderArgs {
     /// Keep the leader running after the last client disconnects.
     #[arg(long)]
     pub no_exit_on_disconnect: bool,
-    /// Defer the grok.com relay WebSocket until the first headless IPC client registers.
+    /// Defer the hosted relay WebSocket until the first headless IPC client registers.
     /// Without this flag the leader connects the relay eagerly at startup.
     /// Passed by leaders auto-spawned from interactive clients (TUI/IDE), which only need the relay if a headless client appears.
     #[arg(long)]
@@ -1061,7 +1118,7 @@ impl PagerArgs {
     }
     /// The initial interactive prompt from the positional argument, trimmed.
     /// Returns `None` when no positional prompt was given or it is only whitespace.
-    /// This is the `grok "<prompt>"` launch form; the headless `-p`/`--single` path is handled separately.
+    /// This is the `supercharge "<prompt>"` launch form; the headless `-p`/`--single` path is handled separately.
     pub fn initial_prompt(&self) -> Option<&str> {
         self.prompt
             .as_deref()
