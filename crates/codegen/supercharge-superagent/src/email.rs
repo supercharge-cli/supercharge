@@ -532,6 +532,9 @@ fn server_name(host: &str) -> Result<rustls::pki_types::ServerName<'static>, Ema
         .map_err(|error| EmailError::Tls(format!("invalid email host {host}: {error}")))
 }
 
+#[allow(dead_code)]
+type _TlsStream = TlsStream<TcpStream>;
+
 #[cfg(test)]
 mod tests {
     use super::{EmailConfig, parse_rfc822};
@@ -560,6 +563,3 @@ mod tests {
         assert!(config.is_allowed_sender(&message.sender));
     }
 }
-
-#[allow(dead_code)]
-type _TlsStream = TlsStream<TcpStream>;

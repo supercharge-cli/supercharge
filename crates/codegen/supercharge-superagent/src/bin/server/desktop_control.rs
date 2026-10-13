@@ -16,11 +16,14 @@ struct Ticket {
     expires: Instant,
 }
 
+/// Live desktop socket: two identifiers and its close signal.
+type SocketEntry = (String, String, watch::Sender<bool>);
+
 #[derive(Default)]
 pub struct DesktopControl {
     pub active: RwLock<HashMap<String, ActiveHandoff>>,
     tickets: Mutex<HashMap<String, Ticket>>,
-    sockets: Mutex<HashMap<String, (String, String, watch::Sender<bool>)>>,
+    sockets: Mutex<HashMap<String, SocketEntry>>,
     settled: Notify,
 }
 

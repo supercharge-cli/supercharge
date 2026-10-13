@@ -3333,17 +3333,14 @@ async fn browser_handoff(
             }),
         ));
     }
-    if start {
-        if bot_handoff_busy(&state, &target.bot_id).await {
-            return Err((
-                StatusCode::CONFLICT,
-                Json(ErrorResponse {
-                    error:
-                        "An agent is working or queued. Stop the relevant task before taking over."
-                            .into(),
-                }),
-            ));
-        }
+    if start && bot_handoff_busy(&state, &target.bot_id).await {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "An agent is working or queued. Stop the relevant task before taking over."
+                    .into(),
+            }),
+        ));
     }
     let control = DesktopControl::shared();
     if !start {
@@ -4222,20 +4219,20 @@ fn schedule_bot_queue(state: Arc<AppState>) {
                         blocked_bots.insert(bot_id.clone());
                         if let Some(id) = status.handoff_id.as_deref() {
                             let previous = control.active.read().await.get(&bot_id).cloned();
-                            if let Some(previous) = previous.filter(|previous| previous.id != id) {
-                                if control.revoke(&bot_id, &previous.id).await.is_err() {
-                                    continue;
-                                }
+                            if let Some(previous) = previous.filter(|previous| previous.id != id)
+                                && control.revoke(&bot_id, &previous.id).await.is_err()
+                            {
+                                continue;
                             }
                             let _ = control.activate(id, &bot_id, status.expires_at).await;
                         }
                     }
                     Ok(_) => {
                         let old = { control.active.read().await.get(&bot_id).cloned() };
-                        if let Some(old) = old {
-                            if control.revoke(&bot_id, &old.id).await.is_err() {
-                                blocked_bots.insert(bot_id);
-                            }
+                        if let Some(old) = old
+                            && control.revoke(&bot_id, &old.id).await.is_err()
+                        {
+                            blocked_bots.insert(bot_id);
                         }
                     }
                     Err(_) => {

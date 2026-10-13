@@ -530,14 +530,15 @@ pub(super) async fn reconcile_after_turn(state: &Arc<AppState>, bot_id: &str, se
         .contains(session_id);
     if pending {
         let runtime = state.app_runtimes.lock().await.get(session_id).cloned();
-        if let Some(runtime) = runtime {
-            if !runtime.cli.is_prompting() && runtime.cli.refresh_plugins().await.is_ok() {
-                PENDING_SKILL_REFRESH
-                    .get_or_init(Default::default)
-                    .lock()
-                    .unwrap()
-                    .remove(session_id);
-            }
+        if let Some(runtime) = runtime
+            && !runtime.cli.is_prompting()
+            && runtime.cli.refresh_plugins().await.is_ok()
+        {
+            PENDING_SKILL_REFRESH
+                .get_or_init(Default::default)
+                .lock()
+                .unwrap()
+                .remove(session_id);
         }
     }
     let status = match request_for(state, bot_id, "status", json!({})).await {
