@@ -57,8 +57,8 @@ pub fn section_label(section: &McpSectionId, count: usize) -> String {
 /// it so the list footer, the overlay footer, and telemetry cannot drift apart.
 pub const MCP_SERVERS_REFRESH_KEY: char = 'r';
 
-/// Base grok.com connectors URL (no team). Prefer [`managed_connectors_url`] when opening.
-pub const MANAGED_SECTION_CONNECTORS_URL: &str = "https://grok.com/connectors";
+/// Base connectors help URL (no team). Prefer [`managed_connectors_url`] when opening.
+pub const MANAGED_SECTION_CONNECTORS_URL: &str = "https://superchargeai.in/docs";
 
 /// Connectors deep link, appending percent-encoded `teamId` when the session is a team principal.
 pub fn managed_connectors_url(team_id: Option<&str>) -> String {
@@ -518,7 +518,7 @@ mod tests {
             "should mention Ctrl+O shortcut: {first}"
         );
         // URL sits alone on the second line, scheme-stripped and bracket-highlighted.
-        assert_eq!(second, "[grok.com/connectors]");
+        assert_eq!(second, "[superchargeai.in/docs]");
         assert!(
             !second.contains("https://"),
             "displayed URL should drop the scheme: {second}"
@@ -526,7 +526,7 @@ mod tests {
         let with_team = section_description_lines(&McpSectionId::Managed, Some("team-1"));
         assert_eq!(
             with_team.get(1).map(String::as_str),
-            Some("[grok.com/connectors?teamId=team-1]")
+            Some("[superchargeai.in/docs?teamId=team-1]")
         );
     }
 
@@ -534,11 +534,11 @@ mod tests {
     fn managed_connectors_url_display_strips_scheme() {
         assert_eq!(
             managed_connectors_url_display(None),
-            "supercharge.ai/connectors"
+            "superchargeai.in/docs"
         );
         assert_eq!(
             managed_connectors_url_display(Some("team-uuid-1")),
-            "supercharge.ai/connectors?teamId=team-uuid-1"
+            "superchargeai.in/docs?teamId=team-uuid-1"
         );
     }
 

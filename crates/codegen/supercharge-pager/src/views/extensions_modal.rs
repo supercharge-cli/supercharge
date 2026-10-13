@@ -1837,7 +1837,7 @@ pub struct ExtensionsModalState {
     pub active_tab: ExtensionsTab,
     /// Session team principal for managed-connectors deep links in section copy.
     pub session_team_id: Option<String>,
-    /// Wait overlay after opening grok.com/connectors. Cleared on MCP list refresh.
+    /// Wait overlay after opening superchargeai.in/docs. Cleared on MCP list refresh.
     pub managed_connectors_wait:
         Option<crate::views::managed_connectors_wait::ManagedConnectorsWaitState>,
     /// Hooks list data (fetched from shell).
@@ -7545,7 +7545,7 @@ mod tests {
             "wait must show a copy button"
         );
         assert_eq!(
-            buffer_count(&buf, "https://grok.com/connectors"),
+            buffer_count(&buf, "https://superchargeai.in/docs"),
             1,
             "wait must show a copyable connectors URL"
         );
