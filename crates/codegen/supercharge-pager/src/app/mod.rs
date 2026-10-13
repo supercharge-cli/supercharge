@@ -684,26 +684,8 @@ pub async fn run(
                 )
             }
         };
-    // Saved BYOK/Nous credentials are authoritative: never replace provider setup
-    // with the upstream account-login flow, even when an editor requests login.
-    let has_saved_provider =
-        supercharge_shell::agent::provider_setup::load_existing_provider_setup_details().is_some();
-    if has_saved_provider {
-        args.force_login = false;
-    }
-    if !has_saved_provider
-        && let supercharge_login::PreTuiLoginOutcome::SignedIn(auth) =
-            supercharge_login::maybe_run_pre_tui_external_login(
-                &grok_com_config,
-                proxy_base_url.clone(),
-                args.force_login,
-                io::stdin().is_terminal(),
-            )
-            .await?
-    {
-        supercharge_shell::agent::init::apply_post_login_config(*auth).await?;
-        args.force_login = false;
-    }
+    // No account login: providers are configured with `/setup`.
+    args.force_login = false;
     supercharge_tty_utils::redirect_native_stderr();
     let refreshed_auth = tokio::time::timeout(
         supercharge_shell::http::STARTUP_AUTH_REFRESH_TIMEOUT,
