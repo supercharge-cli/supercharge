@@ -38,14 +38,15 @@ async fn persist_ack_waits_for_disk_flush_before_success() {
                 id: acp::SessionId::new("test-persist-ack"),
                 cwd: cwd.as_str().to_string(),
             };
-            let sampling_client = crate::sampling::Client::new(supercharge_sampler::SamplerConfig {
-                api_key: Some("test-key".to_string()),
-                base_url: "http://localhost".to_string(),
-                model: "test".to_string(),
-                context_window: 100_000,
-                ..Default::default()
-            })
-            .expect("sampling client should build for persistence actor");
+            let sampling_client =
+                crate::sampling::Client::new(supercharge_sampler::SamplerConfig {
+                    api_key: Some("test-key".to_string()),
+                    base_url: "http://localhost".to_string(),
+                    model: "test".to_string(),
+                    context_window: 100_000,
+                    ..Default::default()
+                })
+                .expect("sampling client should build for persistence actor");
             let persistence = crate::session::persistence::new_with_explicit_dir(
                 &crate::session::info::Info {
                     id: session_info.id.clone(),
@@ -555,14 +556,15 @@ async fn first_turn_memory_injection_disabled_does_not_persist_to_chat_history()
             );
             let tool_context =
                 ToolContext::new(cwd.clone(), None, None, fs, terminal, hunk_tracker_handle);
-            let sampling_client = crate::sampling::Client::new(supercharge_sampler::SamplerConfig {
-                api_key: Some("test-key".to_string()),
-                base_url: "http://localhost".to_string(),
-                model: "test-model".to_string(),
-                context_window: 100_000,
-                ..Default::default()
-            })
-            .expect("sampling client should build for persistence actor");
+            let sampling_client =
+                crate::sampling::Client::new(supercharge_sampler::SamplerConfig {
+                    api_key: Some("test-key".to_string()),
+                    base_url: "http://localhost".to_string(),
+                    model: "test-model".to_string(),
+                    context_window: 100_000,
+                    ..Default::default()
+                })
+                .expect("sampling client should build for persistence actor");
             let persistence = crate::session::persistence::new_with_explicit_dir(
                 &crate::session::info::Info {
                     id: session_info.id.clone(),
@@ -1499,11 +1501,13 @@ async fn cancel_with_dangling_tool_call_skips_interrupt_reminder() {
                 tokio::sync::mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
             actor.chat_state_handle.push_assistant_response(
-                ConversationItem::assistant_tool_calls(vec![supercharge_sampling_types::ToolCall {
-                    id: "call-1".into(),
-                    name: "run_terminal_cmd".into(),
-                    arguments: "{}".into(),
-                }]),
+                ConversationItem::assistant_tool_calls(vec![
+                    supercharge_sampling_types::ToolCall {
+                        id: "call-1".into(),
+                        name: "run_terminal_cmd".into(),
+                        arguments: "{}".into(),
+                    },
+                ]),
             );
             *actor
                 .current_prompt_id

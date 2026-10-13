@@ -5,7 +5,8 @@ fn startup_completed_carries_bootstrap_subphase_fields() {
     unsafe { supercharge_test_support::isolate_grok_env(home.path()) };
     supercharge_telemetry::unified_log::redirect_to_temp_for_tests();
     supercharge_telemetry::startup::mark_process_start();
-    let _timer = supercharge_telemetry::startup::begin(supercharge_telemetry::startup::Owner::Client);
+    let _timer =
+        supercharge_telemetry::startup::begin(supercharge_telemetry::startup::Owner::Client);
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

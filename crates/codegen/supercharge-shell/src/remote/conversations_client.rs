@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use supercharge_login::{AuthManager, GrokAuth};
 
-
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Conversation {

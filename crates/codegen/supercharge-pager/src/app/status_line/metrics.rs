@@ -3,7 +3,9 @@
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use supercharge_status_line::{ResolvedStatusLine, StatusLineConfig, StatusLineItem, StatusLineType};
+use supercharge_status_line::{
+    ResolvedStatusLine, StatusLineConfig, StatusLineItem, StatusLineType,
+};
 
 use super::draws_a_row;
 

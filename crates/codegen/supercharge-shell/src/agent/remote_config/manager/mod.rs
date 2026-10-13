@@ -977,11 +977,17 @@ impl ModelsManager {
         let current_model = if selected.is_some_and(ModelEntry::has_own_credentials) {
             selected
         } else {
-            config.models.default.as_deref()
+            config
+                .models
+                .default
+                .as_deref()
                 .and_then(|id| all_models.get(id))
                 .filter(|model| model.has_own_credentials() && model.info.user_selectable)
-                .or_else(|| all_models.values()
-                    .find(|model| model.has_own_credentials() && model.info.user_selectable))
+                .or_else(|| {
+                    all_models
+                        .values()
+                        .find(|model| model.has_own_credentials() && model.info.user_selectable)
+                })
                 .or(selected)
         };
         let current_model = match current_model.or_else(|| all_models.values().next()) {

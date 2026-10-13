@@ -756,7 +756,10 @@ mod tests {
         let [first, rest @ ..] = dirs.as_slice() else {
             panic!("expected four refresh dirs: {dirs:?}");
         };
-        assert_eq!(first, &(supercharge_value.clone(), RecursiveMode::NonRecursive));
+        assert_eq!(
+            first,
+            &(supercharge_value.clone(), RecursiveMode::NonRecursive)
+        );
         assert_eq!(
             rest,
             [
@@ -772,7 +775,10 @@ mod tests {
             ]
             .as_slice()
         );
-        assert_eq!(rest, vendor_skill_refresh_dirs(&supercharge_value).as_slice());
+        assert_eq!(
+            rest,
+            vendor_skill_refresh_dirs(&supercharge_value).as_slice()
+        );
     }
 
     #[test]

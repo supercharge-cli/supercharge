@@ -42,4 +42,6 @@ pub use tool::{
     ToolStreamItem, ToolVariant, TypedToolOutput, deferred_terminal, terminal_only, with_progress,
 };
 
-pub use supercharge_tool_protocol::{StreamingSpec, ToolCallId, ToolCapabilities, ToolId, ToolScope};
+pub use supercharge_tool_protocol::{
+    StreamingSpec, ToolCallId, ToolCapabilities, ToolId, ToolScope,
+};

@@ -8,8 +8,8 @@ use std::io::Read as _;
 use std::path::{Component, Path, PathBuf};
 
 use rusqlite::{OptionalExtension as _, TransactionBehavior, params};
-use supercharge_tools::types::memory_v2::MemoryV2Access as _;
 use supercharge_sqlite_journal::JournalMode;
+use supercharge_tools::types::memory_v2::MemoryV2Access as _;
 
 use crate::storage::MemoryStorage;
 use crate::v2::{V2ManifestBudget, V2MemoryScope, regenerate_scope_manifest};

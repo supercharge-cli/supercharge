@@ -1694,7 +1694,10 @@ impl AgentView {
             ButtonAction::HooksAction(hooks_action) => {
                 if let Some(ref mut state) = self.extensions_modal {
                     state.modal_message = None;
-                    if matches!(hooks_action, supercharge_hooks_plugins_types::HooksAction::Reload) {
+                    if matches!(
+                        hooks_action,
+                        supercharge_hooks_plugins_types::HooksAction::Reload
+                    ) {
                         // Reload rebuilds the entire plugin registry; show tab-level "Loading..." instead of a single-entry badge
                         state.pending_action = Some("Reloading...".into());
                         state.pending_entry_index = None;
@@ -1879,10 +1882,14 @@ impl AgentView {
                             state.marketplace_data = TabDataState::Loading;
                         }
                         // No pending_entry_index: the new source doesn't exist yet, so any index would decorate an unrelated row
-                        supercharge_hooks_plugins_types::MarketplaceAction::AddSource { .. } => {
+                        supercharge_hooks_plugins_types::MarketplaceAction::AddSource {
+                            ..
+                        } => {
                             state.pending_action = Some("Adding source...".into());
                         }
-                        supercharge_hooks_plugins_types::MarketplaceAction::Uninstall { .. } => {
+                        supercharge_hooks_plugins_types::MarketplaceAction::Uninstall {
+                            ..
+                        } => {
                             state.pending_action = Some("Uninstalling...".into());
                             state.pending_entry_index = Some(state.picker_state.selected);
                         }
@@ -2736,9 +2743,10 @@ mod extensions_action_target_tests {
     /// Plugins modal with one grouped plugin (group header row + plugin row).
     fn plugins_modal_agent() -> super::AgentView {
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        modal.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("qa-plugin-local", true)],
-        });
+        modal.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("qa-plugin-local", true)],
+            });
         pipeline_agent(modal)
     }
 
@@ -2966,11 +2974,12 @@ mod extensions_action_target_tests {
     #[test]
     fn hook_and_skill_toggle_on_group_header_posts_row_hint() {
         let mut hooks = ExtensionsModalState::new(ExtensionsTab::Hooks);
-        hooks.hooks_data = TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
-            hooks: vec![hook_info("src/hook-a", "/tmp/hooks", false)],
-            project_trusted: true,
-            load_errors: Vec::new(),
-        });
+        hooks.hooks_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
+                hooks: vec![hook_info("src/hook-a", "/tmp/hooks", false)],
+                project_trusted: true,
+                load_errors: Vec::new(),
+            });
         let mut skills = ExtensionsModalState::new(ExtensionsTab::Skills);
         skills.skills_data = TabDataState::Loaded(vec![
             supercharge_tools::implementations::skills::types::SkillInfo {
@@ -3015,7 +3024,9 @@ mod extensions_action_target_tests {
     fn row_scoped_keys_stay_silent_when_the_list_has_no_rows() {
         let mut no_plugins = ExtensionsModalState::new(ExtensionsTab::Plugins);
         no_plugins.plugins_data =
-            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse { plugins: vec![] });
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![],
+            });
         let mut all_filtered_out = ExtensionsModalState::new(ExtensionsTab::Plugins);
         all_filtered_out.plugins_data =
             TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
@@ -3025,7 +3036,9 @@ mod extensions_action_target_tests {
         let marketplace = |sources| {
             let mut modal = ExtensionsModalState::new(ExtensionsTab::Marketplace);
             modal.marketplace_data =
-                TabDataState::Loaded(supercharge_hooks_plugins_types::MarketplaceListResponse { sources });
+                TabDataState::Loaded(supercharge_hooks_plugins_types::MarketplaceListResponse {
+                    sources,
+                });
             modal
         };
         let source = |error: Option<&str>| supercharge_hooks_plugins_types::MarketplaceScanResult {
@@ -3077,9 +3090,10 @@ mod extensions_action_target_tests {
     #[test]
     fn plugins_toggle_and_uninstall_resolve_name_and_state() {
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        modal.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("my-plugin", true)],
-        });
+        modal.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("my-plugin", true)],
+            });
         modal.entry_data_indices = vec![Some(0)];
         modal.entry_group_keys = vec![None];
         modal.picker_state.selected = 0;
@@ -3099,9 +3113,10 @@ mod extensions_action_target_tests {
     fn update_selected_plugin_dispatches_update_with_selected_id_and_pending_state() {
         let mut agent = super::test_fixtures::make_agent();
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        modal.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("my-plugin", true)],
-        });
+        modal.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("my-plugin", true)],
+            });
         modal.entry_data_indices = vec![Some(0)];
         modal.entry_group_keys = vec![None];
         modal.picker_state.selected = 0;
@@ -3169,9 +3184,10 @@ mod extensions_action_target_tests {
     fn plugins_cycle_filter_resets_selection_to_top() {
         let mut agent = super::test_fixtures::make_agent();
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        modal.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("my-plugin", true)],
-        });
+        modal.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("my-plugin", true)],
+            });
         modal.picker_state.selected = 5;
         agent.extensions_modal = Some(modal);
 
@@ -3188,9 +3204,10 @@ mod extensions_action_target_tests {
     fn plugins_toggle_expand_folds_group_header_and_expands_row_details() {
         let mut agent = super::test_fixtures::make_agent();
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        modal.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("my-plugin", true)],
-        });
+        modal.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("my-plugin", true)],
+            });
         modal.entry_data_indices = vec![None, Some(0)];
         modal.entry_group_keys = vec![Some("origin:user".into()), None];
         modal.picker_state.selected = 0;
@@ -3381,11 +3398,12 @@ mod extensions_action_target_tests {
 
     fn hooks_modal(hooks: Vec<supercharge_hooks_plugins_types::HookInfo>) -> ExtensionsModalState {
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Hooks);
-        modal.hooks_data = TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
-            hooks,
-            project_trusted: true,
-            load_errors: Vec::new(),
-        });
+        modal.hooks_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
+                hooks,
+                project_trusted: true,
+                load_errors: Vec::new(),
+            });
         modal.entry_data_indices = vec![Some(0)];
         modal.entry_group_keys = vec![None];
         modal.picker_state.selected = 0;
@@ -4284,7 +4302,8 @@ mod extensions_modal_confirmation_tests {
         }
     }
 
-    fn marketplace_loaded() -> TabDataState<supercharge_hooks_plugins_types::MarketplaceListResponse> {
+    fn marketplace_loaded() -> TabDataState<supercharge_hooks_plugins_types::MarketplaceListResponse>
+    {
         TabDataState::Loaded(supercharge_hooks_plugins_types::MarketplaceListResponse {
             sources: vec![supercharge_hooks_plugins_types::MarketplaceScanResult {
                 source_name: "test-source".into(),
@@ -4356,9 +4375,10 @@ mod extensions_modal_confirmation_tests {
         mcp.picker_state.selected = 0;
 
         let mut plugins = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        plugins.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("my-plugin")],
-        });
+        plugins.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("my-plugin")],
+            });
         plugins.entry_data_indices = vec![Some(0)];
         plugins.entry_group_keys = vec![None];
         plugins.picker_state.selected = 0;
@@ -4380,16 +4400,17 @@ mod extensions_modal_confirmation_tests {
 
         let source = "/tmp/my-hooks-dir";
         let mut hooks = ExtensionsModalState::new(ExtensionsTab::Hooks);
-        hooks.hooks_data = TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
-            hooks: vec![{
-                // Only removable (user-registered) sources reach the confirm.
-                let mut h = hook_info("hook-a", source);
-                h.removable = true;
-                h
-            }],
-            project_trusted: true,
-            load_errors: Vec::new(),
-        });
+        hooks.hooks_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
+                hooks: vec![{
+                    // Only removable (user-registered) sources reach the confirm.
+                    let mut h = hook_info("hook-a", source);
+                    h.removable = true;
+                    h
+                }],
+                project_trusted: true,
+                load_errors: Vec::new(),
+            });
         hooks.entry_data_indices = vec![Some(0)];
         hooks.entry_group_keys = vec![None];
         hooks.picker_state.selected = 0;
@@ -4444,9 +4465,11 @@ mod extensions_modal_confirmation_tests {
                 modal: hooks,
                 button: ButtonAction::RemoveSelectedHook,
                 message_sub: format!("Remove hook source \"{hook_label}\"?"),
-                expected: ConfirmationAction::Hooks(supercharge_hooks_plugins_types::HooksAction::Remove {
-                    path: source.into(),
-                }),
+                expected: ConfirmationAction::Hooks(
+                    supercharge_hooks_plugins_types::HooksAction::Remove {
+                        path: source.into(),
+                    },
+                ),
                 row: 0,
             },
         ]
@@ -4535,9 +4558,10 @@ mod extensions_modal_confirmation_tests {
     fn plugin_y_sends_confirmed_false_so_server_can_gate_multi() {
         let mut agent = super::test_fixtures::make_agent();
         let mut modal = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        modal.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![plugin_info("my-plugin")],
-        });
+        modal.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![plugin_info("my-plugin")],
+            });
         modal.entry_data_indices = vec![Some(0)];
         modal.entry_group_keys = vec![None];
         modal.picker_state.selected = 0;

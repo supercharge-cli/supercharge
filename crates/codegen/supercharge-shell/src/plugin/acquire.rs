@@ -662,7 +662,8 @@ mod tests {
             .is_some()
         );
 
-        let unrestricted = supercharge_workspace::permission::resolution::MarketplacePolicy::default();
+        let unrestricted =
+            supercharge_workspace::permission::resolution::MarketplacePolicy::default();
         assert!(
             direct_install_block_reason(&unrestricted, &git("https://github.com/any/repo.git"))
                 .is_none()

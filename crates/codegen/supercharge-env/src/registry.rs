@@ -53,7 +53,10 @@ mod tests {
     #[test]
     fn env_string_trims_and_treats_blank_as_unset() {
         let guard = EnvVarGuard::set("SUPERCHARGE_TEST_ENV_STRING", "  hi  ");
-        assert_eq!(env_string("SUPERCHARGE_TEST_ENV_STRING"), Some("hi".to_string()));
+        assert_eq!(
+            env_string("SUPERCHARGE_TEST_ENV_STRING"),
+            Some("hi".to_string())
+        );
         guard.set_value("   ");
         assert_eq!(env_string("SUPERCHARGE_TEST_ENV_STRING"), None);
     }

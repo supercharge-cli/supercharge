@@ -28,11 +28,11 @@ use std::time::Duration;
 
 use agent_client_protocol as acp;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex as TokioMutex;
-use tokio::sync::mpsc::UnboundedReceiver;
 use supercharge_mcp::servers::{
     McpClientEvent, McpClientEventKind, McpServerName, McpState, mcp_server_name, mcp_transport_str,
 };
+use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::extensions::mcp::{MANAGED_GATEWAY_ENTRY_PREFIX, McpServerSource};
 

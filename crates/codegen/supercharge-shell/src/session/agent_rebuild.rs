@@ -31,7 +31,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
 use supercharge_agent::config::AgentDefinition;
 use supercharge_agent::error::AgentBuildError;
 use supercharge_agent::prompt::context::PromptAudience;
@@ -53,6 +52,7 @@ use supercharge_tools::notification::ToolNotificationHandle;
 use supercharge_tools::types::SharedApiKeyProvider;
 use supercharge_tools::types::compat::CompatConfig;
 use supercharge_tools::types::memory_backend::MemoryBackend;
+use tokio::sync::mpsc::UnboundedSender;
 /// Shell-resolved per-tool `ToolConfig.params` JSON maps.
 /// The struct keeps the spawn functions to a single argument instead of adjacent identically-typed positional arguments a caller could transpose.
 #[derive(Debug, Clone, Default)]
@@ -479,7 +479,9 @@ fn model_prompt_backend(
             supercharge_sampling_types::ApiBackend::Responses => {
                 "responses (/v1/responses)".to_owned()
             }
-            supercharge_sampling_types::ApiBackend::Messages => "messages (/v1/messages)".to_owned(),
+            supercharge_sampling_types::ApiBackend::Messages => {
+                "messages (/v1/messages)".to_owned()
+            }
         })
         .unwrap_or_default()
 }
@@ -555,7 +557,8 @@ pub(crate) fn test_rebuild_spec_default() -> Arc<AgentRebuildSpec> {
         monitor_event_buffer: None,
         user_question_tx: uq_tx,
         subagent_depth: 0,
-        subagents_max_depth: supercharge_tools::implementations::grok_build::task::MAX_SUBAGENT_DEPTH,
+        subagents_max_depth:
+            supercharge_tools::implementations::grok_build::task::MAX_SUBAGENT_DEPTH,
         session_id_str: "test-session".to_string(),
         blocking_wait_depth: Arc::new(crate::tools::tool_context::BlockingWaitState::new()),
         respect_gitignore: false,

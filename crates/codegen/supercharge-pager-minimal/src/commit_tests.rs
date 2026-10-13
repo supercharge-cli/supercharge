@@ -406,7 +406,10 @@ fn remove_from_below_frontier_then_push_still_commits() {
 fn btw_block_emits_once_across_repeated_frontier_passes() {
     let mut s = ScrollbackState::new();
     s.push(ScrollbackEntry::new(RenderBlock::Btw(
-        supercharge_pager::scrollback::blocks::BtwBlock::new("original question", "original answer"),
+        supercharge_pager::scrollback::blocks::BtwBlock::new(
+            "original question",
+            "original answer",
+        ),
     )));
 
     let mut emitted = Vec::new();

@@ -345,10 +345,9 @@ impl supercharge_tool_runtime::Tool for AskUserQuestionTool {
             let mut seen = std::collections::HashSet::new();
             for q in &input.questions {
                 if !seen.insert(&q.question) {
-                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                        "Duplicate question text: \"{}\"",
-                        q.question
-                    )));
+                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                        format!("Duplicate question text: \"{}\"", q.question),
+                    ));
                 }
             }
         }
@@ -650,10 +649,13 @@ mod tests {
             use_id_keyed_format: false,
         };
 
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "test-call"), input)
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx_with_call_id(shared, "test-call"),
+            input,
+        )
+        .await
+        .unwrap();
 
         match result {
             AskUserQuestionOutput::QuestionsSent {
@@ -678,10 +680,13 @@ mod tests {
             use_id_keyed_format: false,
         };
 
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "test-call"), input)
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx_with_call_id(shared, "test-call"),
+            input,
+        )
+        .await
+        .unwrap();
 
         match result {
             AskUserQuestionOutput::QuestionsSent {
@@ -739,10 +744,13 @@ mod tests {
             use_id_keyed_format: false,
         };
 
-        let err =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "test-call"), input)
-                .await
-                .unwrap_err();
+        let err = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx_with_call_id(shared, "test-call"),
+            input,
+        )
+        .await
+        .unwrap_err();
 
         let msg = err.to_string();
         assert!(msg.contains("Duplicate question text"), "got: {msg}");
@@ -764,8 +772,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-1"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-1"),
+                    input,
+                )
+                .await
             }
         });
 
@@ -807,8 +819,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-4"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-4"),
+                    input,
+                )
+                .await
             }
         });
 
@@ -845,8 +861,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-ni"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-ni"),
+                    input,
+                )
+                .await
             }
         });
 
@@ -970,8 +990,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-ok"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-ok"),
+                    input,
+                )
+                .await
             }
         });
 
@@ -1057,8 +1081,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-short"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-short"),
+                    input,
+                )
+                .await
             }
         });
 
@@ -1140,8 +1168,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-5"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-5"),
+                    input,
+                )
+                .await
             }
         });
 
@@ -1166,8 +1198,12 @@ mod tests {
         let handle = tokio::spawn({
             let shared = shared.clone();
             async move {
-                supercharge_tool_runtime::Tool::run(&tool, test_ctx_with_call_id(shared, "tc-6"), input)
-                    .await
+                supercharge_tool_runtime::Tool::run(
+                    &tool,
+                    test_ctx_with_call_id(shared, "tc-6"),
+                    input,
+                )
+                .await
             }
         });
 

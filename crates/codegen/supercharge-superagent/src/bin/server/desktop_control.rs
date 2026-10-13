@@ -40,11 +40,14 @@ impl DesktopControl {
         if active.get(bot_id).is_some_and(|current| current.id != id) {
             return Err("Another handoff is active for this bot");
         }
-        active.insert(bot_id.to_owned(), ActiveHandoff {
-            id: id.to_owned(),
-            bot_id: bot_id.to_owned(),
-            expires_at,
-        });
+        active.insert(
+            bot_id.to_owned(),
+            ActiveHandoff {
+                id: id.to_owned(),
+                bot_id: bot_id.to_owned(),
+                expires_at,
+            },
+        );
         Ok(())
     }
 
@@ -82,8 +85,15 @@ impl DesktopControl {
         (ticket.expires > Instant::now()).then_some((ticket.handoff_id, ticket.bot_id))
     }
 
-    pub fn allows(active: &HashMap<String, ActiveHandoff>, id: &str, bot_id: &str, now: u64) -> bool {
-        active.get(bot_id).is_some_and(|current| current.id == id && current.expires_at > now)
+    pub fn allows(
+        active: &HashMap<String, ActiveHandoff>,
+        id: &str,
+        bot_id: &str,
+        now: u64,
+    ) -> bool {
+        active
+            .get(bot_id)
+            .is_some_and(|current| current.id == id && current.expires_at > now)
     }
 
     pub async fn register(
@@ -200,8 +210,10 @@ mod tests {
         control.activate("shared", "research", 100).await.unwrap();
         let main_ticket = control.mint("shared", "main", 0).await.unwrap();
         let research_ticket = control.mint("shared", "research", 0).await.unwrap();
-        let (main_socket, mut main_cancelled) = control.register("shared", "main", 0).await.unwrap();
-        let (research_socket, research_cancelled) = control.register("shared", "research", 0).await.unwrap();
+        let (main_socket, mut main_cancelled) =
+            control.register("shared", "main", 0).await.unwrap();
+        let (research_socket, research_cancelled) =
+            control.register("shared", "research", 0).await.unwrap();
         let revoking = tokio::spawn({
             let control = control.clone();
             async move { control.revoke("main", "shared").await }
@@ -213,10 +225,23 @@ mod tests {
         drop(main_socket);
         revoking.await.unwrap().unwrap();
         assert!(control.consume(&main_ticket).is_none());
-        assert_eq!(control.consume(&research_ticket), Some(("shared".into(), "research".into())));
+        assert_eq!(
+            control.consume(&research_ticket),
+            Some(("shared".into(), "research".into()))
+        );
         assert!(control.mint("shared", "research", 0).await.is_ok());
-        assert!(!DesktopControl::allows(&*control.active.read().await, "shared", "main", 0));
-        assert!(DesktopControl::allows(&*control.active.read().await, "shared", "research", 0));
+        assert!(!DesktopControl::allows(
+            &*control.active.read().await,
+            "shared",
+            "main",
+            0
+        ));
+        assert!(DesktopControl::allows(
+            &*control.active.read().await,
+            "shared",
+            "research",
+            0
+        ));
         control.revoke("main", "shared").await.unwrap();
         assert!(!research_cancelled.has_changed().unwrap());
         drop(research_socket);

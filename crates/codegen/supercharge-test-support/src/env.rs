@@ -154,7 +154,11 @@ fn ensure_local_grok_binary(binary: &Path) {
 pub fn grok_binary() -> PathBuf {
     if let Ok(path) = std::env::var("SUPERCHARGE_BINARY") {
         let p = PathBuf::from(path);
-        assert!(p.exists(), "SUPERCHARGE_BINARY does not exist: {}", p.display());
+        assert!(
+            p.exists(),
+            "SUPERCHARGE_BINARY does not exist: {}",
+            p.display()
+        );
         // Bazel's SUPERCHARGE_BINARY is runfiles-relative; the harness spawns the child with a different cwd
         // Absolutize against the (runfiles-root) cwd now
         return std::path::absolute(&p).unwrap_or(p);

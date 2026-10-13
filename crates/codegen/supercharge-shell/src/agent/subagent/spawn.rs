@@ -15,13 +15,13 @@ use crate::agent::mvp_agent::{LocalRef, MvpAgent};
 use crate::extensions::notification::{SessionNotification, SessionUpdate};
 use crate::session::SessionCommand;
 use agent_client_protocol as acp;
-use tokio::sync::mpsc;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_telemetry::region::Region;
 use supercharge_tools::implementations::grok_build::task::coordinator::{self, ChildCompletion};
 use supercharge_tools::implementations::grok_build::task::types::{
     SubagentRequest, SubagentResult, SubagentSnapshot,
 };
+use tokio::sync::mpsc;
 /// Floor keeps the pool responsive when `available_parallelism` is tiny.
 const MIN_WORKER_THREADS: usize = 2;
 /// Four suffice for 32 children (each runs on its own OS thread); `SUPERCHARGE_SUBAGENT_WORKER_THREADS` overrides.

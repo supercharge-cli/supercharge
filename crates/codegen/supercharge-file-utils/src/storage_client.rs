@@ -21,13 +21,15 @@ use std::os::windows::fs::FileExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use supercharge_auth::AuthCredentialProvider;
+use supercharge_circuit_breaker::{
+    BreakerConfig, BreakerOpen, CircuitBreaker, Outcome, RetryPolicy,
+};
 use tokio::io::AsyncRead;
 use tokio::sync::Semaphore;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::bytes::Bytes;
 use tokio_util::io::ReaderStream;
-use supercharge_circuit_breaker::{BreakerConfig, BreakerOpen, CircuitBreaker, Outcome, RetryPolicy};
-use supercharge_auth::AuthCredentialProvider;
 
 use crate::circuit_breaker_observer::TracingObserver;
 

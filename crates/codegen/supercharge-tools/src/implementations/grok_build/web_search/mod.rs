@@ -118,7 +118,10 @@ mod tests {
     #[test]
     fn tool_name_and_description() {
         let tool = WebSearchTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "web_search");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "web_search"
+        );
     }
 
     #[tokio::test]

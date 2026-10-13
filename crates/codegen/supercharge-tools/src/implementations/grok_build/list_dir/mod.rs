@@ -1216,9 +1216,10 @@ mod tests {
         resources.insert(Cwd(tmp.path().to_path_buf()));
         let tool = ListDirTool;
         let mut ctx = test_ctx(resources.into_shared());
-        ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-            "legacy-0.4.10".to_string(),
-        ));
+        ctx.extensions
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                "legacy-0.4.10".to_string(),
+            ));
         let output = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
@@ -1247,9 +1248,10 @@ mod tests {
         resources.insert(Cwd(tmp.path().to_path_buf()));
         let tool = ListDirTool;
         let mut ctx = test_ctx(resources.into_shared());
-        ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-            "legacy-0.4.10".to_string(),
-        ));
+        ctx.extensions
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                "legacy-0.4.10".to_string(),
+            ));
         let output = supercharge_tool_runtime::Tool::run(
             &tool,
             ctx,
@@ -1496,9 +1498,10 @@ mod tests {
         let mut resources = Resources::new();
         resources.insert(Cwd(tmp.path().to_path_buf()));
         let mut ctx = test_ctx(resources.into_shared());
-        ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-            "legacy-0.4.10".to_string(),
-        ));
+        ctx.extensions
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                "legacy-0.4.10".to_string(),
+            ));
         let output = supercharge_tool_runtime::Tool::run(
             &ListDirTool,
             ctx,
@@ -1542,9 +1545,10 @@ mod tests {
             max_output_chars: Some(BUDGET),
         }));
         let mut ctx = test_ctx(resources.into_shared());
-        ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-            "legacy-0.4.10".to_string(),
-        ));
+        ctx.extensions
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                "legacy-0.4.10".to_string(),
+            ));
         let output = supercharge_tool_runtime::Tool::run(
             &ListDirTool,
             ctx,
@@ -1572,9 +1576,10 @@ mod tests {
         let mut resources = Resources::new();
         resources.insert(Cwd(tmp.path().to_path_buf()));
         let mut ctx = test_ctx(resources.into_shared());
-        ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-            "legacy-0.4.10".to_string(),
-        ));
+        ctx.extensions
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                "legacy-0.4.10".to_string(),
+            ));
         let output = supercharge_tool_runtime::Tool::run(
             &ListDirTool,
             ctx,
@@ -1630,7 +1635,10 @@ mod tests {
     fn tool_name_and_description() {
         use crate::types::tool_metadata::ToolMetadata;
         let tool = ListDirTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "list_dir");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "list_dir"
+        );
         assert!(
             ToolMetadata::description_template(&tool)
                 .contains("${{ params.list.target_directory }}"),

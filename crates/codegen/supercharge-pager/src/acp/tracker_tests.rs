@@ -4915,9 +4915,10 @@ fn video_tool_variants_use_typed_path_not_generic_scrape() {
 }
 #[test]
 fn media_gen_ref_skips_uploaded_only_video() {
-    let output = ToolOutput::ImageToVideo(supercharge_tools::types::output::MediaGenOutput::uploaded(
-        "https://bucket.example/videos/x.mp4".into(),
-    ));
+    let output =
+        ToolOutput::ImageToVideo(supercharge_tools::types::output::MediaGenOutput::uploaded(
+            "https://bucket.example/videos/x.mp4".into(),
+        ));
     let tc = acp::ToolCall::new(
         acp::ToolCallId::new(Arc::from("zdr-upload")),
         "image_to_video",
@@ -4938,18 +4939,15 @@ fn media_gen_ref_skips_uploaded_only_video() {
 fn media_without_output_file_keeps_provider_explanation() {
     let message = "Image generation canceled before a file was created.";
     let output = ToolOutput::Text(supercharge_tools::types::output::TextOutput::from(message));
-    let tc = acp::ToolCall::new(
-        acp::ToolCallId::new(Arc::from("provider-img")),
-        "image_gen",
-    )
-    .kind(acp::ToolKind::Other)
-    .status(acp::ToolCallStatus::Completed)
-    .content(vec![acp::ToolCallContent::Content(acp::Content::new(
-        acp::ContentBlock::Text(acp::TextContent::new(message)),
-    ))])
-    .raw_input(Some(serde_json::json!({ "variant": "ImageGen" })))
-    .raw_output(serde_json::to_value(output).ok())
-    .locations(vec![]);
+    let tc = acp::ToolCall::new(acp::ToolCallId::new(Arc::from("provider-img")), "image_gen")
+        .kind(acp::ToolKind::Other)
+        .status(acp::ToolCallStatus::Completed)
+        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+            acp::ContentBlock::Text(acp::TextContent::new(message)),
+        ))])
+        .raw_input(Some(serde_json::json!({ "variant": "ImageGen" })))
+        .raw_output(serde_json::to_value(output).ok())
+        .locations(vec![]);
     let RenderBlock::ToolCall(ToolCallBlock::Other(block)) =
         tool_call_to_block(&tc, None, &SubagentLabelRegistry::default())
     else {

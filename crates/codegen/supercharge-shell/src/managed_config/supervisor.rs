@@ -505,7 +505,9 @@ fn policy_repair_pending_from(
 pub async fn ensure_managed_policy_present(
     auth_manager: &std::sync::Arc<supercharge_login::AuthManager>,
 ) {
-    supercharge_telemetry::startup::enter(supercharge_telemetry::startup::StartupPhase::ManagedPolicy);
+    supercharge_telemetry::startup::enter(
+        supercharge_telemetry::startup::StartupPhase::ManagedPolicy,
+    );
     let has_deployment_key = store::resolve_deployment_key().is_some();
     let signed_in_team = store::team_principal_signed_in();
     supercharge_telemetry::startup::set_auth_mode(policy::auth_mode(

@@ -470,8 +470,10 @@ mod tests {
     }
     fn test_auth_manager() -> Arc<supercharge_login::AuthManager> {
         let dir = tempfile::tempdir().unwrap();
-        let mgr =
-            supercharge_login::AuthManager::new(dir.path(), supercharge_login::GrokComConfig::default());
+        let mgr = supercharge_login::AuthManager::new(
+            dir.path(),
+            supercharge_login::GrokComConfig::default(),
+        );
         mgr.hot_swap(test_auth());
         std::mem::forget(dir);
         Arc::new(mgr)

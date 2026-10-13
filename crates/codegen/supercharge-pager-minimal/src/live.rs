@@ -23,7 +23,9 @@ use supercharge_pager::views::turn_status;
 /// Left inset (columns) for every auxiliary live-region row and the prompt's `chrome_pad_left`. Minimal is
 /// flush-left. Content glyphs (`◆` / `$` / message text) thus start at column 0, matching the welcome card's outer
 /// edge.
-pub(super) fn live_left_inset(_appearance: &supercharge_pager::appearance::AppearanceConfig) -> u16 {
+pub(super) fn live_left_inset(
+    _appearance: &supercharge_pager::appearance::AppearanceConfig,
+) -> u16 {
     0
 }
 /// Shrink `area` from the left by `inset` columns (clamped to the width).

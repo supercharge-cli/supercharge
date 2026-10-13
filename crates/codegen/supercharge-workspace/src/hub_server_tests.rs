@@ -4,11 +4,11 @@ use crate::handle::tests::{
     background_capable_cfg, make_confining_handle, make_handle, start_background_sleep,
 };
 use std::sync::Arc;
+use supercharge_tool_protocol::turn_hook;
 use supercharge_tools::implementations::grok_build::scheduler::types::{
     ScheduledTask, SchedulerState,
 };
 use supercharge_tools::types::resources::State;
-use supercharge_tool_protocol::turn_hook;
 async fn next_item(
     stream: &mut ToolStream<TypedToolOutput>,
 ) -> Option<supercharge_tool_runtime::ToolStreamItem<TypedToolOutput>> {
@@ -2623,8 +2623,8 @@ async fn dispatch_knows_every_typed_method() {
 #[tokio::test]
 async fn dispatch_stamps_client_rpc_activity_for_mutations_only() {
     use crate::file_system::{FsListReq, FsWriteFileReq};
-    use supercharge_workspace_types::rpc::workspace::DropSessionReq;
     use supercharge_tool_protocol::IdleWithholdReason;
+    use supercharge_workspace_types::rpc::workspace::DropSessionReq;
     let handler = WorkspaceRpcHandler::new(make_handle());
     let tracker = handler.workspace.activity_tracker().clone();
     assert_eq!(tracker.snapshot().withhold_reason, None);
@@ -2667,8 +2667,8 @@ async fn dispatch_stamps_client_rpc_activity_for_mutations_only() {
 }
 #[tokio::test]
 async fn presence_note_stamps_only_visible_notes_for_live_sessions() {
-    use supercharge_workspace_types::rpc::presence::PresenceNoteReq;
     use supercharge_tool_protocol::IdleWithholdReason;
+    use supercharge_workspace_types::rpc::presence::PresenceNoteReq;
     let handle = crate::handle::tests::make_handle_with_status_config(crate::StatusConfig {
         presence_keepalive_enabled: true,
         ..crate::StatusConfig::default()

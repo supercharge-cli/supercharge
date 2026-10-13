@@ -243,9 +243,11 @@ impl SnapshotRefresher {
                     if generation.is_cancelled() {
                         return;
                     }
-                    resources.insert(supercharge_tools::types::resources::ManagedGatewayToolCatalog(
-                        catalog.gateway_resource_entries.into_iter().collect(),
-                    ));
+                    resources.insert(
+                        supercharge_tools::types::resources::ManagedGatewayToolCatalog(
+                            catalog.gateway_resource_entries.into_iter().collect(),
+                        ),
+                    );
                     let mut snapshot = tool_metadata_snapshot.lock().unwrap();
                     snapshot.tools = catalog.tools;
                     snapshot.servers = catalog.servers;

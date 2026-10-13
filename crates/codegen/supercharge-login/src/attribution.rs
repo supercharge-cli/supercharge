@@ -46,7 +46,9 @@ use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
 use supercharge_sampler::{Auth401AttributionCallback, SamplingConsumer};
-use supercharge_tools::{Auth401AttributionCallback as ToolAuth401AttributionCallback, ToolConsumer};
+use supercharge_tools::{
+    Auth401AttributionCallback as ToolAuth401AttributionCallback, ToolConsumer,
+};
 
 use crate::{AuthManager, TOKEN_TTL};
 use supercharge_auth::bearer_suffix;

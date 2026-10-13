@@ -12,12 +12,16 @@ use std::sync::{Arc, Mutex, OnceLock};
 use anyhow::Result;
 use git2::{DiffOptions, Oid, Repository};
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex as TokioMutex;
-use tokio_util::sync::CancellationToken;
-use supercharge_fast_worktree::{BtrfsDelegate, IgnoredFilesMode, WorkingTreeMode, WorktreeBuilder};
-use supercharge_telemetry::events::{CloneCancellationDisposition, CloneOutcome, WorktreeLifecycle};
+use supercharge_fast_worktree::{
+    BtrfsDelegate, IgnoredFilesMode, WorkingTreeMode, WorktreeBuilder,
+};
+use supercharge_telemetry::events::{
+    CloneCancellationDisposition, CloneOutcome, WorktreeLifecycle,
+};
 use supercharge_telemetry::region;
 use supercharge_telemetry::region::Parent;
+use tokio::sync::Mutex as TokioMutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::session::git::{
     GitFileChange, change_type_from_git2_delta, find_git_root_from_path,
@@ -807,7 +811,8 @@ pub fn resolve_label_collision(base_dir: &Path, label: &str) -> String {
 /// Grok home for worktree paths: the same resolver as `worktrees.db`, with a `temp_dir()/.supercharge` last resort.
 /// This is not grok-config's cwd-relative `.supercharge`: worktree paths need an absolute, always-writable anchor that does not move with the process cwd.
 fn grok_home() -> std::path::PathBuf {
-    supercharge_fast_worktree::resolve_grok_home().unwrap_or_else(|_| std::env::temp_dir().join(".supercharge"))
+    supercharge_fast_worktree::resolve_grok_home()
+        .unwrap_or_else(|_| std::env::temp_dir().join(".supercharge"))
 }
 
 /// Returns `~/.supercharge/worktrees/<repo_slug>` for the given git root.
@@ -1432,7 +1437,9 @@ pub async fn remove_worktree(
     let delegate = btrfs_delegate_from_env();
     let span = tracing::Span::current();
     match tokio::task::spawn_blocking(move || {
-        span.in_scope(|| supercharge_fast_worktree::remove_worktree_with_delegate(&wt_path, delegate))
+        span.in_scope(|| {
+            supercharge_fast_worktree::remove_worktree_with_delegate(&wt_path, delegate)
+        })
     })
     .await
     {
@@ -1549,8 +1556,16 @@ pub async fn snapshot_subagent_worktree(
         span.in_scope(|| {
             let message = format!("subagent worktree snapshot {ref_name}");
             // Capture into the worktree's git, then make it durable in the source repo (and verify) so it survives the worktree's deletion
-            supercharge_fast_worktree::snapshot_worktree_to_ref(&worktree_path, &ref_name, &message)?;
-            supercharge_fast_worktree::transfer_snapshot_to_repo(&worktree_path, &source_repo, &ref_name)?;
+            supercharge_fast_worktree::snapshot_worktree_to_ref(
+                &worktree_path,
+                &ref_name,
+                &message,
+            )?;
+            supercharge_fast_worktree::transfer_snapshot_to_repo(
+                &worktree_path,
+                &source_repo,
+                &ref_name,
+            )?;
             Ok(ref_name)
         })
     })
@@ -1567,7 +1582,9 @@ pub async fn remove_subagent_worktree(worktree_path: &Path) -> Result<()> {
     let delegate = btrfs_delegate_from_env();
     let span = tracing::Span::current();
     tokio::task::spawn_blocking(move || {
-        span.in_scope(|| supercharge_fast_worktree::remove_worktree_with_delegate(&worktree_path, delegate))
+        span.in_scope(|| {
+            supercharge_fast_worktree::remove_worktree_with_delegate(&worktree_path, delegate)
+        })
     })
     .await
     .map_err(|e| anyhow::anyhow!("remove_subagent_worktree task failed: {e}"))??;
@@ -2832,7 +2849,9 @@ pub fn salvage_worktree_mgmt(
     }
 }
 
-pub fn clean_artifacts_mgmt(id_or_path: &str) -> Result<supercharge_fast_worktree::CleanArtifactsReply> {
+pub fn clean_artifacts_mgmt(
+    id_or_path: &str,
+) -> Result<supercharge_fast_worktree::CleanArtifactsReply> {
     let path = resolve_mgmt_path(id_or_path)?;
     let client = supercharge_fast_worktree::NfsWorktreeClient::from_opts(
         &supercharge_fast_worktree::NfsWorktreeOpts::default(),
@@ -2903,12 +2922,14 @@ pub fn worktree_auto_gc_layer_from_settings(
 fn load_local_worktree_auto_gc_settings(
     home: &Path,
 ) -> Option<supercharge_config_types::WorktreeAutoGcSettings> {
-    let root = supercharge_config::load_config_file(&home.join(supercharge_config::USER_CONFIG_FILENAME))
-        .inspect_err(|error| {
-            // The loader's error is already snippet-free, so it is safe to log
-            tracing::debug!(%error, "config.toml did not load; skipping the local auto-GC opt-in");
-        })
-        .ok()?;
+    let root = supercharge_config::load_config_file(
+        &home.join(supercharge_config::USER_CONFIG_FILENAME),
+    )
+    .inspect_err(|error| {
+        // The loader's error is already snippet-free, so it is safe to log
+        tracing::debug!(%error, "config.toml did not load; skipping the local auto-GC opt-in");
+    })
+    .ok()?;
     worktree_auto_gc_settings_from_config(root)
 }
 
@@ -2970,8 +2991,8 @@ pub fn run_auto_gc_best_effort_in(grok_home: &Path) {
         tracing::debug!("auto worktree gc skipped at workspace startup: no local opt-in");
         return;
     };
-    if let Err(error) =
-        WorktreeDb::open(grok_home).and_then(|db| supercharge_fast_worktree::maybe_auto_gc(&db, &policy))
+    if let Err(error) = WorktreeDb::open(grok_home)
+        .and_then(|db| supercharge_fast_worktree::maybe_auto_gc(&db, &policy))
     {
         tracing::warn!(%error, context = "workspace startup", "auto worktree gc failed");
     }

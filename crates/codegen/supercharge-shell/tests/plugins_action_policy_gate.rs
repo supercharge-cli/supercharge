@@ -20,8 +20,9 @@ fn action_outcome(response: &serde_json::Value) -> supercharge_hooks_plugins_typ
 #[test]
 fn plugins_action_install_and_update_respect_marketplace_lockdown() {
     run_agent_test(|cwd, _server| async move {
-        let grok_home =
-            std::path::PathBuf::from(std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"));
+        let grok_home = std::path::PathBuf::from(
+            std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"),
+        );
         std::fs::create_dir_all(&grok_home).unwrap();
         // Binding lockdown: one allowed marketplace (installs/updates of
         // anything else refuse) and project MCP pinned off.

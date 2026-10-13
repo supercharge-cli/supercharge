@@ -15,8 +15,7 @@ use agent_client_protocol as acp;
 pub const RATE_LIMITED_ERROR_CODE: i32 = -32003;
 
 /// Provider-neutral rate-limit copy for explicit provider credentials.
-pub const RATE_LIMITED_USER_MESSAGE_OAUTH: &str =
-    "The selected provider is rate limiting requests. Try again later or run /setup to choose another provider.";
+pub const RATE_LIMITED_USER_MESSAGE_OAUTH: &str = "The selected provider is rate limiting requests. Try again later or run /setup to choose another provider.";
 
 /// Kept as a separate constant for clients that distinguish API-key errors.
 pub const RATE_LIMITED_USER_MESSAGE_API_KEY: &str = RATE_LIMITED_USER_MESSAGE_OAUTH;
@@ -28,8 +27,7 @@ pub const FREE_USAGE_EXHAUSTED_ERROR_CODE: &str = "subscription:free-usage-exhau
 
 /// A provider quota can reset or be changed with that provider; Supercharge
 /// cannot sell credits for an independently configured BYOK endpoint.
-pub const FREE_USAGE_USER_MESSAGE: &str =
-    "The selected provider reports that its usage limit has been reached. Check your provider account or run /setup to choose another provider.";
+pub const FREE_USAGE_USER_MESSAGE: &str = "The selected provider reports that its usage limit has been reached. Check your provider account or run /setup to choose another provider.";
 
 /// Whether flattened server detail is free-usage-quota exhaustion (paywall), not transient throttling.
 /// Sniffs the well-known code embedded by `parse_error_bytes`.
@@ -111,26 +109,27 @@ pub(crate) fn map_sampling_err_to_acp(err: SamplingError) -> acp::Error {
         } => {
             let message = provider_error_message(message);
             match status {
-            StatusCode::UNAUTHORIZED => acp::Error::auth_required().data(message),
-            // 403 Forbidden is not an auth error: the request was authenticated, but the action is not permitted
-            // Examples: content-safety blocks, ZDR-gated operations, remote-settings-blocked users
-            // Passing the proxy's message via internal_error keeps the explanation visible without triggering the client's re-auth flow on -32000
-            StatusCode::FORBIDDEN => {
-                // 403 is content-safety, never auth: on this setup path it stays
-                // `internal_error` → `server_error`.
-                acp::Error::internal_error().data(message)
+                StatusCode::UNAUTHORIZED => acp::Error::auth_required().data(message),
+                // 403 Forbidden is not an auth error: the request was authenticated, but the action is not permitted
+                // Examples: content-safety blocks, ZDR-gated operations, remote-settings-blocked users
+                // Passing the proxy's message via internal_error keeps the explanation visible without triggering the client's re-auth flow on -32000
+                StatusCode::FORBIDDEN => {
+                    // 403 is content-safety, never auth: on this setup path it stays
+                    // `internal_error` → `server_error`.
+                    acp::Error::internal_error().data(message)
+                }
+                StatusCode::BAD_REQUEST => acp::Error::invalid_params().data(message),
+                StatusCode::NOT_FOUND => acp::Error::resource_not_found(None).data(message),
+                StatusCode::PAYLOAD_TOO_LARGE => acp::Error::invalid_params().data(message),
+                StatusCode::TOO_MANY_REQUESTS => {
+                    acp::Error::new(RATE_LIMITED_ERROR_CODE, "Rate limited".to_string())
+                        .data(message)
+                }
+                // Preserve the HTTP status in data so the classifier folds capacity errors (503/529) into `rate_limit`
+                _ => acp::Error::internal_error()
+                    .data(error_data_with_status(message, Some(status.as_u16()))),
             }
-            StatusCode::BAD_REQUEST => acp::Error::invalid_params().data(message),
-            StatusCode::NOT_FOUND => acp::Error::resource_not_found(None).data(message),
-            StatusCode::PAYLOAD_TOO_LARGE => acp::Error::invalid_params().data(message),
-            StatusCode::TOO_MANY_REQUESTS => {
-                acp::Error::new(RATE_LIMITED_ERROR_CODE, "Rate limited".to_string()).data(message)
-            }
-            // Preserve the HTTP status in data so the classifier folds capacity errors (503/529) into `rate_limit`
-            _ => acp::Error::internal_error()
-                .data(error_data_with_status(message, Some(status.as_u16()))),
-            }
-        },
+        }
         SamplingError::EventStreamError(message) => acp::Error::internal_error().data(message),
         SamplingError::StreamError {
             error_type,
@@ -392,7 +391,8 @@ pub(crate) fn prompt_complete_fields(
         Err(err) => {
             let is_rate_limit = i32::from(err.code) == RATE_LIMITED_ERROR_CODE;
             let stop = if is_rate_limit { "rate_limit" } else { "error" };
-            let result = err.data
+            let result = err
+                .data
                 .as_ref()
                 .map(error_message_from_data)
                 .unwrap_or_else(|| serde_json::Value::String(err.message.clone()));
@@ -509,7 +509,6 @@ mod tests {
         );
     }
 
-
     #[tokio::test]
     async fn byok_provider_http_errors_preserve_detail_and_session_usage() {
         use supercharge_sampler::{ApiBackend, SamplerConfig, SamplingClient};
@@ -524,36 +523,62 @@ mod tests {
             api_backend: ApiBackend::Responses,
             max_retries: Some(0),
             ..Default::default()
-        }).unwrap();
+        })
+        .unwrap();
         for (status, detail) in [
             (402, "Provider account has insufficient credits"),
             (403, "Provider credit limit prevents this request"),
-            (429, "subscription:free-usage-exhausted: provider quota reached"),
+            (
+                429,
+                "subscription:free-usage-exhausted: provider quota reached",
+            ),
         ] {
-            server.enqueue_response("/v1/responses", ScriptedResponse::json(status,
-                serde_json::json!({"error": {"message": detail}})));
-            let error = client.create_response(CreateResponseWrapper::new(rs::CreateResponse {
-                input: rs::InputParam::Text("hello".into()),
-                ..Default::default()
-            })).await.expect_err("provider should reject request");
-            assert!(matches!(&error, SamplingError::Api { status: actual, .. } if actual.as_u16() == status));
-            let error = attach_prompt_usage(map_sampling_err_to_acp(error), Some(
-                crate::extensions::notification::PromptUsage {
-                    totals: crate::extensions::notification::PromptUsageModel { input_tokens: 3, ..Default::default() },
+            server.enqueue_response(
+                "/v1/responses",
+                ScriptedResponse::json(status, serde_json::json!({"error": {"message": detail}})),
+            );
+            let error = client
+                .create_response(CreateResponseWrapper::new(rs::CreateResponse {
+                    input: rs::InputParam::Text("hello".into()),
+                    ..Default::default()
+                }))
+                .await
+                .expect_err("provider should reject request");
+            assert!(
+                matches!(&error, SamplingError::Api { status: actual, .. } if actual.as_u16() == status)
+            );
+            let error = attach_prompt_usage(
+                map_sampling_err_to_acp(error),
+                Some(crate::extensions::notification::PromptUsage {
+                    totals: crate::extensions::notification::PromptUsageModel {
+                        input_tokens: 3,
+                        ..Default::default()
+                    },
                     model_usage: Default::default(),
                     num_turns: 1,
                     usage_is_incomplete: false,
-                }
-            ));
-            assert_eq!(error_detail_from_data(error.data.as_ref().unwrap()).as_deref(), Some(detail));
+                }),
+            );
+            assert_eq!(
+                error_detail_from_data(error.data.as_ref().unwrap()).as_deref(),
+                Some(detail)
+            );
             assert_ne!(error.code, acp::Error::auth_required().code);
-            assert_eq!(prompt_usage_from_error(&error).unwrap().totals.input_tokens, 3);
+            assert_eq!(
+                prompt_usage_from_error(&error).unwrap().totals.input_tokens,
+                3
+            );
             let (_, result, _) = prompt_complete_fields(&Err(error));
             assert_eq!(result, serde_json::json!(detail));
             assert_eq!(format_rate_limited_user_message(Some(detail), true), detail);
         }
         assert_eq!(server.request_count(), 3);
-        assert!(server.requests().iter().all(|request| request.path == "/v1/responses"));
+        assert!(
+            server
+                .requests()
+                .iter()
+                .all(|request| request.path == "/v1/responses")
+        );
     }
 
     #[test]
@@ -869,7 +894,10 @@ mod tests {
             let acp_err = map_sampling_err_to_acp(err);
             let data = acp_err.data.unwrap();
             let msg = data.as_str().unwrap();
-            assert_eq!(msg, "The model 'Supercharge AI-build' requires a Grok subscription.");
+            assert_eq!(
+                msg,
+                "The model 'Supercharge AI-build' requires a Grok subscription."
+            );
             assert!(!msg.contains("/logout"));
         });
     }

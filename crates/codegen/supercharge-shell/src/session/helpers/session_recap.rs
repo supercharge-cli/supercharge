@@ -7,7 +7,9 @@
 
 use crate::sampling::ConversationItem;
 use crate::session::helpers::chat::floor_char_boundary;
-use supercharge_chat_state::{compaction_utils, estimate_conversation_tokens, estimate_item_tokens};
+use supercharge_chat_state::{
+    compaction_utils, estimate_conversation_tokens, estimate_item_tokens,
+};
 
 /// Generous headroom: the recap instruction targets about 25-40 words (roughly 240 chars at the top end).
 /// This only guards against runaway model output and never cuts a normal recap.

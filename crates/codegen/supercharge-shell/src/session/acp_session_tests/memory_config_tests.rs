@@ -1,10 +1,10 @@
 use super::support::*;
 use super::*;
 use crate::session::memory::MemorySearchSource;
-use tokio::sync::mpsc;
 use supercharge_paths::AbsPathBuf;
 use supercharge_workspace::file_system::MockFs;
 use supercharge_workspace::permission::PermissionHandle;
+use tokio::sync::mpsc;
 #[test]
 fn first_turn_memory_visibility_matches_displayed_score() {
     assert_eq!(
@@ -933,7 +933,9 @@ async fn test_first_turn_reminder_injects_without_persisted_block() {
     local
         .run_until(async {
             let actor = create_injection_ready_actor(vec![
-                supercharge_sampling_types::ConversationItem::system("You are a helpful assistant."),
+                supercharge_sampling_types::ConversationItem::system(
+                    "You are a helpful assistant.",
+                ),
                 supercharge_sampling_types::ConversationItem::user(
                     "tell me about rust backend services conventions",
                 ),
@@ -962,7 +964,9 @@ async fn test_first_turn_reminder_skips_all_displayed_zero_results() {
     local
         .run_until(async {
             let mut actor = create_injection_ready_actor(vec![
-                supercharge_sampling_types::ConversationItem::system("You are a helpful assistant."),
+                supercharge_sampling_types::ConversationItem::system(
+                    "You are a helpful assistant.",
+                ),
                 supercharge_sampling_types::ConversationItem::user(
                     "tell me about rust backend services conventions",
                 ),

@@ -696,7 +696,9 @@ mod tests {
 
         assert!(matches!(
             resolve_inline(script("../../escape")),
-            Err(ResolveError::Meta(supercharge_workflow::MetaError::InvalidName))
+            Err(ResolveError::Meta(
+                supercharge_workflow::MetaError::InvalidName
+            ))
         ));
         assert!(matches!(
             resolve_inline("x".repeat(MAX_WORKFLOW_SOURCE_BYTES as usize + 1)),

@@ -19,12 +19,12 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use unicode_width::UnicodeWidthStr;
 use supercharge_pager::scrollback::{
     RenderBlock, ScratchBuffer, ScrollbackPane, ScrollbackSearchState, ScrollbackState,
 };
 use supercharge_pager::theme::Theme;
 use supercharge_pager::views::picker::render_search_bar_with_viewport;
+use unicode_width::UnicodeWidthStr;
 
 struct App {
     scrollback: ScrollbackState,

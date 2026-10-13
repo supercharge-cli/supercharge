@@ -582,7 +582,11 @@ impl UploadAttempt<'_> {
         let _ = writeln!(log, "Trace upload debug log");
         let _ = writeln!(log, "======================");
         let _ = writeln!(log, "Timestamp:    {}", chrono::Utc::now().to_rfc3339());
-        let _ = writeln!(log, "Supercharge version: {}", supercharge_version::full_version());
+        let _ = writeln!(
+            log,
+            "Supercharge version: {}",
+            supercharge_version::full_version()
+        );
         let _ = writeln!(
             log,
             "OS:           {} {}",
@@ -624,7 +628,12 @@ async fn upload_with_retries(
     (|| async {
         tokio::time::timeout(
             UPLOAD_TIMEOUT,
-            supercharge_file_utils::gcs::upload_bytes(config, object_path, archive, "application/gzip"),
+            supercharge_file_utils::gcs::upload_bytes(
+                config,
+                object_path,
+                archive,
+                "application/gzip",
+            ),
         )
         .await
         .map_err(|_| anyhow::anyhow!("Upload timed out after {}s", UPLOAD_TIMEOUT.as_secs()))?

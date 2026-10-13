@@ -2061,8 +2061,10 @@ mod author_identity_tests {
             "SUPERCHARGE_TEST_WORK_EMAIL",
             "ada@corp.example",
         );
-        let _name =
-            supercharge_test_support::env::EnvGuard::set("SUPERCHARGE_TEST_WORK_NAME", "Ada Lovelace");
+        let _name = supercharge_test_support::env::EnvGuard::set(
+            "SUPERCHARGE_TEST_WORK_NAME",
+            "Ada Lovelace",
+        );
 
         // The loader expands `$VAR` at load, exactly as a trusted config tier ships it.
         let mut value = toml::from_str::<toml::Value>(
@@ -2115,7 +2117,10 @@ email = ["$SUPERCHARGE_TEST_WORK_EMAIL"]
             body.get("authorEmail"),
             Some(&serde_json::json!("ada@corp.example"))
         );
-        assert_eq!(body.get("modelId"), Some(&serde_json::json!("Supercharge AI-4")));
+        assert_eq!(
+            body.get("modelId"),
+            Some(&serde_json::json!("Supercharge AI-4"))
+        );
         assert_eq!(
             body.get("feedbackText"),
             Some(&serde_json::json!("great session"))

@@ -170,7 +170,10 @@ impl SessionRegistryClient {
     }
 
     /// Attach an `AuthManager` so request signing and 401 recovery go through the shared auth path.
-    pub fn with_auth(mut self, auth_manager: std::sync::Arc<supercharge_login::AuthManager>) -> Self {
+    pub fn with_auth(
+        mut self,
+        auth_manager: std::sync::Arc<supercharge_login::AuthManager>,
+    ) -> Self {
         let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> =
             std::sync::Arc::new(
                 supercharge_login::credential_provider::ShellAuthCredentialProvider::with_deployment_id_resolver(
@@ -227,7 +230,11 @@ impl SessionRegistryClient {
     /// Emit a single `auth 401 attribution` log entry tagged with `consumer = "SessionRegistryClient.<op>"`.
     /// The op string is the operation name passed to `check_response`, e.g. `"session register"`.
     /// `stamp` is what the middleware put on the wire; [`supercharge_auth::StampedBearerSuffix`] explains why it is never re-resolved.
-    fn record_401_attribution(&self, op: &str, stamp: Option<&supercharge_auth::StampedBearerSuffix>) {
+    fn record_401_attribution(
+        &self,
+        op: &str,
+        stamp: Option<&supercharge_auth::StampedBearerSuffix>,
+    ) {
         if let Some(manager) = self.credentials.auth_manager() {
             supercharge_login::attribution::record_consumer_401(
                 manager.as_ref(),
@@ -572,8 +579,8 @@ mod tests {
         use chrono::{Duration, Utc};
         use std::net::SocketAddr;
         use std::sync::Arc;
-        use tokio::net::TcpListener;
         use supercharge_login::{AuthManager, AuthMode, GrokAuth, GrokComConfig};
+        use tokio::net::TcpListener;
 
         let captured = Arc::new(parking_lot::Mutex::new(None::<String>));
         let captured_for_handler = captured.clone();

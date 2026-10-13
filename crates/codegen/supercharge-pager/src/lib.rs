@@ -38,8 +38,6 @@ pub mod minimal_api;
 #[path = "minimal/hook.rs"]
 pub mod minimal_hook;
 pub mod models;
-#[cfg(windows)]
-pub(crate) mod windows_image_paste;
 pub mod notifications;
 #[allow(unused_imports, unused_macros)]
 pub mod obf;
@@ -57,6 +55,8 @@ pub mod tips;
 pub mod tool_usage;
 pub mod tutorial_docs;
 pub mod usage_cmd;
+#[cfg(windows)]
+pub(crate) mod windows_image_paste;
 pub mod wrap_clipboard_image;
 pub mod wrap_cmd;
 pub(crate) mod wrap_filter;

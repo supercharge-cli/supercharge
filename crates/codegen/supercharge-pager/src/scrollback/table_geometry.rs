@@ -2,9 +2,9 @@
 //! Table lines never soft-wrap, so one rendered line is one block line.
 
 use std::ops::Range;
+use supercharge_markdown::{TableCellCopy, TableCopyMeta};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
-use supercharge_markdown::{TableCellCopy, TableCopyMeta};
 
 /// A cell position within a detected grid: `row` indexes logical rows (the header is row 0), `col` indexes columns left to right.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

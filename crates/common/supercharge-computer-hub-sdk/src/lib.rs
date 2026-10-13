@@ -68,12 +68,12 @@ pub use server::{
     ResolvedSessionHandlers, SessionHandlerResolver, SessionUnboundCallback, SystemNotifyAck,
     ToolServer, ToolServerBuilder, ToolServerHandler, WeakToolServer,
 };
-pub use trace_donate::{HubDonatingReporter, TraceDonationPump};
 pub use supercharge_computer_hub_core::{
     SUPERCHARGE_BOT_DEFAULT_TOOL_IDS, SUPERCHARGE_BOT_TOOL_DESCRIPTIONS, SUPERCHARGE_BOT_TOOL_IDS,
     grok_bot_tool_arguments_schema, grok_bot_tool_description, is_grok_bot_default_tool,
     is_grok_bot_tool,
 };
+pub use trace_donate::{HubDonatingReporter, TraceDonationPump};
 // Re-exported so consumers that depend only on the SDK can recognize the
 // server's `workspace_unavailable` error without also pulling in the core crate.
 pub use supercharge_computer_hub_core::is_workspace_unavailable;

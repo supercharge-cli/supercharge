@@ -36,7 +36,9 @@ fn spawn_probe(socket: &Path, filtered: bool) -> std::process::Output {
         let filter = supercharge_sandbox::child_net::prebuilt_child_network_filter();
         // SAFETY: the closure only runs prctl against the parent-built program.
         unsafe {
-            cmd.pre_exec(move || supercharge_sandbox::child_net::install_child_network_filter(filter));
+            cmd.pre_exec(move || {
+                supercharge_sandbox::child_net::install_child_network_filter(filter)
+            });
         }
     }
     cmd.output().expect("spawn probe")

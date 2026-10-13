@@ -499,12 +499,14 @@ mod tests {
             workflows: vec![],
             workflow_tool_name: None,
         };
-        let skills = [supercharge_tools::implementations::skills::types::SkillInfo {
-            name: "commit".into(),
-            description: "Create a git commit.".into(),
-            path: "/skills/commit/SKILL.md".into(),
-            ..Default::default()
-        }];
+        let skills = [
+            supercharge_tools::implementations::skills::types::SkillInfo {
+                name: "commit".into(),
+                description: "Create a git commit.".into(),
+                path: "/skills/commit/SKILL.md".into(),
+                ..Default::default()
+            },
+        ];
         let workflows =
             "The following workflows are available:\n\n- review-pr: Review a PR.\n  Source: user";
         let text = to_system_reminder_sync(&ctx, &[], &skills, None, None, Some(workflows))

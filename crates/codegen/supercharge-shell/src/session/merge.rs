@@ -212,9 +212,9 @@ pub(crate) async fn fetch_lanes(
             return Vec::new();
         }
         cwd.map(|c| {
-            supercharge_workspace::session::git::resolve_normalized_remote_urls(std::path::Path::new(
-                c,
-            ))
+            supercharge_workspace::session::git::resolve_normalized_remote_urls(
+                std::path::Path::new(c),
+            )
         })
         .unwrap_or_default()
     };

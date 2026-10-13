@@ -1084,10 +1084,11 @@ impl SessionActor {
         let compaction_hosted_tools: Vec<supercharge_sampling_types::HostedTool> =
             self.hosted_tools_for_turn();
         if lossy_input {
-            simplified_messages = supercharge_chat_state::compaction_utils::fit_conversation_to_budget(
-                simplified_messages,
-                lossy_input_budget(context_window, compaction_tool_tokens),
-            );
+            simplified_messages =
+                supercharge_chat_state::compaction_utils::fit_conversation_to_budget(
+                    simplified_messages,
+                    lossy_input_budget(context_window, compaction_tool_tokens),
+                );
         }
         tracing::info!(
             num_tools = compaction_tools.len(),
@@ -1114,7 +1115,10 @@ impl SessionActor {
         let started_at = chrono::Utc::now().to_rfc3339();
         let estimated_input_tokens =
             supercharge_chat_state::estimate_conversation_tokens(&simplified_messages);
-        let auto_trigger = matches!(trigger, supercharge_telemetry::events::CompactionTrigger::Auto);
+        let auto_trigger = matches!(
+            trigger,
+            supercharge_telemetry::events::CompactionTrigger::Auto
+        );
         let wall_clock_budget_secs = self
             .agent
             .borrow()
@@ -2244,10 +2248,12 @@ impl SessionActor {
         self.record_compaction_variant();
         let tokens_before = self.chat_state_handle.get_total_tokens().await;
         tracing::Span::current().record("pre_tokens", tokens_before as i64);
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::AutoCompactFired {
-            tokens_before: trigger_info.tokens_used,
-            percentage: trigger_info.percentage,
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::AutoCompactFired {
+                tokens_before: trigger_info.tokens_used,
+                percentage: trigger_info.percentage,
+            },
+        );
         self.signals_handle()
             .record_compaction(trigger_info.tokens_used);
         let reason = if trigger_info.reason_override == Some(MODEL_FAMILY_SWITCH_COMPACT_BANNER) {

@@ -403,7 +403,8 @@ fn log_plugin_installed(
 }
 
 fn cmd_install(source: &str, trust: bool) -> Result<()> {
-    if let Some(mref) = supercharge_plugin_marketplace::install_resolve::parse_marketplace_ref(source)
+    if let Some(mref) =
+        supercharge_plugin_marketplace::install_resolve::parse_marketplace_ref(source)
     {
         return cmd_install_marketplace(source, &mref, trust);
     }
@@ -801,9 +802,10 @@ async fn run_marketplace(cmd: MarketplaceCommand) -> Result<()> {
         MarketplaceCommand::List { json } => marketplace_list(&sources, json),
         MarketplaceCommand::Add { url, force } => marketplace_add(&url, force),
         // Remove is cleanup, not bypass: it must find blocked sources too.
-        MarketplaceCommand::Remove { source } => {
-            marketplace_remove(&supercharge_shell::plugin::load_marketplace_sources(), &source)
-        }
+        MarketplaceCommand::Remove { source } => marketplace_remove(
+            &supercharge_shell::plugin::load_marketplace_sources(),
+            &source,
+        ),
         MarketplaceCommand::Update { name } => marketplace_update(&sources, name.as_deref()),
     }
 }

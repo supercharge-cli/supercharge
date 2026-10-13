@@ -38,8 +38,7 @@ use crate::app::worktree_session::{
 use crate::best_effort_stderr::eprint_line;
 use crate::client_identity::{HEADLESS_CLIENT_TYPE, PAGER_CLIENT_VERSION};
 use crate::headless::reducer::{
-    Lifecycle, Reducer, SessionContext, StreamEvent, TurnEnd, map_session_update,
-    reducer_for,
+    Lifecycle, Reducer, SessionContext, StreamEvent, TurnEnd, map_session_update, reducer_for,
 };
 
 mod ext_protocol;
@@ -474,8 +473,8 @@ async fn authenticate(
     // Prefer non-interactive methods only; interactive login is not usable headless.
     if kind.needs_interactive_login() {
         use std::io::IsTerminal;
-        let interactive =
-            std::io::stdin().is_terminal() && !supercharge_shell::util::clipboard::is_remote_session();
+        let interactive = std::io::stdin().is_terminal()
+            && !supercharge_shell::util::clipboard::is_remote_session();
         anyhow::bail!("{}", auth_required_message(interactive));
     }
     let is_api_key_auth = kind.is_api_key();
@@ -540,8 +539,10 @@ async fn open_session(
     restore_code: Option<bool>,
 ) -> anyhow::Result<OpenedSession> {
     // Sessions open before the agent resolves per-vendor compat; default all-on until it does.
-    let mcp_servers =
-        cli_config::load_mcp_servers(cwd, &supercharge_tools::types::compat::CompatConfig::default());
+    let mcp_servers = cli_config::load_mcp_servers(
+        cwd,
+        &supercharge_tools::types::compat::CompatConfig::default(),
+    );
 
     if let Some(sid) = session_id_flag {
         let try_load: Result<acp::LoadSessionResponse, _> = acp_send(
@@ -594,8 +595,10 @@ async fn open_session_with_id(
 ) -> anyhow::Result<OpenedSession> {
     let cwd_str = cwd.to_string_lossy();
     crate::app::session_startup::ensure_session_id_available(session_id, &cwd_str)?;
-    let mcp_servers =
-        cli_config::load_mcp_servers(cwd, &supercharge_tools::types::compat::CompatConfig::default());
+    let mcp_servers = cli_config::load_mcp_servers(
+        cwd,
+        &supercharge_tools::types::compat::CompatConfig::default(),
+    );
     let mut meta = serde_json::json!({ "sessionId": session_id, "sessionKind": "headless" })
         .as_object()
         .cloned();
@@ -852,7 +855,11 @@ pub async fn run_single_turn(
     let deferred = signals.defer_exit();
     let active_session = std::sync::Arc::new(parking_lot::Mutex::new(None));
     let mut turn = Box::pin(run_single_turn_inner(
-        prompt, verbatim, options, cancel, active_session.clone(),
+        prompt,
+        verbatim,
+        options,
+        cancel,
+        active_session.clone(),
     ));
     let result = tokio::select! {
         biased;
@@ -917,19 +924,21 @@ async fn run_single_turn_inner(
         agent_config.default_model_override = Some(model.clone());
     }
 
-    agent_config.resolve_runtime_fields(&supercharge_shell::agent::config::RuntimeResolutionContext {
-        raw_config: &raw_config,
-        remote_settings: None,
-        is_headless: true,
-        cli_subagents: None,
-        cli_web_search_model: None,
-        cli_session_summary_model: None,
-        memory_enabled_override: options.memory_enabled_override,
-        disable_web_search: options.disable_web_search,
-        todo_gate: false,
-        laziness_debug_log: None,
-        storage_mode: None,
-    });
+    agent_config.resolve_runtime_fields(
+        &supercharge_shell::agent::config::RuntimeResolutionContext {
+            raw_config: &raw_config,
+            remote_settings: None,
+            is_headless: true,
+            cli_subagents: None,
+            cli_web_search_model: None,
+            cli_session_summary_model: None,
+            memory_enabled_override: options.memory_enabled_override,
+            disable_web_search: options.disable_web_search,
+            todo_gate: false,
+            laziness_debug_log: None,
+            storage_mode: None,
+        },
+    );
 
     agent_config.mode = supercharge_shell::agent::config::AgentMode::Headless;
     agent_config.default_yolo_mode = options.yolo;
@@ -1179,7 +1188,9 @@ async fn run_single_turn_inner(
             pid: std::process::id(),
             cwd: cwd.display().to_string(),
             opened_at: chrono::Utc::now(),
-        }).is_ok() {
+        })
+        .is_ok()
+        {
             *active_session.lock() = Some(session_id.clone());
         }
     }
@@ -1554,7 +1565,8 @@ async fn run_single_turn_inner(
                 }
             }
             let stop_reason_override =
-                (supercharge_shell::sampling::error::stop_reason_for_turn_error(&err) == "MaxTokens")
+                (supercharge_shell::sampling::error::stop_reason_for_turn_error(&err)
+                    == "MaxTokens")
                     .then_some("max_tokens");
             emitter.on_error(&msg, stop_reason_override);
             Err(anyhow::anyhow!("{msg}"))

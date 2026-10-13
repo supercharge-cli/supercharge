@@ -633,8 +633,10 @@ pub struct ToolsConfig {
     pub media_gen: MediaGenToolsConfig,
 }
 impl ToolsConfig {
-    pub const ENV_MAX_PARALLEL_IMAGE_GEN_CALLS: &'static str = "SUPERCHARGE_MAX_PARALLEL_IMAGE_GEN_CALLS";
-    pub const ENV_MAX_PARALLEL_VIDEO_GEN_CALLS: &'static str = "SUPERCHARGE_MAX_PARALLEL_VIDEO_GEN_CALLS";
+    pub const ENV_MAX_PARALLEL_IMAGE_GEN_CALLS: &'static str =
+        "SUPERCHARGE_MAX_PARALLEL_IMAGE_GEN_CALLS";
+    pub const ENV_MAX_PARALLEL_VIDEO_GEN_CALLS: &'static str =
+        "SUPERCHARGE_MAX_PARALLEL_VIDEO_GEN_CALLS";
     /// Resolve the final tools config, in priority order: Env vars `SUPERCHARGE_RESPECT_GITIGNORE` and `SUPERCHARGE_DISABLE_ZDR_INCOMPATIBLE_TOOLS` (`0`/`false` off, `1`/`true` on). `[tools]` block from the merged effective config.
     /// Defaults (both `false`). Fields are read individually. A malformed `[tools.zdr_video_output_s3]` therefore cannot wipe `disable_zdr_incompatible_tools` or any other tools flag.
     pub fn resolve(config: &toml::Value) -> Self {
@@ -1484,7 +1486,11 @@ pub fn apply_sandbox(
             );
         };
         let command = supercharge_sandbox::bwrap_reexec_for_profile(&sandbox_profile, &workspace);
-        match route_bwrap_startup(command, supercharge_sandbox::is_inside_bwrap(), requires_bwrap) {
+        match route_bwrap_startup(
+            command,
+            supercharge_sandbox::is_inside_bwrap(),
+            requires_bwrap,
+        ) {
             BwrapStartup::ReexecRequired(mut cmd) => {
                 use std::os::unix::process::CommandExt;
                 let err = cmd.exec();

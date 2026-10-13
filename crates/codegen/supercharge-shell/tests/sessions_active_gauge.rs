@@ -8,7 +8,9 @@ use acp_harness::{AutoApproveClient, RPC_TIMEOUT, connect_and_auth, new_session,
 use agent_client_protocol::{self as acp, Agent as _};
 
 fn sessions_active() -> u32 {
-    supercharge_telemetry::activity::gauge_value(supercharge_telemetry::activity::SESSIONS_ACTIVE_KEY)
+    supercharge_telemetry::activity::gauge_value(
+        supercharge_telemetry::activity::SESSIONS_ACTIVE_KEY,
+    )
 }
 
 #[test]

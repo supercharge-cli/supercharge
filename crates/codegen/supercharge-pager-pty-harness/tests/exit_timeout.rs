@@ -8,7 +8,9 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use supercharge_pager_pty_harness::{ContentController, PtyExitPoll, PtyHarness, keys, pager_binary};
+use supercharge_pager_pty_harness::{
+    ContentController, PtyExitPoll, PtyHarness, keys, pager_binary,
+};
 
 const ROWS: u16 = 50;
 const COLS: u16 = 120;

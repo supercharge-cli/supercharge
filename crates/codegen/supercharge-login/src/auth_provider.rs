@@ -355,7 +355,10 @@ async fn mint_provider_token(
             cmd.env("SUPERCHARGE_AUTH_PROVIDER_REFRESH_TOKEN", refresh);
         }
         if let Some(expires_at) = prev.expires_at {
-            cmd.env("SUPERCHARGE_AUTH_PROVIDER_EXPIRES_AT", expires_at.to_rfc3339());
+            cmd.env(
+                "SUPERCHARGE_AUTH_PROVIDER_EXPIRES_AT",
+                expires_at.to_rfc3339(),
+            );
         }
     }
     supercharge_tools::util::detach_command(&mut cmd);

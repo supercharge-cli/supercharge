@@ -36,7 +36,9 @@ fn grok_home_override_path_helpers() {
         "$SUPERCHARGE_HOME/last-copy.txt"
     );
 
-    assert!(supercharge_pager::util::is_under_user_grok_home(&memory_path));
+    assert!(supercharge_pager::util::is_under_user_grok_home(
+        &memory_path
+    ));
     assert!(!supercharge_pager::util::is_under_user_grok_home(
         PathBuf::from("/tmp/other").as_path()
     ));
@@ -53,8 +55,10 @@ fn disk_usage_run_creates_no_grok_home() {
     }
 
     for json in [false, true] {
-        supercharge_pager::disk_usage_cmd::run(supercharge_pager::disk_usage_cmd::DiskUsageArgs { json })
-            .expect("a missing home is not an error");
+        supercharge_pager::disk_usage_cmd::run(supercharge_pager::disk_usage_cmd::DiskUsageArgs {
+            json,
+        })
+        .expect("a missing home is not an error");
         assert!(
             !ghost.exists(),
             "grok du must not create the home it reports on (json={json})"

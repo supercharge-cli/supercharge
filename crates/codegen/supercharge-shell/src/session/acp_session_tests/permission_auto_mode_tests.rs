@@ -102,7 +102,9 @@ async fn spawn_auto_seed_wires_classifier_when_is_auto_mode() {
             install_real_permissions(&mut actor);
             actor.permissions.set_auto_mode(true);
             actor.permissions.set_classifier_transcript(vec![
-                supercharge_workspace::permission::ClassifierTurn::UserText("please run tests".into()),
+                supercharge_workspace::permission::ClassifierTurn::UserText(
+                    "please run tests".into(),
+                ),
             ]);
 
             let session = Arc::new(actor);

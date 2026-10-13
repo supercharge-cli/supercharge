@@ -11,8 +11,8 @@ use crate::managed_config::LaunchProfile;
 use indexmap::IndexMap;
 use std::sync::{Arc, Mutex, TryLockError};
 use std::time::Duration;
-use tokio_util::sync::CancellationToken;
 use supercharge_login::{AuthManager, GrokAuth};
+use tokio_util::sync::CancellationToken;
 /// The policy refusal stays typed; stringify only at the process boundary.
 #[derive(Debug, thiserror::Error)]
 pub enum BootstrapError {
@@ -160,7 +160,9 @@ pub fn bootstrap_with_cancel(
         init_process(&cfg, auth_manager);
     }
     ensure_bootstrap_not_cancelled(cancel)?;
-    supercharge_telemetry::startup::enter(supercharge_telemetry::startup::StartupPhase::ModelCatalog);
+    supercharge_telemetry::startup::enter(
+        supercharge_telemetry::startup::StartupPhase::ModelCatalog,
+    );
     let models_manager = {
         let mut timer = crate::instrumentation_timer!("startup.model_catalog.models_manager");
         timer.with_subphase(supercharge_telemetry::startup::Subphase::ModelsManager);

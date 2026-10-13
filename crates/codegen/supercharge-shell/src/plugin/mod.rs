@@ -402,7 +402,8 @@ pub fn update_plugins(name: Option<&str>) -> Result<Vec<RepoUpdateOutcome>, Upda
                 },
             }
         } else if let Some(detail) = acquire::direct_update_block_reason(
-            &supercharge_workspace::permission::resolution::managed_settings().marketplace_allowlist,
+            &supercharge_workspace::permission::resolution::managed_settings()
+                .marketplace_allowlist,
             repo,
         ) {
             // Same acquisition gate as `install_plugin`: update re-fetches

@@ -352,7 +352,9 @@ impl StatusConfig {
                 "SUPERCHARGE_WORKSPACE_WS_RECONNECT_BACKOFF_MS",
             ),
             ws_liveness_deadline: optional_secs("SUPERCHARGE_WORKSPACE_WS_LIVENESS_DEADLINE_SECS"),
-            hub_connect_hedge_after: optional_secs("SUPERCHARGE_WORKSPACE_HUB_CONNECT_HEDGE_AFTER_SECS"),
+            hub_connect_hedge_after: optional_secs(
+                "SUPERCHARGE_WORKSPACE_HUB_CONNECT_HEDGE_AFTER_SECS",
+            ),
             hub_connect_deadline: optional_secs("SUPERCHARGE_WORKSPACE_HUB_CONNECT_DEADLINE_SECS"),
             oidc_refresh: ProactiveRefreshConfig::from_env(),
             hub_warn_threshold: parse_or(
@@ -1352,17 +1354,32 @@ mod tests {
         assert_eq!(cfg, ProactiveRefreshConfig::default());
         assert!(cfg.enabled);
 
-        unsafe { std::env::set_var("SUPERCHARGE_WORKSPACE_OIDC_PROACTIVE_REFRESH_ENABLED", "false") };
+        unsafe {
+            std::env::set_var(
+                "SUPERCHARGE_WORKSPACE_OIDC_PROACTIVE_REFRESH_ENABLED",
+                "false",
+            )
+        };
         let cfg = ProactiveRefreshConfig::from_env();
         assert!(
             !cfg.enabled,
             "explicit false is the env kill-switch and must still win"
         );
 
-        unsafe { std::env::set_var("SUPERCHARGE_WORKSPACE_OIDC_PROACTIVE_REFRESH_ENABLED", "true") };
+        unsafe {
+            std::env::set_var(
+                "SUPERCHARGE_WORKSPACE_OIDC_PROACTIVE_REFRESH_ENABLED",
+                "true",
+            )
+        };
         unsafe { std::env::set_var("SUPERCHARGE_WORKSPACE_OIDC_REFRESH_FRACTION", "0.7") };
         unsafe { std::env::set_var("SUPERCHARGE_WORKSPACE_OIDC_REFRESH_JITTER_FRACTION", "0.1") };
-        unsafe { std::env::set_var("SUPERCHARGE_WORKSPACE_OIDC_REFRESH_SAFETY_MARGIN_SECS", "90") };
+        unsafe {
+            std::env::set_var(
+                "SUPERCHARGE_WORKSPACE_OIDC_REFRESH_SAFETY_MARGIN_SECS",
+                "90",
+            )
+        };
         unsafe { std::env::set_var("SUPERCHARGE_WORKSPACE_OIDC_MIN_REFRESH_INTERVAL_SECS", "30") };
         let cfg = ProactiveRefreshConfig::from_env();
         assert!(cfg.enabled);

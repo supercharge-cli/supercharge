@@ -77,9 +77,11 @@ pub(super) fn build_middleware_client(
 fn build_static_middleware_client(
     api_key: Option<String>,
 ) -> reqwest_middleware::ClientWithMiddleware {
-    let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> = std::sync::Arc::new(
-        supercharge_auth::StaticAuthCredentialProvider::new(Box::new(NoopHttpAuth), api_key),
-    );
+    let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> =
+        std::sync::Arc::new(supercharge_auth::StaticAuthCredentialProvider::new(
+            Box::new(NoopHttpAuth),
+            api_key,
+        ));
     build_middleware_client(provider)
 }
 

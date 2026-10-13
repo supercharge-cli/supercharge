@@ -30,7 +30,8 @@ pub struct SessionPickerSurface {
     pub entries: Option<Vec<crate::app::app_view::SessionPickerEntry>>,
     pub loading: bool,
     pub lanes: crate::views::session_picker::SessionPickerLanes,
-    pub content_results: Option<Vec<supercharge_shell::extensions::session_search::SearchSessionHit>>,
+    pub content_results:
+        Option<Vec<supercharge_shell::extensions::session_search::SearchSessionHit>>,
     pub content_loading: bool,
     /// Per-surface counters; the dashboard host does not share the welcome picker's `session_picker_list_seq` / `session_picker_deep_search_seq`.
     pub list_seq: u64,

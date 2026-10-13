@@ -14,6 +14,7 @@ pub mod skills;
 pub mod task_output;
 pub mod use_tool;
 pub mod web_search;
+pub use curated_memory::CuratedMemoryTool;
 pub use grok_build::bash::{BashError, BashToolInput};
 pub use grok_build::{
     AskUserQuestionTool, BashTool, EnterPlanModeTool, ExitPlanModeTool, GrepTool, KillTaskTool,
@@ -21,7 +22,6 @@ pub use grok_build::{
     SendSubagentMessageTool, TaskOutputTool, TaskTool, TodoWriteTool, WaitTasksTool, WebFetchTool,
     WebSearchTool,
 };
-pub use curated_memory::CuratedMemoryTool;
 pub use memory::{MemoryGetImpl, MemorySearchImpl};
 pub use opencode::{
     OpenCodeBashTool, OpenCodeEditTool, OpenCodeGlobTool, OpenCodeGrepTool, OpenCodeReadTool,

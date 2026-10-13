@@ -16,7 +16,9 @@ use crate::types::requirements::{Expr, ToolRequirement};
 use crate::types::resources::{Terminal, TruncationCfg};
 use crate::types::template_renderer::TemplateRenderer;
 use crate::types::tool::{ToolKind, ToolNamespace};
-use supercharge_tool_types::{MultiTaskOutputResult, TaskOutputOutput, WaitMode, WaitTasksToolInput};
+use supercharge_tool_types::{
+    MultiTaskOutputResult, TaskOutputOutput, WaitMode, WaitTasksToolInput,
+};
 
 #[derive(Debug, Default)]
 pub struct WaitTasksTool;
@@ -35,11 +37,13 @@ impl crate::types::tool_metadata::ToolMetadata for WaitTasksTool {
         // renders it context-aware from the finalized toolset. This static
         // fallback uses canonical tool/param names.
         static DESC: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-            supercharge_tool_types::build_wait_tasks_description(&supercharge_tool_types::WaitTasksToolNaming {
-                background_retrieval_tool: "get_task_output",
-                bash_background_param: Some("is_background"),
-                subagent_background_param: Some("run_in_background"),
-            })
+            supercharge_tool_types::build_wait_tasks_description(
+                &supercharge_tool_types::WaitTasksToolNaming {
+                    background_retrieval_tool: "get_task_output",
+                    bash_background_param: Some("is_background"),
+                    subagent_background_param: Some("run_in_background"),
+                },
+            )
         });
         &DESC
     }
@@ -89,13 +93,15 @@ fn wait_tasks_description(
             ovr.to_string()
         });
     }
-    supercharge_tool_types::build_wait_tasks_description(&supercharge_tool_types::WaitTasksToolNaming {
-        background_retrieval_tool: renderer
-            .tool_for_kind(ToolKind::BackgroundTaskAction)
-            .unwrap_or("get_task_output"),
-        bash_background_param: renderer.param_for_kind(ToolKind::Execute, "is_background"),
-        subagent_background_param: renderer.param_for_kind(ToolKind::Task, "run_in_background"),
-    })
+    supercharge_tool_types::build_wait_tasks_description(
+        &supercharge_tool_types::WaitTasksToolNaming {
+            background_retrieval_tool: renderer
+                .tool_for_kind(ToolKind::BackgroundTaskAction)
+                .unwrap_or("get_task_output"),
+            bash_background_param: renderer.param_for_kind(ToolKind::Execute, "is_background"),
+            subagent_background_param: renderer.param_for_kind(ToolKind::Task, "run_in_background"),
+        },
+    )
 }
 
 impl supercharge_tool_runtime::Tool for WaitTasksTool {
@@ -144,9 +150,9 @@ impl supercharge_tool_runtime::Tool for WaitTasksTool {
             ));
         }
         if input.task_ids.len() > MAX_MULTI_WAIT_IDS {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "task_ids exceeds maximum of {MAX_MULTI_WAIT_IDS} entries."
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("task_ids exceeds maximum of {MAX_MULTI_WAIT_IDS} entries."),
+            ));
         }
 
         // wait_all (the common case) shares the unified multi path on get_task_output.
@@ -181,9 +187,9 @@ impl supercharge_tool_runtime::Tool for WaitTasksTool {
             let terminal = res.require::<Terminal>()?.0.clone();
             let backend = res.get::<SubagentBackendResource>().cloned();
             let renderer = res.require::<TemplateRenderer>()?;
-            let rfn = renderer
-                .render("${{ tools.by_kind.read }}")
-                .map_err(|e| supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string()))?;
+            let rfn = renderer.render("${{ tools.by_kind.read }}").map_err(|e| {
+                supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string())
+            })?;
             let mob = res
                 .get::<TruncationCfg>()
                 .map(|cfg| {

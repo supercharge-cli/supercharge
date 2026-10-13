@@ -93,7 +93,10 @@ mod tests {
             parse_command("/cmd ls -la /tmp"),
             Some(AgentCommand::Cmd("ls -la /tmp".to_owned()))
         );
-        assert_eq!(parse_command("/cmd"), Some(AgentCommand::Cmd(String::new())));
+        assert_eq!(
+            parse_command("/cmd"),
+            Some(AgentCommand::Cmd(String::new()))
+        );
         assert_eq!(
             parse_command("/format responses"),
             Some(AgentCommand::Format(Some("responses".to_owned())))

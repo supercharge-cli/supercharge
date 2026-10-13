@@ -730,7 +730,9 @@ mod tests {
     /// Build an agent with an active single-select question in InputMode and the given freeform text loaded into the prompt.
     fn question_input_agent(text: &str) -> AgentView {
         use supercharge_pager::views::prompt_widget::StashedPrompt;
-        use supercharge_pager::views::question_view::{Question, QuestionOption, QuestionViewState};
+        use supercharge_pager::views::question_view::{
+            Question, QuestionOption, QuestionViewState,
+        };
 
         let mut agent = minimal_api::test_agent_view(Some("s1"), std::path::PathBuf::from("/tmp"));
         let mut qv = QuestionViewState::new(

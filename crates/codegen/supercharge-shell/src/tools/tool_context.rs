@@ -7,11 +7,11 @@ use agent_client_protocol as acp;
 use std::collections::HashMap;
 use std::sync::Arc;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
+use supercharge_hunk_tracker::HunkTrackerHandle;
 use supercharge_paths::AbsPathBuf;
+use supercharge_tty_utils::ProcessScope;
 use supercharge_workspace::file_system::{AsyncFileSystem, AsyncFsWrapper};
 use supercharge_workspace::session::file_state::FileStateHandle;
-use supercharge_hunk_tracker::HunkTrackerHandle;
-use supercharge_tty_utils::ProcessScope;
 #[derive(Debug, Clone, Default)]
 pub struct TaskOutputTokenBudget {
     inner: Arc<parking_lot::Mutex<TaskOutputTokenBudgetState>>,
@@ -403,9 +403,9 @@ mod tests {
     use crate::{terminal::AsyncTerminalRunner, tools::ToolContext};
     use std::collections::HashMap;
     use std::sync::Arc;
+    use supercharge_hunk_tracker::HunkTrackerHandle;
     use supercharge_paths::AbsPathBuf;
     use supercharge_workspace::file_system::{AsyncFileSystem, AsyncFsWrapper};
-    use supercharge_hunk_tracker::HunkTrackerHandle;
     impl ToolContext {
         pub(crate) fn new_local_context(
             cwd: AbsPathBuf,
@@ -439,7 +439,8 @@ mod tests {
                 synthetic_trace_tx: None,
                 synthetic_trace_tx_shared: None,
                 task_output_tool_name:
-                    supercharge_tools::reminders::task_completion::DEFAULT_TASK_OUTPUT_TOOL.to_string(),
+                    supercharge_tools::reminders::task_completion::DEFAULT_TASK_OUTPUT_TOOL
+                        .to_string(),
                 scheduler_delete_tool_name: None,
                 scheduler_create_tool_name: None,
                 auto_wake_enabled: true,

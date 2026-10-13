@@ -280,9 +280,15 @@ mod tests {
             selected: true,
         };
         let v = serde_json::to_value(&opt).expect("serialize");
-        assert_eq!(v.get("id").and_then(|x| x.as_str()), Some("Supercharge AI-build"));
+        assert_eq!(
+            v.get("id").and_then(|x| x.as_str()),
+            Some("Supercharge AI-build")
+        );
         assert_eq!(v.get("category").and_then(|x| x.as_str()), Some("model"));
-        assert_eq!(v.get("label").and_then(|x| x.as_str()), Some("Supercharge AI"));
+        assert_eq!(
+            v.get("label").and_then(|x| x.as_str()),
+            Some("Supercharge AI")
+        );
         assert_eq!(v.get("selected").and_then(|x| x.as_bool()), Some(true));
         assert!(v.get("description").is_none());
     }

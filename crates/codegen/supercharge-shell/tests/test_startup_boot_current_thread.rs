@@ -2,11 +2,11 @@
 
 mod common;
 
-use tokio_util::sync::CancellationToken;
 use supercharge_shell::agent::config::Config;
 use supercharge_shell::agent::init::{bootstrap_with_cancel, resolve_boot_startup_settings};
 use supercharge_shell::util::config::RemoteSettings;
 use supercharge_test_support::MockModelEntry;
+use tokio_util::sync::CancellationToken;
 
 /// The production current-thread boot path (`resolve_boot_startup_settings` then
 /// `bootstrap_with_cancel`) the pager worker uses; every other suite drives the

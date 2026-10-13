@@ -631,7 +631,8 @@ fn load_plugin_mcp_servers_from_config(
     plugin_data: &str,
 ) -> (Vec<acp::McpServer>, crate::util::config::McpOAuthConfigMap) {
     let sub = |s: &str| -> String {
-        let s = supercharge_agent::plugins::manifest::substitute_env_vars(s, plugin_root, plugin_data);
+        let s =
+            supercharge_agent::plugins::manifest::substitute_env_vars(s, plugin_root, plugin_data);
         crate::config::expand_env_vars_in_string(&s)
     };
     let label = format!("plugin:{}", plugin_name);

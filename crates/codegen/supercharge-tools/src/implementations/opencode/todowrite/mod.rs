@@ -405,7 +405,10 @@ mod tests {
     fn id_and_kind() {
         use crate::types::tool_metadata::ToolMetadata;
         let tool = TodoWriteTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "todowrite");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "todowrite"
+        );
         assert!(matches!(tool.kind(), ToolKind::Plan));
     }
 

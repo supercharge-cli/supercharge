@@ -26,7 +26,9 @@ pub enum AuthError {
     PinnedTeamMismatch { message: String },
 
     /// The cached API-key session was rejected because API-key auth is disabled.
-    #[error("API-key auth is disabled by your administrator. Run `supercharge login` to authenticate.")]
+    #[error(
+        "API-key auth is disabled by your administrator. Run `supercharge login` to authenticate."
+    )]
     ApiKeyAuthDisabled,
 
     /// Outcome of a refresh-authority attempt.
@@ -173,10 +175,17 @@ mod branding_tests {
             AuthError::NotLoggedIn.to_string(),
             AuthError::TokenExpiredNoRefresh.to_string(),
             AuthError::ServerRejectedNoRecovery.to_string(),
-            AuthError::PinnedTeamMismatch { message: "Wrong team.".into() }.to_string(),
+            AuthError::PinnedTeamMismatch {
+                message: "Wrong team.".into(),
+            }
+            .to_string(),
             AuthError::ApiKeyAuthDisabled.to_string(),
-            RefreshTokenFailedReason::RefreshTokenRejected.user_message().to_string(),
-            RefreshTokenFailedReason::ClientRejected.user_message().to_string(),
+            RefreshTokenFailedReason::RefreshTokenRejected
+                .user_message()
+                .to_string(),
+            RefreshTokenFailedReason::ClientRejected
+                .user_message()
+                .to_string(),
             RefreshTokenFailedReason::Other.user_message().to_string(),
         ];
         for message in messages {

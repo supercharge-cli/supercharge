@@ -700,7 +700,8 @@ mod tests {
         );
         assert_eq!(input.session_id, "sess-1");
 
-        let submission = input.take_submission(Some("Supercharge AI-3".into()), None, None, Some(5));
+        let submission =
+            input.take_submission(Some("Supercharge AI-3".into()), None, None, Some(5));
         assert_eq!(
             submission.client_type,
             prod_mc_cli_chat_proxy_types::feedback_types::ClientType::Desktop

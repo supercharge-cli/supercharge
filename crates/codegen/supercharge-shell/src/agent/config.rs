@@ -3370,7 +3370,10 @@ pub(crate) fn resolve_model_list(
             let donor = resolved.get(key);
             if let Some(donor) = donor {
                 if entry.info.context_windows.is_empty() {
-                    entry.info.context_windows.clone_from(&donor.info.context_windows);
+                    entry
+                        .info
+                        .context_windows
+                        .clone_from(&donor.info.context_windows);
                 }
                 if entry.info.context_window.get() == default_cw
                     && donor.info.context_window.get() != default_cw

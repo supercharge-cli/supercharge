@@ -5,8 +5,6 @@
 
 use std::time::Duration;
 
-use tempfile::TempDir;
-use tokio::net::UnixStream;
 use supercharge_shell::cpu_profile::ControlErrorCode;
 use supercharge_shell::leader::{
     ClientCapabilities, ClientMode, ControlCommand, ControlPayload, LeaderClient,
@@ -14,6 +12,8 @@ use supercharge_shell::leader::{
     protocol::{ClientMessage, ServerMessage, read_message, write_message},
     spawn_leader_server,
 };
+use tempfile::TempDir;
+use tokio::net::UnixStream;
 
 /// Pipe character used for ID namespacing (must match server.rs)
 const ID_NAMESPACE_SEP: char = '|';
@@ -1941,9 +1941,9 @@ async fn test_code_status_ext_request_forwarded_to_agent() {
 async fn test_raw_registration_handshake_not_ready_then_ready() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use supercharge_shell::leader::run_leader_server;
     use tokio::sync::{mpsc, watch};
     use tokio_util::sync::CancellationToken;
-    use supercharge_shell::leader::run_leader_server;
 
     let temp = TempDir::new().unwrap();
     let sock_path = temp.path().join("leader.sock");
@@ -2088,9 +2088,9 @@ async fn test_raw_registration_handshake_not_ready_then_ready() {
 async fn test_connect_waits_for_leader_ready() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use supercharge_shell::leader::run_leader_server;
     use tokio::sync::{mpsc, watch};
     use tokio_util::sync::CancellationToken;
-    use supercharge_shell::leader::run_leader_server;
 
     let temp = TempDir::new().unwrap();
     let sock_path = temp.path().join("leader.sock");
@@ -2200,9 +2200,11 @@ async fn test_connect_waits_for_leader_ready() {
 async fn test_version_mismatch_notification_sent_to_client() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use supercharge_shell::leader::{
+        ClientCapabilities, ClientMode, LeaderClient, run_leader_server,
+    };
     use tokio::sync::{mpsc, watch};
     use tokio_util::sync::CancellationToken;
-    use supercharge_shell::leader::{ClientCapabilities, ClientMode, LeaderClient, run_leader_server};
 
     let temp = TempDir::new().unwrap();
     let sock_path = temp.path().join("leader.sock");
@@ -2273,9 +2275,11 @@ async fn test_version_mismatch_notification_sent_to_client() {
 async fn test_no_version_mismatch_notification_when_versions_match() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use supercharge_shell::leader::{
+        ClientCapabilities, ClientMode, LeaderClient, run_leader_server,
+    };
     use tokio::sync::{mpsc, watch};
     use tokio_util::sync::CancellationToken;
-    use supercharge_shell::leader::{ClientCapabilities, ClientMode, LeaderClient, run_leader_server};
 
     let temp = TempDir::new().unwrap();
     let sock_path = temp.path().join("leader.sock");
@@ -2685,9 +2689,9 @@ async fn test_lock_released_before_connect_prevents_deadlock() {
     use fs2::FileExt;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use supercharge_shell::leader::run_leader_server;
     use tokio::sync::{mpsc, watch};
     use tokio_util::sync::CancellationToken;
-    use supercharge_shell::leader::run_leader_server;
 
     let temp = TempDir::new().unwrap();
     let sock_path = temp.path().join("leader.sock");

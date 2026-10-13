@@ -395,8 +395,9 @@ mod tests {
                     is_ready: true,
                 },
             })));
-        let mut ctx =
-            supercharge_tool_runtime::ToolCallContext::new(supercharge_tool_protocol::ToolCallId::new_v7());
+        let mut ctx = supercharge_tool_runtime::ToolCallContext::new(
+            supercharge_tool_protocol::ToolCallId::new_v7(),
+        );
         ctx.extensions.insert(resources);
 
         let output = SearchTool
@@ -440,8 +441,9 @@ mod tests {
                     is_ready: true,
                 },
             })));
-        let mut ctx =
-            supercharge_tool_runtime::ToolCallContext::new(supercharge_tool_protocol::ToolCallId::new_v7());
+        let mut ctx = supercharge_tool_runtime::ToolCallContext::new(
+            supercharge_tool_protocol::ToolCallId::new_v7(),
+        );
         ctx.extensions.insert(resources);
 
         let output = SearchTool

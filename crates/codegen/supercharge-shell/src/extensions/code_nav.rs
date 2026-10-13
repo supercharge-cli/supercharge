@@ -358,7 +358,9 @@ pub async fn handle(
 }
 
 /// Convert workspace CodeNavResponse to the shell's CodeNavResponse format and wrap in the `ExtMethodResult` envelope that clients expect.
-fn to_code_nav_ext_response(resp: supercharge_workspace::workspace_ops::CodeNavResponse) -> ExtResult {
+fn to_code_nav_ext_response(
+    resp: supercharge_workspace::workspace_ops::CodeNavResponse,
+) -> ExtResult {
     let symbol = resp
         .locations
         .first()

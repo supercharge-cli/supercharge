@@ -1771,8 +1771,12 @@ fn custom_endpoint_scope_identity_differs_per_key() {
     let endpoints = config::EndpointsConfig::default();
     let identity_for = |key: &str| {
         ModelsCacheScope::resolve_with_provider_key(
-            &endpoints, ModelFetchAuth::CustomEndpoint, None, Some(key),
-        ).identity
+            &endpoints,
+            ModelFetchAuth::CustomEndpoint,
+            None,
+            Some(key),
+        )
+        .identity
     };
     assert_eq!(
         identity_for("key-a"),
@@ -1799,8 +1803,12 @@ fn custom_endpoint_session_scope_keys_on_account_not_bearer() {
             ..GrokAuth::test_default()
         };
         ModelsCacheScope::resolve_with_provider_key(
-            &endpoints, ModelFetchAuth::CustomEndpoint, Some(&auth), None,
-        ).identity
+            &endpoints,
+            ModelFetchAuth::CustomEndpoint,
+            Some(&auth),
+            None,
+        )
+        .identity
     };
     assert_eq!(
         identity_for("account-a", "token-1"),

@@ -335,8 +335,10 @@ impl SessionActor {
                     .get_prompt_index()
                     .await
                     .saturating_sub(1);
-                let binding =
-                    supercharge_message_delivery_core::TurnBinding::new(requested.to_owned(), turn_epoch);
+                let binding = supercharge_message_delivery_core::TurnBinding::new(
+                    requested.to_owned(),
+                    turn_epoch,
+                );
                 let (message_completions, had_fallbacks) = self.transition_parent_messages(
                     &mut state,
                     supercharge_message_delivery_core::TerminalTarget::Turn(&binding),
@@ -371,8 +373,11 @@ impl SessionActor {
             let _strip_guard = self.prepare_image_strips_for_rewind().await;
             self.cancel_active_sampling_requests();
             self.cancel_pending_image_strips_for_rewind();
-            self.notify_turn_abort(epoch, supercharge_agent_lifecycle::TurnAbortReason::Interrupted)
-                .await;
+            self.notify_turn_abort(
+                epoch,
+                supercharge_agent_lifecycle::TurnAbortReason::Interrupted,
+            )
+            .await;
             let total_tokens = self.chat_state_handle.get_total_tokens().await;
             let result = Ok(PromptTurnOk {
                 stop_reason: acp::StopReason::Cancelled,
@@ -645,15 +650,16 @@ impl SessionActor {
             } else {
                 supercharge_message_delivery_core::TerminalCause::SoftCancel
             };
-            let message_target =
-                if message_cause == supercharge_message_delivery_core::TerminalCause::HardTeardown {
-                    supercharge_message_delivery_core::TerminalTarget::All
-                } else {
-                    binding.as_ref().map_or(
-                        supercharge_message_delivery_core::TerminalTarget::All,
-                        supercharge_message_delivery_core::TerminalTarget::Turn,
-                    )
-                };
+            let message_target = if message_cause
+                == supercharge_message_delivery_core::TerminalCause::HardTeardown
+            {
+                supercharge_message_delivery_core::TerminalTarget::All
+            } else {
+                binding.as_ref().map_or(
+                    supercharge_message_delivery_core::TerminalTarget::All,
+                    supercharge_message_delivery_core::TerminalTarget::Turn,
+                )
+            };
             let (message_completions, had_message_fallbacks) =
                 self.transition_parent_messages(&mut state, message_target, message_cause);
             let pending_inputs = if rewound_input.is_some() {
@@ -818,8 +824,11 @@ impl SessionActor {
         if cancelled_prompt_id.is_some()
             && let Some(epoch) = turn_epoch
         {
-            self.notify_turn_abort(epoch, supercharge_agent_lifecycle::TurnAbortReason::Interrupted)
-                .await;
+            self.notify_turn_abort(
+                epoch,
+                supercharge_agent_lifecycle::TurnAbortReason::Interrupted,
+            )
+            .await;
         }
         // Rewind rails hold no lease, so clear the aborted turn's exact
         // resources here (the Keep rail does it in `finish_finalization_lease`).

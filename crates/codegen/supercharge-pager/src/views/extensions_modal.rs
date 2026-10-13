@@ -129,7 +129,9 @@ fn hook_group_sort_key<'a>(source_dir: &'a str, meta: &HookSourceMeta) -> HookGr
     }
 }
 
-fn is_official_marketplace_source(source: &supercharge_hooks_plugins_types::MarketplaceScanResult) -> bool {
+fn is_official_marketplace_source(
+    source: &supercharge_hooks_plugins_types::MarketplaceScanResult,
+) -> bool {
     source.source_name == supercharge_plugin_marketplace::OFFICIAL_SOURCE_NAME
         || supercharge_plugin_marketplace::is_official_source_url(&source.source_url_or_path)
 }
@@ -738,7 +740,10 @@ impl ModalInputField {
         self.editor.handle_key(key)
     }
 
-    pub(crate) fn viewport(&self, width: usize) -> supercharge_ratatui_textarea::SingleLineViewport {
+    pub(crate) fn viewport(
+        &self,
+        width: usize,
+    ) -> supercharge_ratatui_textarea::SingleLineViewport {
         self.editor.viewport(width)
     }
 }
@@ -2126,7 +2131,10 @@ impl ExtensionsModalState {
 
     /// Seed the all-collapsed default for plugin source groups once, on the first non-empty delivery.
     /// Called from both plugin-data delivery channels (list fetch and the `PluginsChanged` push).
-    pub fn seed_plugin_groups_once(&mut self, plugins: &[supercharge_hooks_plugins_types::PluginInfo]) {
+    pub fn seed_plugin_groups_once(
+        &mut self,
+        plugins: &[supercharge_hooks_plugins_types::PluginInfo],
+    ) {
         seed_groups_once(
             &mut self.plugins_groups_seeded,
             &mut self.plugins_collapsed_groups,
@@ -2662,7 +2670,9 @@ fn skill_source_str(skill: &SkillInfo) -> String {
                     "project".into()
                 }
             }
-            supercharge_tools::types::config_source::ConfigSource::Plugin { plugin_name, .. } => {
+            supercharge_tools::types::config_source::ConfigSource::Plugin {
+                plugin_name, ..
+            } => {
                 format!("plugin: {}", plugin_name)
             }
             _ => format!("{:?}", skill.scope).to_lowercase(),
@@ -2709,7 +2719,10 @@ const NO_DETECTABLE_COMPONENTS: &str = "no detectable components";
 
 fn component_categories(
     components: &supercharge_hooks_plugins_types::PluginComponents,
-) -> [(&'static str, &[supercharge_hooks_plugins_types::ComponentItem]); 6] {
+) -> [(
+    &'static str,
+    &[supercharge_hooks_plugins_types::ComponentItem],
+); 6] {
     use supercharge_hooks_plugins_types::ComponentCategory;
     components.categories().map(|(category, items)| {
         let label = match category {
@@ -4279,7 +4292,8 @@ mod tests {
     fn derive_source_label_detects_project_scoped_plugins() {
         // Regression: project-scoped `{cwd}/.supercharge/plugins/<name>/` must label as a (non-removable) plugin, not a removable "Custom" source
         // The user grok-home branch is SUPERCHARGE_HOME-aware; this covers the project fallback
-        let (label, is_custom) = derive_source_label("/repo/work/.supercharge/plugins/my-plugin/hooks");
+        let (label, is_custom) =
+            derive_source_label("/repo/work/.supercharge/plugins/my-plugin/hooks");
         assert_eq!(label, "Plugin: my-plugin");
         assert!(!is_custom);
 
@@ -5105,10 +5119,12 @@ mod tests {
         let mut skill = make_skill(name, desc);
         skill.plugin_name = Some(plugin.to_string());
         skill.scope = supercharge_tools::implementations::skills::types::SkillScope::Plugin;
-        skill.config_source = Some(supercharge_tools::types::config_source::ConfigSource::Plugin {
-            plugin_name: plugin.to_string(),
-            path: std::path::PathBuf::from(format!("/plugins/{plugin}/skills/{name}/SKILL.md")),
-        });
+        skill.config_source = Some(
+            supercharge_tools::types::config_source::ConfigSource::Plugin {
+                plugin_name: plugin.to_string(),
+                path: std::path::PathBuf::from(format!("/plugins/{plugin}/skills/{name}/SKILL.md")),
+            },
+        );
         skill
     }
 
@@ -5388,7 +5404,10 @@ mod tests {
         assert!(StatusFilter::Disabled.matches(false));
     }
 
-    fn make_plugin_with_enabled(name: &str, enabled: bool) -> supercharge_hooks_plugins_types::PluginInfo {
+    fn make_plugin_with_enabled(
+        name: &str,
+        enabled: bool,
+    ) -> supercharge_hooks_plugins_types::PluginInfo {
         let mut p = make_plugin(name);
         p.enabled = enabled;
         p
@@ -5405,12 +5424,13 @@ mod tests {
 
         state.entry_data_indices = vec![Some(0), Some(1)];
         state.picker_state.selected = 0;
-        state.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![
-                make_plugin_with_enabled("on", true),
-                make_plugin_with_enabled("off", false),
-            ],
-        });
+        state.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![
+                    make_plugin_with_enabled("on", true),
+                    make_plugin_with_enabled("off", false),
+                ],
+            });
 
         assert_eq!(state.selected_item_enabled(), Some(true));
         assert_eq!(action_key_footer_desc(' ', "toggle", &state), "disable");
@@ -5449,11 +5469,12 @@ mod tests {
         // Entry maps as the picker builds them (headers carry a group key, no data index):
         //   0: header /etc/grok, 1: pinned row, 2: header user, 3: user row
         let mut state = ExtensionsModalState::new(ExtensionsTab::Hooks);
-        state.hooks_data = TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
-            hooks: vec![pinned, user],
-            project_trusted: true,
-            load_errors: Vec::new(),
-        });
+        state.hooks_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
+                hooks: vec![pinned, user],
+                project_trusted: true,
+                load_errors: Vec::new(),
+            });
         let data_indices = vec![None, Some(0), None, Some(1)];
         let group_keys = vec![
             Some("/etc/grok".to_string()),
@@ -5483,11 +5504,12 @@ mod tests {
         let mixed_user = make_hook("user/d", "/mixed", false);
         let mixed_state = {
             let mut s = ExtensionsModalState::new(ExtensionsTab::Hooks);
-            s.hooks_data = TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
-                hooks: vec![mixed_pinned, mixed_user],
-                project_trusted: true,
-                load_errors: Vec::new(),
-            });
+            s.hooks_data =
+                TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
+                    hooks: vec![mixed_pinned, mixed_user],
+                    project_trusted: true,
+                    load_errors: Vec::new(),
+                });
             s
         };
         let mixed_indices = vec![None, Some(0), Some(1)];
@@ -5521,11 +5543,12 @@ mod tests {
         sibling.removable = true;
 
         let mut state = ExtensionsModalState::new(ExtensionsTab::Hooks);
-        state.hooks_data = TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
-            hooks: vec![pinned, sibling],
-            project_trusted: true,
-            load_errors: Vec::new(),
-        });
+        state.hooks_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::HooksListResponse {
+                hooks: vec![pinned, sibling],
+                project_trusted: true,
+                load_errors: Vec::new(),
+            });
         // 0: header, 1: pinned row, 2: unpinned sibling row.
         let data_indices = vec![None, Some(0), Some(1)];
         let group_keys = vec![Some("/reg/policy".to_string()), None, None];
@@ -5578,12 +5601,13 @@ mod tests {
     #[test]
     fn space_footer_follows_refreshed_entry_data_indices_after_filter_shape_change() {
         let mut state = ExtensionsModalState::new(ExtensionsTab::Plugins);
-        state.plugins_data = TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
-            plugins: vec![
-                make_plugin_with_enabled("on", true),
-                make_plugin_with_enabled("off", false),
-            ],
-        });
+        state.plugins_data =
+            TabDataState::Loaded(supercharge_hooks_plugins_types::PluginsListResponse {
+                plugins: vec![
+                    make_plugin_with_enabled("on", true),
+                    make_plugin_with_enabled("off", false),
+                ],
+            });
 
         // Unfiltered shape: both rows; selection on the enabled plugin.
         let unfiltered = vec![Some(0), Some(1)];

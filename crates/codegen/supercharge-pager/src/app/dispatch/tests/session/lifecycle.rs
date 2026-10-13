@@ -2543,7 +2543,8 @@ fn delete_current_session_refuses_known_read_only_workspace_member() {
     app.workspace_dashboard_enabled = true;
     let temp = tempfile::tempdir().unwrap();
     let store =
-        supercharge_dashboard_store::WorkspaceStore::open(&temp.path().join("workspace.db")).unwrap();
+        supercharge_dashboard_store::WorkspaceStore::open(&temp.path().join("workspace.db"))
+            .unwrap();
     app.workspace_membership.set_read_only_for_test(
         store,
         supercharge_dashboard_store::WorkspaceSnapshot {
@@ -2677,8 +2678,9 @@ fn delete_current_session_complete_welcome_and_guard() {
             .any(|e| matches!(e, Effect::UnregisterActiveSession { .. }))
     );
     assert!(
-        app.workspace_membership
-            .removal_pending_for_test(&supercharge_dashboard_store::SessionId::new("sess-a").unwrap()),
+        app.workspace_membership.removal_pending_for_test(
+            &supercharge_dashboard_store::SessionId::new("sess-a").unwrap()
+        ),
         "/delete success must remove dashboard membership"
     );
     let mut app = test_app_with_agent();
@@ -3337,8 +3339,10 @@ mod welcome_workspace_mode {
             crate::app::session_startup::SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV,
         );
         let home = tempfile::tempdir().unwrap();
-        let _home =
-            supercharge_test_support::EnvGuard::set("SUPERCHARGE_HOME", home.path().to_str().unwrap());
+        let _home = supercharge_test_support::EnvGuard::set(
+            "SUPERCHARGE_HOME",
+            home.path().to_str().unwrap(),
+        );
         set_active_local_workspace(None).unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let mut app = test_app();
@@ -3450,8 +3454,10 @@ mod welcome_workspace_mode {
             crate::app::session_startup::SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV,
         );
         let home = tempfile::tempdir().unwrap();
-        let _home =
-            supercharge_test_support::EnvGuard::set("SUPERCHARGE_HOME", home.path().to_str().unwrap());
+        let _home = supercharge_test_support::EnvGuard::set(
+            "SUPERCHARGE_HOME",
+            home.path().to_str().unwrap(),
+        );
         set_active_local_workspace(None).unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let mut app = test_app();

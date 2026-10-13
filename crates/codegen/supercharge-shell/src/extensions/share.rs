@@ -173,9 +173,9 @@ mod tests {
     use super::*;
     use chrono::{Duration, Utc};
     use std::sync::Arc;
-    use tempfile::tempdir;
     use supercharge_login::GrokComConfig;
     use supercharge_login::{AuthMode, GrokAuth};
+    use tempfile::tempdir;
 
     fn make_auth_manager_with_token_expiring_in(
         ttl: Duration,

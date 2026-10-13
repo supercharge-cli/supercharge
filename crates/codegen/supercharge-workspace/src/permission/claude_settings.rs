@@ -444,7 +444,8 @@ pub fn is_claude_import_marked() -> bool {
     if std::env::var("_SUPERCHARGE_CLAUDE_MARKER_OVERRIDE").as_deref() == Ok("1") {
         return true;
     }
-    let Some(config_path) = supercharge_config::user_grok_home().map(|g| g.join("config.toml")) else {
+    let Some(config_path) = supercharge_config::user_grok_home().map(|g| g.join("config.toml"))
+    else {
         return false;
     };
     let Ok(contents) = std::fs::read_to_string(&config_path) else {

@@ -267,9 +267,13 @@ pub enum BashToolOutput {
 }
 
 impl supercharge_tool_runtime::ToolOutput for BashToolOutput {
-    fn chat_completion_output(&self) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
+    fn chat_completion_output(
+        &self,
+    ) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
         match self {
-            Self::Foreground(bash) => supercharge_tool_runtime::ToolOutput::chat_completion_output(bash),
+            Self::Foreground(bash) => {
+                supercharge_tool_runtime::ToolOutput::chat_completion_output(bash)
+            }
             Self::Background(_) => None,
         }
     }
@@ -1771,7 +1775,9 @@ impl supercharge_tool_runtime::Tool for BashTool {
                     trailing_is_syntax_error,
                 ),
             };
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(message));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                message,
+            ));
         }
 
         // Validate: reject self-matching pkill/pgrep -f <pat> --- `pkill -f` matches the wrapper bash's full argv (which
@@ -1788,7 +1794,9 @@ impl supercharge_tool_runtime::Tool for BashTool {
                  -r kill` invoked from a separate command, a fully-qualified path that \
                  does not appear later in the script, or kill by PID file."
             );
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(message));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                message,
+            ));
         }
 
         if input.is_background && !background_enabled {
@@ -2464,7 +2472,9 @@ mod tests {
 
     /// Destructure a `bash_output_chunk` payload, asserting the canonical
     /// `raw_terminal` / `append` envelope.
-    fn read_chunk_progress(p: &supercharge_tool_runtime::ToolProgress) -> (String, usize, bool, bool) {
+    fn read_chunk_progress(
+        p: &supercharge_tool_runtime::ToolProgress,
+    ) -> (String, usize, bool, bool) {
         match p {
             supercharge_tool_runtime::ToolProgress::Custom { subkind, payload } => {
                 assert_eq!(subkind, "bash_output_chunk", "unexpected subkind");
@@ -2630,7 +2640,8 @@ mod tests {
         .await;
 
         let mut progress = 0usize;
-        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(_) => {
@@ -2675,7 +2686,8 @@ mod tests {
         .await;
 
         let mut progress = 0usize;
-        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(p) => {
@@ -2727,7 +2739,8 @@ mod tests {
 
         // (total_bytes, truncated, gap, delta_len)
         let mut deltas: Vec<(usize, bool, bool, usize)> = Vec::new();
-        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(p) => {
@@ -2833,7 +2846,8 @@ mod tests {
 
         let mut concatenated = String::new();
         let mut last_delta_total: Option<usize> = None;
-        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<BashToolOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(p) => {
@@ -3154,9 +3168,12 @@ mod tests {
         // No Terminal inserted
         let tool = BashTool;
 
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), make_input("ls"))
-                .await;
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(resources.into_shared()),
+            make_input("ls"),
+        )
+        .await;
         assert!(result.is_err());
         assert!(
             result
@@ -4765,12 +4782,14 @@ mod tests {
         fn legacy_rt_ctx(
             resources: crate::types::resources::SharedResources,
         ) -> supercharge_tool_runtime::ToolCallContext {
-            let mut ctx =
-                supercharge_tool_runtime::ToolCallContext::new(supercharge_tool_protocol::ToolCallId::new_v7());
+            let mut ctx = supercharge_tool_runtime::ToolCallContext::new(
+                supercharge_tool_protocol::ToolCallId::new_v7(),
+            );
             ctx.extensions.insert(resources);
-            ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-                "legacy-0.4.10".to_string(),
-            ));
+            ctx.extensions
+                .insert(supercharge_tool_runtime::BehaviorVersion(
+                    "legacy-0.4.10".to_string(),
+                ));
             ctx
         }
 

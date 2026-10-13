@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use educe::Educe;
-use tokio::sync::{OwnedSemaphorePermit, oneshot};
 use supercharge_tool_types::is_not_sentinel;
+use tokio::sync::{OwnedSemaphorePermit, oneshot};
 
 /// Maximum UTF-8 byte length of one in-memory V0 agent message.
 pub const MAX_ACTIVE_AGENT_MESSAGE_BYTES: usize = 32 * 1024;
@@ -41,8 +41,12 @@ pub enum ActiveAgentMessageOperation {
 impl From<ActiveAgentMessageOperation> for supercharge_message_delivery_core::Operation {
     fn from(operation: ActiveAgentMessageOperation) -> Self {
         match operation {
-            ActiveAgentMessageOperation::Queue => supercharge_message_delivery_core::Operation::Queue,
-            ActiveAgentMessageOperation::Steer => supercharge_message_delivery_core::Operation::Steer,
+            ActiveAgentMessageOperation::Queue => {
+                supercharge_message_delivery_core::Operation::Queue
+            }
+            ActiveAgentMessageOperation::Steer => {
+                supercharge_message_delivery_core::Operation::Steer
+            }
             ActiveAgentMessageOperation::Interject => {
                 supercharge_message_delivery_core::Operation::Interject
             }

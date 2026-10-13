@@ -301,7 +301,10 @@ impl WorkspaceSessionContextFactory {
         }
     }
     /// Factory with auth: gen tools use the provider's live token.
-    pub fn with_auth(auth: supercharge_computer_hub_sdk::SharedAuthProvider, api_base_url: String) -> Self {
+    pub fn with_auth(
+        auth: supercharge_computer_hub_sdk::SharedAuthProvider,
+        api_base_url: String,
+    ) -> Self {
         Self {
             auth: Some(auth),
             api_base_url: Some(api_base_url),
@@ -484,9 +487,11 @@ fn build_proxy_headers(base_url: &str) -> indexmap::IndexMap<String, String> {
     headers
 }
 /// Enabled with default params unless `SUPERCHARGE_DISABLE_WEB_FETCH=1` is set.
-fn build_web_fetch_config() -> supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig
-{
-    use supercharge_tools::implementations::grok_build::web_fetch::{WebFetchConfig, WebFetchParams};
+fn build_web_fetch_config()
+-> supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig {
+    use supercharge_tools::implementations::grok_build::web_fetch::{
+        WebFetchConfig, WebFetchParams,
+    };
     if std::env::var("SUPERCHARGE_DISABLE_WEB_FETCH").is_ok_and(|v| v == "1" || v == "true") {
         return WebFetchConfig::Disabled;
     }
@@ -508,13 +513,13 @@ pub mod test_support {
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use tempfile::TempDir;
     use supercharge_tools::computer::local::{LocalFs, LocalTerminalBackend};
     use supercharge_tools::notification::ToolNotificationHandle;
     use supercharge_tools::registry::types::{
         SessionContext, ToolConfig, ToolRegistryBuilder, ToolServerConfig,
     };
     use supercharge_tools::types::tool::ToolKind;
+    use tempfile::TempDir;
     /// Test factory: builds a `SessionContext` rooted at a per-test temp dir.
     pub struct TestSessionContextFactory {
         pub temp: TempDir,

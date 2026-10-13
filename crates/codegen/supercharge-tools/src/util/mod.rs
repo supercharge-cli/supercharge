@@ -44,9 +44,9 @@ pub use spawn::{
     ProcessGroup, ProcessScope, detach_command, detach_search_command, global_process_scope,
     new_process_group, reap_killed_search_child,
 };
+pub use supercharge_tty_utils::detach_std_command;
 pub use truncate::{
     DEFAULT_SOFT_WRAP_WIDTH, ceil_char_boundary, estimate_tokens, floor_char_boundary,
     format_bytes, soft_wrap_line, soft_wrap_lines, truncate_line, truncate_str,
     truncate_str_with_marker,
 };
-pub use supercharge_tty_utils::detach_std_command;

@@ -6,6 +6,7 @@ use std::path::Path;
 use supercharge_agent::config::{AgentDefinition, IsolationMode};
 use supercharge_agent::plugins::PluginRegistry;
 use supercharge_agent::prompt::context::{PromptAudience, PromptContext};
+use supercharge_tool_types::{SubagentCapabilityMode, SubagentIsolationMode};
 use supercharge_tools::implementations::grok_build::task::types::{
     SubagentCapabilityModeExt, SubagentRuntimeOverrides, prune_orphaned_background_task_tools,
 };
@@ -13,7 +14,6 @@ use supercharge_tools::registry::types::ToolConfig;
 use supercharge_tools::types::compat::CompatConfig;
 use supercharge_tools::types::template_renderer::TemplateRenderer;
 use supercharge_tools::types::tool::ToolKind;
-use supercharge_tool_types::{SubagentCapabilityMode, SubagentIsolationMode};
 /// Inputs that affect definition discovery and spawn permission.
 pub struct DefinitionResolutionContext<'a> {
     pub cwd: &'a Path,
@@ -350,7 +350,9 @@ mod tests {
             resolve_agent_definition("general-purpose", &context(cwd.path(), &toggles)).unwrap();
         assert!(
             definition.tool_config.tools.iter().all(|tool| {
-                !supercharge_tools::implementations::grok_build::is_workflow_tool(tool.kind, &tool.id)
+                !supercharge_tools::implementations::grok_build::is_workflow_tool(
+                    tool.kind, &tool.id,
+                )
             }),
             "general-purpose must declare its own list without workflow"
         );

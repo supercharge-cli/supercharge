@@ -181,11 +181,7 @@ fn print_serve_startup_info(bind_addr: SocketAddr, secret: &str) {
 /// Paseo-style inbox: exec `supercharge-superagent-server` (HTTP `/v1/chat` on bind)
 /// which launches Supercharge CLI children. Falls back to ACP `agent serve` if the
 /// inbox binary is missing.
-async fn run_inbox_daemon(
-    bind: SocketAddr,
-    secret: &str,
-    agent_config: AgentConfig,
-) -> Result<()> {
+async fn run_inbox_daemon(bind: SocketAddr, secret: &str, agent_config: AgentConfig) -> Result<()> {
     unsafe {
         std::env::set_var("SUPERAGENT_BIND", bind.to_string());
         std::env::set_var("SUPERAGENT_APP_INBOX_PORT", bind.port().to_string());
@@ -2902,8 +2898,7 @@ mod tests {
     }
     #[test]
     fn acp_setup_has_unattended_cli_identity() {
-        let args = PagerArgs::try_parse_from(["supercharge", "acp", "setup", "--print"])
-            .unwrap();
+        let args = PagerArgs::try_parse_from(["supercharge", "acp", "setup", "--print"]).unwrap();
         for is_interactive in [false, true] {
             let identity = process_identity(args.command.as_ref(), is_interactive).unwrap();
             assert!(matches!(identity.entrypoint, Entrypoint::Cli));
@@ -3169,8 +3164,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn is_managed_install_matches_only_the_managed_bin_target() {
-        let home =
-            std::env::temp_dir().join(format!("supercharge-pager-managed-install-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!(
+            "supercharge-pager-managed-install-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(home.join("bin")).unwrap();
         std::fs::create_dir_all(home.join("downloads")).unwrap();

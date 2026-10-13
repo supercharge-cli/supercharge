@@ -295,7 +295,8 @@ impl supercharge_tool_runtime::Tool for HashlineEditTool {
         &self,
         ctx: supercharge_tool_runtime::ToolCallContext,
         input: HashlineEditInput,
-    ) -> Result<crate::types::output::SearchReplaceOutput, supercharge_tool_runtime::ToolError> {
+    ) -> Result<crate::types::output::SearchReplaceOutput, supercharge_tool_runtime::ToolError>
+    {
         use crate::types::tool_metadata::shared_resources;
         let resources = shared_resources(&ctx)?;
 
@@ -554,9 +555,13 @@ mod tests {
             file_path: file_path.to_string(),
             edits,
         };
-        supercharge_tool_runtime::Tool::run(&HashlineEditTool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap()
+        supercharge_tool_runtime::Tool::run(
+            &HashlineEditTool,
+            test_ctx(resources.into_shared()),
+            input,
+        )
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -785,9 +790,10 @@ mod tests {
             }],
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             SearchReplaceOutput::FileNotFound(msg) => {
@@ -823,9 +829,10 @@ mod tests {
             ],
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         assert!(
             matches!(
@@ -862,9 +869,10 @@ mod tests {
             }],
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         assert!(
             matches!(

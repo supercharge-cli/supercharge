@@ -325,11 +325,13 @@ pub async fn handle(
                 total,
             );
 
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::SkillAdded {
-                added_count: added_count as u32,
-                total_skills: total as u32,
-                success: true,
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::SkillAdded {
+                    added_count: added_count as u32,
+                    total_skills: total as u32,
+                    success: true,
+                },
+            );
             super::to_ext_response(Ok(SkillsAddResponse {
                 added_count,
                 total,
@@ -369,9 +371,9 @@ pub async fn handle(
                 if total == 1 { "" } else { "s" },
             );
 
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::SkillRemoved {
-                success: true,
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::SkillRemoved { success: true },
+            );
             super::to_ext_response(Ok(SkillsRemoveResponse {
                 path: resolved,
                 skills,

@@ -689,13 +689,19 @@ for line in sys.stdin:
         let steer = tokio::spawn(async move { copy.steer("change direction", "steer-1").await });
         let request = requests.recv().await.unwrap();
         assert_eq!(request["method"], "x.ai/interject");
-        assert_eq!(request["params"], json!({
-            "sessionId":"test-session","text":"change direction","interjectionId":"steer-1"
-        }));
+        assert_eq!(
+            request["params"],
+            json!({
+                "sessionId":"test-session","text":"change direction","interjectionId":"steer-1"
+            })
+        );
         let id = request["id"].as_u64().unwrap();
         let pending = state.pending.lock().unwrap().remove(&id).unwrap();
         assert!(!pending.prompt);
-        pending.response.send(Ok(json!({"status":"queued"}))).unwrap();
+        pending
+            .response
+            .send(Ok(json!({"status":"queued"})))
+            .unwrap();
         assert_eq!(steer.await.unwrap().unwrap()["status"], "queued");
         assert!(runtime.is_prompting());
     }

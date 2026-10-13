@@ -1,7 +1,7 @@
 use super::RemoteSettings;
 use serde::{Deserialize, Serialize};
-use toml::Value as TomlValue;
 use supercharge_fast_worktree::CreationMode;
+use toml::Value as TomlValue;
 
 /// Mirrors the internal `CreationMode` enum from supercharge-fast-worktree but uses config-friendly naming (lowercase strings in TOML).
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

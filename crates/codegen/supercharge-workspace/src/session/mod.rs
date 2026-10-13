@@ -16,13 +16,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use supercharge_computer_hub_mcp_adapter::McpBridgeHandle;
+use supercharge_hunk_tracker::HunkTrackerHandle;
 use supercharge_mcp::servers::McpState;
+use supercharge_tool_protocol::ToolId;
+use supercharge_tool_runtime::WorkspaceViewerContext;
 use supercharge_tools::notification::AcknowledgedToolNotification;
 use supercharge_tools::notification::types::ToolNotificationHandle;
 use supercharge_tools::registry::types::{FinalizedToolset, ToolConfig, ToolServerConfig};
-use supercharge_hunk_tracker::HunkTrackerHandle;
-use supercharge_tool_protocol::ToolId;
-use supercharge_tool_runtime::WorkspaceViewerContext;
 /// Minimal result types for git error reporting (duplicated from shell session/result).
 pub mod result {
     use serde::Serialize;
@@ -679,7 +679,9 @@ impl WorkspaceShared {
     }
     /// The durable upload queue used for archives.
     /// `None` in tests and local mode; see [`WorkspaceShared::upload_queue`].
-    pub fn upload_queue(&self) -> Option<&std::sync::Arc<supercharge_file_utils::queue::UploadQueue>> {
+    pub fn upload_queue(
+        &self,
+    ) -> Option<&std::sync::Arc<supercharge_file_utils::queue::UploadQueue>> {
         self.upload_queue.as_ref()
     }
     /// Whether hub tool calls pass the approval gate; see [`crate::permission::approval_gate_for`].
@@ -909,11 +911,11 @@ impl WorkspaceShared {
                         &sid,
                         SwapAction::Applied,
                     );
-                    let _ =
-                        self.events
-                            .send(supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
-                                session_id: sid,
-                            });
+                    let _ = self.events.send(
+                        supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
+                            session_id: sid,
+                        },
+                    );
                     rebuilt += 1;
                 }
                 Err(e) => {

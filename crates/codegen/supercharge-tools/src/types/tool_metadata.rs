@@ -128,7 +128,10 @@ pub async fn resolve_cwd(
     res.get::<crate::types::resources::Cwd>()
         .map(|c| c.0.clone())
         .ok_or_else(|| {
-            supercharge_tool_runtime::ToolError::custom("missing_cwd", "Cwd not available in Resources")
+            supercharge_tool_runtime::ToolError::custom(
+                "missing_cwd",
+                "Cwd not available in Resources",
+            )
         })
 }
 

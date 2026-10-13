@@ -49,7 +49,9 @@ pub fn validate_tool_name(name: &str) -> Result<(), String> {
 }
 
 /// Parse a non-empty `server__tool` ID with one overlap-aware delimiter and valid [`supercharge_tool_protocol::ToolId`] syntax.
-pub fn parse_mcp_qualified_name(name: &str) -> Option<(supercharge_tool_protocol::ToolId, &str, &str)> {
+pub fn parse_mcp_qualified_name(
+    name: &str,
+) -> Option<(supercharge_tool_protocol::ToolId, &str, &str)> {
     let delimiter = MCP_TOOL_NAME_DELIMITER.as_bytes();
     // Byte windows preserve both overlapping `__` boundaries in `___`.
     let mut boundaries = name
@@ -66,7 +68,11 @@ pub fn parse_mcp_qualified_name(name: &str) -> Option<(supercharge_tool_protocol
     if server.is_empty() || tool.is_empty() {
         return None;
     }
-    Some((supercharge_tool_protocol::ToolId::new(name).ok()?, server, tool))
+    Some((
+        supercharge_tool_protocol::ToolId::new(name).ok()?,
+        server,
+        tool,
+    ))
 }
 
 /// Parse an MCP tool name in `server__tool` format into owned segments.

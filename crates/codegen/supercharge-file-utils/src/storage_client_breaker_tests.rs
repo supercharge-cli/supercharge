@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
-use tokio::net::TcpListener;
 use supercharge_circuit_breaker::{BreakerState, Observer, Outcome};
+use tokio::net::TcpListener;
 
 /// Read the threshold straight from the preset so the test stays
 /// in lock-step with `BreakerConfig::client()` if it ever changes.

@@ -40,13 +40,14 @@ async fn handle_set(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         "codingDataRetentionOptOut": params.coding_data_retention_opt_out,
     });
 
-    let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> = std::sync::Arc::new(
-        supercharge_login::credential_provider::ShellAuthCredentialProvider::new(
-            agent.auth_manager.clone(),
-            None,
-            None,
-        ),
-    );
+    let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> =
+        std::sync::Arc::new(
+            supercharge_login::credential_provider::ShellAuthCredentialProvider::new(
+                agent.auth_manager.clone(),
+                None,
+                None,
+            ),
+        );
     let client = crate::http::with_auth_retry(crate::http::shared_client(), provider);
 
     let resp = client

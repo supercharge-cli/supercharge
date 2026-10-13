@@ -159,7 +159,10 @@ pub(crate) fn spawn_polling_session_with_env(
 ) -> PtyHarness {
     seed_fake_oauth(content, oauth_user);
     let mut overrides = Vec::from(oauth_credential_ops());
-    overrides.push(EnvOp::set("SUPERCHARGE_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS", "1"));
+    overrides.push(EnvOp::set(
+        "SUPERCHARGE_ANNOUNCEMENTS_REFRESH_INTERVAL_SECS",
+        "1",
+    ));
     overrides.extend(extra_env.iter().map(|(key, value)| EnvOp::set(key, value)));
 
     let binary = pager_binary().expect("resolve pager binary");
@@ -219,7 +222,10 @@ pub(crate) fn git_repo_with_mcp_json() -> tempfile::TempDir {
 pub(crate) fn trust_env(feature_on: bool) -> [(&'static str, &'static str); 2] {
     [
         ("SUPERCHARGE_TEST_VERSION", "0.0.0-sim"),
-        ("SUPERCHARGE_FOLDER_TRUST", if feature_on { "1" } else { "0" }),
+        (
+            "SUPERCHARGE_FOLDER_TRUST",
+            if feature_on { "1" } else { "0" },
+        ),
     ]
 }
 
@@ -252,7 +258,10 @@ pub(crate) fn store_trusts(store_path: &Path, query: &Path) -> bool {
 
 /// Whether the isolated trust store has recorded a grant covering `repo` (a repo root, so its own workspace key).
 pub(crate) fn folder_is_trusted(content: &ContentController, repo: &Path) -> bool {
-    store_trusts(&content.home().join(".supercharge").join(TRUST_FILE_NAME), repo)
+    store_trusts(
+        &content.home().join(".supercharge").join(TRUST_FILE_NAME),
+        repo,
+    )
 }
 
 // Leader mode e2e. The leader cluster cases moved to the dedicated `tests/leader_pty_e2e` target.

@@ -61,7 +61,8 @@ pub fn read_auth_json(auth_file: &Path) -> std::io::Result<AuthStore> {
 
     // Tighten world-readable copies (hand-restored, umask edge cases, etc.).
     // Best-effort: a chmod failure must not block login/read paths.
-    if let Err(e) = supercharge_shell_base::util::secure_file::ensure_owner_only_permissions(auth_file)
+    if let Err(e) =
+        supercharge_shell_base::util::secure_file::ensure_owner_only_permissions(auth_file)
     {
         tracing::warn!(
             path = %auth_file.display(),
@@ -125,7 +126,8 @@ pub fn backup_corrupt_auth_file(path: &Path) -> Option<PathBuf> {
     match std::fs::rename(path, &backup) {
         Ok(()) => {
             // Corrupt backups still hold token material, so keep them owner-only
-            let _ = supercharge_shell_base::util::secure_file::ensure_owner_only_permissions(&backup);
+            let _ =
+                supercharge_shell_base::util::secure_file::ensure_owner_only_permissions(&backup);
             tracing::warn!(
                 original = %path.display(),
                 backup = %backup.display(),
@@ -286,7 +288,8 @@ fn write_auth_json_atomic(auth_file: &Path, auth_store: &AuthStore) -> std::io::
     tmp_reclaim.0 = None; // renamed into place; nothing to reclaim
     // Re-assert on the final path (covers rename edge cases and FS quirks)
     // Best-effort: rename already published the new tokens.
-    if let Err(e) = supercharge_shell_base::util::secure_file::ensure_owner_only_permissions(auth_file)
+    if let Err(e) =
+        supercharge_shell_base::util::secure_file::ensure_owner_only_permissions(auth_file)
     {
         tracing::warn!(
             error = %e,

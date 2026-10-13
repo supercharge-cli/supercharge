@@ -6,6 +6,7 @@ use super::proxy;
 use crate::{teprintln, tprintln};
 use futures_util::{SinkExt as _, StreamExt as _};
 use std::sync::Arc;
+use supercharge_login::{GrokAuth, GrokComConfig};
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 use tokio_tungstenite::{
@@ -14,7 +15,6 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
-use supercharge_login::{GrokAuth, GrokComConfig};
 const KEEPALIVE_INTERVAL_SECS: u64 = 15;
 /// Read-side liveness deadline. The write half pings every `KEEPALIVE_INTERVAL_SECS`, and a healthy peer answers each ping with a pong. A live connection thus delivers an inbound frame at least that often.
 /// If *nothing* arrives for this long the connection is treated as dead and the session is torn down so the reconnect loop can take over.

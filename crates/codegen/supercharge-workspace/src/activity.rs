@@ -20,7 +20,9 @@ use std::time::Instant;
 use dashmap::DashMap;
 use supercharge_file_utils::queue::UploadQueueStats;
 use supercharge_session_events::{Event, EventWriter, ToolCompletedSource, ToolOutcome};
-use supercharge_tool_protocol::{IdleWithholdReason, ToolServerLifecycleStatus, ToolServerStatusPayload};
+use supercharge_tool_protocol::{
+    IdleWithholdReason, ToolServerLifecycleStatus, ToolServerStatusPayload,
+};
 
 const LIFECYCLE_NONE: u8 = 0;
 const LIFECYCLE_DRAINING: u8 = 1;

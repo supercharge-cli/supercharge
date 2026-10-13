@@ -61,8 +61,6 @@ use std::path::Path;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::OnceLock;
-use tokio::sync::{Mutex as TokioMutex, mpsc, oneshot};
-use tokio::time::{Duration, sleep};
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_agent::AgentDefinition;
 use supercharge_agent::prompt::agents_md::LEGACY_AGENTS_MD_REMINDER_PREFIX;
@@ -82,6 +80,8 @@ use supercharge_workspace::permission::{
     AccessKind, ClientType, Decision, HookAsk, PermissionEvent, PermissionHandle, PermissionRequest,
 };
 use supercharge_workspace::session::file_state::{FileStateHandle, FileStateTracker};
+use tokio::sync::{Mutex as TokioMutex, mpsc, oneshot};
+use tokio::time::{Duration, sleep};
 const SESSION_LOG: &str = "xai_session";
 #[path = "compaction.rs"]
 mod compaction;
@@ -456,7 +456,9 @@ struct ShellManagedGatewayToolClient {
     auth_manager: Arc<AuthManager>,
 }
 #[async_trait::async_trait]
-impl supercharge_tools::types::resources::ManagedGatewayToolCaller for ShellManagedGatewayToolClient {
+impl supercharge_tools::types::resources::ManagedGatewayToolCaller
+    for ShellManagedGatewayToolClient
+{
     async fn call_tool(
         &self,
         call_id: &str,
@@ -472,7 +474,9 @@ impl supercharge_tools::types::resources::ManagedGatewayToolCaller for ShellMana
             .await
             .ok()
             .or_else(|| self.auth_manager.current_or_expired().map(|a| a.key))
-            .ok_or_else(|| supercharge_tool_runtime::ToolError::unauthorized("no auth token available"))?;
+            .ok_or_else(|| {
+                supercharge_tool_runtime::ToolError::unauthorized("no auth token available")
+            })?;
         let response = crate::session::managed_mcp::call_gateway_tool(
             &self.proxy_base_url,
             &auth_key,
@@ -501,8 +505,9 @@ fn managed_gateway_error_to_tool_error(
             } else if status == reqwest::StatusCode::FORBIDDEN {
                 supercharge_tool_runtime::ToolError::permission_denied(detail)
             } else {
-                let tool_id = supercharge_tool_protocol::ToolId::new(caller)
-                    .unwrap_or_else(|_| supercharge_tool_protocol::ToolId::new("use_tool").expect("valid"));
+                let tool_id = supercharge_tool_protocol::ToolId::new(caller).unwrap_or_else(|_| {
+                    supercharge_tool_protocol::ToolId::new("use_tool").expect("valid")
+                });
                 supercharge_tool_runtime::ToolError::execution(tool_id, detail)
             };
             match err.details.as_mut() {
@@ -544,7 +549,10 @@ mod managed_gateway_error_tests {
     #[test]
     fn unauthorized_status_maps_to_unauthorized_and_carries_status() {
         let err = managed_gateway_error_to_tool_error(status_error(401, "expired"), "use_tool");
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::Unauthorized);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::Unauthorized
+        );
         assert!(err.detail.contains("expired"));
         let details = err.details.as_ref().unwrap();
         assert_eq!(
@@ -555,7 +563,10 @@ mod managed_gateway_error_tests {
     #[test]
     fn forbidden_status_maps_to_permission_denied_and_carries_status() {
         let err = managed_gateway_error_to_tool_error(status_error(403, "denied"), "use_tool");
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::PermissionDenied);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::PermissionDenied
+        );
         let details = err.details.as_ref().unwrap();
         assert_eq!(
             details.get(HTTP_STATUS_DETAILS_KEY),
@@ -589,7 +600,10 @@ mod managed_gateway_error_tests {
             crate::session::managed_mcp::ManagedMcpFetchError::NoAuth,
             "use_tool",
         );
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::Unauthorized);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::Unauthorized
+        );
     }
     #[tokio::test]
     async fn transport_error_maps_to_network_error_without_url() {
@@ -602,7 +616,10 @@ mod managed_gateway_error_tests {
             crate::session::managed_mcp::ManagedMcpFetchError::Transport(transport),
             "use_tool",
         );
-        assert_eq!(err.kind, supercharge_tool_runtime::ToolErrorKind::NetworkError);
+        assert_eq!(
+            err.kind,
+            supercharge_tool_runtime::ToolErrorKind::NetworkError
+        );
         assert!(err.detail.contains("Managed MCP gateway tool call failed"));
         assert!(
             !err.detail.contains("http://"),
@@ -776,7 +793,8 @@ pub(crate) struct SessionActor {
     pub(crate) telemetry_enabled: bool,
     pub(crate) supports_backend_search: std::cell::Cell<bool>,
     /// Per-turn override, set at promotion. Not persisted; a reload reverts to the definition seed.
-    pub(crate) tool_overrides: std::cell::RefCell<Option<supercharge_sampling_types::ToolOverrides>>,
+    pub(crate) tool_overrides:
+        std::cell::RefCell<Option<supercharge_sampling_types::ToolOverrides>>,
     pub(crate) resolved_tool_overrides:
         std::sync::Arc<arc_swap::ArcSwapOption<supercharge_sampling_types::ToolOverrides>>,
     pub(crate) compactions_remaining:
@@ -1054,7 +1072,8 @@ pub(crate) struct SessionActor {
         std::cell::RefCell<Option<std::sync::Arc<supercharge_agent::plugins::PluginRegistry>>>,
     /// Shared handle to the agent-level plugin registry.
     /// Used by `/plugins reload` to trigger a rebuild that new sessions see.
-    pub(crate) plugin_registry_handle: Option<supercharge_agent::plugins::SharedPluginRegistryHandle>,
+    pub(crate) plugin_registry_handle:
+        Option<supercharge_agent::plugins::SharedPluginRegistryHandle>,
     /// Centralized event tracking: event log, turn-end guard, active tool, doom loop terminate flag.
     pub(crate) events: crate::session::events::EventTracker,
     /// Optional hub-side session event emitter (always constructed without a harness client in the agent; methods no-op with `None` transport).
@@ -1105,8 +1124,9 @@ pub(crate) struct SessionActor {
     /// Orders streamed text against tool-call `send_update`s, which allocate the client-visible `eventId` at call time on separate `LocalSet` tasks.
     /// Without the barrier a tool call can land between still-draining text chunks and split the assistant message on every client.
     /// Map presence owns the stream; a timeout clears the waiter without invalidating FIFO events already queued, and turn/cancel boundaries revoke abandoned ownership.
-    pub(crate) turn_stream_drained:
-        parking_lot::Mutex<std::collections::HashMap<supercharge_sampler::RequestId, StreamOwnership>>,
+    pub(crate) turn_stream_drained: parking_lot::Mutex<
+        std::collections::HashMap<supercharge_sampler::RequestId, StreamOwnership>,
+    >,
     /// A server-confirmed image strip awaiting proof that the stripped retry helped.
     /// URLs are buffered by request id on `ImagesStripped`.
     /// They persist to stored history only when that request's `Completed` arrives, and drop on `Failed`.
@@ -1203,7 +1223,10 @@ impl SessionActor {
         skip_all,
         fields(session_id = %self.session_info.id.0, turn_number = payload.turn_number)
     )]
-    async fn send_after_turn_event(&self, payload: supercharge_tool_protocol::turn_hook::AfterTurnPayload) {
+    async fn send_after_turn_event(
+        &self,
+        payload: supercharge_tool_protocol::turn_hook::AfterTurnPayload,
+    ) {
         self.workspace_ops
             .on_after_turn(&self.session_id_string(), &payload)
             .await;
@@ -1365,7 +1388,10 @@ impl SessionActor {
 const PROMPT_CONTEXT_FILENAME: &str = "prompt_context.json";
 /// Persist the structured prompt context to `{session_dir}/prompt_context.json`.
 /// The saved JSON enables deterministic re-rendering and `grok prompt --json` inspection.
-fn save_prompt_context(session_info: &SessionInfo, prompt_context: &supercharge_agent::PromptContext) {
+fn save_prompt_context(
+    session_info: &SessionInfo,
+    prompt_context: &supercharge_agent::PromptContext,
+) {
     let dir = match crate::session::persistence::ensure_owner_only_session_dir(session_info) {
         Ok(dir) => dir,
         Err(e) => {
@@ -1750,10 +1776,10 @@ mod tool_meta_stamp_tests {
     use super::replay_buffer_send_update_tests::make_replay_send_update_fixture;
     use super::support::test_agent_with_tools;
     use super::*;
-    use tokio::sync::mpsc;
     use supercharge_tools::registry::types::ToolConfig;
     use supercharge_tools::tool_taxonomy::TOOL_META_KEY;
     use supercharge_workspace::permission::PermissionCommand;
+    use tokio::sync::mpsc;
     fn read_file_call() -> crate::sampling::types::ToolCallResponse {
         crate::sampling::types::ToolCallResponse {
             id: "call-stamp-1".to_string(),

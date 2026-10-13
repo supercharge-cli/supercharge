@@ -160,7 +160,8 @@ pub(crate) fn typed_tool_output_preserving_cco(
 ) -> supercharge_tool_runtime::TypedToolOutput {
     let cco = source.chat_completion_output();
     let value = serde_json::to_value(payload).unwrap_or(serde_json::Value::Null);
-    supercharge_tool_runtime::TypedToolOutput::from_value(tool_id, value).with_chat_completion_output(cco)
+    supercharge_tool_runtime::TypedToolOutput::from_value(tool_id, value)
+        .with_chat_completion_output(cco)
 }
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ListDirContent {
@@ -583,7 +584,9 @@ pub enum BashToolOutput {
     BackgroundTaskStarted(BackgroundTaskStarted),
 }
 impl supercharge_tool_runtime::ToolOutput for BashToolOutput {
-    fn chat_completion_output(&self) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
+    fn chat_completion_output(
+        &self,
+    ) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
         match self {
             Self::Bash(bash) => supercharge_tool_runtime::ToolOutput::chat_completion_output(bash),
             Self::BackgroundTaskStarted(_) => None,
@@ -1214,10 +1217,14 @@ impl MCPOutput {
     }
 }
 impl supercharge_tool_runtime::ToolOutput for ToolOutput {
-    fn chat_completion_output(&self) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
+    fn chat_completion_output(
+        &self,
+    ) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
         match self {
             Self::Bash(bash) => supercharge_tool_runtime::ToolOutput::chat_completion_output(bash),
-            Self::SearchReplace(edit) => supercharge_tool_runtime::ToolOutput::chat_completion_output(edit),
+            Self::SearchReplace(edit) => {
+                supercharge_tool_runtime::ToolOutput::chat_completion_output(edit)
+            }
             _ => None,
         }
     }
@@ -1242,12 +1249,16 @@ impl supercharge_tool_runtime::ToolOutput for SearchReplaceEditsApplied {
     /// `code_execution_result` shell is what settles the edit card on every
     /// client, and the anchor rides along when there is one. The reducer
     /// projects the anchor ahead of the shell only where clients accept it.
-    fn chat_completion_output(&self) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
+    fn chat_completion_output(
+        &self,
+    ) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
         Some(supercharge_tool_runtime::ToolChatCompletionResponse {
             result: Some(supercharge_tool_runtime::ToolChatCompletion {
                 sender: "assistant".into(),
                 message_tag: Some("raw_function_result".into()),
-                code_execution_result: Some(supercharge_tool_runtime::ToolCodeExecutionResult::default()),
+                code_execution_result: Some(
+                    supercharge_tool_runtime::ToolCodeExecutionResult::default(),
+                ),
                 edit_file_result: self.edit_file_anchor(),
                 ..Default::default()
             }),
@@ -1256,7 +1267,9 @@ impl supercharge_tool_runtime::ToolOutput for SearchReplaceEditsApplied {
     }
 }
 impl supercharge_tool_runtime::ToolOutput for BashOutput {
-    fn chat_completion_output(&self) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
+    fn chat_completion_output(
+        &self,
+    ) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
         let mut stdout = String::from_utf8_lossy(&self.output).into_owned();
         let mut extra = serde_json::Map::new();
         if self.truncated {
@@ -1299,7 +1312,9 @@ impl supercharge_tool_runtime::ToolOutput for GrepSearchOutput {}
 impl supercharge_tool_runtime::ToolOutput for ReadFileOutput {}
 impl supercharge_tool_runtime::ToolOutput for ListDirOutput {}
 impl supercharge_tool_runtime::ToolOutput for SearchReplaceOutput {
-    fn chat_completion_output(&self) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
+    fn chat_completion_output(
+        &self,
+    ) -> Option<supercharge_tool_runtime::ToolChatCompletionResponse> {
         match self {
             Self::EditsApplied(applied) => {
                 supercharge_tool_runtime::ToolOutput::chat_completion_output(applied)
@@ -2766,9 +2781,10 @@ mod tests {
     }
     #[test]
     fn bash_output_chat_completion_empty_stdout_still_emits() {
-        let resp =
-            supercharge_tool_runtime::ToolOutput::chat_completion_output(&sample_bash(0, b"", false))
-                .unwrap();
+        let resp = supercharge_tool_runtime::ToolOutput::chat_completion_output(&sample_bash(
+            0, b"", false,
+        ))
+        .unwrap();
         assert_cer(&resp, "", 0, false);
     }
     #[test]
@@ -2834,9 +2850,9 @@ mod tests {
     }
     #[test]
     fn bash_tool_output_foreground_delegates_background_skips() {
-        let resp = supercharge_tool_runtime::ToolOutput::chat_completion_output(&BashToolOutput::Bash(
-            sample_bash(0, b"ok", false),
-        ))
+        let resp = supercharge_tool_runtime::ToolOutput::chat_completion_output(
+            &BashToolOutput::Bash(sample_bash(0, b"ok", false)),
+        )
         .unwrap();
         assert_cer(&resp, "ok", 0, false);
         assert!(
@@ -2927,9 +2943,9 @@ mod tests {
             anchor,
         );
         assert_applied_edit_frame(
-            supercharge_tool_runtime::ToolOutput::chat_completion_output(&ToolOutput::SearchReplace(
-                applied,
-            ))
+            supercharge_tool_runtime::ToolOutput::chat_completion_output(
+                &ToolOutput::SearchReplace(applied),
+            )
             .unwrap(),
             anchor,
         );
@@ -2937,9 +2953,11 @@ mod tests {
     #[test]
     fn search_replace_chat_completion_settles_multi_match_and_creation_without_anchor() {
         assert_applied_edit_frame(
-            supercharge_tool_runtime::ToolOutput::chat_completion_output(&ToolOutput::SearchReplace(
-                SearchReplaceOutput::EditsApplied(sample_edits_applied(&[2, 9])),
-            ))
+            supercharge_tool_runtime::ToolOutput::chat_completion_output(
+                &ToolOutput::SearchReplace(SearchReplaceOutput::EditsApplied(
+                    sample_edits_applied(&[2, 9]),
+                )),
+            )
             .unwrap(),
             None,
         );
@@ -2954,9 +2972,9 @@ mod tests {
     #[test]
     fn search_replace_chat_completion_skips_failures() {
         assert!(
-            supercharge_tool_runtime::ToolOutput::chat_completion_output(&ToolOutput::SearchReplace(
-                SearchReplaceOutput::MultipleMatchesFound("two".into())
-            ))
+            supercharge_tool_runtime::ToolOutput::chat_completion_output(
+                &ToolOutput::SearchReplace(SearchReplaceOutput::MultipleMatchesFound("two".into()))
+            )
             .is_none()
         );
     }
@@ -2986,13 +3004,15 @@ mod tests {
             0,
             false,
         );
-        let dropped = supercharge_tool_runtime::TypedToolOutput::from_value(typed.tool_id, expected_value);
+        let dropped =
+            supercharge_tool_runtime::TypedToolOutput::from_value(typed.tool_id, expected_value);
         assert!(dropped.chat_completion_output.is_none());
     }
     #[test]
     fn into_typed_tool_output_non_bash_cco_is_none() {
         let run = sample_run_result(ToolOutput::Text(TextOutput::from("noop")));
-        let typed = run.into_typed_tool_output(supercharge_tool_protocol::ToolId::new("text").unwrap());
+        let typed =
+            run.into_typed_tool_output(supercharge_tool_protocol::ToolId::new("text").unwrap());
         assert!(typed.chat_completion_output.is_none());
     }
     #[test]

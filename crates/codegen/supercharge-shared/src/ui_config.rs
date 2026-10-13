@@ -368,7 +368,10 @@ mod tests {
         let ui: UiConfig = serde_json::from_str(r#"{"dashboard_preview":false}"#).unwrap();
         assert!(!ui.dashboard_preview_enabled());
         let saved = serde_json::to_value(&ui).unwrap();
-        assert_eq!(saved.get("dashboard_preview"), Some(&serde_json::json!(false)));
+        assert_eq!(
+            saved.get("dashboard_preview"),
+            Some(&serde_json::json!(false))
+        );
         let restored: UiConfig = serde_json::from_value(saved).unwrap();
         assert!(!restored.dashboard_preview_enabled());
     }

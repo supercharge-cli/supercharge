@@ -21,9 +21,9 @@
 use std::sync::Arc;
 
 use educe::Educe;
+use supercharge_tool_types::{SubagentCapabilityMode, SubagentIsolationMode, WaitMode};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use supercharge_tool_types::{SubagentCapabilityMode, SubagentIsolationMode, WaitMode};
 
 use crate::register_resource;
 

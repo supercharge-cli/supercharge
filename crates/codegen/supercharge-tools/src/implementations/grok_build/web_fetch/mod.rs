@@ -200,7 +200,10 @@ mod tests {
     #[test]
     fn tool_name_and_description() {
         let tool = WebFetchTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "web_fetch");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "web_fetch"
+        );
         assert_eq!(
             crate::types::tool_metadata::ToolMetadata::kind(&tool),
             ToolKind::WebFetch

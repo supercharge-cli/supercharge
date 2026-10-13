@@ -26,7 +26,8 @@ pub(crate) const CANCELLATION_CATEGORY_KEY: &str = "cancellationCategory";
 /// It is stamped beside the category; absent on older shells.
 pub(crate) const CANCELLATION_CONTEXT_KEY: &str = "cancellationContext";
 /// `_meta` key distinguishing a queued prompt that never ran from a real cancel.
-pub(crate) const COMPLETION_KIND_KEY: &str = supercharge_shell::session::commands::COMPLETION_KIND_KEY;
+pub(crate) const COMPLETION_KIND_KEY: &str =
+    supercharge_shell::session::commands::COMPLETION_KIND_KEY;
 /// `_meta.completionKind` of [`supercharge_shell::session::commands::PromptCompletionKind::RemovedFromQueue`].
 pub(crate) const REMOVED_FROM_QUEUE_KIND: &str =
     supercharge_shell::session::commands::REMOVED_FROM_QUEUE_KIND;

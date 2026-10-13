@@ -834,8 +834,8 @@ mod auth_refresh_tests {
     use std::net::SocketAddr;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering};
-    use tokio::net::TcpListener;
     use supercharge_login::{AuthManager, AuthMode, GrokAuth, GrokComConfig};
+    use tokio::net::TcpListener;
 
     async fn start_server(router: Router) -> (SocketAddr, tokio::task::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

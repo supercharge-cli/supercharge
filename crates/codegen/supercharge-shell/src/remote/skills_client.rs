@@ -24,7 +24,6 @@ use supercharge_tools::implementations::skills::types::{SkillInfo, SkillScope};
 
 use supercharge_login::AuthManager;
 
-
 /// Marker stored on SkillInfo.metadata / AvailableCommand._meta so clients can tell product Skills from Build disk discovery without name allowlists.
 pub const CHAT_PRODUCT_META_VALUE: &str = "chat";
 pub const CHAT_PRODUCT_META_KEY: &str = "product";

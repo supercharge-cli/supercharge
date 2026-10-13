@@ -89,10 +89,12 @@ impl AgentView {
         if matches!(outcome, InputOutcome::Action(_))
             && self.ephemeral_tip.current_key() == Some(crate::tips::send_now::SEND_NOW_TIP_KEY)
         {
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::ContextualTip {
-                tip: supercharge_telemetry::events::ContextualTipKind::SendNow,
-                action: supercharge_telemetry::events::ContextualTipAction::Accepted,
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::ContextualTip {
+                    tip: supercharge_telemetry::events::ContextualTipKind::SendNow,
+                    action: supercharge_telemetry::events::ContextualTipAction::Accepted,
+                },
+            );
             self.ephemeral_tip
                 .clear(crate::tips::send_now::SEND_NOW_TIP_KEY);
         }

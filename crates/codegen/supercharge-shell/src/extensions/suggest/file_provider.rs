@@ -1078,7 +1078,8 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         std::fs::write(tmp.path().join("notes.md"), "").unwrap();
 
-        let _env = supercharge_test_support::EnvGuard::set("SUPERCHARGE_SUGGEST_TEST_DIR", tmp.path());
+        let _env =
+            supercharge_test_support::EnvGuard::set("SUPERCHARGE_SUGGEST_TEST_DIR", tmp.path());
         let ctx = SuggestContext::new(
             "cat $SUPERCHARGE_SUGGEST_TEST_DIR/no".into(),
             "cat $SUPERCHARGE_SUGGEST_TEST_DIR/no".len(),

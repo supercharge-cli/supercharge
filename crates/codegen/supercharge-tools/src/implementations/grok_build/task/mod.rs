@@ -183,7 +183,10 @@ pub fn is_task_tool_id(name: &str) -> bool {
 }
 
 fn flatten_spawn_join(
-    joined: Result<Result<SubagentResult, supercharge_tool_runtime::ToolError>, tokio::task::JoinError>,
+    joined: Result<
+        Result<SubagentResult, supercharge_tool_runtime::ToolError>,
+        tokio::task::JoinError,
+    >,
 ) -> Result<SubagentResult, supercharge_tool_runtime::ToolError> {
     match joined {
         Ok(result) => result,
@@ -228,7 +231,10 @@ fn background_spawn_reject_error(
 fn log_background_spawn_after_start(
     id: &str,
     subagent_type: &str,
-    joined: Result<Result<SubagentResult, supercharge_tool_runtime::ToolError>, tokio::task::JoinError>,
+    joined: Result<
+        Result<SubagentResult, supercharge_tool_runtime::ToolError>,
+        tokio::task::JoinError,
+    >,
 ) {
     match flatten_spawn_join(joined) {
         // Child-result failures are logged once by the coordinator. This
@@ -411,21 +417,25 @@ impl supercharge_tool_runtime::Tool for TaskTool {
         };
 
         if depth >= max_depth {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "Subagent depth limit exceeded (current depth: {depth}, max: {max_depth}). \
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!(
+                    "Subagent depth limit exceeded (current depth: {depth}, max: {max_depth}). \
                  Cannot spawn further nested subagents."
-            )));
+                ),
+            ));
         }
 
         let agent_id = input.task_id.map_or_else(
             || {
                 let generated = uuid::Uuid::now_v7().to_string();
-                supercharge_message_delivery_core::AgentId::from_uuid_v7(generated).ok_or_else(|| {
-                    supercharge_tool_runtime::ToolError::custom(
-                        "identity_generation_failed",
-                        "Generated subagent identity was not a UUIDv7.",
-                    )
-                })
+                supercharge_message_delivery_core::AgentId::from_uuid_v7(generated).ok_or_else(
+                    || {
+                        supercharge_tool_runtime::ToolError::custom(
+                            "identity_generation_failed",
+                            "Generated subagent identity was not a UUIDv7.",
+                        )
+                    },
+                )
             },
             |task_id| {
                 supercharge_message_delivery_core::AgentId::from_uuid_v7(task_id).ok_or_else(|| {
@@ -497,7 +507,9 @@ impl supercharge_tool_runtime::Tool for TaskTool {
                 } else {
                     format!("cwd \"{cwd_path}\" does not exist")
                 };
-                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(detail));
+                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                    detail,
+                ));
             }
         }
 
@@ -519,23 +531,26 @@ impl supercharge_tool_runtime::Tool for TaskTool {
                 } else {
                     format!(". Available types: {}", available.join(", "))
                 };
-                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "Unknown subagent type: {}{suffix}",
-                    input.subagent_type
-                )));
+                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                    format!("Unknown subagent type: {}{suffix}", input.subagent_type),
+                ));
             }
             SubagentValidateTypeOutcome::Disabled => {
-                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "Subagent '{}' is disabled via [subagents.toggle] in config.toml",
-                    input.subagent_type
-                )));
+                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                    format!(
+                        "Subagent '{}' is disabled via [subagents.toggle] in config.toml",
+                        input.subagent_type
+                    ),
+                ));
             }
             SubagentValidateTypeOutcome::NotAllowed { allowed } => {
-                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "agent can only spawn: {}; '{}' not allowed",
-                    allowed.join(", "),
-                    input.subagent_type
-                )));
+                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                    format!(
+                        "agent can only spawn: {}; '{}' not allowed",
+                        allowed.join(", "),
+                        input.subagent_type
+                    ),
+                ));
             }
             // `custom` (not `invalid_arguments`) so the model doesn't
             // retry with a different name on transport faults.
@@ -569,7 +584,9 @@ impl supercharge_tool_runtime::Tool for TaskTool {
                 )
             })?;
             if let Some(error) = validator.error_for(requested) {
-                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(error));
+                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                    error,
+                ));
             }
         }
 
@@ -780,8 +797,8 @@ mod tests {
     use crate::types::resources::Resources;
     use crate::types::tool_metadata::test_ctx;
     use std::sync::Arc;
-    use tokio::sync::mpsc;
     use supercharge_tool_types::SubagentCapabilityMode;
+    use tokio::sync::mpsc;
 
     /// Backend whose `ValidateType` events are auto-acked with `Ok`.
     fn make_backend() -> (
@@ -1415,8 +1432,12 @@ mod tests {
         let mut input = task_input("general-purpose", true);
         input.model = Some("invented-model".to_string());
 
-        let result =
-            supercharge_tool_runtime::Tool::run(&TaskTool, test_ctx(resources.into_shared()), input).await;
+        let result = supercharge_tool_runtime::Tool::run(
+            &TaskTool,
+            test_ctx(resources.into_shared()),
+            input,
+        )
+        .await;
 
         let msg = result
             .expect_err("invalid model must reject before spawn")

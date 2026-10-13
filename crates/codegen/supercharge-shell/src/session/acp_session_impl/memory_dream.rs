@@ -309,8 +309,12 @@ impl SessionActor {
                 })
                 .await;
                 match reason {
-                    "another consolidation is already running" => crate::extensions::memory::MemoryDreamOutcome::Busy,
-                    "nothing new to consolidate" | "no readable session content" => crate::extensions::memory::MemoryDreamOutcome::NoWork,
+                    "another consolidation is already running" => {
+                        crate::extensions::memory::MemoryDreamOutcome::Busy
+                    }
+                    "nothing new to consolidate" | "no readable session content" => {
+                        crate::extensions::memory::MemoryDreamOutcome::NoWork
+                    }
                     _ => crate::extensions::memory::MemoryDreamOutcome::Failed,
                 }
             }

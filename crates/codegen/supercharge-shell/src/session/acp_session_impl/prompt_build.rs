@@ -242,8 +242,10 @@ mod partition_rules_by_scope_tests {
             &[Path::new("/repo")],
         );
         let rules =
-            supercharge_agent::prompt::user_message::format_rules_section(&workspace, &user).unwrap();
-        let reminder = supercharge_agent::prompt::agents_md::format_agents_md_section(&files).unwrap();
+            supercharge_agent::prompt::user_message::format_rules_section(&workspace, &user)
+                .unwrap();
+        let reminder =
+            supercharge_agent::prompt::agents_md::format_agents_md_section(&files).unwrap();
         for body in [
             "repo-agents-body",
             "repo-claude-body",

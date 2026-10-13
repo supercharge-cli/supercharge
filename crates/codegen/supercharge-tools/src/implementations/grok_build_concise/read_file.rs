@@ -167,9 +167,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
         match result {
             ReadFileOutput::FileContent(content) => {
                 assert_eq!(content.content, "1→hello\nworld\n");

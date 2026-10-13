@@ -1260,7 +1260,9 @@ mod xai_event_id_stamping_tests {
                     .await;
                 assert!(matches!(
                     gateway_rx.try_recv(),
-                    Ok(supercharge_acp_lib::AcpClientMessage::SessionNotification(_))
+                    Ok(supercharge_acp_lib::AcpClientMessage::SessionNotification(
+                        _
+                    ))
                 ));
             })
             .await;
@@ -1289,7 +1291,9 @@ mod xai_event_id_stamping_tests {
                     .await;
                 assert!(matches!(
                     gateway_rx.try_recv(),
-                    Ok(supercharge_acp_lib::AcpClientMessage::SessionNotification(_))
+                    Ok(supercharge_acp_lib::AcpClientMessage::SessionNotification(
+                        _
+                    ))
                 ));
             })
             .await;

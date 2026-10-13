@@ -697,7 +697,10 @@ fn handle_interjection(notif: &acp::ExtNotification, app: &mut AppView) -> bool 
     is_active
 }
 
-fn handle_ext_method(ext: supercharge_acp_lib::AcpArgs<acp::ExtRequest>, app: &mut AppView) -> bool {
+fn handle_ext_method(
+    ext: supercharge_acp_lib::AcpArgs<acp::ExtRequest>,
+    app: &mut AppView,
+) -> bool {
     match ext.request.method.as_ref() {
         "x.ai/ask_user_question" => handle_ask_user_question(ext, app),
         "x.ai/exit_plan_mode" => handle_exit_plan_mode(ext, app),

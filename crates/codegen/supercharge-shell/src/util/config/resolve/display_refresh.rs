@@ -2,8 +2,8 @@
 
 use crate::util::config::RemoteSettings;
 use serde::Deserialize;
-use toml::Value as TomlValue;
 use supercharge_config_types::DisplayRefreshSettings;
+use toml::Value as TomlValue;
 
 pub const ENV_DISPLAY_REFRESH_PROBE_ENABLED: &str = "SUPERCHARGE_DISPLAY_REFRESH_PROBE_ENABLED";
 pub const ENV_DISPLAY_REFRESH_AUTO_CADENCE: &str = "SUPERCHARGE_DISPLAY_REFRESH_AUTO_CADENCE";

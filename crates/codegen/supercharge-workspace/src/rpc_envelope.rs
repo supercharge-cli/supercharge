@@ -33,7 +33,9 @@ pub fn error_code(err: &WorkspaceError) -> &'static str {
 /// `HubRefused` travels as the `hub_error` it renders to.
 pub fn rpc_error_to_workspace(err: RpcError) -> WorkspaceError {
     if let Some(kind) =
-        supercharge_workspace_types::rpc::export_github::ExportGithubError::from_wire_code(&err.code)
+        supercharge_workspace_types::rpc::export_github::ExportGithubError::from_wire_code(
+            &err.code,
+        )
     {
         return WorkspaceError::ExportGithub {
             kind,

@@ -185,7 +185,9 @@ fn usable_cta(a: &supercharge_announcements::RemoteAnnouncement) -> Option<(&str
 /// The CTA's optional dim helper caption (`cta.caption`), trimmed-non-empty.
 /// Decorative only: deliberately independent of [`usable_cta`] so a caption can never gate, resurrect, or invalidate the button.
 /// Each surface combines this with its own pinned/chord gates; no button painted means no caption shown.
-pub(crate) fn usable_cta_caption(a: &supercharge_announcements::RemoteAnnouncement) -> Option<&str> {
+pub(crate) fn usable_cta_caption(
+    a: &supercharge_announcements::RemoteAnnouncement,
+) -> Option<&str> {
     let caption = a.cta.as_ref()?.caption.as_deref()?.trim();
     (!caption.is_empty()).then_some(caption)
 }

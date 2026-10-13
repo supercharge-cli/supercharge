@@ -32,6 +32,6 @@ pub use definition::{
 };
 pub use overrides::{intersect_capability_modes, resolve_effective_overrides};
 pub use resume::{ResumeValidationError, validate_resume_identity};
-pub use types::{ContextSource, EffectiveRuntimeConfig, ResolutionError, ResumeSourceData};
 pub use supercharge_agent::config::AgentDefinition;
 pub use supercharge_agent::prompt::paths::PathsConfig;
+pub use types::{ContextSource, EffectiveRuntimeConfig, ResolutionError, ResumeSourceData};

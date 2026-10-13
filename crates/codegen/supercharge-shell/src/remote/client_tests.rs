@@ -204,8 +204,10 @@ fn test_auth() -> GrokAuth {
 }
 fn test_auth_manager() -> Arc<supercharge_login::AuthManager> {
     let dir = tempfile::tempdir().unwrap();
-    let mgr =
-        supercharge_login::AuthManager::new(dir.path(), supercharge_login::GrokComConfig::default());
+    let mgr = supercharge_login::AuthManager::new(
+        dir.path(),
+        supercharge_login::GrokComConfig::default(),
+    );
     mgr.hot_swap(test_auth());
     std::mem::forget(dir);
     Arc::new(mgr)
@@ -746,10 +748,7 @@ fn endpoints(
 #[test]
 fn inference_url_defaults_to_proxy() {
     let ep = endpoints("https://proxy.grok.com/v1", None, None);
-    assert_eq!(
-        ep.resolve_inference_base_url(),
-        "https://proxy.grok.com/v1"
-    );
+    assert_eq!(ep.resolve_inference_base_url(), "https://proxy.grok.com/v1");
 }
 #[test]
 fn inference_url_uses_models_base_url() {
@@ -824,10 +823,7 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     )
     .unwrap();
     let url = EndpointsConfig::from_config_value(&managed).resolve_managed_config_url();
-    assert_eq!(
-        url,
-        "https://cli-chat-proxy.grok.com/v1/deployment/config"
-    );
+    assert_eq!(url, "https://cli-chat-proxy.grok.com/v1/deployment/config");
     assert!(
         !url.contains("acme-corp"),
         "deployment key would be sent to the inference host: {url}"

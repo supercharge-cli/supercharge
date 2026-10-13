@@ -23,7 +23,6 @@ use agent_client_protocol as acp;
 use anyhow::Result;
 pub use model_state::ModelState;
 use std::io::Write;
-use tokio_util::sync::CancellationToken;
 use supercharge_acp_lib::{AcpAgentTx, AcpClientRx, acp_send};
 use supercharge_shell::agent::auth_method::AuthMethodKind;
 use supercharge_shell::agent::config::Config as AgentConfig;
@@ -35,6 +34,7 @@ use supercharge_telemetry::startup;
 pub use supercharge_telemetry::startup::{
     AgentKind, Owner, StartupOutcome, StartupPhase, StartupTimer,
 };
+use tokio_util::sync::CancellationToken;
 /// Construct a `METHOD_NOT_FOUND` error for `WaitForTerminalExit`.
 /// Both the interactive pager and headless mode reject this ACP method (the adapter falls back to polling).
 /// Centralised here so the error code and message format stay in sync.
@@ -338,11 +338,12 @@ pub async fn connect_via_leader(
         Some(reconnector),
         ReconnectPolicy::unbounded(),
     )?;
-    let auth_manager = std::sync::Arc::new(supercharge_login::AuthManager::new_with_proxy_base_url(
-        &supercharge_shell::util::grok_home::grok_home(),
-        agent_config.grok_com_config.clone(),
-        agent_config.endpoints.proxy_url(),
-    ));
+    let auth_manager =
+        std::sync::Arc::new(supercharge_login::AuthManager::new_with_proxy_base_url(
+            &supercharge_shell::util::grok_home::grok_home(),
+            agent_config.grok_com_config.clone(),
+            agent_config.endpoints.proxy_url(),
+        ));
     set_identity(ProcessIdentity {
         entrypoint: Entrypoint::Pager,
         leader: LeaderMode::Attached,
@@ -390,8 +391,8 @@ fn unsupported_leader_flags(flags: &ConnectFlags) -> Vec<&'static str> {
 }
 /// Write config.toml fields based on CLI flags.
 pub(super) fn apply_config_writes(flags: &ConnectFlags) {
-    let config_path =
-        supercharge_shell::util::grok_home::grok_home().join(supercharge_config::USER_CONFIG_FILENAME);
+    let config_path = supercharge_shell::util::grok_home::grok_home()
+        .join(supercharge_config::USER_CONFIG_FILENAME);
     let content = std::fs::read_to_string(&config_path).unwrap_or_default();
     let mut doc = content
         .parse::<toml_edit::DocumentMut>()

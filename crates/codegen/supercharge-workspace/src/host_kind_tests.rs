@@ -12,12 +12,12 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use supercharge_computer_hub_sdk::{AuthCredential, SharedAuthProvider};
+use supercharge_tool_protocol::SessionId;
 use supercharge_tools::implementations::grok_build::image_gen::ImageGenClient;
 use supercharge_tools::implementations::grok_build::video_gen::VideoGenClient;
 use supercharge_tools::implementations::web_search::WebSearchConfig;
 use supercharge_tools::implementations::web_search::client::WebSearchClient;
 use supercharge_tools::registry::types::{FinalizedToolset, ToolServerConfig};
-use supercharge_tool_protocol::SessionId;
 /// The tools a hub-only host must not offer: each one calls the API with the server's own credential.
 const API_BACKED_TOOLS: &[&str] = &[
     "web_search",

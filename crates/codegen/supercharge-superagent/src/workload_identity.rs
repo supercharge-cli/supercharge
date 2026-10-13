@@ -73,7 +73,9 @@ pub fn apply_tokio_as(command: &mut tokio::process::Command, uid: u32, gid: u32)
     if should_drop() {
         use std::os::unix::process::CommandExt;
         unsafe {
-            command.as_std_mut().pre_exec(drop_identity_preexec(uid, gid));
+            command
+                .as_std_mut()
+                .pre_exec(drop_identity_preexec(uid, gid));
         }
         command
             .env("HOME", "/home/user")

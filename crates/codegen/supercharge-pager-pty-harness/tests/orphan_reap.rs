@@ -62,8 +62,9 @@ fn assert_no_orphan_after_holder_killed_by(signal: libc::c_int) {
     // explicit kill (bad stdout, parse failure, sanity assert) must not leak
     // the holder's infinite loop either.
     #[allow(clippy::disallowed_methods)] // guarded by KillOnDrop below
-    let mut holder =
-        supercharge_tty_utils::KillOnDrop::new(cmd.spawn().expect("spawn pty_orphan_holder fixture"));
+    let mut holder = supercharge_tty_utils::KillOnDrop::new(
+        cmd.spawn().expect("spawn pty_orphan_holder fixture"),
+    );
 
     // Bounded read of the CHILD_PID line: a wedged holder must fail the test
     // (and be killed by the guard), not hang it. The reader thread exits on

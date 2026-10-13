@@ -29,10 +29,9 @@ use agent_client_protocol as acp;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::CancellationToken;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_agent::config::{McpInheritance, ModelOverride, PermissionMode};
+use supercharge_hunk_tracker::HunkTrackerHandle;
 use supercharge_sampling_types::conversation::ConversationItem;
 use supercharge_session_events::types::CancellationCategory;
 use supercharge_subagent_resolution::ResumeSourceData;
@@ -40,7 +39,8 @@ use supercharge_tools::implementations::grok_build::monitor::types::MonitorEvent
 use supercharge_tools::implementations::grok_build::task::types::*;
 use supercharge_tools::types::tool::ToolKind;
 use supercharge_workspace::file_system::AsyncFileSystem;
-use supercharge_hunk_tracker::HunkTrackerHandle;
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 mod attempt_runner;
 mod spawn;
 mod start_artifact_publication;
@@ -231,7 +231,8 @@ pub(crate) struct SubagentSpawnContext {
     pub terminal: Arc<dyn AsyncTerminalRunner>,
     /// Parent's terminal backend, shared so background tasks, monitors, and scheduled tasks survive subagent exit.
     /// When `Some`, the subagent session reuses this backend instead of creating a new `LocalTerminalBackend`.
-    pub parent_terminal_backend: Option<Arc<dyn supercharge_tools::computer::types::TerminalBackend>>,
+    pub parent_terminal_backend:
+        Option<Arc<dyn supercharge_tools::computer::types::TerminalBackend>>,
     /// Parent's notification handle for reparenting on subagent exit.
     /// When a subagent exits, its surviving tasks (monitors, bg commands) need their notification handles swapped to this.
     /// Events then route to the parent's notification bridge.
@@ -1595,7 +1596,8 @@ fn gate_subagent_type(
         toggles: &ctx.subagent_toggle,
         allowed_types: ctx.allowed_subagent_types.as_deref(),
     };
-    match supercharge_subagent_resolution::gate_agent_definition(subagent_type, &resolution_context) {
+    match supercharge_subagent_resolution::gate_agent_definition(subagent_type, &resolution_context)
+    {
         Ok(()) => SubagentValidateTypeOutcome::Ok,
         Err(supercharge_subagent_resolution::ResolutionError::Disabled { .. }) => {
             SubagentValidateTypeOutcome::Disabled

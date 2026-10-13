@@ -1116,14 +1116,13 @@ fn provenance_digest_and_blob_match_are_stable() {
 fn compiled_input_provenance_lists_required_files() {
     assert_eq!(HARNESS_INPUT_PATHS.len(), 7);
     assert!(
-        HARNESS_INPUT_PATHS
-            .contains(&"crates/codegen/supercharge-fast-worktree/src/bin/worktree_lifecycle_bench.rs")
-    );
-    assert!(
         HARNESS_INPUT_PATHS.contains(
-            &"crates/codegen/supercharge-fast-worktree/src/bin/worktree_lifecycle_bench/runtime.rs"
+            &"crates/codegen/supercharge-fast-worktree/src/bin/worktree_lifecycle_bench.rs"
         )
     );
+    assert!(HARNESS_INPUT_PATHS.contains(
+        &"crates/codegen/supercharge-fast-worktree/src/bin/worktree_lifecycle_bench/runtime.rs"
+    ));
     assert!(HARNESS_INPUT_PATHS.contains(&"crates/codegen/supercharge-fast-worktree/Cargo.toml"));
     assert!(HARNESS_INPUT_PATHS.contains(&"crates/codegen/supercharge-fast-worktree/BUILD.bazel"));
     assert!(HARNESS_INPUT_PATHS.contains(&"Cargo.lock"));

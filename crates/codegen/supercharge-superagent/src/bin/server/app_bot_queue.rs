@@ -538,7 +538,11 @@ mod tests {
             kind: "steer".into(),
             ..Default::default()
         };
-        assert!(queue.enqueue_group(steer.clone(), Vec::new(), &path).unwrap());
+        assert!(
+            queue
+                .enqueue_group(steer.clone(), Vec::new(), &path)
+                .unwrap()
+        );
         assert!(!queue.enqueue_group(steer, Vec::new(), &path).unwrap());
         let loaded = BotQueue::load(&path).unwrap();
         assert!(loaded.queued.is_empty());
@@ -555,10 +559,29 @@ mod tests {
         queue.enqueue(work("first", "research"), &path).unwrap();
         queue.enqueue(work("second", "design"), &path).unwrap();
         let blocked = HashSet::from(["research".to_owned()]);
-        assert_eq!(queue.start_next(&HashSet::new(), &blocked, &path).unwrap().unwrap().id, "second");
-        assert!(queue.start_next(&HashSet::new(), &blocked, &path).unwrap().is_none());
+        assert_eq!(
+            queue
+                .start_next(&HashSet::new(), &blocked, &path)
+                .unwrap()
+                .unwrap()
+                .id,
+            "second"
+        );
+        assert!(
+            queue
+                .start_next(&HashSet::new(), &blocked, &path)
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(queue.queued.front().unwrap().id, "first");
-        assert_eq!(queue.start_next(&HashSet::new(), &HashSet::new(), &path).unwrap().unwrap().id, "first");
+        assert_eq!(
+            queue
+                .start_next(&HashSet::new(), &HashSet::new(), &path)
+                .unwrap()
+                .unwrap()
+                .id,
+            "first"
+        );
     }
 
     #[test]
@@ -573,14 +596,19 @@ mod tests {
         delegated.origin_session_id = Some("main-original-dm".into());
         delegated.origin_work_id = Some("original-turn".into());
         queue.enqueue(delegated.clone(), &path).unwrap();
-        queue.start_next(&HashSet::new(), &HashSet::new(), &path).unwrap();
+        queue
+            .start_next(&HashSet::new(), &HashSet::new(), &path)
+            .unwrap();
         queue
             .finish("job-one", "succeeded", "answer from worker", "", 9, &path)
             .unwrap();
         let mut loaded = BotQueue::load(&path).unwrap();
         assert!(!loaded.enqueue(delegated, &path).unwrap());
         assert_eq!(loaded.queued.len(), 1);
-        let notification = loaded.start_next(&HashSet::new(), &HashSet::new(), &path).unwrap().unwrap();
+        let notification = loaded
+            .start_next(&HashSet::new(), &HashSet::new(), &path)
+            .unwrap()
+            .unwrap();
         assert_eq!(notification.session(), "main-original-dm");
         assert_eq!(notification.bot_id, "main");
         assert!(notification.prompt.contains("answer from worker"));

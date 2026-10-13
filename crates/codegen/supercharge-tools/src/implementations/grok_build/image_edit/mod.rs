@@ -69,9 +69,9 @@ fn compress_reference(
     if let Ok((w, h)) = reader.into_dimensions()
         && (w as u64) * (h as u64) > MAX_REF_DECODE_PIXELS
     {
-        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-            "image reference is too large to process ({w}\u{00d7}{h} pixels)",
-        )));
+        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+            format!("image reference is too large to process ({w}\u{00d7}{h} pixels)",),
+        ));
     }
 
     // `into_dimensions` consumed the reader; re-open to decode.
@@ -80,7 +80,9 @@ fn compress_reference(
         .ok()
         .and_then(|r| r.decode().ok())
         .ok_or_else(|| {
-            supercharge_tool_runtime::ToolError::invalid_arguments("failed to decode image reference")
+            supercharge_tool_runtime::ToolError::invalid_arguments(
+                "failed to decode image reference",
+            )
         })?;
 
     let params = ReEncodeParams {
@@ -116,7 +118,9 @@ async fn resolve_to_data_url(value: &str) -> Result<String, supercharge_tool_run
 
     let raw_bytes = if value.starts_with("data:image/") {
         let comma = value.find(',').ok_or_else(|| {
-            supercharge_tool_runtime::ToolError::invalid_arguments("malformed data URL in image reference")
+            supercharge_tool_runtime::ToolError::invalid_arguments(
+                "malformed data URL in image reference",
+            )
         })?;
         let Some(header) = value.get(..comma) else {
             return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
@@ -463,7 +467,10 @@ mod tests {
     #[test]
     fn tool_name_and_description() {
         let tool = ImageEditTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "image_edit");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "image_edit"
+        );
     }
 
     #[test]

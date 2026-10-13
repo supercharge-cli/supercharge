@@ -261,7 +261,10 @@ impl MemoryBackendImpl {
     }
 
     /// Override the search scoring config (weights, limits, etc.).
-    pub fn with_search_config(mut self, config: supercharge_config_types::MemorySearchConfig) -> Self {
+    pub fn with_search_config(
+        mut self,
+        config: supercharge_config_types::MemorySearchConfig,
+    ) -> Self {
         self.search_config = config;
         self
     }
@@ -276,7 +279,8 @@ impl MemoryBackendImpl {
     /// Open a read-only connection for simple queries (`total_chunks`, `get`).
     fn open_readonly(&self) -> Result<rusqlite::Connection, rusqlite::Error> {
         // Journal-mode-aware open (busy_timeout included): never mmap a legacy WAL -shm on network mounts (SIGBUS); see JournalMode::open_readonly
-        supercharge_sqlite_journal::JournalMode::for_db_path(&self.db_path).open_readonly(&self.db_path)
+        supercharge_sqlite_journal::JournalMode::for_db_path(&self.db_path)
+            .open_readonly(&self.db_path)
     }
 
     async fn make_embedding_provider(&self) -> Option<super::embedding::ApiEmbeddingProvider> {
@@ -584,8 +588,8 @@ mod factory_tests {
     }
     use crate::index::{MemoryIndex, init_sqlite_vec};
     use crate::storage::MemoryStorage;
-    use tempfile::TempDir;
     use supercharge_config_types::{MemoryEmbeddingConfig, MemorySearchConfig};
+    use tempfile::TempDir;
 
     fn make_storage(tmp: &TempDir) -> MemoryStorage {
         let global = tmp.path().join("memory");
@@ -1177,8 +1181,8 @@ mod factory_tests {
 mod tests {
     use super::*;
     use crate::index::{MemoryIndex, init_sqlite_vec};
-    use tempfile::TempDir;
     use supercharge_config_types::MemoryIndexConfig;
+    use tempfile::TempDir;
 
     /// An api-key provider that fails the test if its key is ever resolved, proving a scoped-away credential is never consulted.
     struct PanicKey;

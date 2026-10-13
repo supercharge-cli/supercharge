@@ -287,7 +287,9 @@ mod tests {
         };
         assert!(spec.name.starts_with("plugin/my-plugin/"));
         assert_eq!(
-            spec.extra_env.get("SUPERCHARGE_PLUGIN_ROOT").map(String::as_str),
+            spec.extra_env
+                .get("SUPERCHARGE_PLUGIN_ROOT")
+                .map(String::as_str),
             Some("/path/to/plugin")
         );
         assert_eq!(
@@ -295,7 +297,9 @@ mod tests {
             Some("/path/to/plugin")
         );
         assert_eq!(
-            spec.extra_env.get("SUPERCHARGE_PLUGIN_DATA").map(String::as_str),
+            spec.extra_env
+                .get("SUPERCHARGE_PLUGIN_DATA")
+                .map(String::as_str),
             Some("/path/to/data")
         );
 
@@ -329,7 +333,9 @@ mod tests {
         };
         assert!(spec.name.starts_with("plugin/inline-plugin/"));
         assert_eq!(
-            spec.extra_env.get("SUPERCHARGE_PLUGIN_ROOT").map(String::as_str),
+            spec.extra_env
+                .get("SUPERCHARGE_PLUGIN_ROOT")
+                .map(String::as_str),
             Some("/path/to/plugin")
         );
         assert!(warnings.is_empty());

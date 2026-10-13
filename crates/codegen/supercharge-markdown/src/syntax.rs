@@ -162,8 +162,10 @@ mod tests {
     fn highlight_lines_for_fence_info_resolves_citation_path_to_rust() {
         let s = super::test_syntect();
         assert!(
-            s.highlight_lines_for_fence_info("37:65:crates/codegen/supercharge-markdown/src/parse.rs")
-                .is_some()
+            s.highlight_lines_for_fence_info(
+                "37:65:crates/codegen/supercharge-markdown/src/parse.rs"
+            )
+            .is_some()
         );
     }
 

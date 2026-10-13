@@ -149,7 +149,8 @@ pub fn collect_doctor_tui<'a>(
         },
         host_os: crate::host::HostOs::current(),
         display_server: crate::host::DisplayServer::current(),
-        container_no_display: supercharge_shell::util::clipboard::is_containerized_without_display(),
+        container_no_display: supercharge_shell::util::clipboard::is_containerized_without_display(
+        ),
         color_level: crate::theme::color_support::get(),
     }
 }
@@ -225,7 +226,8 @@ fn collect_standalone_with_tmux<'a>(
     let is_wayland = display_server == crate::host::DisplayServer::Wayland;
     let native_tool = supercharge_shell::util::clipboard::native_tool_name();
     let data_control = standalone_data_control(is_wayland);
-    let container_no_display = supercharge_shell::util::clipboard::is_containerized_without_display();
+    let container_no_display =
+        supercharge_shell::util::clipboard::is_containerized_without_display();
     collect_standalone_from(
         terminal,
         tmux,

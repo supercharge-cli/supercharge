@@ -10,7 +10,8 @@ use supercharge_sampling_types::ConversationItem;
 /// Serializes `items` the way a main turn would, so auxiliary calls can be compared against the real wire shape.
 fn main_turn_input(items: Vec<ConversationItem>) -> Vec<serde_json::Value> {
     let request = supercharge_sampling_types::ConversationRequest {
-        items: supercharge_chat_state::compaction_utils::ModelRequestHistory::from_raw(items).into_items(),
+        items: supercharge_chat_state::compaction_utils::ModelRequestHistory::from_raw(items)
+            .into_items(),
         model: Some("test-model".to_string()),
         ..Default::default()
     };
@@ -75,13 +76,15 @@ fn assert_messages_rides_parent_prefix(
     label: &str,
 ) {
     let request = supercharge_sampling_types::ConversationRequest {
-        items: supercharge_chat_state::compaction_utils::ModelRequestHistory::from_raw(parent).into_items(),
+        items: supercharge_chat_state::compaction_utils::ModelRequestHistory::from_raw(parent)
+            .into_items(),
         model: Some("test".to_string()),
         reasoning_effort: Some(supercharge_sampling_types::ReasoningEffort::High),
         ..Default::default()
     };
-    let expected = serde_json::to_value(supercharge_sampling_types::build_messages_request(&request))
-        .expect("main Messages request serializes");
+    let expected =
+        serde_json::to_value(supercharge_sampling_types::build_messages_request(&request))
+            .expect("main Messages request serializes");
     let expected_messages = without_cache_control(j(&expected, "messages").clone());
     let actual_messages = without_cache_control(j(body, "messages").clone());
     let expected = expected_messages
@@ -185,7 +188,9 @@ async fn side_question_projects_agent_messages_without_mutating_history() {
                 .and_then(|request| request.body.as_ref())
                 .expect("btw body must be JSON")
                 .to_string();
-            assert!(body.contains(supercharge_chat_state::compaction_utils::AGENT_MESSAGE_MODEL_LABEL));
+            assert!(
+                body.contains(supercharge_chat_state::compaction_utils::AGENT_MESSAGE_MODEL_LABEL)
+            );
             assert_eq!(
                 serde_json::to_vec(&actor.chat_state_handle.get_conversation().await).unwrap(),
                 raw_bytes
@@ -777,7 +782,9 @@ async fn manual_recap_over_budget_trims_persisted_request_and_is_display_only() 
             let mut saw_recap_request = false;
             while let Ok(msg) = persistence_rx.try_recv() {
                 if let PersistenceMsg::RecapRequest(artifact) = msg {
-                    let est = supercharge_chat_state::estimate_conversation_tokens(&artifact.chat_history);
+                    let est = supercharge_chat_state::estimate_conversation_tokens(
+                        &artifact.chat_history,
+                    );
                     assert!(
                         est <= PROMPT_BUDGET,
                         "persisted recap request must be within budget: {est} > {PROMPT_BUDGET}"
@@ -1423,9 +1430,11 @@ async fn auxiliary_calls_keep_the_main_turn_prefix() {
             let parent = vec![
                 ConversationItem::system("you are a coding agent"),
                 ConversationItem::user("explain the borrow checker"),
-                ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item(
-                    "recalling the aliasing rules",
-                )),
+                ConversationItem::Reasoning(
+                    supercharge_sampling_types::synthesized_reasoning_item(
+                        "recalling the aliasing rules",
+                    ),
+                ),
                 ConversationItem::assistant("it enforces shared-xor-mutable"),
             ];
             actor.chat_state_handle.replace_conversation(parent.clone());
@@ -1710,9 +1719,11 @@ async fn side_question_trims_reasoning_orphaned_by_mid_turn_truncation() {
             actor.chat_state_handle.replace_conversation(vec![
                 ConversationItem::system("you are a coding agent"),
                 ConversationItem::user("explain the borrow checker"),
-                ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item(
-                    "planning the file read",
-                )),
+                ConversationItem::Reasoning(
+                    supercharge_sampling_types::synthesized_reasoning_item(
+                        "planning the file read",
+                    ),
+                ),
                 ConversationItem::Assistant(AssistantItem {
                     content: String::new().into(),
                     tool_calls: vec![ToolCall {

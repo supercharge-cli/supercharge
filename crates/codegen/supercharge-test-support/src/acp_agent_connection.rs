@@ -10,10 +10,10 @@ use std::time::{Duration, Instant};
 
 use agent_client_protocol::{self as acp, Agent as _};
 use futures_util::future::LocalBoxFuture;
+use supercharge_acp_lib::LineBufferedRead;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tokio_util::task::AbortOnDropHandle;
-use supercharge_acp_lib::LineBufferedRead;
 
 use crate::acp_policy::ClientPolicy;
 use crate::acp_scripted_client::ScriptedClient;

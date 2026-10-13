@@ -28,12 +28,14 @@ use criterion::{
     BenchmarkId, Criterion, SamplingMode, Throughput, criterion_group, criterion_main,
 };
 use filetime::{FileTime, set_file_mtime};
-use tempfile::TempDir;
-use supercharge_fast_worktree::{ListFilter, WorktreeDb, WorktreeKind, WorktreeRecord, WorktreeStatus};
+use supercharge_fast_worktree::{
+    ListFilter, WorktreeDb, WorktreeKind, WorktreeRecord, WorktreeStatus,
+};
 use supercharge_shell::session::info::Info;
 use supercharge_shell::session::persistence::Summary;
 use supercharge_shell::session::storage::{JsonlStorageAdapter, StorageAdapter};
 use supercharge_shell::session::unified_list::{ListReq, UnifiedListResult, build_unified_list};
+use tempfile::TempDir;
 
 const WORKSPACE_COUNT: usize = 3_000;
 // Bump whenever the shape of the workload changes, even if aggregate counts do not
@@ -195,10 +197,11 @@ impl Fixture {
     }
 
     fn assert_correct(&self, runtime: &tokio::runtime::Runtime) {
-        let discovered = supercharge_shell::session::worktree::candidate_worktree_cwds_for_same_repo(
-            Path::new(&self.picker_cwd),
-        )
-        .expect("discover same-repo candidate cwd paths");
+        let discovered =
+            supercharge_shell::session::worktree::candidate_worktree_cwds_for_same_repo(Path::new(
+                &self.picker_cwd,
+            ))
+            .expect("discover same-repo candidate cwd paths");
         assert_eq!(discovered, self.same_repo_cwds);
 
         for (index, (cwd, expected_label)) in self

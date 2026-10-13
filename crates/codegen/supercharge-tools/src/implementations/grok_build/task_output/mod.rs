@@ -148,7 +148,9 @@ pub(crate) fn background_bash_requires_exprs() -> Vec<Expr<ToolRequirement>> {
     use crate::types::tool_metadata::ToolMetadata;
     let grok_build_bash = Expr::Value(ToolRequirement::Tool {
         namespace: ToolMetadata::tool_namespace(&BashTool).to_string(),
-        id: supercharge_tool_runtime::Tool::id(&BashTool).as_str().to_string(),
+        id: supercharge_tool_runtime::Tool::id(&BashTool)
+            .as_str()
+            .to_string(),
         if_params: Some(Expr::Value(ToolParamsRequirement {
             key: "enabled_background".to_string(),
             value: Expr::Value(serde_json::Value::Bool(true)),
@@ -179,7 +181,9 @@ pub(crate) fn task_output_requires_expr() -> Expr<ToolRequirement> {
     use crate::types::tool_metadata::ToolMetadata;
     let task_tool = Expr::Value(ToolRequirement::Tool {
         namespace: ToolMetadata::tool_namespace(&TaskTool).to_string(),
-        id: supercharge_tool_runtime::Tool::id(&TaskTool).as_str().to_string(),
+        id: supercharge_tool_runtime::Tool::id(&TaskTool)
+            .as_str()
+            .to_string(),
         if_params: None,
     });
     let mut arms = background_bash_requires_exprs();
@@ -236,9 +240,9 @@ impl TaskOutputTool {
             {
                 let res = resources.lock().await;
                 let renderer = res.require::<TemplateRenderer>()?;
-                read_file_name = renderer
-                    .render("${{ tools.by_kind.read }}")
-                    .map_err(|e| supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string()))?;
+                read_file_name = renderer.render("${{ tools.by_kind.read }}").map_err(|e| {
+                    supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string())
+                })?;
             }
             let max_output_bytes = resources
                 .lock()
@@ -325,9 +329,9 @@ impl TaskOutputTool {
             let terminal = res.require::<Terminal>()?.0.clone();
             let backend = res.get::<SubagentBackendResource>().cloned();
             let renderer = res.require::<TemplateRenderer>()?;
-            let rfn = renderer
-                .render("${{ tools.by_kind.read }}")
-                .map_err(|e| supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string()))?;
+            let rfn = renderer.render("${{ tools.by_kind.read }}").map_err(|e| {
+                supercharge_tool_runtime::ToolError::invalid_arguments(e.to_string())
+            })?;
             let mob = res
                 .get::<TruncationCfg>()
                 .map(|cfg| {
@@ -790,15 +794,17 @@ impl crate::types::tool_metadata::ToolMetadata for TaskOutputTool {
         // renders it context-aware from the finalized toolset. This static
         // fallback mirrors the default supercharge-core toolset.
         static DESC: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-            supercharge_tool_types::build_task_output_description(&supercharge_tool_types::TaskOutputToolNaming {
-                monitor_tool: Some("monitor"),
-                read_tool: Some("read_file"),
-                bash_background_param: Some("is_background"),
-                subagent_background_param: Some("run_in_background"),
-                task_ids_param: "task_ids",
-                timeout_ms_param: "timeout_ms",
-                task_id_param: "task_id",
-            })
+            supercharge_tool_types::build_task_output_description(
+                &supercharge_tool_types::TaskOutputToolNaming {
+                    monitor_tool: Some("monitor"),
+                    read_tool: Some("read_file"),
+                    bash_background_param: Some("is_background"),
+                    subagent_background_param: Some("run_in_background"),
+                    task_ids_param: "task_ids",
+                    timeout_ms_param: "timeout_ms",
+                    task_id_param: "task_id",
+                },
+            )
         });
         &DESC
     }
@@ -848,22 +854,24 @@ fn task_output_description(
             ovr.to_string()
         });
     }
-    supercharge_tool_types::build_task_output_description(&supercharge_tool_types::TaskOutputToolNaming {
-        monitor_tool: renderer.tool_for_kind(ToolKind::Monitor),
-        read_tool: renderer.tool_for_kind(ToolKind::Read),
-        bash_background_param: renderer.param_for_kind(ToolKind::Execute, "is_background"),
-        subagent_background_param: renderer.param_for_kind(ToolKind::Task, "run_in_background"),
-        task_ids_param: renderer
-            .param_for_kind(ToolKind::BackgroundTaskAction, "task_ids")
-            .unwrap_or("task_ids"),
-        timeout_ms_param: renderer
-            .param_for_kind(ToolKind::BackgroundTaskAction, "timeout_ms")
-            .unwrap_or("timeout_ms"),
-        // Same singular id name kill_task uses in its monitor aside.
-        task_id_param: renderer
-            .param_for_kind(ToolKind::KillTaskAction, "task_id")
-            .unwrap_or("task_id"),
-    })
+    supercharge_tool_types::build_task_output_description(
+        &supercharge_tool_types::TaskOutputToolNaming {
+            monitor_tool: renderer.tool_for_kind(ToolKind::Monitor),
+            read_tool: renderer.tool_for_kind(ToolKind::Read),
+            bash_background_param: renderer.param_for_kind(ToolKind::Execute, "is_background"),
+            subagent_background_param: renderer.param_for_kind(ToolKind::Task, "run_in_background"),
+            task_ids_param: renderer
+                .param_for_kind(ToolKind::BackgroundTaskAction, "task_ids")
+                .unwrap_or("task_ids"),
+            timeout_ms_param: renderer
+                .param_for_kind(ToolKind::BackgroundTaskAction, "timeout_ms")
+                .unwrap_or("timeout_ms"),
+            // Same singular id name kill_task uses in its monitor aside.
+            task_id_param: renderer
+                .param_for_kind(ToolKind::KillTaskAction, "task_id")
+                .unwrap_or("task_id"),
+        },
+    )
 }
 
 impl supercharge_tool_runtime::Tool for TaskOutputTool {
@@ -912,9 +920,9 @@ impl supercharge_tool_runtime::Tool for TaskOutputTool {
             ));
         }
         if ids.len() > MAX_MULTI_WAIT_IDS {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "task_ids exceeds maximum of {MAX_MULTI_WAIT_IDS} entries."
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("task_ids exceeds maximum of {MAX_MULTI_WAIT_IDS} entries."),
+            ));
         }
 
         if ids.len() == 1 {
@@ -2053,9 +2061,10 @@ mod tests {
         let tool = TaskOutputTool;
 
         let mut ctx = test_ctx(resources.into_shared());
-        ctx.extensions.insert(supercharge_tool_runtime::BehaviorVersion(
-            "legacy-0.4.10".to_string(),
-        ));
+        ctx.extensions
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                "legacy-0.4.10".to_string(),
+            ));
 
         let result = supercharge_tool_runtime::Tool::run(
             &tool,

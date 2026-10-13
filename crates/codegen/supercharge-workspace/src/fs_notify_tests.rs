@@ -47,8 +47,8 @@ fn parse_diff_name_status_all_variants() {
 #[tokio::test]
 async fn file_write_is_broadcast_as_fs_changed() {
     let root = tempfile::tempdir().expect("tempdir");
-    let source =
-        supercharge_fsnotify::shared(root.path().to_path_buf(), FsConfig::default()).expect("watcher init");
+    let source = supercharge_fsnotify::shared(root.path().to_path_buf(), FsConfig::default())
+        .expect("watcher init");
     let fs_rx = source.subscribe();
     let (events_tx, mut events_rx) = broadcast::channel(16);
     let forwarder = tokio::spawn(async move {
@@ -160,7 +160,10 @@ fn index_over(root: &Path) -> Arc<supercharge_codebase_graph::IndexManagerHandle
 
 /// Where `idx` defines `symbol`, as paths relative to its root. Commands are applied in order, so
 /// this sees every event sent before it.
-fn definition_of(idx: &supercharge_codebase_graph::IndexManagerHandle, symbol: &str) -> Vec<String> {
+fn definition_of(
+    idx: &supercharge_codebase_graph::IndexManagerHandle,
+    symbol: &str,
+) -> Vec<String> {
     idx.find_definitions_blocking(symbol.to_owned(), None)
         .expect("index alive")
         .into_iter()

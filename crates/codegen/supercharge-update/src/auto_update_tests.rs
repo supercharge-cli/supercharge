@@ -216,10 +216,12 @@ async fn test_reconcile_agent_repoints_diverged_agent() {
     std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
     std::fs::write(downloads.join("grok-0.1.199-macos-aarch64"), "old").unwrap();
 
-    std::os::unix::fs::symlink("../downloads/grok-0.2.101-macos-aarch64", bin.join("supercharge"))
-        .unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc"))
-        .unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/grok-0.2.101-macos-aarch64",
+        bin.join("supercharge"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
@@ -238,8 +240,11 @@ async fn test_reconcile_agent_heals_legacy_unversioned_agent() {
     std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
     std::fs::write(downloads.join("grok-macos-aarch64"), "legacy").unwrap();
 
-    std::os::unix::fs::symlink("../downloads/grok-0.2.101-macos-aarch64", bin.join("supercharge"))
-        .unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/grok-0.2.101-macos-aarch64",
+        bin.join("supercharge"),
+    )
+    .unwrap();
     std::os::unix::fs::symlink("../downloads/grok-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
@@ -256,8 +261,11 @@ async fn test_reconcile_agent_heals_legacy_unversioned_agent() {
 async fn test_reconcile_agent_creates_missing_agent() {
     let (_dir, bin, downloads) = managed_layout();
     std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.2.101-macos-aarch64", bin.join("supercharge"))
-        .unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/grok-0.2.101-macos-aarch64",
+        bin.join("supercharge"),
+    )
+    .unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
@@ -292,11 +300,13 @@ async fn test_reconcile_agent_noop_when_consistent() {
 #[tokio::test]
 async fn test_reconcile_agent_skips_when_grok_dangling() {
     let (_dir, bin, downloads) = managed_layout();
-    std::os::unix::fs::symlink("../downloads/grok-0.2.101-macos-aarch64", bin.join("supercharge"))
-        .unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/grok-0.2.101-macos-aarch64",
+        bin.join("supercharge"),
+    )
+    .unwrap();
     std::fs::write(downloads.join("grok-0.1.199-macos-aarch64"), "old").unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc"))
-        .unwrap();
+    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
@@ -312,8 +322,7 @@ async fn test_reconcile_agent_skips_when_grok_not_symlink() {
     let (_dir, bin, downloads) = managed_layout();
     std::fs::write(bin.join("supercharge"), "copy-binary").unwrap();
     std::fs::write(downloads.join("grok-0.1.199-macos-aarch64"), "old").unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc"))
-        .unwrap();
+    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 

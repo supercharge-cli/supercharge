@@ -2992,9 +2992,15 @@ impl SessionActor {
             && let ToolsToolOutput::DesktopObservation(ref observation) = *output
         {
             use crate::session::image_normalize::{InlineAttachVerdict, inline_attach_verdict};
-            if matches!(inline_attach_verdict(&observation.image.data), InlineAttachVerdict::Attach) {
+            if matches!(
+                inline_attach_verdict(&observation.image.data),
+                InlineAttachVerdict::Attach
+            ) {
                 inline_images.push(ContentPart::Image {
-                    url: std::sync::Arc::<str>::from(format!("data:{};base64,{}", observation.image.mime_type, observation.image.data)),
+                    url: std::sync::Arc::<str>::from(format!(
+                        "data:{};base64,{}",
+                        observation.image.mime_type, observation.image.data
+                    )),
                 });
             } else {
                 prompt_text = "Desktop image could not be attached. Do not act on unseen coordinates; request a new desktop observation.".to_owned();

@@ -124,7 +124,10 @@ fn recv_pipe_drain(
         .map_err(|_| format!("tmux {label} did not close before the query deadline"))?
 }
 
-fn terminate_tmux_tree(group: &supercharge_tty_utils::ProcessGroup, child: &mut std::process::Child) {
+fn terminate_tmux_tree(
+    group: &supercharge_tty_utils::ProcessGroup,
+    child: &mut std::process::Child,
+) {
     terminate_owned_group(group);
     let _ = child.wait();
 }
@@ -246,7 +249,8 @@ fn build_tmux_command(command: TmuxCommand<'_>) -> Command {
                 .stderr(Stdio::piped());
         }
     }
-    cmd.stdin(Stdio::null()).envs(supercharge_tty_utils::pager_env());
+    cmd.stdin(Stdio::null())
+        .envs(supercharge_tty_utils::pager_env());
     supercharge_tty_utils::detach_std_command(&mut cmd);
     cmd
 }

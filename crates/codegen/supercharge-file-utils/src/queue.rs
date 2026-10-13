@@ -21,11 +21,11 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::task::Poll;
 use std::time::{Duration, Instant};
+use supercharge_auth::AuthCredentialProvider;
+use supercharge_circuit_breaker::{Disposition, RetryPolicy};
 use tokio::io::{AsyncRead, ReadBuf};
 use tokio::sync::{Notify, mpsc, oneshot};
 use tracing::Instrument;
-use supercharge_circuit_breaker::{Disposition, RetryPolicy};
-use supercharge_auth::AuthCredentialProvider;
 /// Resolves upload credentials at upload time, plus hooks for refresh-aware creds and 401 attribution.
 /// The agent delegates to AuthManager so queued items do not retry with expired tokens.
 /// Optional hooks default to `None` so existing implementors keep compiling.

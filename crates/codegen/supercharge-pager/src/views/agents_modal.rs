@@ -15,13 +15,13 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use unicode_width::UnicodeWidthStr;
 use supercharge_agent::config::{AgentDefinition, AgentScope, BuiltinAgentName};
 use supercharge_shell::agent::config::AgentSelectionConfig;
 use supercharge_tools::implementations::skills::discovery::extract_first_paragraph;
 use supercharge_tools::registry::types::ToolServerConfig;
 use supercharge_tools::types::template_renderer::TemplateRenderer;
 use supercharge_tools::types::tool::ToolKind;
+use unicode_width::UnicodeWidthStr;
 /// Which tab is active in the agents modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentsTab {
@@ -751,7 +751,8 @@ fn refresh_default_agent(state: &mut AgentsModalState) {
 ///
 /// Pass `Some(name)` to set, `None` to clear (remove the key).
 pub fn set_default_agent(name: Option<&str>) -> Result<(), String> {
-    let config_path = supercharge_config::grok_home().join(supercharge_config::USER_CONFIG_FILENAME);
+    let config_path =
+        supercharge_config::grok_home().join(supercharge_config::USER_CONFIG_FILENAME);
     if let Some(parent) = config_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -771,7 +772,8 @@ pub fn set_default_agent(name: Option<&str>) -> Result<(), String> {
 }
 /// Toggle an agent's enabled state via `[subagents.toggle]` in config.toml.
 pub fn toggle_agent(name: &str, enabled: bool) -> Result<(), String> {
-    let config_path = supercharge_config::grok_home().join(supercharge_config::USER_CONFIG_FILENAME);
+    let config_path =
+        supercharge_config::grok_home().join(supercharge_config::USER_CONFIG_FILENAME);
     if let Some(parent) = config_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

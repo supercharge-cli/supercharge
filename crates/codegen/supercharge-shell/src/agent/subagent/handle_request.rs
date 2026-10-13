@@ -351,7 +351,8 @@ pub(crate) async fn run_shell_child(
         Some(origin) => (Some(origin.source), Some(origin.message_id)),
         None => (None, None),
     };
-    let Some(agent_id) = supercharge_message_delivery_core::AgentId::from_uuid_v7(request.id.clone())
+    let Some(agent_id) =
+        supercharge_message_delivery_core::AgentId::from_uuid_v7(request.id.clone())
     else {
         let completion_data = ShellCompletionData {
             attempt_id: None,
@@ -622,11 +623,14 @@ pub(crate) async fn run_shell_child(
         let create_span = worktree_create_span.span().clone();
         let created = match tokio::task::spawn_blocking(move || {
             create_span.in_scope(|| {
-                let mut builder = supercharge_fast_worktree::WorktreeBuilder::new(&source_clone, &dest)
-                    .working_tree_mode(supercharge_fast_worktree::WorkingTreeMode::PreserveWorkingTree)
-                    .creation_mode(creation_mode)
-                    .worktree_kind(supercharge_fast_worktree::WorktreeKind::Subagent)
-                    .session_id(subagent_id);
+                let mut builder =
+                    supercharge_fast_worktree::WorktreeBuilder::new(&source_clone, &dest)
+                        .working_tree_mode(
+                            supercharge_fast_worktree::WorkingTreeMode::PreserveWorkingTree,
+                        )
+                        .creation_mode(creation_mode)
+                        .worktree_kind(supercharge_fast_worktree::WorktreeKind::Subagent)
+                        .session_id(subagent_id);
                 if let Some(delegate) = btrfs_delegate {
                     builder = builder.btrfs_delegate(delegate);
                 }
@@ -1172,7 +1176,8 @@ pub(crate) async fn run_shell_child(
     let parent_traceparent = supercharge_otel::current_traceparent();
     let tracker_child_cwd = child_session_info.cwd.clone();
     let tracker_model_id = effective_model_id.0.to_string();
-    let initial_child_tokens = supercharge_chat_state::estimate_conversation_tokens(&forked_conversation);
+    let initial_child_tokens =
+        supercharge_chat_state::estimate_conversation_tokens(&forked_conversation);
     let model_entry = crate::agent::config::find_model_by_id(
         &ctx.available_models,
         effective_model_id.0.as_ref(),
@@ -1208,7 +1213,8 @@ pub(crate) async fn run_shell_child(
     let agent_memory_scope = agent_memory_scope_for_mode(definition.memory, ctx.memory_mode);
     let agent_name_for_memory = definition.name.clone();
     let is_plugin_agent = definition.plugin_name.is_some();
-    let yolo_policy_block = supercharge_workspace::permission::resolution::yolo_disabled_by_policy();
+    let yolo_policy_block =
+        supercharge_workspace::permission::resolution::yolo_disabled_by_policy();
     let agent_permission_mode = resolve_subagent_permission_mode(
         definition.permission_mode.clone(),
         is_plugin_agent,
@@ -1434,22 +1440,25 @@ pub(crate) async fn run_shell_child(
         SUBAGENTS_ACTIVE.get() >= 1,
         "SubagentLaunched must stamp a self-inclusive count"
     );
-    supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::SubagentLaunched {
-        subagent_id: request.id.clone(),
-        parent_session_id: request.parent_session_id.clone(),
-        subagent_type: request.subagent_type.clone(),
-        owner: telemetry_owner_kind(&request),
-        workflow_run_id: request.owner.workflow_run_id().map(str::to_string),
-        queued_ms: queued_for.map(|queued| u64::try_from(queued.as_millis()).unwrap_or(u64::MAX)),
-        session_running: u32::try_from(session_running).unwrap_or(u32::MAX),
-        persona: request.runtime_overrides.persona.clone(),
-        fork_context: matches!(context_source, InitialContextSource::Forked),
-        resume_from: request.resume_from.clone(),
-        isolated_worktree: worktree_path.is_some(),
-        mcp_inherited_count,
-        mcp_owned_count,
-        skills_inherited_count,
-    });
+    supercharge_telemetry::session_ctx::log_event(
+        supercharge_telemetry::events::SubagentLaunched {
+            subagent_id: request.id.clone(),
+            parent_session_id: request.parent_session_id.clone(),
+            subagent_type: request.subagent_type.clone(),
+            owner: telemetry_owner_kind(&request),
+            workflow_run_id: request.owner.workflow_run_id().map(str::to_string),
+            queued_ms: queued_for
+                .map(|queued| u64::try_from(queued.as_millis()).unwrap_or(u64::MAX)),
+            session_running: u32::try_from(session_running).unwrap_or(u32::MAX),
+            persona: request.runtime_overrides.persona.clone(),
+            fork_context: matches!(context_source, InitialContextSource::Forked),
+            resume_from: request.resume_from.clone(),
+            isolated_worktree: worktree_path.is_some(),
+            mcp_inherited_count,
+            mcp_owned_count,
+            skills_inherited_count,
+        },
+    );
     let wake_model_id = effective_model_id.clone();
     let wake_agent_name = definition.name.clone();
     let wake_reasoning_effort = effective_sampling_config.reasoning_effort;

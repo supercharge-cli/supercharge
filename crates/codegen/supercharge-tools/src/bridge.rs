@@ -551,9 +551,9 @@ impl ToolBridge {
         if let Some(terminal) = &self.terminal {
             Ok(terminal.kill_task_with_source(task_id, source).await)
         } else {
-            Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "Missing Task Id: {task_id}"
-            )))
+            Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("Missing Task Id: {task_id}"),
+            ))
         }
     }
 
@@ -596,7 +596,10 @@ impl ToolBridge {
             let res = self.registry.resources.lock().await;
             res.get::<SchedulerHandle>()
                 .ok_or_else(|| {
-                    supercharge_tool_runtime::ToolError::custom("missing_resource", "SchedulerHandle")
+                    supercharge_tool_runtime::ToolError::custom(
+                        "missing_resource",
+                        "SchedulerHandle",
+                    )
                 })?
                 .0
                 .clone()
@@ -608,7 +611,10 @@ impl ToolBridge {
                 reply: reply_tx,
             })
             .map_err(|_| {
-                supercharge_tool_runtime::ToolError::custom("process_manager", "Scheduler actor stopped")
+                supercharge_tool_runtime::ToolError::custom(
+                    "process_manager",
+                    "Scheduler actor stopped",
+                )
             })?;
         reply_rx
             .await

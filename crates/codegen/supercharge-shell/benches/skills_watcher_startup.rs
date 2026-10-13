@@ -23,8 +23,8 @@ use std::time::Duration;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use notify::RecursiveMode;
 use notify_debouncer_mini::new_debouncer;
-use tempfile::TempDir;
 use supercharge_shell::config::watcher::SkillsFileWatcher;
+use tempfile::TempDir;
 
 /// Default directory count under `.claude/worktrees/` (override with `SUPERCHARGE_SKILLS_WATCHER_BENCH_DIRS`).
 const DEFAULT_WORKTREE_DIRS: usize = 6_000;

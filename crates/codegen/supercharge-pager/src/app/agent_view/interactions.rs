@@ -185,12 +185,11 @@ impl AgentView {
                     return InputOutcome::Changed;
                 };
                 if key.code == KeyCode::Enter {
-                    if edit
-                        .trimmed()
-                        .is_some_and(|p| !supercharge_workspace::permission::bash_glob_is_catchall(p))
-                        && let Some(opt) = perm
-                            .allow_always_command_idx()
-                            .and_then(|idx| perm.options.get(idx))
+                    if edit.trimmed().is_some_and(|p| {
+                        !supercharge_workspace::permission::bash_glob_is_catchall(p)
+                    }) && let Some(opt) = perm
+                        .allow_always_command_idx()
+                        .and_then(|idx| perm.options.get(idx))
                     {
                         return InputOutcome::Action(Action::PermissionSelect(
                             opt.option_id.clone(),

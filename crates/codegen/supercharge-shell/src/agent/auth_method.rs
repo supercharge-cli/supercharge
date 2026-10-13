@@ -25,8 +25,7 @@ pub const LEGACY_SUPERCHARGE_API_KEY_ENV_VAR: &str = "SUPERCHARGE_CODE_API_KEY";
 
 // Compatibility names for upstream callers; these never activate ambient keys.
 pub use supercharge_login::auth_method::{
-    XAI_API_KEY_ENV_VAR, LEGACY_XAI_API_KEY_ENV_VAR,
-    read_xai_api_key_env, has_xai_api_key_env,
+    LEGACY_XAI_API_KEY_ENV_VAR, XAI_API_KEY_ENV_VAR, has_xai_api_key_env, read_xai_api_key_env,
 };
 
 /// Environment-key authentication is not a supported runtime path.

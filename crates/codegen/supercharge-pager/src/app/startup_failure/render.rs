@@ -138,7 +138,9 @@ impl NextStep {
     fn text(self) -> &'static str {
         match self {
             Self::Retry => "Start Supercharge again.",
-            Self::CheckNetworkThenRetry => "Check your network connection, then start Supercharge again.",
+            Self::CheckNetworkThenRetry => {
+                "Check your network connection, then start Supercharge again."
+            }
             Self::RestartSharedLeader => {
                 "Stop it with the command below, which also stops any other Supercharge \
                  session using it, then start Supercharge again."

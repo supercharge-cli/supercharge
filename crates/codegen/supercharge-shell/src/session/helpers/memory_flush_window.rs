@@ -78,7 +78,8 @@ mod tests {
         let agent = ConversationItem::agent_message("agent context");
         let window = select_flush_window(vec![human.clone(), agent], 20);
         let projected =
-            supercharge_chat_state::compaction_utils::ModelRequestHistory::from_raw(window).into_items();
+            supercharge_chat_state::compaction_utils::ModelRequestHistory::from_raw(window)
+                .into_items();
 
         assert_eq!(
             projected.first().map(|i| i.text_content()),

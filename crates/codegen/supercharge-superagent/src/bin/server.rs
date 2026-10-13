@@ -3256,10 +3256,13 @@ async fn bot_handoff_busy(state: &AppState, bot_id: &str) -> bool {
     }
     drop(queue);
     let tasks = background_snapshot(state);
-    if tasks.is_empty() { return false; }
+    if tasks.is_empty() {
+        return false;
+    }
     let sessions = state.sessions.lock().await;
     tasks.iter().any(|task| {
-        task.get("sessionId").and_then(Value::as_str)
+        task.get("sessionId")
+            .and_then(Value::as_str)
             .and_then(|id| sessions.get(id))
             .is_none_or(|session| session.bot_id == bot_id)
     })
@@ -3344,14 +3347,17 @@ async fn browser_handoff(
     }
     let control = DesktopControl::shared();
     if !start {
-        control.revoke(&target.bot_id, &request.handoff_id).await.map_err(|error| {
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: error.into(),
-                }),
-            )
-        })?;
+        control
+            .revoke(&target.bot_id, &request.handoff_id)
+            .await
+            .map_err(|error| {
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: error.into(),
+                    }),
+                )
+            })?;
     }
     let value = browser::handoff(
         start,
@@ -3672,7 +3678,10 @@ async fn app_maintenance(
                 let control = DesktopControl::shared();
                 let old = control.active.read().await.clone();
                 for handoff in old.values() {
-                    control.revoke(&handoff.bot_id, &handoff.id).await.map_err(internal_error)?;
+                    control
+                        .revoke(&handoff.bot_id, &handoff.id)
+                        .await
+                        .map_err(internal_error)?;
                 }
             }
             match std::fs::remove_file(&state.maintenance_path) {
@@ -4194,8 +4203,14 @@ fn schedule_bot_queue(state: Arc<AppState>) {
         }
         let mut blocked_bots = HashSet::new();
         if browser::is_e2b_runtime() {
-            let queued_bots = state.bot_queue.lock().await.queued.iter()
-                .map(|work| work.bot_id.clone()).collect::<HashSet<_>>();
+            let queued_bots = state
+                .bot_queue
+                .lock()
+                .await
+                .queued
+                .iter()
+                .map(|work| work.bot_id.clone())
+                .collect::<HashSet<_>>();
             let control = DesktopControl::shared();
             for bot_id in queued_bots {
                 let status = match browser::bot_desktop(&bot_id).await {
@@ -4208,7 +4223,9 @@ fn schedule_bot_queue(state: Arc<AppState>) {
                         if let Some(id) = status.handoff_id.as_deref() {
                             let previous = control.active.read().await.get(&bot_id).cloned();
                             if let Some(previous) = previous.filter(|previous| previous.id != id) {
-                                if control.revoke(&bot_id, &previous.id).await.is_err() { continue; }
+                                if control.revoke(&bot_id, &previous.id).await.is_err() {
+                                    continue;
+                                }
                             }
                             let _ = control.activate(id, &bot_id, status.expires_at).await;
                         }
@@ -4221,7 +4238,9 @@ fn schedule_bot_queue(state: Arc<AppState>) {
                             }
                         }
                     }
-                    Err(_) => { blocked_bots.insert(bot_id); }
+                    Err(_) => {
+                        blocked_bots.insert(bot_id);
+                    }
                 }
             }
             if !blocked_bots.is_empty() {
@@ -4244,12 +4263,11 @@ fn schedule_bot_queue(state: Arc<AppState>) {
                 .keys()
                 .cloned()
                 .collect::<HashSet<_>>();
-            let work = match state
-                .bot_queue
-                .lock()
-                .await
-                .start_next(&active, &blocked_bots, &state.bot_queue_path)
-            {
+            let work = match state.bot_queue.lock().await.start_next(
+                &active,
+                &blocked_bots,
+                &state.bot_queue_path,
+            ) {
                 Ok(Some(work)) => work,
                 Ok(None) => break,
                 Err(error) => {
@@ -5689,31 +5707,89 @@ async fn app_chat_steer(
     Json(request): Json<AppSteerRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
     if !browser::is_e2b_runtime() {
-        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "E2B only".into() })));
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "E2B only".into(),
+            }),
+        ));
     }
     let text = request.text.trim();
     if text.is_empty() || text.len() > 64_000 {
-        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Steer text must be 1–64000 bytes".into() })));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Steer text must be 1–64000 bytes".into(),
+            }),
+        ));
     }
     if state.app_maintenance.load(Ordering::SeqCst) {
-        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "Sandbox is pausing".into() })));
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "Sandbox is pausing".into(),
+            }),
+        ));
     }
     bot_definition(&state, &request.bot_id).await?;
-    if state.sessions.lock().await.get(&request.chat_id).is_none_or(|session| session.bot_id != request.bot_id) {
-        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Conversation not found".into() })));
+    if state
+        .sessions
+        .lock()
+        .await
+        .get(&request.chat_id)
+        .is_none_or(|session| session.bot_id != request.bot_id)
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Conversation not found".into(),
+            }),
+        ));
     }
-    let work = state.bot_queue.lock().await.in_flight.values()
+    let work = state
+        .bot_queue
+        .lock()
+        .await
+        .in_flight
+        .values()
         .find(|work| work.session() == request.chat_id && work.bot_id == request.bot_id)
         .cloned()
-        .ok_or_else(|| (StatusCode::CONFLICT, Json(ErrorResponse { error: "No running turn to steer".into() })))?;
-    let runtime = state.app_runtimes.lock().await.get(&request.chat_id).cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: "No running turn to steer".into(),
+                }),
+            )
+        })?;
+    let runtime = state
+        .app_runtimes
+        .lock()
+        .await
+        .get(&request.chat_id)
+        .cloned()
         .filter(|runtime| runtime.cli.is_prompting())
-        .ok_or_else(|| (StatusCode::CONFLICT, Json(ErrorResponse { error: "Agent is not ready to steer yet".into() })))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: "Agent is not ready to steer yet".into(),
+                }),
+            )
+        })?;
     let id = uuid::Uuid::new_v4().to_string();
-    let response = runtime.cli.steer(text, &id).await
+    let response = runtime
+        .cli
+        .steer(text, &id)
+        .await
         .map_err(|error| (StatusCode::CONFLICT, Json(ErrorResponse { error })))?;
     if response.get("status").and_then(Value::as_str) != Some("queued") {
-        return Err((StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: "Agent did not accept the steer".into() })));
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                error: "Agent did not accept the steer".into(),
+            }),
+        ));
     }
     if let Some(group_message_id) = &work.group_message_id {
         state
@@ -5740,11 +5816,17 @@ async fn app_chat_steer(
     }
     let mut message = work;
     message.id = id.clone();
-    record_bot_message(&state, &message, "user", text).await.map_err(internal_error)?;
-    app_emit(&state, &request.chat_id, json!({
-        "type":"user","role":"user","text":text,"steer":true,
-        "sessionId":request.chat_id,"botId":request.bot_id,"turnId":message.id,
-    }));
+    record_bot_message(&state, &message, "user", text)
+        .await
+        .map_err(internal_error)?;
+    app_emit(
+        &state,
+        &request.chat_id,
+        json!({
+            "type":"user","role":"user","text":text,"steer":true,
+            "sessionId":request.chat_id,"botId":request.bot_id,"turnId":message.id,
+        }),
+    );
     Ok(Json(json!({"ok":true,"steered":true,"turnId":message.id})))
 }
 

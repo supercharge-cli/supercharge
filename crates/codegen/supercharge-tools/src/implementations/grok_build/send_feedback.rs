@@ -313,7 +313,8 @@ fn map_append_result(
             | FeedbackStoreError::AreaTooLarge { .. }
             | FeedbackStoreError::DraftNotFound { .. }),
         )) => Err(
-            supercharge_tool_runtime::ToolError::invalid_arguments(error.to_string()).with_source(error),
+            supercharge_tool_runtime::ToolError::invalid_arguments(error.to_string())
+                .with_source(error),
         ),
         Ok(Err(error)) => Err(supercharge_tool_runtime::ToolError::new(
             supercharge_tool_runtime::ToolErrorKind::Execution,

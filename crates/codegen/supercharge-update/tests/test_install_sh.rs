@@ -441,16 +441,25 @@ fn run_with_proxy_url(script: &Path, proxy_url: &str) -> (bool, String, bool) {
         .env("HOME", home.path())
         .env("PATH", &path_env)
         .env("SHELL", "/bin/bash")
-        .env("SUPERCHARGE_BIN_DIR", home.path().join(".supercharge").join("bin"))
+        .env(
+            "SUPERCHARGE_BIN_DIR",
+            home.path().join(".supercharge").join("bin"),
+        )
         .env("SUPERCHARGE_CHANNEL", "stable")
-        .env("SUPERCHARGE_DEPLOYMENT_KEY", "test-deployment-key-must-not-leak")
+        .env(
+            "SUPERCHARGE_DEPLOYMENT_KEY",
+            "test-deployment-key-must-not-leak",
+        )
         .env("SUPERCHARGE_PROXY_URL", proxy_url)
         .env("FAKE_MODE", "full")
         .env("FAKE_URL_LOG", &url_log)
         .status()
         .expect("spawn bash install script");
     let urls = std::fs::read_to_string(&url_log).unwrap_or_default();
-    let managed = home.path().join(".supercharge/managed_config.toml").exists();
+    let managed = home
+        .path()
+        .join(".supercharge/managed_config.toml")
+        .exists();
     (status.success(), urls, managed)
 }
 
@@ -516,7 +525,10 @@ fn install_sh_rejects_hostile_grok_channel() {
         .env("HOME", home.path())
         .env("PATH", path_env)
         .env("SHELL", "/bin/bash")
-        .env("SUPERCHARGE_BIN_DIR", home.path().join(".supercharge").join("bin"))
+        .env(
+            "SUPERCHARGE_BIN_DIR",
+            home.path().join(".supercharge").join("bin"),
+        )
         .env("SUPERCHARGE_CHANNEL", hostile)
         .env("FAKE_MODE", "full")
         .env("FAKE_URL_LOG", &url_log)

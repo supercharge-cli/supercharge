@@ -39,13 +39,14 @@ async fn handle_record(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     let url = format!("{proxy_url}/consent/accept");
     let token_header = agent.auth_manager.grok_com_config().token_header.clone();
 
-    let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> = std::sync::Arc::new(
-        supercharge_login::credential_provider::ShellAuthCredentialProvider::new(
-            agent.auth_manager.clone(),
-            None,
-            None,
-        ),
-    );
+    let provider: std::sync::Arc<dyn supercharge_auth::AuthCredentialProvider> =
+        std::sync::Arc::new(
+            supercharge_login::credential_provider::ShellAuthCredentialProvider::new(
+                agent.auth_manager.clone(),
+                None,
+                None,
+            ),
+        );
     let client = crate::http::with_auth_retry(crate::http::shared_client(), provider);
 
     let resp = client

@@ -125,7 +125,9 @@ pub(super) fn agent_has_pending_mcps_fetch(app: &AppView, agent_id: AgentId) -> 
 pub(super) fn handle_mcp_server_status(notif: &acp::ExtNotification, app: &mut AppView) -> bool {
     use crate::views::extensions_modal::TabDataState;
     use crate::views::mcps_modal::{McpServerDisplayStatus, McpToolDetail, patch_server_row};
-    use supercharge_shell::extensions::mcp::{McpServerStatus, McpServerStatusPayload, McpToolEntry};
+    use supercharge_shell::extensions::mcp::{
+        McpServerStatus, McpServerStatusPayload, McpToolEntry,
+    };
 
     let Ok(payload) = serde_json::from_str::<McpServerStatusPayload>(notif.params.get()) else {
         tracing::warn!(

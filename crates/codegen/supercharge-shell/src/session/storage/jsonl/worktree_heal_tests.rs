@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use serial_test::serial;
-use tempfile::TempDir;
 use supercharge_test_support::EnvGuard;
+use tempfile::TempDir;
 
 use crate::session::info::Info;
 use crate::session::persistence::{Summary, default_model_id};

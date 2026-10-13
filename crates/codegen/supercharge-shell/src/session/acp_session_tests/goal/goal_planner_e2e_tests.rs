@@ -5,10 +5,10 @@ use super::support::*;
 use super::*;
 use std::sync::Arc as StdArc;
 use std::sync::atomic::{AtomicUsize, Ordering as SeqOrd};
-use tempfile::TempDir;
 use supercharge_tools::implementations::grok_build::task::types::{
     SubagentCancelTarget, SubagentEvent, SubagentResult, SubagentSpawnRequest,
 };
+use tempfile::TempDir;
 
 /// Pull the planner's plan-file path from the prompt by its backtick-quoted `.md` token.
 /// Rewording the surrounding sentence therefore can't silently break the fake, which would otherwise write nothing and fail far from the cause.
@@ -1037,7 +1037,8 @@ async fn planner_subagent_tokens_fold_into_goal_total() {
             assert_eq!(spawn_count.load(SeqOrd::SeqCst), 1);
 
             // Simulate the SubagentSpawned notification handler after the planner reports 12,000 cumulative tokens.
-            let child_attempt = supercharge_message_delivery_core::AttemptId::mint(0x11).to_string();
+            let child_attempt =
+                supercharge_message_delivery_core::AttemptId::mint(0x11).to_string();
             let mut record = SubagentTokenRecord::new(0);
             assert_eq!(
                 record.spawn(Some(goal_id), Some(child_attempt.clone()), None),

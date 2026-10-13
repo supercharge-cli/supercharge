@@ -247,7 +247,10 @@ fn subprocess_entry() {
         }
     }
 }
-fn subprocess_profile_and_bwrap_reexec(profile: &supercharge_sandbox::ProfileName, workspace: &Path) {
+fn subprocess_profile_and_bwrap_reexec(
+    profile: &supercharge_sandbox::ProfileName,
+    workspace: &Path,
+) {
     #[cfg(target_os = "linux")]
     {
         if !supercharge_sandbox::is_inside_bwrap() {
@@ -576,8 +579,10 @@ fn subprocess_devbox_marker_spoof(workspace: &Path) {
             eprintln!("FAIL: verification failed without a /data mount to check: {e}");
             std::process::exit(5);
         }
-        let mut sandbox =
-            supercharge_sandbox::SandboxManager::new(supercharge_sandbox::ProfileName::Devbox, workspace);
+        let mut sandbox = supercharge_sandbox::SandboxManager::new(
+            supercharge_sandbox::ProfileName::Devbox,
+            workspace,
+        );
         if let Err(e) = sandbox.apply(workspace) {
             eprintln!("sandbox apply failed: {e}");
             std::process::exit(3);

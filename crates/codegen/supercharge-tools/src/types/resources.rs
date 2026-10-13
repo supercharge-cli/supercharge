@@ -171,7 +171,9 @@ impl Resources {
     }
     /// Get a shared reference to a stored value, or return
     /// a `custom("missing_resource", ...)` error with the type name if absent.
-    pub fn require<T: Send + Sync + 'static>(&self) -> Result<&T, supercharge_tool_runtime::ToolError> {
+    pub fn require<T: Send + Sync + 'static>(
+        &self,
+    ) -> Result<&T, supercharge_tool_runtime::ToolError> {
         self.get::<T>().ok_or_else(|| {
             supercharge_tool_runtime::ToolError::custom(
                 "missing_resource",

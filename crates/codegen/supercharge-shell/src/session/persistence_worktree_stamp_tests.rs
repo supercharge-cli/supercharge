@@ -69,7 +69,8 @@ async fn new_with_explicit_dir_overrides_worktree_stamp_so_subagent_stays_hidden
     let cwd = worktree_cwd_under(home.path());
     let target_dir = home.path().join("child-session");
 
-    let sampling_client = OaiCompatClient::new(supercharge_sampler::SamplerConfig::default()).unwrap();
+    let sampling_client =
+        OaiCompatClient::new(supercharge_sampler::SamplerConfig::default()).unwrap();
     let _persistence = new_with_explicit_dir(
         &Info {
             id: acp::SessionId::new("subagent-in-worktree"),
@@ -102,7 +103,8 @@ async fn new_with_explicit_dir_stores_requested_identity() {
     let _env = EnvGuard::set("SUPERCHARGE_HOME", home.path());
     let target_dir = home.path().join("child-session");
     let agent_id =
-        supercharge_message_delivery_core::AgentId::from_uuid_v7(uuid::Uuid::now_v7().to_string()).unwrap();
+        supercharge_message_delivery_core::AgentId::from_uuid_v7(uuid::Uuid::now_v7().to_string())
+            .unwrap();
     let attempt_id = supercharge_message_delivery_core::AttemptId::mint(0x11);
     let persistence = new_with_explicit_dir(
         &Info {

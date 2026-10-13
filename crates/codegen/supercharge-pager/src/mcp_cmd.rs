@@ -641,7 +641,8 @@ async fn run_set_enabled(name: &str, enabled: bool) -> Result<()> {
 
     // Policy check BEFORE the config write, or a blocked server is written under a success
     // message and resurrects when the pin lifts; disabling only tightens, so it stays allowed.
-    if enabled && let Some(refusal) = supercharge_shell::mcp_doctor::policy_enable_refusal(&cwd, name)
+    if enabled
+        && let Some(refusal) = supercharge_shell::mcp_doctor::policy_enable_refusal(&cwd, name)
     {
         eprintln!("{refusal}");
         std::process::exit(1);
@@ -664,7 +665,8 @@ async fn run_set_enabled(name: &str, enabled: bool) -> Result<()> {
     let modified =
         supercharge_shell::util::config::save_mcp_server_enabled_in(name, enabled, &cwd).await?;
 
-    let now_disabled = supercharge_shell::util::config::disabled_mcp_server_names(&cwd).contains(name);
+    let now_disabled =
+        supercharge_shell::util::config::disabled_mcp_server_names(&cwd).contains(name);
 
     if enabled && now_disabled {
         eprintln!(

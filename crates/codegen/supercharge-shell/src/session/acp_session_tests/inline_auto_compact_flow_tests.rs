@@ -2,10 +2,10 @@ use super::support::*;
 use super::*;
 use crate::terminal::AsyncTerminalRunner;
 use crate::terminal::runner::{TerminalError, TerminalRunRequest, TerminalRunResult};
-use tokio::sync::mpsc;
 use supercharge_paths::AbsPathBuf;
 use supercharge_workspace::file_system::MockFs;
 use supercharge_workspace::permission::PermissionHandle;
+use tokio::sync::mpsc;
 #[derive(Debug)]
 struct DummyTerminal;
 #[async_trait::async_trait]
@@ -935,7 +935,8 @@ async fn test_compact_on_error_triggers_when_tokens_exceed_new_window() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(214_000, 1_000_000, 85, gateway_tx, persistence_tx).await;
             let err = api_error_with_context_window(200_000);
@@ -949,7 +950,8 @@ async fn test_compact_on_error_no_trigger_when_tokens_within_new_window() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(150_000, 1_000_000, 85, gateway_tx, persistence_tx).await;
             let err = api_error_with_context_window(200_000);
@@ -963,7 +965,8 @@ async fn test_compact_on_error_noop_without_model_metadata() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(500_000, 200_000, 85, gateway_tx, persistence_tx).await;
             let err = supercharge_sampler::SamplingErrorInfo {

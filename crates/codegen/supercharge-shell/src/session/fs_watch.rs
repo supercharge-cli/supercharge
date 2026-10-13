@@ -9,12 +9,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_client_protocol as acp;
-use tokio::sync::mpsc;
-use tokio::time::sleep_until;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_fsnotify::{FsEvent, FsEventKind};
-use supercharge_workspace::file_system::{CodebaseIndexManager, FileIndex, WalkOptions};
 use supercharge_hunk_tracker::HunkTrackerHandle;
+use supercharge_workspace::file_system::{CodebaseIndexManager, FileIndex, WalkOptions};
+use tokio::sync::mpsc;
+use tokio::time::sleep_until;
 
 use crate::session::acp_session::SessionActor;
 use crate::session::persistence::PersistenceMsg;
@@ -156,8 +156,12 @@ fn parse_diff_name_status_line(
     let path = parts.next()?;
 
     match status.chars().next()? {
-        'A' => Some(supercharge_codebase_graph::FileEvent::created(repo_root.join(path))),
-        'D' => Some(supercharge_codebase_graph::FileEvent::removed(repo_root.join(path))),
+        'A' => Some(supercharge_codebase_graph::FileEvent::created(
+            repo_root.join(path),
+        )),
+        'D' => Some(supercharge_codebase_graph::FileEvent::removed(
+            repo_root.join(path),
+        )),
         'R' | 'C' => {
             let new_path = parts.next()?;
             Some(supercharge_codebase_graph::FileEvent::renamed(
@@ -856,9 +860,10 @@ pub(crate) fn spawn(plan: FsWatchPlan) -> FsWatchHandle {
             let mut timer = crate::instrumentation_timer!("session.fs_notify_start");
             timer.with_field("cwd", cwd.to_string_lossy().as_ref());
             let init_cwd = cwd.clone();
-            let result =
-                tokio::task::spawn_blocking(move || supercharge_fsnotify::shared(init_cwd, fs_config))
-                    .await;
+            let result = tokio::task::spawn_blocking(move || {
+                supercharge_fsnotify::shared(init_cwd, fs_config)
+            })
+            .await;
             let ws = supercharge_fsnotify::stats();
             timer.with_field("live_watchers", ws.live_watchers as u64);
             timer.with_field("watchers_created_total", ws.created_total);

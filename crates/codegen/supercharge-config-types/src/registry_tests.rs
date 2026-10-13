@@ -53,14 +53,20 @@ fn registered_settings() {
             ("voice_mode", ("SUPERCHARGE_VOICE_MODE", true)),
             ("write_file", ("SUPERCHARGE_WRITE_FILE", true)),
             ("feedback", ("SUPERCHARGE_FEEDBACK_ENABLED", true)),
-            ("feedback_trace_card", ("SUPERCHARGE_FEEDBACK_TRACE_CARD", false)),
+            (
+                "feedback_trace_card",
+                ("SUPERCHARGE_FEEDBACK_TRACE_CARD", false)
+            ),
             ("turn_summary", ("SUPERCHARGE_TURN_SUMMARY", true)),
             ("cancel_rewind", ("SUPERCHARGE_CANCEL_REWIND", true)),
             (
                 "compaction_verbatim_input",
                 ("SUPERCHARGE_COMPACTION_VERBATIM_INPUT", true),
             ),
-            ("two_pass_compaction", ("SUPERCHARGE_TWO_PASS_COMPACTION", true)),
+            (
+                "two_pass_compaction",
+                ("SUPERCHARGE_TWO_PASS_COMPACTION", true)
+            ),
             ("backend_tools", ("SUPERCHARGE_BACKEND_SEARCH", true)),
             ("auto_wake", ("SUPERCHARGE_AUTO_WAKE", true)),
             (

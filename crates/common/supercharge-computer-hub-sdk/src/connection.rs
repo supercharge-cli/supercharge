@@ -40,6 +40,10 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant, SystemTime};
+use supercharge_tool_protocol::{
+    ConnectionId, ConnectionKind, JsonRpcId, JsonRpcRequest, JsonRpcResponse, JsonRpcVersion,
+    Method, PingFrame, PongFrame, ResponseOutcome, SessionId,
+};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio::time::sleep;
@@ -49,10 +53,6 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use url::Url;
-use supercharge_tool_protocol::{
-    ConnectionId, ConnectionKind, JsonRpcId, JsonRpcRequest, JsonRpcResponse, JsonRpcVersion,
-    Method, PingFrame, PongFrame, ResponseOutcome, SessionId,
-};
 /// Outbound mpsc bound. Picked to match the server's per-actor outbound
 /// buffer so a single-process roundtrip never dead-blocks on sender
 /// capacity.
@@ -1130,7 +1130,9 @@ impl HubConnection {
     /// failure path is the empty-string check, which `format!` cannot
     /// produce). Callers in non-fallible contexts should propagate
     /// the error rather than panic.
-    pub fn try_alloc_request_id(&self) -> Result<supercharge_tool_protocol::RequestId, ClientError> {
+    pub fn try_alloc_request_id(
+        &self,
+    ) -> Result<supercharge_tool_protocol::RequestId, ClientError> {
         let value = self
             .inner
             .next_request_id

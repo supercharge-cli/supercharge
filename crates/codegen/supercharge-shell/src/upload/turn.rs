@@ -1,8 +1,8 @@
 use super::drain::PendingUploadGuard;
 use crate::session::repo_changes::TraceExportConfig;
 use futures::FutureExt as _;
-use tokio::sync::oneshot;
 use supercharge_workspace::permission::PermissionEvent;
+use tokio::sync::oneshot;
 /// Request to upload a trace for a synthetic auto-wake turn.
 /// The notification bridge sends it for bash task completions; the subagent coordinator sends it for subagent completions.
 /// The `MvpAgent`'s synthetic trace handler receives it, allocates a turn number, and drives the before/after artifact uploads.

@@ -10,7 +10,9 @@ use crate::session::ExtMethodResult;
 use agent_client_protocol as acp;
 use serde::Deserialize;
 use std::path::PathBuf;
-use supercharge_workspace::session::git::{self, DiscardScope, GitDiffsData, check_diff_size_limits};
+use supercharge_workspace::session::git::{
+    self, DiscardScope, GitDiffsData, check_diff_size_limits,
+};
 use supercharge_workspace::workspace_ops::{
     GitBranchesReq, GitCheckoutCommitReq, GitCheckoutReq, GitCommitReq, GitCurrentCommitReq,
     GitDiffReq, GitDiscardReq, GitFilesReq, GitInfoReq, GitStageContentReq, GitStageReq,

@@ -376,7 +376,9 @@ impl WorkspaceMembership {
                         db_path, access, ..
                     } => (db_path.clone(), *access),
                     _ => (
-                        supercharge_dashboard_store::default_db_path(&supercharge_config::grok_home()),
+                        supercharge_dashboard_store::default_db_path(
+                            &supercharge_config::grok_home(),
+                        ),
                         None,
                     ),
                 };
@@ -977,7 +979,10 @@ fn access_for(store: &WorkspaceStore) -> StoreAccess {
     }
 }
 
-fn metadata_matches(member: &supercharge_dashboard_store::Member, metadata: &MemberMetadata) -> bool {
+fn metadata_matches(
+    member: &supercharge_dashboard_store::Member,
+    metadata: &MemberMetadata,
+) -> bool {
     member.cwd == metadata.cwd
         && member.title == metadata.title
         && member.model == metadata.model

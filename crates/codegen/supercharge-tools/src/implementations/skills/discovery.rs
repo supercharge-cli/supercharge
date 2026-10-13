@@ -1443,7 +1443,11 @@ model: test-model
             (grok_shell.join("SKILL.md"), SkillScope::User),
         ]);
         assert_eq!(skills.len(), 1, "cursor builtin must be dropped");
-        assert!(skills.first().is_some_and(|s| s.path.contains("/.supercharge/")));
+        assert!(
+            skills
+                .first()
+                .is_some_and(|s| s.path.contains("/.supercharge/"))
+        );
     }
 
     #[test]

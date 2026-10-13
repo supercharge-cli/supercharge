@@ -320,7 +320,9 @@ async fn completed_agent_message_wakes_same_id_and_queues_next_turn() {
             ),
             (&CHILD_ID.to_owned(), &None, &"work".to_owned(), None, &None,)
         );
-        assert!(supercharge_message_delivery_core::AttemptId::parse(first_run.1.as_str()).is_some());
+        assert!(
+            supercharge_message_delivery_core::AttemptId::parse(first_run.1.as_str()).is_some()
+        );
         let first_sender = first_run.6.as_ref().expect("ordinary child sender");
         assert_eq!(&first_run.1, first_sender.holder().attempt_id());
         assert_eq!(harness.started.recv().await.as_deref(), Some(CHILD_ID));

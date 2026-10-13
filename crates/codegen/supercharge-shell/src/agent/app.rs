@@ -11,11 +11,6 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, simplex};
-use tokio::sync::{Mutex as TokioMutex, mpsc};
-use tokio::time::Duration;
-use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
-use tracing::{debug, info, warn};
 use supercharge_acp_lib::{
     AcpAgentGatewayReceiver as GatewayReceiver, AcpAgentGatewaySender as GatewaySender,
     LineBufferedRead,
@@ -23,6 +18,11 @@ use supercharge_acp_lib::{
 #[cfg(test)]
 use supercharge_login::AuthMode;
 use supercharge_login::{AuthManager, GrokAuth, GrokComConfig, run_auth_flow};
+use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, simplex};
+use tokio::sync::{Mutex as TokioMutex, mpsc};
+use tokio::time::Duration;
+use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
+use tracing::{debug, info, warn};
 const MAX_BUFFER_SIZE: usize = 8 * 1024 * 1024;
 use indexmap::IndexMap;
 /// Configuration for periodic auto-update checking in leader mode. A long-running leader periodically calls `check_fn` to check for updates.
@@ -167,7 +167,8 @@ where
     W: tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
     let cwd = std::env::current_dir().unwrap_or_default();
-    let workspace_user_dir = supercharge_agent::prompt::workspace_user::optional_workspace_user_dir();
+    let workspace_user_dir =
+        supercharge_agent::prompt::workspace_user::optional_workspace_user_dir();
     let (mut watcher, mut skills_rx) = crate::config::watcher::SkillsFileWatcher::start(
         Some(cwd.as_path()),
         workspace_user_dir.as_deref(),

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use tempfile::TempDir;
 use supercharge_sqlite_journal::JournalMode;
+use tempfile::TempDir;
 
 use super::*;
 use crate::{

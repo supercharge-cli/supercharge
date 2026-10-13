@@ -117,17 +117,15 @@ impl AgentView {
         let Some(wait) = modal_state.active_managed_connectors_wait() else {
             return;
         };
-        link_spans_out.extend(
-            wait.url_rects
-                .iter()
-                .map(|rect| supercharge_ratatui_inline::LinkSpan {
-                    row: rect.y,
-                    col_start: rect.x,
-                    col_end: rect.x.saturating_add(rect.width),
-                    url: std::sync::Arc::clone(&wait.url),
-                    id: None,
-                }),
-        );
+        link_spans_out.extend(wait.url_rects.iter().map(|rect| {
+            supercharge_ratatui_inline::LinkSpan {
+                row: rect.y,
+                col_start: rect.x,
+                col_end: rect.x.saturating_add(rect.width),
+                url: std::sync::Arc::clone(&wait.url),
+                id: None,
+            }
+        }));
     }
     /// Append the OSC 8 spans a `command` status row opened, in the screen columns the row was painted at, under the same occluder rule as the CTAs.
     pub(super) fn push_status_line_link_spans(
@@ -740,7 +738,10 @@ mod link_click_tests {
                     .collect::<String>()
             })
             .collect();
-        assert!(text.contains("Help improve Supercharge"), "banner copy painted");
+        assert!(
+            text.contains("Help improve Supercharge"),
+            "banner copy painted"
+        );
         assert!(
             !text.contains("ZZCRIT"),
             "critical announcement yields the slot to the privacy banner"

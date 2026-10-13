@@ -3,8 +3,8 @@
 use super::*;
 use serde_json::json;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tokio_tungstenite::tungstenite::{Utf8Bytes, protocol::Role};
 use supercharge_login::AuthMode;
+use tokio_tungstenite::tungstenite::{Utf8Bytes, protocol::Role};
 /// Create an in-memory WebSocket pair (no network, no handshake needed).
 async fn ws_pair() -> (
     tokio_tungstenite::WebSocketStream<tokio::io::DuplexStream>,
@@ -366,7 +366,10 @@ async fn auth_recovery_refreshes_and_heals_missing_auth_json() {
     }
     #[async_trait::async_trait]
     impl TokenRefresher for CountingRefresher {
-        async fn refresh(&self, _reason: supercharge_login::manager::RefreshReason) -> RefreshOutcome {
+        async fn refresh(
+            &self,
+            _reason: supercharge_login::manager::RefreshReason,
+        ) -> RefreshOutcome {
             self.calls.fetch_add(1, Ordering::SeqCst);
             RefreshOutcome::Success(Box::new(GrokAuth {
                 key: "fresh-from-authority".into(),
@@ -423,7 +426,10 @@ async fn attempt_auth_recovery_same_key_backs_off_without_cancel() {
     struct PanicRefresher;
     #[async_trait::async_trait]
     impl TokenRefresher for PanicRefresher {
-        async fn refresh(&self, _reason: supercharge_login::manager::RefreshReason) -> RefreshOutcome {
+        async fn refresh(
+            &self,
+            _reason: supercharge_login::manager::RefreshReason,
+        ) -> RefreshOutcome {
             panic!("fresh-mint guard must keep recovery away from the IdP");
         }
     }
@@ -562,14 +568,17 @@ async fn test_auth_refresh_failure_continues_with_backoff() {
 #[tokio::test]
 async fn non_sticky_verdict_keeps_reconnecting_with_growing_backoff() {
     use std::sync::Mutex;
-    use tokio::sync::Notify;
-    use tokio::time::Instant;
     use supercharge_login::error::RefreshTokenFailedReason;
     use supercharge_login::refresh::{RefreshOutcome, TokenRefresher};
+    use tokio::sync::Notify;
+    use tokio::time::Instant;
     struct InteractiveRequiredRefresher;
     #[async_trait::async_trait]
     impl TokenRefresher for InteractiveRequiredRefresher {
-        async fn refresh(&self, _reason: supercharge_login::manager::RefreshReason) -> RefreshOutcome {
+        async fn refresh(
+            &self,
+            _reason: supercharge_login::manager::RefreshReason,
+        ) -> RefreshOutcome {
             RefreshOutcome::permanent(RefreshTokenFailedReason::ProviderInteractiveRequired, None)
         }
     }

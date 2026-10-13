@@ -4,12 +4,12 @@ use environment::WorkspaceIdentity;
 use prometheus::{IntCounterVec, IntGauge, register_int_counter_vec, register_int_gauge};
 use std::sync::Arc;
 use std::sync::LazyLock;
+use supercharge_auth::{AuthCredentialProvider, CredentialSnapshot};
 use supercharge_computer_hub_sdk::auth::{AuthCredential, AuthProvider};
 use supercharge_file_utils::gcs::StorageConfig;
 use supercharge_file_utils::queue::{EnqueueOutcome, TraceExportSource, UploadQueue};
 use supercharge_file_utils::storage_client::Auth401AttributionCallback;
 use supercharge_file_utils::{TraceExportConfig, UploadMethod};
-use supercharge_auth::{AuthCredentialProvider, CredentialSnapshot};
 /// `…_pending_bytes` is the series the mandatory queue-memory alert fires on.
 static UPLOAD_QUEUE_PENDING_BYTES: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!(

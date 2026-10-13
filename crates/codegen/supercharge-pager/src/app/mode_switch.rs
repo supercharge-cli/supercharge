@@ -121,7 +121,8 @@ fn perform_screen_transition(
                 // JediTerm/Windows: DisableMouseCapture is winapi-only, so send the ANSI reset too (init_terminal applies the same fix)
                 if crate::terminal::terminal_context().mouse_reporting_leaks_as_raw_text() {
                     use std::io::Write as _;
-                    let _ = stderr.write_all(supercharge_crash_handler::terminal::MOUSE_TRACKING_RESET);
+                    let _ =
+                        stderr.write_all(supercharge_crash_handler::terminal::MOUSE_TRACKING_RESET);
                 }
             });
             #[cfg(windows)]

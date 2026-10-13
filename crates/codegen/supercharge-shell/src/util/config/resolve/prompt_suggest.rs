@@ -1,6 +1,6 @@
 use crate::util::config::RemoteSettings;
-use toml::Value as TomlValue;
 use supercharge_sampling_types::ReasoningEffort;
+use toml::Value as TomlValue;
 
 pub(crate) const ENV_PROMPT_SUGGESTIONS: &str = "SUPERCHARGE_PROMPT_SUGGESTIONS";
 

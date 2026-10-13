@@ -77,13 +77,15 @@ impl crate::types::tool_metadata::ToolMetadata for KillTaskTool {
         // renders it context-aware from the finalized toolset. This static
         // fallback mirrors the default supercharge-core toolset on the current OS.
         static DESC: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-            supercharge_tool_types::build_kill_task_description(&supercharge_tool_types::KillTaskToolNaming {
-                monitor_tool: Some("monitor"),
-                subagent_present: true,
-                bash_present: true,
-                is_windows: cfg!(not(unix)),
-                task_id_param: "task_id",
-            })
+            supercharge_tool_types::build_kill_task_description(
+                &supercharge_tool_types::KillTaskToolNaming {
+                    monitor_tool: Some("monitor"),
+                    subagent_present: true,
+                    bash_present: true,
+                    is_windows: cfg!(not(unix)),
+                    task_id_param: "task_id",
+                },
+            )
         });
         &DESC
     }
@@ -138,15 +140,17 @@ fn kill_task_description(
             ovr.to_string()
         });
     }
-    supercharge_tool_types::build_kill_task_description(&supercharge_tool_types::KillTaskToolNaming {
-        monitor_tool: renderer.tool_for_kind(ToolKind::Monitor),
-        subagent_present: renderer.tool_for_kind(ToolKind::Task).is_some(),
-        bash_present: renderer.tool_for_kind(ToolKind::Execute).is_some(),
-        is_windows: cfg!(not(unix)),
-        task_id_param: renderer
-            .param_for_kind(ToolKind::KillTaskAction, "task_id")
-            .unwrap_or("task_id"),
-    })
+    supercharge_tool_types::build_kill_task_description(
+        &supercharge_tool_types::KillTaskToolNaming {
+            monitor_tool: renderer.tool_for_kind(ToolKind::Monitor),
+            subagent_present: renderer.tool_for_kind(ToolKind::Task).is_some(),
+            bash_present: renderer.tool_for_kind(ToolKind::Execute).is_some(),
+            is_windows: cfg!(not(unix)),
+            task_id_param: renderer
+                .param_for_kind(ToolKind::KillTaskAction, "task_id")
+                .unwrap_or("task_id"),
+        },
+    )
 }
 
 impl supercharge_tool_runtime::Tool for KillTaskTool {
@@ -290,7 +294,9 @@ mod tests {
     ) -> supercharge_tool_runtime::ToolCallContext {
         let mut ctx = test_ctx_with_call_id(resources, call_id);
         ctx.extensions
-            .insert(supercharge_tool_runtime::BehaviorVersion(version.to_owned()));
+            .insert(supercharge_tool_runtime::BehaviorVersion(
+                version.to_owned(),
+            ));
         ctx
     }
 
@@ -414,7 +420,10 @@ mod tests {
     #[test]
     fn tool_name_and_description() {
         let tool = KillTaskTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "kill_task");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "kill_task"
+        );
         // The static fallback is the shared builder's default supercharge-core
         // rendering (monitor + task + bash present) for the current OS.
         let desc = crate::types::tool_metadata::ToolMetadata::description_template(&tool);

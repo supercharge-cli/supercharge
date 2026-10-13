@@ -29,9 +29,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::time::Duration;
 
 use agent_client_protocol as acp;
-use tempfile::TempDir;
-use tokio::task::JoinSet;
-use tokio_util::sync::CancellationToken;
 use supercharge_acp_lib::{AcpClientRx, acp_send};
 use supercharge_shell::leader::{
     ClientCapabilities as LeaderClientCapabilities, ClientMode, ConnectionStatus,
@@ -39,6 +36,9 @@ use supercharge_shell::leader::{
     LeaderServerControlState, LeaderServerMetadata, ReconnectPolicy, run_leader_server,
 };
 use supercharge_test_support::MockInferenceServer;
+use tempfile::TempDir;
+use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 
 use super::actions::{Action, TaskResult};
 use super::agent::AgentState;

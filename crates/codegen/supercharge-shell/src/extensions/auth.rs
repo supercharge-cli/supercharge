@@ -21,9 +21,8 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         "x.ai/auth/cancel" => handle_cancel(agent, args),
         "x.ai/auth/logout" => handle_logout(agent, args).await,
         "x.ai/auth/info" => handle_info(agent),
-        "x.ai/auth/check_subscription" => Err(acp::Error::method_not_found().data(
-            "Subscription checks are unavailable in provider-only Supercharge.",
-        )),
+        "x.ai/auth/check_subscription" => Err(acp::Error::method_not_found()
+            .data("Subscription checks are unavailable in provider-only Supercharge.")),
         _ => Err(acp::Error::method_not_found()),
     }
 }

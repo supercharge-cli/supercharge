@@ -765,7 +765,10 @@ fn method_roster_status_subscribe_bind() {
     assert_eq!(Some(1_700_000_200_000), roster.remembered_at_ms);
 
     let status: BotStatusResult = serde_json::from_str(METHOD_STATUS_RESULT).expect("status");
-    assert_eq!(status.run_state, supercharge_tool_protocol::BotRunState::Hibernated);
+    assert_eq!(
+        status.run_state,
+        supercharge_tool_protocol::BotRunState::Hibernated
+    );
 
     let sub: BotSubscribeParams = serde_json::from_str(METHOD_SUBSCRIBE_PARAMS).expect("subscribe");
     assert_eq!(sub.agent_ids, ["agt_a", "agt_b"]);

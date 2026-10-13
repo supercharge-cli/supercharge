@@ -16,7 +16,9 @@ struct ListRequest {
     session_id: String,
 }
 
-pub(crate) fn loaded_plugin_to_info(plugin: &supercharge_agent::plugins::LoadedPlugin) -> PluginInfo {
+pub(crate) fn loaded_plugin_to_info(
+    plugin: &supercharge_agent::plugins::LoadedPlugin,
+) -> PluginInfo {
     use supercharge_agent::plugins::discovery::PluginScope as AgentScope;
 
     let scope = match plugin.scope {
@@ -157,7 +159,8 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
             super::to_ext_response(Ok::<_, anyhow::Error>(response))
         }
         "x.ai/plugins/action" => {
-            let req: supercharge_hooks_plugins_types::PluginsActionRequest = super::parse_params(args)?;
+            let req: supercharge_hooks_plugins_types::PluginsActionRequest =
+                super::parse_params(args)?;
             let sid = acp::SessionId::new(req.session_id);
 
             let result = agent

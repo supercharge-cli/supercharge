@@ -77,7 +77,9 @@ use std::{
 use uuid::Uuid;
 
 // These types are canonical in supercharge-workspace-types; the re-export keeps existing import paths working
-pub use supercharge_workspace_types::rpc::search::{ClientId, ContentSearchRequest, TargetClientId};
+pub use supercharge_workspace_types::rpc::search::{
+    ClientId, ContentSearchRequest, TargetClientId,
+};
 
 impl From<ContentSearchRequest> for ContentSearchParams {
     fn from(req: ContentSearchRequest) -> Self {

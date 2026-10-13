@@ -343,9 +343,15 @@ fn disabled_dashboard_preview_keeps_list_and_dispatch_without_peek() {
         None,
     );
 
-    assert!(state.peek.is_none(), "disabled preview must not compute a peek");
+    assert!(
+        state.peek.is_none(),
+        "disabled preview must not compute a peek"
+    );
     assert!(state.dispatch_rect.is_some(), "dispatch remains available");
-    assert!(buf_to_text(&buf).contains("fix the bug"), "list remains visible");
+    assert!(
+        buf_to_text(&buf).contains("fix the bug"),
+        "list remains visible"
+    );
 }
 
 #[test]

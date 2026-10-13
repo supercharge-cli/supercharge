@@ -26,12 +26,12 @@ use crate::leader::roster_merge::ExternalRoster;
 use agent_client_protocol::AGENT_METHOD_NAMES;
 use kanal::{AsyncReceiver, AsyncSender};
 use parking_lot::Mutex;
-use tokio::sync::{mpsc, watch};
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, trace, warn};
 use supercharge_computer_hub_sdk::{AuthCredential, AuthIdentity, AuthProvider};
 use supercharge_login::AuthManager;
 use supercharge_workspace::WorkspaceHandle;
+use tokio::sync::{mpsc, watch};
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, trace, warn};
 const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(30);
 /// Separator for namespacing request IDs.
 /// The pipe is valid in JSON strings (no escaping needed) and unlikely to appear in typical JSON-RPC IDs (usually numbers or UUIDs).

@@ -146,8 +146,9 @@ impl SessionCreatePrefetch {
     #[cfg(test)]
     fn launch_for_test(
         scan: TrustScan,
-        plugins: impl std::future::Future<Output = Option<Arc<supercharge_agent::plugins::PluginRegistry>>>
-        + Send
+        plugins: impl std::future::Future<
+            Output = Option<Arc<supercharge_agent::plugins::PluginRegistry>>,
+        > + Send
         + 'static,
     ) -> Self {
         Self {

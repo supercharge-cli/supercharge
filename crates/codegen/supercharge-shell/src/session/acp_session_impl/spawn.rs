@@ -5,10 +5,10 @@
 #![allow(clippy::items_after_test_module)]
 use super::*;
 use crate::remote::DEFAULT_CONTEXT_WINDOW;
-use tracing::Instrument;
 use supercharge_telemetry::region;
 use supercharge_telemetry::region::Parent as SpanParent;
 use supercharge_telemetry::subagent_spawn::phase_region_under;
+use tracing::Instrument;
 static SESSIONS_ACTIVE: supercharge_telemetry::activity::ActivityGauge =
     supercharge_telemetry::activity::ActivityGauge::residency(
         supercharge_telemetry::activity::SESSIONS_ACTIVE_KEY,
@@ -304,8 +304,10 @@ pub(crate) async fn spawn_session_actor(
     is_chat_kind: bool,
     spawn_ctx: Option<supercharge_telemetry::subagent_spawn::SpawnPhaseContext>,
     sampling_gate: Option<Arc<tokio::sync::Semaphore>>,
-) -> Result<(SessionInitResult, tokio::sync::oneshot::Receiver<()>), supercharge_agent::AgentBuildError>
-{
+) -> Result<
+    (SessionInitResult, tokio::sync::oneshot::Receiver<()>),
+    supercharge_agent::AgentBuildError,
+> {
     if max_turns == Some(0) {
         return Err(supercharge_agent::AgentBuildError::InvalidConfig(
             "max_turns must be greater than 0".to_string(),
@@ -551,10 +553,9 @@ pub(crate) async fn spawn_session_actor(
             "SUPERCHARGE_DEBUG_CONTEXT_WINDOW override active"
         );
     }
-    let resolved_max_retries = supercharge_sampler::resolve_max_retries(session_max_retries_source(
-        sampling_config.max_retries,
-        max_retries,
-    ));
+    let resolved_max_retries = supercharge_sampler::resolve_max_retries(
+        session_max_retries_source(sampling_config.max_retries, max_retries),
+    );
     let chat_state_span = tracing::info_span!("spawn.chat_state_init");
     let chat_state_guard = chat_state_span.enter();
     let chat_state_sampling_config = supercharge_sampling_types::SamplingConfig {
@@ -898,7 +899,10 @@ pub(crate) async fn spawn_session_actor(
     {
         let clock = supercharge_memory::system_v2_clock();
         for (scope_dir, scope) in [
-            (storage.global_dir(), supercharge_memory::V2MemoryScope::Global),
+            (
+                storage.global_dir(),
+                supercharge_memory::V2MemoryScope::Global,
+            ),
             (
                 storage.workspace_dir(),
                 supercharge_memory::V2MemoryScope::Workspace,
@@ -927,9 +931,10 @@ pub(crate) async fn spawn_session_actor(
             storage.workspace_dir(),
         ) {
             Ok(policy) => {
-                memory_v2_access = Some(supercharge_tools::types::memory_v2::MemoryV2AccessResource(
-                    std::sync::Arc::new(policy),
-                ));
+                memory_v2_access =
+                    Some(supercharge_tools::types::memory_v2::MemoryV2AccessResource(
+                        std::sync::Arc::new(policy),
+                    ));
             }
             Err(error) => {
                 v2_init_failure = Some(("file access policy initialization", error.to_string()));
@@ -989,11 +994,12 @@ pub(crate) async fn spawn_session_actor(
         } else {
             None
         };
-        let embed_credentials = supercharge_login::credential_provider::embedding_session_credentials(
-            &embed_base_url,
-            auth_manager.as_ref(),
-            api_key_provider.clone(),
-        );
+        let embed_credentials =
+            supercharge_login::credential_provider::embedding_session_credentials(
+                &embed_base_url,
+                auth_manager.as_ref(),
+                api_key_provider.clone(),
+            );
         let params = crate::session::memory::MemoryBackendParams {
             session_id: session_info.id.to_string(),
             embed_config: memory_config.as_ref().map(|mc| mc.embedding.clone()),
@@ -1555,7 +1561,8 @@ pub(crate) async fn spawn_session_actor(
                     false,
                 )
             };
-            let git_root = supercharge_workspace::session::git::find_git_root_from_path(cwd_path).ok();
+            let git_root =
+                supercharge_workspace::session::git::find_git_root_from_path(cwd_path).ok();
             let (registry, errors) = crate::util::hooks::discover_hooks(
                 git_root.as_deref(),
                 &rebuild_spec.compat,
@@ -1682,8 +1689,10 @@ pub(crate) async fn spawn_session_actor(
         },
     );
     let obs_bridge = {
-        let sid = supercharge_tool_protocol::SessionId::new(&*session_info.id.0)
-            .unwrap_or_else(|_| supercharge_tool_protocol::SessionId::new("unknown").expect("valid"));
+        let sid =
+            supercharge_tool_protocol::SessionId::new(&*session_info.id.0).unwrap_or_else(|_| {
+                supercharge_tool_protocol::SessionId::new("unknown").expect("valid")
+            });
         supercharge_computer_hub_sdk::ObservabilityBridge::new(None, sid)
     };
     let config_load_span = tracing::info_span!("spawn.config_load").entered();
@@ -1755,7 +1764,8 @@ pub(crate) async fn spawn_session_actor(
         !crate::util::config::resolve_repo_status_in_system_prompt(remote_settings.as_ref())
             || startup_hints.skip_git_status;
     let starts_fresh = initial_conversation_len == 0;
-    let repo_status_plan = if matches!(vcs_kind, supercharge_workspace::session::git::VcsKind::None) {
+    let repo_status_plan = if matches!(vcs_kind, supercharge_workspace::session::git::VcsKind::None)
+    {
         RepoStatusPlan::NoRepo
     } else {
         let prefix_cwd = std::path::PathBuf::from(

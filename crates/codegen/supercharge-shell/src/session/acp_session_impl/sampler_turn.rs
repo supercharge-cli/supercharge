@@ -536,7 +536,10 @@ impl SessionActor {
     /// 401 arm for a provider-backed model: re-run the helper once and resubmit.
     /// A missing key means the cold mint failed and the request went out unauthenticated, so mint instead.
     /// Returns `false` when the fresh-mint guard blocked the re-run or the helper failed; the 401 then becomes a terminal error.
-    async fn try_provider_401_recovery(&self, provider: &supercharge_login::AuthProviderRef) -> bool {
+    async fn try_provider_401_recovery(
+        &self,
+        provider: &supercharge_login::AuthProviderRef,
+    ) -> bool {
         let rejected_key = self.chat_state_handle.get_credentials().await.api_key;
         let recovered = match rejected_key {
             Some(ref rejected_key) => provider.recover_rejected_token(rejected_key).await,
@@ -768,7 +771,9 @@ impl SessionActor {
             // Explicit API-key/env-key models must keep their configured bearer and must not be overwritten by the interactive session token
             bearer_resolver: if use_bearer_resolver {
                 self.auth_manager.as_ref().map(|am| {
-                    supercharge_login::credential_provider::WireValidBearerResolver::shared(am.clone())
+                    supercharge_login::credential_provider::WireValidBearerResolver::shared(
+                        am.clone(),
+                    )
                 })
             } else {
                 None
@@ -919,8 +924,10 @@ impl SessionActor {
                 let _ = respond_to.send(result);
             }
         });
-        let clf =
-            supercharge_workspace::permission::LlmPermissionClassifier::with_channel(tx, prompt_type);
+        let clf = supercharge_workspace::permission::LlmPermissionClassifier::with_channel(
+            tx,
+            prompt_type,
+        );
         debug_assert!(
             clf.has_side_query(),
             "channel-wired classifier must report has_side_query"
@@ -1001,8 +1008,8 @@ impl SessionActor {
 
         let mut full_config = self.reconstruct_full_config().await;
         full_config.force_http1 = force_http1;
-        let sampling_client =
-            supercharge_sampler::SamplingClient::new(full_config).map_err(|e| self.to_acp_error(e))?;
+        let sampling_client = supercharge_sampler::SamplingClient::new(full_config)
+            .map_err(|e| self.to_acp_error(e))?;
 
         Ok(sampling_client)
     }
@@ -1278,7 +1285,8 @@ impl SessionActor {
                 .expect("should_compact_on_error guarantees context_window");
             {
                 let total_tokens = self.chat_state_handle.get_estimated_total_tokens().await;
-                let percentage = supercharge_token_estimation::usage_percentage_u8(total_tokens, cw);
+                let percentage =
+                    supercharge_token_estimation::usage_percentage_u8(total_tokens, cw);
 
                 // Update the in-memory sampling config's `context_window` if the model reported a different value (mirror the legacy path's bookkeeping)
                 if let Some(mut cfg) = self.chat_state_handle.get_sampling_config().await

@@ -48,7 +48,8 @@ impl supercharge_tool_runtime::Tool for GetTerminalCommandOutputTool {
     type Output = TaskOutputOutput;
 
     fn id(&self) -> supercharge_tool_protocol::ToolId {
-        supercharge_tool_protocol::ToolId::new("get_terminal_command_output").expect("valid tool id")
+        supercharge_tool_protocol::ToolId::new("get_terminal_command_output")
+            .expect("valid tool id")
     }
 
     fn description(

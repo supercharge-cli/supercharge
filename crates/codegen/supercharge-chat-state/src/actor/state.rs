@@ -80,7 +80,9 @@ pub fn estimate_item_tokens(item: &ConversationItem) -> u64 {
                     .sum::<usize>();
             (bytes as u64) / supercharge_token_estimation::BYTES_PER_TOKEN
         }
-        ConversationItem::ToolResult(tr) => supercharge_token_estimation::estimate_tokens(&tr.content),
+        ConversationItem::ToolResult(tr) => {
+            supercharge_token_estimation::estimate_tokens(&tr.content)
+        }
         ConversationItem::BackendToolCall(b) => {
             supercharge_token_estimation::estimate_tokens(&b.text_summary())
         }
@@ -89,7 +91,8 @@ pub fn estimate_item_tokens(item: &ConversationItem) -> u64 {
             // larger, not the sum. The ciphertext is base64, ~4/3 over raw bytes.
             let text_bytes = supercharge_sampling_types::reasoning_item_text(r).len();
             let enc_bytes = r.encrypted_content.as_deref().map(str::len).unwrap_or(0);
-            (text_bytes.max(enc_bytes * 3 / 4) as u64) / supercharge_token_estimation::BYTES_PER_TOKEN
+            (text_bytes.max(enc_bytes * 3 / 4) as u64)
+                / supercharge_token_estimation::BYTES_PER_TOKEN
         }
     }
 }

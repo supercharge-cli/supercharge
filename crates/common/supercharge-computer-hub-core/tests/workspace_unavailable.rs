@@ -2,7 +2,9 @@
 //! wire decode path (`error_from_envelope` / `tool_error_from_wire`).
 
 use serde_json::json;
-use supercharge_computer_hub_core::{error_from_envelope, is_workspace_unavailable, tool_error_from_wire};
+use supercharge_computer_hub_core::{
+    error_from_envelope, is_workspace_unavailable, tool_error_from_wire,
+};
 use supercharge_tool_protocol::{
     JsonRpcError, ToolErrorWire, WORKSPACE_UNAVAILABLE_SUBCODE, WorkspaceGonePhase,
     WorkspaceGoneReason, WorkspaceUnavailableDetails, workspace_unavailable_wire,

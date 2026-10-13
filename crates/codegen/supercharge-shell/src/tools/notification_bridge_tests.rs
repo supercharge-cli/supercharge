@@ -887,8 +887,8 @@ async fn scheduled_task_created_is_persisted() {
 #[tokio::test]
 async fn bash_output_chunk_forwards_live_without_persisting() {
     let (config, mut gateway_rx, mut persistence_rx, _cmd_rx) = make_test_config_full();
-    let notification =
-        ToolNotification::BashOutputChunk(supercharge_tools::notification::types::BashOutputChunk {
+    let notification = ToolNotification::BashOutputChunk(
+        supercharge_tools::notification::types::BashOutputChunk {
             base: supercharge_tools::notification::types::BashNotificationBase {
                 tool_call_id: "call-1".into(),
                 command: "echo hi".into(),
@@ -897,7 +897,8 @@ async fn bash_output_chunk_forwards_live_without_persisting() {
                 truncated: false,
                 cwd: PathBuf::from("/tmp"),
             },
-        });
+        },
+    );
     let mut offsets = HashMap::new();
 
     handle_notification(&config, notification, &mut offsets).await;
@@ -933,16 +934,18 @@ async fn live_in_progress_event_id_is_not_a_prepare_replay_cursor() {
     let (config, mut gateway_rx, mut persistence_rx, _cmd_rx) = make_test_config_full();
     handle_notification(
         &config,
-        ToolNotification::BashOutputChunk(supercharge_tools::notification::types::BashOutputChunk {
-            base: supercharge_tools::notification::types::BashNotificationBase {
-                tool_call_id: "call-cursor".into(),
-                command: "echo hi".into(),
-                output: b"hi\n".to_vec(),
-                total_bytes: 3,
-                truncated: false,
-                cwd: PathBuf::from("/tmp"),
+        ToolNotification::BashOutputChunk(
+            supercharge_tools::notification::types::BashOutputChunk {
+                base: supercharge_tools::notification::types::BashNotificationBase {
+                    tool_call_id: "call-cursor".into(),
+                    command: "echo hi".into(),
+                    output: b"hi\n".to_vec(),
+                    total_bytes: 3,
+                    truncated: false,
+                    cwd: PathBuf::from("/tmp"),
+                },
             },
-        }),
+        ),
         &mut HashMap::new(),
     )
     .await;
@@ -974,8 +977,8 @@ async fn bash_output_chunk_skips_persist_when_gateway_closed() {
     config
         .gateway_enabled
         .store(false, std::sync::atomic::Ordering::Relaxed);
-    let notification =
-        ToolNotification::BashOutputChunk(supercharge_tools::notification::types::BashOutputChunk {
+    let notification = ToolNotification::BashOutputChunk(
+        supercharge_tools::notification::types::BashOutputChunk {
             base: supercharge_tools::notification::types::BashNotificationBase {
                 tool_call_id: "call-closed".into(),
                 command: "echo hi".into(),
@@ -984,7 +987,8 @@ async fn bash_output_chunk_skips_persist_when_gateway_closed() {
                 truncated: false,
                 cwd: PathBuf::from("/tmp"),
             },
-        });
+        },
+    );
     let mut offsets = HashMap::new();
     handle_notification(&config, notification, &mut offsets).await;
     assert!(
@@ -1885,10 +1889,11 @@ async fn plan_mode_exited_arms_exit_reminder_when_gated() {
 async fn plan_mode_entered_emits_current_mode_update_plan() {
     let (config, mut gateway_rx, mut persistence_rx, _cmd_rx) = make_test_config_full();
 
-    let notification =
-        ToolNotification::PlanModeEntered(supercharge_tools::notification::types::PlanModeEntered {
+    let notification = ToolNotification::PlanModeEntered(
+        supercharge_tools::notification::types::PlanModeEntered {
             tool_call_id: "tc-enter-1".into(),
-        });
+        },
+    );
 
     let mut offsets = HashMap::new();
     handle_notification(&config, notification, &mut offsets).await;

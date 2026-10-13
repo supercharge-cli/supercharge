@@ -14,8 +14,8 @@
 //! ```
 
 use std::path::PathBuf;
-use tempfile::TempDir;
 use supercharge_tools::util::path_suggestions::{format_not_found_error, path_not_found_hint};
+use tempfile::TempDir;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -37,7 +37,9 @@ fn setup_fs(dirs: &[&str], files: &[&str]) -> (TempDir, PathBuf) {
 }
 
 /// Extract leaf file names from the `similar` vec for assertion.
-fn similar_names(hint: &supercharge_tools::util::path_suggestions::PathNotFoundHint) -> Vec<String> {
+fn similar_names(
+    hint: &supercharge_tools::util::path_suggestions::PathNotFoundHint,
+) -> Vec<String> {
     hint.similar
         .iter()
         .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))

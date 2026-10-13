@@ -4,11 +4,11 @@ use crate::{AuthManager, GrokAuth, GrokComConfig, parse_output};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::io::AsyncBufReadExt as _;
-use tokio::sync::{mpsc, oneshot};
 use supercharge_http::TransportFailureKind;
 use supercharge_shell_base::util::grok_home;
 use supercharge_telemetry::events::{LoginFailed, LoginFailureKind};
+use tokio::io::AsyncBufReadExt as _;
+use tokio::sync::{mpsc, oneshot};
 pub type StderrCallback = Box<dyn Fn(&str)>;
 /// Reject a cached credential that lacks `oidc_issuer`, has a mismatched issuer, or whose team principal violates the `force_login_team_uuid` pin.
 /// Interactive login then starts fresh instead of reusing a stale or wrong-team session.
@@ -837,8 +837,10 @@ pub async fn run_cli_login(
         device_auth,
     )
     .await;
-    supercharge_telemetry::session_ctx::drain_pending(supercharge_telemetry::session_ctx::CLI_DRAIN)
-        .await;
+    supercharge_telemetry::session_ctx::drain_pending(
+        supercharge_telemetry::session_ctx::CLI_DRAIN,
+    )
+    .await;
     result
 }
 async fn run_cli_login_steps(
@@ -1174,8 +1176,7 @@ mod tests {
     /// The script is the one published in `README.md`, which operators copy.
     #[tokio::test]
     async fn a_provider_written_to_the_published_contract_can_sign_in_after_an_expiry() {
-        let conforming =
-            r#"if [ "$SUPERCHARGE_AUTH_EXPIRED" = "1" ]; then exit 1; else printf '%s' sso-token; fi"#;
+        let conforming = r#"if [ "$SUPERCHARGE_AUTH_EXPIRED" = "1" ]; then exit 1; else printf '%s' sso-token; fi"#;
         let dir = tempfile::tempdir().unwrap();
         let mgr = Arc::new(
             AuthManager::new(dir.path(), GrokComConfig::default())

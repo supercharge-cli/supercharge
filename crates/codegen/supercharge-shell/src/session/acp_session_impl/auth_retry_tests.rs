@@ -365,7 +365,8 @@ async fn pace_adopts_token_written_to_auth_json_mid_park() {
     use supercharge_login::backend::{ActiveAuthBackend, AuthBackend};
     let (_dir, am) = expired_manager_for_pace();
     let path = am.auth_json_path().to_path_buf();
-    let scope = ActiveAuthBackend::default().scope_key(&supercharge_login::GrokComConfig::default());
+    let scope =
+        ActiveAuthBackend::default().scope_key(&supercharge_login::GrokComConfig::default());
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         // Disk write only — no hot_swap, no notify — what an external login does.

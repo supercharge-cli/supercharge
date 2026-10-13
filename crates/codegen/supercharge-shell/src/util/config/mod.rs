@@ -30,10 +30,10 @@ pub use persist::*;
 // These types live in `supercharge-config-types`; the re-export keeps `crate::util::config::{RemoteSettings, GoalRoleModel}` working
 pub use resolve::*;
 pub use settings_writes::*;
-pub use tips::*;
-pub use worktree::*;
 pub use supercharge_config_types::{
     CampaignOverride, ConsentGate, ContextualHintsRemote, DisplayRefreshSettings,
     DoomLoopRecoverySettings, GoalRoleModel, RemoteSettings, WorktreeAutoGcSettings,
     WorktreeKindMaxAge, deserialize_tolerant,
 };
+pub use tips::*;
+pub use worktree::*;

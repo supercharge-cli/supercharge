@@ -112,6 +112,9 @@ mod tests {
     fn bad_arg_errors() {
         let models = ModelState::default();
         let mut c = ctx(&models);
-        assert!(matches!(PonyCommand.run(&mut c, "maybe"), CommandResult::Error(_)));
+        assert!(matches!(
+            PonyCommand.run(&mut c, "maybe"),
+            CommandResult::Error(_)
+        ));
     }
 }

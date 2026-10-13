@@ -46,8 +46,8 @@ pub mod relay;
 pub mod remote;
 pub mod sampling;
 pub mod session;
-pub use supercharge_superagent as superagent;
 pub use supercharge_shell_terminal as terminal;
+pub use supercharge_superagent as superagent;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod tier;

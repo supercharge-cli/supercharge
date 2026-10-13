@@ -461,9 +461,9 @@ mod tests {
     }
     fn user(text: &str) -> ConversationItem {
         ConversationItem::User(UserItem {
-            content: vec![supercharge_sampling_types::conversation::ContentPart::Text {
-                text: text.into(),
-            }],
+            content: vec![
+                supercharge_sampling_types::conversation::ContentPart::Text { text: text.into() },
+            ],
             synthetic_reason: SyntheticReason::Human,
             ..Default::default()
         })

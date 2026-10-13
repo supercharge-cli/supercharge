@@ -562,7 +562,10 @@ fn rename_at_cap_drops_extra_char() {
         MAX_RENAME_SCALARS,
         supercharge_shell::session::persistence::MAX_TITLE_SCALARS
     );
-    assert_eq!(supercharge_shell::session::persistence::MAX_TITLE_SCALARS, 100);
+    assert_eq!(
+        supercharge_shell::session::persistence::MAX_TITLE_SCALARS,
+        100
+    );
     let mut draft = RenameDraft::new(
         DashboardRowId::TopLevel(AgentId(0)),
         "a".repeat(MAX_RENAME_SCALARS),
@@ -6930,19 +6933,21 @@ fn workspace_identity_keeps_removed_selection_as_repair_anchor() {
         session_id: "removed".into(),
     };
     let mut old_snapshot = snapshot.clone();
-    old_snapshot.members.push(supercharge_dashboard_store::Member {
-        session_id: supercharge_dashboard_store::SessionId::new("removed").unwrap(),
-        kind: supercharge_dashboard_store::MemberKind::Build,
-        origin: supercharge_dashboard_store::MemberOrigin::Local,
-        cwd: Some("/tmp".into()),
-        title: Some("Removed".into()),
-        model: None,
-        last_turn_summary: None,
-        is_worktree: false,
-        last_change_unix_ms: 1,
-        pin_rank: None,
-        order_rank: None,
-    });
+    old_snapshot
+        .members
+        .push(supercharge_dashboard_store::Member {
+            session_id: supercharge_dashboard_store::SessionId::new("removed").unwrap(),
+            kind: supercharge_dashboard_store::MemberKind::Build,
+            origin: supercharge_dashboard_store::MemberOrigin::Local,
+            cwd: Some("/tmp".into()),
+            title: Some("Removed".into()),
+            model: None,
+            last_turn_summary: None,
+            is_worktree: false,
+            last_change_unix_ms: 1,
+            pin_rank: None,
+            order_rank: None,
+        });
     let agents = indexmap::IndexMap::new();
     let old_workspace = workspace_view(&old_snapshot);
     let workspace = workspace_view(&snapshot);

@@ -796,7 +796,10 @@ mod tests {
 
         // Both should contain the persistent parts.
         for t in [&t1, &t2] {
-            assert!(t.contains("Supercharge"), "title missing 'Supercharge': {t}");
+            assert!(
+                t.contains("Supercharge"),
+                "title missing 'Supercharge': {t}"
+            );
             assert!(t.contains("Responding"), "title missing 'Responding': {t}");
             assert!(t.contains("my-session"), "title missing session name: {t}");
         }

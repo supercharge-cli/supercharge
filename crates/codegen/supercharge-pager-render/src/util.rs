@@ -419,7 +419,10 @@ mod tests {
         );
         assert_eq!(
             display_user_grok_path_for(&custom, supercharge_config::SANDBOX_CONFIG_FILENAME),
-            format!("$SUPERCHARGE_HOME/{}", supercharge_config::SANDBOX_CONFIG_FILENAME)
+            format!(
+                "$SUPERCHARGE_HOME/{}",
+                supercharge_config::SANDBOX_CONFIG_FILENAME
+            )
         );
     }
 

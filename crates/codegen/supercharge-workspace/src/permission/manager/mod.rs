@@ -5,8 +5,8 @@ use parking_lot::Mutex;
 
 use agent_client_protocol as acp;
 use chrono::Utc;
-use tokio::sync::{mpsc, oneshot};
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::permission::auto_mode::{
     BashSecurityAssessment, ClassifierSecurityFinding, ClassifierVerdict,
@@ -5434,7 +5434,8 @@ mod tests {
                 let client = HangingFirstPromptClient {
                     prompts: prompts.clone(),
                 };
-                let (gateway, receiver) = supercharge_acp_lib::acp_gateway::<acp::AgentSide, _>(client);
+                let (gateway, receiver) =
+                    supercharge_acp_lib::acp_gateway::<acp::AgentSide, _>(client);
                 tokio::task::spawn_local(receiver.run());
                 let (mgr, _events) = spawn_permission_manager_with_pin(
                     acp::SessionId::new(Arc::from("test-session")),
@@ -5602,7 +5603,8 @@ mod tests {
                     seen: seen.clone(),
                     gate: gate.clone(),
                 };
-                let (gateway, receiver) = supercharge_acp_lib::acp_gateway::<acp::AgentSide, _>(client);
+                let (gateway, receiver) =
+                    supercharge_acp_lib::acp_gateway::<acp::AgentSide, _>(client);
                 tokio::task::spawn_local(receiver.run());
                 let (mgr, mut events) = spawn_permission_manager_with_pin(
                     acp::SessionId::new(Arc::from("test-session")),

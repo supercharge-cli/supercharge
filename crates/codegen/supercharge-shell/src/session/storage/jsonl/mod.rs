@@ -1038,8 +1038,10 @@ impl JsonlStorageAdapter {
                     continue;
                 }
             };
-            let siblings =
-                supercharge_sampling_types::upgrade_legacy_reasoning(&raw, &mut sibling_btc_ids_seen);
+            let siblings = supercharge_sampling_types::upgrade_legacy_reasoning(
+                &raw,
+                &mut sibling_btc_ids_seen,
+            );
             for sib in siblings {
                 match &sib {
                     ConversationItem::Reasoning(_) => upgraded_reasoning_count += 1,
@@ -1208,7 +1210,8 @@ impl StorageAdapter for JsonlStorageAdapter {
         } else {
             tracing::info!("Creating new session in JSONL");
             let mut summary = Summary::new(info, model_id)?;
-            summary.sandbox_profile = supercharge_sandbox::configured_profile_name().map(String::from);
+            summary.sandbox_profile =
+                supercharge_sandbox::configured_profile_name().map(String::from);
             self.write_summary_sync(info, &summary)?;
             Ok(summary)
         }
@@ -1742,8 +1745,10 @@ impl StorageAdapter for JsonlStorageAdapter {
     }
     async fn merge_rewind_points_from(&self, info: &Info, target_index: usize) -> io::Result<()> {
         let points = self.load_rewind_points(info).await?;
-        let merged =
-            supercharge_workspace::session::file_state::merge_rewind_points_from(points, target_index);
+        let merged = supercharge_workspace::session::file_state::merge_rewind_points_from(
+            points,
+            target_index,
+        );
         self.write_jsonl(self.rewind_points_file(info), &merged)
             .await
     }
@@ -1943,11 +1948,11 @@ impl StorageAdapter for JsonlStorageAdapter {
         info: &Info,
         segment: &crate::extensions::notification::CompactionSegmentFile,
     ) -> io::Result<()> {
-        use tokio::io::AsyncWriteExt;
         use supercharge_compaction_transcript::{
             COMPACTION_DIR, INDEX_FILE, INDEX_HEADER, extract_keywords, render_index_row,
             render_segment_md, segment_filename,
         };
+        use tokio::io::AsyncWriteExt;
         let base = self.session_dir(info).join(COMPACTION_DIR);
         tokio::fs::create_dir_all(&base).await?;
         let index = next_compaction_segment_index(&base).await;

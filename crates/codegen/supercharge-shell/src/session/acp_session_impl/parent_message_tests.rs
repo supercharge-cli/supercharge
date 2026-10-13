@@ -413,8 +413,10 @@ async fn running_steer_projects_at_safe_point_with_agent_provenance() {
         let completions = {
             let mut state = await_with_timeout(actor.state.lock()).await;
             let task = state.running_task.as_ref().expect("running task");
-            let binding =
-                supercharge_message_delivery_core::TurnBinding::new(task.prompt_id.clone(), task.epoch);
+            let binding = supercharge_message_delivery_core::TurnBinding::new(
+                task.prompt_id.clone(),
+                task.epoch,
+            );
             let (completions, _) = actor.transition_parent_messages(
                 &mut state,
                 supercharge_message_delivery_core::TerminalTarget::Turn(&binding),
@@ -448,7 +450,8 @@ async fn completion_fallback_appends_after_retained_queue() {
     await_with_timeout(local.run_until(async {
         let (actor, _) = await_with_timeout(super::super::support::build_actor()).await;
         let task = super::super::support::running_task_stub("running");
-        let binding = supercharge_message_delivery_core::TurnBinding::new("running".to_owned(), task.epoch);
+        let binding =
+            supercharge_message_delivery_core::TurnBinding::new("running".to_owned(), task.epoch);
         {
             let mut state = await_with_timeout(actor.state.lock()).await;
             state
@@ -658,10 +661,9 @@ async fn unresolved_persistence_barrier_does_not_block_hard_teardown() {
             .await
             .expect("barrier was enqueued");
 
-        await_with_timeout(
-            actor
-                .settle_all_parent_messages(supercharge_message_delivery_core::TerminalCause::HardTeardown),
-        )
+        await_with_timeout(actor.settle_all_parent_messages(
+            supercharge_message_delivery_core::TerminalCause::HardTeardown,
+        ))
         .await;
         let state = actor.state.lock().await;
         assert!(state.message_delivery.is_empty());
@@ -753,9 +755,9 @@ async fn teardown_settlement_during_barrier_skips_persist_and_push() {
 
         // The command channel closing settles all receipts with `ActorDrop`
         // while the drain is suspended on its persistence barrier.
-        await_with_timeout(
-            actor.settle_all_parent_messages(supercharge_message_delivery_core::TerminalCause::ActorDrop),
-        )
+        await_with_timeout(actor.settle_all_parent_messages(
+            supercharge_message_delivery_core::TerminalCause::ActorDrop,
+        ))
         .await;
         let settled = await_with_timeout(receipt.result)
             .await

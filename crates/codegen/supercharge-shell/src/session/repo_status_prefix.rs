@@ -88,7 +88,9 @@ impl RepoStatusSnapshot {
             .filter(|s| !s.trim().is_empty())?;
         match self.vcs_kind {
             VcsKind::JujutsuColocated => Some(raw_status.to_string()),
-            VcsKind::Git => supercharge_agent::prompt::user_message::normalize_git_status(raw_status),
+            VcsKind::Git => {
+                supercharge_agent::prompt::user_message::normalize_git_status(raw_status)
+            }
             VcsKind::None => None,
         }
     }

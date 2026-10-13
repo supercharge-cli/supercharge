@@ -8,12 +8,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex as TokioMutex, mpsc};
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
+use supercharge_hunk_tracker::HunkTrackerHandle;
 use supercharge_tools::notification::types::{ToolNotification, ToolNotificationHandle};
 use supercharge_tools::types::output::{BashOutput, ToolOutput};
 use supercharge_workspace::session::file_state::FileStateTracker;
-use supercharge_hunk_tracker::HunkTrackerHandle;
+use tokio::sync::{Mutex as TokioMutex, mpsc};
 const TASK_WAKE_ADMISSION_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(250);
 pub(crate) struct NotificationBridgeConfig {
     /// ACP gateway for sending streaming updates to TUI
@@ -654,7 +654,8 @@ async fn handle_notification(
                     .persistence
                     .tx
                     .send(PersistenceMsg::PlanModeState(snapshot));
-                emit_current_mode_update(config, supercharge_tools::types::SessionMode::Default).await;
+                emit_current_mode_update(config, supercharge_tools::types::SessionMode::Default)
+                    .await;
             }
             tracing::info!(
                 tool_call_id = %exited.tool_call_id,

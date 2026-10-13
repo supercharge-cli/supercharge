@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 
 use supercharge_telemetry::client;
 use supercharge_telemetry::config::{TelemetryConfig, TelemetryMode};
-use supercharge_telemetry::events::{AuthTokenKind, ManualAuth, ManualAuthReason, ManualAuthSurface};
+use supercharge_telemetry::events::{
+    AuthTokenKind, ManualAuth, ManualAuthReason, ManualAuthSurface,
+};
 use supercharge_telemetry::process_info::{
     Entrypoint, Interactivity, LeaderMode, ProcessIdentity, ReleaseChannel, set_identity,
     set_release_channel,

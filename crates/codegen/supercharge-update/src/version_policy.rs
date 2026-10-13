@@ -3,8 +3,8 @@
 
 use crate::version::get_installed_grok_version;
 use semver::Version;
-use tracing::warn;
 use supercharge_shell::util::config::VersionPolicy;
+use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RequiredRangeDecision {

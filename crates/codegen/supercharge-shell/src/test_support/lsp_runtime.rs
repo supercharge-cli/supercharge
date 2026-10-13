@@ -3,8 +3,8 @@ use agent_client_protocol as acp;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
+use tokio::sync::mpsc;
 pub(crate) type GatewayOut = <acp::AgentSide as supercharge_acp_lib::AcpSide>::OutMessage;
 pub(crate) fn test_gateway() -> GatewaySender {
     let (tx, _rx) = mpsc::unbounded_channel();
@@ -87,7 +87,8 @@ pub(crate) fn ctx_with_toggle(toggle: HashMap<String, bool>) -> SubagentSpawnCon
         gcs_upload_method: None,
         hook_registry: None,
         parent_depth: 0,
-        subagents_max_depth: supercharge_tools::implementations::grok_build::task::MAX_SUBAGENT_DEPTH,
+        subagents_max_depth:
+            supercharge_tools::implementations::grok_build::task::MAX_SUBAGENT_DEPTH,
         workflow_max_concurrent_agents:
             crate::session::workflow::host_service::DEFAULT_WORKFLOW_MAX_CONCURRENT_AGENTS,
         media_gen_batch_limits: supercharge_tools::media_gen_limits::MediaGenBatchLimits::default(),
@@ -117,8 +118,8 @@ pub(crate) fn ctx_with_toggle(toggle: HashMap<String, bool>) -> SubagentSpawnCon
         parent_compat: supercharge_tools::types::compat::CompatConfig::default(),
         parent_paths_config: Default::default(),
         synthetic_trace_tx: None,
-        task_output_tool_name: supercharge_tools::reminders::task_completion::DEFAULT_TASK_OUTPUT_TOOL
-            .to_string(),
+        task_output_tool_name:
+            supercharge_tools::reminders::task_completion::DEFAULT_TASK_OUTPUT_TOOL.to_string(),
         scheduler_delete_tool_name: None,
         scheduler_create_tool_name: None,
         auto_wake_enabled: true,

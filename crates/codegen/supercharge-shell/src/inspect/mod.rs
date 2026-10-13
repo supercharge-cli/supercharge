@@ -590,16 +590,17 @@ async fn list_instructions(
     configs
         .into_iter()
         .map(|c| {
-            let (scope, file_type, vendor) =
-                if c.source == supercharge_agent::prompt::agents_md::InstructionSource::Configured {
-                    (Scope::Global, "rules", None)
-                } else {
-                    (
-                        instruction_scope(&c.file_path, &grok_home, &vendor_homes, &workspace_root),
-                        instruction_file_type(&c.file_path, &grok_home, imported),
-                        derive_vendor(&c.file_path).map(String::from),
-                    )
-                };
+            let (scope, file_type, vendor) = if c.source
+                == supercharge_agent::prompt::agents_md::InstructionSource::Configured
+            {
+                (Scope::Global, "rules", None)
+            } else {
+                (
+                    instruction_scope(&c.file_path, &grok_home, &vendor_homes, &workspace_root),
+                    instruction_file_type(&c.file_path, &grok_home, imported),
+                    derive_vendor(&c.file_path).map(String::from),
+                )
+            };
             let size = c.content.len();
             InstructionFile {
                 size_bytes: size,
@@ -1033,7 +1034,8 @@ fn list_plugins(discovered: &[supercharge_agent::plugins::DiscoveredPlugin]) -> 
                 provides: PluginProvides {
                     // Count the SKILL.md files discovered (root-level or in subdirs), not the number of configured skill dirs
                     // The reported count then matches what the skills registry loads
-                    skills: supercharge_agent::plugins::registry::skill_md_paths(&p.skill_dirs).len(),
+                    skills: supercharge_agent::plugins::registry::skill_md_paths(&p.skill_dirs)
+                        .len(),
                     agents: p.agent_dirs.len(),
                     hooks: p.hooks_path.is_some(),
                     mcp_servers: if p.mcp_config_path.is_some() { 1 } else { 0 },
@@ -1146,13 +1148,14 @@ fn list_lsp_servers(
         plugin_inline_lsp.iter().map(|(v, _)| *v).collect();
     let inline_names: Vec<&str> = plugin_inline_lsp.iter().map(|(_, n)| *n).collect();
 
-    let servers = supercharge_tools::implementations::lsp::config::load_servers_with_plugins_sourced(
-        cwd,
-        &plugin_lsp_paths,
-        &inline_values,
-        &plugin_names,
-        &inline_names,
-    );
+    let servers =
+        supercharge_tools::implementations::lsp::config::load_servers_with_plugins_sourced(
+            cwd,
+            &plugin_lsp_paths,
+            &inline_values,
+            &plugin_names,
+            &inline_names,
+        );
 
     // Folder-trust gate, display-only: inspect never spawns servers
     // Mark the repo-local (project-scoped) entries a session would skip in an untrusted clone, so the listing matches the live gate
@@ -2005,7 +2008,8 @@ mod tests {
             ("claude", "/repo/.claude/rules/team.md"),
             ("claude", r"C:\repo\.claude\rules\team.md"),
         ] {
-            let file_type = instruction_file_type(path, Path::new("/home/user/.supercharge"), false);
+            let file_type =
+                instruction_file_type(path, Path::new("/home/user/.supercharge"), false);
             assert_eq!(file_type, "rules");
             assert_eq!(
                 instruction_compat_status(&Some(vendor.to_owned()), file_type, &report),
@@ -2716,7 +2720,8 @@ mod tests {
             disabled: vec!["inspect-cfg-extra".to_string()],
             ..Default::default()
         };
-        let registry = supercharge_agent::plugins::PluginRegistry::from_discovered(vec![], &[], &[]);
+        let registry =
+            supercharge_agent::plugins::PluginRegistry::from_discovered(vec![], &[], &[]);
 
         let entries = list_skills(
             cwd.path(),

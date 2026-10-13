@@ -3559,9 +3559,18 @@ mod tests {
             .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
             .collect();
 
-        assert_eq!(env.get("SUPERCHARGE_TEST_BASE").map(String::as_str), Some("1"));
-        assert_eq!(env.get("SUPERCHARGE_TEST_LOGIN").map(String::as_str), Some("l"));
-        assert_eq!(env.get("SUPERCHARGE_TEST_REQ").map(String::as_str), Some("r"));
+        assert_eq!(
+            env.get("SUPERCHARGE_TEST_BASE").map(String::as_str),
+            Some("1")
+        );
+        assert_eq!(
+            env.get("SUPERCHARGE_TEST_LOGIN").map(String::as_str),
+            Some("l")
+        );
+        assert_eq!(
+            env.get("SUPERCHARGE_TEST_REQ").map(String::as_str),
+            Some("r")
+        );
         assert!(!env.contains_key("SUPERCHARGE_TEST_SECRET"));
         assert_eq!(env.get("PATH").map(String::as_str), Some("/login/bin"));
         assert_eq!(

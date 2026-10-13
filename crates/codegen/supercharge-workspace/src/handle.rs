@@ -194,8 +194,8 @@ use crate::telemetry::dc_log;
 use crate::workspace_ops::{
     GetFileEntry, GetFileResult, GetFilesRes, PutFileEntry, PutFileResult, PutFilesRes,
 };
-use supercharge_file_utils::queue::EnqueueOutcome;
 use supercharge_diag_server::DiagHandle;
+use supercharge_file_utils::queue::EnqueueOutcome;
 use supercharge_session_events::types::CancellationCategory;
 use supercharge_session_events::{Event, SessionRelationship, TurnOutcomeLabel};
 use supercharge_tool_protocol::turn_hook::{AfterTurnAckPayload, AfterTurnAckStatus};
@@ -1109,12 +1109,12 @@ impl WorkspaceHandle {
             &session_id,
             SwapAction::Applied,
         );
-        let _ = self
-            .shared
-            .events
-            .send(supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
-                session_id: session_id.to_owned(),
-            });
+        let _ =
+            self.shared
+                .events
+                .send(supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
+                    session_id: session_id.to_owned(),
+                });
         Ok(SwapOutcome::Swapped)
     }
     /// Hub `session.bind` against an existing session: reuse, or re-resolve and swap per the owner-rebind policy rows (incl. the stale heal).
@@ -2383,7 +2383,9 @@ impl WorkspaceHandle {
             let mut rx = handle.shared.events.subscribe();
             loop {
                 match rx.recv().await {
-                    Ok(supercharge_workspace_types::WorkspaceEvent::ToolsChanged { session_id }) => {
+                    Ok(supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
+                        session_id,
+                    }) => {
                         if tool_defs_reemit_gate(
                             handle.shared.tool_defs_enabled,
                             &handle.shared.tool_defs_last_emit,
@@ -2597,12 +2599,11 @@ impl WorkspaceHandle {
         )
         .await?;
         if !result.started.is_empty() {
-            let _ =
-                self.shared
-                    .events
-                    .send(supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
-                        session_id: session_id.to_owned(),
-                    });
+            let _ = self.shared.events.send(
+                supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
+                    session_id: session_id.to_owned(),
+                },
+            );
         }
         Ok(result)
     }
@@ -2687,12 +2688,11 @@ impl WorkspaceHandle {
                 failed = ?delta.failed,
                 "converged session onto the published MCP configuration"
             );
-            let _ =
-                self.shared
-                    .events
-                    .send(supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
-                        session_id: session_id.to_owned(),
-                    });
+            let _ = self.shared.events.send(
+                supercharge_workspace_types::WorkspaceEvent::ToolsChanged {
+                    session_id: session_id.to_owned(),
+                },
+            );
         }
         Some(delta)
     }
@@ -2782,9 +2782,10 @@ impl WorkspaceHandle {
             let hub_guard = self.shared.hub_handle.lock().await;
             hub_guard.as_ref().map(|hub| hub.server.clone())
         };
-        if let (Some(tool_server), Ok(sid)) =
-            (tool_server, supercharge_tool_protocol::SessionId::new(session_id))
-        {
+        if let (Some(tool_server), Ok(sid)) = (
+            tool_server,
+            supercharge_tool_protocol::SessionId::new(session_id),
+        ) {
             for server in servers.values() {
                 for tool_id in &server.tool_ids {
                     let _ = crate::mcp::HubToolRegistry::unregister_tool_dynamic(
@@ -4009,7 +4010,9 @@ fn build_session_routed_handlers(
             ws.clone(),
         ) {
             Ok(handler) => {
-                handlers.push(Arc::new(handler) as Arc<dyn supercharge_computer_hub_sdk::ToolServerHandler>)
+                handlers
+                    .push(Arc::new(handler)
+                        as Arc<dyn supercharge_computer_hub_sdk::ToolServerHandler>)
             }
             Err(e) => {
                 tracing::warn!(
@@ -4564,7 +4567,9 @@ async fn enqueue_workspace_tool_definitions(
 }
 /// Single source of truth for mapping a turn-hook outcome to the `events.jsonl` [`TurnOutcomeLabel`].
 /// Kept as one `match` so the two enums cannot drift and the mapping is never duplicated across call sites.
-fn turn_outcome_label(outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome) -> TurnOutcomeLabel {
+fn turn_outcome_label(
+    outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome,
+) -> TurnOutcomeLabel {
     use supercharge_tool_protocol::turn_hook::TurnHookOutcome;
     match outcome {
         TurnHookOutcome::Completed => TurnOutcomeLabel::Completed,
@@ -4844,7 +4849,8 @@ impl WorkspaceHandle {
             );
             match SessionToolHandle::new(tool_name, desc, self.clone(), session_id.to_string()) {
                 Ok(tool) => {
-                    registry.register_dyn(Arc::new(tool) as Arc<dyn supercharge_tool_runtime::ToolDyn>);
+                    registry
+                        .register_dyn(Arc::new(tool) as Arc<dyn supercharge_tool_runtime::ToolDyn>);
                 }
                 Err(e) => {
                     tracing::warn!(

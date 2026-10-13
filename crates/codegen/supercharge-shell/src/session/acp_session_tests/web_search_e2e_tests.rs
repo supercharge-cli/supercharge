@@ -99,18 +99,19 @@ async fn web_search_uses_model_override_from_config_end_to_end() {
         skills: vec![],
         state_path: std::env::temp_dir().join("grok-web-search-e2e/state.json"),
         memory_backend: None,
-        web_search_config: supercharge_tools::implementations::web_search::WebSearchConfig::Enabled {
-            api_key: web_search_sampling.api_key.clone().unwrap(),
-            base_url: web_search_sampling.base_url.clone(),
-            model: web_search_sampling.model.clone(),
-            extra_headers: web_search_sampling.extra_headers.clone(),
-            // `SamplerConfig` does not carry the optional extra access key
-            // The shell passes that key through `Credentials` when it spawns a session
-            // This test builds the config directly, so there is no key to pass
-            alpha_test_key: None,
-            allowed_domains: None,
-            excluded_domains: None,
-        },
+        web_search_config:
+            supercharge_tools::implementations::web_search::WebSearchConfig::Enabled {
+                api_key: web_search_sampling.api_key.clone().unwrap(),
+                base_url: web_search_sampling.base_url.clone(),
+                model: web_search_sampling.model.clone(),
+                extra_headers: web_search_sampling.extra_headers.clone(),
+                // `SamplerConfig` does not carry the optional extra access key
+                // The shell passes that key through `Credentials` when it spawns a session
+                // This test builds the config directly, so there is no key to pass
+                alpha_test_key: None,
+                allowed_domains: None,
+                excluded_domains: None,
+            },
         web_fetch_config: Default::default(),
         lsp: None,
         image_gen_config: Default::default(),
@@ -180,7 +181,8 @@ async fn web_search_errors_when_configured_model_cannot_be_resolved() {
         skills: vec![],
         state_path: std::env::temp_dir().join("grok-web-search-disabled/state.json"),
         memory_backend: None,
-        web_search_config: supercharge_tools::implementations::web_search::WebSearchConfig::Disabled,
+        web_search_config:
+            supercharge_tools::implementations::web_search::WebSearchConfig::Disabled,
         web_fetch_config: Default::default(),
         lsp: None,
         image_gen_config: Default::default(),

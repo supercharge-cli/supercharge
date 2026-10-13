@@ -516,10 +516,12 @@ fn stamp_plugin_fields(skills: &mut [SkillInfo], plugin: &crate::plugins::Loaded
                 skill.display_name = Some(std::mem::replace(&mut skill.name, dir));
             }
         }
-        skill.config_source = Some(supercharge_tools::types::config_source::ConfigSource::Plugin {
-            plugin_name: plugin.name.clone(),
-            path: PathBuf::from(&skill.path),
-        });
+        skill.config_source = Some(
+            supercharge_tools::types::config_source::ConfigSource::Plugin {
+                plugin_name: plugin.name.clone(),
+                path: PathBuf::from(&skill.path),
+            },
+        );
     }
 }
 

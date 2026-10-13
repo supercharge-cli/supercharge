@@ -148,7 +148,10 @@ fn usage_modal_renders_session_usage_not_a_plan() {
 
     let content = render_with_modal(&mut state, area);
     assert!(content.contains("Usage"), "{content}");
-    assert!(content.contains("Session usage: 3 input tokens"), "{content}");
+    assert!(
+        content.contains("Session usage: 3 input tokens"),
+        "{content}"
+    );
     assert!(!content.contains("SuperGrok"), "{content}");
     assert!(!content.contains("42%"), "{content}");
 

@@ -7,7 +7,6 @@ use serde::Deserialize;
 
 use supercharge_login::AuthManager;
 
-
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mode {

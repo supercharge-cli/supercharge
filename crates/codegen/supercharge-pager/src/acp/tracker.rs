@@ -27,11 +27,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use tracing::debug;
 use supercharge_shell::session::storage::chunk_meta_flag;
 use supercharge_tools::types::output::{BashOutput, ToolOutput};
 use supercharge_tools::types::output::{ReadFileOutput, SearchToolOutput, WebFetchOutput};
 use supercharge_tools::util::strip_redundant_session_cd;
+use tracing::debug;
 /// Convert a UTC millisecond timestamp to local time.
 fn utc_ms_to_local(ms: i64) -> DateTime<Local> {
     chrono::Utc
@@ -1604,7 +1604,9 @@ impl AcpUpdateTracker {
             crate::scrollback::blocks::UserPromptBlock::with_skill_tokens(text, skill_token_ranges)
         } else {
             let skill_display =
-                supercharge_tools::implementations::skills::skill::extract_skill_display_text(&text);
+                supercharge_tools::implementations::skills::skill::extract_skill_display_text(
+                    &text,
+                );
             if let Some(display_text) = skill_display {
                 self.skip_next_skill_body = true;
                 crate::scrollback::blocks::UserPromptBlock::skill(display_text)

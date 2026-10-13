@@ -33,7 +33,9 @@ pub use prod_mc_cli_chat_proxy_types::feedback_types::{
     MAX_FEEDBACK_IMAGE_TOTAL_BYTES, MAX_FEEDBACK_IMAGES, RatingType, feedback_image_extension,
     validate_feedback_images,
 };
-pub use supercharge_fsnotify::{FsConfig, FsEvent, FsEventKind, FsEventSource, FsNotifyError, GitMetaKind};
+pub use supercharge_fsnotify::{
+    FsConfig, FsEvent, FsEventKind, FsEventSource, FsNotifyError, GitMetaKind,
+};
 /// `false` twin: this template is not compiled into this build, so no template matches.
 /// Keeps ungated call sites compiling in both configurations.
 pub(crate) fn is_cursor_user_template(

@@ -190,8 +190,8 @@ async fn over_cap_report_classifies_modest_vs_egregious() {
                 "max+1 is modest first-K, not a 2x resample"
             );
 
-            let spam: Vec<supercharge_sampling_types::ToolCall> = (0..DEFAULT_MAX_PARALLEL_IMAGE_GEN
-                * 2)
+            let spam: Vec<supercharge_sampling_types::ToolCall> = (0
+                ..DEFAULT_MAX_PARALLEL_IMAGE_GEN * 2)
                 .map(|i| supercharge_sampling_types::ToolCall {
                     id: format!("spam_{i}").into(),
                     name: "image_gen".into(),
@@ -202,7 +202,8 @@ async fn over_cap_report_classifies_modest_vs_egregious() {
             assert_eq!(spam_report.len(), 1);
             assert!(at(&spam_report, 0).is_egregious());
 
-            let under: Vec<supercharge_sampling_types::ToolCall> = (0..DEFAULT_MAX_PARALLEL_IMAGE_GEN)
+            let under: Vec<supercharge_sampling_types::ToolCall> = (0
+                ..DEFAULT_MAX_PARALLEL_IMAGE_GEN)
                 .map(|i| supercharge_sampling_types::ToolCall {
                     id: format!("ok_{i}").into(),
                     name: "image_gen".into(),

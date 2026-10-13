@@ -158,11 +158,12 @@ fn active_message_outputs_distinguish_uncertain_from_proved_rejection() {
         ),
     ] {
         let output = ToolOutput::SendSubagentMessage(output);
-        let result: Result<ToolRunResult, supercharge_tool_runtime::ToolError> = Ok(ToolRunResult {
-            prompt_text: output.to_prompt_format(),
-            output,
-            effective_tool_name: None,
-        });
+        let result: Result<ToolRunResult, supercharge_tool_runtime::ToolError> =
+            Ok(ToolRunResult {
+                prompt_text: output.to_prompt_format(),
+                output,
+                effective_tool_name: None,
+            });
         assert_eq!(
             super::tool_calls::tool_output_span_outcome(&result),
             expected,

@@ -415,10 +415,12 @@ impl VideoGenClient {
             tokio::time::sleep(poll_interval).await;
 
             if started.elapsed() >= deadline {
-                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                    "Video generation did not complete within {}s (request_id={request_id})",
-                    VIDEO_GEN_TIMEOUT_SECS
-                )));
+                return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                    format!(
+                        "Video generation did not complete within {}s (request_id={request_id})",
+                        VIDEO_GEN_TIMEOUT_SECS
+                    ),
+                ));
             }
 
             let poll_sent_bearer = self.current_bearer().await;
@@ -492,14 +494,16 @@ impl VideoGenClient {
                 }
                 "failed" => {
                     let preview: String = poll_body.chars().take(300).collect();
-                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                        "Video generation failed on the server (request_id={request_id}): {preview}"
-                    )));
+                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                        format!(
+                            "Video generation failed on the server (request_id={request_id}): {preview}"
+                        ),
+                    ));
                 }
                 "expired" => {
-                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                        "Video generation request expired (request_id={request_id})."
-                    )));
+                    return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                        format!("Video generation request expired (request_id={request_id})."),
+                    ));
                 }
                 other => {
                     tracing::debug!(
@@ -513,9 +517,14 @@ impl VideoGenClient {
     }
 
     /// Download video bytes from a pre-signed temporary URL (no auth headers).
-    async fn download_video(&self, url: &str) -> Result<Vec<u8>, supercharge_tool_runtime::ToolError> {
+    async fn download_video(
+        &self,
+        url: &str,
+    ) -> Result<Vec<u8>, supercharge_tool_runtime::ToolError> {
         let response = self.download_http.get(url).send().await.map_err(|e| {
-            supercharge_tool_runtime::ToolError::invalid_arguments(format!("Failed to download video: {e}"))
+            supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+                "Failed to download video: {e}"
+            ))
         })?;
 
         if !response.status().is_success() {
@@ -600,9 +609,9 @@ impl VideoGenClient {
         })?;
 
         if !is_http_url(&upload_url) {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "Presigned upload URL is not http(s): {upload_url}"
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("Presigned upload URL is not http(s): {upload_url}"),
+            ));
         }
 
         let get_url = match self
@@ -679,9 +688,9 @@ impl VideoGenClient {
         })?;
 
         if !is_http_url(&url) {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "Presigned GET URL is not http(s): {url}"
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("Presigned GET URL is not http(s): {url}"),
+            ));
         }
         Ok(url)
     }
@@ -767,7 +776,10 @@ fn is_zdr_upload_url_error(body: &str) -> bool {
         .contains("must provide output.upload_url")
 }
 
-fn video_http_error(status: reqwest::StatusCode, body: &str) -> supercharge_tool_runtime::ToolError {
+fn video_http_error(
+    status: reqwest::StatusCode,
+    body: &str,
+) -> supercharge_tool_runtime::ToolError {
     if is_zdr_upload_url_error(body) {
         return zdr_restricted_error();
     }
@@ -864,7 +876,9 @@ struct VideoGenVideoInfo {
     url: Option<String>,
 }
 
-async fn resolve_image_reference(value: &str) -> Result<String, supercharge_tool_runtime::ToolError> {
+async fn resolve_image_reference(
+    value: &str,
+) -> Result<String, supercharge_tool_runtime::ToolError> {
     let value = value.trim();
     if value.is_empty() {
         return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
@@ -874,7 +888,9 @@ async fn resolve_image_reference(value: &str) -> Result<String, supercharge_tool
 
     if value.starts_with("data:image/") {
         let comma = value.find(',').ok_or_else(|| {
-            supercharge_tool_runtime::ToolError::invalid_arguments("malformed data URL in image reference")
+            supercharge_tool_runtime::ToolError::invalid_arguments(
+                "malformed data URL in image reference",
+            )
         })?;
         let Some(header) = value.get(..comma) else {
             return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
@@ -906,7 +922,9 @@ async fn resolve_image_reference(value: &str) -> Result<String, supercharge_tool
 
     let (_w, _h, mime) =
         crate::util::image_validate::validate_image_bytes(&raw_bytes).map_err(|e| {
-            supercharge_tool_runtime::ToolError::invalid_arguments(format!("invalid image reference: {e}"))
+            supercharge_tool_runtime::ToolError::invalid_arguments(format!(
+                "invalid image reference: {e}"
+            ))
         })?;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&raw_bytes);
     Ok(format!("data:{mime};base64,{b64}"))
@@ -920,19 +938,23 @@ fn validate_one_of(
     if allowed.contains(&value) {
         return Ok(());
     }
-    Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-        "`{field}` must be one of: {}. Got {value}.",
-        allowed.join(", ")
-    )))
+    Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+        format!(
+            "`{field}` must be one of: {}. Got {value}.",
+            allowed.join(", ")
+        ),
+    ))
 }
 
-fn validate_imagine_duration(duration: Option<u32>) -> Result<(), supercharge_tool_runtime::ToolError> {
+fn validate_imagine_duration(
+    duration: Option<u32>,
+) -> Result<(), supercharge_tool_runtime::ToolError> {
     if let Some(secs) = duration
         && !IMAGINE_VIDEO_DURATIONS_SECS.contains(&secs)
     {
-        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-            "`duration` must be either 6 or 10 seconds. Got {secs}."
-        )));
+        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+            format!("`duration` must be either 6 or 10 seconds. Got {secs}."),
+        ));
     }
     Ok(())
 }
@@ -941,9 +963,11 @@ fn validate_r2v_duration(duration: Option<u32>) -> Result<(), supercharge_tool_r
     if let Some(secs) = duration
         && !(MIN_R2V_DURATION_SECS..=MAX_R2V_DURATION_SECS).contains(&secs)
     {
-        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-            "`duration` must be between {MIN_R2V_DURATION_SECS} and {MAX_R2V_DURATION_SECS} seconds. Got {secs}."
-        )));
+        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+            format!(
+                "`duration` must be between {MIN_R2V_DURATION_SECS} and {MAX_R2V_DURATION_SECS} seconds. Got {secs}."
+            ),
+        ));
     }
     Ok(())
 }
@@ -953,19 +977,23 @@ fn validate_keyframes(
     duration: u32,
 ) -> Result<(), supercharge_tool_runtime::ToolError> {
     if keyframes.len() > MAX_R2V_MID_KEYFRAMES {
-        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-            "`keyframes` must contain at most {MAX_R2V_MID_KEYFRAMES} anchors. Got {}.",
-            keyframes.len()
-        )));
+        return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+            format!(
+                "`keyframes` must contain at most {MAX_R2V_MID_KEYFRAMES} anchors. Got {}.",
+                keyframes.len()
+            ),
+        ));
     }
     for keyframe in keyframes {
         let t = keyframe.timestamp_s;
         if !t.is_finite() || t <= 0.0 || t >= duration as f32 {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "`keyframes` timestamp {t}s must be strictly inside the clip \
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!(
+                    "`keyframes` timestamp {t}s must be strictly inside the clip \
                  (0 < t < {duration}s). Pin the endpoints with `first_frame` / `last_frame` \
                  instead."
-            )));
+                ),
+            ));
         }
     }
     Ok(())
@@ -1321,14 +1349,16 @@ impl supercharge_tool_runtime::Tool for ReferenceToVideoTool {
             ));
         }
         if input.images.len() > MAX_R2V_REFERENCE_IMAGES {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "`images` must contain at most {MAX_R2V_REFERENCE_IMAGES} image references."
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!(
+                    "`images` must contain at most {MAX_R2V_REFERENCE_IMAGES} image references."
+                ),
+            ));
         }
         if input.voices.len() > MAX_R2V_REFERENCE_VOICES {
-            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(format!(
-                "`voices` must contain at most {MAX_R2V_REFERENCE_VOICES} preset voices."
-            )));
+            return Err(supercharge_tool_runtime::ToolError::invalid_arguments(
+                format!("`voices` must contain at most {MAX_R2V_REFERENCE_VOICES} preset voices."),
+            ));
         }
         if input.voices.iter().any(|v| v.trim().is_empty()) {
             return Err(supercharge_tool_runtime::ToolError::invalid_arguments(

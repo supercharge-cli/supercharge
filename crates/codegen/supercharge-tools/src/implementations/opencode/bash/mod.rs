@@ -742,9 +742,12 @@ mod tests {
         // No Terminal inserted
         let tool = BashTool;
 
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), make_input("ls"))
-                .await;
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(resources.into_shared()),
+            make_input("ls"),
+        )
+        .await;
         assert!(result.is_err());
         assert!(
             result
@@ -1004,9 +1007,10 @@ mod tests {
             description: "Check workdir".to_string(),
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             BashToolOutput::Bash(bash) => {
@@ -1122,9 +1126,12 @@ mod tests {
         resources.insert(NotificationHandle(ToolNotificationHandle::noop()));
 
         let tool = BashTool;
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), make_input("ls"))
-                .await;
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(resources.into_shared()),
+            make_input("ls"),
+        )
+        .await;
 
         assert!(result.is_err());
         assert!(

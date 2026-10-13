@@ -10,8 +10,8 @@
 
 use agent_client_protocol as acp;
 use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
 use supercharge_chat_state::compaction_utils::HistoryRepairReport;
+use tokio::sync::oneshot;
 
 use super::{ExtResult, parse_params, to_raw_response};
 use crate::agent::MvpAgent;
@@ -147,8 +147,8 @@ mod tests {
     use crate::sampling::ConversationItem;
     use crate::session::info::Info;
     use crate::session::persistence::default_model_id;
-    use tempfile::TempDir;
     use supercharge_sampling_types::ToolCall;
+    use tempfile::TempDir;
 
     const SESSION_ID: &str = "019f3df7-3d70-7f60-8ca0-a38d2d005670";
 

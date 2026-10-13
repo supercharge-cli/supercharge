@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::CancellationToken;
 use supercharge_sampling_types::ReasoningEffort;
 use supercharge_tools::implementations::grok_build::workflow::WorkflowControl;
 use supercharge_workflow::{Journal, WorkflowOutcome, WorkflowRunParams};
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 
 use super::host_service::{
     HostDrainOutcome, TelemetryHook, WorkflowHostParams, spawn_workflow_host_service,
@@ -843,19 +843,21 @@ struct RunEndMetadata<'a> {
 }
 
 fn log_run_ended(episode: RunEndMetadata<'_>, stats: &super::host_service::WorkflowAgentStats) {
-    supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::WorkflowRunEnded {
-        run_id: episode.run_id.to_owned(),
-        parent_session_id: episode.parent_session_id.to_owned(),
-        status: episode.status,
-        duration_ms: episode.duration_ms,
-        agents_used: episode.agents_used,
-        agent_budget: episode.agent_budget,
-        agents_failed: stats.agents_failed.load(Ordering::Relaxed),
-        peak_concurrent_agents: stats.peak_concurrent.load(Ordering::Relaxed),
-        slot_waits: stats.slot_waits.load(Ordering::Relaxed),
-        slot_wait_ms_total: stats.slot_wait_ms_total.load(Ordering::Relaxed),
-        slot_wait_ms_max: stats.slot_wait_ms_max.load(Ordering::Relaxed),
-    });
+    supercharge_telemetry::session_ctx::log_event(
+        supercharge_telemetry::events::WorkflowRunEnded {
+            run_id: episode.run_id.to_owned(),
+            parent_session_id: episode.parent_session_id.to_owned(),
+            status: episode.status,
+            duration_ms: episode.duration_ms,
+            agents_used: episode.agents_used,
+            agent_budget: episode.agent_budget,
+            agents_failed: stats.agents_failed.load(Ordering::Relaxed),
+            peak_concurrent_agents: stats.peak_concurrent.load(Ordering::Relaxed),
+            slot_waits: stats.slot_waits.load(Ordering::Relaxed),
+            slot_wait_ms_total: stats.slot_wait_ms_total.load(Ordering::Relaxed),
+            slot_wait_ms_max: stats.slot_wait_ms_max.load(Ordering::Relaxed),
+        },
+    );
 }
 
 /// Exhaustive so a new tracker status forces a decision here.

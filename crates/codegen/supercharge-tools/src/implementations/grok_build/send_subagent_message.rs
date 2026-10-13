@@ -216,7 +216,8 @@ impl supercharge_tool_runtime::Tool for SendSubagentMessageTool {
     type Output = SendSubagentMessageOutput;
 
     fn id(&self) -> supercharge_tool_protocol::ToolId {
-        supercharge_tool_protocol::ToolId::new(SEND_SUBAGENT_MESSAGE_TOOL_NAME).expect("valid tool id")
+        supercharge_tool_protocol::ToolId::new(SEND_SUBAGENT_MESSAGE_TOOL_NAME)
+            .expect("valid tool id")
     }
 
     fn description(
@@ -261,12 +262,13 @@ impl supercharge_tool_runtime::Tool for SendSubagentMessageTool {
             let target = if input.subagent_id == "parent" {
                 ActiveMessageTarget::Parent
             } else {
-                let agent_id = supercharge_message_delivery_core::AgentId::parse(&input.subagent_id)
-                    .ok_or_else(|| {
-                        supercharge_tool_runtime::ToolError::invalid_arguments(
-                            "subagent_id must be `parent` or a valid agent ID",
-                        )
-                    })?;
+                let agent_id =
+                    supercharge_message_delivery_core::AgentId::parse(&input.subagent_id)
+                        .ok_or_else(|| {
+                            supercharge_tool_runtime::ToolError::invalid_arguments(
+                                "subagent_id must be `parent` or a valid agent ID",
+                            )
+                        })?;
                 ActiveMessageTarget::Agent { agent_id }
             };
             let request =

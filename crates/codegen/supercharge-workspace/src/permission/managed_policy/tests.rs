@@ -2825,7 +2825,8 @@ server_url = "https://ok.example.com/*"
         source: supercharge_config::RequirementsSource::File(user.path().join("requirements.toml")),
         is_system: false,
     };
-    let layers = supercharge_config::managed_config_layers_at(Some(system.path()), Some(user.path()));
+    let layers =
+        supercharge_config::managed_config_layers_at(Some(system.path()), Some(user.path()));
     let ms = resolve_managed_settings(
         None,
         managed_toml_policy_layers(layers, vec![user_requirements]),

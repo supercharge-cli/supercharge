@@ -1310,9 +1310,9 @@ mod tests {
     #[test]
     fn write_scoped_access_respects_edit_deny_and_not_read_allow() {
         use crate::permission::rules::parse_permission_rule;
+        use supercharge_tool_types::TaskToolInput;
         use supercharge_tools::implementations::opencode::edit::EditInput;
         use supercharge_tools::types::ToolInput;
-        use supercharge_tool_types::TaskToolInput;
 
         let edit = AccessKind::from(&ToolInput::from(EditInput {
             file_path: "/tmp/denied.txt".into(),

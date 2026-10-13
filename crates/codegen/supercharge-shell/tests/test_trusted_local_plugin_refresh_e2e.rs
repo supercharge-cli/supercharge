@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serial_test::serial;
-use tempfile::TempDir;
 use supercharge_agent::plugins::SharedPluginRegistryHandle;
 use supercharge_agent::plugins::discovery::DiscoveryConfig;
 use supercharge_agent::plugins::git_install::{InstallSource, install_from_source};
@@ -23,6 +22,7 @@ use supercharge_agent::plugins::install_registry::{
     InstallKind, InstallRegistry, InstalledRepo, RepoPlugin,
 };
 use supercharge_test_support::*;
+use tempfile::TempDir;
 
 fn write_minimal_plugin(dir: &Path, name: &str) {
     std::fs::create_dir_all(dir).unwrap();

@@ -564,7 +564,9 @@ mod tests {
     use super::*;
     use ratatui::layout::Rect;
     use supercharge_pager::views::extensions_modal::ExtensionsModalState;
-    use supercharge_pager::views::mcps_modal::{McpServerDisplayStatus, McpServerInfo, McpWireSource};
+    use supercharge_pager::views::mcps_modal::{
+        McpServerDisplayStatus, McpServerInfo, McpWireSource,
+    };
 
     fn agent() -> AgentView {
         minimal_api::test_agent_view(Some("s1"), std::path::PathBuf::from("/tmp/repo"))
@@ -625,7 +627,9 @@ mod tests {
         }
     }
 
-    fn with_resume(entries: Vec<supercharge_pager::app::app_view::SessionPickerEntry>) -> AgentView {
+    fn with_resume(
+        entries: Vec<supercharge_pager::app::app_view::SessionPickerEntry>,
+    ) -> AgentView {
         let mut a = agent();
         a.active_modal = Some(ActiveModal::SessionPicker {
             state: picker::PickerState::default(),

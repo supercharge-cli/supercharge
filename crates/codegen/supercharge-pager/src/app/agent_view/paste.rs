@@ -200,7 +200,8 @@ impl AgentView {
                         supercharge_telemetry::session_ctx::log_event(
                             supercharge_telemetry::events::ContextualTip {
                                 tip: supercharge_telemetry::events::ContextualTipKind::ImageInput,
-                                action: supercharge_telemetry::events::ContextualTipAction::Accepted,
+                                action:
+                                    supercharge_telemetry::events::ContextualTipAction::Accepted,
                             },
                         );
                     }
@@ -1251,9 +1252,10 @@ pub(super) mod paste_key_tests {
     /// Build a `QuestionViewState` already in `InputMode` focus.
     pub(in crate::app::agent_view) fn make_question_view_state_in_input_mode()
     -> crate::views::question_view::QuestionViewState {
-        let question = supercharge_tools::implementations::grok_build::ask_user_question::Question {
-            question: "Pick one?".to_string(),
-            options: vec![
+        let question =
+            supercharge_tools::implementations::grok_build::ask_user_question::Question {
+                question: "Pick one?".to_string(),
+                options: vec![
                 supercharge_tools::implementations::grok_build::ask_user_question::QuestionOption {
                     label: "A".to_string(),
                     description: "Option A".to_string(),
@@ -1261,9 +1263,9 @@ pub(super) mod paste_key_tests {
                     id: None,
                 },
             ],
-            multi_select: Some(false),
-            id: None,
-        };
+                multi_select: Some(false),
+                id: None,
+            };
         let mut state = crate::views::question_view::QuestionViewState::new(
             "tc-1".into(),
             vec![question],

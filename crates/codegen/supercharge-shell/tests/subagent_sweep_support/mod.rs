@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 
 use agent_client_protocol::{self as acp, Agent as _};
 use serde_json::{Value, json};
-use tempfile::TempDir;
 use supercharge_shell::waterfall;
 use supercharge_test_support::mock_server::LogEntry;
 use supercharge_test_support::{
@@ -15,6 +14,7 @@ use supercharge_test_support::{
     ScriptedResponse, SseEvent,
 };
 use supercharge_test_utils::env::env_usize;
+use tempfile::TempDir;
 
 use crate::acp_harness;
 use crate::perf_harness::{PerfRecorder, spawn_agent_thread};

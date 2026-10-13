@@ -1125,7 +1125,10 @@ struct BodyStreamer<'a> {
 }
 
 impl<'a> BodyStreamer<'a> {
-    fn new(spec: &'a supercharge_tool_protocol::StreamingSpec, config: &'a GrepFormatConfig) -> Self {
+    fn new(
+        spec: &'a supercharge_tool_protocol::StreamingSpec,
+        config: &'a GrepFormatConfig,
+    ) -> Self {
         Self {
             spec,
             config,
@@ -1784,10 +1787,13 @@ mod tests {
             (resources, input)
         };
         let run = |resources: Resources, input| async {
-            let out =
-                supercharge_tool_runtime::Tool::run(&GrepTool, test_ctx(resources.into_shared()), input)
-                    .await
-                    .unwrap();
+            let out = supercharge_tool_runtime::Tool::run(
+                &GrepTool,
+                test_ctx(resources.into_shared()),
+                input,
+            )
+            .await
+            .unwrap();
             String::from_utf8_lossy(&out.stdout).into_owned()
         };
 
@@ -1897,10 +1903,14 @@ mod tests {
         let mut input = make_grep_input("FAKE");
         input.path = Some("src".to_string());
         let out = String::from_utf8_lossy(
-            &supercharge_tool_runtime::Tool::run(&GrepTool, test_ctx(resources.into_shared()), input)
-                .await
-                .unwrap()
-                .stdout,
+            &supercharge_tool_runtime::Tool::run(
+                &GrepTool,
+                test_ctx(resources.into_shared()),
+                input,
+            )
+            .await
+            .unwrap()
+            .stdout,
         )
         .into_owned();
 
@@ -2016,10 +2026,13 @@ mod tests {
         let mut input = make_grep_input("findme_");
         input.head_limit = Some(5);
 
-        let output =
-            supercharge_tool_runtime::Tool::run(&GrepTool, test_ctx(resources.into_shared()), input)
-                .await
-                .unwrap();
+        let output = supercharge_tool_runtime::Tool::run(
+            &GrepTool,
+            test_ctx(resources.into_shared()),
+            input,
+        )
+        .await
+        .unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert_eq!(output.exit_code, 0);
@@ -2051,10 +2064,13 @@ mod tests {
         let mut input = make_grep_input("findme_");
         input.head_limit = Some(6);
 
-        let output =
-            supercharge_tool_runtime::Tool::run(&GrepTool, test_ctx(resources.into_shared()), input)
-                .await
-                .unwrap();
+        let output = supercharge_tool_runtime::Tool::run(
+            &GrepTool,
+            test_ctx(resources.into_shared()),
+            input,
+        )
+        .await
+        .unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert_eq!(output.exit_code, 0);
@@ -2449,7 +2465,8 @@ mod tests {
 
         let mut deltas = String::new();
         let mut progress = 0usize;
-        let mut terminal: Option<Result<GrepSearchOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<GrepSearchOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(p) => {
@@ -2528,7 +2545,8 @@ mod tests {
             supercharge_tool_runtime::Tool::execute(&tool, ctx, make_grep_input("findme")).await;
 
         let mut progress = 0usize;
-        let mut terminal: Option<Result<GrepSearchOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<GrepSearchOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(_) => progress += 1,
@@ -2574,11 +2592,16 @@ mod tests {
         input.head_limit = Some(5);
 
         let tool = GrepTool;
-        let mut stream =
-            supercharge_tool_runtime::Tool::execute(&tool, test_ctx(resources.into_shared()), input).await;
+        let mut stream = supercharge_tool_runtime::Tool::execute(
+            &tool,
+            test_ctx(resources.into_shared()),
+            input,
+        )
+        .await;
 
         let mut deltas = String::new();
-        let mut terminal: Option<Result<GrepSearchOutput, supercharge_tool_runtime::ToolError>> = None;
+        let mut terminal: Option<Result<GrepSearchOutput, supercharge_tool_runtime::ToolError>> =
+            None;
         while let Some(item) = stream.next().await {
             match item {
                 supercharge_tool_runtime::ToolStreamItem::Progress(p) => {

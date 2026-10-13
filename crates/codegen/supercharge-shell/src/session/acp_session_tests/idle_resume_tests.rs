@@ -68,7 +68,8 @@ async fn test_e2e_idle_resume_refreshes_model_metadata() {
                 axum::serve(listener, app).await.unwrap();
             });
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let cwd = supercharge_paths::AbsPathBuf::new(std::path::PathBuf::from("/tmp")).unwrap();
             let fs = Arc::new(supercharge_workspace::file_system::MockFs::new(
@@ -396,7 +397,8 @@ async fn test_idle_resume_noop_when_not_idle_enough() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
-            let (gateway_tx, _) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+            let (gateway_tx, _) =
+                mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
             let (persistence_tx, _) = mpsc::unbounded_channel::<PersistenceMsg>();
             let actor = create_test_actor(50_000, 200_000, 85, gateway_tx, persistence_tx).await;
             let five_minutes_ago_ms = chrono::Utc::now().timestamp_millis() - (5 * 60 * 1000);

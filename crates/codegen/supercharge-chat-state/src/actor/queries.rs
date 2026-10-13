@@ -79,9 +79,15 @@ impl ChatStateActor {
         let context_window = self.state.sampling_config.context_window;
         let cw = context_window.get();
 
-        if supercharge_token_estimation::exceeds_threshold(self.state.total_tokens, cw, threshold_percent) {
-            let utilization_percent =
-                supercharge_token_estimation::usage_percentage_truncated_u8(self.state.total_tokens, cw);
+        if supercharge_token_estimation::exceeds_threshold(
+            self.state.total_tokens,
+            cw,
+            threshold_percent,
+        ) {
+            let utilization_percent = supercharge_token_estimation::usage_percentage_truncated_u8(
+                self.state.total_tokens,
+                cw,
+            );
             Some(AutoCompactTrigger {
                 total_tokens: self.state.total_tokens,
                 context_window,
@@ -293,11 +299,18 @@ impl ChatStateActor {
     }
 
     /// Return the first `System` message in the conversation, or `None`.
-    pub(super) fn get_system_message(&self) -> Option<supercharge_sampling_types::ConversationItem> {
+    pub(super) fn get_system_message(
+        &self,
+    ) -> Option<supercharge_sampling_types::ConversationItem> {
         self.state
             .conversation
             .iter()
-            .find(|item| matches!(item, supercharge_sampling_types::ConversationItem::System(_)))
+            .find(|item| {
+                matches!(
+                    item,
+                    supercharge_sampling_types::ConversationItem::System(_)
+                )
+            })
             .cloned()
     }
 }

@@ -847,9 +847,11 @@ async fn observe_only_confident_completion_stays_warn_only() {
                 usage: None,
                 cost_usd_ticks: None,
                 message_chunks_emitted: 1,
-                doom_loop_signals: vec![supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
-                    "tail_repetition:8@thinking",
-                )],
+                doom_loop_signals: vec![
+                    supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
+                        "tail_repetition:8@thinking",
+                    ),
+                ],
                 stop_message: None,
                 message_id: None,
                 raw_stop_reason: None,
@@ -911,9 +913,11 @@ async fn exact_repetition_completion_is_tracked_for_incidence_only() {
                 usage: None,
                 cost_usd_ticks: None,
                 message_chunks_emitted: 1,
-                doom_loop_signals: vec![supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
-                    "exact_repetition:42x3@response",
-                )],
+                doom_loop_signals: vec![
+                    supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
+                        "exact_repetition:42x3@response",
+                    ),
+                ],
                 stop_message: None,
                 message_id: None,
                 raw_stop_reason: None,
@@ -1055,9 +1059,11 @@ async fn doom_loop_recovery_stamps_capture_segments_and_counters() {
                 usage: None,
                 cost_usd_ticks: None,
                 message_chunks_emitted: 1,
-                doom_loop_signals: vec![supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
-                    "tail_repetition:4@thinking",
-                )],
+                doom_loop_signals: vec![
+                    supercharge_sampling_types::doom_loop::DoomLoopSignal::parse(
+                        "tail_repetition:4@thinking",
+                    ),
+                ],
                 stop_message: None,
                 message_id: None,
                 raw_stop_reason: None,
@@ -1367,7 +1373,8 @@ async fn reasoning_only_doomloop_turn_captures_every_generation_as_segments() {
             // Take the capture exactly as the trace upload does: through the real `TakeStreamingCapture` command
             // The command finalizes the uncommitted generations for upload
             let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<SessionCommand>();
-            let (_chat_tx, chat_rx) = mpsc::unbounded_channel::<supercharge_chat_state::ChatStateEvent>();
+            let (_chat_tx, chat_rx) =
+                mpsc::unbounded_channel::<supercharge_chat_state::ChatStateEvent>();
             let codebase_indexes = Arc::new(parking_lot::Mutex::new(
                 supercharge_workspace::file_system::CodebaseIndexManager::new(),
             ));

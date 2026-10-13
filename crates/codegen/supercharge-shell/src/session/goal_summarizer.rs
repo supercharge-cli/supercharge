@@ -15,11 +15,11 @@ use crate::session::goal_role_tools::RoleToolNames;
 use std::path::Path;
 use std::sync::Arc;
 use supercharge_session_events::EventWriter;
+use supercharge_tool_types::SubagentCapabilityMode;
 use supercharge_tools::implementations::grok_build::task::backend::ChannelBackend;
 use supercharge_tools::implementations::grok_build::task::types::{
     SubagentOwner, SubagentRequest, SubagentRuntimeOverrides,
 };
-use supercharge_tool_types::SubagentCapabilityMode;
 
 // Constants
 
@@ -604,10 +604,10 @@ mod tests {
 
     #[tokio::test]
     async fn channel_spawner_request_is_harness_internal_and_read_only() {
+        use supercharge_tool_types::SubagentCapabilityMode;
         use supercharge_tools::implementations::grok_build::task::types::{
             SubagentEvent, SubagentResult,
         };
-        use supercharge_tool_types::SubagentCapabilityMode;
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let spawner = ChannelSpawner {

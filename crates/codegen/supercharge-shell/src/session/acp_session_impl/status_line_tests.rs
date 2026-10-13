@@ -8,10 +8,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use tokio::sync::Notify;
-use tokio::sync::mpsc::UnboundedReceiver;
 use supercharge_acp_lib::AcpClientMessage;
 use supercharge_workspace::session::git::normalize_repo_url;
+use tokio::sync::Notify;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 #[test]
 fn session_usage_splits_fresh_input_from_the_cache_buckets() {

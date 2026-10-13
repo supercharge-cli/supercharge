@@ -8,10 +8,10 @@ use crate::session::tool_config::resolve_session_toolset;
 use crate::session::tool_config::test_support::{TestSessionContextFactory, baseline_config, tc};
 use axum::response::IntoResponse;
 use std::sync::Arc;
+use supercharge_tool_runtime::ToolCallContext;
 use supercharge_tools::registry::types::ToolServerConfig;
 use supercharge_tools::types::tool::ToolKind;
 use supercharge_workspace_types::WorkspaceEvent;
-use supercharge_tool_runtime::ToolCallContext;
 /// Create a test workspace handle with a "main" session pre-created.
 pub(crate) fn make_handle() -> WorkspaceHandle {
     make_handle_with_rewind_all_outcomes(false)
@@ -104,9 +104,9 @@ fn make_handle_with_factory(
         skills_config: Default::default(),
         plugin_discovery_config: Default::default(),
         hub_config: None,
-        auth_provider: Some(Arc::new(supercharge_computer_hub_sdk::AuthCredential::bearer(
-            "test-token",
-        ))),
+        auth_provider: Some(Arc::new(
+            supercharge_computer_hub_sdk::AuthCredential::bearer("test-token"),
+        )),
         server_metadata: None,
         status_config,
         project_lsp_trusted: true,
@@ -164,7 +164,8 @@ impl supercharge_tool_runtime::Tool for BashCcoStub {
         &self,
         _ctx: supercharge_tool_runtime::ToolCallContext,
         _input: serde_json::Value,
-    ) -> Result<supercharge_tools::types::output::ToolOutput, supercharge_tool_runtime::ToolError> {
+    ) -> Result<supercharge_tools::types::output::ToolOutput, supercharge_tool_runtime::ToolError>
+    {
         let output = BASH_CCO_STUB_STDOUT.as_bytes();
         Ok(supercharge_tools::types::output::ToolOutput::Bash(
             supercharge_tools::types::output::BashOutput {
@@ -240,7 +241,8 @@ async fn local_harness_preserves_bash_chat_completion_output() {
     let handle = make_handle();
     register_bash_cco_stub(&handle);
     let harness = handle.create_local_harness("main").expect("local harness");
-    let tool_id = supercharge_tool_protocol::ToolId::new(BASH_CCO_STUB_NAME).expect("valid tool id");
+    let tool_id =
+        supercharge_tool_protocol::ToolId::new(BASH_CCO_STUB_NAME).expect("valid tool id");
     let stream = harness
         .call(tool_id, serde_json::json!({}), ToolCallContext::default())
         .await;
@@ -1752,7 +1754,9 @@ pub(crate) fn make_handle_with_events() -> (WorkspaceHandle, tempfile::TempDir) 
 #[tokio::test]
 async fn events_jsonl_captures_turn_tool_toggle_and_mcp_variants() {
     use supercharge_session_events::ToolOutcome;
-    use supercharge_tool_protocol::turn_hook::{AfterTurnPayload, BeforeTurnPayload, TurnHookOutcome};
+    use supercharge_tool_protocol::turn_hook::{
+        AfterTurnPayload, BeforeTurnPayload, TurnHookOutcome,
+    };
     let (handle, home) = make_handle_with_events();
     let sid = "sess-int";
     handle
@@ -2020,7 +2024,9 @@ async fn before_turn_yolo_transition_emits_yolo_toggled_event() {
 #[tokio::test]
 async fn events_disabled_keeps_noop_and_writes_nothing() {
     use supercharge_session_events::ToolOutcome;
-    use supercharge_tool_protocol::turn_hook::{AfterTurnPayload, BeforeTurnPayload, TurnHookOutcome};
+    use supercharge_tool_protocol::turn_hook::{
+        AfterTurnPayload, BeforeTurnPayload, TurnHookOutcome,
+    };
     let handle = make_handle();
     assert!(
         !handle.shared().events_enabled,
@@ -4384,9 +4390,12 @@ async fn bind_with_no_configured_mcp_still_joins_the_configured_set() {
     let handle = WorkspaceHandle::new(config).unwrap();
     handle.create_session("main").unwrap();
     let resolver = bind_resolver_fixture(&handle);
-    resolver(supercharge_tool_protocol::SessionId::new("empty").unwrap(), None)
-        .await
-        .expect("bind must succeed with no MCP servers configured");
+    resolver(
+        supercharge_tool_protocol::SessionId::new("empty").unwrap(),
+        None,
+    )
+    .await
+    .expect("bind must succeed with no MCP servers configured");
     assert_eq!(live_mcp_servers(&handle, "empty").await, Some(Vec::new()));
 }
 /// A reload unregisters exactly the ids a server contributed, so those ids
@@ -4432,9 +4441,12 @@ async fn a_shadowed_mcp_tool_is_not_attributed_to_its_server() {
     let handle = WorkspaceHandle::new(config).unwrap();
     handle.create_session("main").unwrap();
     let resolver = bind_resolver_fixture(&handle);
-    resolver(supercharge_tool_protocol::SessionId::new("shadowed").unwrap(), None)
-        .await
-        .expect("bind must succeed");
+    resolver(
+        supercharge_tool_protocol::SessionId::new("shadowed").unwrap(),
+        None,
+    )
+    .await
+    .expect("bind must succeed");
     let hub = FakeHubRegistry::default();
     converge_with(&handle, "shadowed", &hub, crate::mcp::McpReclaim::Always).await;
     assert_eq!(
@@ -4553,9 +4565,12 @@ async fn a_reload_without_a_hub_stages_the_config_and_reports_it() {
         "the config must be published even without a hub"
     );
     let resolver = bind_resolver_fixture(&handle);
-    resolver(supercharge_tool_protocol::SessionId::new("late").unwrap(), None)
-        .await
-        .expect("bind must succeed");
+    resolver(
+        supercharge_tool_protocol::SessionId::new("late").unwrap(),
+        None,
+    )
+    .await
+    .expect("bind must succeed");
     let hub = FakeHubRegistry::default();
     converge_with(&handle, "late", &hub, crate::mcp::McpReclaim::Always).await;
     assert_eq!(
@@ -5035,7 +5050,10 @@ struct FakeHubRegistry {
 /// them: `session -> [(life, handler)]`.
 type DynamicRegistrations = std::collections::HashMap<
     supercharge_tool_protocol::SessionId,
-    Vec<(u64, Arc<dyn supercharge_computer_hub_sdk::ToolServerHandler>)>,
+    Vec<(
+        u64,
+        Arc<dyn supercharge_computer_hub_sdk::ToolServerHandler>,
+    )>,
 >;
 impl FakeHubRegistry {
     /// What the fake hub currently advertises for a session — the assertion surface reload/converge tests read. Inherent (not on [`crate::mcp::HubToolRegistry`]): production never reads back through the registry seam, so the trait carries only the register/unregister channel.
@@ -5069,9 +5087,11 @@ impl crate::mcp::HubToolRegistry for FakeHubRegistry {
             match ledger {
                 Some(existing) if existing == life => continue,
                 Some(existing) if existing > life => {
-                    return Err(supercharge_computer_hub_sdk::ClientError::InvalidConfig(format!(
-                        "tool_id {tool_id} is registered for session {sid} by a newer life"
-                    )));
+                    return Err(supercharge_computer_hub_sdk::ClientError::InvalidConfig(
+                        format!(
+                            "tool_id {tool_id} is registered for session {sid} by a newer life"
+                        ),
+                    ));
                 }
                 Some(_) => {}
                 None => {
@@ -5079,9 +5099,9 @@ impl crate::mcp::HubToolRegistry for FakeHubRegistry {
                         .get(&sid)
                         .is_some_and(|handlers| handlers.iter().any(|h| h.tool_id() == tool_id))
                     {
-                        return Err(supercharge_computer_hub_sdk::ClientError::InvalidConfig(format!(
-                            "tool_id {tool_id} is already registered for session {sid}"
-                        )));
+                        return Err(supercharge_computer_hub_sdk::ClientError::InvalidConfig(
+                            format!("tool_id {tool_id} is already registered for session {sid}"),
+                        ));
                     }
                 }
             }
@@ -5150,7 +5170,10 @@ impl FakeHubRegistry {
         self.handlers.lock().insert(sid.clone(), merged);
     }
 }
-fn fake_hub_tool_ids(hub: &FakeHubRegistry, sid: &supercharge_tool_protocol::SessionId) -> Vec<String> {
+fn fake_hub_tool_ids(
+    hub: &FakeHubRegistry,
+    sid: &supercharge_tool_protocol::SessionId,
+) -> Vec<String> {
     hub.handlers_for_session(sid)
         .iter()
         .map(|handler| handler.tool_id().as_str().to_owned())
@@ -7317,7 +7340,9 @@ async fn no_upload_queue_registers_no_inflight_enqueue() {
 /// The turn-end path evicts a stored inflight before-turn entry.
 #[tokio::test]
 async fn compute_turn_injections_after_returns_skipped_ack_without_queue() {
-    use supercharge_tool_protocol::turn_hook::{AfterTurnPayload, TurnHookOutcome, TurnHookRequest};
+    use supercharge_tool_protocol::turn_hook::{
+        AfterTurnPayload, TurnHookOutcome, TurnHookRequest,
+    };
     let handle = make_handle();
     handle.shared().inflight_enqueues.insert(
         ("main".to_owned(), 3),
@@ -7403,7 +7428,9 @@ async fn compute_turn_injections_before_runs_turn_start_and_replies_noop() {
 /// The category string becomes the enum's snake_case form and the context object passes through verbatim.
 #[tokio::test]
 async fn after_turn_decodes_cancellation_fields_into_events_jsonl() {
-    use supercharge_tool_protocol::turn_hook::{AfterTurnPayload, BeforeTurnPayload, TurnHookOutcome};
+    use supercharge_tool_protocol::turn_hook::{
+        AfterTurnPayload, BeforeTurnPayload, TurnHookOutcome,
+    };
     let (handle, home) = make_handle_with_events();
     let sid = "sess-cancel";
     handle
@@ -7849,7 +7876,10 @@ async fn enqueue_workspace_tool_definitions_reports_enqueued_at_session_root() {
         .expect("payload for an existing session");
     assert_eq!(path, "main/workspace_tool_definitions.json");
     let outcome = enqueue_workspace_tool_definitions(&queue, "main", &path, &bytes).await;
-    assert_eq!(outcome, supercharge_file_utils::queue::EnqueueOutcome::Enqueued);
+    assert_eq!(
+        outcome,
+        supercharge_file_utils::queue::EnqueueOutcome::Enqueued
+    );
     assert_eq!(
         queue
             .stats()
@@ -8149,7 +8179,10 @@ async fn drain_wedged_producer_does_not_starve_queue_flush() {
     )
     .expect("queue-backed handle construction");
     let outcome = enqueue_workspace_tool_definitions(&queue, "main", "main/pre.json", b"{}").await;
-    assert_eq!(outcome, supercharge_file_utils::queue::EnqueueOutcome::Enqueued);
+    assert_eq!(
+        outcome,
+        supercharge_file_utils::queue::EnqueueOutcome::Enqueued
+    );
     let _join = handle.spawn_producer(std::future::pending::<()>());
     let before = DRAIN_COMPLETED_TOTAL
         .with_label_values(&[DrainOutcome::ProducersTimeout.as_ref()])

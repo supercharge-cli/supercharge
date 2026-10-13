@@ -138,7 +138,9 @@ impl WorkspaceRpc for GetRewindPointsReq {
     const ACTIVITY: RpcActivityClass = RpcActivityClass::Read;
     type Response = Vec<crate::session::file_state::RewindPoint>;
 }
-fn hunk_line_info_to_wire(info: &supercharge_hunk_tracker::types::HunkLineInfo) -> HunkLineInfoWire {
+fn hunk_line_info_to_wire(
+    info: &supercharge_hunk_tracker::types::HunkLineInfo,
+) -> HunkLineInfoWire {
     HunkLineInfoWire {
         old_start: info.old_start,
         old_count: info.old_count,
@@ -188,7 +190,9 @@ fn file_content_view_to_wire(
         content: view.content,
     }
 }
-fn file_content_entry_to_wire(entry: supercharge_hunk_tracker::FileContentEntry) -> FileContentEntryWire {
+fn file_content_entry_to_wire(
+    entry: supercharge_hunk_tracker::FileContentEntry,
+) -> FileContentEntryWire {
     FileContentEntryWire {
         path: entry.path,
         baseline: file_content_view_to_wire(entry.baseline),
@@ -197,7 +201,9 @@ fn file_content_entry_to_wire(entry: supercharge_hunk_tracker::FileContentEntry)
         staged: entry.staged,
     }
 }
-fn session_stats_to_wire(stats: &supercharge_hunk_tracker::types::SessionStats) -> SessionStatsWire {
+fn session_stats_to_wire(
+    stats: &supercharge_hunk_tracker::types::SessionStats,
+) -> SessionStatsWire {
     SessionStatsWire {
         accepted_hunks: stats.accepted_hunks,
         rejected_hunks: stats.rejected_hunks,
@@ -216,7 +222,9 @@ fn turn_summary_to_wire(turn: supercharge_hunk_tracker::types::TurnSummary) -> T
         lines_removed: turn.lines_removed,
     }
 }
-fn session_summary_to_wire(summary: supercharge_hunk_tracker::SessionSummary) -> SessionSummaryWire {
+fn session_summary_to_wire(
+    summary: supercharge_hunk_tracker::SessionSummary,
+) -> SessionSummaryWire {
     SessionSummaryWire {
         stats: session_stats_to_wire(&summary.stats),
         turns: summary
@@ -736,7 +744,8 @@ impl WorkspaceOp for HunkSingleActionReq {
         ws: &WorkspaceHandle,
         session_id: Option<&str>,
     ) -> WorkspaceResult<Self::Response> {
-        let hunk_id = supercharge_hunk_tracker::types::HunkId::from_string(self.action.hunk_id.clone());
+        let hunk_id =
+            supercharge_hunk_tracker::types::HunkId::from_string(self.action.hunk_id.clone());
         let hunk_action = tracker_action(self.action.action);
         session_tracker(ws, session_id)?
             .hunk_action(hunk_id, hunk_action)
@@ -1612,7 +1621,9 @@ impl WorkspaceOps {
     pub async fn repos_list(&self) -> WorkspaceResult<ReposListResponse> {
         self.dispatch(&ReposListReq {}, None).await
     }
-    pub async fn hook_registry(&self) -> WorkspaceResult<supercharge_hooks::discovery::HookRegistry> {
+    pub async fn hook_registry(
+        &self,
+    ) -> WorkspaceResult<supercharge_hooks::discovery::HookRegistry> {
         let wire = self.dispatch(&HookRegistryReq {}, None).await?;
         wire_to_hook_registry(&wire)
     }
@@ -1698,8 +1709,8 @@ impl WorkspaceOps {
                     )
                 })?;
                 let mut ctx = supercharge_tool_runtime::ToolCallContext::default();
-                ctx.call_id =
-                    supercharge_tool_protocol::ToolCallId::new(call_id.to_owned()).unwrap_or(ctx.call_id);
+                ctx.call_id = supercharge_tool_protocol::ToolCallId::new(call_id.to_owned())
+                    .unwrap_or(ctx.call_id);
                 let mut stream = client.harness().call(tool_id, args, ctx).await;
                 let typed = crate::hub_channel::consume_stream_terminal(&mut stream)
                     .await
@@ -1980,8 +1991,10 @@ mod tests {
             )
             .expect("bind should succeed");
         };
-        let first = Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
-        let second = Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
+        let first =
+            Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
+        let second =
+            Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
         bind(&first);
         bind(&second);
         assert!(
@@ -2010,8 +2023,10 @@ mod tests {
             unreachable!("for_test builds a local handle");
         };
         let sid = "sess-bind-after-unmap";
-        let first = Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
-        let second = Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
+        let first =
+            Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
+        let second =
+            Arc::new(supercharge_tools::registry::types::FinalizedToolset::empty_for_test());
         assert!(
             !handle.replace_session_toolset_if_mapped(sid, Arc::clone(&first)),
             "an unmapped id has nothing to swap"

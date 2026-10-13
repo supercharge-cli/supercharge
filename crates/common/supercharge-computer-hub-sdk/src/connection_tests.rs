@@ -1849,7 +1849,10 @@ async fn serve_send_failure_fails_fast_without_retry() {
     let session = SessionId::new("serve_session").expect("valid");
     let result = tokio::time::timeout(
         Duration::from_secs(5),
-        conn.serve(session, supercharge_tool_protocol::ServeParams { tools: vec![] }),
+        conn.serve(
+            session,
+            supercharge_tool_protocol::ServeParams { tools: vec![] },
+        ),
     )
     .await
     .expect("serve must fail bounded, not park");
@@ -1870,7 +1873,10 @@ async fn serve_times_out_bounded_and_reclaims_every_attempt_waiter() {
     let (conn, demux, mut outbound_rx) = test_connection();
     let session = SessionId::new("serve_timeout").expect("valid");
     let result = conn
-        .serve(session, supercharge_tool_protocol::ServeParams { tools: vec![] })
+        .serve(
+            session,
+            supercharge_tool_protocol::ServeParams { tools: vec![] },
+        )
         .await;
     assert!(matches!(result, Err(ClientError::NetworkError(_))));
     for id in ["c1", "c2", "c3"] {

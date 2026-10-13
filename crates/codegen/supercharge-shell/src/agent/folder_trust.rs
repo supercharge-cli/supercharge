@@ -428,8 +428,10 @@ pub(crate) fn filter_untrusted_project_lsp(
             supercharge_tools::types::config_source::ConfigSource,
         ),
     >,
-) -> std::collections::BTreeMap<String, supercharge_tools::implementations::lsp::config::LspServerConfig>
-{
+) -> std::collections::BTreeMap<
+    String,
+    supercharge_tools::implementations::lsp::config::LspServerConfig,
+> {
     supercharge_tools::implementations::lsp::config::filter_project_lsp_when_untrusted(
         sourced,
         project_scope_allowed(cwd),
@@ -986,7 +988,11 @@ mod tests {
         let tmp = repo_tmp();
         // A project plugin
         // Project scope is default-disabled, so name it in the `enabled` list to isolate the TRUST gate (not the enable gate)
-        let plugin = tmp.path().join(".supercharge").join("plugins").join("trustgate");
+        let plugin = tmp
+            .path()
+            .join(".supercharge")
+            .join("plugins")
+            .join("trustgate");
         std::fs::create_dir_all(&plugin).unwrap();
         std::fs::write(plugin.join("plugin.json"), r#"{"name":"trustgate"}"#).unwrap();
         let cfg = DiscoveryConfig {
@@ -1057,7 +1063,8 @@ mod tests {
         let untrusted = resolve_and_record(tmp.path(), None, false);
         assert!(!untrusted, "untrusted repo must resolve the gate false");
         // Mirror the production startup/reload path via the single load entry point.
-        let git_root = supercharge_workspace::session::git::find_git_root_from_path(tmp.path()).ok();
+        let git_root =
+            supercharge_workspace::session::git::find_git_root_from_path(tmp.path()).ok();
         let (reg, _errs) = crate::util::hooks::discover_hooks(
             git_root.as_deref(),
             &supercharge_tools::types::compat::CompatConfig::default(),
@@ -1337,7 +1344,9 @@ mod tests {
         // The reconcile re-reads the store, which honors the most-specific (child) decision and stays untrusted
         // The ancestor's cascade no longer undoes the explicit untrust
         let tmp = tempfile::tempdir().unwrap();
-        let store_path = tmp.path().join(supercharge_workspace::trust::TRUST_FILE_NAME);
+        let store_path = tmp
+            .path()
+            .join(supercharge_workspace::trust::TRUST_FILE_NAME);
         let parent = tmp.path().join("parent");
         let child = parent.join("child");
         std::fs::create_dir_all(&child).unwrap();

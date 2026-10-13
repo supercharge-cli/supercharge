@@ -212,7 +212,10 @@ fn assert_set_bool_action(outcome: SettingsKeyOutcome, key: &str, expected: bool
             assert_eq!(b, expected, "SetTimeline value differs from expected")
         }
         ("dashboard_preview", Action::SetDashboardPreview(b)) => {
-            assert_eq!(b, expected, "SetDashboardPreview value differs from expected")
+            assert_eq!(
+                b, expected,
+                "SetDashboardPreview value differs from expected"
+            )
         }
         ("page_flip_on_send", Action::SetPageFlipOnSend(b)) => {
             assert_eq!(b, expected, "SetPageFlipOnSend value differs from expected")
@@ -401,7 +404,11 @@ fn space_on_dashboard_preview_dispatches_typed_setter() {
     let mut s = make_state();
     navigate_to(&mut s, "dashboard_preview");
     let outcome = handle_settings_key(&mut s, &press(KeyCode::Char(' ')));
-    assert_set_bool_action(outcome, "dashboard_preview", !UiConfig::default().dashboard_preview_enabled());
+    assert_set_bool_action(
+        outcome,
+        "dashboard_preview",
+        !UiConfig::default().dashboard_preview_enabled(),
+    );
 }
 
 #[test]
@@ -713,7 +720,11 @@ fn mouse_click_on_dashboard_preview_indicator_toggles_in_one_click() {
         72,
         row_y,
     );
-    assert_set_bool_action(outcome, "dashboard_preview", !UiConfig::default().dashboard_preview_enabled());
+    assert_set_bool_action(
+        outcome,
+        "dashboard_preview",
+        !UiConfig::default().dashboard_preview_enabled(),
+    );
 }
 
 #[test]

@@ -423,9 +423,9 @@ pub async fn persist_models_default(
 mod tests {
     use super::*;
     use serial_test::serial;
-    use tempfile::tempdir;
     use supercharge_config::ConfigLayers;
     use supercharge_test_support::EnvGuard;
+    use tempfile::tempdir;
 
     fn models_default_patch(default: &str) -> toml::Table {
         let mut models = toml::map::Map::new();

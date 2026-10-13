@@ -2184,7 +2184,10 @@ fn terminal_feedback_outcomes_take_parked_consent_and_upload_only_remote_success
             supercharge_shell::session::FeedbackOutcome::SubmittedCleanupFailed,
             true,
         ),
-        (supercharge_shell::session::FeedbackOutcome::LocalOnly, false),
+        (
+            supercharge_shell::session::FeedbackOutcome::LocalOnly,
+            false,
+        ),
         (
             supercharge_shell::session::FeedbackOutcome::OutcomeUnknown,
             false,

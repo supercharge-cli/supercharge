@@ -5,9 +5,9 @@
 
 pub mod clipboard;
 pub mod placeholder_images;
+pub mod ponytail;
 pub mod session;
 pub mod stderr;
-pub mod ponytail;
 pub mod ui_config;
 
 #[cfg(test)]

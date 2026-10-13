@@ -42,7 +42,10 @@ fn execute_hook(
             tracing::debug!(error = %error, command, "hook process group enrollment failed");
             let _ = child.kill();
             if !matches!(
-                supercharge_tty_utils::wait_child_bounded(&mut child, supercharge_tty_utils::KILL_REAP_TIMEOUT,),
+                supercharge_tty_utils::wait_child_bounded(
+                    &mut child,
+                    supercharge_tty_utils::KILL_REAP_TIMEOUT,
+                ),
                 Ok(Some(_))
             ) && let Err((error, child, _)) =
                 supercharge_tty_utils::spawn_child_reaper("notification-hook-reaper", child, None)
@@ -72,13 +75,20 @@ fn execute_hook(
     }
 }
 
-fn kill_tree_and_reap(mut child: Child, group: Arc<supercharge_tty_utils::ProcessGroup>, command: &str) {
+fn kill_tree_and_reap(
+    mut child: Child,
+    group: Arc<supercharge_tty_utils::ProcessGroup>,
+    command: &str,
+) {
     if let Err(group_error) = group.kill()
         && let Err(child_error) = child.kill()
     {
         tracing::warn!(error = %group_error, fallback_error = %child_error, command, "hook group and direct-child kill failed");
     }
-    match supercharge_tty_utils::wait_child_bounded(&mut child, supercharge_tty_utils::KILL_REAP_TIMEOUT) {
+    match supercharge_tty_utils::wait_child_bounded(
+        &mut child,
+        supercharge_tty_utils::KILL_REAP_TIMEOUT,
+    ) {
         Ok(Some(_)) => drop(group),
         Ok(None) => abandon_child(child, Some(group), command),
         Err(error) => {
@@ -88,7 +98,11 @@ fn kill_tree_and_reap(mut child: Child, group: Arc<supercharge_tty_utils::Proces
     }
 }
 
-fn abandon_child(child: Child, group: Option<Arc<supercharge_tty_utils::ProcessGroup>>, command: &str) {
+fn abandon_child(
+    child: Child,
+    group: Option<Arc<supercharge_tty_utils::ProcessGroup>>,
+    command: &str,
+) {
     if let Err((error, child, group)) =
         supercharge_tty_utils::spawn_child_reaper("notification-hook-reaper", child, group)
     {

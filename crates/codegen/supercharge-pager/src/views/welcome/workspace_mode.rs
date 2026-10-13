@@ -820,11 +820,14 @@ mod apply_tests {
     #[test]
     #[serial_test::serial(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK)]
     fn local_without_ack_awaits_confirm() {
-        let _ack = supercharge_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV);
+        let _ack =
+            supercharge_test_support::EnvGuard::unset(SUPERCHARGE_CHAT_LOCAL_WORKSPACE_ACK_ENV);
         // Isolate the ack file from the developer machine
         let home = tempfile::tempdir().unwrap();
-        let _home =
-            supercharge_test_support::EnvGuard::set("SUPERCHARGE_HOME", home.path().to_str().unwrap());
+        let _home = supercharge_test_support::EnvGuard::set(
+            "SUPERCHARGE_HOME",
+            home.path().to_str().unwrap(),
+        );
         set_active_local_workspace(None).unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let out = prepare_welcome_workspace_for_new_session(

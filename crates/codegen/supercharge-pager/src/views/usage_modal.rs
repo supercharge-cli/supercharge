@@ -1023,7 +1023,10 @@ mod tests {
         let theme = Theme::current();
         let lines = usage_limit_lines(&state, &theme);
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
-        assert_eq!(text.first().map(String::as_str), Some("Session usage: 3 input tokens"));
+        assert_eq!(
+            text.first().map(String::as_str),
+            Some("Session usage: 3 input tokens")
+        );
     }
 
     #[test]

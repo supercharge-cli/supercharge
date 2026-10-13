@@ -22,7 +22,9 @@ use tokio_util::sync::CancellationToken;
 use supercharge_test_support::env::env_parse;
 use supercharge_test_support::resources::{ResourceGrowth, ResourceSnapshot};
 use supercharge_tools::implementations::grok_build::task::admission::SubagentLimits;
-use supercharge_tools::implementations::grok_build::task::backend::{ChannelBackend, SubagentBackend};
+use supercharge_tools::implementations::grok_build::task::backend::{
+    ChannelBackend, SubagentBackend,
+};
 use supercharge_tools::implementations::grok_build::task::coordinator::{
     ChildCompletion, ChildControl, ChildRunOutput, ChildRunRequest, ChildRunner, CoordinatorConfig,
     LocalBoxFuture, MAX_COMPLETED_ENTRIES, StartedChild, SubagentCoordinator, SubagentProgress,

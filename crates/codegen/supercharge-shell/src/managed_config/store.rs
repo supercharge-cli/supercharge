@@ -396,7 +396,10 @@ pub(super) fn apply_fetched(
             clear_squatting_dir(
                 &home.join(supercharge_config::signed_policy::MANAGED_IDENTITY_SIDECAR_FILE),
             );
-            supercharge_config::signed_policy::write_managed_identity_sidecar(&home, &claim_sidecar)?;
+            supercharge_config::signed_policy::write_managed_identity_sidecar(
+                &home,
+                &claim_sidecar,
+            )?;
         }
     }
     // Marker last, still under the lock: post-release, a concurrent purge could delete
@@ -526,7 +529,8 @@ pub(super) fn verified_claim_sidecar(
     use supercharge_config::signed_policy::now_unix;
     let sidecar = body.managed_identity_sidecar()?;
     // Unclamped wall clock, like the policy verify: a fresh claim heals an inflated floor.
-    let claim = match supercharge_config::signed_policy::verify_fetched_claim(&sidecar, now_unix()) {
+    let claim = match supercharge_config::signed_policy::verify_fetched_claim(&sidecar, now_unix())
+    {
         Ok(claim) => claim,
         Err(e) => {
             tracing::debug!("is-managed claim did not verify; not persisting it: {e}");

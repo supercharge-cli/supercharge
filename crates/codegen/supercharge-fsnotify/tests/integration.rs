@@ -4,8 +4,8 @@
 //! sharing remains: it locks watcher identity and stats, not event timing.
 
 use serial_test::serial;
-use tempfile::TempDir;
 use supercharge_fsnotify::FsConfig;
+use tempfile::TempDir;
 
 #[tokio::test(flavor = "current_thread")]
 #[serial]

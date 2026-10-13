@@ -60,9 +60,9 @@ impl Backend {
             None
             | Some(
                 AgentCmd::Headless(_)
-                    | AgentCmd::Serve(_)
-                    | AgentCmd::Daemon(_)
-                    | AgentCmd::Leader(_),
+                | AgentCmd::Serve(_)
+                | AgentCmd::Daemon(_)
+                | AgentCmd::Leader(_),
             ) => Backend::Shell,
         }
     }

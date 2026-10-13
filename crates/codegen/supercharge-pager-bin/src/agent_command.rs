@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tokio::sync::oneshot;
-use tokio_util::task::AbortOnDropHandle;
 use supercharge_pager::agent_runtime::AgentRuntime;
 use supercharge_shell::agent::config::Config;
+use tokio::sync::oneshot;
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::shutdown_and_flush_telemetry;
 

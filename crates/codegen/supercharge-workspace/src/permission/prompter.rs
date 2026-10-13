@@ -872,7 +872,8 @@ pub fn tool_name_for_access(access: &AccessKind) -> String {
         AccessKind::WebFetch(_) => "web_fetch".to_owned(),
         AccessKind::WebSearch(_) => "web_search".to_owned(),
         AccessKind::AgentMessage { .. } => {
-            supercharge_tools::implementations::grok_build::SEND_SUBAGENT_MESSAGE_TOOL_NAME.to_owned()
+            supercharge_tools::implementations::grok_build::SEND_SUBAGENT_MESSAGE_TOOL_NAME
+                .to_owned()
         }
         AccessKind::Tool(name) => name.clone(),
     }

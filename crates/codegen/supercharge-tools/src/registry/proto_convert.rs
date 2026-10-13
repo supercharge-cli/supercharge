@@ -8,7 +8,9 @@
 
 use super::types::{ToolConfig, ToolServerConfig};
 
-pub use supercharge_tools_api::config_validation::{ToolConfigEntryError, ToolConfigEntryErrorKind};
+pub use supercharge_tools_api::config_validation::{
+    ToolConfigEntryError, ToolConfigEntryErrorKind,
+};
 
 /// Convert one wire [`supercharge_tools_api::ToolConfigEntry`] to a runtime [`ToolConfig`]. `index` is
 /// only used for error reporting. The result always has `kind: None`: the wire format carries no

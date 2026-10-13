@@ -9,12 +9,12 @@ use crate::system_reminder::ReminderPolicy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::Instrument;
 use supercharge_tools::bridge::ToolBridge;
 use supercharge_tools::computer::types::{AsyncFileSystem, TerminalBackend};
 use supercharge_tools::notification::ToolNotificationHandle;
 use supercharge_tools::registry::types::SessionContext;
 use supercharge_tools::types::tool::ToolKind;
+use tracing::Instrument;
 /// The Grok [`ToolKind`] a vendor-compat `tools:` allowlist entry resolves to, so a plugin's upstream allowlist still binds.
 /// Backed by the shared vendor-to-Grok tool registry in `supercharge-tools` (also used by the hook matcher).
 fn claude_tool_kind(name: &str) -> Option<ToolKind> {
@@ -653,7 +653,8 @@ impl AgentBuilder {
         )
         .await?;
         let bridge = agent.tool_bridge();
-        let read_only_kinds = supercharge_tool_types::SubagentCapabilityMode::ReadOnly.allowed_tool_kinds();
+        let read_only_kinds =
+            supercharge_tool_types::SubagentCapabilityMode::ReadOnly.allowed_tool_kinds();
         let mut names = Vec::new();
         let mut read_only = true;
         for tool in bridge.tool_definitions_builtins_only().await {
@@ -776,9 +777,9 @@ impl AgentBuilder {
                     .push((&supercharge_tools::implementations::grok_build::ImageEditTool).into());
             }
             if self.video_gen_config.is_enabled() {
-                tool_config
-                    .tools
-                    .push((&supercharge_tools::implementations::grok_build::ImageToVideoTool).into());
+                tool_config.tools.push(
+                    (&supercharge_tools::implementations::grok_build::ImageToVideoTool).into(),
+                );
                 tool_config.tools.push(
                     (&supercharge_tools::implementations::grok_build::ReferenceToVideoTool).into(),
                 );
@@ -792,9 +793,9 @@ impl AgentBuilder {
                 tc.kind.or_else(|| known_kinds.get(&tc.id).copied()) == Some(ToolKind::Edit)
             });
             if self.write_file_enabled && !has_write_tool && has_edit_tool {
-                tool_config
-                    .tools
-                    .push((&supercharge_tools::implementations::opencode::OpenCodeWriteTool).into());
+                tool_config.tools.push(
+                    (&supercharge_tools::implementations::opencode::OpenCodeWriteTool).into(),
+                );
             }
             if self.prompt_audience == PromptAudience::Primary {
                 ensure_plan_mode_tools(&mut tool_config);
@@ -824,7 +825,8 @@ impl AgentBuilder {
                 .retain(|tool| !is_active_agent_message(tool));
         }
         if self.memory_backend.is_none() {
-            let grok_build_ns = supercharge_tools::types::tool::ToolNamespace::GrokBuild.to_string();
+            let grok_build_ns =
+                supercharge_tools::types::tool::ToolNamespace::GrokBuild.to_string();
             let mem_search_id = format!(
                 "{grok_build_ns}:{}",
                 supercharge_tools::implementations::memory::MEMORY_SEARCH_TOOL_NAME
@@ -1131,7 +1133,9 @@ impl AgentBuilder {
         }
         if self.prompt_audience == crate::prompt::context::PromptAudience::Subagent {
             tool_config.tools.retain(|tool| {
-                !supercharge_tools::implementations::grok_build::is_workflow_tool(tool.kind, &tool.id)
+                !supercharge_tools::implementations::grok_build::is_workflow_tool(
+                    tool.kind, &tool.id,
+                )
             });
         }
         let use_backend_search = self.backend_search;
@@ -1335,10 +1339,12 @@ impl AgentBuilder {
         let mut hosted_tools = Vec::new();
         if use_backend_search {
             if web_search_enabled && definition.hosted_tool_allowed("web_search") {
-                hosted_tools.push(supercharge_sampling_types::HostedTool::WebSearch { options: None });
+                hosted_tools
+                    .push(supercharge_sampling_types::HostedTool::WebSearch { options: None });
             }
             if definition.hosted_tool_allowed("x_search") {
-                hosted_tools.push(supercharge_sampling_types::HostedTool::XSearch { options: None });
+                hosted_tools
+                    .push(supercharge_sampling_types::HostedTool::XSearch { options: None });
             }
             supercharge_sampling_types::apply_tool_overrides(
                 &mut hosted_tools,
@@ -1360,14 +1366,15 @@ impl AgentBuilder {
     }
 }
 /// CLI naming for the shared [`supercharge_tool_types::build_task_description`] builder.
-const TASK_TOOL_NAMING: supercharge_tool_types::TaskToolNaming<'static> = supercharge_tool_types::TaskToolNaming {
-    task_tool: "${{ tools.by_kind.task }}",
-    subagent_type_param: "${{ params.task.subagent_type }}",
-    run_in_background_param: "${{ params.task.run_in_background }}",
-    resume_from_param: "${{ params.task.resume_from }}",
-    background_retrieval_tool: "${{ tools.by_kind.background_task_action }}",
-    isolation_param: "${{ params.task.isolation }}",
-};
+const TASK_TOOL_NAMING: supercharge_tool_types::TaskToolNaming<'static> =
+    supercharge_tool_types::TaskToolNaming {
+        task_tool: "${{ tools.by_kind.task }}",
+        subagent_type_param: "${{ params.task.subagent_type }}",
+        run_in_background_param: "${{ params.task.run_in_background }}",
+        resume_from_param: "${{ params.task.resume_from }}",
+        background_retrieval_tool: "${{ tools.by_kind.background_task_action }}",
+        isolation_param: "${{ params.task.isolation }}",
+    };
 /// Child sessions get a concise description that discourages recursive delegation. Hardcodes the built-in type names;
 /// if custom child-visible subagent types become common, generate this like the parent description.
 const CHILD_TASK_DESCRIPTION: &str = "\
@@ -1457,7 +1464,8 @@ pub(crate) fn build_task_description(
             }
         })
         .collect();
-    let mut description = supercharge_tool_types::build_task_description(&descriptors, &TASK_TOOL_NAMING);
+    let mut description =
+        supercharge_tool_types::build_task_description(&descriptors, &TASK_TOOL_NAMING);
     description.push_str(&task_model_guidance(model_slugs));
     description
 }
@@ -1505,7 +1513,8 @@ mod tests {
             &self,
             _path: &std::path::Path,
             _contents: &[u8],
-        ) -> std::result::Result<supercharge_tools::types::memory_v2::MemoryV2Write, String> {
+        ) -> std::result::Result<supercharge_tools::types::memory_v2::MemoryV2Write, String>
+        {
             Ok(supercharge_tools::types::memory_v2::MemoryV2Write::Outside)
         }
         fn scope_roots(&self) -> [PathBuf; 2] {
@@ -1544,12 +1553,14 @@ mod tests {
     async fn unexposed_memory_v2_access_installs_policy_without_prompt_block() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
         let access = || {
-            supercharge_tools::types::memory_v2::MemoryV2AccessResource(Arc::new(TestMemoryV2Access {
-                roots: [
-                    PathBuf::from("/memory/global"),
-                    PathBuf::from("/memory/workspace"),
-                ],
-            }))
+            supercharge_tools::types::memory_v2::MemoryV2AccessResource(Arc::new(
+                TestMemoryV2Access {
+                    roots: [
+                        PathBuf::from("/memory/global"),
+                        PathBuf::from("/memory/workspace"),
+                    ],
+                },
+            ))
         };
         let builder = || {
             AgentBuilder::new(
@@ -1658,12 +1669,11 @@ mod tests {
     async fn active_agent_messages_are_present_in_enabled_child_toolsets() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
         let mut definition = crate::config::AgentDefinition::default_grok_build();
-        definition
-            .tool_config
-            .tools
-            .push(supercharge_tools::registry::types::ToolConfig::for_tool::<
+        definition.tool_config.tools.push(
+            supercharge_tools::registry::types::ToolConfig::for_tool::<
                 supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
-            >());
+            >(),
+        );
         let definitions = AgentBuilder::new(
             std::env::temp_dir(),
             Arc::new(LocalTerminalBackend::new()),
@@ -2391,17 +2401,18 @@ mod tests {
         use supercharge_tools::computer::local::LocalTerminalBackend;
         use supercharge_tools::notification::ToolNotificationHandle;
         use supercharge_tools::registry::types::ToolConfig;
-        let feedback_id =
-            ToolConfig::for_tool::<supercharge_tools::implementations::grok_build::SendFeedbackTool>()
-                .id;
+        let feedback_id = ToolConfig::for_tool::<
+            supercharge_tools::implementations::grok_build::SendFeedbackTool,
+        >()
+        .id;
         let mut kindless_feedback_id = crate::config::AgentDefinition::default_grok_build();
         kindless_feedback_id.tool_config.tools = vec![ToolConfig::from_id(&feedback_id)];
         kindless_feedback_id.inject_default_tools = false;
         let mut kindless_feedback_name = crate::config::AgentDefinition::default_grok_build();
-        kindless_feedback_name.tool_config.tools = vec![
-            ToolConfig::from_id("custom:tool")
-                .with_name(supercharge_tools::implementations::grok_build::SEND_FEEDBACK_TOOL_NAME),
-        ];
+        kindless_feedback_name.tool_config.tools =
+            vec![ToolConfig::from_id("custom:tool").with_name(
+                supercharge_tools::implementations::grok_build::SEND_FEEDBACK_TOOL_NAME,
+            )];
         kindless_feedback_name.inject_default_tools = false;
         for definition in [
             crate::config::AgentDefinition::default_grok_build(),

@@ -672,13 +672,22 @@ where
 pub enum BuiltinAgentName {
     #[strum(serialize = "grok-build", to_string = "supercharge-core")]
     GrokBuild,
-    #[strum(serialize = "grok-build-concise", to_string = "supercharge-core-concise")]
+    #[strum(
+        serialize = "grok-build-concise",
+        to_string = "supercharge-core-concise"
+    )]
     GrokBuildConcise,
     #[strum(serialize = "grok-build-plan", to_string = "supercharge-core-plan")]
     GrokBuildPlan,
-    #[strum(serialize = "grok-build-plan-no-subagents", to_string = "supercharge-core-plan-no-subagents")]
+    #[strum(
+        serialize = "grok-build-plan-no-subagents",
+        to_string = "supercharge-core-plan-no-subagents"
+    )]
     GrokBuildPlanNoSubagents,
-    #[strum(serialize = "grok-build-ask-user", to_string = "supercharge-core-ask-user")]
+    #[strum(
+        serialize = "grok-build-ask-user",
+        to_string = "supercharge-core-ask-user"
+    )]
     GrokBuildAskUser,
     Codex,
     Opencode,
@@ -1564,7 +1573,9 @@ impl AgentDefinition {
     pub fn explore() -> Self {
         use crate::prompt::subagent_prompts;
         Self {
-            description: supercharge_tool_types::EXPLORE_SUBAGENT.description.to_string(),
+            description: supercharge_tool_types::EXPLORE_SUBAGENT
+                .description
+                .to_string(),
             tool_config: explore_toolset(),
             permission_mode: PermissionMode::Plan,
             prompt_body: Some(subagent_prompts::EXPLORE_PROMPT.to_string()),
@@ -1575,7 +1586,9 @@ impl AgentDefinition {
     pub fn plan() -> Self {
         use crate::prompt::subagent_prompts;
         Self {
-            description: supercharge_tool_types::PLAN_SUBAGENT.description.to_string(),
+            description: supercharge_tool_types::PLAN_SUBAGENT
+                .description
+                .to_string(),
             tool_config: plan_toolset(),
             permission_mode: PermissionMode::Plan,
             prompt_body: Some(subagent_prompts::PLAN_PROMPT.to_string()),
@@ -1688,14 +1701,19 @@ mod tests {
         }
         assert!(toolset_for_preset("does-not-exist").is_none());
         let e2b = toolset_for_preset("supercharge-e2b").expect("E2B preset resolves");
-        assert!(e2b.tools.iter().any(|tool| tool.id.ends_with(":browser_snapshot")));
+        assert!(
+            e2b.tools
+                .iter()
+                .any(|tool| tool.id.ends_with(":browser_snapshot"))
+        );
         let def = AgentDefinition::supercharge_e2b();
         assert_eq!(def.name, "supercharge-e2b");
-        assert!(def
-            .tool_config
-            .tools
-            .iter()
-            .any(|tool| tool.id.ends_with(":browser_navigate")));
+        assert!(
+            def.tool_config
+                .tools
+                .iter()
+                .any(|tool| tool.id.ends_with(":browser_navigate"))
+        );
     }
     #[test]
     fn presets_select_distinct_toolsets_by_size() {
@@ -1725,7 +1743,10 @@ mod tests {
         use strum::IntoEnumIterator;
         let presets = all_toolset_presets();
         for (name, config) in &presets {
-            let expected = matches!(name.as_str(), "grok-build" | "supercharge-core" | "supercharge-e2b");
+            let expected = matches!(
+                name.as_str(),
+                "grok-build" | "supercharge-core" | "supercharge-e2b"
+            );
             let count = config
                 .tools
                 .iter()
@@ -2592,7 +2613,10 @@ description: Test default tool config
             ("grok-build", "supercharge-core"),
             ("grok-build-concise", "supercharge-core-concise"),
             ("grok-build-plan", "supercharge-core-plan"),
-            ("grok-build-plan-no-subagents", "supercharge-core-plan-no-subagents"),
+            (
+                "grok-build-plan-no-subagents",
+                "supercharge-core-plan-no-subagents",
+            ),
             ("grok-build-ask-user", "supercharge-core-ask-user"),
         ] {
             let parsed = BuiltinAgentName::from_str(legacy).unwrap();

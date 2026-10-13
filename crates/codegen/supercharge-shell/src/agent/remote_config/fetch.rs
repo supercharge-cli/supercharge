@@ -105,7 +105,8 @@ pub(in crate::agent::remote_config) fn fetch_models_uncommitted(
 
     let cache = ModelsCacheManager::new();
     if !endpoints.has_custom_endpoint()
-        && let Some(cached) = cache.load_fresh(&scope) {
+        && let Some(cached) = cache.load_fresh(&scope)
+    {
         return ModelsPrefetch::Cached(cached.models);
     }
 
@@ -129,7 +130,8 @@ pub(in crate::agent::remote_config) fn fetch_models_uncommitted(
             Ok(_) => tracing::warn!("setup provider returned no models"),
             Err(error) => tracing::warn!(%error, "setup provider catalog fetch failed"),
         }
-        return cache.load_fresh(&scope)
+        return cache
+            .load_fresh(&scope)
             .map(|cached| ModelsPrefetch::Cached(cached.models))
             .unwrap_or(ModelsPrefetch::Unavailable);
     }

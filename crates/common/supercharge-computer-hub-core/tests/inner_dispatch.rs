@@ -313,5 +313,7 @@ async fn inner_dispatch_implements_object_safe_tool_dispatch() {
             ToolCallContext::default(),
         )
         .await;
-    assert!(matches!(result, Err(ref e) if e.kind == supercharge_tool_runtime::ToolErrorKind::NotFound));
+    assert!(
+        matches!(result, Err(ref e) if e.kind == supercharge_tool_runtime::ToolErrorKind::NotFound)
+    );
 }

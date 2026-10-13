@@ -30,7 +30,8 @@ impl supercharge_login::refresh::TokenRefresher for WakeGapRefresher {
         reason: supercharge_login::refresh::RefreshReason,
     ) -> supercharge_login::refresh::RefreshOutcome {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        if self.fail_pre_request && reason == supercharge_login::refresh::RefreshReason::PreRequest {
+        if self.fail_pre_request && reason == supercharge_login::refresh::RefreshReason::PreRequest
+        {
             return supercharge_login::refresh::RefreshOutcome::TransientFailure {
                 message: "simulated post-wake network gap".to_string(),
             };

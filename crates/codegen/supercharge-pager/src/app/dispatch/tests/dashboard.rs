@@ -218,8 +218,8 @@ fn dashboard_picker_filters_workspace_members_and_strict_loads_fuzzy_pick() {
     app.workspace_dashboard_enabled = true;
     app.active_view = ActiveView::AgentDashboard;
     ensure_dashboard_state(&mut app);
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![
                 supercharge_dashboard_store::Member {
@@ -282,12 +282,15 @@ fn dashboard_picker_filters_workspace_members_and_strict_loads_fuzzy_pick() {
                 },
             ],
             data_version: 1,
-        });
+        },
+    );
     app.workspace_membership
         .request_pin(
             supercharge_dashboard_store::MemberKey {
-                session_id: supercharge_dashboard_store::SessionId::new(optimistic_pinned_id.clone())
-                    .unwrap(),
+                session_id: supercharge_dashboard_store::SessionId::new(
+                    optimistic_pinned_id.clone(),
+                )
+                .unwrap(),
                 kind: supercharge_dashboard_store::MemberKind::Build,
             },
             true,
@@ -401,11 +404,12 @@ fn v1_dashboard_picker_does_not_consult_workspace_view() {
     use crate::views::session_picker_surface::{SessionPickerHost, SessionPickerSurface};
     let mut app = test_app();
     let session_id = format!("v1-picker-{}", uuid::Uuid::new_v4());
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
-                session_id: supercharge_dashboard_store::SessionId::new(session_id.clone()).unwrap(),
+                session_id: supercharge_dashboard_store::SessionId::new(session_id.clone())
+                    .unwrap(),
                 kind: supercharge_dashboard_store::MemberKind::Build,
                 origin: supercharge_dashboard_store::MemberOrigin::Local,
                 cwd: Some("/tmp".into()),
@@ -418,7 +422,8 @@ fn v1_dashboard_picker_does_not_consult_workspace_view() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     let generation = app.alloc_picker_generation();
     let mut surface = SessionPickerSurface::new(generation);
     surface.loading = true;
@@ -483,11 +488,12 @@ fn missing_workspace_row_toasts_without_remote_restore() {
     app.workspace_dashboard_enabled = true;
     app.active_view = ActiveView::AgentDashboard;
     ensure_dashboard_state(&mut app);
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
-                session_id: supercharge_dashboard_store::SessionId::new(session_id.clone()).unwrap(),
+                session_id: supercharge_dashboard_store::SessionId::new(session_id.clone())
+                    .unwrap(),
                 kind: supercharge_dashboard_store::MemberKind::Build,
                 origin: supercharge_dashboard_store::MemberOrigin::Local,
                 cwd: Some("/definitely/missing".to_owned()),
@@ -500,7 +506,8 @@ fn missing_workspace_row_toasts_without_remote_restore() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     let effects = dispatch(
         Action::DashboardAttach(DashboardRowId::Workspace {
             session_id: session_id.clone(),
@@ -536,7 +543,8 @@ fn local_workspace_row_uses_the_same_strict_load_path() {
     store
         .insert_member(supercharge_dashboard_store::NewMember {
             key: supercharge_dashboard_store::MemberKey {
-                session_id: supercharge_dashboard_store::SessionId::new(session_id.clone()).unwrap(),
+                session_id: supercharge_dashboard_store::SessionId::new(session_id.clone())
+                    .unwrap(),
                 kind: supercharge_dashboard_store::MemberKind::Build,
             },
             origin: supercharge_dashboard_store::MemberOrigin::Remote,
@@ -2362,7 +2370,8 @@ fn closing_loaded_workspace_agent_rebinds_selection_to_unloaded_row() {
         store.apply_layout_patch(&supercharge_dashboard_store::LayoutPatch {
             pin_assignments: vec![supercharge_dashboard_store::PinAssignment {
                 key: supercharge_dashboard_store::MemberKey {
-                    session_id: supercharge_dashboard_store::SessionId::new("test-session").unwrap(),
+                    session_id: supercharge_dashboard_store::SessionId::new("test-session")
+                        .unwrap(),
                     kind: supercharge_dashboard_store::MemberKind::Build,
                 },
                 pinned: true,
@@ -2426,12 +2435,13 @@ fn workspace_refresh_result_does_not_request_an_upsert() {
 fn workspace_dashboard_reopens_store_when_only_stale_snapshot_remains() {
     let mut app = test_app_with_agent();
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![],
             data_version: 1,
-        });
+        },
+    );
     app.active_view = ActiveView::Agent(AgentId(0));
     let effects = dispatch_open_dashboard(&mut app);
     assert!(matches!(
@@ -2682,7 +2692,8 @@ fn workspace_layout_on_provisional_row_toasts() {
         "a provisional row must not take a manual-order slot",
     );
     let store =
-        supercharge_dashboard_store::WorkspaceStore::open(&temp.path().join("workspace.db")).unwrap();
+        supercharge_dashboard_store::WorkspaceStore::open(&temp.path().join("workspace.db"))
+            .unwrap();
     app.workspace_membership
         .set_read_only_for_test(store, snapshot);
     app.dashboard.as_mut().unwrap().error_toast = None;
@@ -2721,8 +2732,8 @@ fn workspace_layout_on_vanished_row_toasts_no_longer_in_workspace() {
 fn workspace_row_ctrl_x_archives_membership_without_deleting_history() {
     let mut app = test_app();
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
                 session_id: supercharge_dashboard_store::SessionId::new("saved").unwrap(),
@@ -2738,7 +2749,8 @@ fn workspace_row_ctrl_x_archives_membership_without_deleting_history() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     ensure_dashboard_state(&mut app);
     app.active_view = ActiveView::AgentDashboard;
     app.dashboard
@@ -2757,8 +2769,9 @@ fn workspace_row_ctrl_x_archives_membership_without_deleting_history() {
         "archive must preserve history: {effects:?}"
     );
     assert!(
-        app.workspace_membership
-            .removal_pending_for_test(&supercharge_dashboard_store::SessionId::new("saved").unwrap())
+        app.workspace_membership.removal_pending_for_test(
+            &supercharge_dashboard_store::SessionId::new("saved").unwrap()
+        )
     );
     assert!(
         app.workspace_membership.view().unwrap().members.is_empty(),
@@ -2847,8 +2860,8 @@ fn workspace_overlay_cycle_reaches_provisional_but_not_hidden_live_agents() {
     let second = insert_second_agent(&mut app);
     mark_agent_nonempty(&mut app, second);
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
                 session_id: supercharge_dashboard_store::SessionId::new("test-session").unwrap(),
@@ -2864,7 +2877,8 @@ fn workspace_overlay_cycle_reaches_provisional_but_not_hidden_live_agents() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     app.active_view = ActiveView::Agent(AgentId(0));
     assert!(dispatch_dashboard_overlay_cycle(&mut app, 1).is_empty());
     assert_eq!(app.active_view, ActiveView::Agent(second));
@@ -3212,7 +3226,10 @@ fn dashboard_slash_usage_opens_dashboard_modal() {
     open_dashboard(&mut app);
     let before = app.agents.len();
     let effects = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
-    assert!(effects.is_empty(), "session-less usage must not fetch account billing");
+    assert!(
+        effects.is_empty(),
+        "session-less usage must not fetch account billing"
+    );
     assert_eq!(app.agents.len(), before, "must not add an agent");
     assert!(
         matches!(app.active_view, ActiveView::AgentDashboard),
@@ -6111,8 +6128,8 @@ fn workspace_dashboard_stop_archives_loaded_row_and_repairs_selection() {
         agent.session.session_id = Some(acp::SessionId::new(format!("archive-{index}")));
     }
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: ids
                 .iter()
@@ -6135,7 +6152,8 @@ fn workspace_dashboard_stop_archives_loaded_row_and_repairs_selection() {
                 })
                 .collect(),
             data_version: 1,
-        });
+        },
+    );
     open_dashboard(&mut app);
     let order = dashboard_row_order(&app);
     let [target, neighbor, ..] = order.as_slice() else {
@@ -6198,8 +6216,8 @@ fn workspace_archive_keeps_conversation_twin_open_and_registered() {
         .unwrap()
         .conversation_entry = true;
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
                 session_id: supercharge_dashboard_store::SessionId::new("shared-session").unwrap(),
@@ -6215,7 +6233,8 @@ fn workspace_archive_keeps_conversation_twin_open_and_registered() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     ensure_dashboard_state(&mut app);
     app.active_view = ActiveView::AgentDashboard;
     app.dashboard
@@ -6241,8 +6260,8 @@ fn confirmed_workspace_archive_reports_when_session_became_busy() {
     let id = AgentId(0);
     app.agents.get_mut(&id).unwrap().session.session_id = Some(acp::SessionId::new("archive-race"));
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
                 session_id: supercharge_dashboard_store::SessionId::new("archive-race").unwrap(),
@@ -6258,7 +6277,8 @@ fn confirmed_workspace_archive_reports_when_session_became_busy() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     ensure_dashboard_state(&mut app);
     app.active_view = ActiveView::AgentDashboard;
     app.dashboard
@@ -6290,8 +6310,8 @@ fn workspace_overlay_ctrl_x_archives_settled_only_agent() {
         agent.session.session_id = Some(acp::SessionId::new("only-archive"));
     }
     app.workspace_dashboard_enabled = true;
-    app.workspace_membership
-        .set_snapshot_for_test(supercharge_dashboard_store::WorkspaceSnapshot {
+    app.workspace_membership.set_snapshot_for_test(
+        supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
                 session_id: supercharge_dashboard_store::SessionId::new("only-archive").unwrap(),
@@ -6307,7 +6327,8 @@ fn workspace_overlay_ctrl_x_archives_settled_only_agent() {
                 order_rank: None,
             }],
             data_version: 1,
-        });
+        },
+    );
     ensure_dashboard_state(&mut app);
     app.dashboard.as_mut().unwrap().attached_agent = Some(id);
     app.dashboard

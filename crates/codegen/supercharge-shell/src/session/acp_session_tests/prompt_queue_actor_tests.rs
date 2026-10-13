@@ -218,8 +218,11 @@ fn x_search_cutoff_update() -> supercharge_sampling_types::ToolOverridesUpdate {
     supercharge_sampling_types::ToolOverridesUpdate {
         x_search: Some(Some(supercharge_sampling_types::XSearchOptions {
             date_bound: Some(
-                supercharge_sampling_types::SearchDateBound::new(None, Some("2024-03-15".to_string()))
-                    .unwrap(),
+                supercharge_sampling_types::SearchDateBound::new(
+                    None,
+                    Some("2024-03-15".to_string()),
+                )
+                .unwrap(),
             ),
         })),
         web_search: None,
@@ -2976,10 +2979,12 @@ async fn tool_overrides_update_applies_at_promotion_never_at_enqueue() {
                 Some(&expected),
                 "a prompt with no update leaves the sticky override in place"
             );
-            actor.apply_tool_overrides_update(Some(supercharge_sampling_types::ToolOverridesUpdate {
-                x_search: Some(None),
-                web_search: None,
-            }));
+            actor.apply_tool_overrides_update(Some(
+                supercharge_sampling_types::ToolOverridesUpdate {
+                    x_search: Some(None),
+                    web_search: None,
+                },
+            ));
             assert_eq!(
                 *actor.tool_overrides.borrow(),
                 None,
@@ -3067,17 +3072,19 @@ async fn unsupported_backend_search_sends_no_hosted_tool_on_either_channel() {
                 allowed_domains: None,
                 excluded_domains: Some(vec!["reddit.com".to_string()]),
             };
-            *actor.agent.borrow_mut() =
-                test_agent_backend_search(vec![supercharge_sampling_types::HostedTool::WebSearch {
+            *actor.agent.borrow_mut() = test_agent_backend_search(vec![
+                supercharge_sampling_types::HostedTool::WebSearch {
                     options: Some(configured),
-                }])
-                .await;
+                },
+            ])
+            .await;
 
             // Model advertises server-side search: the hosted tool rides both channels.
             actor.supports_backend_search.set(true);
             assert!(!actor.hosted_tools_for_turn().is_empty());
             assert_eq!(
-                supercharge_sampling_types::extra_tool_entries(&actor.hosted_tools_for_turn()).len(),
+                supercharge_sampling_types::extra_tool_entries(&actor.hosted_tools_for_turn())
+                    .len(),
                 1
             );
 
@@ -3110,11 +3117,12 @@ async fn per_turn_tool_overrides_win_over_the_config_web_search_policy() {
                 allowed_domains: None,
                 excluded_domains: Some(vec!["reddit.com".to_string()]),
             };
-            *actor.agent.borrow_mut() =
-                test_agent_backend_search(vec![supercharge_sampling_types::HostedTool::WebSearch {
+            *actor.agent.borrow_mut() = test_agent_backend_search(vec![
+                supercharge_sampling_types::HostedTool::WebSearch {
                     options: Some(configured.clone()),
-                }])
-                .await;
+                },
+            ])
+            .await;
             actor.supports_backend_search.set(true);
             assert!(actor.backend_search_active());
 
@@ -3130,10 +3138,12 @@ async fn per_turn_tool_overrides_win_over_the_config_web_search_policy() {
                 allowed_domains: Some(vec!["docs.x.ai".to_string()]),
                 excluded_domains: None,
             };
-            actor.apply_tool_overrides_update(Some(supercharge_sampling_types::ToolOverridesUpdate {
-                x_search: None,
-                web_search: Some(Some(per_turn.clone())),
-            }));
+            actor.apply_tool_overrides_update(Some(
+                supercharge_sampling_types::ToolOverridesUpdate {
+                    x_search: None,
+                    web_search: Some(Some(per_turn.clone())),
+                },
+            ));
 
             assert_eq!(
                 actor.effective_hosted_tools(),
@@ -3152,10 +3162,12 @@ async fn per_turn_tool_overrides_win_over_the_config_web_search_policy() {
             );
 
             // Clearing the per-turn override falls back to the configured policy.
-            actor.apply_tool_overrides_update(Some(supercharge_sampling_types::ToolOverridesUpdate {
-                x_search: None,
-                web_search: Some(None),
-            }));
+            actor.apply_tool_overrides_update(Some(
+                supercharge_sampling_types::ToolOverridesUpdate {
+                    x_search: None,
+                    web_search: Some(None),
+                },
+            ));
             assert_eq!(
                 actor.effective_hosted_tools(),
                 vec![supercharge_sampling_types::HostedTool::WebSearch {

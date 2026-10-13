@@ -2,10 +2,10 @@ use super::support::*;
 use super::*;
 use crate::terminal::AsyncTerminalRunner;
 use crate::terminal::runner::{TerminalError, TerminalRunRequest, TerminalRunResult};
-use tokio::sync::mpsc;
 use supercharge_paths::AbsPathBuf;
 use supercharge_workspace::file_system::MockFs;
 use supercharge_workspace::permission::PermissionHandle;
+use tokio::sync::mpsc;
 #[derive(Debug)]
 struct DummyTerminal;
 #[async_trait::async_trait]
@@ -35,7 +35,8 @@ pub(super) struct ReplaySendUpdateFixture {
     pub(super) persistence_rx: mpsc::UnboundedReceiver<PersistenceMsg>,
 }
 pub(super) async fn make_replay_send_update_fixture() -> ReplaySendUpdateFixture {
-    let (gateway_tx, mut gateway_rx) = mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
+    let (gateway_tx, mut gateway_rx) =
+        mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
     let gateway = GatewaySender::new(gateway_tx);
     let sent = Arc::new(tokio::sync::Mutex::new(
         Vec::<acp::SessionNotification>::new(),

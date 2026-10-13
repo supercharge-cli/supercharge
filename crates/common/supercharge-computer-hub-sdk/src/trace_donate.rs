@@ -16,8 +16,8 @@ use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::trace::{SpanData, SpanExporter};
 use prost::Message as _;
-use tokio::sync::mpsc;
 use supercharge_tool_protocol::{MAX_DONATION_BYTES, MAX_SPANS_PER_DONATION};
+use tokio::sync::mpsc;
 
 use crate::donate_pump::{PENDING_FLUSHES, PumpMsg, drain_via, run_pump};
 use crate::server::ToolServer;

@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 
 use acp_harness::{AutoApproveClient, connect_and_auth_with_remote, ext_method, run_agent_test};
 use serde_json::{Value, json};
-use tempfile::TempDir;
 use supercharge_shell::util::config::{ENV_WORKTREE_TYPE, RemoteSettings};
+use tempfile::TempDir;
 
 const CREATE_SYNC: &str = "x.ai/git/worktree/create_from_worktree_sync";
 const DAEMON_READY: Duration = Duration::from_secs(15);

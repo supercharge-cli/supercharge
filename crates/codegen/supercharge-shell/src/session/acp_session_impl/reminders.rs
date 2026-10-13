@@ -9,7 +9,10 @@ pub(super) fn escape_reminder_tags(content: &str, tag: &str) -> String {
         .replace(&format!("<{tag}"), &format!("<\\{tag}"))
 }
 fn reminder_text(content: &str, tag: &str) -> String {
-    supercharge_tools::reminders::wrap_reminder_with_tag(&escape_reminder_close_tag(content, tag), tag)
+    supercharge_tools::reminders::wrap_reminder_with_tag(
+        &escape_reminder_close_tag(content, tag),
+        tag,
+    )
 }
 pub(super) fn wrap_in_reminder_tag(content: &str, tag: &str) -> ConversationItem {
     ConversationItem::system_reminder(reminder_text(content, tag))
@@ -181,7 +184,10 @@ pub(super) const WORKFLOW_OBJECTIVE_REMINDER_CAP: usize = 256;
 fn workflow_completion_detail(detail: &str) -> std::borrow::Cow<'_, str> {
     let normalized = detail.split_whitespace().collect::<Vec<_>>().join(" ");
     if normalized == detail {
-        supercharge_tools::util::truncate_str_with_marker(detail, WORKFLOW_RESULT_SUMMARY_REMINDER_CAP)
+        supercharge_tools::util::truncate_str_with_marker(
+            detail,
+            WORKFLOW_RESULT_SUMMARY_REMINDER_CAP,
+        )
     } else {
         std::borrow::Cow::Owned(
             supercharge_tools::util::truncate_str_with_marker(
@@ -307,7 +313,10 @@ fn format_workflow_status_reminder(
                 let _ = write!(
                     buf,
                     "\n  Paused: {}",
-                    supercharge_tools::util::truncate_str(msg, WORKFLOW_RESULT_SUMMARY_REMINDER_CAP)
+                    supercharge_tools::util::truncate_str(
+                        msg,
+                        WORKFLOW_RESULT_SUMMARY_REMINDER_CAP
+                    )
                 );
             }
             let max_budget_exhausted = run.status
@@ -424,8 +433,10 @@ fn format_workflow_completion_reminder(
             format_workflow_elapsed(run.elapsed_ms_floor)
         );
         if let Some(summary) = run.result_summary.as_deref() {
-            let capped =
-                supercharge_tools::util::truncate_str(summary, WORKFLOW_RESULT_SUMMARY_REMINDER_CAP);
+            let capped = supercharge_tools::util::truncate_str(
+                summary,
+                WORKFLOW_RESULT_SUMMARY_REMINDER_CAP,
+            );
             buf.push_str("\n  Result:\n");
             for line in capped.lines() {
                 let _ = writeln!(buf, "    {line}");

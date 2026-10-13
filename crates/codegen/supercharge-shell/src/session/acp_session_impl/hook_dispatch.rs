@@ -386,7 +386,8 @@ impl SessionActor {
         }
         let raw_input: serde_json::Value =
             serde_json::from_str(&prepared.raw_arguments).unwrap_or(serde_json::Value::Null);
-        let (tool_input, tool_input_truncated) = supercharge_hooks::event::truncate_payload(raw_input);
+        let (tool_input, tool_input_truncated) =
+            supercharge_hooks::event::truncate_payload(raw_input);
         let hook_tool_name = prepared.hook_tool_name();
         self.dispatch_post_tool_use_failure_hook(
             supercharge_hooks::event::HookPayload::PostToolUseFailure {
@@ -421,9 +422,10 @@ impl SessionActor {
         };
         let ctx = self.hook_run_ctx();
         let batch = self.announce_hook_run(&registry, &envelope, &ctx);
-        let result =
-            supercharge_hooks::dispatcher::dispatch_post_tool_use_failure(&registry, &envelope, &ctx)
-                .await;
+        let result = supercharge_hooks::dispatcher::dispatch_post_tool_use_failure(
+            &registry, &envelope, &ctx,
+        )
+        .await;
         self.send_hook_execution(&batch, &result.results).await;
         self.emit_hook_executed_telemetry(&batch.event_name, Some(tool_name), &result.results)
             .await;
@@ -497,13 +499,15 @@ impl SessionActor {
                 ),
                 supercharge_hooks::result::HookRunResult::Skipped { .. } => continue,
             };
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::HookExecuted {
-                hook_name: hook_name.clone(),
-                event: event_name.to_string(),
-                tool_name: tool.clone(),
-                duration_ms: elapsed.as_millis() as u64,
-                outcome,
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::HookExecuted {
+                    hook_name: hook_name.clone(),
+                    event: event_name.to_string(),
+                    tool_name: tool.clone(),
+                    duration_ms: elapsed.as_millis() as u64,
+                    outcome,
+                },
+            );
         }
     }
 }

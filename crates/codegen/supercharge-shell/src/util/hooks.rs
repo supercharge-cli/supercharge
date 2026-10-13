@@ -79,14 +79,14 @@ pub(crate) fn discover_hook_source_paths(
                     .map(|s| classify_grok_hook_source(s.path.clone()))
                     .collect()
             }
-        Err(e) => {
-            tracing::warn!(
-                error = %e,
-                "global hook source resolve hard-failed; omitting Supercharge global sources"
-            );
-            Vec::new()
-        }
-    };
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "global hook source resolve hard-failed; omitting Supercharge global sources"
+                );
+                Vec::new()
+            }
+        };
 
     if let Some(h) = home.as_deref() {
         if include_claude {
@@ -114,7 +114,9 @@ pub(crate) fn discover_hook_source_paths(
                 root.join(".claude").join("settings.local.json"),
             ));
         }
-        project.push(classify_grok_hook_source(root.join(".supercharge").join("hooks")));
+        project.push(classify_grok_hook_source(
+            root.join(".supercharge").join("hooks"),
+        ));
         if include_cursor {
             project.push(HookSourceConfig::SettingsFile(
                 root.join(".cursor").join("hooks.json"),

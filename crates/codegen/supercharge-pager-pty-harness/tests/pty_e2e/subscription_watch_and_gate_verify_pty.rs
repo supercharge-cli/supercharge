@@ -216,7 +216,10 @@ async fn subscription_watch_polls_free_tier_then_goes_dormant_after_upgrade() {
     let mut harness = spawn_subscription_session(
         &content,
         "pty-subwatch",
-        &[EnvOp::set("SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS", "1")],
+        &[EnvOp::set(
+            "SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS",
+            "1",
+        )],
     );
 
     // While free, the watch fires repeatedly at the (test-shrunk) cadence.
@@ -348,7 +351,10 @@ async fn stale_gate_push_never_flashes_paywall_for_subscribed_user() {
     let mut harness = spawn_subscription_session(
         &content,
         "pty-subgate-paid",
-        &[EnvOp::set("SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS", "0")],
+        &[EnvOp::set(
+            "SUPERCHARGE_SUBSCRIPTION_WATCH_INTERVAL_SECS",
+            "0",
+        )],
     );
 
     // Let startup fetches fully settle so the scripted one-shot below can only be consumed by the /new refresh

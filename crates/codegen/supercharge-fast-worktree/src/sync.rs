@@ -610,8 +610,8 @@ mod tests {
     use crate::git::index::copy_git_index;
     use std::path::PathBuf;
     use std::process::Command;
-    use tempfile::TempDir;
     use supercharge_test_utils::git::{git_commit_all, init_git_repo};
+    use tempfile::TempDir;
 
     /// Helper: create a git worktree from a source repo
     fn create_linked_worktree(source: &Path, name: &str) -> PathBuf {

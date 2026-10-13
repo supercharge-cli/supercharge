@@ -671,12 +671,14 @@ async fn parent_skill_lookup_matches_advertised_gated_collision_and_skill_only_l
                 .seed_skill_discovery(
                     None,
                     None,
-                    vec![supercharge_tools::implementations::skills::types::SkillInfo {
-                        name: "flush".into(),
-                        description: "Skill colliding with gated memory builtin".into(),
-                        path: skill_path.display().to_string(),
-                        ..Default::default()
-                    }],
+                    vec![
+                        supercharge_tools::implementations::skills::types::SkillInfo {
+                            name: "flush".into(),
+                            description: "Skill colliding with gated memory builtin".into(),
+                            path: skill_path.display().to_string(),
+                            ..Default::default()
+                        },
+                    ],
                     None,
                     None,
                     None,
@@ -757,7 +759,9 @@ async fn shared_command_availability_syncs_classic_goal_harness() {
 /// A `/goal <objective>` whose planner pauses the goal ends the turn without ever calling the model.
 #[tokio::test(flavor = "current_thread")]
 async fn goal_set_with_failed_planner_makes_no_inference_request() {
-    use supercharge_tools::implementations::grok_build::task::types::{SubagentEvent, SubagentResult};
+    use supercharge_tools::implementations::grok_build::task::types::{
+        SubagentEvent, SubagentResult,
+    };
 
     let local = tokio::task::LocalSet::new();
     local

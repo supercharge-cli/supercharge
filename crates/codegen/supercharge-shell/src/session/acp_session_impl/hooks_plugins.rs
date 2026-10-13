@@ -931,7 +931,8 @@ impl SessionActor {
                     // No registry yet: bootstrap config-layer and file hooks the way reload_hooks_impl does
                     // Starting from empty sources instead would let a plugin-first snapshot drop config hooks
                     let git_root =
-                        supercharge_workspace::session::git::find_git_root_from_path(session_cwd).ok();
+                        supercharge_workspace::session::git::find_git_root_from_path(session_cwd)
+                            .ok();
                     let is_trusted =
                         crate::agent::folder_trust::resolve_and_record(session_cwd, None, false);
                     let (mut new_reg, _errs) = crate::util::hooks::discover_hooks(
@@ -989,8 +990,9 @@ impl SessionActor {
 
         let t_skills = std::time::Instant::now();
         let bridge = self.agent.borrow().tool_bridge().clone();
-        let mut plugin_skills =
-            supercharge_agent::prompt::skills::collect_plugin_skills(new_registry_snapshot.as_deref());
+        let mut plugin_skills = supercharge_agent::prompt::skills::collect_plugin_skills(
+            new_registry_snapshot.as_deref(),
+        );
         let disabled = crate::util::config::load_config().await.skills.disabled;
         for skill in &mut plugin_skills {
             if disabled.iter().any(|name| name == &skill.name) {

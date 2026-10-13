@@ -152,7 +152,9 @@ fn fork_filter_keeps_multi_tool_turn_with_reasoning_between_results() {
     let mut items = vec![
         ConversationItem::system("sys"),
         ConversationItem::user("q"),
-        ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item("plan")),
+        ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item(
+            "plan",
+        )),
         ConversationItem::Assistant(AssistantItem {
             content: String::new().into(),
             tool_calls: vec![
@@ -172,7 +174,9 @@ fn fork_filter_keeps_multi_tool_turn_with_reasoning_between_results() {
             reasoning_effort: None,
         }),
         ConversationItem::tool_result("tc1", "out1"),
-        ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item("mid")),
+        ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item(
+            "mid",
+        )),
         ConversationItem::tool_result("tc2", "out2"),
         ConversationItem::Reasoning(supercharge_sampling_types::synthesized_reasoning_item(
             "reflect",

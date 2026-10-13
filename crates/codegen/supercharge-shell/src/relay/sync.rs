@@ -27,8 +27,13 @@ const DROP_BATCH_SIZE: usize = 64;
 /// Build a session link only when a web frontend is explicitly configured.
 pub(crate) fn build_share_url(session_id: &str) -> Option<String> {
     let base_url = std::env::var("SUPERCHARGE_CODE_WEB_URL")
-        .ok().filter(|url| !url.trim().is_empty())?;
-    Some(format!("{}/build/{}", base_url.trim_end_matches('/'), session_id))
+        .ok()
+        .filter(|url| !url.trim().is_empty())?;
+    Some(format!(
+        "{}/build/{}",
+        base_url.trim_end_matches('/'),
+        session_id
+    ))
 }
 
 /// Connection state for the relay sync.
@@ -787,7 +792,10 @@ mod tests {
         let env = supercharge_env::EnvVarGuard::remove("SUPERCHARGE_CODE_WEB_URL");
         assert_eq!(build_share_url("session"), None);
         env.set_value("https://example.invalid/");
-        assert_eq!(build_share_url("session").as_deref(), Some("https://example.invalid/build/session"));
+        assert_eq!(
+            build_share_url("session").as_deref(),
+            Some("https://example.invalid/build/session")
+        );
     }
 
     // ===== Sync Status Tests =====

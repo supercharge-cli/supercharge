@@ -9,7 +9,9 @@ use serde_json::{Value, json};
 use serial_test::serial;
 use supercharge_mcp::credentials::McpCredentialStore;
 use supercharge_mcp::rmcp;
-use supercharge_mcp::servers::{McpOauthDiscovery, McpSpawnCtx, OauthInteractivity, start_mcp_server};
+use supercharge_mcp::servers::{
+    McpOauthDiscovery, McpSpawnCtx, OauthInteractivity, start_mcp_server,
+};
 
 const TOKEN: &str = "at-123";
 

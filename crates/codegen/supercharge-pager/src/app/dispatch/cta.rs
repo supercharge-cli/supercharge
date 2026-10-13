@@ -198,7 +198,9 @@ pub(super) fn handle_cta_plugin_install_done(
     });
     // Ok(requires_reload) on success; Err(message) otherwise.
     let install_result = match result {
-        Ok(outcome) if outcome.status == supercharge_hooks_plugins_types::OutcomeStatus::Success => {
+        Ok(outcome)
+            if outcome.status == supercharge_hooks_plugins_types::OutcomeStatus::Success =>
+        {
             Ok(outcome.requires_reload)
         }
         Ok(outcome) => Err(crate::app::effects::sanitize_user_error(&outcome.message)),
@@ -261,7 +263,11 @@ pub(super) fn handle_cta_plugin_reload_done(
     let session_id = agent.session.session_id.clone();
     // Mirror the install handler: a non-Success outcome is a failure, not a reason to advance to the steps after install
     let reload_result = match result {
-        Ok(outcome) if outcome.status == supercharge_hooks_plugins_types::OutcomeStatus::Success => Ok(()),
+        Ok(outcome)
+            if outcome.status == supercharge_hooks_plugins_types::OutcomeStatus::Success =>
+        {
+            Ok(())
+        }
         Ok(outcome) => Err(crate::app::effects::sanitize_user_error(&outcome.message)),
         Err(e) => Err(e),
     };

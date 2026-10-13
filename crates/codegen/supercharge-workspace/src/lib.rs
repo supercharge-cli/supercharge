@@ -70,11 +70,11 @@ pub use path_virtualization::{
 pub use permission::*;
 pub use session::{WorkspaceSession, WorkspaceShared};
 pub use session::{file_state, git, jj};
-pub use upload::environment::{WorkspaceEnvironment, WorkspaceIdentity};
-pub use workspace_ops::{WorkspaceOp, WorkspaceOps};
+pub use supercharge_hunk_tracker::HunkTrackerHandle;
 pub use supercharge_workspace_client::WorkspaceClient;
 pub use supercharge_workspace_types::WorkspaceEvent;
-pub use supercharge_hunk_tracker::HunkTrackerHandle;
+pub use upload::environment::{WorkspaceEnvironment, WorkspaceIdentity};
+pub use workspace_ops::{WorkspaceOp, WorkspaceOps};
 /// Zero-init every workspace metric family so idle panels render a `0` baseline instead of "No data".
 /// Idempotent; call once at workspace-server startup.
 pub fn init_metrics() {

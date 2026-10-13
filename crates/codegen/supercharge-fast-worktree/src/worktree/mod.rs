@@ -242,8 +242,8 @@ mod tests {
         assert!(!is_grove_strategy(STRATEGY_COPY));
         assert!(!is_grove_strategy("linked"));
     }
-    use tempfile::TempDir;
     use supercharge_test_utils::git::{git_commit_all, init_git_repo};
+    use tempfile::TempDir;
 
     #[test]
     fn test_create_worktree_simple() {
@@ -1435,8 +1435,10 @@ mod tests {
         init_git_repo(&repo_path);
         std::fs::write(repo_path.join("file.txt"), "content").unwrap();
         git_commit_all(&repo_path, "initial");
-        let branch =
-            supercharge_test_utils::git::run_git(&repo_path, &["rev-parse", "--abbrev-ref", "HEAD"]);
+        let branch = supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["rev-parse", "--abbrev-ref", "HEAD"],
+        );
         supercharge_test_utils::git::run_git(
             &repo_path,
             &[
@@ -1456,7 +1458,10 @@ mod tests {
             ],
         );
         assert_eq!(
-            supercharge_test_utils::git::run_git(&repo_path, &["config", "--get", "remote.origin.fetch"]),
+            supercharge_test_utils::git::run_git(
+                &repo_path,
+                &["config", "--get", "remote.origin.fetch"]
+            ),
             "+refs/heads/*"
         );
 
@@ -1474,7 +1479,10 @@ mod tests {
             format!("+refs/heads/{branch}:refs/remotes/origin/{branch}")
         );
         assert_eq!(
-            supercharge_test_utils::git::run_git(&worktree_path, &["config", "--get", "remote.origin.url"]),
+            supercharge_test_utils::git::run_git(
+                &worktree_path,
+                &["config", "--get", "remote.origin.url"]
+            ),
             "https://github.com/xai-org/xai.git"
         );
     }
@@ -1496,7 +1504,10 @@ mod tests {
         std::fs::write(repo_path.join("d.txt"), "d").unwrap();
         git_commit_all(&repo_path, "D");
         supercharge_test_utils::git::run_git(&repo_path, &["update-ref", "refs/heads/main", &b]);
-        supercharge_test_utils::git::run_git(&repo_path, &["update-ref", "refs/remotes/origin/main", &b]);
+        supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["update-ref", "refs/remotes/origin/main", &b],
+        );
         std::fs::write(repo_path.join(".git/shallow"), format!("{b}\n")).unwrap();
 
         let worktree_path = temp.path().join("standalone");
@@ -1507,7 +1518,10 @@ mod tests {
 
         assert!(!worktree_path.join(".git/shallow").exists());
         assert_eq!(
-            supercharge_test_utils::git::run_git(&worktree_path, &["rev-parse", "--is-shallow-repository"]),
+            supercharge_test_utils::git::run_git(
+                &worktree_path,
+                &["rev-parse", "--is-shallow-repository"]
+            ),
             "false"
         );
         assert_eq!(
@@ -1531,8 +1545,10 @@ mod tests {
         let b = supercharge_test_utils::git::run_git(&repo_path, &["rev-parse", "HEAD"]);
         std::fs::write(repo_path.join("c.txt"), "c").unwrap();
         git_commit_all(&repo_path, "C");
-        let source_branch =
-            supercharge_test_utils::git::run_git(&repo_path, &["rev-parse", "--abbrev-ref", "HEAD"]);
+        let source_branch = supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["rev-parse", "--abbrev-ref", "HEAD"],
+        );
         supercharge_test_utils::git::run_git(&repo_path, &["checkout", "-b", "feature", &a]);
         std::fs::write(repo_path.join("d.txt"), "d").unwrap();
         git_commit_all(&repo_path, "D");
@@ -1556,12 +1572,18 @@ mod tests {
                 "+refs/heads/*",
             ],
         );
-        supercharge_test_utils::git::run_git(&repo_path, &["update-ref", "refs/remotes/origin/main", &b]);
+        supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["update-ref", "refs/remotes/origin/main", &b],
+        );
         supercharge_test_utils::git::run_git(
             &repo_path,
             &["update-ref", "refs/remotes/origin/feature", &a],
         );
-        supercharge_test_utils::git::run_git(&repo_path, &["update-ref", "refs/remotes/origin/noise", &b]);
+        supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["update-ref", "refs/remotes/origin/noise", &b],
+        );
         std::fs::write(repo_path.join(".git/shallow"), format!("{b}\n")).unwrap();
 
         let worktree_path = temp.path().join("standalone");
@@ -1572,7 +1594,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            supercharge_test_utils::git::run_git(&worktree_path, &["rev-parse", "--abbrev-ref", "HEAD"]),
+            supercharge_test_utils::git::run_git(
+                &worktree_path,
+                &["rev-parse", "--abbrev-ref", "HEAD"]
+            ),
             "feature"
         );
         assert_eq!(
@@ -1604,7 +1629,10 @@ mod tests {
             "after checkout, graft B is unused and its parent is in the ODB"
         );
         assert_eq!(
-            supercharge_test_utils::git::run_git(&worktree_path, &["rev-parse", "--is-shallow-repository"]),
+            supercharge_test_utils::git::run_git(
+                &worktree_path,
+                &["rev-parse", "--is-shallow-repository"]
+            ),
             "false"
         );
         assert_eq!(
@@ -1640,7 +1668,10 @@ mod tests {
             &repo_path,
             &["update-ref", "refs/remotes/origin/feature", &a],
         );
-        supercharge_test_utils::git::run_git(&repo_path, &["update-ref", "refs/remotes/origin/noise", &b]);
+        supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["update-ref", "refs/remotes/origin/noise", &b],
+        );
 
         let worktree_path = temp.path().join("standalone");
         WorktreeBuilder::new(repo_path, worktree_path.clone())
@@ -1682,8 +1713,10 @@ mod tests {
         std::fs::write(repo_path.join("file.txt"), "content").unwrap();
         git_commit_all(&repo_path, "initial");
         let head = supercharge_test_utils::git::run_git(&repo_path, &["rev-parse", "HEAD"]);
-        let branch =
-            supercharge_test_utils::git::run_git(&repo_path, &["rev-parse", "--abbrev-ref", "HEAD"]);
+        let branch = supercharge_test_utils::git::run_git(
+            &repo_path,
+            &["rev-parse", "--abbrev-ref", "HEAD"],
+        );
         supercharge_test_utils::git::run_git(
             &repo_path,
             &["update-ref", "refs/remotes/origin/main", &head],

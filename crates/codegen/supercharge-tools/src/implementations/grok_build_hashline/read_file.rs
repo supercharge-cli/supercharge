@@ -361,7 +361,10 @@ mod tests {
     fn tool_metadata() {
         use crate::types::tool_metadata::ToolMetadata;
         let tool = HashlineReadTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "hashline_read");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "hashline_read"
+        );
         assert_eq!(ToolMetadata::kind(&tool), ToolKind::Read);
         assert!(supercharge_tool_runtime::Tool::capabilities(&tool).is_read_only);
         assert!(matches!(
@@ -429,9 +432,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -472,9 +476,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -511,9 +516,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => assert!(fc.extracted_images.is_empty()),
@@ -570,9 +576,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         assert!(
             matches!(result, ReadFileOutput::FileNotFound(_)),
@@ -595,9 +602,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(_fc) => {
@@ -629,9 +637,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -693,9 +702,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -744,9 +754,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         // Should succeed with FileContent, not FileTooLarge.
         match result {
@@ -782,9 +793,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -817,9 +829,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -855,9 +868,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {
@@ -885,9 +899,10 @@ mod tests {
             format: None,
         };
 
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
 
         match result {
             ReadFileOutput::FileContent(fc) => {

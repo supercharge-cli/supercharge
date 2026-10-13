@@ -72,7 +72,9 @@ fn managed_extra_marketplace_sources(
     managed: &[supercharge_workspace::permission::resolution::ManagedMarketplace],
     existing: &[MarketplaceSource],
 ) -> Vec<MarketplaceSource> {
-    use supercharge_workspace::permission::resolution::{ManagedMarketplaceKind, normalize_git_url};
+    use supercharge_workspace::permission::resolution::{
+        ManagedMarketplaceKind, normalize_git_url,
+    };
     let mut out: Vec<MarketplaceSource> = Vec::new();
     for m in managed {
         let kind = match &m.kind {
@@ -256,7 +258,8 @@ mod tests {
         );
 
         // No policy, no pins: everything survives, blocked or local alike.
-        let unrestricted = supercharge_workspace::permission::resolution::MarketplacePolicy::default();
+        let unrestricted =
+            supercharge_workspace::permission::resolution::MarketplacePolicy::default();
         assert_eq!(
             filter_sources_by_allowlist(sources(), &unrestricted, &[]).len(),
             sources().len()

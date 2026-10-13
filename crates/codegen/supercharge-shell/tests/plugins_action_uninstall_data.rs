@@ -15,8 +15,9 @@ fn action_outcome(response: &serde_json::Value) -> supercharge_hooks_plugins_typ
 #[test]
 fn plugins_action_uninstall_removes_plugin_data_dir() {
     acp_harness::run_agent_test(|cwd, _server| async move {
-        let grok_home =
-            std::path::PathBuf::from(std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"));
+        let grok_home = std::path::PathBuf::from(
+            std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"),
+        );
 
         let plugin_dir = cwd.join("data-demo");
         std::fs::create_dir_all(&plugin_dir).unwrap();

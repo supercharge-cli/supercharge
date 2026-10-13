@@ -222,7 +222,8 @@ fn plugin_cta_catalog_reload_empty_candidates_resets_matched_phase() {
     let id = AgentId(0);
     {
         let cta = &mut app.agents.get_mut(&id).unwrap().plugin_cta;
-        cta.source_url_or_path = Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
+        cta.source_url_or_path =
+            Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
         cta.candidates = vec![cta_entry("figma", "not_installed")];
         cta.phase = CtaPhase::Matched {
             plugin_relative_path: "plugins/figma".into(),
@@ -649,11 +650,14 @@ fn dashboard_preview_setting_updates_live_state_and_rolls_back() {
     let mut app = test_app_with_agent();
     app.dashboard = Some(crate::views::dashboard::DashboardState::new());
     let effects = dispatch(Action::SetDashboardPreview(false), &mut app);
-    assert!(matches!(effects.as_slice(), [Effect::PersistSetting {
-        key: "dashboard_preview",
-        value: SettingValue::Bool(false),
-        rollback_value: SettingValue::Bool(true),
-    }]));
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::PersistSetting {
+            key: "dashboard_preview",
+            value: SettingValue::Bool(false),
+            rollback_value: SettingValue::Bool(true),
+        }]
+    ));
     assert!(!app.dashboard.as_ref().unwrap().preview_enabled);
     assert!(!app.current_ui.dashboard_preview_enabled());
 

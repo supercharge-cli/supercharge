@@ -976,13 +976,17 @@ mod tests {
             assert!(!conversations_lane_enabled());
         }
         {
-            let _on =
-                supercharge_test_support::EnvGuard::set("SUPERCHARGE_SESSION_LIST_CONVERSATIONS", "1");
+            let _on = supercharge_test_support::EnvGuard::set(
+                "SUPERCHARGE_SESSION_LIST_CONVERSATIONS",
+                "1",
+            );
             assert_eq!(conversations_lane_enabled(), false);
         }
         {
-            let _off =
-                supercharge_test_support::EnvGuard::set("SUPERCHARGE_SESSION_LIST_CONVERSATIONS", "0");
+            let _off = supercharge_test_support::EnvGuard::set(
+                "SUPERCHARGE_SESSION_LIST_CONVERSATIONS",
+                "0",
+            );
             assert!(!conversations_lane_enabled());
         }
     }
@@ -999,8 +1003,10 @@ mod tests {
             "no env ⇒ lane off (Build-mode default)"
         );
         {
-            let _desktop =
-                supercharge_test_support::EnvGuard::set("SUPERCHARGE_SESSION_LIST_CONVERSATIONS", "1");
+            let _desktop = supercharge_test_support::EnvGuard::set(
+                "SUPERCHARGE_SESSION_LIST_CONVERSATIONS",
+                "1",
+            );
             assert_eq!(conversations_lane_active(), false);
         }
         {

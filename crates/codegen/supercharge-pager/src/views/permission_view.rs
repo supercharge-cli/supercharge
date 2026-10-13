@@ -182,7 +182,9 @@ impl PermissionViewState {
             let len = h.highlighted_words.len();
             let allow_adjustable = has_row(ALLOW_ALWAYS_COMMAND_OPTION_ID)
                 && (1..=len)
-                    .filter(|&n| supercharge_workspace::permission::always_allow_scope_persists(h, n))
+                    .filter(|&n| {
+                        supercharge_workspace::permission::always_allow_scope_persists(h, n)
+                    })
                     .nth(1)
                     .is_some();
             let deny_adjustable = has_row(REJECT_ALWAYS_COMMAND_OPTION_ID) && len > 1;
@@ -715,10 +717,12 @@ pub fn render_permission_view(
 
 pub(crate) fn preview_command_text(state: &PermissionViewState) -> String {
     match state.bash_highlights.as_ref() {
-        Some(h) => supercharge_workspace::permission::bash_command_splitting::unwrap_command_wrappers(
-            &h.highlighted_words,
-        )
-        .join(" "),
+        Some(h) => {
+            supercharge_workspace::permission::bash_command_splitting::unwrap_command_wrappers(
+                &h.highlighted_words,
+            )
+            .join(" ")
+        }
         None => state.bash_command_raw.clone().unwrap_or_default(),
     }
 }

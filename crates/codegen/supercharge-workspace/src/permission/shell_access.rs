@@ -1510,7 +1510,10 @@ mod tests {
                 "/home/user/.supercharge/requirements.toml",
                 ProtectedEditReason::GrokConfig,
             ),
-            ("/home/user/.supercharge/mcp.json", ProtectedEditReason::GrokConfig),
+            (
+                "/home/user/.supercharge/mcp.json",
+                ProtectedEditReason::GrokConfig,
+            ),
             (
                 "/work/project/.supercharge/lsp.json",
                 ProtectedEditReason::GrokConfig,

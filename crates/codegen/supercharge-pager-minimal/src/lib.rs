@@ -68,7 +68,9 @@ pub fn draw(app: &mut AppView, terminal: &mut PagerTerminal) {
 /// Register the minimal-mode render hooks with `supercharge-pager`. It installs the function-pointer hooks so the
 /// pager's `ScreenMode::Minimal` branches dispatch into this crate.
 pub fn install() {
-    supercharge_pager::minimal_hook::install(supercharge_pager::minimal_hook::MinimalHooks { draw });
+    supercharge_pager::minimal_hook::install(supercharge_pager::minimal_hook::MinimalHooks {
+        draw,
+    });
 }
 
 /// Every row of `buf` as text, one line per row, for the render tests' substring assertions.

@@ -1,6 +1,6 @@
 use crate::util::config::RemoteSettings;
-use toml::Value as TomlValue;
 use supercharge_tools::implementations::grok_build::ask_user_question;
+use toml::Value as TomlValue;
 
 /// Resolve whether the bash-harness shadows that swap `find` for `bfs` and `grep` for `ugrep` are enabled.
 /// Precedence (highest first): `requirements.toml` (org policy, wins outright) > a truthy `DISABLE_EMBEDDED_SEARCH_TOOLS` master (forces off) > env > `config.toml` `[toolset.bash]` > `managed_config.toml` > default-on.
@@ -15,7 +15,8 @@ pub(crate) fn resolve_search_tools_enabled(
         v?.get("toolset")?.get("bash")?.get(key)?.as_bool()
     }
     let resolve = |primary: &str, alias: &str, key: &str| -> bool {
-        let env = supercharge_config::env_bool(primary).or_else(|| supercharge_config::env_bool(alias));
+        let env =
+            supercharge_config::env_bool(primary).or_else(|| supercharge_config::env_bool(alias));
         resolve_search_tool_enabled(
             disable,
             from_toml(requirements, key),

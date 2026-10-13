@@ -12,7 +12,9 @@ use crate::manager::AuthManager;
 use crate::model::GrokAuth;
 use crate::token_type::TokenType;
 use std::sync::Arc;
-use supercharge_telemetry::events::{AuthTokenKind, ManualAuth, ManualAuthReason, ManualAuthSurface};
+use supercharge_telemetry::events::{
+    AuthTokenKind, ManualAuth, ManualAuthReason, ManualAuthSurface,
+};
 /// `manual_auth` KPI reason for a terminal `AuthError`, or `None` when it doesn't force a manual re-login.
 /// Lives here (not on `AuthError`) so the error model stays telemetry-free.
 pub fn manual_auth_reason(err: &AuthError) -> Option<ManualAuthReason> {

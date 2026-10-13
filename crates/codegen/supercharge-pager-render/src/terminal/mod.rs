@@ -533,7 +533,9 @@ impl TerminalContext {
             },
             hyperlink_osc8_support: Some(self.hyperlink_capabilities().osc8.to_string()),
             clipboard_route: Some(crate::clipboard::clipboard_route().to_string()),
-            clipboard_native_tool: Some(supercharge_shared::clipboard::native_tool_name().to_owned()),
+            clipboard_native_tool: Some(
+                supercharge_shared::clipboard::native_tool_name().to_owned(),
+            ),
             display_server: Some(crate::host::DisplayServer::current().to_string()),
         }
     }
@@ -866,7 +868,7 @@ fn terminal_name_from_term_program(value: &str) -> Option<TerminalName> {
         "rio" => Some(TerminalName::Rio),
         "terminator" => Some(TerminalName::Terminator),
         "zed" => Some(TerminalName::Zed),
-            "grokdesktop" | "superchargedesktop" => Some(TerminalName::GrokDesktop),
+        "grokdesktop" | "superchargedesktop" => Some(TerminalName::GrokDesktop),
         "windowsterminal" => Some(TerminalName::WindowsTerminal),
         "otty" => Some(TerminalName::Otty),
         _ => None,

@@ -19,10 +19,10 @@ use supercharge_mcp::servers::{
     InitClaimGuard, MCP_TOOL_NAME_DELIMITER, McpClient, McpClientTimeoutOverrides, McpSpawnCtx,
     OauthInteractivity, SharedMcpState, parse_mcp_qualified_name,
 };
-use supercharge_tools::util::mcp_structured_content::render_structured_content;
 use supercharge_tool_protocol::{SessionId, ToolId};
 use supercharge_tool_runtime::{ToolCallContext, ToolStream, TypedToolOutput};
 use supercharge_tool_types::ToolDescription;
+use supercharge_tools::util::mcp_structured_content::render_structured_content;
 
 use crate::error::{WorkspaceError, WorkspaceResult};
 use crate::mcp_claim::{ClaimOffer, McpServerTier, plan_claims};
@@ -81,14 +81,16 @@ impl McpClientTransportAdapter {
 
 #[async_trait]
 impl McpTransport for McpClientTransportAdapter {
-    async fn initialize(&self) -> Result<McpServerInfo, supercharge_computer_hub_mcp_adapter::McpError> {
-        let service = self
-            .client
-            .ensure_initialized()
-            .await
-            .map_err(|e| supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string()))?;
+    async fn initialize(
+        &self,
+    ) -> Result<McpServerInfo, supercharge_computer_hub_mcp_adapter::McpError> {
+        let service = self.client.ensure_initialized().await.map_err(|e| {
+            supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string())
+        })?;
         let info = service.peer_info().ok_or_else(|| {
-            supercharge_computer_hub_mcp_adapter::McpError::Transport("no peer info after init".into())
+            supercharge_computer_hub_mcp_adapter::McpError::Transport(
+                "no peer info after init".into(),
+            )
         })?;
         // rmcp 3.x makes the server implementation identity optional on peer info.
         let server_info = info.server_info.as_ref();
@@ -102,11 +104,9 @@ impl McpTransport for McpClientTransportAdapter {
     async fn list_tools(
         &self,
     ) -> Result<Vec<McpToolDefinition>, supercharge_computer_hub_mcp_adapter::McpError> {
-        let service = self
-            .client
-            .ensure_initialized()
-            .await
-            .map_err(|e| supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string()))?;
+        let service = self.client.ensure_initialized().await.map_err(|e| {
+            supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string())
+        })?;
 
         let mut all_tools = Vec::new();
         let mut cursor: Option<String> = None;
@@ -116,7 +116,9 @@ impl McpTransport for McpClientTransportAdapter {
                     rmcp::model::PaginatedRequestParams::default().with_cursor(cursor.clone()),
                 ))
                 .await
-                .map_err(|e| supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string()))?;
+                .map_err(|e| {
+                    supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string())
+                })?;
 
             all_tools.extend(result.tools.into_iter().map(|t| McpToolDefinition {
                 name: t.name.to_string(),
@@ -138,11 +140,9 @@ impl McpTransport for McpClientTransportAdapter {
         name: &str,
         arguments: Value,
     ) -> Result<McpCallResult, supercharge_computer_hub_mcp_adapter::McpError> {
-        let service = self
-            .client
-            .ensure_initialized()
-            .await
-            .map_err(|e| supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string()))?;
+        let service = self.client.ensure_initialized().await.map_err(|e| {
+            supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string())
+        })?;
         // MCP spec requires arguments to be an object; coerce if needed.
         let args_object = match arguments {
             Value::Object(map) => Some(map),
@@ -160,7 +160,9 @@ impl McpTransport for McpClientTransportAdapter {
                 params
             })
             .await
-            .map_err(|e| supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string()))?;
+            .map_err(|e| {
+                supercharge_computer_hub_mcp_adapter::McpError::Transport(e.to_string())
+            })?;
 
         Ok(mcp_call_result_from_rmcp(result))
     }

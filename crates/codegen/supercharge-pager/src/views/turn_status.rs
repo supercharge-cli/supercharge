@@ -18,8 +18,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use unicode_width::UnicodeWidthStr;
 use supercharge_workspace::permission::mcp_pretty_name_if_qualified;
+use unicode_width::UnicodeWidthStr;
 
 use crate::acp::tracker::{TurnActivity, WaitingReason};
 use crate::app::agent::{AgentCommand, AgentState};

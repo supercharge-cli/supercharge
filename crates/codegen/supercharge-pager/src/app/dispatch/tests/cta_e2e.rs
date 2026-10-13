@@ -447,7 +447,8 @@ fn plugin_cta_catalog_err_preserves_cache() {
     let id = AgentId(0);
     {
         let cta = &mut app.agents.get_mut(&id).unwrap().plugin_cta;
-        cta.source_url_or_path = Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
+        cta.source_url_or_path =
+            Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
         cta.candidates = vec![cta_entry("cached", "not_installed")];
     }
 
@@ -474,7 +475,8 @@ fn plugin_cta_catalog_reload_empty_candidates_preserves_installed_checkmark() {
     let id = AgentId(0);
     {
         let cta = &mut app.agents.get_mut(&id).unwrap().plugin_cta;
-        cta.source_url_or_path = Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
+        cta.source_url_or_path =
+            Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
         cta.candidates = vec![cta_entry("figma", "not_installed")];
         cta.phase = CtaPhase::Installed {
             name: "figma".into(),
@@ -730,7 +732,8 @@ fn plugin_cta_debounce_sets_hidden_when_feature_disabled() {
     app.plugin_cta_enabled = false;
     {
         let cta = &mut app.agents.get_mut(&id).unwrap().plugin_cta;
-        cta.source_url_or_path = Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
+        cta.source_url_or_path =
+            Some(supercharge_plugin_marketplace::OFFICIAL_SOURCE_GIT_URL.into());
         cta.candidates = vec![cta_entry("figma", "not_installed")];
         cta.debounce_generation = 1;
         cta.phase = CtaPhase::Matched {
@@ -902,7 +905,8 @@ fn cta_install_done_non_success_sets_error_with_sanitized_message() {
         name: "figma".into(),
     };
     // Input and expectation both derive from the shared table so no service name is respelled here and a rename cannot strand the assertions
-    let Some(&(pattern, expected)) = supercharge_shell::sampling::error::SERVICE_NAME_REWRITES.first()
+    let Some(&(pattern, expected)) =
+        supercharge_shell::sampling::error::SERVICE_NAME_REWRITES.first()
     else {
         panic!("expected a service-name rewrite");
     };

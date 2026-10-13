@@ -1,6 +1,7 @@
 use super::*;
-use tokio_util::sync::CancellationToken;
-use supercharge_tools::implementations::grok_build::task::backend::{ChannelBackend, SubagentBackend};
+use supercharge_tools::implementations::grok_build::task::backend::{
+    ChannelBackend, SubagentBackend,
+};
 use supercharge_tools::implementations::grok_build::task::coordinator::{
     ActiveMessageAdmission, ChildCompletion, ChildControl, ChildRunOutput, ChildRunRequest,
     ChildRunner, CoordinatorConfig, LocalBoxFuture, SendBoxFuture, StartedChild, SubagentProgress,
@@ -10,6 +11,7 @@ use supercharge_tools::implementations::grok_build::task::types::{
     ActiveAgentMessageRequest, SubagentDescribeOutcome, SubagentOwner, SubagentRequest,
     SubagentValidateTypeOutcome,
 };
+use tokio_util::sync::CancellationToken;
 
 const TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 

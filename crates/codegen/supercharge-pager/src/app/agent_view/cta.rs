@@ -38,15 +38,17 @@ impl AgentView {
             return;
         }
         let (chars, words) = crate::views::prompt_suggestion::suggestion_size(&full);
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::PromptSuggestion {
-            action: supercharge_telemetry::events::PromptSuggestionAction::Shown,
-            chars,
-            words,
-            model: None,
-            latency_ms: None,
-            request_id: None,
-            session_id: self.session.session_id.as_ref().map(|s| s.0.to_string()),
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::PromptSuggestion {
+                action: supercharge_telemetry::events::PromptSuggestionAction::Shown,
+                chars,
+                words,
+                model: None,
+                latency_ms: None,
+                request_id: None,
+                session_id: self.session.session_id.as_ref().map(|s| s.0.to_string()),
+            },
+        );
     }
 
     /// Notify the suggestion controller that the prompt text changed.

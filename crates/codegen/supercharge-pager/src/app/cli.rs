@@ -389,11 +389,7 @@ impl ServeArgs {
 #[derive(Debug, clap::Args, Clone)]
 pub struct DaemonArgs {
     /// Address for the inbox HTTP server (`host:port`).
-    #[arg(
-        long,
-        default_value = "0.0.0.0:8790",
-        env = "SUPERAGENT_BIND"
-    )]
+    #[arg(long, default_value = "0.0.0.0:8790", env = "SUPERAGENT_BIND")]
     pub bind: SocketAddr,
     /// Shared secret for Bearer / SUPERCHARGE_PASSWORD (auto-generated if omitted).
     #[arg(long, env = "SUPERCHARGE_PASSWORD")]

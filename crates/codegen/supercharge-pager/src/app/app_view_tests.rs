@@ -2032,9 +2032,15 @@ fn byok_auth_metadata_keeps_tools_usage_and_composer_available() {
     for tier in [None, Some("Free"), Some("X Basic"), Some("Supercharge")] {
         let mut app = test_app();
         app.tier_restricted_commands = vec!["usage".into(), "voice".into(), "imagine".into()];
-        app.welcome_prompt.slash_controller.registry_mut().set_available_tools(
-            ["image_gen", "image_to_video"].into_iter().map(str::to_string).collect(),
-        );
+        app.welcome_prompt
+            .slash_controller
+            .registry_mut()
+            .set_available_tools(
+                ["image_gen", "image_to_video"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            );
         app.welcome_prompt.set_voice_visible(true);
         let gate = supercharge_login::GateInfo {
             message: "Buy credits".into(),
@@ -2055,7 +2061,10 @@ fn byok_auth_metadata_keeps_tools_usage_and_composer_available() {
         assert!(app.welcome_prompt.slash_controller.usage_command_visible());
         let registry = app.welcome_prompt.slash_controller.registry();
         for command in ["setup", "usage", "voice", "imagine", "imagine-video"] {
-            assert!(!registry.is_restricted(command), "/{command} was tier-restricted");
+            assert!(
+                !registry.is_restricted(command),
+                "/{command} was tier-restricted"
+            );
             assert!(registry.get(command).is_some(), "/{command} was hidden");
         }
     }
@@ -2076,7 +2085,9 @@ fn byok_auth_metadata_preserves_identity_and_security_policy() {
     assert_eq!(app.team_name.as_deref(), Some("Acme Corp"));
     assert!(app.is_zdr);
     assert!(!app.usage_visible);
-    app.trust_state = TrustState::Pending { workspace: "/tmp/fake-workspace".into() };
+    app.trust_state = TrustState::Pending {
+        workspace: "/tmp/fake-workspace".into(),
+    };
     assert!(!app.session_startup_allowed());
     assert!(!app.ready_for_startup_typeahead());
 }

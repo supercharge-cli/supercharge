@@ -2,11 +2,11 @@
 use super::*;
 use crate::session::{InputAuthority, SlashAuthority};
 use crate::util::dual_clock::DualClock;
-use tracing::Instrument;
 use supercharge_tools::implementations::grok_build::task::types::{
     SubagentEvent, SubagentMarkUsageNotAppliedRequest, SubagentWaitPromptDrainedRequest,
 };
 use supercharge_tools::types::tool::ToolKind;
+use tracing::Instrument;
 static TURNS_ACTIVE: supercharge_telemetry::activity::ActivityGauge =
     supercharge_telemetry::activity::ActivityGauge::work(
         supercharge_telemetry::activity::TURNS_ACTIVE_KEY,
@@ -149,19 +149,21 @@ impl TurnCompletionEmitter {
     }
     fn emit(&mut self, outcome: TurnTelemetryOutcome, duration_ms: u64, tool_call_count: u32) {
         self.emitted = true;
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::TurnCompleted {
-            outcome: outcome.outcome,
-            duration_ms,
-            tool_call_count,
-            model_id: self.model_id.clone(),
-            session_id: Some(self.session.session_info.id.0.to_string()),
-            cancellation_category: outcome.cancellation_category,
-            error_category: outcome.error_category,
-            error_code: outcome.error_code,
-            error_detail: outcome.error_detail,
-            context_tokens: self.context_tokens,
-            turn_tokens: self.turn_tokens,
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::TurnCompleted {
+                outcome: outcome.outcome,
+                duration_ms,
+                tool_call_count,
+                model_id: self.model_id.clone(),
+                session_id: Some(self.session.session_info.id.0.to_string()),
+                cancellation_category: outcome.cancellation_category,
+                error_category: outcome.error_category,
+                error_code: outcome.error_code,
+                error_detail: outcome.error_detail,
+                context_tokens: self.context_tokens,
+                turn_tokens: self.turn_tokens,
+            },
+        );
     }
 }
 impl Drop for TurnCompletionEmitter {
@@ -868,16 +870,18 @@ impl SessionActor {
             model_id: model_id.clone(),
             yolo_mode: self.permissions.is_yolo_mode(),
             conversation_message_count: msg_count,
-            session_relationship: supercharge_tool_protocol::turn_hook::DEFAULT_SESSION_RELATIONSHIP
-                .to_string(),
+            session_relationship:
+                supercharge_tool_protocol::turn_hook::DEFAULT_SESSION_RELATIONSHIP.to_string(),
             schema_version: crate::session::events::EVENT_SCHEMA_VERSION.to_string(),
         })
         .await;
         let turn_idx = self.chat_state_handle.get_prompt_index().await as u64;
-        supercharge_telemetry::session_ctx::log_session_event(crate::agent::session_metrics::Turn {
-            session_id: self.session_info.id.0.to_string(),
-            turn_number: turn_idx,
-        });
+        supercharge_telemetry::session_ctx::log_session_event(
+            crate::agent::session_metrics::Turn {
+                session_id: self.session_info.id.0.to_string(),
+                turn_number: turn_idx,
+            },
+        );
         let current_prompt_index = self.chat_state_handle.get_prompt_index().await;
         supercharge_telemetry::session_ctx::begin_prompt_id();
         let mut chunk_meta = serde_json::Map::new();
@@ -1023,7 +1027,8 @@ impl SessionActor {
                 .normalize_images_with_notices(&mut context, raw_images, is_cursor)
                 .await;
             let (query, extra_images) = if !self.is_cursor_harness() {
-                let extraction = supercharge_tools::util::base64_images::extract_base64_images(query);
+                let extraction =
+                    supercharge_tools::util::base64_images::extract_base64_images(query);
                 if extraction.images.is_empty() {
                     (extraction.text, Vec::new())
                 } else {
@@ -1281,10 +1286,12 @@ impl SessionActor {
             if let Some(kind) = redirect_kind {
                 self.events.set_prior_redirect_kind(kind);
             }
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::HookBlocked {
-                hook_name: hook_name.clone(),
-                cause: supercharge_telemetry::events::HookBlockCause::PromptBlocked,
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::HookBlocked {
+                    hook_name: hook_name.clone(),
+                    cause: supercharge_telemetry::events::HookBlockCause::PromptBlocked,
+                },
+            );
             self.send_hook_annotation(&format!(
                 "\u{26a0} Prompt blocked by {}: {reason}",
                 supercharge_hooks::config::hook_display_name(&hook_name)
@@ -1452,13 +1459,15 @@ impl SessionActor {
         );
         let bridge_outcome = turn_result_to_hook_outcome(&result);
         self.observability_bridge
-            .emit(supercharge_tool_protocol::session_event::SessionEvent::TurnEnded {
-                turn_number: current_prompt_index as u64,
-                outcome: bridge_outcome,
-                duration_ms: turn_duration_ms,
-                tool_call_count: turn_tool_count,
-                model_id: turn_model_id.clone(),
-            })
+            .emit(
+                supercharge_tool_protocol::session_event::SessionEvent::TurnEnded {
+                    turn_number: current_prompt_index as u64,
+                    outcome: bridge_outcome,
+                    duration_ms: turn_duration_ms,
+                    tool_call_count: turn_tool_count,
+                    model_id: turn_model_id.clone(),
+                },
+            )
             .await;
         if supercharge_telemetry::external::is_active() {
             let committed = self
@@ -1476,10 +1485,12 @@ impl SessionActor {
                 &captured,
                 trust_committed,
             );
-            supercharge_telemetry::external::emit(&supercharge_telemetry::events::AssistantResponse {
-                response_length: response_text.len(),
-                response_text: (!response_text.is_empty()).then_some(response_text),
-            });
+            supercharge_telemetry::external::emit(
+                &supercharge_telemetry::events::AssistantResponse {
+                    response_length: response_text.len(),
+                    response_text: (!response_text.is_empty()).then_some(response_text),
+                },
+            );
         }
         match &result {
             Ok(TurnOutcome::Completed { stop, .. }) => {
@@ -1499,16 +1510,18 @@ impl SessionActor {
                         },
                     );
                 }
-                self.send_after_turn_event(supercharge_tool_protocol::turn_hook::AfterTurnPayload {
-                    turn_number: current_prompt_index as u64,
-                    outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Completed,
-                    duration_ms: turn_duration_ms,
-                    tool_call_count: turn_tool_count,
-                    model_id: turn_model_id.clone(),
-                    written_repo_paths: Vec::new(),
-                    cancellation_category: None,
-                    cancellation_context: None,
-                })
+                self.send_after_turn_event(
+                    supercharge_tool_protocol::turn_hook::AfterTurnPayload {
+                        turn_number: current_prompt_index as u64,
+                        outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Completed,
+                        duration_ms: turn_duration_ms,
+                        tool_call_count: turn_tool_count,
+                        model_id: turn_model_id.clone(),
+                        written_repo_paths: Vec::new(),
+                        cancellation_category: None,
+                        cancellation_context: None,
+                    },
+                )
                 .await;
             }
             Ok(TurnOutcome::StationarityEnded) => {
@@ -1517,18 +1530,20 @@ impl SessionActor {
                     None,
                     None,
                 );
-                self.send_after_turn_event(supercharge_tool_protocol::turn_hook::AfterTurnPayload {
-                    turn_number: current_prompt_index as u64,
-                    outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Completed,
-                    duration_ms: turn_duration_ms,
-                    tool_call_count: turn_tool_count,
-                    model_id: turn_model_id.clone(),
-                    written_repo_paths: Vec::new(),
-                    cancellation_category: Some(
-                        crate::session::commands::ACTION_STATIONARITY_CATEGORY.to_string(),
-                    ),
-                    cancellation_context: None,
-                })
+                self.send_after_turn_event(
+                    supercharge_tool_protocol::turn_hook::AfterTurnPayload {
+                        turn_number: current_prompt_index as u64,
+                        outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Completed,
+                        duration_ms: turn_duration_ms,
+                        tool_call_count: turn_tool_count,
+                        model_id: turn_model_id.clone(),
+                        written_repo_paths: Vec::new(),
+                        cancellation_category: Some(
+                            crate::session::commands::ACTION_STATIONARITY_CATEGORY.to_string(),
+                        ),
+                        cancellation_context: None,
+                    },
+                )
                 .await;
             }
             Ok(TurnOutcome::Cancelled { category, context }) => {
@@ -1544,16 +1559,18 @@ impl SessionActor {
                 {
                     self.events.set_prior_interrupt_category(*cause);
                 }
-                self.send_after_turn_event(supercharge_tool_protocol::turn_hook::AfterTurnPayload {
-                    turn_number: current_prompt_index as u64,
-                    outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Cancelled,
-                    duration_ms: turn_duration_ms,
-                    tool_call_count: turn_tool_count,
-                    model_id: turn_model_id.clone(),
-                    written_repo_paths: Vec::new(),
-                    cancellation_category: cancellation_category_to_wire_string(*category),
-                    cancellation_context: context_json,
-                })
+                self.send_after_turn_event(
+                    supercharge_tool_protocol::turn_hook::AfterTurnPayload {
+                        turn_number: current_prompt_index as u64,
+                        outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Cancelled,
+                        duration_ms: turn_duration_ms,
+                        tool_call_count: turn_tool_count,
+                        model_id: turn_model_id.clone(),
+                        written_repo_paths: Vec::new(),
+                        cancellation_category: cancellation_category_to_wire_string(*category),
+                        cancellation_context: context_json,
+                    },
+                )
                 .await;
             }
             Ok(TurnOutcome::MaxTurnsReached { limit }) => {
@@ -1566,33 +1583,37 @@ impl SessionActor {
                         "limit": limit,
                     })),
                 );
-                self.send_after_turn_event(supercharge_tool_protocol::turn_hook::AfterTurnPayload {
-                    turn_number: current_prompt_index as u64,
-                    outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Cancelled,
-                    duration_ms: turn_duration_ms,
-                    tool_call_count: turn_tool_count,
-                    model_id: turn_model_id.clone(),
-                    written_repo_paths: Vec::new(),
-                    cancellation_category: None,
-                    cancellation_context: Some(serde_json::json!({
-                        "reason": "max_turns_reached",
-                        "limit": limit,
-                    })),
-                })
+                self.send_after_turn_event(
+                    supercharge_tool_protocol::turn_hook::AfterTurnPayload {
+                        turn_number: current_prompt_index as u64,
+                        outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Cancelled,
+                        duration_ms: turn_duration_ms,
+                        tool_call_count: turn_tool_count,
+                        model_id: turn_model_id.clone(),
+                        written_repo_paths: Vec::new(),
+                        cancellation_category: None,
+                        cancellation_context: Some(serde_json::json!({
+                            "reason": "max_turns_reached",
+                            "limit": limit,
+                        })),
+                    },
+                )
                 .await;
             }
             Err(err) => {
                 self.emit_turn_ended(crate::session::events::TurnOutcomeLabel::Error, None, None);
-                self.send_after_turn_event(supercharge_tool_protocol::turn_hook::AfterTurnPayload {
-                    turn_number: current_prompt_index as u64,
-                    outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Error,
-                    duration_ms: turn_duration_ms,
-                    tool_call_count: turn_tool_count,
-                    model_id: turn_model_id.clone(),
-                    written_repo_paths: Vec::new(),
-                    cancellation_category: None,
-                    cancellation_context: None,
-                })
+                self.send_after_turn_event(
+                    supercharge_tool_protocol::turn_hook::AfterTurnPayload {
+                        turn_number: current_prompt_index as u64,
+                        outcome: supercharge_tool_protocol::turn_hook::TurnHookOutcome::Error,
+                        duration_ms: turn_duration_ms,
+                        tool_call_count: turn_tool_count,
+                        model_id: turn_model_id.clone(),
+                        written_repo_paths: Vec::new(),
+                        cancellation_category: None,
+                        cancellation_context: None,
+                    },
+                )
                 .await;
                 supercharge_telemetry::session_ctx::log_session_event(
                     supercharge_telemetry::events::ApiError {
@@ -2494,10 +2515,12 @@ impl SessionActor {
     ) {
         if let Some(snap) = snapshot {
             for pr in &snap.delta.prs_created_this_turn {
-                supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::PrCreated {
-                    source: pr.source,
-                    had_commit_in_session: pr.had_commit_in_session,
-                });
+                supercharge_telemetry::session_ctx::log_event(
+                    supercharge_telemetry::events::PrCreated {
+                        source: pr.source,
+                        had_commit_in_session: pr.had_commit_in_session,
+                    },
+                );
             }
             let _ = self
                 .notifications
@@ -3737,7 +3760,8 @@ impl SessionActor {
             self.observability_bridge
                 .emit(
                     supercharge_tool_protocol::session_event::SessionEvent::PhaseChanged {
-                        phase: supercharge_tool_protocol::session_event::SessionPhase::ToolExecution,
+                        phase:
+                            supercharge_tool_protocol::session_event::SessionPhase::ToolExecution,
                     },
                 )
                 .await;
@@ -4222,13 +4246,13 @@ mod last_sample_span_tests {
     use super::{TurnSpanTotals, record_failed_sample_on_turn_span};
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
+    use supercharge_sampling_types::conversation::{
+        ConversationItem, ConversationResponse, StopReason, TokenUsage, ToolCall,
+    };
     use tracing::field::{Field, Visit};
     use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
     use tracing_subscriber::registry::LookupSpan;
     use tracing_subscriber::util::SubscriberInitExt;
-    use supercharge_sampling_types::conversation::{
-        ConversationItem, ConversationResponse, StopReason, TokenUsage, ToolCall,
-    };
     /// Last-write value per field, the view the OTel bridge exports.
     #[derive(Default)]
     struct Fields {

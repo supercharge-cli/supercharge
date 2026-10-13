@@ -12,7 +12,8 @@ pub(crate) use supercharge_interjection_core::{
 };
 
 /// Shell instantiation of the shared entry type: images are ACP content.
-pub(crate) type PendingInterjection = supercharge_interjection_core::PendingInterjection<acp::ImageContent>;
+pub(crate) type PendingInterjection =
+    supercharge_interjection_core::PendingInterjection<acp::ImageContent>;
 
 /// Prompt-id prefix for interjections that missed their turn and were converted into standalone prompt turns.
 /// The prefix keeps the turn's user echo persist-only.

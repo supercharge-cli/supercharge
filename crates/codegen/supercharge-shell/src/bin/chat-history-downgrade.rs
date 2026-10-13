@@ -22,7 +22,9 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
 use clap::Parser;
-use supercharge_shell::sampling::conversation::{ConversationItem, conversation_item_to_chat_message};
+use supercharge_shell::sampling::conversation::{
+    ConversationItem, conversation_item_to_chat_message,
+};
 use supercharge_shell::sampling::types::{ChatRequestMessage, Role};
 
 /// normalize chat_history.jsonl, convert any v1 (ConversationItem) to v0 (ChatRequestMessage) format.
@@ -252,7 +254,10 @@ mod tests {
             v.get("reasoning_content").and_then(|x| x.as_str()),
             Some("Let me think...")
         );
-        assert_eq!(v.get("model_id").and_then(|x| x.as_str()), Some("Supercharge AI-3"));
+        assert_eq!(
+            v.get("model_id").and_then(|x| x.as_str()),
+            Some("Supercharge AI-3")
+        );
     }
 
     /// Current shape: reasoning is a sibling line before the assistant.

@@ -736,7 +736,8 @@ mod tests {
         write_agent_md(&source, "agent");
         std::fs::write(source.join("agents").join("agent.md"), "body-v2\n").unwrap();
 
-        let mut registry = InstallRegistry::empty(home.join(".supercharge").join("installed-plugins"));
+        let mut registry =
+            InstallRegistry::empty(home.join(".supercharge").join("installed-plugins"));
         let installed = register_local_install(&mut registry, &source, None);
         let dest = installed.repo_path.clone();
 

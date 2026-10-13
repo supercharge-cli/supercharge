@@ -260,7 +260,10 @@ fn run_git_timed(cmd: &mut Command, what: &str, timeout: Duration) -> Result<(),
         Err(error) => {
             let _ = child.kill();
             if !matches!(
-                supercharge_tty_utils::wait_child_bounded(&mut child, supercharge_tty_utils::KILL_REAP_TIMEOUT,),
+                supercharge_tty_utils::wait_child_bounded(
+                    &mut child,
+                    supercharge_tty_utils::KILL_REAP_TIMEOUT,
+                ),
                 Ok(Some(_))
             ) {
                 transfer_git_cleanup(
@@ -391,18 +394,20 @@ fn kill_git_child(
             None
         }
     };
-    let child =
-        match supercharge_tty_utils::wait_child_bounded(&mut child, supercharge_tty_utils::KILL_REAP_TIMEOUT) {
-            Ok(Some(_)) => {
-                drop(group);
-                None
-            }
-            Ok(None) => Some((child, group)),
-            Err(error) => {
-                tracing::warn!(error = %error, operation = what, "git bounded reap failed");
-                Some((child, group))
-            }
-        };
+    let child = match supercharge_tty_utils::wait_child_bounded(
+        &mut child,
+        supercharge_tty_utils::KILL_REAP_TIMEOUT,
+    ) {
+        Ok(Some(_)) => {
+            drop(group);
+            None
+        }
+        Ok(None) => Some((child, group)),
+        Err(error) => {
+            tracing::warn!(error = %error, operation = what, "git bounded reap failed");
+            Some((child, group))
+        }
+    };
     if child.is_some() {
         transfer_git_cleanup(what, GitReaperOwners { child, stderr });
         return None;

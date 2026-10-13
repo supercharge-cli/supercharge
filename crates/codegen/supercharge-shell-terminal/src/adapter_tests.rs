@@ -71,7 +71,9 @@ fn scripted_gateway(outputs: Vec<(String, bool)>) -> GatewaySender {
     tokio::spawn(async move {
         let mut next = 0usize;
         let mut wait_reply: Option<
-            tokio::sync::oneshot::Sender<supercharge_acp_lib::AcpResult<acp::WaitForTerminalExitResponse>>,
+            tokio::sync::oneshot::Sender<
+                supercharge_acp_lib::AcpResult<acp::WaitForTerminalExitResponse>,
+            >,
         > = None;
         let mut exited = false;
         while let Some(msg) = rx.recv().await {
@@ -907,13 +909,17 @@ async fn wait_for_completion_race_with_exit_watcher_skips_the_polling_fallback()
                         });
                     let _ = args
                         .response_tx
-                        .send(Err(supercharge_acp_lib::acp_internal_error("terminal released")));
+                        .send(Err(supercharge_acp_lib::acp_internal_error(
+                            "terminal released",
+                        )));
                 }
                 AcpClientMessage::TerminalOutput(args) => {
                     *polls.lock().unwrap() += 1;
                     let _ = args
                         .response_tx
-                        .send(Err(supercharge_acp_lib::acp_internal_error("unknown terminal")));
+                        .send(Err(supercharge_acp_lib::acp_internal_error(
+                            "unknown terminal",
+                        )));
                 }
                 _ => {}
             }

@@ -384,7 +384,10 @@ mod tests {
     #[test]
     fn name_and_description() {
         let tool = TodoWriteTool;
-        assert_eq!(supercharge_tool_runtime::Tool::id(&tool).as_str(), "todo_write");
+        assert_eq!(
+            supercharge_tool_runtime::Tool::id(&tool).as_str(),
+            "todo_write"
+        );
     }
 
     #[tokio::test]
@@ -531,9 +534,10 @@ mod tests {
                 make_update("dup", Some("B"), Some(TodoStatus::Pending)),
             ],
         };
-        let result = supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
-            .await
-            .unwrap();
+        let result =
+            supercharge_tool_runtime::Tool::run(&tool, test_ctx(resources.into_shared()), input)
+                .await
+                .unwrap();
         assert!(
             matches!(result, TodoWriteOutput::DuplicateId(ref msg) if msg.contains("dup")),
             "expected DuplicateId variant, got {result:?}"

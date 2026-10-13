@@ -2158,7 +2158,10 @@ fn inject_client_identity_adds_identifier_to_initialize() {
         inject_client_identity_into_initialize(&mut json, "Supercharge AI-tui");
     assert!(was_initialize, "should have detected an initialize message");
     assert!(mutated, "should have injected the identifier");
-    assert_eq!(j(&json, "/params/_meta/clientIdentifier"), "supercharge-tui");
+    assert_eq!(
+        j(&json, "/params/_meta/clientIdentifier"),
+        "supercharge-tui"
+    );
 }
 
 #[test]

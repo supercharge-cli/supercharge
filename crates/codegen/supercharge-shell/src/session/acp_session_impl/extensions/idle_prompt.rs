@@ -2,7 +2,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use supercharge_agent_lifecycle::LocalExtensionRegistryBuilder;
-use supercharge_agent_lifecycle::{LocalSessionLifecycleContributor, LocalTurnLifecycleContributor};
+use supercharge_agent_lifecycle::{
+    LocalSessionLifecycleContributor, LocalTurnLifecycleContributor,
+};
 use supercharge_agent_lifecycle::{
     SessionIdleInput, TurnAbortInput, TurnDoneInput, TurnErrorInput, TurnStartInput,
 };

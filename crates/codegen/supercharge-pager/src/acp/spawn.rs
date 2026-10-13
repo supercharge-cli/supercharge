@@ -9,9 +9,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use supercharge_telemetry::startup::{self, StartupPhase};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use supercharge_telemetry::startup::{self, StartupPhase};
 
 use supercharge_acp_lib::{
     AcpAgentChannel, AcpClientChannel, AcpClientTx, AcpGatewayReceiver, AcpGatewaySender,
@@ -333,7 +333,8 @@ pub async fn spawn_grok_shell(
         Box::new(move |client_tx| {
             let gateway = AcpGatewaySender::new(client_tx);
 
-            let _t = supercharge_telemetry::instrumentation::timer("startup.worker_spawn.agent_build");
+            let _t =
+                supercharge_telemetry::instrumentation::timer("startup.worker_spawn.agent_build");
             let mut agent =
                 MvpAgent::with_models(gateway, &agent_config, auth_manager, models_manager);
             drop(_t);
@@ -417,8 +418,9 @@ pub(super) async fn spawn_runtime_thread(
         .stack_size(RUNTIME_THREAD_STACK_SIZE)
         .spawn(move || -> Result<()> {
             let mut builder = tokio::runtime::Builder::new_current_thread();
-            let built = supercharge_tty_utils::runtime::build_with_blocking_pool(builder.enable_all())
-                .with_context(|| format!("failed to start the {thread_name} runtime"));
+            let built =
+                supercharge_tty_utils::runtime::build_with_blocking_pool(builder.enable_all())
+                    .with_context(|| format!("failed to start the {thread_name} runtime"));
             let rt = match built {
                 Ok(rt) => rt,
                 Err(error) => {
@@ -453,7 +455,8 @@ fn spawn_skills_file_watcher(
 ) -> tokio::task::JoinHandle<()> {
     // Resolve the workspace at call time; the blocking pool may run this after cwd changes.
     let cwd = std::env::current_dir().unwrap_or_default();
-    let workspace_user_dir = supercharge_agent::prompt::workspace_user::optional_workspace_user_dir();
+    let workspace_user_dir =
+        supercharge_agent::prompt::workspace_user::optional_workspace_user_dir();
     tokio::task::spawn_local(async move {
         // Blocking pool with a shutdown cancel, so a slow filesystem cannot wedge teardown.
         let start_result = run_cancellable_blocking(cancel.clone(), move || {
@@ -546,7 +549,8 @@ mod tests {
     #[test]
     fn worker_runtime_teardown_bounded_despite_inflight_blocking_task() {
         let mut builder = tokio::runtime::Builder::new_current_thread();
-        let rt = supercharge_tty_utils::runtime::build_with_blocking_pool(builder.enable_all()).unwrap();
+        let rt =
+            supercharge_tty_utils::runtime::build_with_blocking_pool(builder.enable_all()).unwrap();
         let (started_tx, started_rx) = std::sync::mpsc::channel();
         rt.handle().spawn_blocking(move || {
             let _ = started_tx.send(());

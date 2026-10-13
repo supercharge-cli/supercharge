@@ -2,12 +2,12 @@
 //! connection is made: every start here fails validation before the bridge is dialed.
 #![cfg(unix)]
 use std::time::Duration;
-use tempfile::TempDir;
 use supercharge_shell::cpu_profile::ControlErrorCode;
 use supercharge_shell::leader::{
     ClientCapabilities, ClientMode, ControlCommand, ControlPayload, CursorWorkerStartArgs,
     LeaderClient, ServerHandle, spawn_leader_server,
 };
+use tempfile::TempDir;
 async fn wait_for_socket(sock_path: &std::path::Path) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     while tokio::time::Instant::now() < deadline {

@@ -791,7 +791,9 @@ fn dispatch_cycle_mode_inner(app: &mut AppView) -> Vec<Effect> {
             tracing::info!("Mode cycle: Normal → Plan");
             vec![Effect::SetSessionMode {
                 session_id,
-                mode_id: acp::SessionModeId::new(supercharge_tools::types::SessionMode::Plan.as_id()),
+                mode_id: acp::SessionModeId::new(
+                    supercharge_tools::types::SessionMode::Plan.as_id(),
+                ),
             }]
         }
         // Plan to Auto (classifier mode; exit plan, not always-approve)

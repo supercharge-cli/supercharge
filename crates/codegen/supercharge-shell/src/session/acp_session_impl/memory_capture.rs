@@ -113,7 +113,9 @@ fn capture_debug_entries(
         .collect()
 }
 
-fn should_continue_capture_worker_after_failure(work: &supercharge_memory::CaptureWorkState) -> bool {
+fn should_continue_capture_worker_after_failure(
+    work: &supercharge_memory::CaptureWorkState,
+) -> bool {
     work.pending > 0
 }
 
@@ -373,7 +375,11 @@ fn select_completed_turn_items(
     Ok(selected)
 }
 
-fn log_condensation(range: supercharge_memory::CaptureRange, attempt: u32, stats: &CondensationStats) {
+fn log_condensation(
+    range: supercharge_memory::CaptureRange,
+    attempt: u32,
+    stats: &CondensationStats,
+) {
     if !stats.is_condensed() {
         return;
     }
@@ -616,8 +622,8 @@ impl SessionActor {
                 if !followup_cancel.is_cancelled() {
                     let followup_session = Arc::clone(&session);
                     let followup_clock = clock;
-                    let followup =
-                        supercharge_telemetry::session_ctx::spawn_local_in_session_ctx(async move {
+                    let followup = supercharge_telemetry::session_ctx::spawn_local_in_session_ctx(
+                        async move {
                             // Promotion may have been blocked by a Dream lease during resume.
                             followup_session
                                 .promote_v2_hidden_observations(true, followup_clock.clone())
@@ -627,7 +633,8 @@ impl SessionActor {
                                     .on_v2_capture_completed(followup_cancel, followup_clock)
                                     .await;
                             }
-                        });
+                        },
+                    );
                     session.memory.dream_workers.track(followup);
                 }
             }
@@ -781,7 +788,8 @@ impl SessionActor {
                                     persist_store.fail_retryable(&persist_lease, now, &detail)
                                 };
                                 match release {
-                                    Ok(()) | Err(supercharge_memory::V2CaptureError::StaleLease) => {
+                                    Ok(())
+                                    | Err(supercharge_memory::V2CaptureError::StaleLease) => {
                                         lease_guard.disarm();
                                         if terminal {
                                             CapturePersistResult::Failed(failure_class, detail)

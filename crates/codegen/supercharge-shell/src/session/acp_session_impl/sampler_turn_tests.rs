@@ -1,4 +1,6 @@
-use supercharge_sampling_types::{SearchDateBound, ToolOverrides, WebSearchOptions, XSearchOptions};
+use supercharge_sampling_types::{
+    SearchDateBound, ToolOverrides, WebSearchOptions, XSearchOptions,
+};
 
 use super::{
     CLASSIFIER_REQUEST_TOKEN_RESERVE, LengthSalvageAction, LengthSalvageStreak,

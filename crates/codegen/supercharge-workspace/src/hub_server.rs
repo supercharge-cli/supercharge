@@ -10,6 +10,11 @@ use chrono::{DateTime, Utc};
 use prometheus::{HistogramVec, IntCounterVec, register_histogram_vec, register_int_counter_vec};
 use serde_json::Value;
 use supercharge_computer_hub_sdk::ToolServerHandler;
+use supercharge_tool_protocol::{HookEvent, HookFrame, SessionId, ToolId, ToolServerEvictParams};
+use supercharge_tool_runtime::{
+    ToolCallContext, ToolError, ToolErrorKind, ToolStream, TypedToolOutput, terminal_only,
+};
+use supercharge_tool_types::ToolDescription;
 use supercharge_tools::computer::types::KillOutcome;
 use supercharge_tools::computer::types::TaskKind;
 use supercharge_tools::implementations::grok_build::scheduler::interval::interval_to_human;
@@ -21,11 +26,6 @@ use supercharge_tools::types::resources::Terminal;
 use supercharge_workspace_types::rpc::workspace::{
     BackgroundTaskSnapshotWire, KillTaskOutcome, ScheduledTaskSnapshotWire, TasksSnapshotResponse,
 };
-use supercharge_tool_protocol::{HookEvent, HookFrame, SessionId, ToolId, ToolServerEvictParams};
-use supercharge_tool_runtime::{
-    ToolCallContext, ToolError, ToolErrorKind, ToolStream, TypedToolOutput, terminal_only,
-};
-use supercharge_tool_types::ToolDescription;
 /// Deprecation monitor for self-attested `caller_session_id`. `param_mismatch` trusted the envelope; `envelope_absent` used the param as fallback.
 /// Envelope-only identity waits for this to be flat zero.
 static WORKSPACE_RPC_CALLER_MISMATCH_TOTAL: std::sync::LazyLock<IntCounterVec> =
@@ -1100,7 +1100,9 @@ impl ToolServerHandler for WorkspaceRpcHandler {
             .get("params")
             .cloned()
             .unwrap_or(Value::Object(Default::default()));
-        let bound_session = ctx.extensions.get::<supercharge_tool_runtime::SessionContext>();
+        let bound_session = ctx
+            .extensions
+            .get::<supercharge_tool_runtime::SessionContext>();
         let session_id = bound_session.as_deref().map(|s| s.0.as_str());
         let start = std::time::Instant::now();
         let result = self.dispatch(method, params, session_id).await;

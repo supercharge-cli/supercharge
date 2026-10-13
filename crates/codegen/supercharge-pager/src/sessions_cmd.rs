@@ -81,7 +81,8 @@ pub async fn run(args: SessionsArgs, agent_config: &AgentConfig) -> Result<()> {
             };
 
             // Search is the only subcommand that reads the index, so it is the only one to start one
-            let search = supercharge_shell::session::storage::search::start_if_enabled(agent_config);
+            let search =
+                supercharge_shell::session::storage::search::start_if_enabled(agent_config);
 
             let req = SessionSearchRequest {
                 query,

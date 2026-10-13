@@ -3,10 +3,10 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use toml::Value as TomlValue;
-use toml::map::Map as TomlMap;
 use supercharge_agent::prompt::skills::SkillsConfig;
 use supercharge_tools::types::compat::{CompatConfig, CompatConfigToml};
+use toml::Value as TomlValue;
+use toml::map::Map as TomlMap;
 
 pub use supercharge_mcp::oauth_config::{McpOAuthConfig, McpOAuthConfigMap};
 // MCP server config value types moved to `supercharge-config-types`; the re-export keeps `crate::util::config::*` paths working
@@ -540,8 +540,9 @@ pub(crate) fn collect_mcp_setup_configs(
                 }
             }
             if let Some(ref inline_value) = plugin.inline_mcp_servers {
-                let normalized =
-                    supercharge_agent::plugins::manifest::normalize_inline_mcp_servers(inline_value);
+                let normalized = supercharge_agent::plugins::manifest::normalize_inline_mcp_servers(
+                    inline_value,
+                );
                 for (name, server) in mcp_config_from_json_value(&normalized).mcp_servers {
                     plugin_configs.entry(name).or_insert(server);
                 }
@@ -1663,7 +1664,9 @@ pub fn cli_known_mcp_server_names(cwd: &std::path::Path) -> std::collections::Ha
 
 /// Plugin registry for one-shot CLI discovery (matches mcp doctor gating). Resolves the same cwd-effective `[plugins]` table as session startup (`resolve_effective_plugins_config`).
 /// Trusted project `[plugins].paths` plugins are therefore included, not just the global config. Also used by the pager's `/agents` modal to list plugin-provided agents without a live session registry snapshot.
-pub fn load_cli_plugin_registry(cwd: &std::path::Path) -> supercharge_agent::plugins::PluginRegistry {
+pub fn load_cli_plugin_registry(
+    cwd: &std::path::Path,
+) -> supercharge_agent::plugins::PluginRegistry {
     let trust_store = supercharge_agent::plugins::TrustStore::load();
     // Resolve/record the folder-trust verdict first: the effective-plugins resolve below gates project [plugins].paths on the cached verdict
     let project_trusted = crate::agent::folder_trust::resolve_and_record(cwd, None, false);

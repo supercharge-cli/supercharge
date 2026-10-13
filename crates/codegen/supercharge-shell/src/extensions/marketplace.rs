@@ -449,8 +449,8 @@ fn uninstall_locked(
     source_url_or_path: &str,
     plugin_relative_path: &str,
 ) -> supercharge_hooks_plugins_types::ActionOutcome {
-    use supercharge_plugin_marketplace::installer;
     use supercharge_hooks_plugins_types::{ActionOutcome, OutcomeStatus};
+    use supercharge_plugin_marketplace::installer;
 
     let _registry_lock = match crate::plugin::acquire::lock_install_registry() {
         Ok(lock) => lock,
@@ -825,7 +825,9 @@ async fn handle_add_source(url: &str) -> supercharge_hooks_plugins_types::Action
 
 /// Remove a marketplace source from `~/.supercharge/config.toml` and uninstall all
 /// plugins that were installed from it.
-async fn handle_remove_source(source_url_or_path: &str) -> supercharge_hooks_plugins_types::ActionOutcome {
+async fn handle_remove_source(
+    source_url_or_path: &str,
+) -> supercharge_hooks_plugins_types::ActionOutcome {
     let src = source_url_or_path.to_string();
     // Guard (SAVE_LOCK + init flock) held across the whole blocking read-modify-write so a
     // concurrent auto-register can't re-add the source mid-removal.
@@ -853,7 +855,9 @@ async fn handle_remove_source(source_url_or_path: &str) -> supercharge_hooks_plu
 
 /// Sync body of [`handle_remove_source`]; the caller holds the config write
 /// guard across this whole read-modify-write.
-fn remove_source_locked(source_url_or_path: &str) -> supercharge_hooks_plugins_types::ActionOutcome {
+fn remove_source_locked(
+    source_url_or_path: &str,
+) -> supercharge_hooks_plugins_types::ActionOutcome {
     use crate::plugin;
     use supercharge_hooks_plugins_types::{ActionOutcome, OutcomeStatus};
 

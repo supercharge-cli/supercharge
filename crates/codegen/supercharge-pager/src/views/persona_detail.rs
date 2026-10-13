@@ -274,7 +274,10 @@ impl PersonaDetailState {
     }
 
     #[cfg(test)]
-    fn editing_viewport(&self, width: usize) -> Option<supercharge_ratatui_textarea::SingleLineViewport> {
+    fn editing_viewport(
+        &self,
+        width: usize,
+    ) -> Option<supercharge_ratatui_textarea::SingleLineViewport> {
         self.editing_editor().map(|editor| editor.viewport(width))
     }
 

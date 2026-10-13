@@ -900,7 +900,10 @@ pub(super) fn set_dashboard_preview_inner(app: &mut AppView, enabled: bool) {
     }
 }
 
-pub(in crate::app::dispatch) fn set_dashboard_preview(app: &mut AppView, enabled: bool) -> Vec<Effect> {
+pub(in crate::app::dispatch) fn set_dashboard_preview(
+    app: &mut AppView,
+    enabled: bool,
+) -> Vec<Effect> {
     let previous = app.current_ui.dashboard_preview_enabled();
     if previous == enabled {
         return vec![];

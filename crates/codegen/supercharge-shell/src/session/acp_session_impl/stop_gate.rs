@@ -147,7 +147,8 @@ impl SessionActor {
 
     pub(crate) async fn list_active_subagents(
         &self,
-    ) -> Vec<supercharge_tools::implementations::grok_build::task::types::ActiveSubagentSummary> {
+    ) -> Vec<supercharge_tools::implementations::grok_build::task::types::ActiveSubagentSummary>
+    {
         use supercharge_tools::implementations::grok_build::task::types::{
             SubagentEvent, SubagentListActiveRequest,
         };
@@ -365,10 +366,12 @@ impl SessionActor {
                 block.hook_name, block.reason
             ))
             .await;
-            supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::HookBlocked {
-                hook_name: block.hook_name.clone(),
-                cause: supercharge_telemetry::events::HookBlockCause::StopBlocked,
-            });
+            supercharge_telemetry::session_ctx::log_event(
+                supercharge_telemetry::events::HookBlocked {
+                    hook_name: block.hook_name.clone(),
+                    cause: supercharge_telemetry::events::HookBlockCause::StopBlocked,
+                },
+            );
         }
         if blocks.is_empty() {
             for context in additional_context {

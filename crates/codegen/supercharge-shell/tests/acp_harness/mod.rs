@@ -6,13 +6,13 @@ use std::time::Duration;
 
 use agent_client_protocol::{self as acp, Agent as _};
 use serde_json::json;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use supercharge_acp_lib::{
     AcpAgentGatewayReceiver as GatewayReceiver, AcpAgentGatewaySender as GatewaySender,
     LineBufferedRead,
 };
 use supercharge_shell::agent::config::Config as AgentConfig;
 use supercharge_shell::agent::mvp_agent::MvpAgent;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 /// Matches production's `MAX_BUFFER_SIZE` in `agent::app`.
 pub const DUPLEX_BUFFER_BYTES: usize = 8 * 1024 * 1024;
@@ -122,7 +122,9 @@ pub struct AgentPipes {
 /// Stand up `MvpAgent` plus its ACP connection and IO tasks on the current `LocalSet`.
 /// `remote` is installed before `MvpAgent::new` so tests can seed `RemoteSettings`
 /// (including a grove kill) before the first worktree RPC.
-fn spawn_agent_local(remote: Option<supercharge_shell::util::config::RemoteSettings>) -> AgentPipes {
+fn spawn_agent_local(
+    remote: Option<supercharge_shell::util::config::RemoteSettings>,
+) -> AgentPipes {
     let (c2a_a, c2a_b) = tokio::io::duplex(DUPLEX_BUFFER_BYTES);
     let (a2c_a, a2c_b) = tokio::io::duplex(DUPLEX_BUFFER_BYTES);
 
@@ -360,7 +362,10 @@ fn set_test_env(grok_home: &std::path::Path, server_url: &str) {
 /// since each test wants a different `acp::Client`.
 pub fn run_agent_test<F, Fut>(body: F)
 where
-    F: FnOnce(std::path::PathBuf, std::rc::Rc<supercharge_test_support::MockInferenceServer>) -> Fut,
+    F: FnOnce(
+        std::path::PathBuf,
+        std::rc::Rc<supercharge_test_support::MockInferenceServer>,
+    ) -> Fut,
     Fut: std::future::Future<Output = ()>,
 {
     run_agent_test_with_models(
@@ -375,7 +380,10 @@ pub fn run_agent_test_with_models<F, Fut>(
     models: Vec<supercharge_test_support::MockModelEntry>,
     body: F,
 ) where
-    F: FnOnce(std::path::PathBuf, std::rc::Rc<supercharge_test_support::MockInferenceServer>) -> Fut,
+    F: FnOnce(
+        std::path::PathBuf,
+        std::rc::Rc<supercharge_test_support::MockInferenceServer>,
+    ) -> Fut,
     Fut: std::future::Future<Output = ()>,
 {
     let _env_guard = hold_global_env();

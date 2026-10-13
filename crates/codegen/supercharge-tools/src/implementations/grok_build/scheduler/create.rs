@@ -178,7 +178,10 @@ impl supercharge_tool_runtime::Tool for SchedulerCreateTool {
             let res = resources.lock().await;
             res.get::<SchedulerHandle>()
                 .ok_or_else(|| {
-                    supercharge_tool_runtime::ToolError::custom("missing_resource", "SchedulerHandle")
+                    supercharge_tool_runtime::ToolError::custom(
+                        "missing_resource",
+                        "SchedulerHandle",
+                    )
                 })?
                 .0
                 .clone()
@@ -189,7 +192,10 @@ impl supercharge_tool_runtime::Tool for SchedulerCreateTool {
             Result<ScheduledTask, super::types::SchedulerError>,
         >| async move {
             sender.send(cmd).map_err(|_| {
-                supercharge_tool_runtime::ToolError::custom("process_manager", "Scheduler actor stopped")
+                supercharge_tool_runtime::ToolError::custom(
+                    "process_manager",
+                    "Scheduler actor stopped",
+                )
             })?;
             reply_rx
                 .await

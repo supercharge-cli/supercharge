@@ -2579,7 +2579,10 @@ mod tests {
             json.get("sessionUpdate"),
             Some(&serde_json::json!("model_changed"))
         );
-        assert_eq!(json.get("model_id"), Some(&serde_json::json!("Supercharge AI-4")));
+        assert_eq!(
+            json.get("model_id"),
+            Some(&serde_json::json!("Supercharge AI-4"))
+        );
         assert_eq!(
             json.get("reasoning_effort"),
             Some(&serde_json::json!("high"))
@@ -2594,7 +2597,10 @@ mod tests {
             json.get("sessionUpdate"),
             Some(&serde_json::json!("model_changed"))
         );
-        assert_eq!(json.get("model_id"), Some(&serde_json::json!("Supercharge AI-3")));
+        assert_eq!(
+            json.get("model_id"),
+            Some(&serde_json::json!("Supercharge AI-3"))
+        );
         assert!(
             json.get("reasoning_effort").is_none(),
             "reasoning_effort: None must be skipped on the wire so old pagers \

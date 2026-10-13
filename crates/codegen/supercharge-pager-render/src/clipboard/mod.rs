@@ -4,11 +4,11 @@
 
 mod trust;
 
+pub use supercharge_ratatui_textarea::{ClipboardProvider, InternalClipboard};
 pub use trust::{
     ClipboardDelivery, ClipboardEnvironment, NativeClipboardPreflight, Osc52Capability,
     expected_delivery, native_clipboard_preflight,
 };
-pub use supercharge_ratatui_textarea::{ClipboardProvider, InternalClipboard};
 
 use std::sync::OnceLock;
 
@@ -1012,16 +1012,18 @@ fn log_clipboard_paste_event(
     if !supercharge_telemetry::client::is_enabled() {
         return;
     }
-    supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::ClipboardImagePaste {
-        terminal: crate::terminal::terminal_context().telemetry_snapshot(),
-        probe: probe.to_owned(),
-        outcome: outcome.to_owned(),
-        read_path: read_path.map(read_path_telemetry),
-        image_mime: image.map(|img| img.mime_type.clone()).unwrap_or_default(),
-        image_hash: image.map(image_fingerprint).unwrap_or_default(),
-        image_bytes: image.map(|img| img.data.len() as u64).unwrap_or_default(),
-        duration_ms: started.elapsed().as_millis() as u64,
-    });
+    supercharge_telemetry::session_ctx::log_event(
+        supercharge_telemetry::events::ClipboardImagePaste {
+            terminal: crate::terminal::terminal_context().telemetry_snapshot(),
+            probe: probe.to_owned(),
+            outcome: outcome.to_owned(),
+            read_path: read_path.map(read_path_telemetry),
+            image_mime: image.map(|img| img.mime_type.clone()).unwrap_or_default(),
+            image_hash: image.map(image_fingerprint).unwrap_or_default(),
+            image_bytes: image.map(|img| img.data.len() as u64).unwrap_or_default(),
+            duration_ms: started.elapsed().as_millis() as u64,
+        },
+    );
 }
 
 /// One `clipboard_paste_probe_dropped` event; `image` is the raster read and then discarded, if any.
@@ -1347,8 +1349,9 @@ mod tests {
     #[test]
     fn read_drop_reason_keeps_the_deadline_kill_apart() {
         use supercharge_telemetry::events::ClipboardProbeDropReason as Reason;
-        let timeout = anyhow::Error::from(supercharge_shared::clipboard::WaitTimeout(OSASCRIPT_WAIT))
-            .context("osascript image read");
+        let timeout =
+            anyhow::Error::from(supercharge_shared::clipboard::WaitTimeout(OSASCRIPT_WAIT))
+                .context("osascript image read");
         assert_eq!(read_drop_reason(&timeout), Reason::Timeout);
         let other = anyhow::anyhow!("osascript exited with status 1");
         assert_eq!(read_drop_reason(&other), Reason::ReadFailed);

@@ -1556,7 +1556,8 @@ async fn pre_tool_batch_start_and_outcome_share_one_identity() {
             let ctx = actor.hook_run_ctx();
             let batch = actor.announce_hook_run(&registry, &envelope, &ctx);
             let pre =
-                supercharge_hooks::dispatcher::dispatch_pre_tool_use(&registry, &envelope, &ctx).await;
+                supercharge_hooks::dispatcher::dispatch_pre_tool_use(&registry, &envelope, &ctx)
+                    .await;
             actor.send_hook_execution(&batch, &pre.results).await;
             tokio::task::yield_now().await;
 

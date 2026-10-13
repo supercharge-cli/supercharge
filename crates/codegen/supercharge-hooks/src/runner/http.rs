@@ -156,7 +156,10 @@ pub async fn run_http_hook(
 
     let mut url_env = spec.extra_env.clone();
     for (k, v) in [
-        ("SUPERCHARGE_HOOK_EVENT", envelope.hook_event_name.to_string()),
+        (
+            "SUPERCHARGE_HOOK_EVENT",
+            envelope.hook_event_name.to_string(),
+        ),
         ("SUPERCHARGE_HOOK_NAME", spec.name.clone()),
         ("SUPERCHARGE_SESSION_ID", ctx.session_id.to_string()),
         ("SUPERCHARGE_WORKSPACE_ROOT", ctx.workspace_root.to_string()),

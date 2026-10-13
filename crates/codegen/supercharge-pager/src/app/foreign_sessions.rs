@@ -5,10 +5,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use parking_lot::Mutex;
-use tokio::sync::Semaphore;
 use supercharge_foreign_sessions::{
     EnabledForeignSessionSources, ForeignSessionSummary, ForeignSessionTool, RecentForeignSession,
 };
+use tokio::sync::Semaphore;
 
 use super::actions::Effect;
 use super::app_view::{ActiveView, AppView, SessionPickerEntry};

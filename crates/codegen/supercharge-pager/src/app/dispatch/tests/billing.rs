@@ -9,8 +9,14 @@ fn byok_provider_failures_remain_visible_and_keep_setup_and_usage_available() {
 
     for (status, reason) in [
         (402, "Request failed (402): fake provider balance exhausted"),
-        (403, "Request failed (403): fake provider has run out of credits"),
-        (429, "Request failed (429): subscription:free-usage-exhausted"),
+        (
+            403,
+            "Request failed (403): fake provider has run out of credits",
+        ),
+        (
+            429,
+            "Request failed (429): subscription:free-usage-exhausted",
+        ),
     ] {
         let mut app = test_app_with_agent();
         let id = AgentId(0);
@@ -46,19 +52,28 @@ fn byok_provider_failures_remain_visible_and_keep_setup_and_usage_available() {
             }),
             &mut app,
         );
-        assert!(effects.is_empty(), "provider {status} must schedule no RPC: {effects:?}");
+        assert!(
+            effects.is_empty(),
+            "provider {status} must schedule no RPC: {effects:?}"
+        );
         let agent = test_agent(&app, id);
-        assert!(agent.question_view.is_none(), "provider {status} created a purchase question");
+        assert!(
+            agent.question_view.is_none(),
+            "provider {status} created a purchase question"
+        );
         assert!(agent.active_modal.is_none());
         assert!(agent.session.state.is_idle());
         assert!(app.has_access());
-        let visible_errors: Vec<_> = (0..agent.scrollback.len()).filter_map(|idx| {
-            match &agent.scrollback.entry(idx)?.block {
+        let visible_errors: Vec<_> = (0..agent.scrollback.len())
+            .filter_map(|idx| match &agent.scrollback.entry(idx)?.block {
                 RenderBlock::SessionEvent(event) => Some(event.event.message()),
                 _ => None,
-            }
-        }).collect();
-        assert!(!visible_errors.is_empty(), "provider {status} error disappeared");
+            })
+            .collect();
+        assert!(
+            !visible_errors.is_empty(),
+            "provider {status} error disappeared"
+        );
         let text = visible_errors.join("\n");
         if status != 429 {
             assert!(text.contains(&status.to_string()), "{text}");
@@ -66,7 +81,13 @@ fn byok_provider_failures_remain_visible_and_keep_setup_and_usage_available() {
         } else {
             assert!(text.to_lowercase().contains("rate limit"), "{text}");
         }
-        for forbidden in ["Buy more credits", "Upgrade tier", "pay-as-you-go", "supercharge.ai", "grok.com"] {
+        for forbidden in [
+            "Buy more credits",
+            "Upgrade tier",
+            "pay-as-you-go",
+            "supercharge.ai",
+            "grok.com",
+        ] {
             assert!(!text.contains(forbidden), "provider {status}: {text}");
         }
 
@@ -76,7 +97,10 @@ fn byok_provider_failures_remain_visible_and_keep_setup_and_usage_available() {
             [Effect::FetchSessionUsage { .. }]
         ));
         let effects = dispatch(Action::SendPrompt("/setup".into()), &mut app);
-        assert!(effects.is_empty(), "setup only opens the provider picker: {effects:?}");
+        assert!(
+            effects.is_empty(),
+            "setup only opens the provider picker: {effects:?}"
+        );
         assert!(matches!(
             test_agent(&app, id).active_modal,
             Some(crate::views::modal::ActiveModal::ProviderSetup { .. })
@@ -150,7 +174,10 @@ fn session_usage_keeps_tokens_and_cost_without_billing() {
     };
     assert!(complete_session_usage(&mut app, "test-session", usage).is_empty());
     let text = last_system_text(&app, AgentId(0));
-    assert!(text.contains("Session usage") && text.contains("$0.5000"), "{text}");
+    assert!(
+        text.contains("Session usage") && text.contains("$0.5000"),
+        "{text}"
+    );
     assert!(text.contains("1,000") && text.contains("100"), "{text}");
 }
 
@@ -167,7 +194,10 @@ fn session_usage_failure_remains_visible_without_billing() {
     let mut app = test_app_with_agent();
     app.screen_mode = crate::app::ScreenMode::Minimal;
     assert!(fail_session_usage(&mut app, "test-session", "fake provider unavailable").is_empty());
-    assert!(last_system_text(&app, AgentId(0)).contains("Couldn't load session usage: fake provider unavailable"));
+    assert!(
+        last_system_text(&app, AgentId(0))
+            .contains("Couldn't load session usage: fake provider unavailable")
+    );
 }
 
 #[test]

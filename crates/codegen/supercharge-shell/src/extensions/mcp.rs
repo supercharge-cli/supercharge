@@ -1494,9 +1494,7 @@ impl supercharge_tools::types::resources::McpResourceProvider for McpStateResour
                 name: None,
                 description: None,
                 mime_type,
-                content: Some(supercharge_tools::types::resources::McpResourceContent::Text(
-                    text,
-                )),
+                content: Some(supercharge_tools::types::resources::McpResourceContent::Text(text)),
             }),
             rmcp::model::ResourceContents::BlobResourceContents {
                 uri: content_uri,
@@ -1508,9 +1506,11 @@ impl supercharge_tools::types::resources::McpResourceProvider for McpStateResour
                 name: None,
                 description: None,
                 mime_type,
-                content: Some(supercharge_tools::types::resources::McpResourceContent::Blob(
-                    blob.into_bytes(),
-                )),
+                content: Some(
+                    supercharge_tools::types::resources::McpResourceContent::Blob(
+                        blob.into_bytes(),
+                    ),
+                ),
             }),
             // Unreachable: `first` is pre-filtered to supported variants, but `ResourceContents` is non_exhaustive so the match must be total
             _ => Err(format!("Unsupported resource content type for: {uri}")),

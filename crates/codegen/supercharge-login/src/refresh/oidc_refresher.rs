@@ -300,28 +300,31 @@ fn spawn_diagnostic_upload(
 
     tokio::spawn(async move {
         // snapshot_log() holds a mutex, flushes, and reads up to 5 MB; run it on a blocking thread to avoid stalling the tokio executor
-        let log_bytes = match tokio::task::spawn_blocking(
-            supercharge_telemetry::unified_log::snapshot_log,
-        )
-        .await
-        {
-            Ok(Some(bytes)) => bytes,
-            Ok(None) => {
-                supercharge_telemetry::unified_log::debug("diagnostic snapshot empty", None, None);
-                in_flight.store(false, Ordering::Release);
-                return;
-            }
-            Err(e) => {
-                tracing::debug!(error = %e, "auth: snapshot_log task failed");
-                supercharge_telemetry::unified_log::error(
-                    "diagnostic snapshot failed",
-                    None,
-                    Some(serde_json::json!({ "error": format!("{e}") })),
-                );
-                in_flight.store(false, Ordering::Release);
-                return;
-            }
-        };
+        let log_bytes =
+            match tokio::task::spawn_blocking(supercharge_telemetry::unified_log::snapshot_log)
+                .await
+            {
+                Ok(Some(bytes)) => bytes,
+                Ok(None) => {
+                    supercharge_telemetry::unified_log::debug(
+                        "diagnostic snapshot empty",
+                        None,
+                        None,
+                    );
+                    in_flight.store(false, Ordering::Release);
+                    return;
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "auth: snapshot_log task failed");
+                    supercharge_telemetry::unified_log::error(
+                        "diagnostic snapshot failed",
+                        None,
+                        Some(serde_json::json!({ "error": format!("{e}") })),
+                    );
+                    in_flight.store(false, Ordering::Release);
+                    return;
+                }
+            };
 
         uploader(log_bytes, auth_token, user_id).await;
         in_flight.store(false, Ordering::Release);

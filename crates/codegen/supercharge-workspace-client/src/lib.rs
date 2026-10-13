@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use supercharge_computer_hub_sdk::harness::ToolHarness;
+use supercharge_tool_runtime::{ToolCallContext, ToolStreamItem, TypedToolOutput};
 use supercharge_workspace_types::rpc::agents_md::{AgentConfigFile, DiscoverAgentsMdReq};
 use supercharge_workspace_types::rpc::code_nav::{
     CodeFindDefinitionsReq, CodeFindReferencesReq, CodeGotoDefinitionReq, CodeGotoReferencesReq,
@@ -59,8 +60,9 @@ use supercharge_workspace_types::rpc::worktree::{
     WorktreeDbPathReq, WorktreeDbPathResponse, WorktreeDbRebuildReq, WorktreeDbStatsReq,
     WorktreeGcReq, WorktreeListReq, WorktreeShowReq,
 };
-use supercharge_workspace_types::rpc::{RpcEnvelope, RpcError, WORKSPACE_RPC_TOOL_ID, WorkspaceRpc};
-use supercharge_tool_runtime::{ToolCallContext, ToolStreamItem, TypedToolOutput};
+use supercharge_workspace_types::rpc::{
+    RpcEnvelope, RpcError, WORKSPACE_RPC_TOOL_ID, WorkspaceRpc,
+};
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceClientError {
     /// A previous call observed a fatal transport error and no reconnect has been signalled since.
@@ -134,7 +136,9 @@ fn is_non_retryable_workspace_unavailable(err: &supercharge_tool_runtime::ToolEr
             use serde::Deserialize as _;
             supercharge_tool_protocol::WorkspaceUnavailableDetails::deserialize(d).ok()
         })
-        .is_some_and(|d| d.code == supercharge_tool_protocol::WORKSPACE_UNAVAILABLE_SUBCODE && !d.retryable)
+        .is_some_and(|d| {
+            d.code == supercharge_tool_protocol::WORKSPACE_UNAVAILABLE_SUBCODE && !d.retryable
+        })
 }
 /// Typed client over a bound [`ToolHarness`] for `workspace.*` RPCs.
 /// Clones share the harness and the connected latch, which fast-fails after a fatal transport error; [`mark_connected`](Self::mark_connected) / [`with_connected_flag`](Self::with_connected_flag) reset it.
@@ -585,10 +589,10 @@ mod tests {
     use schemars::JsonSchema;
     use serde::Deserialize;
     use supercharge_computer_hub_sdk::harness::LocalRegistry;
-    use supercharge_workspace_types::rpc::RpcActivityClass;
     use supercharge_tool_protocol::{SessionId, ToolId};
     use supercharge_tool_runtime::{Tool, ToolError};
     use supercharge_tool_types::ToolDescription;
+    use supercharge_workspace_types::rpc::RpcActivityClass;
     #[derive(Debug, Deserialize, JsonSchema)]
     struct RpcArgs {
         method: String,
@@ -606,7 +610,10 @@ mod tests {
         fn id(&self) -> ToolId {
             ToolId::new(WORKSPACE_RPC_TOOL_ID).unwrap()
         }
-        fn description(&self, _ctx: &::supercharge_tool_runtime::ListToolsContext) -> ToolDescription {
+        fn description(
+            &self,
+            _ctx: &::supercharge_tool_runtime::ListToolsContext,
+        ) -> ToolDescription {
             ToolDescription::new(WORKSPACE_RPC_TOOL_ID, "fake workspace rpc")
         }
         async fn run(&self, _ctx: ToolCallContext, args: Self::Args) -> Result<RawOut, ToolError> {

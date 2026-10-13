@@ -2661,13 +2661,15 @@ fn delete_session_refuses_known_read_only_workspace_member() {
     app.workspace_dashboard_enabled = true;
     let temp = tempfile::tempdir().unwrap();
     let store =
-        supercharge_dashboard_store::WorkspaceStore::open(&temp.path().join("workspace.db")).unwrap();
+        supercharge_dashboard_store::WorkspaceStore::open(&temp.path().join("workspace.db"))
+            .unwrap();
     app.workspace_membership.set_read_only_for_test(
         store,
         supercharge_dashboard_store::WorkspaceSnapshot {
             grouping: supercharge_dashboard_store::Grouping::State,
             members: vec![supercharge_dashboard_store::Member {
-                session_id: supercharge_dashboard_store::SessionId::new("read-only-delete").unwrap(),
+                session_id: supercharge_dashboard_store::SessionId::new("read-only-delete")
+                    .unwrap(),
                 kind: supercharge_dashboard_store::MemberKind::Build,
                 origin: supercharge_dashboard_store::MemberOrigin::Local,
                 cwd: Some("/r".into()),

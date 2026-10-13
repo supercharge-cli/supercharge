@@ -13,8 +13,8 @@ use std::io::{Read, Write};
 use std::sync::{Arc, LazyLock};
 
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
-use tokio::sync::{Mutex, mpsc};
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
+use tokio::sync::{Mutex, mpsc};
 
 use supercharge_workspace::file_system::TargetClientId;
 

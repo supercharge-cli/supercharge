@@ -2657,7 +2657,10 @@ pub async fn run_update(
         );
         &effective_current
     } else {
-        eprintln!("Updating Supercharge {} → {}", effective_current, install_target);
+        eprintln!(
+            "Updating Supercharge {} → {}",
+            effective_current, install_target
+        );
         &install_target
     };
 
@@ -2668,7 +2671,10 @@ pub async fn run_update(
     let stable_ptr = try_fetch_stable_pointer().await;
     write_version_cache(target_version, stable_ptr.as_deref()).await;
     refresh_deployment_config().await;
-    eprintln!("  ✓ Supercharge v{} installed successfully!", target_version);
+    eprintln!(
+        "  ✓ Supercharge v{} installed successfully!",
+        target_version
+    );
 
     if !force && std::env::var_os("SUPERCHARGE_AUTO_UPDATE").is_none() {
         eprintln!("  Please restart Supercharge.");

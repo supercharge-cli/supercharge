@@ -1368,7 +1368,8 @@ mod tests {
             })
         );
 
-        let environment_key_command = "XAI_API_KEY='xai-some-key' cargo run --bin supercharge-pager";
+        let environment_key_command =
+            "XAI_API_KEY='xai-some-key' cargo run --bin supercharge-pager";
         assert_eq!(
             primary_command_from_script(environment_key_command),
             Some(BashCommandHighlights {

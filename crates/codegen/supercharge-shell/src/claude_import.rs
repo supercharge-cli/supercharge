@@ -15,7 +15,9 @@ use supercharge_workspace::permission::claude_settings::{
     find_claude_settings_paths, load_claude_settings,
 };
 use supercharge_workspace::permission::rules::parse_permission_rule;
-use supercharge_workspace::permission::types::{PatternMode, PermissionRule, RuleAction, ToolFilter};
+use supercharge_workspace::permission::types::{
+    PatternMode, PermissionRule, RuleAction, ToolFilter,
+};
 
 // Types
 

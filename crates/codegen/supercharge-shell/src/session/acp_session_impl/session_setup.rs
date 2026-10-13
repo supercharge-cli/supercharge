@@ -634,12 +634,14 @@ impl SessionActor {
             .filter(|td| !backend_search_active || td.function.name != "web_search")
             .collect();
         let tool_definitions_count = tool_defs.len();
-        let tool_definitions_tokens = supercharge_chat_state::estimate_tool_definitions_tokens(&tool_defs);
+        let tool_definitions_tokens =
+            supercharge_chat_state::estimate_tool_definitions_tokens(&tool_defs);
         let message_count = self.chat_state_handle.get_conversation_len().await;
         let message_tokens = self.chat_state_handle.get_estimated_messages_tokens().await;
         let usage_categories = self.usage_categories().await;
         let free_tokens = supercharge_token_estimation::free_tokens(context_window, total_tokens);
-        let usage_pct = supercharge_token_estimation::usage_percentage_u8(total_tokens, context_window);
+        let usage_pct =
+            supercharge_token_estimation::usage_percentage_u8(total_tokens, context_window);
         let api_backend = config.as_ref().map(|c| format!("{:?}", c.api_backend));
         let agent_name = self.agent.borrow().definition().name.clone();
         let conversation_id = None;

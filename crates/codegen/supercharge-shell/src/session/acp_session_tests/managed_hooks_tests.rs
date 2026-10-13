@@ -55,22 +55,24 @@ impl Drop for DisabledHooksGuard {
 
 /// Builds a registry with one command hook whose provenance is `Requirements`.
 fn managed_registry() -> supercharge_hooks::discovery::HookRegistry {
-    supercharge_hooks::discovery::registry_from_specs_deduped(vec![supercharge_hooks::config::HookSpec {
-        name: MANAGED_HOOK.to_string(),
-        event: supercharge_hooks::event::HookEventName::PreToolUse,
-        handler_type: supercharge_hooks::config::HandlerType::Command,
-        configured_matcher: None,
-        matcher: None,
-        enabled: true,
-        command: Some(std::path::PathBuf::from("exit 0")),
-        command_raw: Some("exit 0".to_string()),
-        url: None,
-        url_raw: None,
-        timeout_ms: 5000,
-        source_dir: std::env::temp_dir(),
-        extra_env: std::collections::HashMap::new(),
-        layer: supercharge_hooks::config::HookProvenance::Requirements,
-    }])
+    supercharge_hooks::discovery::registry_from_specs_deduped(vec![
+        supercharge_hooks::config::HookSpec {
+            name: MANAGED_HOOK.to_string(),
+            event: supercharge_hooks::event::HookEventName::PreToolUse,
+            handler_type: supercharge_hooks::config::HandlerType::Command,
+            configured_matcher: None,
+            matcher: None,
+            enabled: true,
+            command: Some(std::path::PathBuf::from("exit 0")),
+            command_raw: Some("exit 0".to_string()),
+            url: None,
+            url_raw: None,
+            timeout_ms: 5000,
+            source_dir: std::env::temp_dir(),
+            extra_env: std::collections::HashMap::new(),
+            layer: supercharge_hooks::config::HookProvenance::Requirements,
+        },
+    ])
 }
 
 #[tokio::test(flavor = "current_thread")]

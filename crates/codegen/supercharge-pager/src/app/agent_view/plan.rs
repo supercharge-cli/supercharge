@@ -1345,7 +1345,9 @@ mod plan_approval_enter_tests {
     /// Like [`agent_with_revise_prompt`] but keeps the shell-side receiver so a test can prove nothing was sent.
     fn agent_with_revise_prompt_and_response() -> (
         AgentView,
-        tokio::sync::oneshot::Receiver<supercharge_acp_lib::AcpResult<agent_client_protocol::ExtResponse>>,
+        tokio::sync::oneshot::Receiver<
+            supercharge_acp_lib::AcpResult<agent_client_protocol::ExtResponse>,
+        >,
     ) {
         let mut agent = make_agent();
         let (tx, rx) = tokio::sync::oneshot::channel();

@@ -51,7 +51,11 @@ pub(super) fn rewrite(events: Vec<TimedInputEvent>) -> Result<Vec<TimedInputEven
     while index < events.len() {
         if let Some(intro_end) = match_marker(&events, index, &INTRO) {
             match take_body(&events, intro_end) {
-                Body::Closed { end, text, arrived_at } => {
+                Body::Closed {
+                    end,
+                    text,
+                    arrived_at,
+                } => {
                     ready.push(TimedInputEvent {
                         event: Event::Paste(text),
                         arrived_at,

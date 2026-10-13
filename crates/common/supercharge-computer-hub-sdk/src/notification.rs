@@ -8,10 +8,10 @@
 //! lose data.
 
 use serde_json::Value;
-use tracing::warn;
 use supercharge_tool_protocol::{
     SessionId, ToolId, ToolNotificationFrame, ToolServerStatusPayload, ToolsChanged,
 };
+use tracing::warn;
 
 /// A typed server notification event parsed from a raw JSON-RPC notification frame.
 #[derive(Debug, Clone, PartialEq)]

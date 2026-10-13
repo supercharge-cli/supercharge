@@ -671,7 +671,9 @@ impl<R: ChildRunner> SubagentCoordinator<R> {
         sender_session_id: &str,
         resolved_target: Option<&TargetIncarnationKey>,
     ) -> ResolvedSend {
-        use supercharge_message_delivery_core::{AddressCandidate, AddressDecision, AddressPresence};
+        use supercharge_message_delivery_core::{
+            AddressCandidate, AddressDecision, AddressPresence,
+        };
 
         let presented = address.as_str();
         let address_hit =
@@ -781,7 +783,8 @@ impl<R: ChildRunner> SubagentCoordinator<R> {
                     presence: *presence,
                 },
             );
-        let decision = supercharge_message_delivery_core::resolve_address(presented, candidate.as_ref());
+        let decision =
+            supercharge_message_delivery_core::resolve_address(presented, candidate.as_ref());
         let hit = hit.map(|(id, ..)| id.to_owned());
         match (decision, hit.as_deref()) {
             (

@@ -24,11 +24,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
-use url::Url;
 use supercharge_tool_protocol::{
     ConnectionKind, HookEvent, HookFrame, HookReplyFrame, JsonRpcError, JsonRpcId,
     JsonRpcNotification, JsonRpcResponse, JsonRpcVersion, Method, ResponseOutcome, SessionId,
@@ -40,6 +35,11 @@ use supercharge_tool_runtime::{
     ToolStreamItem, TraceContext, TypedToolOutput,
 };
 use supercharge_tool_types::ToolDescription;
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, warn};
+use url::Url;
 
 use crate::auth::{AuthCredential, AuthProvider};
 use crate::cancel::CancelRegistry;
@@ -1622,11 +1622,12 @@ impl ToolServer {
                             if let Some(id) = request_id {
                                 let response = match result {
                                     Ok(()) => {
-                                        let tools: Vec<supercharge_tool_types::ToolDescription> = server
-                                            .handlers_for_session(&sid)
-                                            .iter()
-                                            .map(|h| h.description())
-                                            .collect();
+                                        let tools: Vec<supercharge_tool_types::ToolDescription> =
+                                            server
+                                                .handlers_for_session(&sid)
+                                                .iter()
+                                                .map(|h| h.description())
+                                                .collect();
                                         let result = supercharge_tool_protocol::SessionBindResult {
                                             tools,
                                             binary_version: server.inner().binary_version.clone(),
@@ -1988,7 +1989,9 @@ async fn teardown_sessions(inner: &ToolServerInner) {
 /// Must be called before `unregister_session` (the server needs the
 /// session bindings to route the notification).
 async fn push_disconnect_status(connection: &HubConnection, sessions: &[SessionId]) {
-    use supercharge_tool_protocol::{JsonRpcRequest, ToolServerLifecycleStatus, ToolServerStatusPayload};
+    use supercharge_tool_protocol::{
+        JsonRpcRequest, ToolServerLifecycleStatus, ToolServerStatusPayload,
+    };
 
     for sid in sessions {
         let mut payload =
@@ -2343,9 +2346,10 @@ async fn execute_call(
         .unwrap_or_else(fastrace::Span::noop);
 
     let mut ctx = ToolCallContext::new(params.tool_call_id.clone());
-    ctx.extensions.insert(supercharge_tool_runtime::SessionContext(
-        session_id.as_str().to_owned(),
-    ));
+    ctx.extensions
+        .insert(supercharge_tool_runtime::SessionContext(
+            session_id.as_str().to_owned(),
+        ));
     if let Some(cwd) = params.cwd {
         ctx.extensions.insert(Cwd(std::path::PathBuf::from(cwd)));
     }
@@ -2869,7 +2873,8 @@ mod tests {
             &self,
             _ctx: supercharge_tool_runtime::ToolCallContext,
             _args: Value,
-        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput> {
+        ) -> supercharge_tool_runtime::ToolStream<supercharge_tool_runtime::TypedToolOutput>
+        {
             unreachable!("merge test never calls tools")
         }
     }

@@ -188,7 +188,11 @@ fn bundled_git_prepend_respects_the_policy_base_env() {
     };
     let mut cmd = tokio::process::Command::new("true");
     install_policy_base_env(&mut cmd, Some(&inherit_none));
-    supercharge_tty_utils::prepend_child_path(cmd.as_std_mut(), dir, supercharge_tty_utils::PathBase::ExplicitOnly);
+    supercharge_tty_utils::prepend_child_path(
+        cmd.as_std_mut(),
+        dir,
+        supercharge_tty_utils::PathBase::ExplicitOnly,
+    );
     assert_eq!(child_path(&cmd), None, "inherit=none must not grow a PATH");
 
     let mut set = HashMap::new();
@@ -200,7 +204,11 @@ fn bundled_git_prepend_respects_the_policy_base_env() {
     };
     let mut cmd = tokio::process::Command::new("true");
     install_policy_base_env(&mut cmd, Some(&with_path));
-    supercharge_tty_utils::prepend_child_path(cmd.as_std_mut(), dir, supercharge_tty_utils::PathBase::ExplicitOnly);
+    supercharge_tty_utils::prepend_child_path(
+        cmd.as_std_mut(),
+        dir,
+        supercharge_tty_utils::PathBase::ExplicitOnly,
+    );
     assert_eq!(
         child_path(&cmd).flatten().unwrap(),
         OsStr::new(&format!("/mingit/cmd{sep}/policy/bin"))
@@ -209,7 +217,11 @@ fn bundled_git_prepend_respects_the_policy_base_env() {
     // No policy: the inherited environment, so the process PATH is the tail.
     let mut cmd = tokio::process::Command::new("true");
     install_policy_base_env(&mut cmd, None);
-    supercharge_tty_utils::prepend_child_path(cmd.as_std_mut(), dir, supercharge_tty_utils::PathBase::Process);
+    supercharge_tty_utils::prepend_child_path(
+        cmd.as_std_mut(),
+        dir,
+        supercharge_tty_utils::PathBase::Process,
+    );
     let value = child_path(&cmd).flatten().unwrap().to_owned();
     assert_eq!(std::env::split_paths(&value).next().unwrap(), dir);
 }

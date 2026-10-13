@@ -1670,16 +1670,18 @@ impl supercharge_tool_runtime::Tool for McpErasedTool {
             reconnect_attempted,
             auth_retry_attempted,
         });
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::McpToolCalled {
-            server_name: server.clone(),
-            tool_name: tool.clone(),
-            qualified_name,
-            success,
-            duration_ms,
-            failure,
-            outcome,
-            mode,
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::McpToolCalled {
+                server_name: server.clone(),
+                tool_name: tool.clone(),
+                qualified_name,
+                success,
+                duration_ms,
+                failure,
+                outcome,
+                mode,
+            },
+        );
         result
     }
 }
@@ -1869,10 +1871,9 @@ impl McpErasedTool {
         is_timeout: &mut bool,
         ew: &supercharge_session_events::EventWriter,
     ) -> Result<rmcp::model::CallToolResponse, supercharge_tool_runtime::ToolError> {
-        let mcp_service = client
-            .ensure_initialized()
-            .await
-            .map_err(|e| supercharge_tool_runtime::ToolError::custom("process_manager", e.to_string()))?;
+        let mcp_service = client.ensure_initialized().await.map_err(|e| {
+            supercharge_tool_runtime::ToolError::custom("process_manager", e.to_string())
+        })?;
         match call_tool_cancel_aware(&mcp_service, params.clone(), timeout_duration).await {
             Ok(response) => Ok(response),
             Err(ServiceError::Timeout { .. }) => {
@@ -1919,8 +1920,10 @@ impl McpErasedTool {
         &self,
         client: &Arc<McpClient>,
         result: rmcp::model::InputRequiredResult,
-    ) -> Result<(Option<rmcp::model::InputResponses>, Option<String>), supercharge_tool_runtime::ToolError>
-    {
+    ) -> Result<
+        (Option<rmcp::model::InputResponses>, Option<String>),
+        supercharge_tool_runtime::ToolError,
+    > {
         let input_requests = result.input_requests.unwrap_or_default();
         if input_requests.is_empty() && result.request_state.is_none() {
             return Err(supercharge_tool_runtime::ToolError::custom(
@@ -2338,11 +2341,12 @@ async fn decide_http_auth_over_network(
                     timeout_secs = discovery_timeout.as_secs(),
                     "OAuth discovery timed out"
                 );
-                ctx.event_writer
-                    .emit(supercharge_session_events::Event::McpOAuthDiscoveryTimeout {
+                ctx.event_writer.emit(
+                    supercharge_session_events::Event::McpOAuthDiscoveryTimeout {
                         server_name: server_name.to_string(),
                         url: url.to_string(),
-                    });
+                    },
+                );
                 OauthProbeOutcome::on_probe_failure(ctx.mode)
             }
         }
@@ -4315,11 +4319,12 @@ impl McpClient {
         let mcp_service = self.ensure_initialized().await?;
 
         let list_tools_start = std::time::Instant::now();
-        let list_tools_span = supercharge_telemetry::region::Region::from_span(tracing::info_span!(
-            "mcp.list_tools",
-            tools_count = tracing::field::Empty,
-            elapsed_ms = tracing::field::Empty,
-        ));
+        let list_tools_span =
+            supercharge_telemetry::region::Region::from_span(tracing::info_span!(
+                "mcp.list_tools",
+                tools_count = tracing::field::Empty,
+                elapsed_ms = tracing::field::Empty,
+            ));
 
         let mut all_tools = Vec::new();
         let mut cursor: Option<String> = None;
@@ -4829,9 +4834,14 @@ pub async fn start_mcp_server(
             let local_agent_endpoint = ctx.send_grok_agent_id_header;
             if local_agent_endpoint && let Some(session_id) = ctx.session_id {
                 reqwest::header::HeaderValue::try_from(session_id).map_err(|error| {
-                    McpError::ClientError(format!("invalid {SUPERCHARGE_AGENT_ID_HEADER} value: {error}"))
+                    McpError::ClientError(format!(
+                        "invalid {SUPERCHARGE_AGENT_ID_HEADER} value: {error}"
+                    ))
                 })?;
-                headers.push((SUPERCHARGE_AGENT_ID_HEADER.to_owned(), session_id.to_owned()));
+                headers.push((
+                    SUPERCHARGE_AGENT_ID_HEADER.to_owned(),
+                    session_id.to_owned(),
+                ));
             }
             let http_config = HttpConfig {
                 url: url.clone(),

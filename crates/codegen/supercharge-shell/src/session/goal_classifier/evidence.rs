@@ -37,8 +37,8 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::process::Command;
 use supercharge_sampling_types::ConversationItem;
+use tokio::process::Command;
 
 use crate::util::subprocess::git_bin;
 
@@ -678,7 +678,8 @@ fn walkdir_changes_blocking(
                 .to_str()
                 .map(|name| {
                     name != ".git"
-                        && !supercharge_file_utils::skip_dir_set().contains(name.to_lowercase().as_str())
+                        && !supercharge_file_utils::skip_dir_set()
+                            .contains(name.to_lowercase().as_str())
                 })
                 .unwrap_or(true)
         });

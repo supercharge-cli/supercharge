@@ -291,17 +291,18 @@ impl XaiProtoBuilder {
 
         let tempfile;
 
-        let file_descriptor_set_path: Option<PathBuf> =
-            if let Some(file_descriptor_set_path) = file_descriptor_set_path {
-                Some(file_descriptor_set_path)
-            } else if gen_pbjson {
-                tempfile = tempfile::TempDir::new()?;
-                let file_descriptor_set_path = tempfile.path().join("supercharge-proto-build.pbbin");
-                builder = builder.file_descriptor_set_path(&file_descriptor_set_path);
-                Some(file_descriptor_set_path)
-            } else {
-                None
-            };
+        let file_descriptor_set_path: Option<PathBuf> = if let Some(file_descriptor_set_path) =
+            file_descriptor_set_path
+        {
+            Some(file_descriptor_set_path)
+        } else if gen_pbjson {
+            tempfile = tempfile::TempDir::new()?;
+            let file_descriptor_set_path = tempfile.path().join("supercharge-proto-build.pbbin");
+            builder = builder.file_descriptor_set_path(&file_descriptor_set_path);
+            Some(file_descriptor_set_path)
+        } else {
+            None
+        };
 
         // Build the full includes list, prepending the protoc include directory
         // if found (for well-known types like google/protobuf/timestamp.proto).

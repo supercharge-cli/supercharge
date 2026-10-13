@@ -24,8 +24,7 @@ pub type SharedVoiceAuth = Arc<dyn VoiceAuthProvider>;
 pub(crate) async fn require_bearer(auth: &SharedVoiceAuth) -> Result<String, VoiceError> {
     auth.bearer().await.ok_or_else(|| {
         VoiceError::Auth(
-            "not signed in — run `supercharge login` or configure a model API key"
-                .into(),
+            "not signed in — run `supercharge login` or configure a model API key".into(),
         )
     })
 }

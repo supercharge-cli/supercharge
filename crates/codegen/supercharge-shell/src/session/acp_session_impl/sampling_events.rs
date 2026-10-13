@@ -12,7 +12,10 @@ impl SessionActor {
     }
 
     /// Stamp ttft on the first token of any channel (reasoning, text, or tool call).
-    pub(crate) fn record_turn_first_token(&self, request_id: Option<&supercharge_sampler::RequestId>) {
+    pub(crate) fn record_turn_first_token(
+        &self,
+        request_id: Option<&supercharge_sampler::RequestId>,
+    ) {
         let Some(generation) = self.turn_generation(request_id) else {
             return;
         };

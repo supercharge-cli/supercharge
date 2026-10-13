@@ -13,10 +13,10 @@ use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
 use rustls::RootCertStore;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 use rustls::server::WebPkiClientVerifier;
-use support::{send_one, test_config};
 use supercharge_sampler::{SamplerConfig, SamplingClient};
 use supercharge_sampling_types::SamplingError;
 use supercharge_test_support::{TestSandbox, spawn_counting_server};
+use support::{send_one, test_config};
 
 const ONE_MIB: usize = 1024 * 1024;
 

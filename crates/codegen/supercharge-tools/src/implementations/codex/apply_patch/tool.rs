@@ -138,7 +138,9 @@ enum FileChange {
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 /// Create parent directories for a file path if they don't exist.
-async fn ensure_parent_dirs(path: &std::path::Path) -> Result<(), supercharge_tool_runtime::ToolError> {
+async fn ensure_parent_dirs(
+    path: &std::path::Path,
+) -> Result<(), supercharge_tool_runtime::ToolError> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -430,7 +432,8 @@ impl supercharge_tool_runtime::Tool for ApplyPatchTool {
                         ensure_parent_dirs(path).await?;
                         fs.write_file(path, content.as_bytes()).await.map_err(|e| {
                             supercharge_tool_runtime::ToolError::execution(
-                                supercharge_tool_protocol::ToolId::new("apply_patch").expect("valid"),
+                                supercharge_tool_protocol::ToolId::new("apply_patch")
+                                    .expect("valid"),
                                 e.to_string(),
                             )
                         })?;
@@ -494,7 +497,8 @@ impl supercharge_tool_runtime::Tool for ApplyPatchTool {
                             .await
                             .map_err(|e| {
                                 supercharge_tool_runtime::ToolError::execution(
-                                    supercharge_tool_protocol::ToolId::new("apply_patch").expect("valid"),
+                                    supercharge_tool_protocol::ToolId::new("apply_patch")
+                                        .expect("valid"),
                                     e.to_string(),
                                 )
                             })?;
@@ -528,7 +532,8 @@ impl supercharge_tool_runtime::Tool for ApplyPatchTool {
                         .await
                         .map_err(|e| {
                             supercharge_tool_runtime::ToolError::execution(
-                                supercharge_tool_protocol::ToolId::new("apply_patch").expect("valid"),
+                                supercharge_tool_protocol::ToolId::new("apply_patch")
+                                    .expect("valid"),
                                 e.to_string(),
                             )
                         })?;
@@ -616,10 +621,13 @@ mod tests {
         let shared = resources.into_shared();
 
         let patch = wrap_patch("*** Add File: new.txt\n+hello\n+world");
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(shared.clone()), make_input(&patch))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(shared.clone()),
+            make_input(&patch),
+        )
+        .await
+        .unwrap();
 
         match result {
             ApplyPatchOutput::Success {
@@ -648,10 +656,13 @@ mod tests {
         let shared = resources.into_shared();
 
         let patch = wrap_patch("*** Delete File: del.txt");
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(shared.clone()), make_input(&patch))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(shared.clone()),
+            make_input(&patch),
+        )
+        .await
+        .unwrap();
 
         match result {
             ApplyPatchOutput::Success {
@@ -679,10 +690,13 @@ mod tests {
         let shared = resources.into_shared();
 
         let patch = wrap_patch("*** Update File: update.txt\n@@\n foo\n-bar\n+baz");
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(shared.clone()), make_input(&patch))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(shared.clone()),
+            make_input(&patch),
+        )
+        .await
+        .unwrap();
 
         match result {
             ApplyPatchOutput::Success {
@@ -711,10 +725,13 @@ mod tests {
         let shared = resources.into_shared();
 
         let patch = wrap_patch("*** Update File: src.txt\n*** Move to: dst.txt\n@@\n-line\n+line2");
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(shared.clone()), make_input(&patch))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(shared.clone()),
+            make_input(&patch),
+        )
+        .await
+        .unwrap();
 
         match result {
             ApplyPatchOutput::Success { files, .. } => {
@@ -747,10 +764,13 @@ mod tests {
             "*** Add File: a.txt\n+aaa\n\
              *** Add File: b.txt\n+bbb",
         );
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(shared.clone()), make_input(&patch))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(shared.clone()),
+            make_input(&patch),
+        )
+        .await
+        .unwrap();
 
         match result {
             ApplyPatchOutput::Success {
@@ -939,10 +959,13 @@ mod tests {
         let move_out = wrap_patch(
             "*** Update File: memory/topics/rust.md\n*** Move to: stolen.md\n@@\n-keep\n+gone",
         );
-        let result =
-            supercharge_tool_runtime::Tool::run(&ApplyPatchTool, test_ctx(shared), make_input(&move_out))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &ApplyPatchTool,
+            test_ctx(shared),
+            make_input(&move_out),
+        )
+        .await
+        .unwrap();
         assert!(
             matches!(result, ApplyPatchOutput::ApplicationError(_)),
             "got {result:?}"
@@ -989,10 +1012,13 @@ mod tests {
         let shared = resources.into_shared();
 
         let patch = wrap_patch("*** Update File: file.txt\n@@\n-nonexistent\n+replacement");
-        let result =
-            supercharge_tool_runtime::Tool::run(&tool, test_ctx(shared.clone()), make_input(&patch))
-                .await
-                .unwrap();
+        let result = supercharge_tool_runtime::Tool::run(
+            &tool,
+            test_ctx(shared.clone()),
+            make_input(&patch),
+        )
+        .await
+        .unwrap();
 
         match result {
             ApplyPatchOutput::ApplicationError(msg) => {

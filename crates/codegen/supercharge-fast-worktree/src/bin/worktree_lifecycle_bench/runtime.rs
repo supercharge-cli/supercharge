@@ -411,7 +411,8 @@ fn run_contained_command_impl(
         Ok(None) => {
             let mut cleanup_errors = Vec::new();
             attempt_command_teardown(cgroup.as_deref(), &group, &mut cleanup_errors);
-            let reap = supercharge_tty_utils::wait_child_bounded(&mut child, CHILD_KILL_REAP_TIMEOUT);
+            let reap =
+                supercharge_tty_utils::wait_child_bounded(&mut child, CHILD_KILL_REAP_TIMEOUT);
             if !matches!(reap, Ok(Some(_))) {
                 cleanup_errors.push(match &reap {
                     Ok(None) => "child did not reap after bounded teardown".into(),
@@ -437,7 +438,8 @@ fn run_contained_command_impl(
             let mut cleanup_errors = Vec::new();
             attempt_command_teardown(cgroup.as_deref(), &group, &mut cleanup_errors);
             if !supercharge_tty_utils::is_child_wait_identity_uncertain(&error) {
-                let reap = supercharge_tty_utils::wait_child_bounded(&mut child, CHILD_KILL_REAP_TIMEOUT);
+                let reap =
+                    supercharge_tty_utils::wait_child_bounded(&mut child, CHILD_KILL_REAP_TIMEOUT);
                 if !matches!(reap, Ok(Some(_))) {
                     cleanup_errors.push(match &reap {
                         Ok(None) => "child did not reap after wait error teardown".into(),

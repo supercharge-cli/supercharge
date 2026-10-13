@@ -1625,14 +1625,8 @@ pub(crate) async fn run(
             reader_parked_thread.store(false, Ordering::Release);
             #[cfg(windows)]
             if crate::windows_image_paste::take_paste_request() {
-                let paste = Event::Key(KeyEvent::new(
-                    KeyCode::Char('v'),
-                    KeyModifiers::CONTROL,
-                ));
-                if reader_input_tx
-                    .send(TimedInputEvent::now(paste))
-                    .is_err()
-                {
+                let paste = Event::Key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL));
+                if reader_input_tx.send(TimedInputEvent::now(paste)).is_err() {
                     break;
                 }
             }

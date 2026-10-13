@@ -48,8 +48,10 @@ impl SessionActor {
             &counts,
             &tokens,
         ));
-        supercharge_telemetry::session_ctx::drain_pending(supercharge_telemetry::session_ctx::CLI_DRAIN)
-            .await;
+        supercharge_telemetry::session_ctx::drain_pending(
+            supercharge_telemetry::session_ctx::CLI_DRAIN,
+        )
+        .await;
     }
 
     async fn tokenize_api_key(&self) -> Option<String> {

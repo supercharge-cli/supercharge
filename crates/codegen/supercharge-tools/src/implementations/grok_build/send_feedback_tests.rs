@@ -41,7 +41,8 @@ async fn run_tool(
 ) -> Result<SendFeedbackOutput, supercharge_tool_runtime::ToolError> {
     let mut resources = Resources::new();
     resources.insert(SessionFolder(session_folder.to_path_buf()));
-    supercharge_tool_runtime::Tool::run(&SendFeedbackTool, test_ctx(resources.into_shared()), input).await
+    supercharge_tool_runtime::Tool::run(&SendFeedbackTool, test_ctx(resources.into_shared()), input)
+        .await
 }
 
 async fn run(
@@ -124,7 +125,10 @@ async fn storage_and_join_failures_are_execution_errors() {
         .await
         .unwrap_err();
     let join_error = map_append_result(Err(join_error)).unwrap_err();
-    assert_eq!(join_error.kind, supercharge_tool_runtime::ToolErrorKind::Execution);
+    assert_eq!(
+        join_error.kind,
+        supercharge_tool_runtime::ToolErrorKind::Execution
+    );
     assert!(!join_error.detail.contains(SUCCESS_MESSAGE));
 }
 

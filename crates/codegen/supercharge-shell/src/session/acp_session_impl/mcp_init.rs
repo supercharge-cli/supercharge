@@ -463,13 +463,15 @@ impl InitPass {
             _ => supercharge_telemetry::events::McpErrorType::HandshakeFailed,
         };
         let transport = self.transport(&server);
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::McpServerFailed {
-            server_name: server.clone(),
-            error_type,
-            duration_ms: elapsed.as_millis() as u64,
-            timeout_sec,
-            error_message: Some(error.to_string()),
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::McpServerFailed {
+                server_name: server.clone(),
+                error_type,
+                duration_ms: elapsed.as_millis() as u64,
+                timeout_sec,
+                error_message: Some(error.to_string()),
+            },
+        );
         crate::session::telemetry::emit_mcp_connection_span(
             "failed",
             &server,
@@ -507,17 +509,19 @@ impl InitPass {
             })
             .await?;
 
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::McpInitCompleted {
-            total_duration_ms: started.elapsed().as_millis() as u64,
-            spawn_duration_ms: started.duration_since(self.mcp_init_start).as_millis() as u64,
-            server_count: self.server_count,
-            servers_succeeded: self.tally.succeeded,
-            servers_failed: self.tally.failed,
-            servers_auth_required: self.tally.auth_required,
-            total_tools_registered: self.tally.tools_registered,
-            strategy: self.strategy,
-            is_reinit: self.is_reinit,
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::McpInitCompleted {
+                total_duration_ms: started.elapsed().as_millis() as u64,
+                spawn_duration_ms: started.duration_since(self.mcp_init_start).as_millis() as u64,
+                server_count: self.server_count,
+                servers_succeeded: self.tally.succeeded,
+                servers_failed: self.tally.failed,
+                servers_auth_required: self.tally.auth_required,
+                total_tools_registered: self.tally.tools_registered,
+                strategy: self.strategy,
+                is_reinit: self.is_reinit,
+            },
+        );
         self.events
             .emit(supercharge_session_events::Event::McpInitCompleted {
                 total_servers: self.server_count,
@@ -722,11 +726,13 @@ pub(super) fn register_mcp_tool(
             server_name,
             e
         );
-        events.emit(supercharge_session_events::Event::McpToolRegistrationFailed {
-            server_name: server_name.to_string(),
-            tool_name: qualified_name,
-            error: e.to_string(),
-        });
+        events.emit(
+            supercharge_session_events::Event::McpToolRegistrationFailed {
+                server_name: server_name.to_string(),
+                tool_name: qualified_name,
+                error: e.to_string(),
+            },
+        );
     } else {
         tracing::debug!(
             "Registered MCP tool '{}' from server '{}'",

@@ -336,7 +336,9 @@ async fn resume_local_session_in_worktree(
     if req.restore_code.unwrap_or(restore_code_default) {
         let is_jj = find_git_root_from_path(std::path::Path::new(resolved_source_cwd))
             .ok()
-            .is_some_and(|root| supercharge_workspace::session::git::detect_vcs_kind(&root).is_jj());
+            .is_some_and(|root| {
+                supercharge_workspace::session::git::detect_vcs_kind(&root).is_jj()
+            });
         if !is_jj {
             if supercharge_workspace::session::git::should_warn_registry_disabled(
                 is_jj,

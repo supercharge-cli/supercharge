@@ -6,8 +6,8 @@
 //! [`crate::ClientError`].
 
 use futures::{SinkExt, StreamExt};
-use tokio_tungstenite::tungstenite::Message;
 use supercharge_tool_protocol::{ConnectionKind, HelloAckMsg, HelloMsg};
+use tokio_tungstenite::tungstenite::Message;
 
 use crate::error::ClientError;
 

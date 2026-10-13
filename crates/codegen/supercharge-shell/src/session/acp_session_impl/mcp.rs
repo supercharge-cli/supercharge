@@ -571,8 +571,9 @@ impl SessionActor {
         error: &crate::session::mcp_servers::McpError,
         client_for_auth: Option<std::sync::Arc<crate::session::mcp_servers::McpClient>>,
     ) {
-        let detail =
-            || supercharge_tools::util::truncate_str_with_marker(&error.to_string(), 200).into_owned();
+        let detail = || {
+            supercharge_tools::util::truncate_str_with_marker(&error.to_string(), 200).into_owned()
+        };
         let mut state = self.mcp_state.lock().await;
         if error.is_auth_rejection() {
             if !state.settle_unreachable_attempt_unretryable(server_name, token) {
@@ -1473,8 +1474,9 @@ impl SessionActor {
     /// Known approximations: the default reminder mode is `Delta`, which injects incremental texts rather than this full listing.
     pub(super) async fn mcp_announcement_snapshot(&self) -> Option<McpAnnouncementSnapshot> {
         let server_summaries = self.connected_server_summaries();
-        let mut text =
-            supercharge_tools::implementations::search_tool::build_server_reminder(&server_summaries)?;
+        let mut text = supercharge_tools::implementations::search_tool::build_server_reminder(
+            &server_summaries,
+        )?;
         if let Some(hint) = self.rendered_mcp_hint().await {
             text.push_str(&hint);
         }

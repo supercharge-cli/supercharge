@@ -73,7 +73,9 @@ fn enqueue_permission(
         .and_then(|meta| serde_json::from_value(serde_json::Value::Object(meta.clone())).ok());
     let bash_selection_count = bash_highlights
         .as_ref()
-        .map(|h| supercharge_workspace::permission::default_always_allow_scope(&h.highlighted_words))
+        .map(|h| {
+            supercharge_workspace::permission::default_always_allow_scope(&h.highlighted_words)
+        })
         .unwrap_or(0);
     let bash_deny_selection_count = bash_highlights
         .as_ref()
@@ -85,7 +87,10 @@ fn enqueue_permission(
             o.option_id.0.as_ref() == crate::views::permission_view::ALLOW_ALWAYS_COMMAND_OPTION_ID
         });
         if offers_allow_row
-            && !supercharge_workspace::permission::always_allow_scope_persists(h, bash_selection_count)
+            && !supercharge_workspace::permission::always_allow_scope_persists(
+                h,
+                bash_selection_count,
+            )
         {
             tracing::warn!(
                 scope = bash_selection_count,

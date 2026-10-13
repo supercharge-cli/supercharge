@@ -2538,10 +2538,7 @@ mod tests {
     /// The hero footer prints a channel only on alpha and beta builds, so on stable it must not end on a separator.
     #[test]
     fn version_badge_carries_no_release_label() {
-        let full = badge_text(
-            VersionBadgeMode::Full,
-            Some("acme"),
-        );
+        let full = badge_text(VersionBadgeMode::Full, Some("acme"));
         let inline = badge_text(VersionBadgeMode::HeroInline, None);
         let footer = badge_text(VersionBadgeMode::HeroFooter, Some("acme"));
 

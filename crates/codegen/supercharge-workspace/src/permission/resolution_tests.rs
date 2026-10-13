@@ -2652,7 +2652,8 @@ async fn managed_config_toml_rules_resolve_as_non_admin_defaults() {
     )
     .unwrap();
 
-    let layers = supercharge_config::managed_config_layers_at(Some(system.path()), Some(user.path()));
+    let layers =
+        supercharge_config::managed_config_layers_at(Some(system.path()), Some(user.path()));
     assert!(
         layers
             .first()

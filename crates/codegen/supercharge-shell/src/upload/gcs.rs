@@ -16,10 +16,10 @@
 //! Use [`WithAuth::with_auth`] at every shell-side upload call site that has an `AuthManager` in scope.
 //! Call it immediately before passing the config to an `supercharge_file_utils::gcs::*` helper.
 use std::sync::Arc;
+use supercharge_auth::AuthCredentialProvider;
 use supercharge_file_utils::gcs::StorageConfig;
 use supercharge_file_utils::storage_client::Auth401AttributionCallback;
 use supercharge_file_utils::{TraceExportConfig, UploadMethod};
-use supercharge_auth::AuthCredentialProvider;
 use supercharge_login::AuthManager;
 use supercharge_login::credential_provider::{
     ShellAuthCredentialProvider, StorageClientAttributionBridge,

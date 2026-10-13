@@ -9,7 +9,9 @@ use crate::session::goal_role_tools::RoleToolNames;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use supercharge_session_events::EventWriter;
-use supercharge_tools::implementations::grok_build::task::backend::{ChannelBackend, SubagentBackend};
+use supercharge_tools::implementations::grok_build::task::backend::{
+    ChannelBackend, SubagentBackend,
+};
 use supercharge_tools::implementations::grok_build::task::types::{
     SubagentOwner, SubagentRequest, SubagentRuntimeOverrides,
 };

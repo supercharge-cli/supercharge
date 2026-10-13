@@ -8,15 +8,16 @@ impl SessionActor {
     ) -> PromptTurnResult {
         // Builtin turns carry no user message, so a send-now may cancel from the start.
         self.mark_front_message_committed().await;
-        supercharge_telemetry::session_ctx::log_event(supercharge_telemetry::events::SlashCommandUsed {
-            command: action.command_name().to_string(),
-            args_provided: action.args_provided(),
-        });
+        supercharge_telemetry::session_ctx::log_event(
+            supercharge_telemetry::events::SlashCommandUsed {
+                command: action.command_name().to_string(),
+                args_provided: action.args_provided(),
+            },
+        );
         match action {
             BuiltinAction::Help => {
-                let text = crate::session::slash_commands::help_text(
-                    self.command_availability().await,
-                );
+                let text =
+                    crate::session::slash_commands::help_text(self.command_availability().await);
                 self.send_host_turn_slash_command_output(&text).await;
                 ok_end_turn(0, None)
             }
@@ -398,7 +399,8 @@ impl SessionActor {
                 };
 
                 let ctx = &info.context;
-                let context_pct = supercharge_token_estimation::usage_percentage(ctx.used, ctx.total);
+                let context_pct =
+                    supercharge_token_estimation::usage_percentage(ctx.used, ctx.total);
 
                 let summary_path = crate::session::persistence::session_dir(&self.session_info)
                     .join("summary.json");
@@ -1214,10 +1216,7 @@ impl SessionActor {
             Err(err) => return format!("Could not list models: {err}"),
         };
         let model_id = if model_id.is_empty() {
-            models
-                .first()
-                .map(|m| m.id.clone())
-                .unwrap_or_default()
+            models.first().map(|m| m.id.clone()).unwrap_or_default()
         } else {
             model_id
         };

@@ -820,7 +820,8 @@ impl LocationPickerState {
                 if cfg!(windows) && has_windows_drive_prefix(q) && q.len() == 2 {
                     (PathBuf::from(format!("{q}\\")), String::new())
                 } else {
-                    let home = supercharge_dirs::home_dir().unwrap_or_else(|| self.base_cwd.clone());
+                    let home =
+                        supercharge_dirs::home_dir().unwrap_or_else(|| self.base_cwd.clone());
                     (home, q.trim_start_matches('~').to_string())
                 }
             }

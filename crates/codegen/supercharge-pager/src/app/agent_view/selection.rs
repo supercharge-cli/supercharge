@@ -185,7 +185,10 @@ impl AgentView {
         range_id: u16,
         width_override: Option<u16>,
         geom: &TableGeometry,
-        f: impl FnOnce(&dyn Fn(usize) -> Option<String>, Option<&supercharge_markdown::TableCopyMeta>) -> R,
+        f: impl FnOnce(
+            &dyn Fn(usize) -> Option<String>,
+            Option<&supercharge_markdown::TableCopyMeta>,
+        ) -> R,
     ) -> Option<R> {
         if entry_idx == BTW_OVERLAY_ENTRY_IDX {
             return self.with_btw_output(range_id, width_override, |src, lines, content| {

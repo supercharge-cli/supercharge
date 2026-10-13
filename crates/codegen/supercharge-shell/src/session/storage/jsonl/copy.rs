@@ -320,7 +320,8 @@ impl JsonlStorageAdapter {
         }
 
         if options.strip_reasoning {
-            chat_to_copy = supercharge_chat_state::compaction_utils::strip_reasoning_blocks(chat_to_copy);
+            chat_to_copy =
+                supercharge_chat_state::compaction_utils::strip_reasoning_blocks(chat_to_copy);
         }
 
         let num_chat_messages = chat_to_copy.len();

@@ -5,8 +5,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use unicode_width::UnicodeWidthStr;
 use supercharge_tools::mcp_elicitation::ElicitFieldKind;
+use unicode_width::UnicodeWidthStr;
 
 use crate::theme::Theme;
 

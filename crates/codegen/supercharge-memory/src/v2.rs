@@ -9,8 +9,8 @@ use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use rusqlite::params;
-use supercharge_tools::util::truncate_str;
 use supercharge_sqlite_journal::JournalMode;
+use supercharge_tools::util::truncate_str;
 
 const STATE_SCHEMA_VERSION: &str = "1";
 pub(crate) const MAX_DISCOVERED_FILES: usize = 10_000;
@@ -136,7 +136,8 @@ pub fn ensure_scope_initialized_with_journal_mode(
 
     let state_path = scope_dir.join("memory_state.sqlite");
     let journal_mode = journal_mode.unwrap_or_else(|| JournalMode::for_db_path(&state_path));
-    if journal_mode == JournalMode::Truncate || supercharge_sqlite_journal::is_network_fs(scope_dir) {
+    if journal_mode == JournalMode::Truncate || supercharge_sqlite_journal::is_network_fs(scope_dir)
+    {
         return Err(V2StorageError::UnsupportedNetworkFilesystem {
             path: scope_dir.to_path_buf(),
         });

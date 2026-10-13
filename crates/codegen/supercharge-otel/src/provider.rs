@@ -4,10 +4,10 @@ use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::trace::SdkTracerProvider;
+use supercharge_auth::AuthCredentialProvider;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::Layer as _;
 use tracing_subscriber::registry::LookupSpan;
-use supercharge_auth::AuthCredentialProvider;
 
 use crate::config::{OtelClientInfo, OtelLayerConfig};
 

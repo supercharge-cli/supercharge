@@ -24,7 +24,10 @@ async fn ponytail_toggle_is_idempotent_and_preserves_user_slash_text() {
                 let conv = actor.chat_state_handle.get_conversation().await;
                 assert_eq!(
                     head_text(&conv).unwrap(),
-                    format!("base policy\n\n{}", supercharge_shared::ponytail::SYSTEM_BLOCK),
+                    format!(
+                        "base policy\n\n{}",
+                        supercharge_shared::ponytail::SYSTEM_BLOCK
+                    ),
                 );
                 assert_eq!(serde_json::to_value(&conv[1..]).unwrap(), turns);
             }
@@ -40,7 +43,10 @@ async fn ponytail_toggle_is_idempotent_and_preserves_user_slash_text() {
 async fn ponytail_toggle_preserves_inherited_system_verbatim() {
     tokio::task::LocalSet::new()
         .run_until(async {
-            let inherited = format!("parent policy\n\n{}", supercharge_shared::ponytail::SYSTEM_BLOCK);
+            let inherited = format!(
+                "parent policy\n\n{}",
+                supercharge_shared::ponytail::SYSTEM_BLOCK
+            );
             let mut actor = actor_with_history(vec![
                 ConversationItem::system(inherited.clone()),
                 ConversationItem::user("/skill argument"),

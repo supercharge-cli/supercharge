@@ -17,8 +17,6 @@ use std::time::Duration;
 
 use agent_client_protocol::{self as acp, Agent as _};
 use serde_json::json;
-use tempfile::TempDir;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use supercharge_acp_lib::{
     AcpAgentGatewayReceiver as GatewayReceiver, AcpAgentGatewaySender as GatewaySender,
     LineBufferedRead,
@@ -26,6 +24,8 @@ use supercharge_acp_lib::{
 use supercharge_shell::agent::config::Config as AgentConfig;
 use supercharge_shell::agent::mvp_agent::MvpAgent;
 use supercharge_test_support::{MockInferenceServer, MockModelEntry};
+use tempfile::TempDir;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 const DUPLEX_BUFFER_BYTES: usize = 8 * 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(60);

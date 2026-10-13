@@ -21,9 +21,7 @@ mod builtin_proxy_tests {
         assert!(is_builtin_grok_proxy(
             crate::env::PROD_CLI_CHAT_PROXY_BASE_URL
         ));
-        assert!(is_builtin_grok_proxy(
-            "https://cli-chat-proxy.grok.com/v1/"
-        ));
+        assert!(is_builtin_grok_proxy("https://cli-chat-proxy.grok.com/v1/"));
         assert!(!is_builtin_grok_proxy("https://api.x.ai/v1"));
         assert!(!is_builtin_grok_proxy("https://api.zenllm.org/v1"));
     }

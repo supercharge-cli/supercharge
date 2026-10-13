@@ -4,8 +4,8 @@
 //! nothing is cached here (cross-launch reuse is the disk cache's job, see
 //! `settings_cache`).
 
-use tokio::sync::watch;
 use supercharge_login::GrokAuth;
+use tokio::sync::watch;
 
 /// Coalesces concurrent mid-session settings refreshes onto one live fetch.
 #[derive(Default)]

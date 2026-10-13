@@ -33,8 +33,6 @@ use futures::future::{BoxFuture, Shared};
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 use serde_json::Value;
-use tokio::sync::{mpsc, oneshot};
-use url::Url;
 use supercharge_computer_hub_core::{
     ErasedTool, ToolHandle, decode_call_result, error_from_envelope, progress_from_frame,
     tool_error_from_wire,
@@ -52,6 +50,8 @@ use supercharge_tool_runtime::{
     ToolStreamItem, TypedToolOutput, terminal_only,
 };
 use supercharge_tool_types::ToolDescription;
+use tokio::sync::{mpsc, oneshot};
+use url::Url;
 
 use crate::auth::{AuthCredential, AuthProvider};
 use crate::connection::{
@@ -407,7 +407,10 @@ impl ToolHarnessBuilder {
     }
 
     /// Default extensions merged into every `ToolCallContext` before dispatch.
-    pub fn default_extensions(mut self, extensions: supercharge_tool_runtime::TypedExtensions) -> Self {
+    pub fn default_extensions(
+        mut self,
+        extensions: supercharge_tool_runtime::TypedExtensions,
+    ) -> Self {
         self.default_extensions = Some(extensions);
         self
     }
@@ -1046,7 +1049,9 @@ impl ToolHarness {
     }
 
     /// Discover available tool servers for the current user.
-    pub async fn list_servers(&self) -> Result<Vec<supercharge_tool_protocol::ServerInfo>, ClientError> {
+    pub async fn list_servers(
+        &self,
+    ) -> Result<Vec<supercharge_tool_protocol::ServerInfo>, ClientError> {
         let connection = self.require_connection()?;
         let request_id = connection.try_alloc_request_id()?;
         let req = JsonRpcRequest {
@@ -1136,40 +1141,41 @@ impl ToolHarness {
         metadata: Option<serde_json::Value>,
     ) -> Result<supercharge_tool_protocol::SessionBindServerResult, ClientError> {
         let start = std::time::Instant::now();
-        let result: Result<supercharge_tool_protocol::SessionBindServerResult, ClientError> = async {
-            let connection = self.require_connection()?;
-            let request_id = connection.try_alloc_request_id()?;
-            let parsed_server_id = supercharge_tool_protocol::ServerId::new(server_id)
-                .map_err(|e| ClientError::InvalidConfig(format!("invalid server_id: {e}")))?;
-            let params = supercharge_tool_protocol::SessionBindServerParams {
-                server_id: parsed_server_id,
-                cwd: cwd.map(String::from),
-                metadata,
-            };
-            let req = JsonRpcRequest {
-                jsonrpc: JsonRpcVersion,
-                id: JsonRpcId::from_request_id(&request_id),
-                session_id: Some(self.inner.session.clone()),
-                method: Method::SessionBindServer.as_wire_str().to_owned(),
-                params,
-            };
-            let resp = connection.call_request(request_id, &req).await?;
-            match resp.outcome {
-                ResponseOutcome::Result(value) => {
-                    let bind_result: supercharge_tool_protocol::SessionBindServerResult =
-                        serde_json::from_value(value)
-                            .map_err(|e| ClientError::Serde(e.to_string()))?;
-                    let arc = Arc::new(bind_result.tools.clone());
-                    self.inner.remote_tools.store(arc);
-                    self.inner
-                        .last_bind_report
-                        .store(Some(Arc::new(SessionBindReport::from(&bind_result))));
-                    Ok(bind_result)
+        let result: Result<supercharge_tool_protocol::SessionBindServerResult, ClientError> =
+            async {
+                let connection = self.require_connection()?;
+                let request_id = connection.try_alloc_request_id()?;
+                let parsed_server_id = supercharge_tool_protocol::ServerId::new(server_id)
+                    .map_err(|e| ClientError::InvalidConfig(format!("invalid server_id: {e}")))?;
+                let params = supercharge_tool_protocol::SessionBindServerParams {
+                    server_id: parsed_server_id,
+                    cwd: cwd.map(String::from),
+                    metadata,
+                };
+                let req = JsonRpcRequest {
+                    jsonrpc: JsonRpcVersion,
+                    id: JsonRpcId::from_request_id(&request_id),
+                    session_id: Some(self.inner.session.clone()),
+                    method: Method::SessionBindServer.as_wire_str().to_owned(),
+                    params,
+                };
+                let resp = connection.call_request(request_id, &req).await?;
+                match resp.outcome {
+                    ResponseOutcome::Result(value) => {
+                        let bind_result: supercharge_tool_protocol::SessionBindServerResult =
+                            serde_json::from_value(value)
+                                .map_err(|e| ClientError::Serde(e.to_string()))?;
+                        let arc = Arc::new(bind_result.tools.clone());
+                        self.inner.remote_tools.store(arc);
+                        self.inner
+                            .last_bind_report
+                            .store(Some(Arc::new(SessionBindReport::from(&bind_result))));
+                        Ok(bind_result)
+                    }
+                    ResponseOutcome::Error(err) => Err(ClientError::from_jsonrpc_error(err)),
                 }
-                ResponseOutcome::Error(err) => Err(ClientError::from_jsonrpc_error(err)),
             }
-        }
-        .await;
+            .await;
         crate::metrics::session_op_observe(
             "bind",
             if result.is_ok() { "ok" } else { "error" },
@@ -1199,41 +1205,43 @@ impl ToolHarness {
         caller: &str,
     ) -> Result<supercharge_tool_protocol::SessionAttachServerResult, ClientError> {
         let start = std::time::Instant::now();
-        let result: Result<supercharge_tool_protocol::SessionAttachServerResult, ClientError> = async {
-            let connection = self.require_connection()?;
-            let request_id = connection.try_alloc_request_id()?;
-            let parsed_server_id = server_id
-                .map(|s| {
-                    supercharge_tool_protocol::ServerId::new(s)
-                        .map_err(|e| ClientError::InvalidConfig(format!("invalid server_id: {e}")))
-                })
-                .transpose()?;
-            let params = supercharge_tool_protocol::SessionAttachServerParams {
-                server_id: parsed_server_id,
-                caller: Some(caller.to_owned()),
-            };
-            let req = JsonRpcRequest {
-                jsonrpc: JsonRpcVersion,
-                id: JsonRpcId::from_request_id(&request_id),
-                session_id: Some(self.inner.session.clone()),
-                method: Method::SessionAttachServer.as_wire_str().to_owned(),
-                params,
-            };
-            let resp = connection.call_request(request_id, &req).await?;
-            match resp.outcome {
-                ResponseOutcome::Result(value) => {
-                    let attach_result: supercharge_tool_protocol::SessionAttachServerResult =
-                        serde_json::from_value(value)
-                            .map_err(|e| ClientError::Serde(e.to_string()))?;
-                    self.inner
-                        .remote_tools
-                        .store(Arc::new(attach_result.tools.clone()));
-                    Ok(attach_result)
+        let result: Result<supercharge_tool_protocol::SessionAttachServerResult, ClientError> =
+            async {
+                let connection = self.require_connection()?;
+                let request_id = connection.try_alloc_request_id()?;
+                let parsed_server_id = server_id
+                    .map(|s| {
+                        supercharge_tool_protocol::ServerId::new(s).map_err(|e| {
+                            ClientError::InvalidConfig(format!("invalid server_id: {e}"))
+                        })
+                    })
+                    .transpose()?;
+                let params = supercharge_tool_protocol::SessionAttachServerParams {
+                    server_id: parsed_server_id,
+                    caller: Some(caller.to_owned()),
+                };
+                let req = JsonRpcRequest {
+                    jsonrpc: JsonRpcVersion,
+                    id: JsonRpcId::from_request_id(&request_id),
+                    session_id: Some(self.inner.session.clone()),
+                    method: Method::SessionAttachServer.as_wire_str().to_owned(),
+                    params,
+                };
+                let resp = connection.call_request(request_id, &req).await?;
+                match resp.outcome {
+                    ResponseOutcome::Result(value) => {
+                        let attach_result: supercharge_tool_protocol::SessionAttachServerResult =
+                            serde_json::from_value(value)
+                                .map_err(|e| ClientError::Serde(e.to_string()))?;
+                        self.inner
+                            .remote_tools
+                            .store(Arc::new(attach_result.tools.clone()));
+                        Ok(attach_result)
+                    }
+                    ResponseOutcome::Error(err) => Err(ClientError::from_jsonrpc_error(err)),
                 }
-                ResponseOutcome::Error(err) => Err(ClientError::from_jsonrpc_error(err)),
             }
-        }
-        .await;
+            .await;
         crate::metrics::session_op_observe(
             "attach",
             if result.is_ok() { "ok" } else { "error" },
@@ -1944,13 +1952,16 @@ fn parse_permission_request_hook(value: &Value) -> Option<supercharge_tool_proto
     if method != Method::Hook.as_wire_str() {
         return None;
     }
-    let hook =
-        <supercharge_tool_protocol::HookFrame as serde::Deserialize>::deserialize(value.get("params")?)
-            .ok()?;
+    let hook = <supercharge_tool_protocol::HookFrame as serde::Deserialize>::deserialize(
+        value.get("params")?,
+    )
+    .ok()?;
     // Only request/response hooks (those with a reply leg) qualify.
     hook.hook_id.as_ref()?;
     match &hook.event {
-        supercharge_tool_protocol::HookEvent::Custom { kind, .. } if kind == PERMISSION_REQUEST_KIND => {
+        supercharge_tool_protocol::HookEvent::Custom { kind, .. }
+            if kind == PERMISSION_REQUEST_KIND =>
+        {
             Some(hook)
         }
         _ => None,
@@ -2499,7 +2510,9 @@ mod tests {
 
     #[tokio::test]
     async fn request_turn_hook_errors_without_hub_connection() {
-        use supercharge_tool_protocol::turn_hook::{AfterTurnPayload, TurnHookOutcome, TurnHookRequest};
+        use supercharge_tool_protocol::turn_hook::{
+            AfterTurnPayload, TurnHookOutcome, TurnHookRequest,
+        };
 
         let harness = ToolHarness::local_only_with(
             LocalRegistry::new(),

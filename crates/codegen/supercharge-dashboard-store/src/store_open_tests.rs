@@ -201,7 +201,8 @@ fn corrupt_file_errors_without_destroying_it() {
     let db = default_db_path(tmp.path());
     let dir = db.parent().unwrap().to_path_buf();
     std::fs::create_dir_all(&dir).unwrap();
-    let effective = supercharge_sqlite_journal::JournalMode::for_db_path(&db).effective_db_path(&db);
+    let effective =
+        supercharge_sqlite_journal::JournalMode::for_db_path(&db).effective_db_path(&db);
     let garbage = vec![b'x'; 1024];
     std::fs::write(&effective, &garbage).unwrap();
 
@@ -226,7 +227,8 @@ fn open_refuses_symlinked_db_path() {
     let tmp = TempDir::new().unwrap();
     let db = default_db_path(tmp.path());
     std::fs::create_dir_all(db.parent().unwrap()).unwrap();
-    let effective = supercharge_sqlite_journal::JournalMode::for_db_path(&db).effective_db_path(&db);
+    let effective =
+        supercharge_sqlite_journal::JournalMode::for_db_path(&db).effective_db_path(&db);
     let target = tmp.path().join("target.db");
     std::os::unix::fs::symlink(&target, &effective).unwrap();
 

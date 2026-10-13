@@ -26,20 +26,20 @@ use crate::handle::WorkspaceHandle;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::task::JoinHandle;
-use url::Url;
 use supercharge_computer_hub_sdk::{
     AuthProvider, CLOSE_CODE_SANDBOX_TERMINATED, ClientError, HubConnectionPool,
     InitialConnectPolicy, RefusalCode, ToolServer, ToolServerBuilder, ToolServerHandler,
 };
 use supercharge_diag_server::DiagHandle;
-use supercharge_tools::registry::types::ToolConfig;
 use supercharge_tool_protocol::ToolId;
 use supercharge_tool_runtime::{
     ToolCallContext, ToolError, ToolErrorKind, ToolStream, ToolStreamItem, TypedToolOutput,
     terminal_only,
 };
 use supercharge_tool_types::ToolDescription;
+use supercharge_tools::registry::types::ToolConfig;
+use tokio::task::JoinHandle;
+use url::Url;
 /// Configuration for connecting to a server instance, via [`WorkspaceConfig::hub_config`](crate::config::WorkspaceConfig::hub_config).
 /// When `Some`, connect after construction via [`WorkspaceHandle::connect_hub`](crate::handle::WorkspaceHandle::connect_hub).
 #[derive(Clone)]
@@ -214,7 +214,9 @@ impl HubHandle {
         tool_handlers: Vec<std::sync::Arc<dyn ToolServerHandler>>,
         server_metadata: Option<serde_json::Value>,
         session_handler_resolver: Option<supercharge_computer_hub_sdk::SessionHandlerResolver>,
-        on_session_unbound: Option<std::sync::Arc<supercharge_computer_hub_sdk::SessionUnboundCallback>>,
+        on_session_unbound: Option<
+            std::sync::Arc<supercharge_computer_hub_sdk::SessionUnboundCallback>,
+        >,
     ) -> Result<Self, ClientError> {
         let pool = HubConnectionPool::new();
         let server_url = config.url.clone();
@@ -918,7 +920,10 @@ mod tests {
             &self,
             _ctx: &::supercharge_tool_runtime::ListToolsContext,
         ) -> supercharge_tool_types::ToolDescription {
-            supercharge_tool_types::ToolDescription::new("gate_streaming_stub", "gate streaming stub")
+            supercharge_tool_types::ToolDescription::new(
+                "gate_streaming_stub",
+                "gate streaming stub",
+            )
         }
         async fn run(
             &self,
@@ -955,7 +960,9 @@ mod tests {
             )
             .expect("register_tool must succeed");
     }
-    async fn drain_counts<T>(mut stream: supercharge_tool_runtime::ToolStream<T>) -> (usize, usize, bool) {
+    async fn drain_counts<T>(
+        mut stream: supercharge_tool_runtime::ToolStream<T>,
+    ) -> (usize, usize, bool) {
         let mut progress = 0;
         let mut terminal = 0;
         let mut last_is_terminal = false;

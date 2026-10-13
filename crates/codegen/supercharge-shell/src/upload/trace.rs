@@ -5,10 +5,12 @@ use crate::session::repo_changes::{TraceExportConfig, UploadMethod};
 use base64::Engine as _;
 use std::path::Path;
 use std::sync::Arc;
+use supercharge_file_utils::queue::{
+    EnqueueOutcome, TraceExportSource, UploadQueue, UploadRetryPolicy,
+};
+use supercharge_workspace::permission::PermissionEvent;
 use tokio::sync::oneshot;
 use url::Url;
-use supercharge_file_utils::queue::{EnqueueOutcome, TraceExportSource, UploadQueue, UploadRetryPolicy};
-use supercharge_workspace::permission::PermissionEvent;
 /// Upload the canonical tool definitions trace and wait for completion.
 /// `ToolDefinition` serializes in Chat Completions format: `{ "type": "function", "function": { ... } }`.
 /// That is the shape downstream ingest/enrichment expects to read from `tool_definitions.json`.
@@ -2041,7 +2043,8 @@ pub(crate) mod tests {
         let cancel = tokio_util::sync::CancellationToken::new();
         auth_manager.start_proactive_refresh(cancel.clone());
         tokio::time::sleep(
-            supercharge_login::manager::PROACTIVE_MIN_SLEEP + std::time::Duration::from_millis(1000),
+            supercharge_login::manager::PROACTIVE_MIN_SLEEP
+                + std::time::Duration::from_millis(1000),
         )
         .await;
         assert!(call_count.load(std::sync::atomic::Ordering::SeqCst) >= 1);

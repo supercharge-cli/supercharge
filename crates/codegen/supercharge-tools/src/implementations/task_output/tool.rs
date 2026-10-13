@@ -204,16 +204,18 @@ mod tests {
         let mut running = make_test_snapshot("test-1", false, None);
         running.output = String::new();
         let result = snapshot_to_result(running, "read_file", DEFAULT_TOOL_OUTPUT_BYTES);
-        let prompt = ToolOutput::TaskOutput(supercharge_tool_types::TaskOutputOutput::Result(result))
-            .to_prompt_format();
+        let prompt =
+            ToolOutput::TaskOutput(supercharge_tool_types::TaskOutputOutput::Result(result))
+                .to_prompt_format();
         assert!(prompt.contains("(no output yet)"), "running: {prompt}");
 
         let mut timed_out = make_test_snapshot("test-2", true, None);
         timed_out.output = String::new();
         timed_out.signal = Some("timeout".to_string());
         let result = snapshot_to_result(timed_out, "read_file", DEFAULT_TOOL_OUTPUT_BYTES);
-        let prompt = ToolOutput::TaskOutput(supercharge_tool_types::TaskOutputOutput::Result(result))
-            .to_prompt_format();
+        let prompt =
+            ToolOutput::TaskOutput(supercharge_tool_types::TaskOutputOutput::Result(result))
+                .to_prompt_format();
         assert!(prompt.contains("Status: timed_out"), "prompt: {prompt}");
         assert!(prompt.contains("(no output)"), "prompt: {prompt}");
         assert!(!prompt.contains("(no output yet)"), "prompt: {prompt}");
@@ -255,7 +257,8 @@ mod tests {
         assert_eq!(q_count, 5_000);
 
         // Prompt rendering also preserves content
-        let output = ToolOutput::TaskOutput(supercharge_tool_types::TaskOutputOutput::Result(result));
+        let output =
+            ToolOutput::TaskOutput(supercharge_tool_types::TaskOutputOutput::Result(result));
         let prompt = output.to_prompt_format();
         let q_count = prompt.chars().filter(|c| *c == 'Q').count();
         assert_eq!(q_count, 5_000);

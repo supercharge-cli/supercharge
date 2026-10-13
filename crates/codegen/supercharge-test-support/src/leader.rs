@@ -191,7 +191,10 @@ impl LeaderFixture {
             .env("SUPERCHARGE_TRACE_UPLOAD_URL", base_url)
             .env("SUPERCHARGE_API_KEY", "test-key-for-ci")
             .env("SUPERCHARGE_LEADER_SOCKET", &socket)
-            .env("RUST_LOG", "supercharge_shell=debug,supercharge_login=debug");
+            .env(
+                "RUST_LOG",
+                "supercharge_shell=debug,supercharge_login=debug",
+            );
         let log_path = sandbox.grok_home().join("leader.log");
         match std::fs::File::create(&log_path) {
             Ok(log) => {
@@ -574,7 +577,10 @@ impl LeaderStdioClient {
                 .env("SUPERCHARGE_TRACE_UPLOAD_URL", base_url)
                 .env("SUPERCHARGE_API_KEY", "test-key-for-ci")
                 .env("SUPERCHARGE_LEADER_SOCKET", leader_socket)
-                .env("RUST_LOG", "supercharge_shell=debug,supercharge_login=debug"),
+                .env(
+                    "RUST_LOG",
+                    "supercharge_shell=debug,supercharge_login=debug",
+                ),
         )
         .map_err(|error| {
             io::Error::new(

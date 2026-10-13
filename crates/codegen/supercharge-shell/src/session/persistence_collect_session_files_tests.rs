@@ -69,7 +69,8 @@ fn skips_feedback_draft_artifacts_at_every_depth() {
     let nested = dir.path().join("nested");
     fs::create_dir(&nested).unwrap();
     for path in [
-        dir.path().join(supercharge_feedback::FEEDBACK_DRAFTS_FILENAME),
+        dir.path()
+            .join(supercharge_feedback::FEEDBACK_DRAFTS_FILENAME),
         dir.path()
             .join(supercharge_feedback::FEEDBACK_DRAFTS_LOCK_FILENAME),
         nested.join(format!(
@@ -93,8 +94,9 @@ fn skips_feedback_draft_artifacts_at_every_depth() {
 #[test]
 fn skips_feedback_draft_images_directory() {
     let dir = TempDir::new().unwrap();
-    let draft_id =
-        supercharge_feedback::FeedbackDraftId::from("01931111-aaaa-7bbb-8ccc-ddddeeeeffff".to_owned());
+    let draft_id = supercharge_feedback::FeedbackDraftId::from(
+        "01931111-aaaa-7bbb-8ccc-ddddeeeeffff".to_owned(),
+    );
     let images = supercharge_feedback::feedback_draft_images_dir(dir.path(), &draft_id);
     fs::create_dir_all(&images).unwrap();
     fs::write(images.join("0.png"), b"\x89PNG screenshot bytes").unwrap();
@@ -116,7 +118,9 @@ fn skips_feedback_draft_images_directory() {
 #[test]
 fn skips_feedback_draft_hardlink_under_another_name() {
     let dir = TempDir::new().unwrap();
-    let draft = dir.path().join(supercharge_feedback::FEEDBACK_DRAFTS_FILENAME);
+    let draft = dir
+        .path()
+        .join(supercharge_feedback::FEEDBACK_DRAFTS_FILENAME);
     fs::write(&draft, b"private draft").unwrap();
     fs::hard_link(&draft, dir.path().join("innocent.json")).unwrap();
     fs::write(dir.path().join("trace.jsonl"), b"trace").unwrap();
