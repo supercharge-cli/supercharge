@@ -77,7 +77,12 @@ fn clamp_info_height(desired: u16, input: &WelcomeLayoutInput<'_>, one_line_prom
 /// Width (cols) of the hero box's left (logo) column, including padding.
 /// Collapses to a small inset when the logo is hidden.
 fn ascii_logo(input: &WelcomeLayoutInput<'_>) -> bool {
-    let prompt_height = input.prompt_height.unwrap_or(super::PROMPT_HEIGHT);
+    // Measured against the one-line prompt so a growing draft never swaps the logo
+    // (and resizes the box); when the draft no longer fits, the layout falls back to stacked whole.
+    let prompt_height = input
+        .prompt_height
+        .unwrap_or(super::PROMPT_HEIGHT)
+        .min(super::PROMPT_HEIGHT);
     let gap_after_error = u16::from(input.error_height > 0);
     let needed = gap_after_error
         + input.error_height
