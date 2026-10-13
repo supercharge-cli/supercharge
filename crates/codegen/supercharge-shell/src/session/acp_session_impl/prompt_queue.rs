@@ -525,12 +525,15 @@ impl SessionActor {
             "broadcasting x.ai/queue/changed to subscribers",
         );
         if let Ok(params) = serde_json::value::to_raw_value(&payload) {
-            self.notifications
-                .gateway
-                .forward_fire_and_forget(acp::ExtNotification::new(
-                    crate::session::prompt_queue::QUEUE_CHANGED_METHOD,
-                    params.into(),
-                ));
+            let params: std::sync::Arc<serde_json::value::RawValue> = params.into();
+            for method in [
+                crate::session::prompt_queue::QUEUE_CHANGED_METHOD,
+                crate::session::prompt_queue::SUPERCHARGE_QUEUE_CHANGED_METHOD,
+            ] {
+                self.notifications
+                    .gateway
+                    .forward_fire_and_forget(acp::ExtNotification::new(method, params.clone()));
+            }
         }
     }
 

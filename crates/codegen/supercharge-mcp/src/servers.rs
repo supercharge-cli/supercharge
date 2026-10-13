@@ -368,10 +368,13 @@ struct AcpMcpRegistry {
 enum UnreachableRetry {
     Cooling {
         retry_at: std::time::Instant,
+        /// Consecutive failed attempts; drives the exponential backoff.
+        failures: u32,
     },
     InFlight {
         token: u64,
         started_at: std::time::Instant,
+        failures: u32,
     },
 }
 
@@ -877,6 +880,21 @@ impl McpState {
     /// Retry triggers (tool batches, `x.ai/mcp/list` refreshes) cannot dogpile the OAuth-discovery and probe timeout budget while a server is down.
     pub const UNREACHABLE_RETRY_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(60);
 
+    /// First reconnect delay after a server drops; doubles per failure up to [`Self::UNREACHABLE_RETRY_COOLDOWN`].
+    pub const UNREACHABLE_RETRY_INITIAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+    /// Backoff before the next attempt after `failures` consecutive failures: 2s, 4s, 8s, ... capped at 60s.
+    pub fn unreachable_backoff(failures: u32) -> std::time::Duration {
+        Self::UNREACHABLE_RETRY_INITIAL
+            .saturating_mul(1u32 << failures.min(16))
+            .min(Self::UNREACHABLE_RETRY_COOLDOWN)
+    }
+
+    /// True when some unreachable server is waiting for (or due) a reconnect attempt.
+    pub fn has_unreachable_servers(&self) -> bool {
+        !self.unreachable_retry.is_empty()
+    }
+
     /// Upper bound on an attempt's exclusivity (see [`UnreachableRetry`]).
     /// Far above any bounded spawn and handshake, so it only fires for attempts whose future was cancelled and can never settle.
     pub const UNREACHABLE_ATTEMPT_LEASE: std::time::Duration = std::time::Duration::from_secs(600);
@@ -887,7 +905,7 @@ impl McpState {
         self.record_unreachable_failure_at(
             name,
             detail,
-            std::time::Instant::now() + Self::UNREACHABLE_RETRY_COOLDOWN,
+            std::time::Instant::now() + Self::unreachable_backoff(0),
         );
     }
 
@@ -902,8 +920,13 @@ impl McpState {
         if let Some(UnreachableRetry::InFlight { .. }) = self.unreachable_retry.get(name) {
             return;
         }
-        self.unreachable_retry
-            .insert(name.to_string(), UnreachableRetry::Cooling { retry_at });
+        self.unreachable_retry.insert(
+            name.to_string(),
+            UnreachableRetry::Cooling {
+                retry_at,
+                failures: 0,
+            },
+        );
     }
 
     /// Servers due for an unreachable-respawn attempt: cooling finished and the server is still configured.
@@ -925,7 +948,7 @@ impl McpState {
             .filter(|(name, state)| {
                 configured.contains(name.as_str())
                     && match state {
-                        UnreachableRetry::Cooling { retry_at } => *retry_at <= now,
+                        UnreachableRetry::Cooling { retry_at, .. } => *retry_at <= now,
                         // A cancelled attempt never settles; reclaim it once its lease expires (the old token no-ops from here)
                         UnreachableRetry::InFlight { started_at, .. } => {
                             now.saturating_duration_since(*started_at)
@@ -939,11 +962,19 @@ impl McpState {
             .map(|name| {
                 self.unreachable_attempt_counter += 1;
                 let token = self.unreachable_attempt_counter;
+                let failures = match self.unreachable_retry.get(&name) {
+                    Some(
+                        UnreachableRetry::Cooling { failures, .. }
+                        | UnreachableRetry::InFlight { failures, .. },
+                    ) => *failures,
+                    None => 0,
+                };
                 self.unreachable_retry.insert(
                     name.clone(),
                     UnreachableRetry::InFlight {
                         token,
                         started_at: now,
+                        failures,
                     },
                 );
                 (name, token)
@@ -977,10 +1008,15 @@ impl McpState {
             return;
         }
         self.init_failed.insert(name.to_string(), detail);
+        let failures = match self.unreachable_retry.get(name) {
+            Some(UnreachableRetry::InFlight { failures, .. }) => failures.saturating_add(1),
+            _ => 1,
+        };
         self.unreachable_retry.insert(
             name.to_string(),
             UnreachableRetry::Cooling {
-                retry_at: std::time::Instant::now() + Self::UNREACHABLE_RETRY_COOLDOWN,
+                retry_at: std::time::Instant::now() + Self::unreachable_backoff(failures),
+                failures,
             },
         );
     }

@@ -94,3 +94,37 @@ pub(crate) fn to_ext_response_partial<T: Serialize>(
 /// Empty response for operations that return no data.
 #[derive(Debug, Serialize)]
 pub struct Empty {}
+
+/// Map a Supercharge extension method name to the legacy name it aliases (both stay accepted).
+pub(crate) fn legacy_alias(method: &str) -> Option<String> {
+    if method == interject::STEER_METHOD || method == "supercharge/interject" {
+        return Some(interject::INTERJECT_METHOD.to_string());
+    }
+    let rest = method.strip_prefix("supercharge/queue/")?;
+    matches!(
+        rest,
+        "remove" | "reorder" | "clear" | "edit" | "interject" | "hold_edit" | "release_edit"
+    )
+    .then(|| format!("x.ai/queue/{rest}"))
+}
+
+#[cfg(test)]
+mod alias_tests {
+    use super::legacy_alias;
+
+    #[test]
+    fn supercharge_names_map_to_legacy_methods() {
+        assert_eq!(
+            legacy_alias("supercharge/session/steer").as_deref(),
+            Some("x.ai/interject")
+        );
+        for op in ["remove", "reorder", "clear", "edit", "interject"] {
+            assert_eq!(
+                legacy_alias(&format!("supercharge/queue/{op}")),
+                Some(format!("x.ai/queue/{op}"))
+            );
+        }
+        assert_eq!(legacy_alias("supercharge/queue/bogus"), None);
+        assert_eq!(legacy_alias("x.ai/interject"), None);
+    }
+}

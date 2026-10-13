@@ -10,6 +10,8 @@ pub use supercharge_prompt_queue::{
 
 // Outbound method for broadcast_queue_changed. This is an ACP routing concern, not a queue concern.
 pub const QUEUE_CHANGED_METHOD: &str = "x.ai/queue/changed";
+/// Same payload under the Supercharge name; sent alongside the legacy one.
+pub const SUPERCHARGE_QUEUE_CHANGED_METHOD: &str = "supercharge/queue/changed";
 
 #[cfg(test)]
 mod tests {

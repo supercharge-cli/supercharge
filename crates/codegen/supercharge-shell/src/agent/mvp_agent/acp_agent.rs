@@ -596,6 +596,7 @@ impl acp::Agent for MvpAgent {
                     );
                     serde_json::json!({
                     "grokShell": true,
+                    "supercharge": { "steer": true, "sessionsChanged": true, "modelsList": true },
                     // Re-deriving this precedence client-side has regressed OIDC refresh, so clients consume the agent's choice from here
                     "defaultAuthMethodId": default_auth_method_id_wire,
                     // The agent can drive in-process SDK MCP servers over the ACP reverse channel (`x.ai/mcp/sdk_call`)
@@ -1663,8 +1664,11 @@ impl acp::Agent for MvpAgent {
     )]
     async fn ext_method(
         &self,
-        args: acp::ExtRequest,
+        mut args: acp::ExtRequest,
     ) -> Result<acp::ExtResponse, acp::Error> {
+        if let Some(legacy) = crate::extensions::legacy_alias(args.method.as_ref()) {
+            args.method = legacy.into();
+        }
         let request_meta = serde_json::from_str::<serde_json::Value>(args.params.get())
             .ok()
             .and_then(|v| v.get("_meta").cloned());
@@ -2064,8 +2068,11 @@ impl acp::Agent for MvpAgent {
     }
     async fn ext_notification(
         &self,
-        args: acp::ExtNotification,
+        mut args: acp::ExtNotification,
     ) -> Result<(), acp::Error> {
+        if let Some(legacy) = crate::extensions::legacy_alias(args.method.as_ref()) {
+            args.method = legacy.into();
+        }
         tracing::info!("Received extension notification: method={}", args.method);
         if args.method.as_ref() == "x.ai/yolo_mode_changed"
             && let Ok(params) = serde_json::from_str::<

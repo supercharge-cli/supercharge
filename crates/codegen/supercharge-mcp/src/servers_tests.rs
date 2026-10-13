@@ -5449,3 +5449,46 @@ async fn completed_tool_call_sends_no_cancellation() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     assert!(cancellations(&received).is_empty());
 }
+
+#[test]
+fn unreachable_backoff_doubles_and_caps() {
+    use std::time::Duration;
+    assert_eq!(McpState::unreachable_backoff(0), Duration::from_secs(2));
+    assert_eq!(McpState::unreachable_backoff(1), Duration::from_secs(4));
+    assert_eq!(McpState::unreachable_backoff(3), Duration::from_secs(16));
+    assert_eq!(
+        McpState::unreachable_backoff(10),
+        McpState::UNREACHABLE_RETRY_COOLDOWN
+    );
+    assert_eq!(
+        McpState::unreachable_backoff(u32::MAX),
+        McpState::UNREACHABLE_RETRY_COOLDOWN
+    );
+}
+
+#[test]
+fn failed_reconnects_grow_the_backoff() {
+    let mut state = McpState::new(vec![make_stdio_server("srv", "/bin/srv")]);
+    let now = std::time::Instant::now();
+    state.record_unreachable_failure_at("srv", "down".to_string(), now);
+    assert!(state.has_unreachable_servers());
+    for expected_failures in 1..=3u32 {
+        let taken = state.take_unreachable_retry_candidates_at(
+            std::time::Instant::now() + std::time::Duration::from_secs(3600),
+        );
+        let (name, token) = taken.first().cloned().expect("candidate");
+        state.settle_unreachable_attempt_failed(&name, token, "still down".to_string());
+        match state.unreachable_retry.get("srv") {
+            Some(UnreachableRetry::Cooling { failures, .. }) => {
+                assert_eq!(*failures, expected_failures)
+            }
+            other => panic!("expected cooling, got {other:?}"),
+        }
+    }
+    let taken = state.take_unreachable_retry_candidates_at(
+        std::time::Instant::now() + std::time::Duration::from_secs(3600),
+    );
+    let (name, token) = taken.first().cloned().expect("candidate");
+    assert!(state.finish_unreachable_attempt(&name, token));
+    assert!(!state.has_unreachable_servers());
+}

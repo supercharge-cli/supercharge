@@ -503,6 +503,23 @@ pub(super) async fn run_session(
         });
     }
     let startup_tasks = StartupTasks::spawn(&session, completion_tx.clone());
+    // Reconnect dropped/unreachable MCP servers in the background (exponential backoff lives in
+    // `McpState`), so a server that comes back is picked up without `/mcp`.
+    if !session.startup_hints.is_subagent {
+        let weak = Arc::downgrade(&session);
+        tokio::task::spawn_local(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(2));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let Some(s) = weak.upgrade() else { break };
+                let pending = s.mcp_state.lock().await.has_unreachable_servers();
+                if pending {
+                    s.retry_unreachable_servers().await;
+                }
+            }
+        });
+    }
     session.resume_v2_capture().await;
     let mut model_switch_rx = session.models_manager.subscribe_model_switch();
     let _ = *model_switch_rx.borrow_and_update();

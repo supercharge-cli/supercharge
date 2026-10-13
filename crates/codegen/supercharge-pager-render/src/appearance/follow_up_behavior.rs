@@ -10,7 +10,7 @@ pub enum FollowUpBehavior {
     /// Wait for turn end (classic queue).
     #[default]
     Queue,
-    /// Interject at the next tool/model safe point (Codex "Steer").
+    /// Interject at the next tool/model safe point.
     Steer,
 }
 

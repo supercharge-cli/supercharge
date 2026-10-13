@@ -10,17 +10,21 @@ use crate::agent::MvpAgent;
 use crate::session::SessionCommand;
 
 pub const INTERJECT_METHOD: &str = "x.ai/interject";
+/// Supercharge name for the same request: `{sessionId, prompt: ContentBlock[], id?}`.
+pub const STEER_METHOD: &str = "supercharge/session/steer";
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InterjectRequest {
     pub session_id: String,
-    pub text: String,
+    /// Legacy text field; `_supercharge/session/steer` sends `prompt` blocks instead.
     #[serde(default)]
+    pub text: String,
+    #[serde(default, alias = "id")]
     pub interjection_id: Option<String>,
     /// Optional structured blocks (text and images) from image-capable clients.
     /// Absent means the legacy text-only wire shape (empty after default).
-    #[serde(default)]
+    #[serde(default, alias = "prompt")]
     pub content: Vec<acp::ContentBlock>,
 }
 
@@ -51,6 +55,20 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn steer_shape_parses_prompt_blocks_and_id() {
+        let req: InterjectRequest = serde_json::from_value(serde_json::json!({
+            "sessionId": "s1",
+            "prompt": [{"type": "text", "text": "go left"}],
+            "id": "i9",
+        }))
+        .expect("steer params must parse");
+        assert_eq!(req.interjection_id.as_deref(), Some("i9"));
+        let (text_override, images) = super::super::content::split_content(req.content);
+        assert_eq!(text_override.as_deref(), Some("go left"));
+        assert!(images.is_empty());
+    }
 
     /// Legacy wire shape (no `content`) parses byte-identically: text-only, zero images, no text override.
     #[test]
