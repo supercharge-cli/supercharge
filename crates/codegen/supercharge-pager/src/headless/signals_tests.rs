@@ -30,7 +30,6 @@ fn deferred_signal_wakes_and_releases_original_exit_code() {
     assert_eq!(notified.as_mut().poll(&mut cx), Poll::Pending);
     assert_eq!(route_signal(&signals.handoff, 143), SignalRoute::Pending);
     assert_eq!(notified.as_mut().poll(&mut cx), Poll::Ready(()));
-    drop(notified);
     assert_eq!(deferred.release(), Some(143));
 }
 
@@ -93,6 +92,7 @@ fn subprocess_signal_helper() {
 fn subprocess_sigterm_exits_without_tui_output() {
     use std::io::BufRead;
     use std::process::{Command, Stdio};
+    #[allow(clippy::disallowed_methods)] // test helper child is waited on below
     let mut child = Command::new(std::env::current_exe().unwrap())
         .arg("--exact")
         .arg("headless::signals_tests::subprocess_signal_helper")

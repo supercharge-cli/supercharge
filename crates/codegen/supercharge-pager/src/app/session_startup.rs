@@ -1876,10 +1876,7 @@ mod tests {
     }
     #[test]
     fn remote_restore_follows_compiled_restore_stack() {
-        assert_eq!(
-            MaterializeCtx::from_pager_args(&parse(&["Supercharge AI"])).allow_remote_restore,
-            false
-        );
+        assert!(!MaterializeCtx::from_pager_args(&parse(&["Supercharge AI"])).allow_remote_restore);
     }
     #[test]
     fn from_pager_args_does_not_probe_tty_for_progress() {

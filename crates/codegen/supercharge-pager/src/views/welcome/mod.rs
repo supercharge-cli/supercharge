@@ -3459,7 +3459,8 @@ mod tests {
 
     #[test]
     fn ordinary_terminal_home_uses_ascii_when_rows_fit() {
-        for (width, height) in [(167, 41)] {
+        {
+            let (width, height) = (167, 41);
             let layout = WelcomeLayout::compute(WelcomeLayoutInput {
                 content_area: Rect::new(0, 0, width, height),
                 menu_height: 4,
