@@ -271,6 +271,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("token");
         std::fs::write(&path, " first \n").unwrap();
+        #[allow(clippy::disallowed_methods)] // test-only plain client
         let client = McpHttpClient::new(reqwest::Client::new(), "test", WarnBudget::default())
             .with_bearer_token_file(Some(crate::bearer_token_file::BearerTokenFile::new(
                 path.clone(),
