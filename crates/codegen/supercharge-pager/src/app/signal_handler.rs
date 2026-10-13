@@ -251,7 +251,7 @@ fn flush_telemetry_and_exit(exit_code: i32) -> ! {
     // Flush the --debug firehose on TUI signal exit (this path bypasses main's flush).
     supercharge_telemetry::debug_log::flush();
     if let Some(path) = supercharge_telemetry::span_profile::finalize() {
-        eprintln!("grok: span profile written to {}", path.display());
+        eprintln!("supercharge: span profile written to {}", path.display());
     }
     std::process::exit(exit_code);
 }
