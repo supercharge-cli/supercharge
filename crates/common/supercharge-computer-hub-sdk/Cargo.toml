@@ -3,7 +3,7 @@ license = "Apache-2.0"
 name = "supercharge-computer-hub-sdk"
 version = "0.1.0"
 edition.workspace = true
-description = "SDK for the xAI Computer Hub: connection pool, transparent reconnect, tool harness, and tool-server runtime."
+description = "SDK for the Supercharge Computer Hub: connection pool, transparent reconnect, tool harness, and tool-server runtime."
 
 [features]
 metrics = ["dep:prometheus", "dep:prometheus-parse"]
@@ -46,6 +46,7 @@ supercharge-tool-runtime = { workspace = true }
 supercharge-tool-types = { workspace = true }
 supercharge-computer-hub-core = { workspace = true }
 supercharge-tracing = { workspace = true }
+supercharge-extra-ca = { workspace = true }
 
 # Integration tests that need heavier backend deps live in a separate sibling crate to keep this dev-dep set minimal.
 [dev-dependencies]

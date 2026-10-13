@@ -117,20 +117,21 @@ fn stdio_path_override_matches_path_case_insensitively() {
 }
 
 #[test]
-fn is_figma_mcp_matches_name_and_host() {
+fn design_tool_mcp_detection_matches_name_and_host() {
+    let managed = |rest: &str| format!("{LEGACY_MANAGED_MCP_PREFIX}{rest}");
     assert!(is_figma_mcp("figma", "https://example.com/mcp"));
     assert!(is_figma_mcp("Figma", "https://example.com/mcp"));
-    assert!(is_figma_mcp("grok_com_figma", "https://example.com/mcp"));
+    assert!(is_figma_mcp(&managed("figma"), "https://example.com/mcp"));
     assert!(is_figma_mcp(
-        "SUPERCHARGE_COM_FIGMA",
+        &managed("FIGMA").to_ascii_uppercase(),
         "https://example.com/mcp"
     ));
-    assert!(is_figma_mcp("grok_com_FIGMA", "https://example.com/mcp"));
+    assert!(is_figma_mcp(&managed("FIGMA"), "https://example.com/mcp"));
     assert!(is_figma_mcp("other", "https://mcp.figma.com/mcp"));
     assert!(is_figma_mcp("other", "https://figma.com/mcp"));
     assert!(!is_figma_mcp("linear", "https://mcp.linear.app/mcp"));
     assert!(!is_figma_mcp("figma_extra", "https://example.com/mcp"));
-    assert!(!is_figma_mcp("grok_com_linear", "https://example.com/mcp"));
+    assert!(!is_figma_mcp(&managed("linear"), "https://example.com/mcp"));
     assert!(!is_figma_mcp("linear", "not-a-url"));
     assert!(!is_figma_mcp("linear", "https://notfigma.com/mcp"));
     assert!(!is_figma_mcp("linear", "https://figma.com.evil/mcp"));

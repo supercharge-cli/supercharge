@@ -393,6 +393,7 @@ fn effective_max_age_precedence() {
 }
 
 #[test]
+#[ignore = "grove NFS backend is not compiled into this build (see nfs_off.rs)"]
 fn run_pass_prunes_orphan_grove_pins_after_grace() {
     supercharge_test_utils::require_git!();
     use supercharge_test_utils::git::{git_commit_all, init_git_repo};

@@ -4554,16 +4554,18 @@ fn plan_stdio_spawn(
     (OsString::from(command), args.to_vec())
 }
 
+/// Prefix of legacy direct managed MCP server names; newer clients use gateway
+/// tools (`managed_mcp_gateway_tools_enabled`). Kept as-is for wire compatibility.
+const LEGACY_MANAGED_MCP_PREFIX: &str = "grok_com_";
+
 fn is_figma_mcp(server_name: &str, url: &str) -> bool {
     if server_name.eq_ignore_ascii_case("figma") {
         return true;
     }
-    // Legacy direct managed name (`grok_com_figma`); newer clients use gateway tools (`managed_mcp_gateway_tools_enabled`).
-    const MANAGED_PREFIX: &str = "grok_com_";
     if let (Some(prefix), Some(rest)) = (
-        server_name.get(..MANAGED_PREFIX.len()),
-        server_name.get(MANAGED_PREFIX.len()..),
-    ) && prefix.eq_ignore_ascii_case(MANAGED_PREFIX)
+        server_name.get(..LEGACY_MANAGED_MCP_PREFIX.len()),
+        server_name.get(LEGACY_MANAGED_MCP_PREFIX.len()..),
+    ) && prefix.eq_ignore_ascii_case(LEGACY_MANAGED_MCP_PREFIX)
         && rest.eq_ignore_ascii_case("figma")
     {
         return true;

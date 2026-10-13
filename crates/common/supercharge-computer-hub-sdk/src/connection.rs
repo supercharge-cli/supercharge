@@ -1284,6 +1284,9 @@ async fn open_socket(
     alpha_test_key: Option<&str>,
     allow_insecure_ws: bool,
 ) -> Result<WsStream, ClientError> {
+    // Both rustls backends are linked into the workspace; pin the process
+    // provider explicitly so the TLS handshake never has to guess.
+    supercharge_extra_ca::ensure_default_crypto_provider();
     let is_plaintext_remote = url.scheme() != "wss" && !host_is_loopback(url);
     if is_plaintext_remote && !allow_insecure_ws {
         return Err(ClientError::InsecureScheme { url: url.clone() });

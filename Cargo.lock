@@ -10727,6 +10727,7 @@ dependencies = [
  "serde",
  "serde_json",
  "supercharge-computer-hub-core",
+ "supercharge-extra-ca",
  "supercharge-tool-protocol",
  "supercharge-tool-runtime",
  "supercharge-tool-types",
