@@ -138,7 +138,7 @@ pub(crate) async fn parse_prompt_with_skills(
                 resource_links.push(link.clone());
                 if allows_file_expansion && link.meta.is_none() {
                     let path = extract_path_from_uri(link);
-                    message_parts.push(format!("@{path}"));
+                    message_parts.push(mention_for_path(&path));
                 }
             }
             acp::ContentBlock::Resource(resource) => embedded_resources.push(resource.clone()),
@@ -278,6 +278,20 @@ fn collect_file_references(message: &str) -> Vec<String> {
         let Some(rest) = message.get(start..) else {
             break;
         };
+        // `@"path with spaces"` is one reference; otherwise the token ends at whitespace.
+        if let Some(quoted) = rest.strip_prefix('"')
+            && let Some(end) = quoted.find('"')
+        {
+            let path = quoted.get(..end).unwrap_or("");
+            if !path.is_empty() {
+                paths.push(path.to_string());
+            }
+            i = start + end + 2;
+            while i < message.len() && !message.is_char_boundary(i) {
+                i += 1;
+            }
+            continue;
+        }
         let token = rest.split_whitespace().next().unwrap_or("");
         if !token.is_empty() {
             paths.push(token.to_string());
@@ -320,10 +334,30 @@ fn parse_editor_meta(link: &acp::ResourceLink) -> Option<EditorMeta> {
     Some(editor_meta)
 }
 fn extract_path_from_uri(link: &acp::ResourceLink) -> String {
-    if let Some(path) = link.uri.strip_prefix("file://") {
-        path.to_string()
+    match link.uri.strip_prefix("file://") {
+        Some(path) => decode_file_uri_path(path),
+        None => link.name.clone(),
+    }
+}
+/// Percent-decode the path part of a `file://` URI; `/C:/x` becomes `C:/x` (Windows drive).
+fn decode_file_uri_path(path: &str) -> String {
+    let path = path.strip_prefix("localhost").unwrap_or(path);
+    let decoded = urlencoding::decode(path)
+        .map(|p| p.into_owned())
+        .unwrap_or_else(|_| path.to_string());
+    if let [b'/', drive, b':', ..] = decoded.as_bytes()
+        && drive.is_ascii_alphabetic()
+    {
+        return decoded.get(1..).unwrap_or_default().to_string();
+    }
+    decoded
+}
+/// `@path` mention text for a link; paths with whitespace use the quoted `@"…"` form.
+fn mention_for_path(path: &str) -> String {
+    if path.chars().any(char::is_whitespace) {
+        format!("@\"{path}\"")
     } else {
-        link.name.clone()
+        format!("@{path}")
     }
 }
 fn render_regular_links(links: &[&acp::ResourceLink]) -> String {
@@ -705,5 +739,31 @@ mod tests {
             }
         };
         check(false);
+    }
+}
+
+#[cfg(test)]
+mod file_uri_tests {
+    use super::*;
+
+    #[test]
+    fn file_uri_paths_are_percent_decoded() {
+        assert_eq!(
+            decode_file_uri_path("/home/u/My%20Docs/a%2Bb.rs"),
+            "/home/u/My Docs/a+b.rs"
+        );
+        assert_eq!(decode_file_uri_path("/C:/work/x.rs"), "C:/work/x.rs");
+        assert_eq!(decode_file_uri_path("/plain/path.rs"), "/plain/path.rs");
+    }
+
+    #[test]
+    fn spaced_paths_round_trip_through_quoted_mentions() {
+        let link = acp::ResourceLink::new("a b.rs", "file:///tmp/dir%20x/a%20b.rs");
+        let mention = mention_for_path(&extract_path_from_uri(&link));
+        assert_eq!(mention, "@\"/tmp/dir x/a b.rs\"");
+        assert_eq!(
+            collect_file_references(&format!("look at {mention} and @src/main.rs")),
+            vec!["/tmp/dir x/a b.rs".to_string(), "src/main.rs".to_string()]
+        );
     }
 }

@@ -368,6 +368,46 @@ impl MvpAgent {
             self.emit_roster_changed(vec![entry], Vec::new());
         }
     }
+    /// Start the process-wide `_supercharge/sessions/changed` feed (once). Sessions written by
+    /// this or any other CLI process show up through their `summary.json` mtimes.
+    pub(crate) fn spawn_sessions_watch(&self) {
+        use crate::agent::sessions_watch;
+        static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        let gateway = self.gateway.clone();
+        tokio::task::spawn_local(async move {
+            let root = sessions_watch::default_sessions_root();
+            let scan_root = root.clone();
+            let mut seen = tokio::task::spawn_blocking(move || sessions_watch::scan(&scan_root))
+                .await
+                .unwrap_or_default();
+            let mut tick = tokio::time::interval(sessions_watch::POLL_INTERVAL);
+            loop {
+                tick.tick().await;
+                let scan_root = root.clone();
+                let Ok(now) =
+                    tokio::task::spawn_blocking(move || sessions_watch::scan(&scan_root)).await
+                else {
+                    continue;
+                };
+                let changes = sessions_watch::diff(&seen, &now);
+                seen = now;
+                if changes.is_empty() {
+                    continue;
+                }
+                if let Ok(params) =
+                    serde_json::value::to_raw_value(&serde_json::json!({ "changes": changes }))
+                {
+                    gateway.forward_fire_and_forget(acp::ExtNotification::new(
+                        sessions_watch::SUPERCHARGE_SESSIONS_CHANGED_METHOD,
+                        params.into(),
+                    ));
+                }
+            }
+        });
+    }
     /// Roster-wide notification (no `sessionId`): the leader broadcasts it to every client instead of routing by session.
     pub(super) fn emit_roster_changed(
         &self,

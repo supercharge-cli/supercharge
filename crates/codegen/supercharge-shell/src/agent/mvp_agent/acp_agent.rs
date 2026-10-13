@@ -533,6 +533,7 @@ impl acp::Agent for MvpAgent {
         }
         self.spawn_announcements_refresh();
         self.spawn_heap_profile_monitor();
+        self.spawn_sessions_watch();
         let init_model_state = if no_credentials_yet {
             // Do not expose bundled Supercharge models before `/setup` adds a
             // provider/model configuration.
@@ -2041,6 +2042,12 @@ impl acp::Agent for MvpAgent {
             s if s.starts_with("x.ai/rewind") => {
                 crate::extensions::rewind::handle(self, &args).await
             }
+            "supercharge/models/list" => crate::extensions::to_raw_response(
+                &crate::agent::remote_config::models_list_response(
+                    &self.models_manager.models(),
+                    &self.models_manager.current_model_id(),
+                ),
+            ),
             other => {
                 Err(
                     acp::Error::method_not_found()

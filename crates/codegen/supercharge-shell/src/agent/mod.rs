@@ -26,6 +26,7 @@ pub mod server;
 pub mod session_config;
 pub(crate) mod session_metrics;
 pub mod session_registry_client;
+pub mod sessions_watch;
 pub(crate) mod subagent;
 #[cfg(feature = "test-support")]
 pub mod testkit;

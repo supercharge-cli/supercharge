@@ -99,21 +99,78 @@ pub(crate) struct WsQueryParams {
     pub server_key: Option<String>,
 }
 
-/// Validate the bearer token from request headers or query parameters.
-fn validate_auth(headers: &HeaderMap, query: &WsQueryParams, expected_secret: &str) -> bool {
-    if let Some(token) = headers
+/// Outcome of checking a WebSocket upgrade's server key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KeyCheck {
+    Ok,
+    Missing,
+    Invalid,
+}
+
+impl KeyCheck {
+    /// Wire code sent in the 401 JSON body.
+    pub(crate) fn code(self) -> Option<&'static str> {
+        match self {
+            KeyCheck::Ok => None,
+            KeyCheck::Missing => Some("server_key_missing"),
+            KeyCheck::Invalid => Some("server_key_invalid"),
+        }
+    }
+}
+
+/// Compare without short-circuiting on the first differing byte.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Check the bearer token from request headers, else the `server-key` query parameter.
+pub(crate) fn check_auth(
+    headers: &HeaderMap,
+    query: &WsQueryParams,
+    expected_secret: &str,
+) -> KeyCheck {
+    let presented = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-    {
-        return token == expected_secret;
+        .or(query.server_key.as_deref());
+    match presented {
+        None => KeyCheck::Missing,
+        Some("") => KeyCheck::Missing,
+        Some(token) if constant_time_eq(token.as_bytes(), expected_secret.as_bytes()) => {
+            KeyCheck::Ok
+        }
+        Some(_) => KeyCheck::Invalid,
     }
+}
 
-    if let Some(ref key) = query.server_key {
-        return key == expected_secret;
-    }
-
-    false
+/// 401 response with a JSON body `{ "error": { "code", "message" } }` clients can branch on.
+pub(crate) fn unauthorized_response(check: KeyCheck) -> Response {
+    let code = check.code().unwrap_or("server_key_invalid");
+    let message = match check {
+        KeyCheck::Missing => {
+            "No server key was sent. Pass ?server-key=<key> or an Authorization: Bearer header."
+        }
+        _ => {
+            "The server key does not match. Read the current key from the agent-serve.key file in the Supercharge home directory."
+        }
+    };
+    let body = serde_json::json!({ "error": { "code": code, "message": message } });
+    (
+        StatusCode::UNAUTHORIZED,
+        [
+            (axum::http::header::CONTENT_TYPE, "application/json"),
+            (
+                axum::http::header::WWW_AUTHENTICATE,
+                "Bearer realm=\"supercharge-agent\"",
+            ),
+        ],
+        body.to_string(),
+    )
+        .into_response()
 }
 
 /// WebSocket upgrade handler with authentication.
@@ -124,13 +181,10 @@ async fn ws_handler(
     headers: HeaderMap,
     Query(query): Query<WsQueryParams>,
 ) -> Response {
-    if !validate_auth(&headers, &query, &state.secret) {
-        warn!("Unauthorized connection attempt from {}", addr);
-        return (
-            StatusCode::UNAUTHORIZED,
-            "Invalid or missing authorization token",
-        )
-            .into_response();
+    let check = check_auth(&headers, &query, &state.secret);
+    if check != KeyCheck::Ok {
+        warn!(code = ?check.code(), "Unauthorized connection attempt from {}", addr);
+        return unauthorized_response(check);
     }
 
     info!("Authenticated WebSocket connection from {}", addr);

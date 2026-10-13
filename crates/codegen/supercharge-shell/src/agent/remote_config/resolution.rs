@@ -484,6 +484,28 @@ pub(crate) fn model_not_configured_error(
     )
 }
 
+/// `_supercharge/models/list` response: configured, selectable models from the provider catalog.
+pub(crate) fn models_list_response(
+    catalog: &IndexMap<String, ModelEntry>,
+    current: &acp::ModelId,
+) -> serde_json::Value {
+    let models: Vec<serde_json::Value> = catalog
+        .iter()
+        .filter(|(_, e)| e.info.user_selectable && !e.info.hidden && e.has_own_credentials())
+        .map(|(id, e)| {
+            serde_json::json!({
+                "id": id,
+                "displayName": e.info.name.clone().unwrap_or_else(|| id.clone()),
+                "provider": e.info.base_url,
+                "contextWindow": e.info.context_window.get(),
+                "supportsReasoningEffort": e.info.supports_reasoning_effort,
+                "pricing": serde_json::Value::Null,
+            })
+        })
+        .collect();
+    serde_json::json!({ "currentModelId": current.0.as_ref(), "models": models })
+}
+
 #[cfg(test)]
 mod model_not_configured_tests {
     use super::*;
@@ -529,6 +551,21 @@ mod model_not_configured_tests {
         let data = err.data.expect("data");
         assert_eq!(data["requested"], "other");
         assert_eq!(data["configured"], serde_json::json!(["m-1"]));
+    }
+
+    #[test]
+    fn models_list_reports_configured_models() {
+        let v = models_list_response(&catalog("k"), &acp::ModelId::new("m-1"));
+        assert_eq!(v["currentModelId"], "m-1");
+        assert_eq!(v["models"][0]["id"], "m-1");
+        assert_eq!(v["models"][0]["displayName"], "Model One");
+        assert_eq!(v["models"][0]["provider"], "https://provider.example/v1");
+        assert!(
+            models_list_response(&catalog(""), &acp::ModelId::new("m-1"))["models"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

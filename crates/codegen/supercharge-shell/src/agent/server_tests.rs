@@ -140,3 +140,57 @@ async fn matching_fail_boot_resets_slot() {
     let _ = fail_boot(&slot, 3).await;
     assert!(matches!(*slot.lock().await, AgentSlot::Down));
 }
+
+mod key_check {
+    use super::super::{KeyCheck, WsQueryParams, check_auth, unauthorized_response};
+    use axum::http::{HeaderMap, HeaderValue, StatusCode};
+
+    fn query(key: Option<&str>) -> WsQueryParams {
+        WsQueryParams {
+            server_key: key.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn missing_wrong_and_right_keys_are_distinguished() {
+        let h = HeaderMap::new();
+        assert_eq!(check_auth(&h, &query(None), "s3cret"), KeyCheck::Missing);
+        assert_eq!(
+            check_auth(&h, &query(Some("")), "s3cret"),
+            KeyCheck::Missing
+        );
+        assert_eq!(
+            check_auth(&h, &query(Some("nope")), "s3cret"),
+            KeyCheck::Invalid
+        );
+        assert_eq!(
+            check_auth(&h, &query(Some("s3cret")), "s3cret"),
+            KeyCheck::Ok
+        );
+    }
+
+    #[test]
+    fn bearer_header_takes_precedence_over_query() {
+        let mut h = HeaderMap::new();
+        h.insert("authorization", HeaderValue::from_static("Bearer s3cret"));
+        assert_eq!(
+            check_auth(&h, &query(Some("wrong")), "s3cret"),
+            KeyCheck::Ok
+        );
+    }
+
+    #[tokio::test]
+    async fn rejection_is_401_with_json_code() {
+        for (check, code) in [
+            (KeyCheck::Missing, "server_key_missing"),
+            (KeyCheck::Invalid, "server_key_invalid"),
+        ] {
+            let resp = unauthorized_response(check);
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(resp.headers()["content-type"], "application/json");
+            let bytes = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(v["error"]["code"], code);
+        }
+    }
+}
