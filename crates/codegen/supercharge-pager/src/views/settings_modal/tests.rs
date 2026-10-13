@@ -2256,9 +2256,9 @@ fn int_editing_value_click_on_value_text_is_noop() {
 #[test]
 fn picking_enum_esc_dispatches_preview_revert_for_each_key() {
     let cases: &[(&str, &str)] = &[
-        ("theme", "voltage-dark"),
-        ("auto_dark_theme", "voltage-dark"),
-        ("auto_light_theme", "voltage-light"),
+        ("theme", "voltage_dark"),
+        ("auto_dark_theme", "voltage_dark"),
+        ("auto_light_theme", "voltage_light"),
     ];
     for &(key, original) in cases {
         let mut s = make_state();
@@ -2294,12 +2294,12 @@ fn picking_enum_esc_dispatches_preview_revert_for_each_key() {
 #[test]
 fn picking_enum_esc_returns_to_browse() {
     let mut s = make_state();
-    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage-dark"), true);
+    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage_dark"), true);
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     match outcome {
         SettingsKeyOutcome::Action(Action::PreviewTheme(name)) => {
             assert_eq!(
-                name, "voltage-dark",
+                name, "voltage_dark",
                 "Esc revert must dispatch the original canonical"
             );
         }
@@ -2568,7 +2568,7 @@ fn browse_path_enter_commit_returns_to_browse() {
 #[test]
 fn deep_link_theme_commit_closes_with_set() {
     let mut s = make_state();
-    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage-dark"), true);
+    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage_dark"), true);
     s.close_on_picker_exit = true;
 
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -2585,13 +2585,13 @@ fn deep_link_theme_commit_closes_with_set() {
 #[test]
 fn deep_link_picker_esc_reverts_preview_and_closes() {
     let mut s = make_state();
-    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage-dark"), true);
+    s.transition_to_picking_enum("theme", 0, SettingValue::Enum("voltage_dark"), true);
     s.close_on_picker_exit = true;
 
     let outcome = handle_settings_key(&mut s, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     match outcome {
         SettingsKeyOutcome::ActionThenClose(Action::PreviewTheme(name)) => {
-            assert_eq!(name, "voltage-dark");
+            assert_eq!(name, "voltage_dark");
         }
         other => panic!("expected ActionThenClose(PreviewTheme), got {other:?}"),
     }
@@ -5804,7 +5804,7 @@ fn docs_footer_tip_is_centered() {
         "width=40 must render SHORT path (contains `change a setting`): {row_short:?}",
     );
     assert!(
-        !row_short.contains("voltage-light"),
+        !row_short.contains("voltage_light"),
         "width=40 must NOT render LONG path (no `voltage-light`): {row_short:?}",
     );
     assert!(
@@ -6100,7 +6100,7 @@ fn click_settings_breadcrumb_collapses_picker_to_browse() {
     match outcome {
         SettingsKeyOutcome::Action(Action::PreviewTheme(orig)) => {
             assert_eq!(
-                orig, "voltage-dark",
+                orig, "voltage_dark",
                 "breadcrumb-click revert must carry the original canonical",
             );
         }
@@ -6148,7 +6148,7 @@ fn click_settings_breadcrumb_ignores_close_on_picker_exit() {
     );
     match outcome {
         SettingsKeyOutcome::Action(Action::PreviewTheme(orig)) => {
-            assert_eq!(orig, "voltage-dark");
+            assert_eq!(orig, "voltage_dark");
         }
         other => panic!("expected preview revert Action, got {other:?}"),
     }
@@ -6248,7 +6248,7 @@ fn d_key_in_picking_enum_dispatches_open_reset_confirm() {
             // Default theme is `voltage_dark`
             // Entering the picker captures `original_value = current value = voltage_dark`, so the revert dispatches with that canonical
             assert_eq!(
-                orig, "voltage-dark",
+                orig, "voltage_dark",
                 "PreviewTheme revert must carry the original canonical",
             );
         }

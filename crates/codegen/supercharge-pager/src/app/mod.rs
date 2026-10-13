@@ -2515,9 +2515,9 @@ mod tests {
         assert!(!args.no_alt_screen);
     }
     #[test]
-    fn cli_command_name_is_grok() {
+    fn cli_command_name_is_supercharge() {
         use clap::CommandFactory;
-        assert_eq!(PagerArgs::command().get_name(), "Supercharge AI");
+        assert_eq!(PagerArgs::command().get_name(), "supercharge");
     }
     #[test]
     fn cli_help_output_header() {
@@ -2527,9 +2527,9 @@ mod tests {
         assert_eq!(
             first_5,
             vec![
-                "Supercharge AI TUI",
+                "Supercharge AI — interactive coding and chat TUI",
                 "",
-                "Usage: Supercharge AI [OPTIONS] [PROMPT] [COMMAND]",
+                "Usage: supercharge [OPTIONS] [PROMPT] [COMMAND]",
                 "",
                 "Arguments:",
             ]

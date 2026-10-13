@@ -3131,7 +3131,7 @@ fn set_theme_emits_persist_setting_with_correct_payload() {
         let mut app = test_app_with_agent();
         assert_eq!(app.current_ui.theme, None);
         crate::theme::cache::set(crate::theme::ThemeKind::VoltageDark);
-        let effects = dispatch(Action::SetTheme("voltage-light".into()), &mut app);
+        let effects = dispatch(Action::SetTheme("voltage_light".into()), &mut app);
         assert_eq!(effects.len(), 1);
         match effects.first() {
             Some(Effect::PersistSetting {
@@ -3140,12 +3140,12 @@ fn set_theme_emits_persist_setting_with_correct_payload() {
                 rollback_value,
             }) => {
                 assert_eq!(*key, "theme");
-                assert_eq!(*value, SettingValue::Enum("voltage-light"));
+                assert_eq!(*value, SettingValue::Enum("voltage_light"));
                 assert_eq!(*rollback_value, SettingValue::Enum("navy-cyan"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
-        assert_eq!(app.current_ui.theme.as_deref(), Some("voltage-light"));
+        assert_eq!(app.current_ui.theme.as_deref(), Some("voltage_light"));
         assert!(
             !crate::theme::cache::is_auto_mode(),
             "concrete theme commit must disable AUTO_MODE",
@@ -3160,7 +3160,7 @@ fn set_auto_dark_theme_emits_persist_setting_with_correct_payload() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let effects = dispatch(Action::SetAutoDarkTheme("voltage-light".into()), &mut app);
+        let effects = dispatch(Action::SetAutoDarkTheme("voltage_light".into()), &mut app);
         assert_eq!(effects.len(), 1);
         match effects.first() {
             Some(Effect::PersistSetting {
@@ -3169,14 +3169,14 @@ fn set_auto_dark_theme_emits_persist_setting_with_correct_payload() {
                 rollback_value,
             }) => {
                 assert_eq!(*key, "auto_dark_theme");
-                assert_eq!(*value, SettingValue::Enum("voltage-light"));
+                assert_eq!(*value, SettingValue::Enum("voltage_light"));
                 assert_eq!(*rollback_value, SettingValue::Enum("navy-cyan"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
         assert_eq!(
             app.current_ui.auto_dark_theme.as_deref(),
-            Some("voltage-light")
+            Some("voltage_light")
         );
     });
 }
@@ -3185,7 +3185,7 @@ fn set_auto_light_theme_emits_persist_setting_with_correct_payload() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let effects = dispatch(Action::SetAutoLightTheme("voltage-dark".into()), &mut app);
+        let effects = dispatch(Action::SetAutoLightTheme("voltage_dark".into()), &mut app);
         assert_eq!(effects.len(), 1);
         match effects.first() {
             Some(Effect::PersistSetting {
@@ -3194,14 +3194,14 @@ fn set_auto_light_theme_emits_persist_setting_with_correct_payload() {
                 rollback_value,
             }) => {
                 assert_eq!(*key, "auto_light_theme");
-                assert_eq!(*value, SettingValue::Enum("voltage-dark"));
-                assert_eq!(*rollback_value, SettingValue::Enum("voltage-light"));
+                assert_eq!(*value, SettingValue::Enum("voltage_dark"));
+                assert_eq!(*rollback_value, SettingValue::Enum("voltage_light"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("voltage-dark"),
+            Some("voltage_dark"),
         );
     });
 }
@@ -3260,12 +3260,12 @@ fn set_auto_dark_theme_does_not_apply_when_theme_is_not_auto() {
             crate::theme::system_appearance::SystemAppearance::Dark,
         ));
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetTheme("voltage-dark".into()), &mut app);
+        let _ = dispatch(Action::SetTheme("voltage_dark".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageDark,
         );
-        let _ = dispatch(Action::SetAutoDarkTheme("voltage-light".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("voltage_light".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageDark,
@@ -3273,7 +3273,7 @@ fn set_auto_dark_theme_does_not_apply_when_theme_is_not_auto() {
         );
         assert_eq!(
             app.current_ui.auto_dark_theme.as_deref(),
-            Some("voltage-light")
+            Some("voltage_light")
         );
     });
 }
@@ -3293,7 +3293,7 @@ fn set_auto_dark_theme_applies_when_theme_is_auto_and_system_is_dark() {
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageDark,
         );
-        let _ = dispatch(Action::SetAutoDarkTheme("voltage-light".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("voltage_light".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageLight,
@@ -3316,7 +3316,7 @@ fn set_auto_dark_theme_does_not_apply_when_system_is_light() {
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageLight,
         );
-        let _ = dispatch(Action::SetAutoDarkTheme("voltage-dark".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("voltage_dark".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageLight,
@@ -3324,7 +3324,7 @@ fn set_auto_dark_theme_does_not_apply_when_system_is_light() {
         );
         assert_eq!(
             app.current_ui.auto_dark_theme.as_deref(),
-            Some("voltage-dark"),
+            Some("voltage_dark"),
         );
     });
 }
@@ -3342,7 +3342,7 @@ fn set_auto_light_theme_applies_when_theme_is_auto_and_system_is_light() {
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageLight,
         );
-        let _ = dispatch(Action::SetAutoLightTheme("voltage-dark".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("voltage_dark".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageDark,
@@ -3415,7 +3415,7 @@ fn set_auto_light_theme_rejects_auto_value() {
 fn set_theme_toast_format_uses_display_name() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetTheme("voltage-light".into()), &mut app);
+        let _ = dispatch(Action::SetTheme("voltage_light".into()), &mut app);
         let toast = read_toast(&app);
         assert!(
             toast.contains("Theme"),
@@ -3432,7 +3432,7 @@ fn set_theme_toast_format_uses_display_name() {
 fn set_auto_dark_theme_toast_format_uses_display_name() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoDarkTheme("voltage-light".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("voltage_light".into()), &mut app);
         let toast = read_toast(&app);
         assert!(toast.contains("Auto dark theme"));
         assert!(toast.contains("Voltage Light"));
@@ -3443,7 +3443,7 @@ fn set_auto_dark_theme_toast_format_uses_display_name() {
 fn set_auto_light_theme_toast_format_uses_display_name() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoLightTheme("voltage-dark".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("voltage_dark".into()), &mut app);
         let toast = read_toast(&app);
         assert!(toast.contains("Auto light theme"));
         assert!(toast.contains("Voltage Dark"));
@@ -3457,8 +3457,8 @@ fn rollback_theme_reverts_current_ui_and_cache() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetTheme("voltage-light".into()), &mut app);
-        assert_eq!(app.current_ui.theme.as_deref(), Some("voltage-light"));
+        let _ = dispatch(Action::SetTheme("voltage_light".into()), &mut app);
+        assert_eq!(app.current_ui.theme.as_deref(), Some("voltage_light"));
         assert_eq!(
             crate::theme::cache::current_kind(),
             crate::theme::ThemeKind::VoltageLight,
@@ -3466,14 +3466,14 @@ fn rollback_theme_reverts_current_ui_and_cache() {
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "theme",
-                rollback_value: SettingValue::Enum("voltage-dark"),
+                rollback_value: SettingValue::Enum("voltage_dark"),
                 error: "disk full".into(),
             }),
             &mut app,
         );
         assert_eq!(
             app.current_ui.theme.as_deref(),
-            Some("voltage-dark"),
+            Some("voltage_dark"),
             "rollback must update app.current_ui.theme",
         );
         assert_eq!(
@@ -3488,22 +3488,22 @@ fn rollback_auto_dark_theme_reverts_current_ui() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoDarkTheme("voltage-light".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("voltage_light".into()), &mut app);
         assert_eq!(
             app.current_ui.auto_dark_theme.as_deref(),
-            Some("voltage-light")
+            Some("voltage_light")
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "auto_dark_theme",
-                rollback_value: SettingValue::Enum("voltage-dark"),
+                rollback_value: SettingValue::Enum("voltage_dark"),
                 error: "disk full".into(),
             }),
             &mut app,
         );
         assert_eq!(
             app.current_ui.auto_dark_theme.as_deref(),
-            Some("voltage-dark"),
+            Some("voltage_dark"),
         );
     });
 }
@@ -3512,22 +3512,22 @@ fn rollback_auto_light_theme_reverts_current_ui() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoLightTheme("voltage-dark".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("voltage_dark".into()), &mut app);
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("voltage-dark"),
+            Some("voltage_dark"),
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "auto_light_theme",
-                rollback_value: SettingValue::Enum("voltage-light"),
+                rollback_value: SettingValue::Enum("voltage_light"),
                 error: "disk full".into(),
             }),
             &mut app,
         );
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("voltage-light")
+            Some("voltage_light")
         );
     });
 }
@@ -3539,10 +3539,10 @@ fn rollback_auto_dark_theme_with_auto_value_clears_to_none() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoDarkTheme("voltage-light".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("voltage_light".into()), &mut app);
         assert_eq!(
             app.current_ui.auto_dark_theme.as_deref(),
-            Some("voltage-light")
+            Some("voltage_light")
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
@@ -3564,10 +3564,10 @@ fn rollback_auto_light_theme_with_auto_value_clears_to_none() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoLightTheme("voltage-dark".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("voltage_dark".into()), &mut app);
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("voltage-dark"),
+            Some("voltage_dark"),
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
