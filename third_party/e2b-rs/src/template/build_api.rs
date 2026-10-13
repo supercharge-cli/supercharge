@@ -236,6 +236,7 @@ pub(crate) async fn upload_build_context(
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)] // tests talk to a local mock server
 mod tests {
     use super::*;
     use crate::api::client::ApiClient;
