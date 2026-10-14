@@ -73,6 +73,7 @@ pub(crate) struct SummaryPatch {
     pub trace_turn: Option<TraceTurnPatch>,
     pub attempt_id: Option<String>,
     pub model: Option<ModelPatch>,
+    pub permission_mode: Option<String>,
     pub git_head: Option<GitHeadPatch>,
     pub collection_id: Option<String>,
     /// Set the session title unconditionally (last-writer-wins).
@@ -155,6 +156,9 @@ impl Summary {
             if let Some(reasoning_effort) = &model.reasoning_effort {
                 self.reasoning_effort = *reasoning_effort;
             }
+        }
+        if let Some(permission_mode) = &patch.permission_mode {
+            self.permission_mode = Some(permission_mode.clone());
         }
         if let Some(git_head) = &patch.git_head {
             self.head_commit = git_head.commit.clone();

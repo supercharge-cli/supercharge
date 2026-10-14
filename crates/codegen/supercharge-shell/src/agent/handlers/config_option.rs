@@ -5,6 +5,29 @@ use crate::agent::mvp_agent::MvpAgent;
 use crate::agent::session_config::{
     CONFIG_ID_MODEL, CONFIG_ID_PERMISSION_MODE, CONFIG_ID_REASONING_EFFORT,
 };
+use crate::session::persistence::PersistenceMsg;
+
+async fn persist_permission_mode(
+    agent: &MvpAgent,
+    session_id: &acp::SessionId,
+    mode: &str,
+) -> Result<(), acp::Error> {
+    let handle = agent
+        .resident_handle(session_id)
+        .ok_or_else(|| acp::Error::invalid_params().data("session not found"))?;
+    let (respond_to, response) = tokio::sync::oneshot::channel();
+    handle
+        .persistence_tx
+        .send(PersistenceMsg::PermissionMode {
+            mode: mode.to_owned(),
+            respond_to,
+        })
+        .map_err(|_| acp::Error::internal_error().data("permission persistence unavailable"))?;
+    response
+        .await
+        .map_err(|_| acp::Error::internal_error().data("permission persistence unavailable"))?
+        .map_err(|_| acp::Error::internal_error().data("permission persistence failed"))
+}
 
 pub(crate) async fn apply(
     agent: &MvpAgent,
@@ -63,9 +86,21 @@ pub(crate) async fn apply(
                 return Err(acp::Error::invalid_params().data("always-approve disabled by policy"));
             }
             let _config_guard = agent.config_mutation_lock(&session_id).lock_owned().await;
+            let previous = agent.permission_mode_for_session(&session_id, None).await?;
+            if requested == "ask" {
+                persist_permission_mode(agent, &session_id, requested).await?;
+            }
             agent
                 .permission_mode_for_session(&session_id, Some(requested))
                 .await?;
+            if requested != "ask"
+                && let Err(error) = persist_permission_mode(agent, &session_id, requested).await
+            {
+                let _ = agent
+                    .permission_mode_for_session(&session_id, Some(&previous))
+                    .await;
+                return Err(error);
+            }
             let options = agent.acp_config_options_for_session(&session_id).await?;
             if !options.iter().any(|option| {
                 option.id.0.as_ref() == CONFIG_ID_PERMISSION_MODE

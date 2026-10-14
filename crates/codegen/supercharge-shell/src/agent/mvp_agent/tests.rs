@@ -4890,6 +4890,171 @@ fn assert_permission_interface(
         .iter()
         .any(|mode| mode.id.0.as_ref() == "plan"));
 }
+fn permission_current(options: &[acp::SessionConfigOption]) -> &str {
+    let option = options.iter().find(|option| option.id.0.as_ref() == "permission_mode")
+        .expect("permission mode option");
+    let acp::SessionConfigKind::Select(select) = &option.kind else {
+        panic!("permission mode must be a select");
+    };
+    select.current_value.0.as_ref()
+}
+
+#[test]
+fn persisted_permission_mode_is_gated() {
+    use super::session_setup::restored_permission_mode;
+    assert_eq!(restored_permission_mode(None, false, false), None);
+    assert_eq!(
+        restored_permission_mode(Some("ask"), false, false),
+        Some("ask")
+    );
+    assert_eq!(
+        restored_permission_mode(Some("auto"), false, true),
+        Some("ask")
+    );
+    assert_eq!(
+        restored_permission_mode(Some("auto"), true, false),
+        Some("auto")
+    );
+    assert_eq!(
+        restored_permission_mode(Some("always-approve"), true, false),
+        Some("ask")
+    );
+    assert_eq!(
+        restored_permission_mode(Some("always-approve"), false, true),
+        Some("always-approve")
+    );
+    assert_eq!(
+        restored_permission_mode(Some("unrecognized"), true, true),
+        Some("ask")
+    );
+}
+
+#[test]
+fn permission_choice_survives_restart_without_crossing_sessions() {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let cwd = tempfile::tempdir().unwrap();
+            let (ask_id, other_id) = run_local_for_bridge_test(|| async {
+                let mut agent = build_minimal_agent_for_tests();
+                agent.default_yolo_mode = true;
+                let ask_id = new_root_session(&agent, cwd.path()).await;
+                let other_id = acp::SessionId::new(uuid::Uuid::now_v7().to_string());
+                let meta =
+                    serde_json::json!({"sessionId": other_id.0.as_ref(), "modelId": "test-model"})
+                        .as_object()
+                        .cloned();
+                let other = agent
+                    .new_session_inner(
+                        acp::NewSessionRequest::new(cwd.path().to_path_buf()).meta(meta),
+                    )
+                    .await
+                    .expect("second session opens");
+                assert_eq!(
+                    permission_current(other.config_options.as_deref().unwrap()),
+                    "always-approve"
+                );
+                let updated = crate::agent::handlers::config_option::apply(
+                    &agent,
+                    acp::SetSessionConfigOptionRequest::new(
+                        ask_id.clone(),
+                        "permission_mode",
+                        "ask",
+                    ),
+                )
+                .await
+                .expect("ask is persisted before acknowledgement");
+                assert_eq!(permission_current(&updated.config_options), "ask");
+                let other_updated = crate::agent::handlers::config_option::apply(
+                    &agent,
+                    acp::SetSessionConfigOptionRequest::new(
+                        other_id.clone(),
+                        "permission_mode",
+                        "always-approve",
+                    ),
+                )
+                .await
+                .expect("other session stores its own choice");
+                assert_eq!(
+                    permission_current(&other_updated.config_options),
+                    "always-approve"
+                );
+                assert_eq!(
+                    agent
+                        .permission_mode_for_session(&other_id, None)
+                        .await
+                        .unwrap(),
+                    "always-approve"
+                );
+                let summary_path =
+                    crate::session::persistence::session_dir(&crate::session::info::Info {
+                        id: ask_id.clone(),
+                        cwd: cwd.path().to_string_lossy().into_owned(),
+                    })
+                    .join("summary.json");
+                let summary: crate::session::persistence::Summary =
+                    serde_json::from_slice(&std::fs::read(summary_path).unwrap()).unwrap();
+                assert_eq!(summary.permission_mode.as_deref(), Some("ask"));
+                let warm = agent
+                    .load_session_inner(acp::LoadSessionRequest::new(
+                        ask_id.clone(),
+                        cwd.path().to_path_buf(),
+                    ))
+                    .await
+                    .expect("warm load");
+                assert_eq!(
+                    permission_current(warm.config_options.as_deref().unwrap()),
+                    "ask"
+                );
+                agent.remove_session(&ask_id);
+                agent.remove_session(&other_id);
+                (ask_id, other_id)
+            });
+
+            run_local_for_bridge_test(|| async {
+                let mut restarted = build_minimal_agent_for_tests();
+                restarted.default_yolo_mode = true;
+                restarted.set_auth_method(acp::AuthMethodId::new("cached_token"));
+                restarted
+                    .initialize_request
+                    .set(
+                        acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_capabilities(
+                            acp::ClientCapabilities::new()
+                                .fs(acp::FileSystemCapabilities::new())
+                                .terminal(false),
+                        ),
+                    )
+                    .unwrap();
+                let loaded = restarted
+                    .load_session_inner(acp::LoadSessionRequest::new(
+                        ask_id.clone(),
+                        cwd.path().to_path_buf(),
+                    ))
+                    .await
+                    .expect("ask session loads after restart");
+                assert_eq!(
+                    permission_current(loaded.config_options.as_deref().unwrap()),
+                    "ask"
+                );
+                let other = restarted
+                    .load_session_inner(acp::LoadSessionRequest::new(
+                        other_id.clone(),
+                        cwd.path().to_path_buf(),
+                    ))
+                    .await
+                    .expect("other session loads after restart");
+                assert_eq!(
+                    permission_current(other.config_options.as_deref().unwrap()),
+                    "always-approve"
+                );
+                restarted.remove_session(&ask_id);
+                restarted.remove_session(&other_id);
+            })
+        })
+        .expect("test thread starts")
+        .join()
+        .expect("test thread succeeds");
+}
 /// Bindings the real spawn path took through the agent's (lazily built) local workspace ops.
 fn workspace_session_count(agent: &MvpAgent) -> usize {
     agent

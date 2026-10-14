@@ -16,6 +16,19 @@ pub(super) const RESUME_REFUSES_EXTRA_DIRS: &str =
     "session/resume does not support additionalDirectories";
 const TOOL_OVERRIDES_ECHO_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
 const BACKGROUND_TASKS_SNAPSHOT_ACK_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+
+pub(super) fn restored_permission_mode(
+    stored: Option<&str>,
+    auto_enabled: bool,
+    yolo_allowed: bool,
+) -> Option<&'static str> {
+    stored.map(|mode| match mode {
+        "auto" if auto_enabled => "auto",
+        "always-approve" if yolo_allowed => "always-approve",
+        _ => "ask",
+    })
+}
+
 async fn read_applied_tool_overrides(
     cmd_tx: &tokio::sync::mpsc::UnboundedSender<SessionCommand>,
 ) -> Option<supercharge_sampling_types::ToolOverrides> {
@@ -987,15 +1000,27 @@ impl MvpAgent {
             .and_then(|m| m.get("cursor"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        let session_yolo_mode = request_meta
+        let restored_permission = restored_permission_mode(
+            summary.permission_mode.as_deref(),
+            crate::util::config::auto_permission_mode_enabled_from_disk(),
+            supercharge_workspace::permission::resolution::yolo_disabled_by_policy().is_none(),
+        );
+        let requested_yolo_mode = request_meta
             .as_ref()
             .and_then(|m| m.get("yoloMode"))
             .and_then(|v| v.as_bool())
             .unwrap_or(self.default_yolo_mode);
-        let session_auto_mode = crate::session::auto_mode::resolve_session_auto_mode(
-            request_meta.as_ref(),
-            self.default_auto_mode,
-            session_yolo_mode,
+        let session_yolo_mode =
+            restored_permission.map_or(requested_yolo_mode, |mode| mode == "always-approve");
+        let session_auto_mode = restored_permission.map_or_else(
+            || {
+                crate::session::auto_mode::resolve_session_auto_mode(
+                    request_meta.as_ref(),
+                    self.default_auto_mode,
+                    session_yolo_mode,
+                )
+            },
+            |mode| mode == "auto",
         );
         #[allow(unused_variables)]
         let session_computer_sessions = resolve_session_computer_sessions(request_meta.as_ref())?;
@@ -1217,9 +1242,13 @@ impl MvpAgent {
         self.refresh_reconnect_session_state(
             &session_id,
             client_code_nav_enabled,
-            session_yolo_mode,
-            session_auto_mode,
+            restored_permission.is_none() && session_yolo_mode,
+            restored_permission.is_none() && session_auto_mode,
         );
+        if session_exists && let Some(mode) = restored_permission {
+            self.permission_mode_for_session(&session_id, Some(mode))
+                .await?;
+        }
         self.maybe_spawn_interactive_trust_prompt(
             &session_id,
             cwd.as_path(),

@@ -185,6 +185,7 @@ pub(crate) mod hydrate {
             // Hydrated locally: record the profile this process runs under
             sandbox_profile: supercharge_sandbox::configured_profile_name().map(String::from),
             reasoning_effort: None,
+            permission_mode: None,
             last_turn_summary: None,
             last_turn_summary_prompt_id: None,
             last_recap: None,

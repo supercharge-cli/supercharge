@@ -1380,6 +1380,16 @@ impl StorageAdapter for JsonlStorageAdapter {
         )
         .await
     }
+    async fn update_permission_mode(&self, info: &Info, mode: String) -> io::Result<()> {
+        self.apply_summary_patch(
+            info,
+            super::summary_write::SummaryPatch {
+                permission_mode: Some(mode),
+                ..Default::default()
+            },
+        )
+        .await
+    }
     async fn update_collection_id(&self, info: &Info, collection_id: &str) -> io::Result<()> {
         self.apply_summary_patch(
             info,

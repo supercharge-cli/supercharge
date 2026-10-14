@@ -1287,6 +1287,9 @@ pub trait StorageAdapter: Send + Sync {
         reasoning_effort: Option<Option<ReasoningEffort>>,
     ) -> io::Result<()>;
 
+    /// Persist the explicit permission choice in the session summary.
+    async fn update_permission_mode(&self, info: &Info, mode: String) -> io::Result<()>;
+
     /// Update the collection ID for telemetry tracing
     async fn update_collection_id(&self, info: &Info, collection_id: &str) -> io::Result<()>;
 

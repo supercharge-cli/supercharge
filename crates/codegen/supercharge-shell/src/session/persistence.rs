@@ -247,6 +247,10 @@ pub enum PersistenceMsg {
     },
     PlanState(TodoState),
     PlanModeState(crate::session::plan_mode::PlanModeSnapshot),
+    PermissionMode {
+        mode: String,
+        respond_to: tokio::sync::oneshot::Sender<io::Result<()>>,
+    },
     RewindPoint(RewindPoint),
     /// Truncate rewind points from a specific prompt index (inclusive).
     /// Syncs the persisted file with the in-memory FileStateTracker after rewind.
@@ -1141,6 +1145,9 @@ pub struct Summary {
     pub sandbox_profile: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
+    /// Explicit ACP permission choice; absent for sessions that have not selected one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<String>,
     /// Ultra-short summary of the most recent successful turn, shown as the dashboard row's secondary line (via the roster for non-attached clients).
     /// Displayed until replaced by the next successful turn (or cleared by a conversation rewind).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1215,6 +1222,7 @@ impl Summary {
             agent_name: None,
             sandbox_profile: None,
             reasoning_effort: None,
+            permission_mode: None,
             last_turn_summary: None,
             last_turn_summary_prompt_id: None,
             last_recap: None,
@@ -2132,6 +2140,11 @@ impl SessionPersistence {
                     if let Err(e) = self.storage.write_plan_mode_state(&self.info, &state).await {
                         tracing::warn!(?e, "failed to write plan mode state");
                     }
+                }
+                PersistenceMsg::PermissionMode { mode, respond_to } => {
+                    let result = self.storage.update_permission_mode(&self.info, mode).await;
+                    self.observe_io(&result);
+                    let _ = respond_to.send(result);
                 }
                 PersistenceMsg::GoalModeState(state) => {
                     if let Err(e) = self.storage.write_goal_mode_state(&self.info, &state).await {

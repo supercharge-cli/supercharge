@@ -3404,8 +3404,12 @@ impl MvpAgent {
         handle.cmd_tx.send(SessionCommand::PermissionMode {
             mode: mode.map(str::to_owned), responds_to,
         }).map_err(|_| acp::Error::internal_error().data("permission mode command unavailable"))?;
-        response.await.map_err(|_| acp::Error::internal_error().data("permission mode response unavailable"))?
-            .map_err(|error| acp::Error::invalid_params().data(error))
+        let actual = response.await.map_err(|_| acp::Error::internal_error().data("permission mode response unavailable"))?
+            .map_err(|error| acp::Error::invalid_params().data(error))?;
+        self.with_resident_mut(session_id, |handle| {
+            handle.yolo_mode = actual == "always-approve";
+        }).ok_or_else(|| acp::Error::invalid_params().data("session not found"))?;
+        Ok(actual)
     }
     pub(crate) async fn acp_config_options_with_permission(
         &self,
