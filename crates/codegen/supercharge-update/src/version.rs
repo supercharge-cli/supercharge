@@ -11,7 +11,7 @@ use supercharge_shell::util::grok_home::grok_home;
 
 const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
 const NPM_PACKAGE: &str = "@xai-official/grok";
-pub const GH_RELEASE_REPO: &str = "iotserver24/supercharge-releases";
+pub const GH_RELEASE_REPO: &str = "supercharge-cli/supercharge-releases";
 
 /// Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and binaries
 /// (`/grok-{version}-{os}-{arch}`). Host this layout yourself with

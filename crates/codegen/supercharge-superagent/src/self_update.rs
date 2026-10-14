@@ -7,7 +7,7 @@ use std::{env, path::Path, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_REPO: &str = "iotserver24/supercharge-releases";
+const DEFAULT_REPO: &str = "supercharge-cli/supercharge-releases";
 const DAEMON_ASSET: &str = "supercharge-superagent-server-linux-x86_64";
 const CLI_ASSET: &str = "supercharge-linux-x86_64";
 const VERSION_STAMP: &str = "/var/lib/superagent/e2b-version";

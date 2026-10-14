@@ -7,7 +7,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 template_dir="$repo_root/sandbox/e2b-agent-template"
 bin_dir="$template_dir/bin"
 tag="${SUPERCHARGE_E2B_UPDATE_TAG:?Set SUPERCHARGE_E2B_UPDATE_TAG to a new release version}"
-release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-iotserver24/supercharge-releases}"
+release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-supercharge-cli/supercharge-releases}"
 
 "$repo_root/sandbox/prepare-e2b-agent-assets.sh"
 system_version="${tag#v}"

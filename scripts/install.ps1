@@ -2,8 +2,8 @@
 # Supercharge AI public installer for Windows PowerShell
 #
 # Usage:
-#   irm https://raw.githubusercontent.com/iotserver24/supercharge-releases/main/scripts/install.ps1 | iex
-#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/iotserver24/supercharge-releases/main/scripts/install.ps1))) -Version 1.0.5
+#   irm https://raw.githubusercontent.com/supercharge-cli/supercharge-releases/main/scripts/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/supercharge-cli/supercharge-releases/main/scripts/install.ps1))) -Version 1.0.5
 #   $env:SUPERCHARGE_VERSION="1.0.5"; irm ... | iex
 #
 
@@ -27,7 +27,7 @@ if (-not $Version -and $env:SUPERCHARGE_VERSION) {
 }
 $Version = $Version -replace '^v', ''
 
-$Repo = if ($env:SUPERCHARGE_GITHUB_REPO) { $env:SUPERCHARGE_GITHUB_REPO } else { 'iotserver24/supercharge-releases' }
+$Repo = if ($env:SUPERCHARGE_GITHUB_REPO) { $env:SUPERCHARGE_GITHUB_REPO } else { 'supercharge-cli/supercharge-releases' }
 $BinDir = if ($env:SUPERCHARGE_BIN_DIR) { $env:SUPERCHARGE_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
 $ConfigHome = if ($env:SUPERCHARGE_HOME) { $env:SUPERCHARGE_HOME } else { Join-Path $env:USERPROFILE '.supercharge' }
 $DownloadDir = if ($env:SUPERCHARGE_DOWNLOAD_DIR) { $env:SUPERCHARGE_DOWNLOAD_DIR } else { Join-Path $ConfigHome 'downloads' }
