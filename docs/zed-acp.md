@@ -5,7 +5,7 @@ Zed does **not** list Supercharge until you add it as an External Agent (or unti
 ## 1. Install the CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/iotserver24/supercharge-releases/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/supercharge-cli/supercharge-releases/main/scripts/install.sh | bash
 ```
 
 Put `supercharge` on your `PATH`.

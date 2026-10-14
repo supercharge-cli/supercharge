@@ -56,11 +56,11 @@ jobs:
             echo "Create a PAT with repo scope and add it as SUPERCHARGE_RELEASES_TOKEN." >&2
             exit 1
           fi
-          gh api repos/iotserver24/supercharge-releases/dispatches \
+          gh api repos/supercharge-cli/supercharge-releases/dispatches \
             -f event_type=release \
             -f "client_payload[tag]=${{ steps.meta.outputs.tag }}" \
             -f "client_payload[source_ref]=${{ steps.meta.outputs.source_ref }}" \
             -f "client_payload[source_repo]=${GITHUB_REPOSITORY}" \
             -f "client_payload[build_daemon]=true"
           echo "Triggered public release build for ${{ steps.meta.outputs.tag }}"
-          echo "Watch: https://github.com/iotserver24/supercharge-releases/actions"
+          echo "Watch: https://github.com/supercharge-cli/supercharge-releases/actions"

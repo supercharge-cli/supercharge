@@ -38,8 +38,8 @@ remain as the "manage installed plugins" surface.
 
 | Repo | Remote | Role |
 |---|---|---|
-| `.` (root) | `iotserver24/supercharge` | Sandbox template, Rust daemon/CLI, `plugin-api/` service source |
-| `supercharge-app/` | `iotserver24/supercharge-app` (PUBLIC) | Desktop app (Tauri + React); also hosts the **public catalog assets** |
+| `.` (root) | `supercharge-cli/supercharge` | Sandbox template, Rust daemon/CLI, `plugin-api/` service source |
+| `supercharge-app/` | `supercharge-cli/supercharge-app` (PUBLIC) | Desktop app (Tauri + React); also hosts the **public catalog assets** |
 | `cloud-infra/` | `iotserver24/cloud-infra` | Vectra web (Next.js, Vercel) + mobile (Flutter) + gateway |
 
 All three were pushed to `main` this session.
@@ -50,17 +50,17 @@ All three were pushed to `main` this session.
 
 ### 3.1 Shared curated catalog (the "store inventory")
 - `cloud-infra/apps/web/public/managed-mcp/catalog.json` — catalog listing. One entry:
-  `vectra-echo` v1.0.0, pinned archive `https://raw.githubusercontent.com/iotserver24/supercharge-app/379e0d2789ac918e327e5ef1fef5cc2991a431a7/public/managed-mcp/vectra-echo-1.0.0.tar.gz`, SHA-256 `a0c6be6c2f292c1a1ecdcc55056147d1dd232b58c76522e77ad44016ee7c0072`.
+  `vectra-echo` v1.0.0, pinned archive `https://raw.githubusercontent.com/supercharge-cli/supercharge-app/379e0d2789ac918e327e5ef1fef5cc2991a431a7/public/managed-mcp/vectra-echo-1.0.0.tar.gz`, SHA-256 `a0c6be6c2f292c1a1ecdcc55056147d1dd232b58c76522e77ad44016ee7c0072`.
 - `cloud-infra/apps/web/public/managed-mcp/echo-1.0.0/{plugin.json,mcp.mjs}` — reviewed
   release source (echo-only stdio MCP, `node ${PLUGIN_ROOT}/mcp.mjs`, permission
   `mcp:stdio`, no hooks/components/secrets).
 - `cloud-infra/apps/web/scripts/validate-managed-mcp-catalog.mjs` — build gate
   (`npm run catalog:check` in apps/web): verifies IDs, pinned first-party URL format
-  (`raw.githubusercontent.com/iotserver24/supercharge-app/<40-hex-sha>/public/managed-mcp/…`),
+  (`raw.githubusercontent.com/supercharge-cli/supercharge-app/<40-hex-sha>/public/managed-mcp/…`),
   archive checksum, exact reviewed file set, manifest↔catalog metadata match.
 - Published **public immutable copies** (mobile/desktop read these directly):
-  - catalog: `https://raw.githubusercontent.com/iotserver24/supercharge-app/de50dfa59e9b7b7d2ee77b3e1f732242ac84e012/public/managed-mcp/catalog.json`
-  - reviewed manifest (desktop hydrates it): `https://raw.githubusercontent.com/iotserver24/supercharge-app/6204686983497b32b798376b6ea6ed5e105be182/public/managed-mcp/echo-1.0.0/plugin.json`
+  - catalog: `https://raw.githubusercontent.com/supercharge-cli/supercharge-app/de50dfa59e9b7b7d2ee77b3e1f732242ac84e012/public/managed-mcp/catalog.json`
+  - reviewed manifest (desktop hydrates it): `https://raw.githubusercontent.com/supercharge-cli/supercharge-app/6204686983497b32b798376b6ea6ed5e105be182/public/managed-mcp/echo-1.0.0/plugin.json`
 - NOTE: the tar was repacked **without directory entries** (`tar --format=ustar -czf … mcp.mjs plugin.json`)
   because the Plugin API extractor rejects archives containing `./` entries
   (`UNSAFE_ARCHIVE`). Keep new packages built the same way.
@@ -105,7 +105,7 @@ All three were pushed to `main` this session.
 - `sandbox/e2b-agent-template/plugin-api-control.mjs` — root-only controller gained
   `installCatalog` action and `pluginAction: update` via `catalogSource()`: reads
   `/opt/vectra/plugin-api/catalog.json` baked into the image, matches id+sha256,
-  allows only `raw.githubusercontent.com/iotserver24/supercharge-app/<sha>/public/managed-mcp/*.tar.gz`,
+  allows only `raw.githubusercontent.com/supercharge-cli/supercharge-app/<sha>/public/managed-mcp/*.tar.gz`,
   installs through Plugin API with `source.type=archive` (digest verified again at
   staging). Keeps the UID-1000/1001 fix from earlier this week.
 - `sandbox/prepare-e2b-agent-assets.sh` — copies `catalog.json` into the template's
@@ -211,7 +211,7 @@ Security invariants to keep (do not relax):
 - No Plugin API management tokens or sandbox control secrets in the mobile app, browser
   bundle, or agent.
 - Installs only from the pinned, checksum-verified first-party archive; the controller
-  allowlist (raw.githubusercontent.com/iotserver24/supercharge-app/<sha>/…) stays.
+  allowlist (raw.githubusercontent.com/supercharge-cli/supercharge-app/<sha>/…) stays.
 - Install starts disabled + untrusted; explicit permission approval before enable;
   separate consented verification before "ready".
 - Per-bot isolated Plugin API store/service UID; per-conversation bridge credentials.

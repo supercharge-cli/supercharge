@@ -2244,7 +2244,7 @@ async fn gh_release_download(tag: &str, pattern: &str, dest: &std::path::Path) -
     Ok(())
 }
 
-/// Download and install Supercharge from GitHub Releases (`iotserver24/supercharge-releases`). Uses `gh release
+/// Download and install Supercharge from GitHub Releases (`supercharge-cli/supercharge-releases`). Uses `gh release
 /// download` to fetch the binary matching the current platform. This works anywhere the `gh` CLI is authenticated,
 /// without needing npm or internal network access.
 async fn install_gh_release(target: Option<&str>) -> Result<()> {

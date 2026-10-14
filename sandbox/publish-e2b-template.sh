@@ -21,7 +21,7 @@ template_name="${SUPERCHARGE_E2B_TEMPLATE:-supercharge-full-sandbox}"
 cpu_count="${SUPERCHARGE_E2B_CPU_COUNT:-16}"
 memory_mb="${SUPERCHARGE_E2B_MEMORY_MB:-16384}"
 e2b_cli_version="${SUPERCHARGE_E2B_CLI_VERSION:-2.16.1}"
-release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-iotserver24/supercharge-releases}"
+release_repo="${SUPERCHARGE_E2B_UPDATE_REPO:-supercharge-cli/supercharge-releases}"
 system_version="$(python3 - "$repo_root/crates/codegen/supercharge-pager-bin/Cargo.toml" <<'PY'
 import pathlib, re, sys
 match = re.search(r'^version = "(\d+\.\d+\.\d+)"$', pathlib.Path(sys.argv[1]).read_text(), re.M)

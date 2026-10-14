@@ -12,7 +12,7 @@ Supercharge already has a real plugin architecture, Plugin API installation flow
 
 Repository:
 
-`iotserver24/supercharge`
+`supercharge-cli/supercharge`
 
 Important existing configuration:
 
