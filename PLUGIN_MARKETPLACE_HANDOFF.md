@@ -40,7 +40,7 @@ remain as the "manage installed plugins" surface.
 |---|---|---|
 | `.` (root) | `supercharge-cli/supercharge` | Sandbox template, Rust daemon/CLI, `plugin-api/` service source |
 | `supercharge-app/` | `supercharge-cli/supercharge-app` (PUBLIC) | Desktop app (Tauri + React); also hosts the **public catalog assets** |
-| `cloud-infra/` | `iotserver24/cloud-infra` | Vectra web (Next.js, Vercel) + mobile (Flutter) + gateway |
+| `cloud-infra/` | legacy remote unavailable | Vectra web (Next.js, Vercel) + mobile (Flutter) + gateway |
 
 All three were pushed to `main` this session.
 
@@ -155,8 +155,8 @@ All three were pushed to `main` this session.
   "Your Team exceeded our fair use limits and has been blocked"; GitHub deployment
   status also shows "Account is blocked". The live site `https://infra.xibeai.in`
   serves an **old build**: `/api/managed-mcp/catalog` → 404, and the bot proxy route
-  rejects `installCatalog`. CLI is authenticated (`vercel whoami` → iotserver24) but
-  cannot deploy until the account/limits are fixed.
+  rejects `installCatalog`. The previous Vercel account is unavailable, so deployment
+  requires a new authenticated account and project target.
 - **E2B template not republished** with the catalog controller (`561b5ddc5`). Published
   alias `supercharge-full-sandbox` (id `i555ld3tcet21gyd3mry`) still has the
   UID-fix controller but **no** `catalog.json`/`installCatalog`, so even a fresh
@@ -235,8 +235,8 @@ Security invariants to keep (do not relax):
 - Desktop quality gate: `python3 scripts/check-code-quality-gates.py --mode final` in
   `supercharge-app/` — **FILES_OVER_1K_BUDGET caps files ≥1000 lines at 80**; that is
   why `PluginApiCatalogSection.tsx` was extracted. Run it locally before pushing.
-- Vercel CLI installed (`~/.bun/bin/vercel`, authed as iotserver24) but deploys blocked
-  by team limits.
+- Vercel CLI installed (`~/.bun/bin/vercel`), but the previous account is unavailable;
+  authenticate a new account and project target before deploying.
 - Flutter at `/home/r3ap3reditz/flutter/bin/flutter`; adb at `/usr/sbin/adb`.
 - Known bad: `gpt-6-luna` upstream; direct curl to the user's proxy from the sandbox
   gets Cloudflare 403/1010 — test models through the app/daemon, not raw curl.
