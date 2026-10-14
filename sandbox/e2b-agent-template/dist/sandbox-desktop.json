@@ -1,0 +1,15 @@
+{
+  "version": "1.3.30",
+  "notes": [
+    "Published with E2B template supercharge-full-sandbox."
+  ],
+  "archive": "sandbox-desktop-1.3.30.tar.gz",
+  "paths": [
+    "/opt/vectra/wake-http/",
+    "/opt/vectra/browser-runtime/"
+  ],
+  "commands": [],
+  "desktopProtocol": 1,
+  "requiresOptIn": true,
+  "sha256": "7e57bb3d34fe242dec4a3adaab9a2e5ccdc80717bf8a0761d043e40ff1338d66"
+}
