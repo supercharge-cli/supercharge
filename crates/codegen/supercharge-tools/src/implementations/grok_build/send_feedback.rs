@@ -118,7 +118,7 @@ pub fn drafts_file_path(session_folder: &std::path::Path) -> String {
 fn build_description_template() -> String {
     let mut template = String::from(
         "# Overview\n\n\
-Save or update user feedback for later review. Feedback is stored as local drafts and is never sent without explicit approval from the `/feedback` Drafts tab in the Grok TUI. This tool opens no UI and does not stop the current turn.\n\n\
+Save or update user feedback for later review. Feedback is stored as local drafts and is never sent without explicit approval from the `/feedback` Drafts tab in the Supercharge CLI. This tool opens no UI and does not stop the current turn.\n\n\
 # Invocation\n\n\
 When the user types `/feedback` bare into the prompt bar, the form opens with the Write and Drafts tabs. The Write tab is only for the user to hand-write feedback.\n\
 `/feedback <text>` sends the user's report immediately without involving you. Use the ${{ params.feedback.draft_id }} field only when the user explicitly asks you to update an existing feedback draft.\n\
@@ -131,7 +131,7 @@ ${%- if tools.by_kind.ask_user %}\n\
 If mapping feedback is incredibly unclear, only then may you use ${{ tools.by_kind.ask_user }} to confirm ambiguity with the user. Use this sparingly.\n\
 ${%- endif %}\n\n\
 # Confirmation\n\n\
-After drafting feedback and ending your turn, tell the user the draft is saved locally for this session. In the Grok CLI they review and send it by typing `/feedback` and opening the Drafts tab; from any other client, have them resume this session in the Grok CLI first.\n\n\
+After drafting feedback and ending your turn, tell the user the draft is saved locally for this session. In the Supercharge CLI they review and send it by typing `/feedback` and opening the Drafts tab; from any other client, have them resume this session in the Supercharge CLI first.\n\n\
 # Misc\n\n\
 ${%- if feedback_drafts_path %}\n\
 This session's drafts file is ${{ feedback_drafts_path }}.\n\

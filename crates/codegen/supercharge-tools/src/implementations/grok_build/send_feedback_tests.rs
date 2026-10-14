@@ -316,6 +316,8 @@ fn advertised_description_renders_present_names_and_omits_absent_ones() {
     }
     assert!(text.contains("ask_user_question"), "{text}");
     assert!(text.contains(&drafts), "{text}");
+    assert!(text.contains("Supercharge CLI"), "{text}");
+    assert!(!text.contains("Grok CLI"), "{text}");
     assert!(!text.contains("${"), "{text}");
 
     let text = advertised_description(&feedback_renderer(HashMap::from([(
