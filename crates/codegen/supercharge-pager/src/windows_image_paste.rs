@@ -58,7 +58,8 @@ pub(crate) fn install(focused: Arc<AtomicBool>) {
                     return;
                 }
                 HOOK.store(hook as usize, Ordering::Release);
-                let mut msg = MSG::default();
+                // windows-sys MSG has no Default on some Windows targets (e.g. aarch64).
+                let mut msg = unsafe { std::mem::zeroed::<MSG>() };
                 loop {
                     let got = unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) };
                     if got == 0 || got == -1 {
