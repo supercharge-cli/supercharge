@@ -23,6 +23,60 @@ mod yolo_toggle_report_tests {
         assert_eq!(yolo_toggle_report(true, true), None);
     }
 }
+impl SessionActor {
+    pub(super) async fn apply_permission_mode(
+        self: &Arc<Self>,
+        mode: Option<&str>,
+    ) -> Result<String, String> {
+        if !self.permissions.session_mode_channel_open() {
+            return Err("permission command unavailable".to_string());
+        }
+        if self.permissions.is_auto_mode()
+            && !crate::util::config::auto_permission_mode_enabled_from_disk()
+        {
+            self.permissions
+                .try_set_session_mode(false, false)
+                .map_err(|_| "permission command unavailable")?;
+            self.permissions.set_llm_side_query_wired(false);
+        }
+        match mode {
+            Some("ask") => {
+                self.permissions
+                    .try_set_session_mode(false, false)
+                    .map_err(|_| "permission command unavailable")?;
+                self.permissions.set_llm_side_query_wired(false);
+            }
+            Some("auto") if crate::util::config::auto_permission_mode_enabled_from_disk() => {
+                self.permissions
+                    .try_set_session_mode(false, true)
+                    .map_err(|_| "permission command unavailable")?;
+                self.wire_permission_auto_llm_classifier().await;
+            }
+            Some("always-approve")
+                if supercharge_workspace::permission::resolution::yolo_disabled_by_policy()
+                    .is_none() =>
+            {
+                self.permissions
+                    .try_set_session_mode(true, false)
+                    .map_err(|_| "permission command unavailable")?;
+            }
+            None => {}
+            _ => return Err("permission mode is unavailable".to_string()),
+        }
+        let actual = if self.permissions.is_yolo_mode() {
+            "always-approve"
+        } else if self.permissions.is_auto_mode() {
+            "auto"
+        } else {
+            "ask"
+        };
+        if mode.is_some_and(|requested| requested != actual) {
+            return Err("permission mode was not applied".to_string());
+        }
+        Ok(actual.to_string())
+    }
+}
+
 fn spawn_dream_check(session: &Arc<SessionActor>) -> tokio::task::JoinHandle<()> {
     let session = session.clone();
     tokio::task::spawn_local(async move {
@@ -1288,6 +1342,9 @@ pub(super) async fn run_session(
                                     s.memory_forget(&path, &expected_content_hash).await;
                                 let _ = respond_to.send(response);
                             });
+                        }
+                        SessionCommand::PermissionMode { mode, responds_to } => {
+                            let _ = responds_to.send(session.apply_permission_mode(mode.as_deref()).await);
                         }
                         SessionCommand::SetYoloMode { enabled } => {
                             let was = session.permissions.is_yolo_mode();

@@ -403,6 +403,10 @@ pub enum SessionCommand {
         session_mode: acp::SessionModeId,
         responds_to: oneshot::Sender<()>,
     },
+    PermissionMode {
+        mode: Option<String>,
+        responds_to: oneshot::Sender<Result<String, String>>,
+    },
     SetSessionModel {
         switch: SessionModelSwitch,
         responds_to: oneshot::Sender<Result<acp::ModelId, acp::Error>>,

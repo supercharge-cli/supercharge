@@ -207,6 +207,63 @@ async fn set_auto_mode_off_clears_side_query_flag() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn acp_permission_mode_is_session_scoped_and_rejects_invalid_modes() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let (gateway_tx, _grx) = tokio::sync::mpsc::unbounded_channel();
+            let (persistence_tx, _prx) = tokio::sync::mpsc::unbounded_channel();
+            let mut first = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
+            install_real_permissions(&mut first);
+            let first = Arc::new(first);
+            let (gateway_tx, _grx) = tokio::sync::mpsc::unbounded_channel();
+            let (persistence_tx, _prx) = tokio::sync::mpsc::unbounded_channel();
+            let mut second = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
+            install_real_permissions(&mut second);
+            let second = Arc::new(second);
+
+            assert_eq!(first.apply_permission_mode(None).await.unwrap(), "ask");
+            assert!(first.apply_permission_mode(Some("invalid")).await.is_err());
+            assert_eq!(first.apply_permission_mode(None).await.unwrap(), "ask");
+            if supercharge_workspace::permission::resolution::yolo_disabled_by_policy().is_none() {
+                assert_eq!(
+                    first
+                        .apply_permission_mode(Some("always-approve"))
+                        .await
+                        .unwrap(),
+                    "always-approve"
+                );
+                assert_eq!(second.apply_permission_mode(None).await.unwrap(), "ask");
+                assert_eq!(
+                    first.apply_permission_mode(Some("ask")).await.unwrap(),
+                    "ask"
+                );
+            } else {
+                assert!(
+                    first
+                        .apply_permission_mode(Some("always-approve"))
+                        .await
+                        .is_err()
+                );
+            }
+            if crate::util::config::auto_permission_mode_enabled_from_disk() {
+                assert_eq!(
+                    first.apply_permission_mode(Some("auto")).await.unwrap(),
+                    "auto"
+                );
+                assert_eq!(second.apply_permission_mode(None).await.unwrap(), "ask");
+                assert_eq!(
+                    first.apply_permission_mode(Some("ask")).await.unwrap(),
+                    "ask"
+                );
+            } else {
+                assert!(first.apply_permission_mode(Some("auto")).await.is_err());
+                assert_eq!(first.apply_permission_mode(None).await.unwrap(), "ask");
+            }
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn plan_mode_enter_and_exit_leave_permission_manager_untouched() {
     let local = tokio::task::LocalSet::new();
     local

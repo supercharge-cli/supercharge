@@ -3389,9 +3389,56 @@ impl MvpAgent {
     pub(crate) async fn acp_config_options_for_session(
         &self,
         session_id: &acp::SessionId,
-    ) -> Vec<acp::SessionConfigOption> {
+    ) -> Result<Vec<acp::SessionConfigOption>, acp::Error> {
         let state = self.session_model_state(session_id).await;
-        self.acp_config_options(Some(session_id), &state)
+        self.acp_config_options_with_permission(session_id, &state).await
+    }
+    pub(crate) async fn permission_mode_for_session(
+        &self,
+        session_id: &acp::SessionId,
+        mode: Option<&str>,
+    ) -> Result<String, acp::Error> {
+        let handle = self.resident_handle(session_id)
+            .ok_or_else(|| acp::Error::invalid_params().data("session not found"))?;
+        let (responds_to, response) = tokio::sync::oneshot::channel();
+        handle.cmd_tx.send(SessionCommand::PermissionMode {
+            mode: mode.map(str::to_owned), responds_to,
+        }).map_err(|_| acp::Error::internal_error().data("permission mode command unavailable"))?;
+        response.await.map_err(|_| acp::Error::internal_error().data("permission mode response unavailable"))?
+            .map_err(|error| acp::Error::invalid_params().data(error))
+    }
+    pub(crate) async fn acp_config_options_with_permission(
+        &self,
+        session_id: &acp::SessionId,
+        state: &acp::SessionModelState,
+    ) -> Result<Vec<acp::SessionConfigOption>, acp::Error> {
+        let current = self.permission_mode_for_session(session_id, None).await?;
+        let mut options = self.acp_config_options(Some(session_id), state);
+        options.push(session_config::permission_mode_option(
+            &current, crate::util::config::auto_permission_mode_enabled_from_disk(),
+        ));
+        Ok(options)
+    }
+    pub(crate) async fn acp_session_modes(
+        &self,
+        session_id: &acp::SessionId,
+    ) -> Result<acp::SessionModeState, acp::Error> {
+        let handle = self.resident_handle(session_id)
+            .ok_or_else(|| acp::Error::invalid_params().data("session not found"))?;
+        let (responds_to, response) = tokio::sync::oneshot::channel();
+        handle.cmd_tx.send(SessionCommand::GetCurrentPromptMode { responds_to })
+            .map_err(|_| acp::Error::internal_error().data("session mode command unavailable"))?;
+        let mode = response.await.map_err(|_| acp::Error::internal_error().data("session mode response unavailable"))?;
+        let current = match mode {
+            crate::session::plan_mode::PromptMode::Plan => "plan",
+            crate::session::plan_mode::PromptMode::Ask => "ask",
+            crate::session::plan_mode::PromptMode::Agent => "default",
+        };
+        Ok(acp::SessionModeState::new(current, vec![
+            acp::SessionMode::new("default", "Default"),
+            acp::SessionMode::new("plan", "Plan"),
+            acp::SessionMode::new("ask", "Ask"),
+        ]))
     }
     pub(super) fn session_config_options(
         &self,

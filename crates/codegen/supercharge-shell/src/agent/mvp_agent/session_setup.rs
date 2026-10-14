@@ -795,9 +795,11 @@ impl MvpAgent {
             session_started_at.elapsed(),
             false,
         );
-        let config_options = self.acp_config_options(Some(&session_id), &models);
+        let config_options = self.acp_config_options_with_permission(&session_id, &models).await?;
+        let modes = self.acp_session_modes(&session_id).await?;
         Ok(acp::NewSessionResponse::new(session_id)
             .models(Some(models))
+            .modes(Some(modes))
             .config_options(Some(config_options))
             .meta(meta.as_object().cloned()))
     }
@@ -1231,9 +1233,11 @@ impl MvpAgent {
             .build_attach_response_meta(&session_id, &summary, persist_data, code_restore_info)
             .await;
         supercharge_telemetry::unified_log::info("session loaded", Some(session_id.0.as_ref()), None);
-        let config_options = self.acp_config_options(Some(&session_id), &model_state);
+        let config_options = self.acp_config_options_with_permission(&session_id, &model_state).await?;
+        let modes = self.acp_session_modes(&session_id).await?;
         let response = acp::LoadSessionResponse::new()
             .models(Some(model_state))
+            .modes(Some(modes))
             .config_options(Some(config_options))
             .meta(response_meta.as_object().cloned());
         if let Some(handle) = self.resident_handle(&session_id) {

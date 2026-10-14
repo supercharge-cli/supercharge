@@ -14,6 +14,27 @@ pub(crate) const SELECTABLE_REASONING_EFFORTS: [ReasoningEffort; 5] = [
 
 pub(crate) const CONFIG_ID_MODEL: &str = "model";
 pub(crate) const CONFIG_ID_REASONING_EFFORT: &str = "reasoning_effort";
+pub(crate) const CONFIG_ID_PERMISSION_MODE: &str = "permission_mode";
+
+pub(crate) fn permission_mode_option(
+    current: &str,
+    auto_available: bool,
+) -> acp::SessionConfigOption {
+    let mut values = vec![acp::SessionConfigSelectOption::new("ask", "Ask")];
+    if auto_available {
+        values.push(acp::SessionConfigSelectOption::new("auto", "Auto"));
+    }
+    values.push(acp::SessionConfigSelectOption::new(
+        "always-approve",
+        "Always Approve",
+    ));
+    acp::SessionConfigOption::select(
+        CONFIG_ID_PERMISSION_MODE,
+        "Permission Mode",
+        current.to_owned(),
+        values,
+    )
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -380,6 +401,38 @@ mod tests {
                 assert_eq!(select.current_value.0.as_ref(), "low");
             }
             _ => panic!("effort must be a select"),
+        }
+    }
+
+    #[test]
+    fn permission_mode_options_respect_gate_and_current_state() {
+        for (auto_available, current, expected) in [
+            (false, "ask", vec!["ask", "always-approve"]),
+            (true, "auto", vec!["ask", "auto", "always-approve"]),
+            (
+                true,
+                "always-approve",
+                vec!["ask", "auto", "always-approve"],
+            ),
+        ] {
+            let option = permission_mode_option(current, auto_available);
+            assert_eq!(option.id.0.as_ref(), CONFIG_ID_PERMISSION_MODE);
+            match option.kind {
+                acp::SessionConfigKind::Select(select) => {
+                    assert_eq!(select.current_value.0.as_ref(), current);
+                    let acp::SessionConfigSelectOptions::Ungrouped(values) = select.options else {
+                        panic!("permission values must be ungrouped");
+                    };
+                    assert_eq!(
+                        values
+                            .iter()
+                            .map(|o| o.value.0.as_ref())
+                            .collect::<Vec<_>>(),
+                        expected
+                    );
+                }
+                _ => panic!("permission mode must be a select"),
+            }
         }
     }
 

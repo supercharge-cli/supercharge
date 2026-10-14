@@ -4857,11 +4857,38 @@ async fn new_root_session(agent: &MvpAgent, cwd: &std::path::Path) -> acp::Sessi
     let meta = serde_json::json!({ "sessionId": sid, "modelId": "test-model" })
         .as_object()
         .cloned();
-    agent
+    let response = agent
         .new_session_inner(acp::NewSessionRequest::new(cwd.to_path_buf()).meta(meta))
         .await
-        .expect("session/new succeeds")
-        .session_id
+        .expect("session/new succeeds");
+    assert_permission_interface(response.config_options.as_deref(), response.modes.as_ref());
+    response.session_id
+}
+fn assert_permission_interface(
+    options: Option<&[acp::SessionConfigOption]>,
+    modes: Option<&acp::SessionModeState>,
+) {
+    let permission = options
+        .expect("session config options")
+        .iter()
+        .find(|option| option.id.0.as_ref() == "permission_mode")
+        .expect("permission_mode offered on session open");
+    let acp::SessionConfigKind::Select(select) = &permission.kind else {
+        panic!("permission_mode must be a select");
+    };
+    assert!(matches!(
+        select.current_value.0.as_ref(),
+        "ask" | "auto" | "always-approve"
+    ));
+    let modes = modes.expect("session modes offered on session open");
+    assert!(modes
+        .available_modes
+        .iter()
+        .any(|mode| mode.id.0.as_ref() == "default"));
+    assert!(modes
+        .available_modes
+        .iter()
+        .any(|mode| mode.id.0.as_ref() == "plan"));
 }
 /// Bindings the real spawn path took through the agent's (lazily built) local workspace ops.
 fn workspace_session_count(agent: &MvpAgent) -> usize {
@@ -4990,13 +5017,14 @@ fn cold_load_stamps_identity_exactly_once() {
         let sid = new_root_session(&agent, cwd.path()).await;
         agent.remove_session(&sid);
         crate::session::persistence::STAMPS_SERVED.set(0);
-        agent
+        let response = agent
             .load_session_inner(acp::LoadSessionRequest::new(
                 sid.clone(),
                 cwd.path().to_path_buf(),
             ))
             .await
             .expect("cold attach succeeds");
+        assert_permission_interface(response.config_options.as_deref(), response.modes.as_ref());
         drain_persistence(&agent, &sid).await;
         assert_eq!(1, crate::session::persistence::STAMPS_SERVED.get());
         agent.remove_session(&sid);

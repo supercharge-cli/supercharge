@@ -2,7 +2,9 @@ use agent_client_protocol::{self as acp};
 
 use crate::agent::handlers::model_switch::{self, ConfigNotice};
 use crate::agent::mvp_agent::MvpAgent;
-use crate::agent::session_config::{CONFIG_ID_MODEL, CONFIG_ID_REASONING_EFFORT};
+use crate::agent::session_config::{
+    CONFIG_ID_MODEL, CONFIG_ID_PERMISSION_MODE, CONFIG_ID_REASONING_EFFORT,
+};
 
 pub(crate) async fn apply(
     agent: &MvpAgent,
@@ -40,6 +42,47 @@ pub(crate) async fn apply(
             )
             .await?;
         }
+        CONFIG_ID_PERMISSION_MODE => {
+            let value_id = value.as_value_id().ok_or_else(|| {
+                acp::Error::invalid_params().data("permission_mode requires a string value")
+            })?;
+            let requested = value_id.0.as_ref();
+            if !matches!(requested, "ask" | "auto" | "always-approve") {
+                return Err(acp::Error::invalid_params().data("unknown permission mode"));
+            }
+            if requested == "auto" && !crate::util::config::auto_permission_mode_enabled_from_disk()
+            {
+                return Err(
+                    acp::Error::invalid_params().data("auto permission mode is unavailable")
+                );
+            }
+            if requested == "always-approve"
+                && supercharge_workspace::permission::resolution::yolo_disabled_by_policy()
+                    .is_some()
+            {
+                return Err(acp::Error::invalid_params().data("always-approve disabled by policy"));
+            }
+            let _config_guard = agent.config_mutation_lock(&session_id).lock_owned().await;
+            agent
+                .permission_mode_for_session(&session_id, Some(requested))
+                .await?;
+            let options = agent.acp_config_options_for_session(&session_id).await?;
+            if !options.iter().any(|option| {
+                option.id.0.as_ref() == CONFIG_ID_PERMISSION_MODE
+                    && matches!(&option.kind, acp::SessionConfigKind::Select(select) if select.current_value.0.as_ref() == requested)
+            }) {
+                return Err(acp::Error::invalid_params().data("permission mode changed while applying"));
+            }
+            agent
+                .gateway
+                .forward_fire_and_forget(acp::SessionNotification::new(
+                    session_id,
+                    acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(
+                        options.clone(),
+                    )),
+                ));
+            return Ok(acp::SetSessionConfigOptionResponse::new(options));
+        }
         other => {
             return Err(
                 acp::Error::invalid_params().data(format!("unknown config option: {other}"))
@@ -47,6 +90,6 @@ pub(crate) async fn apply(
         }
     }
 
-    let options = agent.acp_config_options_for_session(&session_id).await;
+    let options = agent.acp_config_options_for_session(&session_id).await?;
     Ok(acp::SetSessionConfigOptionResponse::new(options))
 }

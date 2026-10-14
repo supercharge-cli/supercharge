@@ -395,7 +395,9 @@ fn notify_model_changed(
     }
 }
 async fn notify_config_options(agent: &MvpAgent, session_id: &acp::SessionId) {
-    let options = agent.acp_config_options_for_session(session_id).await;
+    let Ok(options) = agent.acp_config_options_for_session(session_id).await else {
+        return;
+    };
     agent
         .gateway
         .forward_fire_and_forget(acp::SessionNotification::new(

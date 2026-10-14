@@ -109,6 +109,40 @@ impl PermissionHandle {
         }
     }
 
+    pub fn session_mode_channel_open(&self) -> bool {
+        matches!(self, PermissionHandle::Actor { cmd_tx, .. } if !cmd_tx.is_closed())
+    }
+
+    /// Apply a session permission-mode change only after its manager accepts the commands.
+    pub fn try_set_session_mode(&self, yolo: bool, auto: bool) -> Result<(), ()> {
+        let PermissionHandle::Actor {
+            cmd_tx,
+            yolo_state,
+            auto_state,
+            yolo_pin,
+            ..
+        } = self
+        else {
+            return Err(());
+        };
+        if yolo && yolo_pin.is_some() {
+            return Err(());
+        }
+        let sent = (yolo || !auto)
+            .then(|| cmd_tx.send(PermissionCommand::SetYoloMode(yolo)))
+            .into_iter()
+            .chain((auto || !yolo).then(|| cmd_tx.send(PermissionCommand::SetAutoMode(auto))))
+            .all(|result| result.is_ok());
+        if !sent {
+            yolo_state.store(false, Ordering::Relaxed);
+            auto_state.store(false, Ordering::Relaxed);
+            return Err(());
+        }
+        yolo_state.store(yolo, Ordering::Relaxed);
+        auto_state.store(auto, Ordering::Relaxed);
+        Ok(())
+    }
+
     /// Enable or disable auto mode (LLM classifier).
     /// Enabling auto clears yolo and installs the default conversation-aware classifier when none is set.
     pub fn set_auto_mode(&self, enabled: bool) {
