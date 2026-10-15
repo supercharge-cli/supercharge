@@ -95,17 +95,68 @@ pub(crate) fn to_ext_response_partial<T: Serialize>(
 #[derive(Debug, Serialize)]
 pub struct Empty {}
 
+/// Read a `_meta` entry by its legacy `x.ai/<rest>` key, preferring the
+/// `_supercharge/<rest>` key when a client sends that instead.
+// TODO(acp-rename): drop the legacy key once clients send only `_supercharge/*`.
+pub(crate) fn meta_get<'a>(
+    meta: &'a serde_json::Map<String, serde_json::Value>,
+    legacy_key: &str,
+) -> Option<&'a serde_json::Value> {
+    legacy_key
+        .strip_prefix("x.ai/")
+        .and_then(|rest| meta.get(&format!("_supercharge/{rest}")))
+        .or_else(|| meta.get(legacy_key))
+}
+
+/// Extension methods that are Supercharge-native (no legacy counterpart).
+const NATIVE_SUPERCHARGE_METHODS: &[&str] = &["supercharge/sessions/changed", "supercharge/models/list"];
+
 /// Map a Supercharge extension method name to the legacy name it aliases (both stay accepted).
+///
+/// Every `supercharge/<rest>` method maps to the legacy `x.ai/<rest>` handler, so clients
+/// may send either `_supercharge/<rest>` or the legacy `_x.ai/<rest>` name.
+// TODO(acp-rename): once Supercharge Studio sends only `_supercharge/*`, rename the handlers
+// themselves and drop the legacy names.
 pub(crate) fn legacy_alias(method: &str) -> Option<String> {
     if method == interject::STEER_METHOD || method == "supercharge/interject" {
         return Some(interject::INTERJECT_METHOD.to_string());
     }
-    let rest = method.strip_prefix("supercharge/queue/")?;
-    matches!(
-        rest,
-        "remove" | "reorder" | "clear" | "edit" | "interject" | "hold_edit" | "release_edit"
-    )
-    .then(|| format!("x.ai/queue/{rest}"))
+    if NATIVE_SUPERCHARGE_METHODS.contains(&method) {
+        return None;
+    }
+    if let Some(rest) = method.strip_prefix("supercharge/queue/") {
+        return matches!(
+            rest,
+            "remove" | "reorder" | "clear" | "edit" | "interject" | "hold_edit" | "release_edit"
+        )
+        .then(|| format!("x.ai/queue/{rest}"));
+    }
+    let rest = method.strip_prefix("supercharge/")?;
+    (!rest.is_empty()).then(|| format!("x.ai/{rest}"))
+}
+
+/// For an outgoing JSON-RPC *notification* (a `method` and no `id`) that still uses a
+/// legacy `_x.ai/` or `x.ai/` method name, the same frame under the `_supercharge/` name.
+/// Callers send this copy in addition to the original (dual-emit) so clients on either
+/// name keep working. Requests and responses are never duplicated: a request answered
+/// twice would break the client.
+// TODO(acp-rename): drop the legacy copy once Supercharge Studio listens on `_supercharge/*` only.
+pub(crate) fn supercharge_notification_alias(frame: &str) -> Option<String> {
+    if !frame.contains("x.ai/") {
+        return None;
+    }
+    let mut value: serde_json::Value = serde_json::from_str(frame).ok()?;
+    let obj = value.as_object_mut()?;
+    if obj.contains_key("id") {
+        return None;
+    }
+    let method = obj.get("method")?.as_str()?;
+    let rest = method
+        .strip_prefix("_x.ai/")
+        .or_else(|| method.strip_prefix("x.ai/"))?;
+    let renamed = format!("_supercharge/{rest}");
+    obj.insert("method".to_string(), serde_json::Value::String(renamed));
+    serde_json::to_string(&value).ok()
 }
 
 #[cfg(test)]
@@ -126,5 +177,37 @@ mod alias_tests {
         }
         assert_eq!(legacy_alias("supercharge/queue/bogus"), None);
         assert_eq!(legacy_alias("x.ai/interject"), None);
+        assert_eq!(legacy_alias("supercharge/sessions/changed"), None);
+        for m in [
+            "capabilities",
+            "fs_notify",
+            "hooks",
+            "mcp/sdk",
+            "pluginDirs",
+            "mcp/server_status",
+            "session_notification",
+            "interject",
+        ] {
+            assert_eq!(
+                legacy_alias(&format!("supercharge/{m}")),
+                Some(format!("x.ai/{m}"))
+            );
+        }
+    }
+
+    #[test]
+    fn outgoing_notifications_get_supercharge_copy() {
+        use super::supercharge_notification_alias as alias;
+        let n = r#"{"jsonrpc":"2.0","method":"_x.ai/mcp/servers_updated","params":{"a":1}}"#;
+        let v: serde_json::Value = serde_json::from_str(&alias(n).unwrap()).unwrap();
+        assert_eq!(v["method"], "_supercharge/mcp/servers_updated");
+        assert_eq!(v["params"]["a"], 1);
+        let bare = r#"{"jsonrpc":"2.0","method":"x.ai/session_notification","params":{}}"#;
+        let v: serde_json::Value = serde_json::from_str(&alias(bare).unwrap()).unwrap();
+        assert_eq!(v["method"], "_supercharge/session_notification");
+        // Requests and responses are never duplicated.
+        assert!(alias(r#"{"jsonrpc":"2.0","id":3,"method":"_x.ai/ask_user_question"}"#).is_none());
+        assert!(alias(r#"{"jsonrpc":"2.0","id":3,"result":{"x.ai/k":1}}"#).is_none());
+        assert!(alias(r#"{"jsonrpc":"2.0","method":"session/update"}"#).is_none());
     }
 }

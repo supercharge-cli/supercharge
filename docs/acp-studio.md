@@ -52,3 +52,27 @@ There is no account login. `initialize` advertises no auth methods and `authenti
 - `session/list` takes an optional `cwd` (omit for all projects) and a `cursor`; rows carry `cwd`, `title`, `updatedAt`.
 - `_supercharge/sessions/changed` notification: `{ changes: [{ kind: "created"|"updated"|"deleted", sessionId, cwd }] }`,
   emitted within ~2 s when this or any other CLI process changes a session. Writes still go through the CLI.
+
+## Extension names (`_supercharge/*`)
+
+Every legacy `_x.ai/<name>` extension method, notification and capability key has a
+`_supercharge/<name>` equivalent. Both are accepted during the migration:
+
+| Direction | Legacy name | Supercharge name | Behaviour now |
+|---|---|---|---|
+| Client → agent requests and notifications | `_x.ai/<name>` | `_supercharge/<name>` | Both accepted (same handler) |
+| Agent → client notifications (WebSocket) | `_x.ai/<name>` | `_supercharge/<name>` | Dual-emitted: the `_supercharge/` frame first, then the legacy one |
+| Agent → client requests (e.g. `ask_user_question`, `mcp/elicit`, `mcp/sdk_call`) | `_x.ai/<name>` | — | Legacy name only (a request can't be sent twice) |
+| `initialize` capability keys | `x.ai/fs_notify`, `x.ai/hooks`, `x.ai/capabilities`, `x.ai/mcp/sdk`, `x.ai/pluginDirs` | `_supercharge/fs_notify`, `_supercharge/hooks`, `_supercharge/capabilities`, `_supercharge/mcp/sdk`, `_supercharge/pluginDirs` | Both advertised |
+| Client `_meta` keys read by the agent | `x.ai/hooks`, `x.ai/fs_notify` | `_supercharge/hooks`, `_supercharge/fs_notify` | Both read (Supercharge name wins) |
+
+Examples: `_x.ai/session_notification` → `_supercharge/session_notification`,
+`_x.ai/mcp/server_status` → `_supercharge/mcp/server_status`,
+`_x.ai/mcp/servers_updated` → `_supercharge/mcp/servers_updated`,
+`_x.ai/interject` → `_supercharge/interject` (also `_supercharge/session/steer`).
+
+Supercharge-only names with no legacy form: `_supercharge/sessions/changed`, `_supercharge/models/list`,
+`_supercharge/session/steer`.
+
+Migrate Studio to the `_supercharge/` names and ignore the duplicate legacy notification.
+The legacy names will be removed in a later release.

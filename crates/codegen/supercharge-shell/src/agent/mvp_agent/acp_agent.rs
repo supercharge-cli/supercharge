@@ -573,6 +573,17 @@ impl acp::Agent for MvpAgent {
                     "x.ai/capabilities": {
                         "toolOverrides": tool_overrides_capability(),
                     },
+                    // Same capabilities under the Supercharge names.
+                    // TODO(acp-rename): drop the legacy keys above once clients migrate.
+                    "_supercharge/fs_notify": true,
+                    "_supercharge/hooks": {
+                        "blockingEvents": crate::extensions::hooks::ADVERTISED_BLOCKING_EVENTS,
+                        "decisions": crate::extensions::hooks::ADVERTISED_DECISIONS,
+                        "stopSignals": crate::extensions::hooks::ADVERTISED_STOP_SIGNALS,
+                    },
+                    "_supercharge/capabilities": {
+                        "toolOverrides": tool_overrides_capability(),
+                    },
                 })
                                 .as_object()
                                 .cloned(),
@@ -605,6 +616,9 @@ impl acp::Agent for MvpAgent {
                     // `session/new` / `session/load` accept per-session plugin roots in `_meta.pluginDirs`
                     // The SDKs gate `GrokOptions.plugins` on this
                     (SESSION_PLUGIN_DIRS_CAPABILITY_KEY): true,
+                    // TODO(acp-rename): legacy keys above; Supercharge names below.
+                    "_supercharge/mcp/sdk": true,
+                    "_supercharge/pluginDirs": true,
                     "currentWorkingDirectory": current_working_directory.to_string_lossy().to_string(),
                     "agentVersion": supercharge_version::VERSION,
                     "agentId": agent_id(),

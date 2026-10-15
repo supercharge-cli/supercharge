@@ -1,6 +1,6 @@
 //! WebSocket server for remote agent connections.
 //!
-//! Remote TUI clients connect here to a grok agent running on a different machine.
+//! Remote TUI clients connect here to a Supercharge agent running on a different machine.
 //!
 //! The agent persists across WebSocket reconnections: a single MvpAgent instance is created on first connection and reused for all later ones.
 //! Session actors (and any in-flight prompts) therefore survive client disconnects.
@@ -477,6 +477,13 @@ async fn handle_connection(ws: WebSocket, state: Arc<ServerState>, peer_addr: So
         loop {
             tokio::select! {
                 Some(msg) = from_agent_rx.recv() => {
+                    // Dual-emit: notifications still named `_x.ai/*` also go out as
+                    // `_supercharge/*`. TODO(acp-rename): drop the legacy frame later.
+                    if let Some(renamed) = crate::extensions::supercharge_notification_alias(&msg)
+                        && ws_write.send(Message::Text(renamed.into())).await.is_err()
+                    {
+                        break;
+                    }
                     if ws_write.send(Message::Text(msg.into())).await.is_err() {
                         break;
                     }

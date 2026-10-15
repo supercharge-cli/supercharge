@@ -161,7 +161,7 @@ pub(crate) struct ClientHookResponse {
 pub(crate) fn parse_client_hooks(meta: Option<&acp::Meta>) -> ClientHooks {
     let mut hooks = ClientHooks::new();
     let Some(map) = meta
-        .and_then(|m| m.get("x.ai/hooks"))
+        .and_then(|m| crate::extensions::meta_get(m, "x.ai/hooks"))
         .and_then(|h| h.as_object())
     else {
         return hooks;
@@ -188,7 +188,7 @@ pub(crate) fn parse_client_hooks(meta: Option<&acp::Meta>) -> ClientHooks {
 }
 
 pub(crate) fn reconnect_client_hooks(meta: Option<&acp::Meta>) -> Option<ClientHooks> {
-    meta.and_then(|m| m.get("x.ai/hooks"))
+    meta.and_then(|m| crate::extensions::meta_get(m, "x.ai/hooks"))
         .map(|_| parse_client_hooks(meta))
 }
 
