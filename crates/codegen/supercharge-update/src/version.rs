@@ -10,7 +10,7 @@ use supercharge_shell::env::GrokBuildEnvironment;
 use supercharge_shell::util::grok_home::grok_home;
 
 const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
-const NPM_PACKAGE: &str = "@xai-official/grok";
+const NPM_PACKAGE: &str = "@supercharge-cli/supercharge";
 pub const GH_RELEASE_REPO: &str = "supercharge-cli/supercharge-releases";
 
 /// Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and binaries

@@ -71,7 +71,7 @@ fn manual_install_cmd(channel: &str) -> String {
 
 fn reinstall_hint(installer: &str, channel: &str) -> String {
     match installer {
-        "npm" => "Please reinstall via npm:\n  npm i -g @xai-official/grok".to_string(),
+        "npm" => "Please reinstall via npm:\n  npm i -g @supercharge-cli/supercharge".to_string(),
         "gh-release" => format!(
             "Please reinstall via GitHub Releases:\n  https://github.com/{}/releases/latest",
             crate::version::GH_RELEASE_REPO
@@ -2419,7 +2419,7 @@ fn install_npm(target: Option<&str>, channel: &str, npm_registry: Option<&str>) 
     warn_if_other_grok_processes_running();
 
     let version_arg = match target {
-        Some(ver) => format!("@xai-official/grok@{ver}"),
+        Some(ver) => format!("@supercharge-cli/supercharge@{ver}"),
         None => {
             // All current callers resolve the version via get_latest_version (max(stable, alpha) for the alpha channel) before reaching here
             // Falling back to a raw dist-tag would bypass that logic, so warn loudly if this path is ever hit
@@ -2428,7 +2428,7 @@ fn install_npm(target: Option<&str>, channel: &str, npm_registry: Option<&str>) 
                 "install_npm called without a resolved version, falling back to dist-tag"
             );
             format!(
-                "@xai-official/grok@{}",
+                "@supercharge-cli/supercharge@{}",
                 if channel == "alpha" {
                     "alpha"
                 } else {

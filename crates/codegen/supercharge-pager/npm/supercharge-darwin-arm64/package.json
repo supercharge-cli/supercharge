@@ -1,0 +1,19 @@
+{
+    "name": "@supercharge-cli/supercharge-darwin-arm64",
+    "version": "0.2.0-dev",
+    "description": "darwin-arm64 binary for @supercharge-cli/supercharge. Do not install directly; install @supercharge-cli/supercharge instead.",
+    "license": "Apache-2.0",
+    "files": [
+        "bin/",
+        "THIRD_PARTY_NOTICES.md"
+    ],
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "publishConfig": {
+        "access": "public"
+    }
+}
