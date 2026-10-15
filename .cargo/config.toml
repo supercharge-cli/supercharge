@@ -32,7 +32,8 @@ rustflags = [
 ]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "force-unwind-tables=yes"]
+# panic=abort in release: unwind tables are not needed and cost ~10 MB.
+rustflags = ["-C", "force-unwind-tables=no"]
 
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "target-cpu=neoverse-v2", "-C", "force-unwind-tables=yes"]

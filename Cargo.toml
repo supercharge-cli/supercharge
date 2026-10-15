@@ -390,8 +390,12 @@ zip = "3"
 zstd = "0.13"
 
 [profile.release]
-incremental = true
+incremental = false
 panic = "abort"
+strip = true
+lto = "fat"
+codegen-units = 1
+opt-level = "s"
 
 # Hardened release profile for shipping to end users (alpha + stable).
 # Use `cargo build --profile release-dist` for distribution builds.
