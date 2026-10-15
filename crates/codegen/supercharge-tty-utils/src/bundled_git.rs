@@ -1,10 +1,10 @@
-//! The MinGit the grok Windows installer places under
-//! `%LOCALAPPDATA%\grok\git\<version>\cmd\git.exe`.
+//! The MinGit the Supercharge Windows installer places under
+//! `%LOCALAPPDATA%\supercharge\git\<version>\cmd\git.exe`.
 //!
 //! Located once per process. A production spawn that resolves `git` by name
 //! calls [`prepend_bundled_git_path`] itself to put the `cmd` directory ahead
 //! of the user's `PATH` entries in the child's `PATH`, so that child resolves
-//! `git` to the version grok was tested with (a caller that set its own
+//! `git` to the version Supercharge was tested with (a caller that set its own
 //! `PATH` on the `Command` keeps it, prepended; a caller that replaced the
 //! environment says so with [`PathBase::ExplicitOnly`] and never receives this
 //! process's `PATH`; `cmd.exe`'s cwd-first lookup is untouched). The detach
@@ -77,7 +77,10 @@ fn locate() -> Option<BundledGit> {
         return None;
     }
     let local = std::env::var_os("LOCALAPPDATA")?;
-    bundled_git_in(&PathBuf::from(local).join("grok").join("git"))
+    let local = PathBuf::from(local);
+    // Installs from before the rename keep MinGit under the old folder name.
+    bundled_git_in(&local.join("supercharge").join("git"))
+        .or_else(|| bundled_git_in(&local.join("grok").join("git")))
 }
 
 /// The newest usable `<root>\<version>` payload under `root`: `cmd\git.exe`

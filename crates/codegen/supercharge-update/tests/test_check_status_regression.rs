@@ -1,4 +1,4 @@
-//! End-to-end regression tests for `check_update_status`, locking in the exact JSON shape produced by `grok update --check --json`.
+//! End-to-end regression tests for `check_update_status`, locking in the exact JSON shape produced by `supercharge update --check --json`.
 //! The cases are failure modes real users have hit in the wild.
 //!
 //! Seen when a user is behind a corporate npm registry mirror:

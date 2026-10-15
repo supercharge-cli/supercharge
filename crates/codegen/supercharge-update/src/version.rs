@@ -13,13 +13,23 @@ const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
 const NPM_PACKAGE: &str = "@supercharge-cli/supercharge";
 pub const GH_RELEASE_REPO: &str = "supercharge-cli/supercharge-releases";
 
-/// Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and binaries
-/// (`/grok-{version}-{os}-{arch}`). Host this layout yourself with
-/// `deploy/publish-cli-feed.sh`.
-pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://cli.grok.com";
+/// Prefix of versioned downloads in `~/.supercharge/downloads/`
+/// (`supercharge-{version}-{os}-{arch}`).
+pub(crate) const BIN_PREFIX: &str = "supercharge";
 
-/// Fallback Supercharge artifact host when the primary feed is unreachable.
-pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://assets.grok.com/cli";
+/// Prefix the pre-rename builds used for the same downloads (and for the
+/// `bin/` links, completions and `-latest` alias). Only read so existing
+/// installs keep updating and get migrated; never written.
+pub(crate) const LEGACY_BIN_PREFIX: &str = "grok";
+
+/// Optional Supercharge CLI feed: channel pointers (`/stable`, `/alpha`) and
+/// binaries (`/supercharge-{version}-{os}-{arch}`). Only used as a fallback
+/// when GitHub Releases is unreachable, or when `cli.update_base_url` /
+/// `SUPERCHARGE_UPDATE_BASE_URL` points at a self-hosted feed.
+pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://www.superchargeai.in/cli";
+
+/// Fallback feed host when the primary feed is unreachable.
+pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://superchargeai.in/cli";
 
 /// CLI base URLs in preference order.
 /// Callers (channel-pointer fetch, binary download, in-app updater) try each in turn and stop at the first success.
@@ -101,7 +111,7 @@ fn is_loopback_base(base: &str) -> bool {
 /// `GrokBuildEnvironment` enum directly.
 #[derive(Debug, Clone)]
 pub struct UpdateConfig {
-    /// Chat API proxy base URL (versioned `https://cli-chat-proxy.grok.com/v1` endpoint).
+    /// Chat API proxy base URL (versioned `https://cli-chat-proxy.supercharge.com/v1` endpoint).
     pub proxy_base_url: String,
     /// Auth scope key for `~/.supercharge/auth.json`.
     pub auth_scope: String,
@@ -526,7 +536,9 @@ pub fn installed_on_disk_version() -> Option<String> {
         let target = std::fs::read_link(&app).ok()?;
         // metadata() follows the symlink: Err means the target is gone (dangling link) and the version it names is not actually on disk
         std::fs::metadata(&app).ok()?;
-        version_from_versioned_binary_name(target.file_name()?.to_str()?, "grok")
+        let name = target.file_name()?.to_str()?;
+        version_from_versioned_binary_name(name, BIN_PREFIX)
+            .or_else(|| version_from_versioned_binary_name(name, LEGACY_BIN_PREFIX))
     }
     #[cfg(not(unix))]
     {
@@ -534,9 +546,9 @@ pub fn installed_on_disk_version() -> Option<String> {
     }
 }
 
-/// Handles the internal layout (`grok-0.1.150-macos-aarch64`) and the npm layout without a platform suffix
-/// (`grok-0.1.150`). Pre-releases parse whole: `grok-0.1.150-alpha.1-linux-x86_64` gives `0.1.150-alpha.1`. Unknown
-/// layouts (`grok-latest`, `supercharge-pager-*` when `bin_prefix` is `grok`) return `None` instead of garbage.
+/// Handles the internal layout (`supercharge-0.1.150-macos-aarch64`) and the npm layout without a platform suffix
+/// (`supercharge-0.1.150`). Pre-releases parse whole: `supercharge-0.1.150-alpha.1-linux-x86_64` gives `0.1.150-alpha.1`. Unknown
+/// layouts (`supercharge-latest`, `supercharge-pager-*` when `bin_prefix` is `supercharge`) return `None` instead of garbage.
 pub(crate) fn version_from_versioned_binary_name(name: &str, bin_prefix: &str) -> Option<String> {
     const PLATFORM_OS: &[&str] = &["macos", "linux", "darwin", "windows"];
     let suffix = name.strip_prefix(bin_prefix)?.strip_prefix('-')?;
@@ -631,8 +643,8 @@ mod tests {
         // Prefix-check bypass vectors.
         assert!(!is_loopback_base("http://127.0.0.1:9@evil.com"));
         assert!(!is_loopback_base("http://localhost.evil.com:80"));
-        assert!(!is_loopback_base("https://x.ai/cli"));
-        assert!(!is_loopback_base("https://cli.grok.com"));
+        assert!(!is_loopback_base("https://example.com/cli"));
+        assert!(!is_loopback_base("https://www.superchargeai.in/cli"));
         assert!(!is_loopback_base("http://192.168.1.1:80"));
         assert!(!is_loopback_base(""));
     }
@@ -640,8 +652,8 @@ mod tests {
     #[test]
     fn allowed_update_base_accepts_https_and_loopback() {
         use super::is_allowed_update_base;
-        assert!(is_allowed_update_base("https://cli.grok.com"));
-        assert!(is_allowed_update_base("https://assets.grok.com/cli"));
+        assert!(is_allowed_update_base("https://www.superchargeai.in/cli"));
+        assert!(is_allowed_update_base("https://superchargeai.in/cli"));
         assert!(is_allowed_update_base("http://127.0.0.1:8971"));
         assert!(!is_allowed_update_base("http://example.com/cli"));
         assert!(!is_allowed_update_base(
@@ -666,36 +678,49 @@ mod tests {
         );
     }
 
-    /// Disk-version probe: parsing the version out of the managed install's symlink-target file name (`grok-<version>-<platform>`).
+    /// Disk-version probe: parsing the version out of the managed install's symlink-target file name (`supercharge-<version>-<platform>`).
     #[test]
     fn test_version_from_versioned_binary_name() {
+        // Pre-rename downloads still parse under the legacy prefix (migration path).
+        assert_eq!(
+            version_from_versioned_binary_name(
+                &format!("{LEGACY_BIN_PREFIX}-0.2.46-linux-x86_64"),
+                LEGACY_BIN_PREFIX
+            )
+            .as_deref(),
+            Some("0.2.46")
+        );
+        assert_eq!(
+            version_from_versioned_binary_name(&format!("{LEGACY_BIN_PREFIX}-0.2.46"), BIN_PREFIX),
+            None
+        );
         let cases: &[(&str, Option<&str>)] = &[
-            ("grok-0.2.46-darwin-arm64", Some("0.2.46")),
-            ("grok-0.1.220-linux-x86_64", Some("0.1.220")),
-            ("grok-0.2.5-windows-x86_64.exe", Some("0.2.5")),
+            ("supercharge-0.2.46-darwin-arm64", Some("0.2.46")),
+            ("supercharge-0.1.220-linux-x86_64", Some("0.1.220")),
+            ("supercharge-0.2.5-windows-x86_64.exe", Some("0.2.5")),
             // Pre-releases must round-trip whole
             // Truncating to "0.1.220" would make an alpha install masquerade as the release and mask updates from alpha to stable
-            ("grok-0.1.220-alpha.4-linux-x86_64", Some("0.1.220-alpha.4")),
-            ("grok-0.1.220-alpha.4", Some("0.1.220-alpha.4")), // npm layout
-            ("grok-pager-0.1.5-darwin-arm64", None),           // "pager" is not a version
-            ("grok-garbage-darwin-arm64", None),               // unparseable version
-            ("grok-0.2.46", Some("0.2.46")),                   // no platform suffix
+            ("supercharge-0.1.220-alpha.4-linux-x86_64", Some("0.1.220-alpha.4")),
+            ("supercharge-0.1.220-alpha.4", Some("0.1.220-alpha.4")), // npm layout
+            ("supercharge-pager-0.1.5-darwin-arm64", None),           // "pager" is not a version
+            ("supercharge-garbage-darwin-arm64", None),               // unparseable version
+            ("supercharge-0.2.46", Some("0.2.46")),                   // no platform suffix
             ("other-0.2.46-darwin-arm64", None),               // wrong prefix
-            ("grok-latest", None),                             // symlink alias, not a version
-            ("grok", None),                                    // bare name
+            ("supercharge-latest", None),                             // symlink alias, not a version
+            ("supercharge", None),                             // bare name
             ("", None),
         ];
         for (name, expected) in cases {
             assert_eq!(
-                version_from_versioned_binary_name(name, "grok").as_deref(),
+                version_from_versioned_binary_name(name, BIN_PREFIX).as_deref(),
                 *expected,
                 "version_from_versioned_binary_name({name:?})"
             );
         }
 
-        // bin_prefix discrimination: the pager binary parses under its own prefix but not under "grok"
+        // bin_prefix discrimination: the pager binary parses under its own prefix but not under "supercharge"
         assert_eq!(
-            version_from_versioned_binary_name("grok-pager-0.1.5-darwin-arm64", "grok-pager")
+            version_from_versioned_binary_name("supercharge-pager-0.1.5-darwin-arm64", "supercharge-pager")
                 .as_deref(),
             Some("0.1.5")
         );

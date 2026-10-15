@@ -103,7 +103,7 @@ async fn write_version_cache_records_recent_timestamp() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// version.json wire format — the on-disk file is read by every grok launch.
+// version.json wire format — the on-disk file is read by every supercharge launch.
 // ─────────────────────────────────────────────────────────────────────────────
 #[tokio::test]
 #[serial]

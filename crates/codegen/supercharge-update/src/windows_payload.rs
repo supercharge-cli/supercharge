@@ -1,12 +1,12 @@
-//! The Windows-only payload a grok release ships beside `grok.exe`: the grove
+//! The Windows-only payload a supercharge release ships beside `supercharge.exe`: the grove
 //! hook exes (`grove.exe`, `grove-fsmonitor.exe`, `grove-credential.exe`,
-//! assumes) and the bundled MinGit under `%LOCALAPPDATA%\grok\git\<mingit-version>\`
+//! assumes) and the bundled MinGit under `%LOCALAPPDATA%\supercharge\git\<mingit-version>\`
 //! that `supercharge_tty_utils::bundled_git()` locates.
 //!
-//! Fetched after the grok binary is smoke-tested, activated after the managed
+//! Fetched after the supercharge binary is smoke-tested, activated after the managed
 //! bin swap, always best-effort: a release without the payload (anything
 //! before it shipped), a signer that has not published the hook exes yet, or a
-//! failed fetch leaves grok updated and the payload as it was. The pure parts
+//! failed fetch leaves supercharge updated and the payload as it was. The pure parts
 //! (names, sidecar parsing, the prune rule, archive extraction) build and test
 //! everywhere; the network and install steps are Windows-only.
 
@@ -56,9 +56,9 @@ pub(super) fn grove_object_name(exe: &str, version: &str, platform: &str) -> Str
     format!("{exe}-{version}-{platform}")
 }
 
-/// `grok-<ver>-<platform>-mingit`; `.zip`, `.zip.sha256` and `.version` hang off it.
+/// `supercharge-<ver>-<platform>-mingit`; `.zip`, `.zip.sha256` and `.version` hang off it.
 pub(super) fn mingit_object_base(version: &str, platform: &str) -> String {
-    format!("grok-{version}-{platform}-mingit")
+    format!("{}-{version}-{platform}-mingit", crate::version::BIN_PREFIX)
 }
 
 /// The digest from a `sha256sum` sidecar (`<hex>  <name>`), lowercased.
@@ -76,7 +76,7 @@ pub(super) fn valid_mingit_version(version: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
-/// `.staging-<grok-version>`: per grok release, so a crashed extraction of an
+/// `.staging-<supercharge-version>`: per supercharge release, so a crashed extraction of an
 /// older release never collides with this one and is swept by the prune.
 pub(super) fn staging_dir_name(grok_version: &str) -> String {
     format!("{STAGING_PREFIX}{grok_version}")
@@ -200,10 +200,10 @@ mod windows {
     use futures::future::join_all;
     use std::path::{Path, PathBuf};
 
-    /// `%LOCALAPPDATA%\grok\git`, the root `supercharge_tty_utils::bundled_git` scans.
+    /// `%LOCALAPPDATA%\supercharge\git`, the root `supercharge_tty_utils::bundled_git` scans.
     fn mingit_root() -> Option<PathBuf> {
         let local = std::env::var_os("LOCALAPPDATA")?;
-        Some(PathBuf::from(local).join("grok").join("git"))
+        Some(PathBuf::from(local).join("supercharge").join("git"))
     }
 
     /// `Ok(None)` on 404 (the release predates the object), the body
@@ -402,7 +402,7 @@ mod windows {
         }
     }
 
-    /// Install what [`download`] fetched: the hook exes beside `grok.exe` in
+    /// Install what [`download`] fetched: the hook exes beside `supercharge.exe` in
     /// `bin_dir` and MinGit under `git\<version>` (independent, so together),
     /// then prune old MinGit versions. Best-effort; the downloads are removed
     /// afterwards either way.
@@ -443,7 +443,7 @@ mod windows {
         let _ = tokio::fs::remove_file(&mingit.zip).await;
     }
 
-    /// The same all-or-nothing replace as the managed `grok.exe`/`agent.exe`
+    /// The same all-or-nothing replace as the managed `supercharge.exe`/`agent.exe`
     /// swap, over the three hook exes.
     async fn install_grove_exes(files: &[PathBuf; 3], bin_dir: &Path) -> Result<()> {
         let pairs: Vec<(PathBuf, PathBuf)> = files
@@ -454,7 +454,7 @@ mod windows {
         replace_managed_bins(&pairs).await
     }
 
-    /// Extract into `git\.staging-<grok-version>`, check the tree is usable,
+    /// Extract into `git\.staging-<supercharge-version>`, check the tree is usable,
     /// then rename onto `git\<version>` so the locator only ever sees a
     /// complete tree under a version name.
     async fn install_mingit(
@@ -546,7 +546,7 @@ mod tests {
         );
         assert_eq!(
             mingit_object_base("0.2.10", "windows-aarch64"),
-            "grok-0.2.10-windows-aarch64-mingit"
+            "supercharge-0.2.10-windows-aarch64-mingit"
         );
         assert_eq!(staging_dir_name("0.2.10"), ".staging-0.2.10");
     }
@@ -556,7 +556,7 @@ mod tests {
         let digest = "56D7B226B7693196CFC71FEF26568F536C4A021AB6C37FF2DB4287BED908E96E";
         assert_eq!(
             parse_sha256_sidecar(&format!(
-                "{digest}  grok-0.2.10-windows-x86_64-mingit.zip\n"
+                "{digest}  supercharge-0.2.10-windows-x86_64-mingit.zip\n"
             )),
             Some(digest.to_ascii_lowercase())
         );

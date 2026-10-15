@@ -2,10 +2,10 @@ use super::*;
 
 #[test]
 fn test_tmp_download_path_is_unique_per_version_and_per_attempt() {
-    // The old `with_extension("tmp")` collapsed every 0.1.x versioned name onto a single `grok-0.1.tmp`
+    // The old `with_extension("tmp")` collapsed every 0.1.x versioned name onto a single `supercharge-0.1.tmp`
     // The helper must keep distinct versions distinct AND make repeated attempts (same process, e.g. concurrent tokio tasks) unique.
-    let dest_181 = std::path::Path::new("/home/u/.supercharge/downloads/grok-0.1.181-linux-x86_64");
-    let dest_182 = std::path::Path::new("/home/u/.supercharge/downloads/grok-0.1.182-linux-x86_64");
+    let dest_181 = std::path::Path::new("/home/u/.supercharge/downloads/supercharge-0.1.181-linux-x86_64");
+    let dest_182 = std::path::Path::new("/home/u/.supercharge/downloads/supercharge-0.1.182-linux-x86_64");
 
     let a = tmp_download_path(dest_181);
     let b = tmp_download_path(dest_182);
@@ -19,7 +19,7 @@ fn test_tmp_download_path_is_unique_per_version_and_per_attempt() {
 
     let name = a.file_name().unwrap().to_string_lossy().to_string();
     assert!(
-        name.starts_with("grok-0.1.181-linux-x86_64."),
+        name.starts_with("supercharge-0.1.181-linux-x86_64."),
         "full versioned name must be preserved: {name}"
     );
     assert!(
@@ -77,7 +77,7 @@ async fn test_atomic_symlink_swap_creates_new_symlink() {
     let target = dir.path().join("binary-v1");
     std::fs::write(&target, "v1").unwrap();
 
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     // No existing symlink, so the swap should create one
     atomic_symlink_swap(&target, &link).await.unwrap();
 
@@ -96,7 +96,7 @@ async fn test_atomic_symlink_swap_replaces_existing() {
     let target_v2 = dir.path().join("binary-v2");
     std::fs::write(&target_v2, "v2").unwrap();
 
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     // Set up initial symlink to v1.
     std::os::unix::fs::symlink(&target_v1, &link).unwrap();
     assert_eq!(std::fs::read_to_string(&link).unwrap(), "v1");
@@ -118,7 +118,7 @@ async fn test_atomic_symlink_swap_preserves_old_target() {
     let target_v2 = dir.path().join("binary-v2");
     std::fs::write(&target_v2, "v2-content").unwrap();
 
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     std::os::unix::fs::symlink(&target_v1, &link).unwrap();
 
     atomic_symlink_swap(&target_v2, &link).await.unwrap();
@@ -141,7 +141,7 @@ async fn test_atomic_symlink_swap_no_intermediate_missing_state() {
     let target_v2 = dir.path().join("binary-v2");
     std::fs::write(&target_v2, "v2").unwrap();
 
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     std::os::unix::fs::symlink(&target_v1, &link).unwrap();
     assert!(link.exists(), "link should exist before swap");
 
@@ -161,8 +161,8 @@ async fn test_atomic_symlink_swap_replaces_regular_file() {
     let target = dir.path().join("binary-v2");
     std::fs::write(&target, "v2").unwrap();
 
-    let link = dir.path().join("grok");
-    // Simulate an old installation where grok is a regular file.
+    let link = dir.path().join("supercharge");
+    // Simulate an old installation where supercharge is a regular file.
     std::fs::write(&link, "old-binary").unwrap();
 
     atomic_symlink_swap(&target, &link).await.unwrap();
@@ -182,7 +182,7 @@ async fn test_atomic_symlink_swap_succeeds_despite_leftover_tmp_link() {
     let target_v2 = dir.path().join("binary-v2");
     std::fs::write(&target_v2, "v2").unwrap();
 
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     std::os::unix::fs::symlink(&target_v1, &link).unwrap();
     std::os::unix::fs::symlink(&target_v1, link.with_extension("tmp-link")).unwrap();
 
@@ -213,45 +213,45 @@ fn test_installer_manages_bin_entrypoints_gate() {
 #[tokio::test]
 async fn test_reconcile_agent_repoints_diverged_agent() {
     let (_dir, bin, downloads) = managed_layout();
-    std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
-    std::fs::write(downloads.join("grok-0.1.199-macos-aarch64"), "old").unwrap();
+    std::fs::write(downloads.join("supercharge-0.2.101-macos-aarch64"), "new").unwrap();
+    std::fs::write(downloads.join("supercharge-0.1.199-macos-aarch64"), "old").unwrap();
 
     std::os::unix::fs::symlink(
-        "../downloads/grok-0.2.101-macos-aarch64",
+        "../downloads/supercharge-0.2.101-macos-aarch64",
         bin.join("supercharge"),
     )
     .unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
+    std::os::unix::fs::symlink("../downloads/supercharge-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
     assert_eq!(
         std::fs::read_link(bin.join("sc")).unwrap(),
-        std::path::PathBuf::from("../downloads/grok-0.2.101-macos-aarch64"),
+        std::path::PathBuf::from("../downloads/supercharge-0.2.101-macos-aarch64"),
     );
     assert_eq!(std::fs::read_to_string(bin.join("sc")).unwrap(), "new");
-    assert!(downloads.join("grok-0.1.199-macos-aarch64").exists());
+    assert!(downloads.join("supercharge-0.1.199-macos-aarch64").exists());
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn test_reconcile_agent_heals_legacy_unversioned_agent() {
     let (_dir, bin, downloads) = managed_layout();
-    std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
-    std::fs::write(downloads.join("grok-macos-aarch64"), "legacy").unwrap();
+    std::fs::write(downloads.join("supercharge-0.2.101-macos-aarch64"), "new").unwrap();
+    std::fs::write(downloads.join("supercharge-macos-aarch64"), "legacy").unwrap();
 
     std::os::unix::fs::symlink(
-        "../downloads/grok-0.2.101-macos-aarch64",
+        "../downloads/supercharge-0.2.101-macos-aarch64",
         bin.join("supercharge"),
     )
     .unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-macos-aarch64", bin.join("sc")).unwrap();
+    std::os::unix::fs::symlink("../downloads/supercharge-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
     assert_eq!(
         std::fs::read_link(bin.join("sc")).unwrap(),
-        std::path::PathBuf::from("../downloads/grok-0.2.101-macos-aarch64"),
+        std::path::PathBuf::from("../downloads/supercharge-0.2.101-macos-aarch64"),
     );
     assert_eq!(std::fs::read_to_string(bin.join("sc")).unwrap(), "new");
 }
@@ -260,9 +260,9 @@ async fn test_reconcile_agent_heals_legacy_unversioned_agent() {
 #[tokio::test]
 async fn test_reconcile_agent_creates_missing_agent() {
     let (_dir, bin, downloads) = managed_layout();
-    std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
+    std::fs::write(downloads.join("supercharge-0.2.101-macos-aarch64"), "new").unwrap();
     std::os::unix::fs::symlink(
-        "../downloads/grok-0.2.101-macos-aarch64",
+        "../downloads/supercharge-0.2.101-macos-aarch64",
         bin.join("supercharge"),
     )
     .unwrap();
@@ -277,8 +277,8 @@ async fn test_reconcile_agent_creates_missing_agent() {
 #[tokio::test]
 async fn test_reconcile_agent_noop_when_consistent() {
     let (_dir, bin, downloads) = managed_layout();
-    std::fs::write(downloads.join("grok-0.2.101-macos-aarch64"), "new").unwrap();
-    let target = "../downloads/grok-0.2.101-macos-aarch64";
+    std::fs::write(downloads.join("supercharge-0.2.101-macos-aarch64"), "new").unwrap();
+    let target = "../downloads/supercharge-0.2.101-macos-aarch64";
     std::os::unix::fs::symlink(target, bin.join("supercharge")).unwrap();
     std::os::unix::fs::symlink(target, bin.join("sc")).unwrap();
 
@@ -301,18 +301,18 @@ async fn test_reconcile_agent_noop_when_consistent() {
 async fn test_reconcile_agent_skips_when_grok_dangling() {
     let (_dir, bin, downloads) = managed_layout();
     std::os::unix::fs::symlink(
-        "../downloads/grok-0.2.101-macos-aarch64",
+        "../downloads/supercharge-0.2.101-macos-aarch64",
         bin.join("supercharge"),
     )
     .unwrap();
-    std::fs::write(downloads.join("grok-0.1.199-macos-aarch64"), "old").unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
+    std::fs::write(downloads.join("supercharge-0.1.199-macos-aarch64"), "old").unwrap();
+    std::os::unix::fs::symlink("../downloads/supercharge-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
     assert_eq!(
         std::fs::read_link(bin.join("sc")).unwrap(),
-        std::path::PathBuf::from("../downloads/grok-0.1.199-macos-aarch64"),
+        std::path::PathBuf::from("../downloads/supercharge-0.1.199-macos-aarch64"),
     );
 }
 
@@ -321,14 +321,14 @@ async fn test_reconcile_agent_skips_when_grok_dangling() {
 async fn test_reconcile_agent_skips_when_grok_not_symlink() {
     let (_dir, bin, downloads) = managed_layout();
     std::fs::write(bin.join("supercharge"), "copy-binary").unwrap();
-    std::fs::write(downloads.join("grok-0.1.199-macos-aarch64"), "old").unwrap();
-    std::os::unix::fs::symlink("../downloads/grok-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
+    std::fs::write(downloads.join("supercharge-0.1.199-macos-aarch64"), "old").unwrap();
+    std::os::unix::fs::symlink("../downloads/supercharge-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
     assert_eq!(
         std::fs::read_link(bin.join("sc")).unwrap(),
-        std::path::PathBuf::from("../downloads/grok-0.1.199-macos-aarch64"),
+        std::path::PathBuf::from("../downloads/supercharge-0.1.199-macos-aarch64"),
     );
 }
 
@@ -338,22 +338,22 @@ async fn test_sweep_stale_tmp_links_removes_stale_keeps_fresh_and_active() {
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("binary-v1");
     std::fs::write(&target, "v1").unwrap();
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     std::os::unix::fs::symlink(&target, &link).unwrap();
 
     // Old- and new-style leftover temp links.
-    let leftover_old = dir.path().join("grok.tmp-link");
-    let leftover_new = dir.path().join("grok.123-0.tmp-link");
+    let leftover_old = dir.path().join("supercharge.tmp-link");
+    let leftover_new = dir.path().join("supercharge.123-0.tmp-link");
     std::os::unix::fs::symlink(&target, &leftover_old).unwrap();
     std::os::unix::fs::symlink(&target, &leftover_new).unwrap();
 
-    // max_age = ZERO: every leftover is stale and removed; the active `grok` link (no `.tmp-link` suffix) is untouched
+    // max_age = ZERO: every leftover is stale and removed; the active `supercharge` link (no `.tmp-link` suffix) is untouched
     sweep_stale_tmp_links(&link, Duration::ZERO).await;
     assert!(!leftover_old.exists() && !leftover_new.exists());
     assert!(link.is_symlink(), "active link must be preserved");
 
     // A fresh leftover under a real max_age is preserved; it could be a concurrent updater's swap still in flight
-    let fresh = dir.path().join("grok.999-9.tmp-link");
+    let fresh = dir.path().join("supercharge.999-9.tmp-link");
     std::os::unix::fs::symlink(&target, &fresh).unwrap();
     sweep_stale_tmp_links(&link, Duration::from_secs(3600)).await;
     assert!(fresh.exists(), "fresh tmp-link must be preserved");
@@ -364,7 +364,7 @@ async fn test_sweep_stale_tmp_links_removes_stale_keeps_fresh_and_active() {
 async fn test_atomic_symlink_swap_multiple_sequential_swaps() {
     // Simulate four sequential swaps, v1 through v4
     let dir = tempfile::tempdir().unwrap();
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
 
     for i in 1..=4 {
         let target = dir.path().join(format!("binary-v{}", i));
@@ -397,16 +397,16 @@ async fn test_atomic_symlink_swap_with_relative_target() {
     std::fs::create_dir_all(&downloads).unwrap();
     std::fs::create_dir_all(&bin).unwrap();
 
-    std::fs::write(downloads.join("grok-0.1.203"), "v203").unwrap();
+    std::fs::write(downloads.join("supercharge-0.1.203"), "v203").unwrap();
 
-    let rel_target = std::path::Path::new("../downloads/grok-0.1.203");
-    let link = bin.join("grok");
+    let rel_target = std::path::Path::new("../downloads/supercharge-0.1.203");
+    let link = bin.join("supercharge");
     atomic_symlink_swap(rel_target, &link).await.unwrap();
 
     assert!(link.is_symlink());
     assert_eq!(
         std::fs::read_link(&link).unwrap(),
-        std::path::PathBuf::from("../downloads/grok-0.1.203")
+        std::path::PathBuf::from("../downloads/supercharge-0.1.203")
     );
     assert_eq!(std::fs::read_to_string(&link).unwrap(), "v203");
 }
@@ -414,37 +414,37 @@ async fn test_atomic_symlink_swap_with_relative_target() {
 #[cfg(unix)]
 #[test]
 fn test_relative_symlink_target_sibling_dirs() {
-    // bin/grok -> ../downloads/grok-0.1.203
-    let target = std::path::Path::new("/home/alice/.supercharge/downloads/grok-0.1.203");
-    let link = std::path::Path::new("/home/alice/.supercharge/bin/grok");
+    // bin/supercharge -> ../downloads/supercharge-0.1.203
+    let target = std::path::Path::new("/home/alice/.supercharge/downloads/supercharge-0.1.203");
+    let link = std::path::Path::new("/home/alice/.supercharge/bin/supercharge");
     let result = relative_symlink_target(target, link);
     assert_eq!(
         result,
-        std::path::PathBuf::from("../downloads/grok-0.1.203")
+        std::path::PathBuf::from("../downloads/supercharge-0.1.203")
     );
 }
 
 #[cfg(unix)]
 #[test]
 fn test_relative_symlink_target_same_dir() {
-    // downloads/grok-latest -> grok-0.1.203 (same directory)
-    let target = std::path::Path::new("/home/alice/.supercharge/downloads/grok-0.1.203");
-    let link = std::path::Path::new("/home/alice/.supercharge/downloads/grok-latest");
+    // downloads/supercharge-latest -> supercharge-0.1.203 (same directory)
+    let target = std::path::Path::new("/home/alice/.supercharge/downloads/supercharge-0.1.203");
+    let link = std::path::Path::new("/home/alice/.supercharge/downloads/supercharge-latest");
     let result = relative_symlink_target(target, link);
-    assert_eq!(result, std::path::PathBuf::from("grok-0.1.203"));
+    assert_eq!(result, std::path::PathBuf::from("supercharge-0.1.203"));
 }
 
 #[cfg(unix)]
 #[test]
 fn test_relative_symlink_target_cross_tree_stays_absolute() {
-    // /usr/local/bin/grok -> /home/alice/.supercharge/downloads/grok-0.1.203
+    // /usr/local/bin/supercharge -> /home/alice/.supercharge/downloads/supercharge-0.1.203
     // Different grandparents, so the target should stay absolute
-    let target = std::path::Path::new("/home/alice/.supercharge/downloads/grok-0.1.203");
-    let link = std::path::Path::new("/usr/local/bin/grok");
+    let target = std::path::Path::new("/home/alice/.supercharge/downloads/supercharge-0.1.203");
+    let link = std::path::Path::new("/usr/local/bin/supercharge");
     let result = relative_symlink_target(target, link);
     assert_eq!(
         result,
-        std::path::PathBuf::from("/home/alice/.supercharge/downloads/grok-0.1.203")
+        std::path::PathBuf::from("/home/alice/.supercharge/downloads/supercharge-0.1.203")
     );
 }
 
@@ -461,11 +461,11 @@ async fn test_relative_symlink_survives_directory_move() {
     let alice_bin = alice.join("bin");
     std::fs::create_dir_all(&alice_downloads).unwrap();
     std::fs::create_dir_all(&alice_bin).unwrap();
-    std::fs::write(alice_downloads.join("grok-0.1.203"), "binary-content").unwrap();
+    std::fs::write(alice_downloads.join("supercharge-0.1.203"), "binary-content").unwrap();
 
     // Create a relative symlink (what relative_symlink_target produces)
-    let rel_target = std::path::Path::new("../downloads/grok-0.1.203");
-    let link = alice_bin.join("grok");
+    let rel_target = std::path::Path::new("../downloads/supercharge-0.1.203");
+    let link = alice_bin.join("supercharge");
     atomic_symlink_swap(rel_target, &link).await.unwrap();
 
     // Verify it works at the original location
@@ -482,11 +482,11 @@ async fn test_relative_symlink_survives_directory_move() {
     assert!(copy_status.success());
 
     // Verify the symlink resolves at bob's path too
-    let bob_link = bob.join("bin").join("grok");
+    let bob_link = bob.join("bin").join("supercharge");
     assert!(bob_link.is_symlink());
     assert_eq!(
         std::fs::read_link(&bob_link).unwrap(),
-        std::path::PathBuf::from("../downloads/grok-0.1.203"),
+        std::path::PathBuf::from("../downloads/supercharge-0.1.203"),
         "symlink target should be relative"
     );
     assert_eq!(
@@ -502,7 +502,7 @@ async fn test_atomic_symlink_swap_broken_symlink_target() {
     // If the current symlink is broken (target deleted externally), the swap should still succeed
     let dir = tempfile::tempdir().unwrap();
 
-    let link = dir.path().join("grok");
+    let link = dir.path().join("supercharge");
     // Create a broken symlink that points to a file that doesn't exist
     std::os::unix::fs::symlink(dir.path().join("deleted-binary"), &link).unwrap();
     assert!(link.is_symlink());
@@ -607,35 +607,35 @@ async fn test_cleanup_old_downloads_keeps_current_plus_one() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    // Simulate 5 old grok binaries in downloads dir.
+    // Simulate 5 old supercharge binaries in downloads dir.
     for v in ["0.1.140", "0.1.141", "0.1.142", "0.1.143", "0.1.144"] {
-        std::fs::write(d.join(format!("grok-{}-macos-aarch64", v)), v).unwrap();
+        std::fs::write(d.join(format!("supercharge-{}-macos-aarch64", v)), v).unwrap();
     }
-    std::fs::write(d.join("grok-0.1.145-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.145-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.145").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.145").await;
 
     // Current must survive.
-    assert!(d.join("grok-0.1.145-macos-aarch64").exists(), "current");
+    assert!(d.join("supercharge-0.1.145-macos-aarch64").exists(), "current");
     // Newest old version (0.1.144) must survive.
-    assert!(d.join("grok-0.1.144-macos-aarch64").exists(), "N-1");
+    assert!(d.join("supercharge-0.1.144-macos-aarch64").exists(), "N-1");
     // Everything else should be deleted.
     assert!(
-        !d.join("grok-0.1.143-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.143-macos-aarch64").exists(),
         "0.1.143 should be deleted"
     );
     assert!(
-        !d.join("grok-0.1.142-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.142-macos-aarch64").exists(),
         "0.1.142 should be deleted"
     );
     assert!(
-        !d.join("grok-0.1.141-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.141-macos-aarch64").exists(),
         "0.1.141 should be deleted"
     );
     assert!(
-        !d.join("grok-0.1.140-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.140-macos-aarch64").exists(),
         "0.1.140 should be deleted"
     );
 }
@@ -645,25 +645,25 @@ async fn test_cleanup_old_downloads_does_not_touch_other_binaries() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    // grok and grok-pager should not interfere with each other.
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "old-grok").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current-grok").unwrap();
-    std::fs::write(d.join("grok-pager-0.1.140-macos-aarch64"), "old-pager").unwrap();
-    std::fs::write(d.join("grok-pager-0.1.141-macos-aarch64"), "current-pager").unwrap();
+    // supercharge and supercharge-pager should not interfere with each other.
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "old-supercharge").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current-supercharge").unwrap();
+    std::fs::write(d.join("supercharge-pager-0.1.140-macos-aarch64"), "old-pager").unwrap();
+    std::fs::write(d.join("supercharge-pager-0.1.141-macos-aarch64"), "current-pager").unwrap();
 
-    // Cleanup only grok; pager files must be untouched
+    // Cleanup only supercharge; pager files must be untouched
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists());
-    assert!(d.join("grok-0.1.140-macos-aarch64").exists()); // only old, kept as N-1
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists()); // only old, kept as N-1
     assert!(
-        d.join("grok-pager-0.1.140-macos-aarch64").exists(),
+        d.join("supercharge-pager-0.1.140-macos-aarch64").exists(),
         "pager untouched"
     );
     assert!(
-        d.join("grok-pager-0.1.141-macos-aarch64").exists(),
+        d.join("supercharge-pager-0.1.141-macos-aarch64").exists(),
         "pager untouched"
     );
 }
@@ -694,24 +694,24 @@ async fn test_cleanup_old_downloads_removes_stale_tmp_keeps_fresh_tmp() {
     let d = dir.path();
 
     // Stale tmp: abandoned by a crashed updater, so it is swept
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64.tmp"), "partial").unwrap();
-    make_stale(&d.join("grok-0.1.140-macos-aarch64.tmp"));
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64.tmp"), "partial").unwrap();
+    make_stale(&d.join("supercharge-0.1.140-macos-aarch64.tmp"));
     // Fresh tmp: a concurrent updater's in-flight download is kept, or its atomic rename would fail with ENOENT
-    std::fs::write(d.join("grok-0.1.142-macos-aarch64.77-0.tmp"), "inflight").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.142-macos-aarch64.77-0.tmp"), "inflight").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     assert!(
-        !d.join("grok-0.1.140-macos-aarch64.tmp").exists(),
+        !d.join("supercharge-0.1.140-macos-aarch64.tmp").exists(),
         "stale tmp cleaned up"
     );
     assert!(
-        d.join("grok-0.1.142-macos-aarch64.77-0.tmp").exists(),
+        d.join("supercharge-0.1.142-macos-aarch64.77-0.tmp").exists(),
         "fresh in-flight tmp must NOT be swept"
     );
     assert!(
-        d.join("grok-0.1.141-macos-aarch64").exists(),
+        d.join("supercharge-0.1.141-macos-aarch64").exists(),
         "current kept"
     );
 }
@@ -725,23 +725,23 @@ async fn test_cleanup_old_downloads_keeps_fresh_versioned_binary() {
 
     // Three old versions and the current: policy would delete .138 and .139
     for v in ["0.1.138", "0.1.139", "0.1.140"] {
-        std::fs::write(d.join(format!("grok-{v}-macos-aarch64")), v).unwrap();
+        std::fs::write(d.join(format!("supercharge-{v}-macos-aarch64")), v).unwrap();
     }
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
     make_all_stale(d);
     // .138 is re-written NOW, simulating a racer that just renamed its download into place (e.g. a rollback install racing an upgrade).
-    std::fs::write(d.join("grok-0.1.138-macos-aarch64"), "in-flight").unwrap();
+    std::fs::write(d.join("supercharge-0.1.138-macos-aarch64"), "in-flight").unwrap();
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists(), "current");
-    assert!(d.join("grok-0.1.140-macos-aarch64").exists(), "N-1 kept");
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists(), "current");
+    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists(), "N-1 kept");
     assert!(
-        d.join("grok-0.1.138-macos-aarch64").exists(),
+        d.join("supercharge-0.1.138-macos-aarch64").exists(),
         "fresh just-renamed binary must NOT be deleted"
     );
     assert!(
-        !d.join("grok-0.1.139-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.139-macos-aarch64").exists(),
         "genuinely old binary still swept"
     );
 }
@@ -752,17 +752,17 @@ async fn test_cleanup_old_downloads_skips_symlinks() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    // grok-latest is a symlink, so it must be skipped
-    let target = d.join("grok-0.1.141-macos-aarch64");
+    // supercharge-latest is a symlink, so it must be skipped
+    let target = d.join("supercharge-0.1.141-macos-aarch64");
     std::fs::write(&target, "current").unwrap();
-    std::os::unix::fs::symlink(&target, d.join("grok-latest")).unwrap();
+    std::os::unix::fs::symlink(&target, d.join("supercharge-latest")).unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     assert!(
-        d.join("grok-latest").exists(),
+        d.join("supercharge-latest").exists(),
         "symlink must not be deleted"
     );
     assert!(target.exists(), "current must not be deleted");
@@ -773,116 +773,116 @@ async fn test_cleanup_old_downloads_version_prefix_collision() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    std::fs::write(d.join("grok-0.1.14-macos-aarch64"), "current").unwrap();
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "old-140").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "old-141").unwrap();
-    std::fs::write(d.join("grok-0.1.13-macos-aarch64"), "old-13").unwrap();
+    std::fs::write(d.join("supercharge-0.1.14-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "old-140").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "old-141").unwrap();
+    std::fs::write(d.join("supercharge-0.1.13-macos-aarch64"), "old-13").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.14").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.14").await;
 
     // Current must survive.
     assert!(
-        d.join("grok-0.1.14-macos-aarch64").exists(),
+        d.join("supercharge-0.1.14-macos-aarch64").exists(),
         "current 0.1.14"
     );
     assert!(
-        d.join("grok-0.1.141-macos-aarch64").exists(),
+        d.join("supercharge-0.1.141-macos-aarch64").exists(),
         "N-1 is 0.1.141"
     );
     assert!(
-        !d.join("grok-0.1.140-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.140-macos-aarch64").exists(),
         "0.1.140 should be deleted"
     );
     assert!(
-        !d.join("grok-0.1.13-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.13-macos-aarch64").exists(),
         "0.1.13 should be deleted"
     );
 }
 
 #[tokio::test]
 async fn test_cleanup_old_downloads_pager_multi_version() {
-    // Verify cleanup works for grok-pager with multiple old versions.
+    // Verify cleanup works for supercharge-pager with multiple old versions.
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
     for v in ["0.1.148", "0.1.149", "0.1.150"] {
-        std::fs::write(d.join(format!("grok-pager-{}-linux-x64", v)), v).unwrap();
+        std::fs::write(d.join(format!("supercharge-pager-{}-linux-x64", v)), v).unwrap();
     }
-    std::fs::write(d.join("grok-pager-0.1.151-linux-x64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-pager-0.1.151-linux-x64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok-pager", "0.1.151").await;
+    cleanup_old_downloads(d, "supercharge-pager", "0.1.151").await;
 
-    assert!(d.join("grok-pager-0.1.151-linux-x64").exists(), "current");
-    assert!(d.join("grok-pager-0.1.150-linux-x64").exists(), "N-1 kept");
+    assert!(d.join("supercharge-pager-0.1.151-linux-x64").exists(), "current");
+    assert!(d.join("supercharge-pager-0.1.150-linux-x64").exists(), "N-1 kept");
     assert!(
-        !d.join("grok-pager-0.1.149-linux-x64").exists(),
+        !d.join("supercharge-pager-0.1.149-linux-x64").exists(),
         "0.1.149 deleted"
     );
     assert!(
-        !d.join("grok-pager-0.1.148-linux-x64").exists(),
+        !d.join("supercharge-pager-0.1.148-linux-x64").exists(),
         "0.1.148 deleted"
     );
 }
 
 #[tokio::test]
 async fn test_cleanup_old_downloads_npm_layout() {
-    // npm layout: files are just `grok-{version}` (no platform suffix).
+    // npm layout: files are just `supercharge-{version}` (no platform suffix).
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
     for v in ["0.1.138", "0.1.139", "0.1.140"] {
-        std::fs::write(d.join(format!("grok-{}", v)), v).unwrap();
+        std::fs::write(d.join(format!("supercharge-{}", v)), v).unwrap();
     }
-    std::fs::write(d.join("grok-0.1.141"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("grok-0.1.141").exists(), "current");
-    assert!(d.join("grok-0.1.140").exists(), "N-1 kept");
-    assert!(!d.join("grok-0.1.139").exists(), "0.1.139 deleted");
-    assert!(!d.join("grok-0.1.138").exists(), "0.1.138 deleted");
+    assert!(d.join("supercharge-0.1.141").exists(), "current");
+    assert!(d.join("supercharge-0.1.140").exists(), "N-1 kept");
+    assert!(!d.join("supercharge-0.1.139").exists(), "0.1.139 deleted");
+    assert!(!d.join("supercharge-0.1.138").exists(), "0.1.138 deleted");
 }
 
 #[tokio::test]
 async fn test_cleanup_old_downloads_alpha_versions() {
     // Alpha version filenames include pre-release tags:
-    //   grok-0.1.150-alpha.1-macos-aarch64
+    //   supercharge-0.1.150-alpha.1-macos-aarch64
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    std::fs::write(d.join("grok-0.1.148-alpha.1-macos-aarch64"), "alpha-148-1").unwrap();
-    std::fs::write(d.join("grok-0.1.148-alpha.2-macos-aarch64"), "alpha-148-2").unwrap();
-    std::fs::write(d.join("grok-0.1.149-alpha.1-macos-aarch64"), "alpha-149-1").unwrap();
+    std::fs::write(d.join("supercharge-0.1.148-alpha.1-macos-aarch64"), "alpha-148-1").unwrap();
+    std::fs::write(d.join("supercharge-0.1.148-alpha.2-macos-aarch64"), "alpha-148-2").unwrap();
+    std::fs::write(d.join("supercharge-0.1.149-alpha.1-macos-aarch64"), "alpha-149-1").unwrap();
     // Current version is the newest alpha.
-    std::fs::write(d.join("grok-0.1.150-alpha.1-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.150-alpha.1-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.150-alpha.1").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.150-alpha.1").await;
 
     // Current must survive.
     assert!(
-        d.join("grok-0.1.150-alpha.1-macos-aarch64").exists(),
+        d.join("supercharge-0.1.150-alpha.1-macos-aarch64").exists(),
         "current alpha"
     );
     // Newest old (0.1.149-alpha.1) kept as N-1.
     assert!(
-        d.join("grok-0.1.149-alpha.1-macos-aarch64").exists(),
+        d.join("supercharge-0.1.149-alpha.1-macos-aarch64").exists(),
         "N-1 alpha"
     );
     // Older alphas deleted.
     assert!(
-        !d.join("grok-0.1.148-alpha.2-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.148-alpha.2-macos-aarch64").exists(),
         "0.1.148-alpha.2 deleted"
     );
     assert!(
-        !d.join("grok-0.1.148-alpha.1-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.148-alpha.1-macos-aarch64").exists(),
         "0.1.148-alpha.1 deleted"
     );
 }
@@ -893,30 +893,30 @@ async fn test_cleanup_old_downloads_mixed_stable_and_alpha() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    std::fs::write(d.join("grok-0.1.148-macos-aarch64"), "stable-148").unwrap();
-    std::fs::write(d.join("grok-0.1.149-alpha.1-macos-aarch64"), "alpha-149").unwrap();
-    std::fs::write(d.join("grok-0.1.149-macos-aarch64"), "stable-149").unwrap();
+    std::fs::write(d.join("supercharge-0.1.148-macos-aarch64"), "stable-148").unwrap();
+    std::fs::write(d.join("supercharge-0.1.149-alpha.1-macos-aarch64"), "alpha-149").unwrap();
+    std::fs::write(d.join("supercharge-0.1.149-macos-aarch64"), "stable-149").unwrap();
     // Current is a stable release.
-    std::fs::write(d.join("grok-0.1.150-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.150-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.150").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.150").await;
 
     // Current must survive.
-    assert!(d.join("grok-0.1.150-macos-aarch64").exists(), "current");
+    assert!(d.join("supercharge-0.1.150-macos-aarch64").exists(), "current");
     // Newest old is 0.1.149 stable (semver: 0.1.149 > 0.1.149-alpha.1).
     assert!(
-        d.join("grok-0.1.149-macos-aarch64").exists(),
+        d.join("supercharge-0.1.149-macos-aarch64").exists(),
         "N-1 is stable 0.1.149"
     );
     // The rest should be deleted.
     assert!(
-        !d.join("grok-0.1.149-alpha.1-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.149-alpha.1-macos-aarch64").exists(),
         "alpha 0.1.149-alpha.1 deleted"
     );
     assert!(
-        !d.join("grok-0.1.148-macos-aarch64").exists(),
+        !d.join("supercharge-0.1.148-macos-aarch64").exists(),
         "stable 0.1.148 deleted"
     );
 }
@@ -989,11 +989,11 @@ fn test_reinstall_hint_internal_alpha_sets_channel() {
 
 #[test]
 fn test_reinstall_hint_enterprise_uses_enterprise_script() {
-    // Enterprise ships via its own bootstrap script (channel hardcoded there), never install.sh with SUPERCHARGE_CHANNEL
+    // Supercharge has no separate enterprise script: enterprise uses the standard installer, without SUPERCHARGE_CHANNEL
     let hint = reinstall_hint("internal", "enterprise");
     assert!(
-        hint.contains("/enterprise-install."),
-        "enterprise must use the published enterprise-install script: {hint}"
+        hint.contains("https://www.superchargeai.in/install."),
+        "enterprise must use the published installer: {hint}"
     );
     assert!(
         !hint.contains("SUPERCHARGE_CHANNEL"),
@@ -1464,33 +1464,33 @@ fn test_corrected_arch() {
 async fn test_cleanup_old_downloads_invalid_current_version_is_no_op() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "v140").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "v141").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "v140").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "v141").unwrap();
 
     // An invalid version string makes cleanup early-return without deleting
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "not-a-version").await;
-    assert!(d.join("grok-0.1.140-macos-aarch64").exists());
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists());
+    cleanup_old_downloads(d, "supercharge", "not-a-version").await;
+    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists());
 }
 #[tokio::test]
 async fn test_cleanup_old_downloads_files_with_non_digit_suffix_skipped() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
-    // Files matching prefix but with a non-digit-leading suffix must be ignored (e.g. grok-latest, supercharge-pager-* when prefix is grok).
-    std::fs::write(d.join("grok-latest"), "alias").unwrap();
-    std::fs::write(d.join("grok-pager-0.1.141-macos-aarch64"), "pager").unwrap();
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "v140").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    // Files matching prefix but with a non-digit-leading suffix must be ignored (e.g. supercharge-latest, supercharge-pager-* when prefix is supercharge).
+    std::fs::write(d.join("supercharge-latest"), "alias").unwrap();
+    std::fs::write(d.join("supercharge-pager-0.1.141-macos-aarch64"), "pager").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "v140").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    // grok-latest and grok-pager-* must be untouched.
-    assert!(d.join("grok-latest").exists());
-    assert!(d.join("grok-pager-0.1.141-macos-aarch64").exists());
+    // supercharge-latest and supercharge-pager-* must be untouched.
+    assert!(d.join("supercharge-latest").exists());
+    assert!(d.join("supercharge-pager-0.1.141-macos-aarch64").exists());
 }
 
 #[tokio::test]
@@ -1498,47 +1498,47 @@ async fn test_cleanup_old_downloads_unparseable_version_skipped() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
     // Files with the prefix and a leading digit but unparseable as semver are ignored (not deleted, not counted)
-    std::fs::write(d.join("grok-9garbage-macos-aarch64"), "junk").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-9garbage-macos-aarch64"), "junk").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     assert!(
-        d.join("grok-9garbage-macos-aarch64").exists(),
+        d.join("supercharge-9garbage-macos-aarch64").exists(),
         "unparseable file must be ignored, not deleted"
     );
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists());
 }
 
 #[tokio::test]
 async fn test_cleanup_old_downloads_only_current_present_no_op() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists());
 }
 
 #[tokio::test]
 async fn test_cleanup_old_downloads_only_one_old_keeps_it() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "v140").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "v140").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     // Only one old version, so it is kept as N-1
-    assert!(d.join("grok-0.1.140-macos-aarch64").exists(), "N-1 kept");
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists(), "current");
+    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists(), "N-1 kept");
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists(), "current");
 }
 
 #[tokio::test]
@@ -1549,12 +1549,12 @@ async fn test_cleanup_old_downloads_unrelated_files_untouched() {
     std::fs::write(d.join("README.md"), "readme").unwrap();
     std::fs::write(d.join("config.toml"), "config").unwrap();
     std::fs::write(d.join("other-tool-0.1.0"), "other").unwrap();
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "v140").unwrap();
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "v140").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     assert!(d.join("README.md").exists());
     assert!(d.join("config.toml").exists());
@@ -1567,21 +1567,21 @@ async fn test_cleanup_old_downloads_multiplatform_in_same_dir() {
     let d = dir.path();
     // Same version, multiple platforms (uncommon, but possible).
     // Both should be considered "current" via the version equality check.
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "mac").unwrap();
-    std::fs::write(d.join("grok-0.1.141-linux-x86_64"), "linux").unwrap();
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64"), "old-mac").unwrap();
-    std::fs::write(d.join("grok-0.1.139-macos-aarch64"), "older-mac").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "mac").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-linux-x86_64"), "linux").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "old-mac").unwrap();
+    std::fs::write(d.join("supercharge-0.1.139-macos-aarch64"), "older-mac").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     // Both platform variants of current must survive.
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists());
-    assert!(d.join("grok-0.1.141-linux-x86_64").exists());
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.141-linux-x86_64").exists());
     // N-1 (0.1.140) kept, older deleted.
-    assert!(d.join("grok-0.1.140-macos-aarch64").exists());
-    assert!(!d.join("grok-0.1.139-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists());
+    assert!(!d.join("supercharge-0.1.139-macos-aarch64").exists());
 }
 
 #[tokio::test]
@@ -1589,37 +1589,37 @@ async fn test_cleanup_old_downloads_tmp_files_deleted_even_when_unparseable() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
     // Stale tmp files are deleted regardless of version-parseability.
-    std::fs::write(d.join("grok-junk.tmp"), "partial").unwrap();
-    make_stale(&d.join("grok-junk.tmp"));
-    std::fs::write(d.join("grok-0.1.140-macos-aarch64.tmp"), "partial2").unwrap();
-    make_stale(&d.join("grok-0.1.140-macos-aarch64.tmp"));
-    std::fs::write(d.join("grok-0.1.141-macos-aarch64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-junk.tmp"), "partial").unwrap();
+    make_stale(&d.join("supercharge-junk.tmp"));
+    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64.tmp"), "partial2").unwrap();
+    make_stale(&d.join("supercharge-0.1.140-macos-aarch64.tmp"));
+    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(!d.join("grok-junk.tmp").exists(), "junk tmp deleted");
+    assert!(!d.join("supercharge-junk.tmp").exists(), "junk tmp deleted");
     assert!(
-        !d.join("grok-0.1.140-macos-aarch64.tmp").exists(),
+        !d.join("supercharge-0.1.140-macos-aarch64.tmp").exists(),
         "versioned tmp deleted"
     );
-    assert!(d.join("grok-0.1.141-macos-aarch64").exists());
+    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists());
 }
 #[tokio::test]
 async fn test_cleanup_old_downloads_darwin_platform_recognized() {
-    // The `darwin` alias for macOS is in PLATFORM_OS; versions on grok-X.Y.Z-darwin-* layouts must split correctly
+    // The `darwin` alias for macOS is in PLATFORM_OS; versions on supercharge-X.Y.Z-darwin-* layouts must split correctly
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
-    std::fs::write(d.join("grok-0.1.140-darwin-arm64"), "v140").unwrap();
-    std::fs::write(d.join("grok-0.1.141-darwin-arm64"), "current").unwrap();
+    std::fs::write(d.join("supercharge-0.1.140-darwin-arm64"), "v140").unwrap();
+    std::fs::write(d.join("supercharge-0.1.141-darwin-arm64"), "current").unwrap();
 
     make_all_stale(d);
 
-    cleanup_old_downloads(d, "grok", "0.1.141").await;
+    cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("grok-0.1.141-darwin-arm64").exists(), "current");
-    assert!(d.join("grok-0.1.140-darwin-arm64").exists(), "N-1");
+    assert!(d.join("supercharge-0.1.141-darwin-arm64").exists(), "current");
+    assert!(d.join("supercharge-0.1.140-darwin-arm64").exists(), "N-1");
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -1976,7 +1976,7 @@ async fn test_windows_replace_exe_creates_dest_when_missing() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new-binary.exe");
     std::fs::write(&src, "new content").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
 
     windows_replace_exe(&src, &dest).await.unwrap();
 
@@ -1990,7 +1990,7 @@ async fn test_windows_replace_exe_overwrites_unlocked_dest() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new-binary.exe");
     std::fs::write(&src, "new content").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "old content").unwrap();
 
     windows_replace_exe(&src, &dest).await.unwrap();
@@ -2005,7 +2005,7 @@ async fn test_windows_replace_exe_preserves_binary_bytes() {
     let body: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
     let src = dir.path().join("binary.exe");
     std::fs::write(&src, &body).unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
 
     windows_replace_exe(&src, &dest).await.unwrap();
 
@@ -2018,9 +2018,9 @@ async fn test_windows_replace_exe_cleans_stale_old_backup() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new.exe");
     std::fs::write(&src, "new").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "current").unwrap();
-    let old = dir.path().join("grok.exe.old");
+    let old = dir.path().join("supercharge.exe.old");
     std::fs::write(&old, "stale-from-prior-update").unwrap();
 
     windows_replace_exe(&src, &dest).await.unwrap();
@@ -2052,7 +2052,7 @@ async fn test_windows_replace_exe_locked_file_renames_aside() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new.exe");
     std::fs::write(&src, "updated binary").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "running binary").unwrap();
 
     let _lock = std::fs::OpenOptions::new()
@@ -2065,7 +2065,7 @@ async fn test_windows_replace_exe_locked_file_renames_aside() {
 
     assert_eq!(std::fs::read_to_string(&dest).unwrap(), "updated binary");
 
-    let old = dir.path().join("grok.exe.old");
+    let old = dir.path().join("supercharge.exe.old");
     assert!(old.exists(), ".old must exist after rename fallback");
     drop(_lock);
     assert_eq!(std::fs::read_to_string(&old).unwrap(), "running binary");
@@ -2074,7 +2074,7 @@ async fn test_windows_replace_exe_locked_file_renames_aside() {
 #[cfg(windows)]
 #[tokio::test]
 async fn test_windows_replace_exe_rollback_on_copy_failure() {
-    // No stale .old: the aside IS grok.exe.old, so this pins the non-diverted rollback branch (rename .old back onto dest)
+    // No stale .old: the aside IS supercharge.exe.old, so this pins the non-diverted rollback branch (rename .old back onto dest)
     use std::os::windows::fs::OpenOptionsExt;
     const FILE_SHARE_READ: u32 = 0x00000001;
     const FILE_SHARE_DELETE: u32 = 0x00000004;
@@ -2082,7 +2082,7 @@ async fn test_windows_replace_exe_rollback_on_copy_failure() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new.exe");
     std::fs::write(&src, "updated binary").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "original").unwrap();
 
     // Dest locked like a running exe: blocks writes but allows rename.
@@ -2108,7 +2108,7 @@ async fn test_windows_replace_exe_rollback_on_copy_failure() {
         "original",
         "rollback must restore the original binary"
     );
-    let old = dir.path().join("grok.exe.old");
+    let old = dir.path().join("supercharge.exe.old");
     assert!(!old.exists(), "rollback must consume the .old aside");
 }
 
@@ -2118,7 +2118,7 @@ async fn test_windows_replace_exe_idempotent_same_content() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("binary.exe");
     std::fs::write(&src, "same content").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "same content").unwrap();
 
     windows_replace_exe(&src, &dest).await.unwrap();
@@ -2132,7 +2132,7 @@ async fn test_windows_replace_exe_empty_binary() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("empty.exe");
     std::fs::write(&src, b"").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "non-empty").unwrap();
 
     windows_replace_exe(&src, &dest).await.unwrap();
@@ -2152,9 +2152,9 @@ async fn test_windows_replace_exe_locked_stale_old_does_not_block_update() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new.exe");
     std::fs::write(&src, "updated binary").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "running binary").unwrap();
-    let old = dir.path().join("grok.exe.old");
+    let old = dir.path().join("supercharge.exe.old");
     std::fs::write(&old, "previous binary").unwrap();
 
     // No FILE_SHARE_DELETE: .old cannot be deleted or rename-replaced.
@@ -2184,7 +2184,7 @@ async fn test_windows_replace_exe_locked_stale_old_does_not_block_update() {
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with("grok.exe.old.") && n.ends_with(".old"))
+                .is_some_and(|n| n.starts_with("supercharge.exe.old.") && n.ends_with(".old"))
         })
         .collect();
     assert_eq!(
@@ -2215,9 +2215,9 @@ async fn test_windows_replace_exe_rollback_restores_from_diverted_aside() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new.exe");
     std::fs::write(&src, "updated binary").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "running binary").unwrap();
-    let old = dir.path().join("grok.exe.old");
+    let old = dir.path().join("supercharge.exe.old");
     std::fs::write(&old, "previous binary").unwrap();
 
     // No FILE_SHARE_DELETE: .old survives the sweep and forces a divert.
@@ -2254,7 +2254,7 @@ async fn test_windows_replace_exe_rollback_restores_from_diverted_aside() {
         .filter(|e| {
             let name = e.file_name();
             let name = name.to_string_lossy();
-            name.starts_with("grok.exe.old.") && name.ends_with(".old")
+            name.starts_with("supercharge.exe.old.") && name.ends_with(".old")
         })
         .count();
     assert_eq!(leftover_asides, 0, "rollback must consume the aside");
@@ -2268,12 +2268,12 @@ async fn test_windows_replace_exe_sweeps_accumulated_asides() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("new.exe");
     std::fs::write(&src, "new").unwrap();
-    let dest = dir.path().join("grok.exe");
+    let dest = dir.path().join("supercharge.exe");
     std::fs::write(&dest, "current").unwrap();
-    let old = dir.path().join("grok.exe.old");
+    let old = dir.path().join("supercharge.exe.old");
     std::fs::write(&old, "stale").unwrap();
-    let aside_a = dir.path().join("grok.exe.old.1234-0.old");
-    let aside_b = dir.path().join("grok.exe.old.1234-1.old");
+    let aside_a = dir.path().join("supercharge.exe.old.1234-0.old");
+    let aside_b = dir.path().join("supercharge.exe.old.1234-1.old");
     std::fs::write(&aside_a, "aside-a").unwrap();
     std::fs::write(&aside_b, "aside-b").unwrap();
     let agent_old = dir.path().join("agent.exe.old");
@@ -2306,7 +2306,7 @@ async fn download_and_decode_round_trips_each_codec() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    let payload = b"\x7fELF grok binary payload".to_vec();
+    let payload = b"\x7fELF supercharge binary payload".to_vec();
     let zst = zstd::encode_all(payload.as_slice(), 3).unwrap();
     let gz = {
         let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
@@ -2317,14 +2317,14 @@ async fn download_and_decode_round_trips_each_codec() {
     for (suffix, codec, body) in [("zst", Codec::Zstd, zst), ("gz", Codec::Gzip, gz)] {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path(format!("/grok-1.2.3-linux-x86_64.{suffix}")))
+            .and(path(format!("/supercharge-1.2.3-linux-x86_64.{suffix}")))
             .respond_with(ResponseTemplate::new(200).set_body_bytes(body))
             .mount(&server)
             .await;
 
         let dir = tempfile::tempdir().unwrap();
-        let dest = dir.path().join("grok-1.2.3-linux-x86_64");
-        let url = format!("{}/grok-1.2.3-linux-x86_64.{suffix}", server.uri());
+        let dest = dir.path().join("supercharge-1.2.3-linux-x86_64");
+        let url = format!("{}/supercharge-1.2.3-linux-x86_64.{suffix}", server.uri());
         download_and_decode(&url, &dest, codec, false)
             .await
             .unwrap_or_else(|e| panic!("decode .{suffix}: {e}"));
@@ -2345,14 +2345,14 @@ async fn download_and_decode_errs_on_corrupt() {
 
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/grok-1.2.3-linux-x86_64.zst"))
+        .and(path("/supercharge-1.2.3-linux-x86_64.zst"))
         .respond_with(ResponseTemplate::new(200).set_body_bytes(b"not a zstd frame".to_vec()))
         .mount(&server)
         .await;
 
     let dir = tempfile::tempdir().unwrap();
-    let dest = dir.path().join("grok-1.2.3-linux-x86_64");
-    let url = format!("{}/grok-1.2.3-linux-x86_64.zst", server.uri());
+    let dest = dir.path().join("supercharge-1.2.3-linux-x86_64");
+    let url = format!("{}/supercharge-1.2.3-linux-x86_64.zst", server.uri());
     let result = download_and_decode(&url, &dest, Codec::Zstd, false).await;
 
     assert!(
@@ -2370,17 +2370,17 @@ async fn download_cli_artifact_falls_back_to_plain() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    let payload = b"\x7fELF grok binary payload".to_vec();
+    let payload = b"\x7fELF supercharge binary payload".to_vec();
     let server = MockServer::start().await; // only the plain object exists; .zst/.gz 404
     Mock::given(method("GET"))
-        .and(path("/grok-1.2.3-linux-x86_64"))
+        .and(path("/supercharge-1.2.3-linux-x86_64"))
         .respond_with(ResponseTemplate::new(200).set_body_bytes(payload.clone()))
         .mount(&server)
         .await;
 
     let dir = tempfile::tempdir().unwrap();
-    let dest = dir.path().join("grok-1.2.3-linux-x86_64");
-    download_cli_artifact_from_gcs(&server.uri(), "grok-1.2.3-linux-x86_64", &dest, false)
+    let dest = dir.path().join("supercharge-1.2.3-linux-x86_64");
+    download_cli_artifact_from_gcs(&server.uri(), "supercharge-1.2.3-linux-x86_64", &dest, false)
         .await
         .expect("fall back to the plain binary when compressed forms are absent");
 
@@ -2393,23 +2393,23 @@ async fn download_cli_artifact_prefers_compressed_over_plain() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    let payload = b"\x7fELF grok binary payload".to_vec();
+    let payload = b"\x7fELF supercharge binary payload".to_vec();
     let zst = zstd::encode_all(payload.as_slice(), 3).unwrap();
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/grok-1.2.3-linux-x86_64.zst"))
+        .and(path("/supercharge-1.2.3-linux-x86_64.zst"))
         .respond_with(ResponseTemplate::new(200).set_body_bytes(zst))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/grok-1.2.3-linux-x86_64"))
+        .and(path("/supercharge-1.2.3-linux-x86_64"))
         .respond_with(ResponseTemplate::new(200).set_body_bytes(b"PLAIN sentinel".to_vec()))
         .mount(&server)
         .await;
 
     let dir = tempfile::tempdir().unwrap();
-    let dest = dir.path().join("grok-1.2.3-linux-x86_64");
-    download_cli_artifact_from_gcs(&server.uri(), "grok-1.2.3-linux-x86_64", &dest, false)
+    let dest = dir.path().join("supercharge-1.2.3-linux-x86_64");
+    download_cli_artifact_from_gcs(&server.uri(), "supercharge-1.2.3-linux-x86_64", &dest, false)
         .await
         .expect("prefer the compressed sidecar when present");
 
@@ -2424,12 +2424,12 @@ async fn download_cli_artifact_prefers_compressed_over_plain() {
 #[test]
 fn cli_object_candidates_try_windows_exe_first() {
     assert_eq!(
-        cli_object_candidates("grok-1.2.3-windows-x86_64", true),
-        ["grok-1.2.3-windows-x86_64.exe", "grok-1.2.3-windows-x86_64"]
+        cli_object_candidates("supercharge-1.2.3-windows-x86_64", true),
+        ["supercharge-1.2.3-windows-x86_64.exe", "supercharge-1.2.3-windows-x86_64"]
     );
     assert_eq!(
-        cli_object_candidates("grok-1.2.3-linux-x86_64", false),
-        ["grok-1.2.3-linux-x86_64"]
+        cli_object_candidates("supercharge-1.2.3-linux-x86_64", false),
+        ["supercharge-1.2.3-linux-x86_64"]
     );
 }
 
@@ -2443,11 +2443,11 @@ fn npm_entry_is_recognized_by_the_binary_location() {
     let native = root.join("lib/node_modules/@supercharge-cli/supercharge/bin/supercharge-native");
     std::fs::create_dir_all(native.parent().unwrap()).unwrap();
     std::fs::write(&native, "bin").unwrap();
-    let path_entry = root.join("prefix-bin/grok");
+    let path_entry = root.join("prefix-bin/supercharge");
     std::fs::create_dir_all(path_entry.parent().unwrap()).unwrap();
     std::os::unix::fs::symlink(&native, &path_entry).unwrap();
 
     let resolved = dunce::canonicalize(&path_entry).unwrap();
     assert!(super::is_under_node_modules(&resolved));
-    assert!(!super::is_under_node_modules(&root.join("home/bin/grok")));
+    assert!(!super::is_under_node_modules(&root.join("home/bin/supercharge")));
 }
