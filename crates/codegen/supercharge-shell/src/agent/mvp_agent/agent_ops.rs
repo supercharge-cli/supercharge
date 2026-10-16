@@ -3483,7 +3483,11 @@ impl MvpAgent {
         self.session_config_inputs(Some(session_id), &state)
             .effort_options
             .iter()
-            .find(|option| option.id.as_str() == value_id)
+            .find(|option| {
+                option.id.as_str() == value_id
+                    // Also accept the canonical name (`none` for `off`).
+                    || option.value.as_ref() == value_id
+            })
             .map(|option| option.value)
     }
     fn session_config_inputs(

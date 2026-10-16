@@ -63,7 +63,8 @@ fn json_schema_and_reasoning_effort_are_orthogonal_in_output_config() {
 
     let msgs = build_messages_request(&req);
     let oc = msgs.output_config.expect("output_config present");
-    assert_eq!(oc.effort.as_deref(), Some("high"));
+    // Effort travels as a thinking budget, not output_config.effort.
+    assert_eq!(oc.effort, None);
     assert!(oc.format.is_some());
     assert!(
         msgs.thinking.is_some(),
@@ -74,25 +75,26 @@ fn json_schema_and_reasoning_effort_are_orthogonal_in_output_config() {
 #[test]
 fn test_messages_request_wire_format_for_supported_variants() {
     for (variant, expected) in [
-        (crate::ReasoningEffort::Low, "low"),
-        (crate::ReasoningEffort::Medium, "medium"),
-        (crate::ReasoningEffort::High, "high"),
-        (crate::ReasoningEffort::Xhigh, "xhigh"),
-        (crate::ReasoningEffort::Max, "max"),
+        (crate::ReasoningEffort::Low, 2048),
+        (crate::ReasoningEffort::Medium, 8192),
+        (crate::ReasoningEffort::High, 16384),
+        (crate::ReasoningEffort::Xhigh, 32768),
+        (crate::ReasoningEffort::Max, 49152),
     ] {
-        let req = messages_test_request(Some(variant));
+        let mut req = messages_test_request(Some(variant));
+        req.max_output_tokens = Some(64000);
         let msgs = build_messages_request(&req);
         let json = serde_json::to_value(&msgs).unwrap();
-        assert_eq!(
-            json.pointer("/output_config/effort")
-                .and_then(|v| v.as_str()),
-            Some(expected),
-            "{variant:?} should map to output_config.effort={expected:?}; got: {json:#}",
-        );
+        assert!(json.pointer("/output_config").is_none(), "{json:#}");
         assert_eq!(
             json.pointer("/thinking/type").and_then(|v| v.as_str()),
-            Some("adaptive"),
-            "{variant:?} should auto-pair thinking.type=adaptive; got: {json:#}",
+            Some("enabled"),
+            "{variant:?} should send thinking.type=enabled; got: {json:#}",
+        );
+        assert_eq!(
+            json.pointer("/thinking/budget_tokens").and_then(|v| v.as_u64()),
+            Some(expected),
+            "{variant:?} budget; got: {json:#}",
         );
     }
 }
@@ -119,7 +121,7 @@ fn test_messages_request_omits_output_config_when_no_supported_effort() {
 }
 
 #[test]
-fn test_messages_request_thinking_carries_summarized_display() {
+fn test_messages_request_thinking_uses_budget_for_effort() {
     let req = ConversationRequest {
         reasoning_effort: Some(crate::ReasoningEffort::High),
         ..ConversationRequest::from_items(vec![ConversationItem::user("hi")])
@@ -129,13 +131,13 @@ fn test_messages_request_thinking_carries_summarized_display() {
     let json = serde_json::to_value(&msg).unwrap();
     assert_eq!(
         json.pointer("/thinking/type").and_then(|v| v.as_str()),
-        Some("adaptive"),
-        "thinking.type should be 'adaptive'; got: {json:#}",
+        Some("enabled"),
+        "thinking.type should be 'enabled'; got: {json:#}",
     );
     assert_eq!(
-        json.pointer("/thinking/display").and_then(|v| v.as_str()),
-        Some("summarized"),
-        "thinking.display must be 'summarized' so 4.7+ surfaces thinking content; got: {json:#}",
+        json.pointer("/thinking/budget_tokens").and_then(|v| v.as_u64()),
+        Some(16384),
+        "{json:#}",
     );
 }
 

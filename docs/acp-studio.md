@@ -76,3 +76,33 @@ Supercharge-only names with no legacy form: `_supercharge/sessions/changed`, `_s
 
 Migrate Studio to the `_supercharge/` names and ignore the duplicate legacy notification.
 The legacy names will be removed in a later release.
+
+## Reasoning effort
+
+- Config option id `reasoning_effort` (category `thought_level`, a `select`) is returned in `configOptions`
+  by `session/new` and `session/load`, for models that support reasoning.
+- Values: `off`, `low`, `medium`, `high`, `xhigh`, filtered per model to the levels the provider accepts
+  where known (for example some models list only `off`/`low`/`medium`/`high`). `none` is accepted as an alias of `off`.
+- Set it with `session/set_config_option` `{ sessionId, configId: "reasoning_effort", value: "high" }`.
+  The response carries the updated `configOptions`, and a `session/update` with
+  `sessionUpdate: "config_option_update"` (`configOptions`) is also sent. The setting applies to the next model calls.
+- On the wire: Chat Completions `reasoning_effort` (`off` → `"none"`), Responses `reasoning.effort`
+  (`off` → `"none"`), Messages `thinking: { type: "enabled", budget_tokens }` with
+  low 2048 / medium 8192 / high 16384 / xhigh 32768 (kept below `max_tokens`; `off` sends no `thinking`).
+
+## Context usage
+
+After each model call the agent sends the notification `_supercharge/session/context_usage`:
+
+```json
+{ "sessionId": "…", "usedTokens": 51234, "maxTokens": 200000 }
+```
+
+`usedTokens` = input + cache reads + output tokens of that call (input includes cache writes);
+`maxTokens` = the model's context window. Not sent when the provider reports no usage.
+
+## Response completed
+
+`response_completed` is a `sessionUpdate` inside `_x.ai/session_notification`, so it is dual-emitted as
+`_supercharge/session_notification` with `update: { sessionUpdate: "response_completed", message_id?, stop_reason?,
+usage?: { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, reasoning_tokens }, signature?, stop_sequence? }`.

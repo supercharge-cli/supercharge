@@ -3338,6 +3338,7 @@ impl SessionActor {
             }
             self.record_response_token_usage(&response, Some(model_duration_ms));
             let response_completed = self.response_completed_update(&response);
+            let context_usage = self.context_usage_payload(&response).await;
             if let Some(mut pt) = prompt_timing.take() {
                 pt.record_stream_latency(latency.time_to_last_byte_ms);
                 pt.record_model_result(
@@ -3498,6 +3499,7 @@ impl SessionActor {
                 .await;
             }
             self.send_buffered_xai_update(response_completed).await;
+            self.send_context_usage(context_usage);
             let schema_complete_at_cap = if stop_reason
                 == Some(supercharge_sampling_types::StopReason::Length)
                 && tool_calls.is_empty()

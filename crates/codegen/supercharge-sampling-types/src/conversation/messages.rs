@@ -310,10 +310,13 @@ pub fn build_messages_request(req: &ConversationRequest) -> crate::messages::Mes
         ConversationToolChoice::None => ToolChoiceParam::Auto, // ToolChoiceParam has no none variant, so fall back to the default
     });
 
-    let effort = req
+    // Reasoning effort becomes an explicit thinking budget (`thinking.budget_tokens`),
+    // which every Messages-compatible provider accepts. `off`/`minimal` send no thinking.
+    let max_tokens = req.max_output_tokens.unwrap_or(0);
+    let thinking_budget = req
         .reasoning_effort
-        .and_then(|e| e.to_messages_api())
-        .map(|s| s.to_string());
+        .and_then(|e| e.messages_thinking_budget(max_tokens));
+    let effort: Option<String> = None;
 
     // A wire schema here suppresses tool calls, so the agent routes structured output through the StructuredOutput tool instead
     let format = req
@@ -324,11 +327,8 @@ pub fn build_messages_request(req: &ConversationRequest) -> crate::messages::Mes
         });
 
     // thinking is driven by reasoning_effort only, not by json_schema.
-    let thinking = effort
-        .as_ref()
-        .map(|_| crate::messages::ThinkingConfig::Adaptive {
-            display: Some(crate::messages::ThinkingDisplay::Summarized),
-        });
+    let thinking = thinking_budget
+        .map(|budget_tokens| crate::messages::ThinkingConfig::Enabled { budget_tokens });
 
     let output_config = if effort.is_some() || format.is_some() {
         Some(OutputConfig { effort, format })

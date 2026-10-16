@@ -4,8 +4,10 @@ use supercharge_sampling_types::{ReasoningEffort, ReasoningEffortOption};
 
 use crate::session::unified_list::SessionKind;
 
+/// The `reasoning_effort` select values when the model has no catalog list:
+/// `off`, `low`, `medium`, `high`, `xhigh`. `off` is [`ReasoningEffort::None`].
 pub(crate) const SELECTABLE_REASONING_EFFORTS: [ReasoningEffort; 5] = [
-    ReasoningEffort::Minimal,
+    ReasoningEffort::None,
     ReasoningEffort::Low,
     ReasoningEffort::Medium,
     ReasoningEffort::High,
@@ -77,7 +79,7 @@ impl GrokSessionDetail {
 
 fn effort_label(effort: ReasoningEffort) -> String {
     match effort {
-        ReasoningEffort::None => "None",
+        ReasoningEffort::None => "Off",
         ReasoningEffort::Minimal => "Minimal",
         ReasoningEffort::Low => "Low",
         ReasoningEffort::Medium => "Medium",
@@ -88,18 +90,50 @@ fn effort_label(effort: ReasoningEffort) -> String {
     .to_string()
 }
 
-/// The built-in session-picker modes used when the model has no server list.
-/// Reproduces the historical five rows and their labels.
+/// Select-value id for an effort: `off` for [`ReasoningEffort::None`], otherwise the canonical name.
+pub(crate) fn effort_option_id(effort: ReasoningEffort) -> String {
+    match effort {
+        ReasoningEffort::None => "off".to_string(),
+        other => other.as_ref().to_string(),
+    }
+}
+
+fn effort_option(effort: ReasoningEffort) -> ReasoningEffortOption {
+    ReasoningEffortOption {
+        id: effort_option_id(effort),
+        value: effort,
+        label: effort_label(effort),
+        description: None,
+        default: false,
+    }
+}
+
+/// The built-in session-picker modes used when the model has no server list:
+/// off / low / medium / high / xhigh.
 pub(crate) fn legacy_session_effort_options() -> Vec<ReasoningEffortOption> {
     SELECTABLE_REASONING_EFFORTS
         .iter()
-        .map(|&effort| ReasoningEffortOption {
-            id: effort.as_ref().to_string(),
-            value: effort,
-            label: effort_label(effort),
-            description: None,
-            default: false,
-        })
+        .map(|&effort| effort_option(effort))
+        .collect()
+}
+
+/// Effort options for a provider model from its supported canonical ids
+/// (`low`, `medium`, `high`, `xhigh`), weakest first, with `off` prepended.
+/// Unknown ids are skipped; an empty input yields no options.
+pub fn effort_options_from_ids(ids: &[&str]) -> Vec<ReasoningEffortOption> {
+    let mut efforts: Vec<ReasoningEffort> = ids
+        .iter()
+        .filter_map(|id| id.parse::<ReasoningEffort>().ok())
+        .filter(|e| *e != ReasoningEffort::None)
+        .collect();
+    if efforts.is_empty() {
+        return Vec::new();
+    }
+    efforts.sort_by_key(|e| *e as u8);
+    efforts.dedup();
+    std::iter::once(ReasoningEffort::None)
+        .chain(efforts)
+        .map(effort_option)
         .collect()
 }
 
@@ -256,8 +290,12 @@ mod tests {
     }
 
     #[test]
-    fn none_effort_is_not_a_user_selectable_mode() {
-        assert!(!SELECTABLE_REASONING_EFFORTS.contains(&ReasoningEffort::None));
+    fn off_is_selectable_and_maps_to_none() {
+        let ids: Vec<String> = legacy_session_effort_options()
+            .into_iter()
+            .map(|o| o.id)
+            .collect();
+        assert_eq!(ids, ["off", "low", "medium", "high", "xhigh"]);
         let models = [model("Supercharge AI-build", "Supercharge AI")];
         let current = acp::ModelId::from("Supercharge AI-build");
         let opts = build_session_config_options(
@@ -266,9 +304,47 @@ mod tests {
             &legacy_session_effort_options(),
             Some(ReasoningEffort::None),
         );
-        let modes: Vec<_> = opts.iter().filter(|o| o.category == "mode").collect();
-        assert!(modes.iter().all(|o| o.id != "none"));
-        assert!(modes.iter().all(|o| !o.selected));
+        let selected: Vec<_> = opts
+            .iter()
+            .filter(|o| o.category == "mode" && o.selected)
+            .collect();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].id, "off");
+    }
+
+    #[test]
+    fn provider_effort_ids_are_filtered_and_get_off() {
+        let ids: Vec<String> = effort_options_from_ids(&["xhigh", "high", "medium", "low", "bogus"])
+            .into_iter()
+            .map(|o| o.id)
+            .collect();
+        assert_eq!(ids, ["off", "low", "medium", "high", "xhigh"]);
+        let ids: Vec<String> = effort_options_from_ids(&["high", "medium", "low"])
+            .into_iter()
+            .map(|o| o.id)
+            .collect();
+        assert_eq!(ids, ["off", "low", "medium", "high"]);
+        assert!(effort_options_from_ids(&[]).is_empty());
+    }
+
+    #[test]
+    fn acp_reasoning_effort_select_uses_off_id() {
+        let models = [model("m", "M")];
+        let current = acp::ModelId::from("m");
+        let opts = build_acp_config_options(
+            &models,
+            &current,
+            &effort_options_from_ids(&["high", "medium", "low"]),
+            Some(ReasoningEffort::None),
+        );
+        let effort = opts
+            .iter()
+            .find(|o| o.id.0.as_ref() == CONFIG_ID_REASONING_EFFORT)
+            .expect("reasoning_effort option");
+        let acp::SessionConfigKind::Select(select) = &effort.kind else {
+            panic!("expected select");
+        };
+        assert_eq!(select.current_value.0.as_ref(), "off");
     }
 
     #[test]

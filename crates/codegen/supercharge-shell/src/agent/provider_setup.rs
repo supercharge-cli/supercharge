@@ -482,8 +482,20 @@ pub fn provider_models_to_catalog(
             api_backend: api_backend.clone(),
             auth_scheme: Some(auth_scheme),
             reasoning_effort: None,
-            supports_reasoning_effort: false,
-            reasoning_efforts: Vec::new(),
+            // Thinking-capable provider models get the per-session `reasoning_effort`
+            // select (off + the levels the model is known to accept).
+            supports_reasoning_effort: model.supports_thinking,
+            reasoning_efforts: if model.supports_thinking {
+                let ids = reasoning_effort_ids_for_model(&model.id);
+                let ids: &[&str] = if ids.is_empty() {
+                    &["high", "medium", "low"]
+                } else {
+                    ids
+                };
+                crate::agent::session_config::effort_options_from_ids(ids)
+            } else {
+                Vec::new()
+            },
             extra_headers: extra_headers.clone(),
             context_window,
             auto_compact_threshold_percent: None,

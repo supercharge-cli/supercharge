@@ -990,6 +990,38 @@ impl SessionActor {
         )
         .await;
     }
+    /// `_supercharge/session/context_usage` payload for the latest model call:
+    /// `usedTokens` = input (uncached + cache writes) + cache reads + output, `maxTokens` = the
+    /// model's context window. `None` when the provider reported no usage.
+    pub(super) async fn context_usage_payload(
+        &self,
+        response: &supercharge_sampling_types::ConversationResponse,
+    ) -> Option<serde_json::Value> {
+        let usage = response.usage.as_ref()?;
+        let max_tokens = self
+            .chat_state_handle
+            .get_sampling_config()
+            .await
+            .map(|c| c.context_window.get())?;
+        Some(context_usage_json(
+            self.session_info.id.0.as_ref(),
+            u64::from(usage.prompt_tokens),
+            u64::from(usage.completion_tokens),
+            max_tokens,
+        ))
+    }
+    /// Send the payload built by [`Self::context_usage_payload`], if any.
+    pub(super) fn send_context_usage(&self, payload: Option<serde_json::Value>) {
+        let Some(payload) = payload else { return };
+        if let Ok(params) = serde_json::value::to_raw_value(&payload) {
+            self.notifications
+                .gateway
+                .forward_fire_and_forget(acp::ExtNotification::new(
+                    CONTEXT_USAGE_METHOD,
+                    params.into(),
+                ));
+        }
+    }
     /// Build the per-response boundary update, projecting the response's usage
     /// into the Messages API `message.usage` shape (uncached `input_tokens`).
     pub(super) fn response_completed_update(
@@ -1482,5 +1514,37 @@ mod xai_event_id_stamping_tests {
                 );
             })
             .await;
+    }
+}
+
+/// Extension notification sent after every model call (`_supercharge/session/context_usage` on the wire).
+pub(crate) const CONTEXT_USAGE_METHOD: &str = "supercharge/session/context_usage";
+
+/// `prompt_tokens` already counts uncached input, cache writes and cache reads.
+pub(crate) fn context_usage_json(
+    session_id: &str,
+    prompt_tokens: u64,
+    output_tokens: u64,
+    max_tokens: u64,
+) -> serde_json::Value {
+    serde_json::json!({
+        "sessionId": session_id,
+        "usedTokens": prompt_tokens.saturating_add(output_tokens),
+        "maxTokens": max_tokens,
+    })
+}
+
+#[cfg(test)]
+mod context_usage_tests {
+    use super::*;
+
+    #[test]
+    fn context_usage_payload_shape() {
+        let v = context_usage_json("s1", 1200, 300, 200_000);
+        assert_eq!(
+            v,
+            serde_json::json!({ "sessionId": "s1", "usedTokens": 1500, "maxTokens": 200000 })
+        );
+        assert_eq!(CONTEXT_USAGE_METHOD, "supercharge/session/context_usage");
     }
 }

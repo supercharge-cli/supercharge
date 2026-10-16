@@ -795,6 +795,27 @@ impl ReasoningEffort {
         }
     }
 
+    /// Messages API `thinking.budget_tokens` for this effort, or `None` for no thinking
+    /// (`none`/`minimal`). The budget stays below `max_tokens` (when set) as the API requires,
+    /// and is dropped when that leaves less than the 1024-token minimum.
+    pub fn messages_thinking_budget(self, max_tokens: u32) -> Option<u32> {
+        const MIN_BUDGET: u32 = 1024;
+        let budget = match self {
+            Self::None | Self::Minimal => return None,
+            Self::Low => 2048,
+            Self::Medium => 8192,
+            Self::High => 16384,
+            Self::Xhigh => 32768,
+            Self::Max => 49152,
+        };
+        let budget = if max_tokens > 0 {
+            budget.min(max_tokens.saturating_sub(1))
+        } else {
+            budget
+        };
+        (budget >= MIN_BUDGET).then_some(budget)
+    }
+
     pub fn to_messages_api(self) -> Option<&'static str> {
         match self {
             Self::None | Self::Minimal => None,
@@ -1614,5 +1635,22 @@ mod tests {
         let inner: &dyn TraceContext = &*cloned_trace;
         let downcast = inner.as_any().downcast_ref::<TestTrace>().unwrap();
         assert_eq!(downcast.0, "trace-data");
+    }
+}
+
+#[cfg(test)]
+mod messages_thinking_budget_tests {
+    use super::ReasoningEffort as E;
+
+    #[test]
+    fn budget_per_effort_and_capped_below_max_tokens() {
+        assert_eq!(E::None.messages_thinking_budget(32000), None);
+        assert_eq!(E::Minimal.messages_thinking_budget(32000), None);
+        assert_eq!(E::Low.messages_thinking_budget(32000), Some(2048));
+        assert_eq!(E::Medium.messages_thinking_budget(32000), Some(8192));
+        assert_eq!(E::High.messages_thinking_budget(32000), Some(16384));
+        assert_eq!(E::Xhigh.messages_thinking_budget(20000), Some(19999));
+        assert_eq!(E::Xhigh.messages_thinking_budget(0), Some(32768));
+        assert_eq!(E::High.messages_thinking_budget(1000), None);
     }
 }

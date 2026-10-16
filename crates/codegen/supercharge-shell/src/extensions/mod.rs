@@ -205,6 +205,11 @@ mod alias_tests {
         let bare = r#"{"jsonrpc":"2.0","method":"x.ai/session_notification","params":{}}"#;
         let v: serde_json::Value = serde_json::from_str(&alias(bare).unwrap()).unwrap();
         assert_eq!(v["method"], "_supercharge/session_notification");
+        // response_completed rides session_notification, so it also goes out under _supercharge/.
+        let rc = r#"{"jsonrpc":"2.0","method":"_x.ai/session_notification","params":{"sessionId":"s","update":{"sessionUpdate":"response_completed"}}}"#;
+        let v: serde_json::Value = serde_json::from_str(&alias(rc).unwrap()).unwrap();
+        assert_eq!(v["method"], "_supercharge/session_notification");
+        assert_eq!(v["params"]["update"]["sessionUpdate"], "response_completed");
         // Requests and responses are never duplicated.
         assert!(alias(r#"{"jsonrpc":"2.0","id":3,"method":"_x.ai/ask_user_question"}"#).is_none());
         assert!(alias(r#"{"jsonrpc":"2.0","id":3,"result":{"x.ai/k":1}}"#).is_none());
