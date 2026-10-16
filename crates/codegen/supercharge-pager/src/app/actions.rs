@@ -706,6 +706,10 @@ pub enum Action {
     ResetSessionTitleToAuto,
     /// Show detailed context usage (progress bar, token breakdown, stats).
     ShowContextInfo,
+    /// `/context <tokens>|reset`: set or clear the current model's context-window override.
+    SetContextWindowOverride {
+        value: Option<u64>,
+    },
     /// `/usage`: session token and cost totals.
     ShowUsage,
     /// Commit a read-only list of the queued prompts as a system block (`/queue`).
@@ -2010,6 +2014,12 @@ pub enum Effect {
         /// Usage-modal fetch generation; echoed back on the task result.
         nonce: u64,
     },
+    /// Send `_supercharge/session/context_window` for the current model.
+    SetContextWindowOverride {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+        value: Option<u64>,
+    },
     /// Fetch and display detailed context usage via x.ai/session/info.
     ShowContextInfo {
         agent_id: AgentId,
@@ -2938,6 +2948,11 @@ pub enum TaskResult {
     RenameSessionFailed {
         agent_id: AgentId,
         error: String,
+    },
+    /// `/context <tokens>|reset` finished: the effective window, and whether an override is set.
+    ContextWindowOverrideComplete {
+        agent_id: AgentId,
+        result: Result<(u64, bool), String>,
     },
     /// `/rename --auto` completed successfully.
     ResetSessionTitleComplete {

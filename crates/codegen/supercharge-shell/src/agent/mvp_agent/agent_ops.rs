@@ -3421,6 +3421,13 @@ impl MvpAgent {
         options.push(session_config::permission_mode_option(
             &current, crate::util::config::auto_permission_mode_enabled_from_disk(),
         ));
+        let model_key = resolve_catalog_key(&self.models_manager.models(), &state.current_model_id)
+            .unwrap_or_else(|| state.current_model_id.clone());
+        if let (Some(effective), overridden) =
+            crate::agent::handlers::context_window::current_window(self, model_key.0.as_ref())
+        {
+            options.push(crate::agent::handlers::context_window::config_option(effective, overridden));
+        }
         Ok(options)
     }
     pub(crate) async fn acp_session_modes(

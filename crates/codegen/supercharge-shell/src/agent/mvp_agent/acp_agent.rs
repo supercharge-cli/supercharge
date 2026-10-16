@@ -2060,6 +2060,38 @@ impl acp::Agent for MvpAgent {
             s if s.starts_with("x.ai/rewind") => {
                 crate::extensions::rewind::handle(self, &args).await
             }
+            crate::agent::handlers::context_window::CONTEXT_WINDOW_METHOD => {
+                // params: { sessionId, contextWindow: <number> | "1m" | "auto" | null }
+                let params: serde_json::Value = serde_json::from_str(args.params.get())
+                    .map_err(|e| acp::Error::invalid_params().data(e.to_string()))?;
+                let session_id = params
+                    .get("sessionId")
+                    .and_then(|v| v.as_str())
+                    .map(acp::SessionId::new)
+                    .ok_or_else(|| acp::Error::invalid_params().data("sessionId required"))?;
+                let value = match params.get("contextWindow") {
+                    None | Some(serde_json::Value::Null) => None,
+                    Some(serde_json::Value::Number(n)) => Some(
+                        n.as_u64()
+                            .filter(|n| *n >= 1_000)
+                            .ok_or_else(|| acp::Error::invalid_params().data("invalid contextWindow"))?,
+                    ),
+                    Some(serde_json::Value::String(s)) => {
+                        crate::agent::handlers::context_window::parse_context_window(s)
+                            .map_err(|e| acp::Error::invalid_params().data(e))?
+                    }
+                    Some(_) => {
+                        return Err(acp::Error::invalid_params().data("invalid contextWindow"));
+                    }
+                };
+                let effective =
+                    crate::agent::handlers::context_window::apply_override(self, &session_id, value)
+                        .await?;
+                crate::extensions::to_raw_response(&serde_json::json!({
+                    "contextWindow": effective,
+                    "overridden": value.is_some(),
+                }))
+            }
             "supercharge/models/list" => crate::extensions::to_raw_response(
                 &crate::agent::remote_config::models_list_response(
                     &self.models_manager.models(),

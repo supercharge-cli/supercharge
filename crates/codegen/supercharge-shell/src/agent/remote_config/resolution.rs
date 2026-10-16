@@ -518,6 +518,7 @@ mod model_not_configured_tests {
             vec![ProviderModel {
                 id: "m-1".into(),
                 name: "Model One".into(),
+                context_window: None,
                 supports_thinking: false,
             }],
             "https://provider.example/v1",

@@ -433,6 +433,7 @@ pub(in crate::app::dispatch) fn dispatch_open_effort_picker(app: &mut AppView) -
     let model = ProviderModel {
         id: model_id.0.to_string(),
         name,
+        context_window: None,
         supports_thinking: true,
     };
     let levels: Vec<String> = options.into_iter().map(|o| o.id).collect();

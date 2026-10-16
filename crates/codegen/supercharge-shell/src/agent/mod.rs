@@ -10,6 +10,7 @@ pub mod external_otel_pin;
 pub mod feedback_client;
 pub mod folder_trust;
 pub(crate) mod handlers;
+pub use handlers::context_window::{format_context_window, parse_context_window};
 pub mod image_provider;
 pub mod init;
 pub mod model_providers;

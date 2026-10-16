@@ -206,6 +206,7 @@ impl SetupModalState {
         state.pending_model = Some(ProviderModel {
             id: setup.model_id,
             name: setup.model_name,
+            context_window: None,
             supports_thinking: false,
         });
         state.selected_effort = effort;
@@ -243,6 +244,7 @@ impl SetupModalState {
             .map(|(id, info)| ProviderModel {
                 id: id.0.to_string(),
                 name: info.name.clone(),
+                context_window: None,
                 supports_thinking: supports_reasoning_effort_meta(info.meta.as_ref())
                     || supercharge_shell::agent::provider_setup::infer_thinking_from_id(&info.name)
                     || supercharge_shell::agent::provider_setup::infer_thinking_from_id(
@@ -318,6 +320,7 @@ impl SetupModalState {
             models.push(ProviderModel {
                 id: CUSTOM_MODEL_ID.to_owned(),
                 name: "Type a custom model id…".to_owned(),
+                context_window: None,
                 supports_thinking: false,
             });
         }
@@ -1636,6 +1639,7 @@ mod tests {
         ProviderModel {
             id: id.to_owned(),
             name: id.to_owned(),
+            context_window: None,
             supports_thinking: false,
         }
     }
@@ -1761,11 +1765,13 @@ mod tests {
                 ProviderModel {
                     id: "gpt-4o".to_owned(),
                     name: "GPT-4o".to_owned(),
+                    context_window: None,
                     supports_thinking: false,
                 },
                 ProviderModel {
                     id: "o3-mini".to_owned(),
                     name: "o3-mini".to_owned(),
+                    context_window: None,
                     supports_thinking: true,
                 },
             ]),

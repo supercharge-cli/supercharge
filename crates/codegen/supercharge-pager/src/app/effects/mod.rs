@@ -3546,6 +3546,34 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::SetContextWindowOverride { agent_id, session_id, value } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let params = serde_json::json!({
+                    "sessionId": session_id.0.to_string(),
+                    "contextWindow": value,
+                });
+                let req = acp::ExtRequest::new(
+                    "supercharge/session/context_window",
+                    serde_json::value::to_raw_value(&params)
+                        .expect("serialize context_window params")
+                        .into(),
+                );
+                let result = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let v: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let v = v.get("result").cloned().unwrap_or(v);
+                        v.get("contextWindow")
+                            .and_then(serde_json::Value::as_u64)
+                            .map(|w| (w, value.is_some()))
+                            .ok_or_else(|| "unexpected response".to_string())
+                    }
+                    Err(e) => Err(sanitize_user_error(&e.to_string())),
+                };
+                TaskResult::ContextWindowOverrideComplete { agent_id, result }
+            });
+        }
         Effect::RenameSession { agent_id, session_id, title, cwd, kind } => {
             let tx = acp_tx.clone();
             tasks

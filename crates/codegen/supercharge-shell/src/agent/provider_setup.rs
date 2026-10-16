@@ -336,6 +336,8 @@ pub struct ProviderModel {
     pub name: String,
     /// True when this model accepts a reasoning / thinking effort level.
     pub supports_thinking: bool,
+    /// Context window reported by the provider's `/models` entry, when present.
+    pub context_window: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -497,7 +499,11 @@ pub fn provider_models_to_catalog(
                 Vec::new()
             },
             extra_headers: extra_headers.clone(),
-            context_window,
+            // The provider's reported window when known; the default only as a fallback.
+            context_window: model
+                .context_window
+                .and_then(NonZeroU64::new)
+                .unwrap_or(context_window),
             auto_compact_threshold_percent: None,
             system_prompt_label: None,
             api_base_url: None,
@@ -622,6 +628,43 @@ pub fn reasoning_effort_ids_for_model(id: &str) -> &'static [&'static str] {
     &["high", "medium", "low"]
 }
 
+/// Context window from a `/models` entry. Providers use different keys:
+/// `context_window`, `context_length` (OpenRouter and most OpenAI-compatible gateways),
+/// `max_context_length`, `max_input_tokens` (Anthropic-style), `contextWindow`,
+/// `inputTokenLimit`, or nested `top_provider.context_length` / `limits.context_window`.
+pub(crate) fn provider_model_context_window(entry: &Value) -> Option<u64> {
+    let obj = entry.as_object()?;
+    let as_u64 = |v: &Value| {
+        v.as_u64()
+            .or_else(|| v.as_f64().filter(|f| *f >= 1.0).map(|f| f as u64))
+            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
+            .filter(|n| *n > 0)
+    };
+    const KEYS: [&str; 9] = [
+        "context_window",
+        "context_length",
+        "max_context_length",
+        "max_context_window",
+        "contextWindow",
+        "contextLength",
+        "max_input_tokens",
+        "maxInputTokens",
+        "inputTokenLimit",
+    ];
+    KEYS.iter()
+        .find_map(|k| obj.get(*k).and_then(as_u64))
+        .or_else(|| {
+            ["top_provider", "limits", "limit", "capabilities"]
+                .iter()
+                .filter_map(|k| obj.get(*k).and_then(Value::as_object))
+                .find_map(|nested| {
+                    KEYS.iter()
+                        .chain(["context", "max_tokens"].iter())
+                        .find_map(|k| nested.get(*k).and_then(as_u64))
+                })
+        })
+}
+
 fn model_entry_supports_thinking(entry: &Value, id: &str, name: &str) -> bool {
     if let Some(obj) = entry.as_object() {
         for key in [
@@ -701,6 +744,7 @@ pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
         models.push(ProviderModel {
             id: id.to_owned(),
             name: name.to_owned(),
+            context_window: provider_model_context_window(&entry),
             supports_thinking: model_entry_supports_thinking(&entry, id, name),
         });
         if models.len() >= MAX_MODELS {
@@ -1390,6 +1434,7 @@ mod tests {
                 vec![ProviderModel {
                     id: "test-model".to_owned(),
                     name: "Test Model".to_owned(),
+                    context_window: None,
                     supports_thinking: false,
                 }],
                 "https://api.example.com/v1",
@@ -1757,11 +1802,13 @@ mod tests {
             ProviderModel {
                 id: "kimi-code".to_owned(),
                 name: "Kimi Code".to_owned(),
+                context_window: None,
                 supports_thinking: false,
             },
             ProviderModel {
                 id: "openai".to_owned(),
                 name: "openai".to_owned(),
+                context_window: None,
                 supports_thinking: false,
             },
         ];
@@ -1853,11 +1900,13 @@ mod tests {
                 ProviderModel {
                     id: "gpt-4o".to_owned(),
                     name: "gpt-4o".to_owned(),
+                    context_window: None,
                     supports_thinking: false,
                 },
                 ProviderModel {
                     id: "o3-mini".to_owned(),
                     name: "o3 mini".to_owned(),
+                    context_window: None,
                     supports_thinking: true,
                 },
             ]
@@ -1974,11 +2023,13 @@ mod tests {
                 ProviderModel {
                     id: "a-model".to_owned(),
                     name: "A model".to_owned(),
+                    context_window: None,
                     supports_thinking: false,
                 },
                 ProviderModel {
                     id: "z-model".to_owned(),
                     name: "z-model".to_owned(),
+                    context_window: None,
                     supports_thinking: false,
                 },
             ]
@@ -2062,5 +2113,21 @@ mod tests {
         .unwrap();
         let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "provider credentials must be owner-only");
+    }
+}
+
+#[cfg(test)]
+mod context_window_metadata_tests {
+    use super::provider_model_context_window;
+    use serde_json::json;
+
+    #[test]
+    fn reads_provider_context_metadata() {
+        assert_eq!(provider_model_context_window(&json!({"id":"a","context_length":1_000_000})), Some(1_000_000));
+        assert_eq!(provider_model_context_window(&json!({"id":"a","context_window":"2000000"})), Some(2_000_000));
+        assert_eq!(provider_model_context_window(&json!({"id":"a","top_provider":{"context_length":400000}})), Some(400_000));
+        assert_eq!(provider_model_context_window(&json!({"id":"a","inputTokenLimit":1048576})), Some(1_048_576));
+        assert_eq!(provider_model_context_window(&json!({"id":"a"})), None);
+        assert_eq!(provider_model_context_window(&json!({"id":"a","context_length":0})), None);
     }
 }

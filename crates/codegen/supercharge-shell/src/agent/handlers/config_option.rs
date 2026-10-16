@@ -118,6 +118,17 @@ pub(crate) async fn apply(
                 ));
             return Ok(acp::SetSessionConfigOptionResponse::new(options));
         }
+        crate::agent::handlers::context_window::CONFIG_ID_CONTEXT_WINDOW => {
+            let value_id = value.as_value_id().ok_or_else(|| {
+                acp::Error::invalid_params().data("context_window requires a string value")
+            })?;
+            let parsed = crate::agent::handlers::context_window::parse_context_window(
+                value_id.0.as_ref(),
+            )
+            .map_err(|e| acp::Error::invalid_params().data(e))?;
+            crate::agent::handlers::context_window::apply_override(agent, &session_id, parsed)
+                .await?;
+        }
         other => {
             return Err(
                 acp::Error::invalid_params().data(format!("unknown config option: {other}"))

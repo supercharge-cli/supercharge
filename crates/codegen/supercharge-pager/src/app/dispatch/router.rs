@@ -1087,6 +1087,23 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::RenameSession { title } => dispatch_rename_session(app, title),
         Action::ResetSessionTitleToAuto => dispatch_reset_session_title(app),
         Action::ShowContextInfo => dispatch_show_context_info(app),
+        Action::SetContextWindowOverride { value } => {
+            let ActiveView::Agent(id) = app.active_view else {
+                return vec![];
+            };
+            let Some(session_id) = app
+                .agents
+                .get(&id)
+                .and_then(|agent| agent.session.session_id.clone())
+            else {
+                return vec![];
+            };
+            vec![Effect::SetContextWindowOverride {
+                agent_id: id,
+                session_id,
+                value,
+            }]
+        }
         Action::ShowUsage => dispatch_show_usage(app),
         Action::ShowQueue => dispatch_show_queue(app),
         Action::ShowTasks => dispatch_show_tasks(app),

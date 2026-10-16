@@ -73,6 +73,7 @@ fn provider_models_results_do_not_mutate_catalog_after_picker_closed_or_reopened
                 result: Ok(vec![ProviderModel {
                     id: "stale-provider-model".to_owned(),
                     name: "Stale".to_owned(),
+                    context_window: None,
                     supports_thinking: false,
                 }]),
             },

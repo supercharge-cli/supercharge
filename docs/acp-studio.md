@@ -106,3 +106,31 @@ After each model call the agent sends the notification `_supercharge/session/con
 `response_completed` is a `sessionUpdate` inside `_x.ai/session_notification`, so it is dual-emitted as
 `_supercharge/session_notification` with `update: { sessionUpdate: "response_completed", message_id?, stop_reason?,
 usage?: { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, reasoning_tokens }, signature?, stop_sequence? }`.
+
+## Context window
+
+Models advertise their real context window in `availableModels[]._meta.totalContextTokens`
+and in `_supercharge/session/context_usage.maxTokens`. For custom providers the window is
+read from the provider's `/models` metadata (`context_length`, `context_window`,
+`max_input_tokens`, `top_provider.context_length`, ...); 256k is used only when the provider
+reports nothing.
+
+Per-model override (applies to `totalContextTokens`, `maxTokens` and the auto-compaction threshold):
+
+- Config: `~/.supercharge/config.toml`
+
+  ```toml
+  [model."<model-id>"]
+  context_window = 1000000
+  ```
+
+- TUI: `/context` shows usage; `/context 1m`, `/context 256k`, `/context 400000` set the
+  override for the current model; `/context reset` (or `auto`) clears it. Saved to config.
+- ACP session config option `context_window` (select): values `auto`, `128000`, `200000`,
+  `256000`, `400000`, `1000000`, `2000000` (plus the current custom value). Set with
+  `session/set_config_option` `{ "configId": "context_window", "value": "1000000" }`.
+- ACP extension `_supercharge/session/context_window`
+  `{ "sessionId": "...", "contextWindow": 1000000 | "1m" | "auto" | null }` →
+  `{ "contextWindow": <effective>, "overridden": <bool> }`.
+
+Changes emit `config_option_update` with the refreshed `context_window` option.

@@ -109,7 +109,11 @@ pub(crate) fn meta_get<'a>(
 }
 
 /// Extension methods that are Supercharge-native (no legacy counterpart).
-const NATIVE_SUPERCHARGE_METHODS: &[&str] = &["supercharge/sessions/changed", "supercharge/models/list"];
+const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
+    "supercharge/sessions/changed",
+    "supercharge/models/list",
+    "supercharge/session/context_window",
+];
 
 /// Map a Supercharge extension method name to the legacy name it aliases (both stay accepted).
 ///

@@ -1441,6 +1441,29 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::ContextWindowOverrideComplete { agent_id, result } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                let text = match result {
+                    Ok((window, overridden)) => {
+                        agent.session.models.context_window_selection = None;
+                        if let Some(used) = agent.context_state.as_ref().map(|c| c.used) {
+                            agent.apply_context_used(used, window);
+                        }
+                        let shown = supercharge_shell::agent::format_context_window(window);
+                        if overridden {
+                            format!("Context window set to {shown} ({window} tokens) for this model; saved to config")
+                        } else {
+                            format!("Context window reset to the model default: {shown} ({window} tokens)")
+                        }
+                    }
+                    Err(error) => format!("Couldn't set context window: {error}"),
+                };
+                agent
+                    .scrollback
+                    .push_block(crate::scrollback::block::RenderBlock::system(text));
+            }
+            vec![]
+        }
         TaskResult::RenameSessionFailed { agent_id, error } => {
             if let Some(agent) = app.agents.get_mut(&agent_id) {
                 agent
