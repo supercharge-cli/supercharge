@@ -418,6 +418,7 @@ impl AgentView {
             display_name: None,
             generated_session_title: None,
             title_unpin_committed: false,
+            thinking_probe_requested: Default::default(),
             last_turn_summary: None,
             last_turn_summary_gen: 0,
             pending_effects: Vec::new(),

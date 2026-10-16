@@ -2014,6 +2014,12 @@ pub enum Effect {
         /// Usage-modal fetch generation; echoed back on the task result.
         nonce: u64,
     },
+    /// Send `_supercharge/session/thinking_probe` for a model with unknown thinking support.
+    ProbeThinking {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+        model_id: acp::ModelId,
+    },
     /// Send `_supercharge/session/context_window` for the current model.
     SetContextWindowOverride {
         agent_id: AgentId,
@@ -2948,6 +2954,12 @@ pub enum TaskResult {
     RenameSessionFailed {
         agent_id: AgentId,
         error: String,
+    },
+    /// Thinking probe finished: whether thinking works and the accepted effort ids.
+    ThinkingProbeComplete {
+        agent_id: AgentId,
+        model_id: acp::ModelId,
+        result: Result<(bool, Vec<String>), String>,
     },
     /// `/context <tokens>|reset` finished: the effective window, and whether an override is set.
     ContextWindowOverrideComplete {

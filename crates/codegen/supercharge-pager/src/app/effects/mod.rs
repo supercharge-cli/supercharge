@@ -3546,6 +3546,36 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::ProbeThinking { agent_id, session_id, model_id } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let params = serde_json::json!({ "sessionId": session_id.0.to_string() });
+                let req = acp::ExtRequest::new(
+                    "supercharge/session/thinking_probe",
+                    serde_json::value::to_raw_value(&params)
+                        .expect("serialize thinking_probe params")
+                        .into(),
+                );
+                let send = acp_send(req, &tx);
+                let result = match tokio::time::timeout(std::time::Duration::from_secs(15), send).await {
+                    Ok(Ok(resp)) => {
+                        let v: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let v = v.get("result").cloned().unwrap_or(v);
+                        let supported = v.get("supported").and_then(serde_json::Value::as_bool).unwrap_or(false);
+                        let efforts = v
+                            .get("efforts")
+                            .and_then(serde_json::Value::as_array)
+                            .map(|a| a.iter().filter_map(|e| e.as_str().map(str::to_owned)).collect())
+                            .unwrap_or_default();
+                        Ok((supported, efforts))
+                    }
+                    Ok(Err(e)) => Err(sanitize_user_error(&e.to_string())),
+                    Err(_) => Err("timed out".to_string()),
+                };
+                TaskResult::ThinkingProbeComplete { agent_id, model_id, result }
+            });
+        }
         Effect::SetContextWindowOverride { agent_id, session_id, value } => {
             let tx = acp_tx.clone();
             tasks.spawn(async move {

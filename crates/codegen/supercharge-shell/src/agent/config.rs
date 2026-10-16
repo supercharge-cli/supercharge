@@ -3392,6 +3392,29 @@ pub(crate) fn resolve_model_list(
         }
         resolved = prefetched;
     }
+    // Capability-probe results (cached per provider + model) fill in models whose thinking
+    // support the catalog could not determine; explicit `[model.<id>]` settings still win below.
+    for entry in resolved.values_mut() {
+        if entry.info.api_backend == ApiBackend::Messages {
+            continue;
+        }
+        let probed = supercharge_sampler::thinking_probe::lookup(&entry.info.base_url, &entry.info.model)
+            .or_else(|| {
+                entry
+                    .api_base_url
+                    .as_deref()
+                    .and_then(|u| supercharge_sampler::thinking_probe::lookup(u, &entry.info.model))
+            });
+        if let Some(probed) = probed {
+            entry.info.supports_reasoning_effort = probed.supported();
+            entry.info.reasoning_efforts = if probed.supported() {
+                let ids: Vec<&str> = probed.efforts.iter().map(String::as_str).collect();
+                crate::agent::session_config::effort_options_from_ids(&ids)
+            } else {
+                Vec::new()
+            };
+        }
+    }
     let mut explicit_api_backend_keys = std::collections::HashSet::new();
     for (key, model_override) in &cfg.config_models {
         let had_base = resolved.contains_key(key);
@@ -3952,6 +3975,9 @@ pub struct ConfigModelOverride {
     pub reasoning_effort: Option<ReasoningEffort>,
     pub supports_reasoning_effort: Option<bool>,
     pub reasoning_efforts: Vec<ReasoningEffortOption>,
+    /// Force thinking on or off for this model (`[model."<id>"] thinking = true`), overriding
+    /// provider metadata, name inference and the capability probe.
+    pub thinking: Option<bool>,
     pub supports_backend_search: Option<bool>,
     /// Aliases must be registered in `config_model_override_parse::ALIASES`; serde rejects a table that contains both spellings otherwise.
     #[serde(alias = "send_compactions_remaining")]
@@ -4054,8 +4080,21 @@ impl ConfigModelOverride {
         {
             entry.info.supports_reasoning_effort = true;
         }
+        if let Some(thinking) = self.thinking {
+            entry.info.supports_reasoning_effort = thinking;
+            if !thinking {
+                entry.info.reasoning_efforts.clear();
+            } else if entry.info.reasoning_efforts.is_empty() {
+                let ids = crate::agent::provider_setup::reasoning_effort_ids_for_model(&entry.info.model);
+                let ids: &[&str] = if ids.is_empty() { &["high", "medium", "low"] } else { ids };
+                entry.info.reasoning_efforts = crate::agent::session_config::effort_options_from_ids(ids);
+            }
+        }
         if !self.reasoning_efforts.is_empty() {
             entry.info.reasoning_efforts = self.reasoning_efforts.clone();
+            if self.thinking.is_none() && self.supports_reasoning_effort.is_none() {
+                entry.info.supports_reasoning_effort = true;
+            }
         }
         if let Some(v) = self.supports_backend_search {
             entry.info.supports_backend_search = v;

@@ -2060,6 +2060,22 @@ impl acp::Agent for MvpAgent {
             s if s.starts_with("x.ai/rewind") => {
                 crate::extensions::rewind::handle(self, &args).await
             }
+            crate::agent::handlers::thinking_probe::THINKING_PROBE_METHOD => {
+                // params: { sessionId, force?: bool }
+                let params: serde_json::Value = serde_json::from_str(args.params.get())
+                    .map_err(|e| acp::Error::invalid_params().data(e.to_string()))?;
+                let session_id = params
+                    .get("sessionId")
+                    .and_then(|v| v.as_str())
+                    .map(acp::SessionId::new)
+                    .ok_or_else(|| acp::Error::invalid_params().data("sessionId required"))?;
+                let force = params.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+                let outcome = crate::agent::handlers::thinking_probe::probe_session_model(
+                    self, &session_id, force,
+                )
+                .await?;
+                crate::extensions::to_raw_response(&outcome.to_json())
+            }
             crate::agent::handlers::context_window::CONTEXT_WINDOW_METHOD => {
                 // params: { sessionId, contextWindow: <number> | "1m" | "auto" | null }
                 let params: serde_json::Value = serde_json::from_str(args.params.get())

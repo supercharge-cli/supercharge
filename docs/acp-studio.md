@@ -134,3 +134,26 @@ Per-model override (applies to `totalContextTokens`, `maxTokens` and the auto-co
   `{ "contextWindow": <effective>, "overridden": <bool> }`.
 
 Changes emit `config_option_update` with the refreshed `context_window` option.
+
+## Thinking support
+
+Whether a model gets the `reasoning_effort` option is decided in this order:
+
+1. `[model."<id>"]` config: `thinking = true|false`, or `reasoning_efforts = ["high", "medium", "low"]`.
+2. Provider `/models` metadata: `supported_parameters` containing `reasoning` / `reasoning_effort` /
+   `include_reasoning` / `thinking`, or flags such as `capabilities.reasoning`, `supports_reasoning`,
+   `thinking`.
+3. A cached capability probe (`~/.supercharge/cache/thinking-probe.json`, per provider base URL + model).
+4. Model-name families (gpt-5+, gpt-6, o-series, claude 3.7/4+, gemini 2.5+, deepseek-r1/reasoner,
+   qwq/qwen3, gpt-oss, ids containing `reason`/`think`).
+
+When support is still unknown and the user opens the effort picker or sets an effort, the agent
+runs a capability probe (at most 6 requests with 16 output tokens, 10 s budget). It tries, in
+order, `reasoning_effort`, `reasoning: {effort}`, `thinking: {type: "enabled", budget_tokens}`,
+`enable_thinking`, and `include_reasoning` (Responses backends: `reasoning.effort`), stops at the
+first one the provider clearly accepts, then checks `xhigh` and `none`. The accepted shape and
+levels are cached and used to shape later chat requests.
+
+ACP extension `_supercharge/session/thinking_probe` `{ "sessionId": "...", "force": false }` →
+`{ "modelId", "supported", "known", "shape", "efforts", "cached" }`. A successful probe also
+emits `config_option_update` with the refreshed `reasoning_effort` option.

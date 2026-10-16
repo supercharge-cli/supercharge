@@ -420,6 +420,18 @@ pub(in crate::app::dispatch) fn dispatch_open_effort_picker(app: &mut AppView) -
     };
     let options = agent.session.models.reasoning_effort_options_for(&model_id);
     if options.is_empty() {
+        // Unknown support: ask the agent to probe the provider once (bounded, non-blocking).
+        if let Some(session_id) = agent.session.session_id.clone()
+            && !agent.thinking_probe_requested.contains(&model_id)
+        {
+            agent.thinking_probe_requested.insert(model_id.clone());
+            app.show_toast("Checking whether this model supports thinking…");
+            return vec![Effect::ProbeThinking {
+                agent_id: id,
+                session_id,
+                model_id,
+            }];
+        }
         app.show_toast("Current model does not support thinking effort");
         return effects;
     }

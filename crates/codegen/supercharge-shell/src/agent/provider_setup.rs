@@ -596,36 +596,165 @@ fn is_non_chat_model(id: &str) -> bool {
         || lower.contains("transcri")
 }
 
+/// Name-based guess for whether a model accepts a thinking/reasoning parameter.
+/// Used only when the provider's `/models` metadata says nothing (see [`model_metadata_thinking`]).
 pub fn infer_thinking_from_id(id: &str) -> bool {
     let s = id.to_ascii_lowercase();
-    s.contains("grok")
-        || s.contains("reason")
-        || s.contains("think")
-        || s.contains("o1")
-        || s.contains("o3")
-        || s.contains("o4")
+    // Strip a vendor prefix such as `openai/` or `accounts/x/models/`.
+    let s = s.rsplit('/').next().unwrap_or(&s);
+    if s.contains("reason") || s.contains("think") {
+        return true;
+    }
+    // Explicit non-thinking variants.
+    if s.contains("non-reasoning") || s.contains("instruct") && !s.contains("qwen3") || s.contains("embed") {
+        return false;
+    }
+    let tokens: Vec<&str> = s.split(|c: char| c == '-' || c == '_' || c == ':' || c == '.').collect();
+    let first = tokens.first().copied().unwrap_or("");
+    let version_after = |prefix: &str| -> Option<f32> {
+        let rest = s.strip_prefix(prefix)?;
+        let num: String = rest
+            .trim_start_matches(['-', '_'])
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        num.trim_end_matches('.').parse().ok()
+    };
+    // o-series: o1, o3, o4-mini, ...
+    if first.len() >= 2 && first.starts_with('o') && first[1..].chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    if let Some(v) = version_after("gpt") {
+        return v >= 5.0 && !s.contains("chat-latest");
+    }
+    if s.starts_with("gpt-oss") {
+        return true;
+    }
+    if s.starts_with("claude") {
+        // claude-3-7-sonnet, claude-sonnet-4, claude-opus-4-1, claude-4.5-...
+        let nums: Vec<u32> = tokens.iter().filter_map(|t| t.parse().ok()).collect();
+        return match nums.as_slice() {
+            [3, 7, ..] => true,
+            [major, ..] => *major >= 4 && *major < 100,
+            [] => false,
+        };
+    }
+    if let Some(v) = version_after("gemini") {
+        return v >= 2.5;
+    }
+    if s.starts_with("deepseek-r") || s.contains("deepseek-reasoner") || s.contains("-r1") {
+        return true;
+    }
+    if s.starts_with("qwq") || s.starts_with("qwen3") || s.starts_with("qvq") {
+        return true;
+    }
+    if s.starts_with("magistral") || s.starts_with("kimi-k2-thinking") || s.starts_with("glm-4.5") || s.starts_with("glm-4.6") || s.starts_with("glm-5") {
+        return true;
+    }
+    false
 }
 
-/// Canonical effort ids this model accepts, strongest first.
-///
-/// From xAI docs (`reasoning_effort` on grok-4.6 / grok-4.5 / grok-4.3):
-/// - grok-4.6 and later, grok-4.20: `low` | `medium` | `high` | `xhigh`
-/// - grok-4.5 / grok-4.3: `low` | `medium` | `high` (no `xhigh`; cannot disable)
-/// Other thinking-capable ids get the three-level set.
+/// Canonical effort ids a thinking model accepts, strongest first.
+/// Recent frontier families (and ids that say `xhigh`/`-max`) get `xhigh`; other thinking
+/// models get the three-level set. Non-thinking ids return an empty slice.
 pub fn reasoning_effort_ids_for_model(id: &str) -> &'static [&'static str] {
     if !infer_thinking_from_id(id) {
         return &[];
     }
     let s = id.to_ascii_lowercase();
-    if s.contains("4.6")
-        || s.contains("4.20")
-        || s.contains("grok-5")
+    let s = s.rsplit('/').next().unwrap_or(&s).to_owned();
+    let gpt_ver: Option<f32> = s
+        .strip_prefix("gpt-")
+        .and_then(|r| {
+            let n: String = r.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+            n.trim_end_matches('.').parse().ok()
+        });
+    if gpt_ver.is_some_and(|v| v >= 5.1)
         || s.contains("xhigh")
         || s.contains("-max")
+        || s.contains("4.6")
+        || s.contains("4.20")
     {
         return &["xhigh", "high", "medium", "low"];
     }
     &["high", "medium", "low"]
+}
+
+/// What a `/models` entry says about thinking support, if anything.
+/// Looks at explicit flags, `supported_parameters` (OpenRouter style), and nested
+/// `capabilities`/`features`/`architecture` objects.
+pub fn model_metadata_thinking(entry: &Value) -> Option<bool> {
+    let obj = entry.as_object()?;
+    const FLAGS: [&str; 8] = [
+        "supports_reasoning_effort",
+        "supportsReasoningEffort",
+        "supports_reasoning",
+        "supportsReasoning",
+        "supports_thinking",
+        "supportsThinking",
+        "reasoning",
+        "thinking",
+    ];
+    const PARAMS: [&str; 6] = [
+        "reasoning",
+        "reasoning_effort",
+        "include_reasoning",
+        "thinking",
+        "enable_thinking",
+        "thinking_budget",
+    ];
+    let flag_in = |o: &serde_json::Map<String, Value>| -> Option<bool> {
+        FLAGS.iter().find_map(|k| match o.get(*k) {
+            Some(Value::Bool(b)) => Some(*b),
+            Some(Value::Object(inner)) => inner
+                .get("supported")
+                .or_else(|| inner.get("enabled"))
+                .and_then(Value::as_bool)
+                .or(Some(true)),
+            _ => None,
+        })
+    };
+    if let Some(b) = flag_in(obj) {
+        return Some(b);
+    }
+    for key in ["reasoning_efforts", "reasoningEfforts"] {
+        if let Some(a) = obj.get(key).and_then(Value::as_array) {
+            return Some(!a.is_empty());
+        }
+    }
+    for key in ["capabilities", "features", "architecture", "meta", "metadata"] {
+        match obj.get(key) {
+            Some(Value::Object(nested)) => {
+                if let Some(b) = flag_in(nested) {
+                    return Some(b);
+                }
+            }
+            Some(Value::Array(items)) => {
+                if items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .any(|i| matches!(i.to_ascii_lowercase().as_str(), "reasoning" | "thinking"))
+                {
+                    return Some(true);
+                }
+            }
+            _ => {}
+        }
+    }
+    for key in ["supported_parameters", "supportedParameters", "parameters"] {
+        if let Some(params) = obj.get(key).and_then(Value::as_array) {
+            if params.is_empty() {
+                continue;
+            }
+            return Some(
+                params
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .any(|p| PARAMS.contains(&p.to_ascii_lowercase().as_str())),
+            );
+        }
+    }
+    None
 }
 
 /// Context window from a `/models` entry. Providers use different keys:
@@ -666,30 +795,8 @@ pub(crate) fn provider_model_context_window(entry: &Value) -> Option<u64> {
 }
 
 fn model_entry_supports_thinking(entry: &Value, id: &str, name: &str) -> bool {
-    if let Some(obj) = entry.as_object() {
-        for key in [
-            "supports_reasoning_effort",
-            "supportsReasoningEffort",
-            "reasoning",
-            "thinking",
-        ] {
-            if obj.get(key).and_then(Value::as_bool) == Some(true) {
-                return true;
-            }
-        }
-        if obj
-            .get("reasoning_efforts")
-            .and_then(Value::as_array)
-            .is_some_and(|a| !a.is_empty())
-            || obj
-                .get("reasoningEfforts")
-                .and_then(Value::as_array)
-                .is_some_and(|a| !a.is_empty())
-        {
-            return true;
-        }
-    }
-    infer_thinking_from_id(id) || infer_thinking_from_id(name)
+    model_metadata_thinking(entry)
+        .unwrap_or_else(|| infer_thinking_from_id(id) || infer_thinking_from_id(name))
 }
 
 fn is_loopback_host(host: &str) -> bool {
@@ -1851,20 +1958,43 @@ mod tests {
     }
 
     #[test]
-    fn reasoning_effort_ids_match_xai_docs() {
-        assert_eq!(
-            reasoning_effort_ids_for_model("grok-4.6"),
-            &["xhigh", "high", "medium", "low"]
-        );
-        assert_eq!(
-            reasoning_effort_ids_for_model("grok-4.5"),
-            &["high", "medium", "low"]
-        );
-        assert_eq!(
-            reasoning_effort_ids_for_model("grok-4.3"),
-            &["high", "medium", "low"]
-        );
+    fn reasoning_effort_ids_by_family() {
+        assert_eq!(reasoning_effort_ids_for_model("gpt-6-astra"), &["xhigh", "high", "medium", "low"]);
+        assert_eq!(reasoning_effort_ids_for_model("gpt-5"), &["high", "medium", "low"]);
+        assert_eq!(reasoning_effort_ids_for_model("o4-mini"), &["high", "medium", "low"]);
         assert!(reasoning_effort_ids_for_model("gpt-4o").is_empty());
+    }
+
+    #[test]
+    fn infers_thinking_for_current_families() {
+        for id in [
+            "gpt-6-astra", "gpt-5.2", "openai/gpt-5-mini", "o1", "o3-pro", "o4-mini",
+            "claude-3-7-sonnet-20250219", "claude-sonnet-4-5", "claude-opus-4-1",
+            "gemini-2.5-pro", "gemini-3-flash", "deepseek-r1", "deepseek-reasoner",
+            "qwq-32b", "qwen3-235b-a22b", "gpt-oss-120b", "my-thinking-model",
+        ] {
+            assert!(infer_thinking_from_id(id), "{id} should infer thinking");
+        }
+        for id in [
+            "gpt-4o", "gpt-4.1-mini", "claude-3-5-sonnet", "gemini-2.0-flash",
+            "deepseek-chat", "llama-3.3-70b", "text-embedding-3-large",
+        ] {
+            assert!(!infer_thinking_from_id(id), "{id} should not infer thinking");
+        }
+    }
+
+    #[test]
+    fn metadata_thinking_wins_over_name() {
+        use serde_json::json;
+        assert_eq!(model_metadata_thinking(&json!({"supported_parameters":["tools","reasoning","include_reasoning"]})), Some(true));
+        assert_eq!(model_metadata_thinking(&json!({"supported_parameters":["tools","temperature"]})), Some(false));
+        assert_eq!(model_metadata_thinking(&json!({"capabilities":{"reasoning":true}})), Some(true));
+        assert_eq!(model_metadata_thinking(&json!({"capabilities":{"thinking":false}})), Some(false));
+        assert_eq!(model_metadata_thinking(&json!({"thinking":{"supported":true}})), Some(true));
+        assert_eq!(model_metadata_thinking(&json!({"features":["vision","reasoning"]})), Some(true));
+        assert_eq!(model_metadata_thinking(&json!({"id":"x"})), None);
+        assert!(model_entry_supports_thinking(&json!({"id":"gpt-6-astra"}), "gpt-6-astra", ""));
+        assert!(!model_entry_supports_thinking(&json!({"supported_parameters":["tools"]}), "o3", ""));
     }
 
     #[test]

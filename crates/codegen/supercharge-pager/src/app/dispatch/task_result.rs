@@ -1441,6 +1441,35 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::ThinkingProbeComplete { agent_id, model_id, result } => {
+            let mut reopen = false;
+            let mut toast: Option<String> = None;
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                match result {
+                    Ok((true, efforts)) => {
+                        if let Some(info) = agent.session.models.available.get_mut(&model_id) {
+                            let meta = info.meta.get_or_insert_with(Default::default);
+                            meta.insert("supportsReasoningEffort".into(), serde_json::Value::Bool(true));
+                            if !efforts.is_empty() {
+                                meta.insert("reasoningEfforts".into(), serde_json::json!(efforts));
+                            }
+                            reopen = agent.session.models.current.as_ref() == Some(&model_id);
+                        }
+                    }
+                    Ok((false, _)) => {
+                        toast = Some("Current model does not support thinking effort".into());
+                    }
+                    Err(error) => toast = Some(format!("Couldn't check thinking support: {error}")),
+                }
+            }
+            if let Some(t) = toast {
+                app.show_toast(&t);
+            }
+            if reopen {
+                return super::settings::ui::dispatch_open_effort_picker(app);
+            }
+            vec![]
+        }
         TaskResult::ContextWindowOverrideComplete { agent_id, result } => {
             if let Some(agent) = app.agents.get_mut(&agent_id) {
                 let text = match result {

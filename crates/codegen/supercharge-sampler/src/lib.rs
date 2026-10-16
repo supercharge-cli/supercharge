@@ -28,6 +28,7 @@ pub mod sampling_log;
 mod shared_http;
 mod span_timing;
 pub mod stream;
+pub mod thinking_probe;
 mod stream_classify;
 pub mod types;
 

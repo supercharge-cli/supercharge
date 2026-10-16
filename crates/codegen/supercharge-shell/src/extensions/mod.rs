@@ -113,6 +113,7 @@ const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
     "supercharge/sessions/changed",
     "supercharge/models/list",
     "supercharge/session/context_window",
+    "supercharge/session/thinking_probe",
 ];
 
 /// Map a Supercharge extension method name to the legacy name it aliases (both stay accepted).

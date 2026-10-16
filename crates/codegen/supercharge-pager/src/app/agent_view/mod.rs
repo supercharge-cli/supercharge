@@ -1434,6 +1434,8 @@ pub struct AgentView {
     pub generated_session_title: Option<String>,
     /// Shell already fanned out `titleIsManual: false` for this unpin. A dropped RPC then surfaces `ResetSessionTitleFailed`; restoring the pin would stick a manual title that later absent-meta auto titles refuse to clear.
     pub title_unpin_committed: bool,
+    /// Models already sent to the thinking probe from the effort picker (one probe per model).
+    pub thinking_probe_requested: std::collections::HashSet<agent_client_protocol::ModelId>,
     /// Ultra-short summary of the most recent successful turn (shell
     /// `LastTurnSummary`), preferred over the last-message preview for the idle dashboard row's secondary line. Shown until replaced by the next successful turn's summary; cleared only by a conversation rewind
     /// (which removes the work it describes).

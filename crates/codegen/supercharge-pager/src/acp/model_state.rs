@@ -476,12 +476,12 @@ mod tests {
     }
 
     #[test]
-    fn grok_45_inferred_menu_omits_xhigh() {
-        let id = acp::ModelId::new(Arc::from("grok-4.5"));
+    fn o3_inferred_menu_omits_xhigh() {
+        let id = acp::ModelId::new(Arc::from("o3"));
         let mut state = ModelState::default();
         state.available.insert(
             id.clone(),
-            acp::ModelInfo::new(id.clone(), "Grok 4.5".to_string()),
+            acp::ModelInfo::new(id.clone(), "O3".to_string()),
         );
         state.current = Some(id);
         let ids: Vec<_> = state

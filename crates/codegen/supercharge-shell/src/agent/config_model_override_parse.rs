@@ -760,6 +760,7 @@ mod tests {
                 description: Some("Deep reasoning".to_string()),
                 default: true,
             }],
+            thinking: Some(true),
             supports_backend_search: Some(false),
             compactions_remaining: Some(CompactionsRemaining::Fixed(1)),
             compaction_at_tokens: Some(CompactionAtTokens::Fixed(100_000)),

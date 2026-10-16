@@ -972,7 +972,7 @@ impl SamplingClient {
             sent_bearer,
         } = self.post(self.endpoint("chat/completions"));
         let built_request = self
-            .build_json_request(grok_headers.apply(builder), &payload)
+            .build_json_request(grok_headers.apply(builder), &self.reshape_chat_payload(&payload)?)
             .await?;
         let response = self.send(built_request).await?;
 
@@ -988,6 +988,153 @@ impl SamplingClient {
     /// Serialize `payload` onto `builder` the way `RequestBuilder::json` does
     /// (a caller-set `Content-Type` wins), zstd-compressing large bodies when
     /// the shell marked this endpoint as accepting it.
+    /// Serialize a Chat Completions payload and rewrite its thinking parameter to the shape
+    /// the capability probe found for this provider + model (no-op when nothing is cached).
+    fn reshape_chat_payload<T: Serialize + ?Sized>(&self, payload: &T) -> Result<serde_json::Value> {
+        let mut body = serde_json::to_value(payload).map_err(SamplingError::Serialization)?;
+        if body.get("reasoning_effort").is_some() {
+            let model = body
+                .get("model")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(&self.defaults.model)
+                .to_owned();
+            if let Some(cached) = crate::thinking_probe::lookup(&self.base_url, &model) {
+                crate::thinking_probe::apply_shape_to_chat_body(&mut body, &cached);
+            }
+        }
+        Ok(body)
+    }
+
+    /// Probe which thinking parameter this provider accepts for `model` and cache the result.
+    ///
+    /// Sends at most [`crate::thinking_probe::MAX_PROBE_REQUESTS`] tiny requests (16 output
+    /// tokens) and gives up after `budget`. Returns `None` when the outcome is inconclusive
+    /// (network, auth or server errors), in which case nothing is cached.
+    pub async fn probe_thinking(
+        &self,
+        model: &str,
+        budget: std::time::Duration,
+    ) -> Option<crate::thinking_probe::ThinkingProbeResult> {
+        use crate::thinking_probe::{
+            CHAT_SHAPES, EXTRA_LEVELS, MAX_PROBE_REQUESTS, ProbeVerdict, ThinkingProbeResult,
+            ThinkingShape, classify_probe_response, efforts_for, now_secs, shape_params, store,
+        };
+        if matches!(self.defaults.api_backend, ApiBackend::Messages) {
+            return None;
+        }
+        let responses = matches!(self.defaults.api_backend, ApiBackend::Responses);
+        let deadline = tokio::time::Instant::now() + budget;
+        let sent = std::cell::Cell::new(0usize);
+        let send = |shape: ThinkingShape, effort: &'static str| {
+            sent.set(sent.get() + 1);
+            let over = sent.get() > MAX_PROBE_REQUESTS;
+            let mut body = serde_json::Map::new();
+            body.insert("model".into(), serde_json::json!(model));
+            let (path, max_key, max) = if responses {
+                body.insert("input".into(), serde_json::json!("Reply with OK."));
+                ("responses", "max_output_tokens", 16u64)
+            } else {
+                body.insert(
+                    "messages".into(),
+                    serde_json::json!([{ "role": "user", "content": "Reply with OK." }]),
+                );
+                let max = if shape == ThinkingShape::ThinkingBudget { 1_100 } else { 16 };
+                ("chat/completions", "max_tokens", max)
+            };
+            body.insert(max_key.into(), serde_json::json!(max));
+            let mut params = shape_params(shape, effort);
+            if shape == ThinkingShape::ThinkingBudget {
+                params.insert(
+                    "thinking".into(),
+                    serde_json::json!({ "type": "enabled", "budget_tokens": 1024 }),
+                );
+            }
+            let names: Vec<String> = params.keys().cloned().collect();
+            body.extend(params);
+            let SentRequest { builder, .. } = self.post(self.endpoint(path));
+            let fut = builder.json(&serde_json::Value::Object(body)).send();
+            async move {
+                if over {
+                    return ProbeVerdict::Inconclusive;
+                }
+                let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+                match tokio::time::timeout(remaining, fut).await {
+                    Ok(Ok(resp)) => {
+                        let status = resp.status().as_u16();
+                        let text = tokio::time::timeout(
+                            deadline.saturating_duration_since(tokio::time::Instant::now()),
+                            resp.text(),
+                        )
+                        .await
+                        .ok()
+                        .and_then(|r| r.ok())
+                        .unwrap_or_default();
+                        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+                        classify_probe_response(status, &text, &names)
+                    }
+                    _ => ProbeVerdict::Inconclusive,
+                }
+            }
+        };
+
+        let shapes: &[ThinkingShape] = if responses {
+            &[ThinkingShape::ResponsesReasoning]
+        } else {
+            &CHAT_SHAPES
+        };
+        let mut tentative: Option<ThinkingShape> = None;
+        let mut chosen: Option<ThinkingShape> = None;
+        let mut rejected_all = true;
+        for &shape in shapes {
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            let effort = if shape.has_levels() { "low" } else { "high" };
+            match send(shape, effort).await {
+                ProbeVerdict::Clear => {
+                    chosen = Some(shape);
+                    rejected_all = false;
+                    break;
+                }
+                ProbeVerdict::Tentative => {
+                    rejected_all = false;
+                    tentative.get_or_insert(shape);
+                }
+                ProbeVerdict::Rejected => {}
+                ProbeVerdict::Inconclusive => return None,
+            }
+        }
+        let shape = match chosen.or(tentative) {
+            Some(shape) => shape,
+            None if rejected_all && sent.get() >= shapes.len() => ThinkingShape::Unsupported,
+            None => return None,
+        };
+        let (mut xhigh_ok, mut none_ok) = (false, false);
+        if shape.has_levels() {
+            for level in EXTRA_LEVELS {
+                if tokio::time::Instant::now() >= deadline {
+                    break;
+                }
+                let ok = matches!(send(shape, level).await, ProbeVerdict::Clear | ProbeVerdict::Tentative);
+                match level {
+                    "xhigh" => xhigh_ok = ok,
+                    _ => none_ok = ok,
+                }
+            }
+        }
+        let result = ThinkingProbeResult {
+            shape,
+            efforts: if shape == ThinkingShape::Unsupported {
+                Vec::new()
+            } else {
+                efforts_for(shape, xhigh_ok, none_ok)
+            },
+            probed_at: now_secs(),
+        };
+        store(&self.base_url, model, result.clone());
+        Some(result)
+    }
+
     async fn build_json_request<T: Serialize + ?Sized>(
         &self,
         builder: reqwest::RequestBuilder,
@@ -1113,7 +1260,7 @@ impl SamplingClient {
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
         let built_request = self
-            .build_json_request(http_request, &streaming_request)
+            .build_json_request(http_request, &self.reshape_chat_payload(&streaming_request)?)
             .await?;
 
         tracing::debug!(
