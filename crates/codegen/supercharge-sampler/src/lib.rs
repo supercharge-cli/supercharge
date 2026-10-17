@@ -17,6 +17,7 @@ pub mod client;
 pub mod commands;
 pub mod config;
 pub mod doom_loop;
+pub mod dynamic_credentials;
 mod doom_loop_recovery;
 pub mod events;
 pub mod handle;

@@ -116,7 +116,7 @@ pub struct SetupProviderProfile {
     pub curated: &'static [&'static str],
 }
 
-/// Built-in providers from the XibeCode catalog, plus a Custom row in the TUI.
+/// Built-in provider profiles, plus a Custom row in the TUI.
 pub fn setup_provider_profiles() -> &'static [SetupProviderProfile] {
     SETUP_PROVIDERS
 }

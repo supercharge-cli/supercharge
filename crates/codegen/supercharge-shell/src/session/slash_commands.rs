@@ -872,7 +872,7 @@ pub(super) fn available_commands(
 /// built. With `CommandAvailability::default()` (all gates closed) this
 /// is equivalent to advertising only `BuiltinGate::AlwaysOn` commands.
 pub(crate) fn help_text(availability: CommandAvailability) -> String {
-    let mut lines = vec!["Slash commands (ACP / Zed):".to_string(), String::new()];
+    let mut lines = vec!["Slash commands:".to_string(), String::new()];
     for cmd in BUILTIN_COMMANDS
         .iter()
         .chain(PROMPT_COMMANDS.iter())

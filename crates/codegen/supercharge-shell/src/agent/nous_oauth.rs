@@ -160,6 +160,52 @@ pub fn poll_for_token(pending: &DeviceCodePending) -> Result<NousOauthState, Str
     }
 }
 
+/// One device-code poll step (no sleeping), for clients that drive the poll loop themselves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DevicePollStatus {
+    /// The user has not approved yet; poll again after `interval` seconds.
+    Pending,
+    /// Poll more slowly (the interval grows by 5 s per RFC 8628).
+    SlowDown,
+    /// Approved; the token is saved to `nous_oauth.json`.
+    Done,
+}
+
+/// Exchange the device code once. Saves the token on approval.
+pub fn poll_once(pending: &DeviceCodePending) -> Result<DevicePollStatus, String> {
+    let client = http_client()?;
+    let cid = client_id();
+    let resp = client
+        .post(format!("{PORTAL_BASE}/api/oauth/token"))
+        .header("Accept", "application/json")
+        .form(&[
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+            ("client_id", cid.as_str()),
+            ("device_code", pending.device_code.as_str()),
+        ])
+        .send()
+        .map_err(|e| format!("Nous token poll failed: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
+    if status.is_success() {
+        let state = state_from_token_json(&v, &cid)?;
+        persist_state(&state)?;
+        return Ok(DevicePollStatus::Done);
+    }
+    match v.get("error").and_then(|x| x.as_str()).unwrap_or("") {
+        "authorization_pending" => Ok(DevicePollStatus::Pending),
+        "slow_down" => Ok(DevicePollStatus::SlowDown),
+        err @ ("expired_token" | "access_denied") => Err(format!("Nous login {err}")),
+        _ => Err(format!("Nous token HTTP {status}: {}", snippet(&body))),
+    }
+}
+
+/// Whether a Nous login is saved (the token may still need a refresh).
+pub fn signed_in() -> bool {
+    load_state().is_some_and(|s| !s.access_token.trim().is_empty() || !s.refresh_token.trim().is_empty())
+}
+
 fn state_from_token_json(v: &serde_json::Value, cid: &str) -> Result<NousOauthState, String> {
     let access = v
         .get("access_token")
@@ -283,6 +329,99 @@ pub fn resolve_access_token() -> Result<String, String> {
     Ok(state.access_token)
 }
 
+/// Host of an inference base URL, lowercased (`None` when unparsable).
+fn host_of(url: &str) -> Option<String> {
+    url::Url::parse(url.trim()).ok()?.host_str().map(str::to_ascii_lowercase)
+}
+
+/// Whether `base_url` points at the Nous inference API (default host or the one saved at login).
+pub(crate) fn covers_base_url(base_url: &str, state: Option<&NousOauthState>) -> bool {
+    let Some(host) = host_of(base_url) else {
+        return false;
+    };
+    host_of(INFERENCE_BASE).as_deref() == Some(host.as_str())
+        || state
+            .filter(|s| !s.inference_base_url.is_empty())
+            .and_then(|s| host_of(&s.inference_base_url))
+            .as_deref()
+            == Some(host.as_str())
+}
+
+/// State read from `nous_oauth.json`, re-read whenever the file's mtime or size changes.
+fn cached_state_at(path: &std::path::Path) -> Option<NousOauthState> {
+    type Entry = (std::path::PathBuf, Option<SystemTime>, u64, Option<NousOauthState>);
+    static CACHE: std::sync::Mutex<Option<Entry>> = std::sync::Mutex::new(None);
+    let meta = std::fs::metadata(path).ok();
+    let mtime = meta.as_ref().and_then(|m| m.modified().ok());
+    let len = meta.as_ref().map_or(0, |m| m.len());
+    let mut guard = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((p, t, l, state)) = guard.as_ref()
+        && p == path
+        && *t == mtime
+        && *l == len
+        && mtime.is_some()
+    {
+        return state.clone();
+    }
+    let state = meta
+        .is_some()
+        .then(|| std::fs::read_to_string(path).ok())
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<NousOauthState>(&raw).ok());
+    *guard = Some((path.to_path_buf(), mtime, len, state.clone()));
+    state
+}
+
+/// Feeds the current Nous access token to every chat request, so a login saved by `/setup`
+/// (or a refresh by another process) takes effect without restarting the agent.
+#[derive(Debug, Default)]
+pub struct NousCredentialSource {
+    path_override: Option<std::path::PathBuf>,
+}
+
+impl NousCredentialSource {
+    fn path(&self) -> std::path::PathBuf {
+        self.path_override.clone().unwrap_or_else(oauth_path)
+    }
+}
+
+impl supercharge_sampler::dynamic_credentials::DynamicCredentialSource for NousCredentialSource {
+    fn bearer_for(&self, base_url: &str) -> Option<String> {
+        let state = cached_state_at(&self.path());
+        if !covers_base_url(base_url, state.as_ref()) {
+            return None;
+        }
+        state.map(|s| s.access_token).filter(|t| !t.trim().is_empty())
+    }
+
+    fn prepare<'a>(
+        &'a self,
+        base_url: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let path = self.path();
+            let Some(state) = cached_state_at(&path) else {
+                return;
+            };
+            if !covers_base_url(base_url, Some(&state)) || !token_expiring(&state) {
+                return;
+            }
+            // Refresh uses a blocking client; keep it off the async runtime.
+            let _ = tokio::task::spawn_blocking(move || refresh_state(&state)).await;
+        })
+    }
+}
+
+/// Register [`NousCredentialSource`] with the sampler once per process.
+pub fn install_credential_source() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        supercharge_sampler::dynamic_credentials::register(std::sync::Arc::new(
+            NousCredentialSource::default(),
+        ));
+    });
+}
+
 fn jwt_exp(token: &str) -> Option<u64> {
     let payload = token.split('.').nth(1)?;
     let padded = match payload.len() % 4 {
@@ -318,6 +457,35 @@ fn snippet(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn credential_source_rereads_file_when_it_changes() {
+        use supercharge_sampler::dynamic_credentials::DynamicCredentialSource;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nous_oauth.json");
+        let write = |tok: &str| {
+            let state = NousOauthState {
+                access_token: tok.into(),
+                refresh_token: "r".into(),
+                token_type: "Bearer".into(),
+                scope: String::new(),
+                client_id: String::new(),
+                portal_base_url: String::new(),
+                inference_base_url: INFERENCE_BASE.into(),
+                expires_at: Some(now_unix() + 3_600),
+            };
+            std::fs::write(&path, serde_json::to_string(&state).unwrap()).unwrap();
+        };
+        let src = NousCredentialSource { path_override: Some(path.clone()) };
+        write("first-token");
+        assert_eq!(src.bearer_for(INFERENCE_BASE).as_deref(), Some("first-token"));
+        assert_eq!(src.bearer_for("https://api.other.test/v1"), None);
+        // A new login with a different length changes size (and usually mtime).
+        write("second-token-after-setup");
+        assert_eq!(src.bearer_for(INFERENCE_BASE).as_deref(), Some("second-token-after-setup"));
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(src.bearer_for(INFERENCE_BASE), None);
+    }
 
     #[test]
     fn jwt_exp_reads_payload() {

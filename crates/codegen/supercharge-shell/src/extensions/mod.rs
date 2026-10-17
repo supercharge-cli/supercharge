@@ -2,6 +2,7 @@ pub mod agent_runtime;
 pub mod auth;
 pub(crate) mod auth_gate;
 pub(crate) mod background_task;
+pub(crate) mod setup;
 pub mod billing;
 pub mod btw;
 pub mod bundle;
@@ -114,6 +115,14 @@ const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
     "supercharge/models/list",
     "supercharge/session/context_window",
     "supercharge/session/thinking_probe",
+    "supercharge/setup/status",
+    "supercharge/setup/models",
+    "supercharge/setup/save",
+    "supercharge/setup/device_start",
+    "supercharge/setup/device_poll",
+    "supercharge/setup/device_cancel",
+    "supercharge/setup/image_status",
+    "supercharge/setup/image_save",
 ];
 
 /// Map a Supercharge extension method name to the legacy name it aliases (both stay accepted).

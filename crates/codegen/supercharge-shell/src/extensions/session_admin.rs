@@ -411,7 +411,7 @@ async fn rename_chat_conversation(
         .await
         .map_err(|e| match e {
             ConvError::NoOauth => acp::Error::invalid_request()
-                .data("chat session rename requires xAI OAuth credentials"),
+                .data("chat session rename requires account sign-in credentials"),
             ConvError::Http { status: 404 } => acp::Error::invalid_request()
                 .data(format!("conversation not found: {conversation_id}")),
             other => acp::Error::internal_error()
@@ -499,7 +499,7 @@ async fn soft_delete_chat_conversation(agent: &MvpAgent, conversation_id: &str) 
         .await
         .map_err(|e| match e {
             ConvError::NoOauth => acp::Error::invalid_request()
-                .data("chat session delete requires xAI OAuth credentials"),
+                .data("chat session delete requires account sign-in credentials"),
             other => acp::Error::internal_error()
                 .data(format!("chat conversation soft-delete failed: {other}")),
         })?;
@@ -743,7 +743,7 @@ fn cwd_matches(session_cwd: &std::path::Path, target_cwd: &std::path::Path) -> b
 /// Re-resolve the agent model list from config.toml. Called by the config hot-reload watcher when `[model.*]` or `[models]` changes.
 /// Re-reads config from disk, re-runs the `new_with_models()` resolution logic for user TOML config entries, and swaps the model list in-place.
 /// Prefetched (API) and default models are NOT re-fetched; only BYOK entries from config are updated.
-fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
+pub(crate) fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
     let disk_config = crate::config::load_effective_config()
         .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
 

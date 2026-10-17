@@ -71,7 +71,7 @@ pub(crate) fn discover_hook_source_paths(
                 if let Some(e) = &resolved.configured_error {
                     tracing::warn!(
                         error = %e,
-                        "hooks-paths unreadable; retaining fixed Grok hook discovery sources only"
+                        "hooks-paths unreadable; retaining built-in hook discovery sources only"
                     );
                 }
                 resolved

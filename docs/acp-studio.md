@@ -157,3 +157,36 @@ levels are cached and used to shape later chat requests.
 ACP extension `_supercharge/session/thinking_probe` `{ "sessionId": "...", "force": false }` →
 `{ "modelId", "supported", "known", "shape", "efforts", "cached" }`. A successful probe also
 emits `config_option_update` with the refreshed `reasoning_effort` option.
+
+## Provider setup (`_supercharge/setup/*`)
+
+Same logic as the TUI `/setup`; writes `~/.supercharge/config.toml` and hot-reloads the model
+catalog. Advertised in `initialize` `_meta`: `"supercharge": { "setup": true, "imageSetup": true,
+"deviceLogin": true }`, `"_supercharge/setup": true`, and `"_supercharge/setup/methods": [...]`.
+Errors use ACP `invalid_params` (bad input, provider rejected, login expired/denied) or
+`internal_error` (I/O).
+
+| Method | Request | Response |
+|---|---|---|
+| `_supercharge/setup/status` | `{}` | `{ configured, providerId, baseUrl, format, hasApiKey, modelId, oauth: { nous: { signedIn } }, deviceLoginPending, configPath, providers: [Provider] }` |
+| `_supercharge/setup/models` | `{ providerId?, baseUrl?, apiKey?, format? }` | `{ models: [Model], providerId, baseUrl, format, defaultModel }` |
+| `_supercharge/setup/save` | `{ providerId?, baseUrl?, apiKey?, modelId?, modelName?, format? }` | `{ saved: true, modelId, reloaded, models: [Model], message }` |
+| `_supercharge/setup/device_start` | `{}` | `{ userCode, verificationUri, verificationUriComplete, expiresIn, interval }` |
+| `_supercharge/setup/device_poll` | `{}` | `{ status: "pending" \| "slow_down" \| "done", interval }` |
+| `_supercharge/setup/device_cancel` | `{}` | `{ cancelled }` |
+| `_supercharge/setup/image_status` | `{}` | `{ configured, baseUrl, hasApiKey, modelId, providers: [Provider] }` |
+| `_supercharge/setup/image_save` | `{ providerId?, baseUrl?, apiKey?, modelId?, format? }` | `{ saved: true, modelId }` |
+
+- `Provider`: `{ id, name, description, baseUrl, defaultModel, format: "openai"|"anthropic"|"responses", curated: [string], auth: "api_key"|"oauth_device" }`.
+- `Model`: `{ id, name, supportsThinking, contextWindow }` (`contextWindow` may be `null`).
+- Target resolution: `providerId` (built-in) supplies `baseUrl`, `format` and the default model;
+  `baseUrl` alone means a custom OpenAI-compatible endpoint (`format` defaults to `openai`).
+  An omitted `apiKey` reuses the saved key when the saved provider has the same base URL.
+  `save` without `modelId` picks the provider default (if listed) or the first listed model.
+- Device login (Nous, `auth: "oauth_device"`): call `device_start`, show `userCode` and open
+  `verificationUri(Complete)`, then call `device_poll` every `interval` seconds (it returns the
+  new interval after `slow_down`) until `done`; an expired or denied code returns an error. Then
+  call `setup/models` / `setup/save` with `providerId: "nous"` (no `apiKey`).
+- Chats against the Nous inference API always use the token currently in `nous_oauth.json`
+  (re-read when the file changes, refreshed before expiry), so a new login applies without
+  restarting the agent.

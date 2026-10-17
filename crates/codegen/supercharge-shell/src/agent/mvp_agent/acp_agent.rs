@@ -607,7 +607,7 @@ impl acp::Agent for MvpAgent {
                     );
                     serde_json::json!({
                     "grokShell": true,
-                    "supercharge": { "steer": true, "sessionsChanged": true, "modelsList": true },
+                    "supercharge": { "steer": true, "sessionsChanged": true, "modelsList": true, "setup": true, "imageSetup": true, "deviceLogin": true },
                     // Re-deriving this precedence client-side has regressed OIDC refresh, so clients consume the agent's choice from here
                     "defaultAuthMethodId": default_auth_method_id_wire,
                     // The agent can drive in-process SDK MCP servers over the ACP reverse channel (`x.ai/mcp/sdk_call`)
@@ -619,6 +619,12 @@ impl acp::Agent for MvpAgent {
                     // TODO(acp-rename): legacy keys above; Supercharge names below.
                     "_supercharge/mcp/sdk": true,
                     "_supercharge/pluginDirs": true,
+                    // Provider setup over ACP (`_supercharge/setup/*`, same logic as `/setup`).
+                    "_supercharge/setup": true,
+                    "_supercharge/setup/methods": crate::extensions::setup::METHODS
+                        .iter()
+                        .map(|m| format!("_{m}"))
+                        .collect::<Vec<_>>(),
                     "currentWorkingDirectory": current_working_directory.to_string_lossy().to_string(),
                     "agentVersion": supercharge_version::VERSION,
                     "agentId": agent_id(),
@@ -2059,6 +2065,9 @@ impl acp::Agent for MvpAgent {
             }
             s if s.starts_with("x.ai/rewind") => {
                 crate::extensions::rewind::handle(self, &args).await
+            }
+            m if crate::extensions::setup::METHODS.contains(&m) => {
+                crate::extensions::setup::handle(self, m, &args).await
             }
             crate::agent::handlers::thinking_probe::THINKING_PROBE_METHOD => {
                 // params: { sessionId, force?: bool }

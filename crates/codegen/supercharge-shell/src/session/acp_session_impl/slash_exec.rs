@@ -1238,7 +1238,7 @@ impl SessionActor {
         };
         match persist_provider_setup(&setup) {
             Ok(()) => format!(
-                "Saved provider settings. Default model: `{model_id}`.\nStart a new Supercharge thread in Zed so the agent reloads config."
+                "Saved provider settings. Default model: `{model_id}`.\nStart a new Supercharge session to use it."
             ),
             Err(err) => format!("Could not save provider settings: {err}"),
         }

@@ -2359,6 +2359,7 @@ impl MvpAgent {
         prefetched_models: Option<IndexMap<String, ModelEntry>>,
         boot: Option<crate::agent::init::BootstrapPrefetch>,
     ) -> Result<Self, crate::agent::init::BootstrapError> {
+        crate::agent::nous_oauth::install_credential_source();
         let (cfg, models_manager) = crate::agent::init::bootstrap_with_cancel(
             cfg,
             &auth_manager,

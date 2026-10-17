@@ -698,6 +698,8 @@ impl SamplingClient {
     async fn prepare_bearer(&self) {
         if let Some(resolver) = &self.bearer_resolver {
             resolver.prepare_for_send().await;
+        } else {
+            crate::dynamic_credentials::prepare(&self.base_url).await;
         }
     }
 
@@ -725,6 +727,24 @@ impl SamplingClient {
                         if let Ok(v) = HeaderValue::from_str(&format!("Bearer {fresh}")) {
                             headers.insert(AUTHORIZATION, v);
                         }
+                    }
+                }
+            }
+        }
+        if self.bearer_resolver.is_none()
+            && let Some(fresh) = crate::dynamic_credentials::bearer_for(&self.base_url)
+        {
+            // A token refreshed out of band (e.g. an OAuth login saved after startup) wins
+            // over the key captured when this client was built.
+            match self.defaults.auth_scheme {
+                AuthScheme::XApiKey => {
+                    if let Ok(v) = HeaderValue::from_str(&fresh) {
+                        headers.insert(HeaderName::from_static("x-api-key"), v);
+                    }
+                }
+                AuthScheme::Bearer => {
+                    if let Ok(v) = HeaderValue::from_str(&format!("Bearer {fresh}")) {
+                        headers.insert(AUTHORIZATION, v);
                     }
                 }
             }
