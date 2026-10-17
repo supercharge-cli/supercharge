@@ -523,6 +523,27 @@ fn non_empty_model_override(value: Option<&str>) -> Option<String> {
         }
     })
 }
+/// `[models] default` when it can stand in for a stale role model: set, and not itself a Studio id.
+fn stale_role_fallback_default(parsed: &crate::agent::config::ModelsConfig) -> Option<String> {
+    non_empty_model_override(parsed.default.as_deref())
+        .filter(|d| !crate::agent::remote_config::is_studio_model_id(d))
+}
+/// A role model a tool left behind: a Studio model id (`studio-*`) while the default is a model of
+/// another provider (a `/setup` model, or no table of its own), or a Studio id with no
+/// `[model.<id>]` table at all. Such entries kept background features on a dead key (401s).
+pub(crate) fn is_stale_role_model(config: &toml::Value, value: &str, default: &str) -> bool {
+    if value == default || !crate::agent::remote_config::is_studio_model_id(value) {
+        return false;
+    }
+    let table = |id: &str| config.get("model").and_then(|m| m.get(id));
+    let Some(_) = table(value) else {
+        return true;
+    };
+    table(default).is_none_or(|t| {
+        t.get("model_provider").and_then(toml::Value::as_str)
+            == Some(crate::agent::provider_setup::SETUP_PROVIDER_ID)
+    })
+}
 impl ModelOverrideConfig {
     /// CLI flag > env var > config.toml > remote settings > compiled default. `image_description` and `session_summary` always resolve to `Some(_)` (default `grok-4.6`), never the session model.
     /// `prompt_suggestion` resolves to a [`PromptSuggestModelPin`] instead of a model string. It has no CLI flag; the default and the catalog guard live at the consumer, `handle_suggest_prompt`.
@@ -536,6 +557,8 @@ impl ModelOverrideConfig {
         let parsed_models: crate::agent::config::ModelsConfig = models_table
             .and_then(|v| v.clone().try_into().ok())
             .unwrap_or_default();
+        let stale_role_default = stale_role_fallback_default(&parsed_models);
+        let local_web_search = parsed_models.web_search.is_some();
         let mut result = Self {
             web_search: parsed_models
                 .web_search
@@ -546,6 +569,26 @@ impl ModelOverrideConfig {
                 .map(PromptSuggestModelPin::Pinned)
                 .unwrap_or_default(),
         };
+        if let Some(default) = stale_role_default {
+            let fix = |value: &mut String| {
+                if is_stale_role_model(config, value, &default) {
+                    tracing::warn!(role_model = %value, default = %default, "role model points at a stale Studio model; using models.default");
+                    *value = default.clone();
+                }
+            };
+            if local_web_search {
+                fix(&mut result.web_search);
+            }
+            if let Some(v) = result.session_summary.as_mut() {
+                fix(v);
+            }
+            if let Some(v) = result.image_description.as_mut() {
+                fix(v);
+            }
+            if let PromptSuggestModelPin::Pinned(v) = &mut result.prompt_suggestion {
+                fix(v);
+            }
+        }
         let has_local_ws = models_table.and_then(|m| m.get("web_search")).is_some();
         let has_local_ss = models_table
             .and_then(|m| m.get("session_summary"))

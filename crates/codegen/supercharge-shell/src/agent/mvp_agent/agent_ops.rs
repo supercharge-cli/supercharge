@@ -171,7 +171,13 @@ impl MvpAgent {
             }
             None => {
                 let mut fallback = primary.clone();
-                fallback.model = slug;
+                // On a custom endpoint, a summary model missing from the catalog falls back to
+                // the session model rather than sending an unknown id to that endpoint.
+                if !endpoints.has_custom_endpoint()
+                    || crate::agent::config::find_model_by_id(&models, &slug).is_some()
+                {
+                    fallback.model = slug;
+                }
                 fallback
             }
         };

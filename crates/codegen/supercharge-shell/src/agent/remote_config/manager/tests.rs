@@ -638,12 +638,11 @@ fn validate_selectable_rejects_bad_allowlists() {
             context_window = 256000
             "#,
     );
+    // A user list that would lock out the configured default is a stale leftover: ignored,
+    // so the default stays selectable instead of erroring.
     let catalog = resolve_model_catalog(&excluded, None);
-    assert!(
-        validate_selectable(&excluded, &catalog)
-            .unwrap_err()
-            .contains("grok-3")
-    );
+    assert!(validate_selectable(&excluded, &catalog).is_ok());
+    assert!(catalog.values().all(|e| e.info.user_selectable));
 
     let zero = config_from_toml(
         r#"

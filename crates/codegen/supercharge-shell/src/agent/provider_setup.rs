@@ -135,7 +135,7 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         format: SetupWireFormat::Openai,
         curated: &[
             "openai",
-            "openai-fast",
+            "fast-model",
             "qwen-coder",
             "kimi-code",
             "deepseek",
@@ -245,9 +245,9 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         name: "Mistral AI",
         description: "Mistral / Codestral",
         base_url: "https://api.mistral.ai/v1",
-        default_model: "mistral-large-latest",
+        default_model: "large-model-latest",
         format: SetupWireFormat::Openai,
-        curated: &["mistral-large-latest", "codestral-latest"],
+        curated: &["large-model-latest", "codestral-latest"],
     },
     SetupProviderProfile {
         id: "together",
@@ -1046,10 +1046,13 @@ fn apply_provider_setup_to_document(
         let models = document_table_mut(document, "models")?;
         models.insert("default", toml_edit::value(model_id));
     }
-    // `/setup` never writes `allowed_models`. A list made only of models an earlier setup
-    // wrote (what 1.3.42 left behind) is dropped so every model of the new provider is
-    // switchable; a hand-written list (globs or other ids) is left alone.
-    drop_setup_managed_allowlist(document);
+    // `/setup` never writes `allowed_models`. A leftover list (only setup/Studio-written ids, or
+    // one that would block the model just saved) is dropped so every model of the new provider
+    // is switchable; a hand-written list that admits the new default is left alone.
+    drop_stale_allowlist(document, model_id);
+    // Role models still pointing at a Studio model or an earlier setup provider would keep
+    // calling a dead endpoint (401s) after the switch; point them at the new default.
+    repoint_stale_role_models(document, model_id, base_url);
 
     {
         let providers = document_table_mut(document, "model_providers")?;
@@ -1115,8 +1118,8 @@ fn apply_provider_setup_to_document(
     Ok(())
 }
 
-fn drop_setup_managed_allowlist(document: &mut toml_edit::DocumentMut) {
-    let setup_models: std::collections::HashSet<String> = document
+fn setup_model_ids(document: &toml_edit::DocumentMut) -> std::collections::HashSet<String> {
+    document
         .get("model")
         .and_then(toml_edit::Item::as_table_like)
         .map(|models| {
@@ -1129,26 +1132,108 @@ fn drop_setup_managed_allowlist(document: &mut toml_edit::DocumentMut) {
                 .map(|(id, _)| id.to_owned())
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// Drop `[models] allowed_models` when it is a leftover: every entry is an exact id an earlier
+/// setup or Studio wrote, or the list would not admit `new_default` (the model `/setup` just
+/// saved). A hand-written list that admits the new default stays, and so do invalid globs.
+fn drop_stale_allowlist(document: &mut toml_edit::DocumentMut, new_default: &str) {
+    let setup_models = setup_model_ids(document);
     let Some(models) = document
         .get_mut("models")
         .and_then(toml_edit::Item::as_table_like_mut)
     else {
         return;
     };
-    let setup_managed = models
+    let Some(list) = models
         .get("allowed_models")
         .and_then(toml_edit::Item::as_array)
-        .is_some_and(|list| {
-            !list.is_empty()
-                && list.iter().all(|v| {
-                    v.as_str().is_some_and(|id| {
-                        !id.contains(['*', '?', '[', ']', '{', '}', '!']) && setup_models.contains(id)
-                    })
-                })
-        });
-    if setup_managed {
+    else {
+        return;
+    };
+    let Some(patterns) = list
+        .iter()
+        .map(|v| v.as_str().map(str::to_owned))
+        .collect::<Option<Vec<String>>>()
+    else {
+        return;
+    };
+    if patterns.is_empty() {
         models.remove("allowed_models");
+        return;
+    }
+    let is_glob = |p: &str| p.contains(['*', '?', '[', ']', '{', '}', '!']);
+    let tool_written = patterns.iter().all(|p| {
+        !is_glob(p)
+            && (p == new_default
+                || setup_models.contains(p)
+                || crate::agent::remote_config::is_studio_model_id(p))
+    });
+    let blocks_new_default = match crate::agent::remote_config::ModelGlobSet::compile(Some(&patterns))
+    {
+        Ok(Some(set)) => !set.matches(new_default, new_default),
+        _ => false,
+    };
+    if tool_written || blocks_new_default {
+        tracing::info!(?patterns, "/setup: removing stale [models] allowed_models");
+        models.remove("allowed_models");
+    }
+}
+
+/// `[models]` keys that name the model a background feature runs on.
+pub(crate) const ROLE_MODEL_KEYS: &[(&str, &str)] = &[
+    ("models", "web_search"),
+    ("models", "session_summary"),
+    ("models", "prompt_suggestion"),
+    ("models", "image_description"),
+    ("ui", "fork_secondary_model"),
+];
+
+/// Point role models at `new_default` when they reference a Studio model (`studio-*`) or a model
+/// an earlier `/setup` saved for a different endpoint. A role model the user configured for a
+/// model table of their own (own endpoint, not setup-managed) or a built-in id is left alone.
+fn repoint_stale_role_models(
+    document: &mut toml_edit::DocumentMut,
+    new_default: &str,
+    base_url: &str,
+) {
+    let stale: Vec<(&str, &str)> = ROLE_MODEL_KEYS
+        .iter()
+        .copied()
+        .filter(|(table, key)| {
+            let Some(value) = document
+                .get(table)
+                .and_then(|t| t.get(key))
+                .and_then(toml_edit::Item::as_str)
+                .map(str::trim)
+            else {
+                return false;
+            };
+            if value.is_empty() || value == new_default {
+                return false;
+            }
+            if crate::agent::remote_config::is_studio_model_id(value) {
+                return true;
+            }
+            document
+                .get("model")
+                .and_then(|m| m.get(value))
+                .is_some_and(|m| {
+                    m.get("model_provider").and_then(toml_edit::Item::as_str)
+                        == Some(SETUP_PROVIDER_ID)
+                        && m.get("base_url").and_then(toml_edit::Item::as_str) != Some(base_url)
+                })
+        })
+        .collect();
+    for (table, key) in stale {
+        if let Some(t) = document
+            .get_mut(table)
+            .and_then(toml_edit::Item::as_table_like_mut)
+        {
+            tracing::info!(role = %format!("{table}.{key}"), "/setup: pointing role model at the new default");
+            t.insert(key, toml_edit::value(new_default));
+        }
     }
 }
 
@@ -1466,7 +1551,8 @@ mod tests {
         let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert!(raw["models"].get("allowed_models").is_none());
 
-        for hand in [r#"["gpt-*"]"#, r#"["model-a", "my-own-model"]"#] {
+        // Hand-written lists that admit the model being saved survive /setup.
+        for hand in [r#"["model-*"]"#, r#"["model-c", "my-own-model"]"#] {
             let text = std::fs::read_to_string(&path).unwrap().replace(
                 "[models]\n",
                 &format!("[models]\nallowed_models = {hand}\n"),
@@ -1479,6 +1565,125 @@ mod tests {
             doc["models"].as_table_mut().unwrap().remove("allowed_models");
             std::fs::write(&path, toml::to_string(&doc).unwrap()).unwrap();
         }
+    }
+
+    const FIELD_DEFAULT: &str = "community/morriszdweck/glm-5.3-flash-free";
+    const FIELD_STUDIO: &str = "studio-bkf6jzvemvbu80ni-d56c25911e6255bf";
+
+    /// The config a real user had after Supercharge Studio and then /setup: a Studio model with
+    /// a dead key, a /setup default, and every role model plus `allowed_models` on the Studio id.
+    fn write_field_config(path: &std::path::Path) {
+        persist_provider_setup_at(path, &setup("https://gen.pollinations.example/v1", "sk-poll-111", FIELD_DEFAULT)).unwrap();
+        let text = std::fs::read_to_string(path).unwrap().replace(
+            "[models]\n",
+            &format!(
+                "[models]\nweb_search = \"{s}\"\nsession_summary = \"{s}\"\nprompt_suggestion = \"{s}\"\nimage_description = \"{s}\"\nallowed_models = [\"{s}\"]\n",
+                s = FIELD_STUDIO
+            ),
+        );
+        let text = format!(
+            "{text}\n[model.{s}]\nmodel = \"glm-4-flash\"\nbase_url = \"https://llm-api.studio-upstream.example/v1\"\napi_key = \"sk-dead-quota\"\nname = \"Studio model\"\n\n[ui]\nfork_secondary_model = \"{s}\"\n",
+            s = FIELD_STUDIO
+        );
+        std::fs::write(path, text).unwrap();
+    }
+
+    fn field_catalog(
+        cfg: &crate::agent::config::Config,
+    ) -> indexmap::IndexMap<String, crate::agent::config::ModelEntry> {
+        let listed = crate::agent::config::resolve_model_list(cfg, None);
+        let template = listed.get(FIELD_DEFAULT).unwrap().clone();
+        let mut prefetched = listed.clone();
+        for id in ["fast-model", "large-model"] {
+            let mut entry = template.clone();
+            entry.info.model = id.to_owned();
+            prefetched.insert(id.to_owned(), entry);
+        }
+        crate::agent::remote_config::resolve_model_catalog(cfg, Some(prefetched))
+    }
+
+    /// Regression (1.3.44 field report): a Studio-only `allowed_models` locked every /setup model
+    /// out and sessions ran on the dead Studio model. On load the list is ignored, the default is
+    /// used, and role models resolve to the default; the next /setup removes the list and repoints
+    /// every role model.
+    #[test]
+    fn studio_leftovers_never_lock_out_or_hijack_the_setup_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        write_field_config(&path);
+
+        // On load, before any /setup.
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        assert!(crate::agent::remote_config::stale_user_allowlist_reason(&cfg, cfg.models.allowed_models.as_deref().unwrap()).is_some());
+        let catalog = field_catalog(&cfg);
+        for id in [FIELD_DEFAULT, "fast-model", "large-model"] {
+            assert!(catalog.get(id).is_some_and(|e| e.info.user_selectable), "{id} must be switchable");
+        }
+        assert!(crate::agent::remote_config::validate_selectable(&cfg, &catalog).is_ok());
+        let (picked, _, _) = crate::agent::remote_config::resolve_default_model(&cfg, &catalog, false);
+        assert_eq!(picked, FIELD_DEFAULT, "the session must run on models.default");
+        let roles = crate::config::ModelOverrideConfig::resolve(None, None, &raw, None);
+        assert_eq!(roles.web_search, FIELD_DEFAULT);
+        assert_eq!(roles.session_summary.as_deref(), Some(FIELD_DEFAULT));
+        assert_eq!(roles.image_description.as_deref(), Some(FIELD_DEFAULT));
+        assert_eq!(roles.prompt_suggestion, crate::config::PromptSuggestModelPin::Pinned(FIELD_DEFAULT.to_owned()));
+
+        // /setup again (same provider) and then a provider switch: list gone, roles repointed.
+        for (url, model) in [("https://gen.pollinations.example/v1", FIELD_DEFAULT), ("https://provider-b.example/v1", "model-b1")] {
+            if model != FIELD_DEFAULT {
+                std::fs::remove_file(&path).unwrap();
+                write_field_config(&path);
+            }
+            persist_provider_setup_at(&path, &setup(url, "sk-new-222", model)).unwrap();
+            let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(raw["models"].get("allowed_models").is_none(), "{model}");
+            for key in ["web_search", "session_summary", "prompt_suggestion", "image_description"] {
+                assert_eq!(raw["models"][key].as_str(), Some(model), "models.{key}");
+            }
+            assert_eq!(raw["ui"]["fork_secondary_model"].as_str(), Some(model));
+            assert_eq!(raw["models"]["default"].as_str(), Some(model));
+            let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+            let listed = crate::agent::config::resolve_model_list(&cfg, None);
+            let (picked, _, _) = crate::agent::remote_config::resolve_default_model(&cfg, &crate::agent::remote_config::resolve_model_catalog(&cfg, Some(listed)), false);
+            assert_eq!(picked, model);
+        }
+    }
+
+    /// Hand-written lists that admit the default are policy and stay enforced, on load and
+    /// across /setup; a list that would block the default is ignored.
+    #[test]
+    fn hand_written_allowlist_that_admits_the_default_is_still_enforced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(&path, &setup("https://gen.pollinations.example/v1", "sk-poll-111", FIELD_DEFAULT)).unwrap();
+        let base = std::fs::read_to_string(&path).unwrap();
+        for hand in [
+            format!(r#"["{FIELD_DEFAULT}", "my-own-model"]"#),
+            r#"["community/*"]"#.to_owned(),
+        ] {
+            let text = base.replace("[models]\n", &format!("[models]\nallowed_models = {hand}\n"));
+            std::fs::write(&path, &text).unwrap();
+            let raw: toml::Value = toml::from_str(&text).unwrap();
+            let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+            assert_eq!(crate::agent::remote_config::stale_user_allowlist_reason(&cfg, cfg.models.allowed_models.as_deref().unwrap()), None, "{hand}");
+            let catalog = field_catalog(&cfg);
+            assert!(catalog[FIELD_DEFAULT].info.user_selectable, "{hand}");
+            assert!(!catalog["fast-model"].info.user_selectable, "{hand} must still block fast-model");
+            assert!(!catalog["large-model"].info.user_selectable, "{hand} must still block large-model");
+            let (picked, _, _) = crate::agent::remote_config::resolve_default_model(&cfg, &catalog, false);
+            assert_eq!(picked, FIELD_DEFAULT);
+            // Re-running /setup for the same default keeps the policy.
+            persist_provider_setup_at(&path, &setup("https://gen.pollinations.example/v1", "sk-poll-222", FIELD_DEFAULT)).unwrap();
+            let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(raw["models"].get("allowed_models").is_some(), "{hand} is hand-written");
+        }
+        // A list that blocks the default is not a usable policy: ignored on load.
+        let text = base.replace("[models]\n", "[models]\nallowed_models = [\"my-own-model\"]\n");
+        let raw: toml::Value = toml::from_str(&text).unwrap();
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        let catalog = field_catalog(&cfg);
+        assert!(catalog.values().all(|e| e.info.user_selectable));
     }
 
     /// Regression: setup A, then setup B; every model B's /models lists must be switchable,

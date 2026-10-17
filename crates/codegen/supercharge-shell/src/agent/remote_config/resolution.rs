@@ -192,7 +192,7 @@ impl ModelGlobSet {
             .map_err(|e| vec![e.to_string()])
     }
 
-    fn matches(&self, key: &str, model: &str) -> bool {
+    pub(crate) fn matches(&self, key: &str, model: &str) -> bool {
         self.0.is_match(key) || self.0.is_match(model)
     }
 
@@ -218,7 +218,7 @@ fn effective_allowlist(cfg: &config::Config) -> EffectiveAllowlist<'_> {
         }
         Some(AllowlistPin::List(patterns)) => EffectiveAllowlist::Fleet(patterns),
         None => match cfg.models.allowed_models.as_deref() {
-            Some(patterns) if !patterns.is_empty() && !is_setup_managed_allowlist(cfg, patterns) => {
+            Some(patterns) if !patterns.is_empty() && !is_stale_user_allowlist(cfg, patterns) => {
                 EffectiveAllowlist::User(patterns)
             }
             _ => EffectiveAllowlist::Unrestricted,
@@ -226,20 +226,114 @@ fn effective_allowlist(cfg: &config::Config) -> EffectiveAllowlist<'_> {
     }
 }
 
-/// A list naming only models that `/setup` wrote (exact ids of `[model.<id>]` tables bound to
-/// `model_provider = "setup"`) is a leftover of an earlier setup, not a hand-written policy:
-/// honoring it would lock the current provider's models out after a provider switch.
-/// Any glob or any other id means the user wrote the list, and it is enforced as is.
-pub(crate) fn is_setup_managed_allowlist(cfg: &config::Config, patterns: &[String]) -> bool {
+/// Whether `id` is a model id Supercharge Studio writes into `[model.<id>]`:
+/// `studio-<slug>-<suffix>`, where the suffix is 16 hex digits or a decimal counter.
+/// Kept in step with Studio's own startup cleanup.
+pub(crate) fn is_studio_model_id(id: &str) -> bool {
+    let Some(rest) = id.strip_prefix("studio-") else {
+        return false;
+    };
+    let Some((slug, suffix)) = rest.rsplit_once('-') else {
+        return false;
+    };
+    !slug.is_empty()
+        && !suffix.is_empty()
+        && ((suffix.len() == 16 && suffix.bytes().all(|b| b.is_ascii_hexdigit()))
+            || suffix.bytes().all(|b| b.is_ascii_digit()))
+}
+
+fn is_glob_pattern(pattern: &str) -> bool {
+    pattern.contains(['*', '?', '[', ']', '{', '}', '!'])
+}
+
+/// Why a user/project `allowed_models` list is a leftover rather than a policy, if it is one.
+///
+/// A list is stale (ignored, and removed by the next `/setup`) when:
+/// - every entry is an exact id of a model `/setup` saved (`model_provider = "setup"`) or a
+///   Studio model id (`studio-*`): those were written by tools, not by the user;
+/// - it does not match `[models] default`: a policy never locks out the configured default;
+/// - it matches none of the models the active `/setup` provider saved;
+/// - with no default set, none of its exact ids names any configured model.
+///
+/// A hand-written list that matches the default is enforced as is. Invalid globs keep failing closed.
+pub(crate) fn stale_user_allowlist_reason(
+    cfg: &config::Config,
+    patterns: &[String],
+) -> Option<&'static str> {
+    if patterns.is_empty() {
+        return None;
+    }
+    let set = match ModelGlobSet::compile(Some(patterns)) {
+        Ok(Some(set)) => set,
+        _ => return None,
+    };
     let setup_id = crate::agent::provider_setup::SETUP_PROVIDER_ID;
-    !patterns.is_empty()
-        && patterns.iter().all(|pattern| {
-            !pattern.contains(['*', '?', '[', ']', '{', '}', '!'])
-                && cfg
-                    .config_models
-                    .get(pattern.as_str())
-                    .is_some_and(|m| m.model_provider.as_deref() == Some(setup_id))
-        })
+    let is_setup_model = |id: &str| {
+        cfg.config_models
+            .get(id)
+            .is_some_and(|m| m.model_provider.as_deref() == Some(setup_id))
+    };
+    let slug = |key: &str| -> String {
+        cfg.config_models
+            .get(key)
+            .and_then(|m| m.model.clone())
+            .unwrap_or_else(|| key.to_owned())
+    };
+    if patterns.iter().all(|p| {
+        !is_glob_pattern(p) && (is_setup_model(p) || is_studio_model_id(p))
+    }) {
+        return Some("it names only models /setup or Studio wrote");
+    }
+    let default = cfg
+        .models
+        .default
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+    if let Some(default) = default
+        && !set.matches(default, &slug(default))
+    {
+        return Some("it does not include [models] default");
+    }
+    let mut setup_models = cfg
+        .config_models
+        .iter()
+        .filter(|(_, m)| m.model_provider.as_deref() == Some(setup_id))
+        .peekable();
+    if setup_models.peek().is_some()
+        && !setup_models.any(|(key, _)| set.matches(key, &slug(key)))
+    {
+        return Some("it blocks every model of the /setup provider");
+    }
+    if default.is_none()
+        && !cfg.config_models.is_empty()
+        && patterns.iter().all(|p| !is_glob_pattern(p))
+        && !cfg
+            .config_models
+            .keys()
+            .any(|key| set.matches(key, &slug(key)))
+    {
+        return Some("none of its entries names a configured model");
+    }
+    None
+}
+
+static STALE_ALLOWLIST_WARNED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// [`stale_user_allowlist_reason`] as a predicate, logging the first time a list is ignored.
+pub(crate) fn is_stale_user_allowlist(cfg: &config::Config, patterns: &[String]) -> bool {
+    let Some(reason) = stale_user_allowlist_reason(cfg, patterns) else {
+        return false;
+    };
+    if !STALE_ALLOWLIST_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        tracing::warn!(
+            patterns = ?patterns,
+            reason,
+            "ignoring stale [models] allowed_models; the next /setup removes it"
+        );
+    }
+    true
 }
 
 /// How to widen a user allowlist: the key and the file it normally lives in.
@@ -605,5 +699,19 @@ mod model_not_configured_tests {
     #[test]
     fn model_without_credentials_is_not_configured() {
         assert!(model_not_configured_error(&catalog(""), &acp::ModelId::new("m-1")).is_some());
+    }
+}
+
+#[cfg(test)]
+mod studio_id_tests {
+    #[test]
+    fn studio_ids_match_the_pattern_studio_writes() {
+        use super::is_studio_model_id as studio;
+        assert!(studio("studio-bkf6jzvemvbu80ni-d56c25911e6255bf"));
+        assert!(studio("studio-my-model-3"));
+        assert!(!studio("studio-"));
+        assert!(!studio("studio-only"));
+        assert!(!studio("studio-x-notahexsuffix"));
+        assert!(!studio("my-studio-x-1"));
     }
 }

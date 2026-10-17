@@ -187,8 +187,17 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
   every open session) to the saved model with the new key and base URL. A key saved for one
   provider is never sent to another; switching provider needs that provider's `apiKey`.
 - Setup never writes `[models] allowed_models`, so every model the provider lists stays
-  switchable. A list naming only setup-saved models (left by 1.3.42) is ignored and removed
-  on the next save; a hand-written list is enforced, and the deny error names the file and key.
+  switchable. A stale list is ignored on load and removed on the next save: one naming only
+  setup-saved or Studio models (`studio-<slug>-<16 hex or number>`), one that does not admit `[models] default`, or one
+  that blocks every setup-saved model. A hand-written list that admits the default is enforced,
+  and the deny error names the file and key.
+- Save also points role models (`[models] web_search`, `session_summary`, `prompt_suggestion`,
+  `image_description`, `[ui] fork_secondary_model`) at the new default when they name a
+  Studio model or a model an earlier setup saved for another endpoint. On load, a role model
+  naming a Studio id resolves to `[models] default` when the default is not a Studio model.
+- Studio must not write `[models] allowed_models` or any role model key into the user's
+  `config.toml`. To use a Studio model, set `[models] default` (or switch the session with
+  `session/set_model`); background features follow the session model on their own.
 - Device login (Nous, `auth: "oauth_device"`): call `device_start`, show `userCode` and open
   `verificationUri(Complete)`, then call `device_poll` every `interval` seconds (it returns the
   new interval after `slow_down`) until `done`; an expired or denied code returns an error. Then
