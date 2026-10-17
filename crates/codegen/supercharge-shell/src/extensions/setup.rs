@@ -262,13 +262,36 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
                 .map_err(setup_err)?;
             // Same as the TUI: hot-reload the catalog so new sessions see the provider.
             let reloaded = crate::extensions::session_admin::handle_reload_models(agent).is_ok();
+            // Like the TUI, the change applies to open sessions right away: the requested
+            // session, or every open session when none is named.
+            let targets: Vec<acp::SessionId> =
+                match str_param(&p, &["sessionId", "session_id"]) {
+                    Some(id) => vec![acp::SessionId::new(id.to_owned())],
+                    None => agent.resident_ids(),
+                };
+            let mut switched = Vec::new();
+            for session_id in targets {
+                let request = acp::SetSessionModelRequest::new(
+                    session_id.clone(),
+                    acp::ModelId::new(model_id.clone()),
+                );
+                match agent.set_model_gated(request).await {
+                    Ok(_) => switched.push(session_id.0.to_string()),
+                    Err(e) => tracing::warn!(
+                        session_id = %session_id.0,
+                        error = ?e,
+                        "setup/save: could not switch session to the new provider"
+                    ),
+                }
+            }
             to_raw_response(&json!({
                 "saved": true,
                 "modelId": model_id,
                 "reloaded": reloaded,
+                "switchedSessions": switched,
                 "models": listed.iter().map(model_json).collect::<Vec<_>>(),
                 "message": format!(
-                    "Saved provider settings. Default model: `{model_id}`. Start a new Supercharge session to use it."
+                    "Saved provider settings. Now using `{model_id}`."
                 ),
             }))
         }

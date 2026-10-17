@@ -170,7 +170,7 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 |---|---|---|
 | `_supercharge/setup/status` | `{}` | `{ configured, providerId, baseUrl, format, hasApiKey, modelId, oauth: { nous: { signedIn } }, deviceLoginPending, configPath, providers: [Provider] }` |
 | `_supercharge/setup/models` | `{ providerId?, baseUrl?, apiKey?, format? }` | `{ models: [Model], providerId, baseUrl, format, defaultModel }` |
-| `_supercharge/setup/save` | `{ providerId?, baseUrl?, apiKey?, modelId?, modelName?, format? }` | `{ saved: true, modelId, reloaded, models: [Model], message }` |
+| `_supercharge/setup/save` | `{ providerId?, baseUrl?, apiKey?, modelId?, modelName?, format?, sessionId? }` | `{ saved: true, modelId, reloaded, switchedSessions: [string], models: [Model], message }` |
 | `_supercharge/setup/device_start` | `{}` | `{ userCode, verificationUri, verificationUriComplete, expiresIn, interval }` |
 | `_supercharge/setup/device_poll` | `{}` | `{ status: "pending" \| "slow_down" \| "done", interval }` |
 | `_supercharge/setup/device_cancel` | `{}` | `{ cancelled }` |
@@ -183,6 +183,9 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
   `baseUrl` alone means a custom OpenAI-compatible endpoint (`format` defaults to `openai`).
   An omitted `apiKey` reuses the saved key when the saved provider has the same base URL.
   `save` without `modelId` picks the provider default (if listed) or the first listed model.
+- `save` applies immediately: it reloads the catalog and switches `sessionId` (or, when omitted,
+  every open session) to the saved model with the new key and base URL. A key saved for one
+  provider is never sent to another; switching provider needs that provider's `apiKey`.
 - Device login (Nous, `auth: "oauth_device"`): call `device_start`, show `userCode` and open
   `verificationUri(Complete)`, then call `device_poll` every `interval` seconds (it returns the
   new interval after `slow_down`) until `done`; an expired or denied code returns an error. Then

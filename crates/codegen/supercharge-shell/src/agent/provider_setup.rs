@@ -1042,7 +1042,18 @@ fn apply_provider_setup_to_document(
             toml_edit::value(provider_models_list_url(base_url)),
         );
     }
-    document_table_mut(document, "models")?.insert("default", toml_edit::value(model_id));
+    {
+        let models = document_table_mut(document, "models")?;
+        models.insert("default", toml_edit::value(model_id));
+        // A user allowlist would otherwise keep the session on the previous provider's model.
+        if let Some(allowed) = models
+            .get_mut("allowed_models")
+            .and_then(toml_edit::Item::as_array_mut)
+            && !allowed.iter().any(|v| v.as_str() == Some(model_id))
+        {
+            allowed.push(model_id);
+        }
+    }
 
     {
         let providers = document_table_mut(document, "model_providers")?;
@@ -1095,10 +1106,15 @@ fn apply_provider_setup_to_document(
             headers.remove(&name);
         }
     }
+    // `/setup` owns this table's endpoint and credential: drop leftovers that would route the
+    // request elsewhere or outrank the key just entered.
+    model.remove("api_base_url");
     if api_key.is_empty() {
         model.remove("api_key");
     } else {
         model.insert("api_key", toml_edit::value(api_key));
+        model.remove("env_key");
+        model.remove("auth_provider");
     }
     Ok(())
 }
@@ -1334,6 +1350,135 @@ fn load_existing_provider_setup_details_at(path: &Path) -> Option<ExistingProvid
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Spawn a local endpoint that records `(path, authorization, body)` of every request.
+    async fn recording_endpoint() -> (
+        String,
+        std::sync::Arc<std::sync::Mutex<Vec<(String, String, serde_json::Value)>>>,
+    ) {
+        use axum::{body::Bytes, extract::Request};
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = seen.clone();
+        let app = axum::Router::new().fallback(move |req: Request| {
+            let log = log.clone();
+            async move {
+                let path = req.uri().path().to_owned();
+                let auth = req
+                    .headers()
+                    .get("authorization")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default()
+                    .to_owned();
+                let body: Bytes = axum::body::to_bytes(req.into_body(), 1 << 20)
+                    .await
+                    .unwrap_or_default();
+                let body = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+                log.lock().unwrap().push((path, auth, body));
+                axum::response::Response::builder()
+                    .status(401)
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(r#"{"error":{"message":"recorded"}}"#))
+                    .unwrap()
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        (format!("http://{addr}/v1"), seen)
+    }
+
+    #[test]
+    fn setup_admits_new_model_through_existing_allowlist_and_drops_stale_routing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "[models]\nallowed_models = [\"model-a\"]\n\n[model.model-b]\nmodel = \"model-b\"\napi_base_url = \"https://old.example/v1\"\nenv_key = \"OLD_PROVIDER_KEY\"\n",
+        )
+        .unwrap();
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://provider-b.example/v1".to_owned(),
+                api_key: "sk-provider-b-222".to_owned(),
+                model_id: "model-b".to_owned(),
+                model_name: "model-b".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: CUSTOM_PROVIDER_ID.to_owned(),
+            },
+        )
+        .unwrap();
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let allowed: Vec<&str> = raw["models"]["allowed_models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .collect();
+        assert_eq!(allowed, ["model-a", "model-b"]);
+        let table = raw["model"]["model-b"].as_table().unwrap();
+        assert!(!table.contains_key("api_base_url"));
+        assert!(!table.contains_key("env_key"));
+        assert_eq!(table["api_key"].as_str(), Some("sk-provider-b-222"));
+    }
+
+    /// Regression: a second `/setup` that switches provider A -> B (different key) must make the
+    /// next request, after a full restart (config re-read from disk), use B's key, base URL and model.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn second_setup_switching_provider_sends_new_key_url_and_model() {
+        let (url_a, seen_a) = recording_endpoint().await;
+        let (url_b, seen_b) = recording_endpoint().await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        for (url, key, model, format) in [
+            (&url_a, "sk-provider-a-111", "model-a", SetupWireFormat::Anthropic),
+            (&url_b, "sk-provider-b-222", "model-b", SetupWireFormat::Openai),
+        ] {
+            persist_provider_setup_at(
+                &path,
+                &ProviderSetup {
+                    base_url: url.clone(),
+                    api_key: key.to_owned(),
+                    model_id: model.to_owned(),
+                    model_name: model.to_owned(),
+                    format,
+                    provider_id: CUSTOM_PROVIDER_ID.to_owned(),
+                },
+            )
+            .unwrap();
+        }
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            provider_setup_api_key_from_toml(&raw).as_deref(),
+            Some("sk-provider-b-222")
+        );
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        let default = cfg.models.default.clone().expect("setup writes [models] default");
+        assert_eq!(default, "model-b");
+        let catalog = crate::agent::config::resolve_model_list(&cfg, None);
+        let entry = crate::agent::config::find_model_by_id(&catalog, &default).unwrap();
+        let creds = crate::agent::config::resolve_credentials(entry, None);
+        assert_eq!(creds.api_key.as_deref(), Some("sk-provider-b-222"));
+        assert_eq!(creds.base_url, url_b);
+        assert!(
+            !entry.extra_headers.keys().any(|h| h.eq_ignore_ascii_case("anthropic-version")),
+            "provider A's Messages headers must not stick to provider B"
+        );
+        let sampler = crate::agent::config::sampling_config_for_model(entry, creds, None, None, None, None);
+        let client = supercharge_sampler::SamplingClient::new(sampler).unwrap();
+        let request: supercharge_sampling_types::types::ChatCompletionRequest =
+            serde_json::from_value(json!({"messages": [{"role": "user", "content": "hi"}]})).unwrap();
+        let _ = client.chat_completion(request).await;
+
+        assert!(seen_a.lock().unwrap().is_empty(), "nothing may reach provider A");
+        let seen = seen_b.lock().unwrap();
+        let (req_path, auth, body) = seen.first().expect("request reached provider B");
+        assert!(req_path.starts_with("/v1/"), "{req_path}");
+        assert_eq!(auth, "Bearer sk-provider-b-222");
+        assert_eq!(body["model"], "model-b");
+    }
 
     fn with_models_server<T>(
         response: fn(&str) -> (&'static str, &'static str),

@@ -57,6 +57,11 @@ pub struct SetupModalState {
     pub step: SetupStep,
     pub(crate) base_url: LineEditor,
     pub(crate) api_key: LineEditor,
+    /// Normalized base URL the pre-filled `api_key` was saved for. A key is never carried
+    /// over to a different provider: entering the API-key step for another base URL clears it.
+    pub(crate) api_key_owner: Option<String>,
+    /// `api_key` still holds the saved key untouched; the first edit or paste replaces it.
+    pub(crate) api_key_prefilled: bool,
     pub(crate) custom_model: LineEditor,
     pub(crate) reveal_api_key: bool,
     pub(crate) filter: LineEditor,
@@ -148,11 +153,13 @@ impl SetupModalState {
         let mut custom_model = LineEditor::default();
         let mut format = SetupWireFormat::Openai;
         let mut provider_id = CUSTOM_PROVIDER_ID.to_owned();
+        let mut api_key_owner = None;
         match kind {
             SetupKind::Chat => {
                 if let Some(existing) =
                     supercharge_shell::agent::provider_setup::load_existing_provider_setup_details()
                 {
+                    api_key_owner = normalize_provider_base_url(&existing.base_url).ok();
                     base_url.set_text(existing.base_url);
                     api_key.set_text(existing.api_key);
                     format = existing.format;
@@ -163,6 +170,7 @@ impl SetupModalState {
                 if let Some((existing_url, existing_key, model)) =
                     supercharge_shell::agent::image_provider::load_existing_image_provider_setup()
                 {
+                    api_key_owner = normalize_provider_base_url(&existing_url).ok();
                     base_url.set_text(existing_url);
                     api_key.set_text(existing_key);
                     custom_model.set_text(model);
@@ -173,6 +181,8 @@ impl SetupModalState {
             window: ModalWindowState::default(),
             step: SetupStep::PickProvider,
             base_url,
+            api_key_prefilled: !api_key.text().is_empty(),
+            api_key_owner,
             api_key,
             custom_model,
             reveal_api_key: false,
@@ -199,6 +209,8 @@ impl SetupModalState {
     pub fn format_picker(setup: ProviderSetup, effort: Option<String>) -> Self {
         let mut state = Self::with_kind(SetupKind::Chat);
         state.format_only = true;
+        state.api_key_owner = normalize_provider_base_url(&setup.base_url).ok();
+        state.api_key_prefilled = !setup.api_key.is_empty();
         state.base_url.set_text(setup.base_url);
         state.api_key.set_text(setup.api_key);
         state.provider_id = setup.provider_id;
@@ -418,6 +430,8 @@ impl SetupModalState {
         match result {
             Ok(access_token) => {
                 self.api_key.set_text(access_token);
+                self.api_key_prefilled = false;
+                self.api_key_owner = None;
                 self.base_url
                     .set_text(supercharge_shell::agent::nous_oauth::INFERENCE_BASE);
                 self.device_status = "Logged in. Fetching models…".into();
@@ -543,7 +557,7 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 {
                     return fetch;
                 }
-                state.step = SetupStep::ApiKey;
+                enter_api_key_step(state);
                 SetupOutcome::Changed
             } else {
                 SetupOutcome::Unchanged
@@ -570,7 +584,10 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
         },
-        SetupStep::ApiKey => match state.api_key.insert_paste(text) {
+        SetupStep::ApiKey => match {
+            take_prefilled_api_key(state);
+            state.api_key.insert_paste(text)
+        } {
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
         },
@@ -594,9 +611,29 @@ const API_FORMATS: [(SetupWireFormat, &str); 3] = [
     (SetupWireFormat::Responses, "Responses  ·  /responses"),
 ];
 
+/// Drop a key that was saved for a different provider before asking for one.
+/// Switching provider must never send the previous provider's key to the new endpoint.
+pub(crate) fn enter_api_key_step(state: &mut SetupModalState) {
+    let current = normalize_provider_base_url(state.base_url.text()).ok();
+    if state.api_key_owner.is_some() && state.api_key_owner != current {
+        state.api_key.set_text("");
+        state.api_key_prefilled = false;
+        state.api_key_owner = None;
+    }
+    state.step = SetupStep::ApiKey;
+}
+
+/// The first edit of an untouched saved key replaces it instead of appending to it.
+fn take_prefilled_api_key(state: &mut SetupModalState) {
+    if state.api_key_prefilled {
+        state.api_key.set_text("");
+        state.api_key_prefilled = false;
+    }
+}
+
 fn pick_format_or_api_key(state: &mut SetupModalState) {
     if state.kind == SetupKind::Image {
-        state.step = SetupStep::ApiKey;
+        enter_api_key_step(state);
         return;
     }
     state.selected = API_FORMATS
@@ -622,7 +659,7 @@ fn handle_pick_format(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutco
                 return save_selected_model(state, model.id, model.name);
             }
             state.selected = 0;
-            state.step = SetupStep::ApiKey;
+            enter_api_key_step(state);
         }
         _ => return SetupOutcome::Unchanged,
     }
@@ -664,7 +701,11 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.filter.reset();
                 state.selected = 0;
                 if profile.id == "nous" {
-                    if supercharge_shell::agent::nous_oauth::resolve_access_token().is_ok() {
+                    if let Ok(token) = supercharge_shell::agent::nous_oauth::resolve_access_token() {
+                        // Never save the previous provider's key against the Nous endpoint.
+                        state.api_key.set_text(token);
+                        state.api_key_prefilled = false;
+                        state.api_key_owner = None;
                         state.generation = next_generation();
                         state.step = SetupStep::Fetching;
                         return match normalize_provider_base_url(state.base_url.text()) {
@@ -748,6 +789,7 @@ fn handle_api_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
             Ok(base_url) => {
                 state.generation = next_generation();
                 state.step = SetupStep::Fetching;
+                state.api_key_owner = Some(base_url.clone());
                 SetupOutcome::Fetch {
                     base_url,
                     api_key: state.api_key.text().trim().to_owned(),
@@ -764,6 +806,12 @@ fn handle_api_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
             }
         }
     } else {
+        let edits = matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+            || (matches!(key.code, KeyCode::Char(_))
+                && !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT));
+        if edits {
+            take_prefilled_api_key(state);
+        }
         match state.api_key.handle_key(key) {
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
@@ -1660,6 +1708,110 @@ mod tests {
                 assert_eq!(base_url, "https://provider.example/v1");
                 assert_eq!(api_key, "saved-key");
             }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+    }
+
+    fn saved_provider_a() -> SetupModalState {
+        let mut state = SetupModalState::new();
+        state.provider_id = CUSTOM_PROVIDER_ID.to_owned();
+        state.format = SetupWireFormat::Openai;
+        state.base_url.set_text("https://provider-a.example/v1");
+        state.api_key.set_text("key-a");
+        state.api_key_owner = Some("https://provider-a.example/v1".to_owned());
+        state.api_key_prefilled = true;
+        state.step = SetupStep::PickProvider;
+        state.selected = 0;
+        state
+    }
+
+    #[test]
+    fn switching_provider_drops_previous_key_and_saves_new_credentials() {
+        let mut state = saved_provider_a();
+        let rows = state.provider_rows();
+        let (index, profile) = rows
+            .iter()
+            .enumerate()
+            .find_map(|(i, row)| match row {
+                ProviderRow::Builtin(p)
+                    if p.id != "nous"
+                        && normalize_provider_base_url(p.base_url).ok().as_deref()
+                            != Some("https://provider-a.example/v1") =>
+                {
+                    Some((i, *p))
+                }
+                _ => None,
+            })
+            .expect("a built-in provider other than A");
+        state.selected = index;
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::PickFormat));
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::ApiKey));
+        assert_eq!(state.api_key.text(), "", "provider A's key must not carry over to B");
+        for ch in "key-b".chars() {
+            handle_setup_key(&mut state, &char_key(ch));
+        }
+        let expected_base = normalize_provider_base_url(profile.base_url).unwrap();
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Fetch {
+                base_url, api_key, ..
+            } => {
+                assert_eq!(base_url, expected_base);
+                assert_eq!(api_key, "key-b");
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+        state.apply_fetched_models(state.generation, Ok(vec![model("model-b")]));
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Save { setup, .. } => {
+                assert_eq!(setup.api_key, "key-b");
+                assert_eq!(setup.base_url, expected_base);
+                assert_eq!(setup.model_id, "model-b");
+                assert_eq!(setup.provider_id, profile.id);
+            }
+            SetupOutcome::Changed if matches!(state.step, SetupStep::PickEffort) => {}
+            other => panic!("expected save, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn switching_to_custom_url_drops_previous_key() {
+        let mut state = saved_provider_a();
+        state.base_url.set_text("https://provider-b.example/v1");
+        state.step = SetupStep::BaseUrl;
+        handle_setup_key(&mut state, &enter());
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::ApiKey));
+        assert_eq!(state.api_key.text(), "");
+    }
+
+    #[test]
+    fn same_provider_keeps_saved_key_but_paste_replaces_it() {
+        let mut state = saved_provider_a();
+        state.step = SetupStep::BaseUrl;
+        handle_setup_key(&mut state, &enter());
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::ApiKey));
+        assert_eq!(state.api_key.text(), "key-a");
+        handle_setup_paste(&mut state, "key-a2");
+        assert_eq!(state.api_key.text(), "key-a2", "paste must replace, not append");
+        handle_setup_paste(&mut state, "x");
+        assert_eq!(state.api_key.text(), "key-a2x", "later edits append normally");
+    }
+
+    #[test]
+    fn rerunning_custom_setup_replaces_saved_key_when_typing() {
+        let mut state = saved_provider_a();
+        state.step = SetupStep::BaseUrl;
+        handle_setup_key(&mut state, &enter());
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::ApiKey));
+        for ch in "key-new".chars() {
+            handle_setup_key(&mut state, &char_key(ch));
+        }
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Fetch { api_key, .. } => assert_eq!(api_key, "key-new"),
             other => panic!("expected fetch, got {other:?}"),
         }
     }
