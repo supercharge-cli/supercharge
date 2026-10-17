@@ -186,6 +186,9 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 - `save` applies immediately: it reloads the catalog and switches `sessionId` (or, when omitted,
   every open session) to the saved model with the new key and base URL. A key saved for one
   provider is never sent to another; switching provider needs that provider's `apiKey`.
+- Setup never writes `[models] allowed_models`, so every model the provider lists stays
+  switchable. A list naming only setup-saved models (left by 1.3.42) is ignored and removed
+  on the next save; a hand-written list is enforced, and the deny error names the file and key.
 - Device login (Nous, `auth: "oauth_device"`): call `device_start`, show `userCode` and open
   `verificationUri(Complete)`, then call `device_poll` every `interval` seconds (it returns the
   new interval after `slow_down`) until `done`; an expired or denied code returns an error. Then

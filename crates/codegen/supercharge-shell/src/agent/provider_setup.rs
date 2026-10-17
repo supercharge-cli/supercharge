@@ -1045,15 +1045,11 @@ fn apply_provider_setup_to_document(
     {
         let models = document_table_mut(document, "models")?;
         models.insert("default", toml_edit::value(model_id));
-        // A user allowlist would otherwise keep the session on the previous provider's model.
-        if let Some(allowed) = models
-            .get_mut("allowed_models")
-            .and_then(toml_edit::Item::as_array_mut)
-            && !allowed.iter().any(|v| v.as_str() == Some(model_id))
-        {
-            allowed.push(model_id);
-        }
     }
+    // `/setup` never writes `allowed_models`. A list made only of models an earlier setup
+    // wrote (what 1.3.42 left behind) is dropped so every model of the new provider is
+    // switchable; a hand-written list (globs or other ids) is left alone.
+    drop_setup_managed_allowlist(document);
 
     {
         let providers = document_table_mut(document, "model_providers")?;
@@ -1117,6 +1113,43 @@ fn apply_provider_setup_to_document(
         model.remove("auth_provider");
     }
     Ok(())
+}
+
+fn drop_setup_managed_allowlist(document: &mut toml_edit::DocumentMut) {
+    let setup_models: std::collections::HashSet<String> = document
+        .get("model")
+        .and_then(toml_edit::Item::as_table_like)
+        .map(|models| {
+            models
+                .iter()
+                .filter(|(_, m)| {
+                    m.get("model_provider").and_then(toml_edit::Item::as_str)
+                        == Some(SETUP_PROVIDER_ID)
+                })
+                .map(|(id, _)| id.to_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let Some(models) = document
+        .get_mut("models")
+        .and_then(toml_edit::Item::as_table_like_mut)
+    else {
+        return;
+    };
+    let setup_managed = models
+        .get("allowed_models")
+        .and_then(toml_edit::Item::as_array)
+        .is_some_and(|list| {
+            !list.is_empty()
+                && list.iter().all(|v| {
+                    v.as_str().is_some_and(|id| {
+                        !id.contains(['*', '?', '[', ']', '{', '}', '!']) && setup_models.contains(id)
+                    })
+                })
+        });
+    if setup_managed {
+        models.remove("allowed_models");
+    }
 }
 
 /// Credential written by `/setup` for custom-endpoint catalog fetches.
@@ -1389,39 +1422,110 @@ mod tests {
         (format!("http://{addr}/v1"), seen)
     }
 
+    fn setup(url: &str, key: &str, model: &str) -> ProviderSetup {
+        ProviderSetup {
+            base_url: url.to_owned(),
+            api_key: key.to_owned(),
+            model_id: model.to_owned(),
+            model_name: model.to_owned(),
+            format: SetupWireFormat::Openai,
+            provider_id: CUSTOM_PROVIDER_ID.to_owned(),
+        }
+    }
+
     #[test]
-    fn setup_admits_new_model_through_existing_allowlist_and_drops_stale_routing() {
+    fn setup_never_writes_allowlist_and_drops_stale_routing() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
         std::fs::write(
             &path,
-            "[models]\nallowed_models = [\"model-a\"]\n\n[model.model-b]\nmodel = \"model-b\"\napi_base_url = \"https://old.example/v1\"\nenv_key = \"OLD_PROVIDER_KEY\"\n",
+            "[model.model-b]\nmodel = \"model-b\"\napi_base_url = \"https://old.example/v1\"\nenv_key = \"OLD_PROVIDER_KEY\"\n",
         )
         .unwrap();
-        persist_provider_setup_at(
-            &path,
-            &ProviderSetup {
-                base_url: "https://provider-b.example/v1".to_owned(),
-                api_key: "sk-provider-b-222".to_owned(),
-                model_id: "model-b".to_owned(),
-                model_name: "model-b".to_owned(),
-                format: SetupWireFormat::Openai,
-                provider_id: CUSTOM_PROVIDER_ID.to_owned(),
-            },
-        )
-        .unwrap();
+        persist_provider_setup_at(&path, &setup("https://provider-b.example/v1", "sk-provider-b-222", "model-b")).unwrap();
         let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        let allowed: Vec<&str> = raw["models"]["allowed_models"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(toml::Value::as_str)
-            .collect();
-        assert_eq!(allowed, ["model-a", "model-b"]);
+        assert!(raw["models"].get("allowed_models").is_none());
         let table = raw["model"]["model-b"].as_table().unwrap();
         assert!(!table.contains_key("api_base_url"));
         assert!(!table.contains_key("env_key"));
         assert_eq!(table["api_key"].as_str(), Some("sk-provider-b-222"));
+    }
+
+    #[test]
+    fn setup_drops_leftover_setup_allowlist_but_keeps_hand_written_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(&path, &setup("https://provider-a.example/v1", "sk-a-111", "model-a")).unwrap();
+        // What 1.3.42 could leave behind: only setup-written model ids.
+        let text = std::fs::read_to_string(&path).unwrap().replace(
+            "[models]\n",
+            "[models]\nallowed_models = [\"model-a\"]\n",
+        );
+        std::fs::write(&path, text).unwrap();
+        persist_provider_setup_at(&path, &setup("https://provider-b.example/v1", "sk-b-222", "model-b")).unwrap();
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(raw["models"].get("allowed_models").is_none());
+
+        for hand in [r#"["gpt-*"]"#, r#"["model-a", "my-own-model"]"#] {
+            let text = std::fs::read_to_string(&path).unwrap().replace(
+                "[models]\n",
+                &format!("[models]\nallowed_models = {hand}\n"),
+            );
+            std::fs::write(&path, text).unwrap();
+            persist_provider_setup_at(&path, &setup("https://provider-c.example/v1", "sk-c-333", "model-c")).unwrap();
+            let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(raw["models"].get("allowed_models").is_some(), "{hand} is hand-written");
+            let mut doc: toml::Value = raw.clone();
+            doc["models"].as_table_mut().unwrap().remove("allowed_models");
+            std::fs::write(&path, toml::to_string(&doc).unwrap()).unwrap();
+        }
+    }
+
+    /// Regression: setup A, then setup B; every model B's /models lists must be switchable,
+    /// including when a leftover setup-written allowlist is still on disk.
+    #[test]
+    fn after_switching_provider_every_listed_model_is_switchable() {
+        use indexmap::IndexMap;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(&path, &setup("https://provider-a.example/v1", "sk-a-111", "model-a")).unwrap();
+        persist_provider_setup_at(&path, &setup("https://provider-b.example/v1", "sk-b-222", "model-b1")).unwrap();
+        let clean = std::fs::read_to_string(&path).unwrap();
+        // Leftover from 1.3.42 on load (written behind setup's back, so no migration ran).
+        let leftover = clean.replace(
+            "[models]\n",
+            "[models]\nallowed_models = [\"model-a\", \"model-b1\"]\n",
+        );
+        for (label, text) in [("clean", clean.as_str()), ("leftover", leftover.as_str())] {
+            let raw: toml::Value = toml::from_str(text).unwrap();
+            let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+            // B's /models lists more than the one model setup saved.
+            let listed = crate::agent::config::resolve_model_list(&cfg, None);
+            let template = listed.get("model-b1").unwrap().clone();
+            let mut prefetched: IndexMap<String, crate::agent::config::ModelEntry> = IndexMap::new();
+            for id in ["model-b1", "model-b2", "model-b3"] {
+                let mut entry = template.clone();
+                entry.info.model = id.to_owned();
+                prefetched.insert(id.to_owned(), entry);
+            }
+            let catalog = crate::agent::remote_config::resolve_model_catalog(&cfg, Some(prefetched));
+            for id in ["model-b1", "model-b2", "model-b3"] {
+                assert!(
+                    catalog.get(id).is_some_and(|e| e.info.user_selectable),
+                    "{label}: {id} must be switchable"
+                );
+            }
+            assert!(crate::agent::remote_config::validate_selectable(&cfg, &catalog).is_ok());
+        }
+        // A hand-written list is still enforced, and the error says how to fix it.
+        let mut raw: toml::Value = toml::from_str(&clean).unwrap();
+        raw["models"].as_table_mut().unwrap().insert(
+            "allowed_models".to_owned(),
+            toml::Value::Array(vec!["model-b1".into(), "other".into()]),
+        );
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        let msg = crate::agent::remote_config::allowlist_denied_message(&cfg);
+        assert!(msg.contains("allowed_models") && msg.contains("[models]") && msg.contains("config.toml"), "{msg}");
     }
 
     /// Regression: a second `/setup` that switches provider A -> B (different key) must make the

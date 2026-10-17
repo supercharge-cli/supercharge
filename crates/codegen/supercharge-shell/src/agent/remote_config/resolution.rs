@@ -218,10 +218,38 @@ fn effective_allowlist(cfg: &config::Config) -> EffectiveAllowlist<'_> {
         }
         Some(AllowlistPin::List(patterns)) => EffectiveAllowlist::Fleet(patterns),
         None => match cfg.models.allowed_models.as_deref() {
-            Some(patterns) if !patterns.is_empty() => EffectiveAllowlist::User(patterns),
+            Some(patterns) if !patterns.is_empty() && !is_setup_managed_allowlist(cfg, patterns) => {
+                EffectiveAllowlist::User(patterns)
+            }
             _ => EffectiveAllowlist::Unrestricted,
         },
     }
+}
+
+/// A list naming only models that `/setup` wrote (exact ids of `[model.<id>]` tables bound to
+/// `model_provider = "setup"`) is a leftover of an earlier setup, not a hand-written policy:
+/// honoring it would lock the current provider's models out after a provider switch.
+/// Any glob or any other id means the user wrote the list, and it is enforced as is.
+pub(crate) fn is_setup_managed_allowlist(cfg: &config::Config, patterns: &[String]) -> bool {
+    let setup_id = crate::agent::provider_setup::SETUP_PROVIDER_ID;
+    !patterns.is_empty()
+        && patterns.iter().all(|pattern| {
+            !pattern.contains(['*', '?', '[', ']', '{', '}', '!'])
+                && cfg
+                    .config_models
+                    .get(pattern.as_str())
+                    .is_some_and(|m| m.model_provider.as_deref() == Some(setup_id))
+        })
+}
+
+/// How to widen a user allowlist: the key and the file it normally lives in.
+fn allowlist_fix_hint() -> String {
+    format!(
+        "Add the model to `allowed_models` under `[models]` in {} (globs like \"gpt-*\" work; \
+         a project's .supercharge/config.toml can also set it), or delete `allowed_models` to allow \
+         every model, then run /model again.",
+        crate::util::config::user_config_path().display()
+    )
 }
 
 impl EffectiveAllowlist<'_> {
@@ -303,11 +331,15 @@ fn model_is_allowlisted(cfg: &config::Config, key: &str, model: &str) -> bool {
     effective_allowlist(cfg).is_selected(key, model)
 }
 
-pub(crate) fn allowlist_denied_message(cfg: &config::Config) -> &'static str {
+pub(crate) fn allowlist_denied_message(cfg: &config::Config) -> String {
     if effective_allowlist(cfg).is_fleet() {
         "This model isn't allowed by your organization's policy. Contact your administrator."
+            .to_owned()
     } else {
-        "This model isn't allowed by your allowed_models setting."
+        format!(
+            "This model isn't allowed by your allowed_models setting. {}",
+            allowlist_fix_hint()
+        )
     }
 }
 
@@ -320,9 +352,10 @@ pub(crate) fn allowlist_excludes_all_message(cfg: &config::Config) -> String {
             "None of your models are allowed by your organization's policy. Contact your administrator."
                 .to_owned()
         }
-        _ => "None of your models are allowed by allowed_models. \
-             Broaden it or remove it from your config, then restart."
-            .to_owned(),
+        _ => format!(
+            "None of your models are allowed by allowed_models. {}",
+            allowlist_fix_hint()
+        ),
     }
 }
 
@@ -438,8 +471,8 @@ pub(crate) fn validate_selectable(
                 )
             } else {
                 format!(
-                    "\"{id}\" (your {src}) isn't allowed by allowed_models. \
-                     Broaden the patterns or remove allowed_models, then try again."
+                    "\"{id}\" (your {src}) isn't allowed by allowed_models. {}",
+                    allowlist_fix_hint()
                 )
             });
         }
