@@ -122,6 +122,36 @@ impl Drop for V2DreamWorkers {
     }
 }
 
+/// Completed turns collected for a deferred capture trigger (`session_end`
+/// or `compaction`), extracted later with a single model call.
+#[derive(Debug, Default)]
+pub(crate) struct V2DeferredCapture {
+    turns: std::cell::Cell<u32>,
+    last_prompt_index: std::cell::Cell<Option<u32>>,
+}
+
+impl V2DeferredCapture {
+    pub(crate) fn record(&self, prompt_index: u32) {
+        self.turns.set(self.turns.get().saturating_add(1));
+        self.last_prompt_index.set(Some(prompt_index));
+    }
+
+    /// Take the pending `(turn_count, last_prompt_index)`, if any.
+    pub(crate) fn take(&self) -> Option<(u32, u32)> {
+        let turns = self.turns.replace(0);
+        let prompt = self.last_prompt_index.take()?;
+        (turns > 0).then_some((turns, prompt))
+    }
+
+    /// Put back work that could not be enqueued so a later trigger retries it.
+    pub(crate) fn restore(&self, turns: u32, prompt_index: u32) {
+        self.turns.set(self.turns.get().saturating_add(turns));
+        if self.last_prompt_index.get().is_none() {
+            self.last_prompt_index.set(Some(prompt_index));
+        }
+    }
+}
+
 pub(crate) struct SessionMemory {
     /// Mode resolved when the session was spawned. Kept even while memory is
     /// disabled so toggles, telemetry, and trace uploads cannot switch roots.
@@ -158,6 +188,8 @@ pub(crate) struct SessionMemory {
     /// an earlier process has no class here.
     pub last_capture_failure:
         RefCell<Option<supercharge_telemetry::memory_telemetry::MemoryV2FailureClass>>,
+    /// Completed turns waiting for a deferred memory-v2 capture trigger.
+    pub v2_deferred: V2DeferredCapture,
     /// The compaction count at which the last flush ran (once-per-cycle guard).
     pub last_flush_compaction: AtomicU64,
     pub flush_count: AtomicU64,

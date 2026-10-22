@@ -18,8 +18,16 @@ const CAPTURE_LEASE: std::time::Duration = std::time::Duration::from_secs(5 * 60
 const EXTRACTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2 * 60);
 const MAX_DURABLE_TRANSCRIPT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DURABLE_TRANSCRIPT_ITEMS: usize = 50_000;
-const EXTRACTION_MAX_OUTPUT_TOKENS: u32 = 16 * 1024;
+/// Extraction answers with a few short observations; 2k tokens bounds the cost
+/// of one capture call on the user's own provider.
+const EXTRACTION_MAX_OUTPUT_TOKENS: u32 = 2 * 1024;
+/// A span whose human text is shorter than this, with no tool or assistant
+/// work beyond a short reply, has nothing worth remembering.
+const NOTHING_NEW_MAX_USER_CHARS: usize = 16;
+const NOTHING_NEW_MAX_ITEMS: usize = 3;
 const MAX_CAPTURE_ATTEMPTS: u32 = 3;
+/// Longest a session end waits for its deferred capture before shutting down.
+const DEFERRED_CAPTURE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CaptureRetry {
@@ -344,35 +352,72 @@ fn build_extraction_request(
     }
 }
 
+#[cfg(test)]
 fn select_completed_turn_items(
     items: Vec<ConversationItem>,
     source_prompt_index: u32,
 ) -> Result<Vec<ConversationItem>, String> {
-    let mut is_selected_turn = false;
-    let mut found_turn = false;
-    let mut selected = Vec::new();
-    for item in items {
-        if let ConversationItem::User(user) = &item {
-            if is_selected_turn && user.synthetic_reason.starts_prompt_turn() {
-                break;
-            }
-            if user.synthetic_reason.is_human()
-                && user.prompt_index == Some(source_prompt_index as usize)
-            {
-                is_selected_turn = true;
-                found_turn = true;
-            }
-        }
-        if is_selected_turn {
-            selected.push(item);
-        }
-    }
-    if !found_turn {
+    select_completed_turn_span(items, source_prompt_index, 1)
+}
+
+/// Select the `turn_count` human turns ending with the one whose prompt index
+/// is `source_prompt_index`. A deferred capture job covers several turns.
+fn select_completed_turn_span(
+    items: Vec<ConversationItem>,
+    source_prompt_index: u32,
+    turn_count: u32,
+) -> Result<Vec<ConversationItem>, String> {
+    let is_human_turn_start = |item: &ConversationItem| {
+        matches!(item, ConversationItem::User(user)
+            if user.synthetic_reason.is_human() && user.prompt_index.is_some())
+    };
+    let starts: Vec<usize> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| is_human_turn_start(item))
+        .map(|(index, _)| index)
+        .collect();
+    let Some(source_position) = starts.iter().position(|&index| {
+        matches!(&items[index], ConversationItem::User(user)
+            if user.prompt_index == Some(source_prompt_index as usize))
+    }) else {
         return Err(format!(
             "durable transcript does not contain source prompt {source_prompt_index}"
         ));
+    };
+    let first = starts[source_position.saturating_sub(turn_count.max(1) as usize - 1)];
+    let source_start = starts[source_position];
+    let mut selected = Vec::new();
+    for (index, item) in items.into_iter().enumerate().skip(first) {
+        if index > source_start
+            && let ConversationItem::User(user) = &item
+            && user.synthetic_reason.starts_prompt_turn()
+        {
+            break;
+        }
+        selected.push(item);
     }
     Ok(selected)
+}
+
+/// True when a selected span is a trivial exchange (for example "ok" or
+/// "thanks" answered briefly), so capture can skip the model call.
+fn span_has_nothing_new(items: &[ConversationItem]) -> bool {
+    if items.len() > NOTHING_NEW_MAX_ITEMS {
+        return false;
+    }
+    let user_chars: usize = items
+        .iter()
+        .filter(|item| matches!(item, ConversationItem::User(user) if user.synthetic_reason.is_human()))
+        .map(|item| item.text_content().trim().chars().count())
+        .sum();
+    user_chars < NOTHING_NEW_MAX_USER_CHARS
+}
+
+/// A condensed capture span; `nothing_new` skips the extraction call.
+struct SelectedCaptureSpan {
+    transcript: CondensedTranscript,
+    nothing_new: bool,
 }
 
 fn log_condensation(
@@ -403,15 +448,30 @@ fn log_condensation(
     );
 }
 
+#[cfg(test)]
 fn select_completed_turn_transcript(
     items: Vec<ConversationItem>,
     source_prompt_index: u32,
     attempt: u32,
 ) -> Result<CondensedTranscript, String> {
-    let selected = select_completed_turn_items(items, source_prompt_index)?;
-    condense_turn_transcript(selected, TranscriptBudget::for_attempt(attempt))
+    select_capture_span(items, source_prompt_index, 1, attempt).map(|span| span.transcript)
 }
 
+fn select_capture_span(
+    items: Vec<ConversationItem>,
+    source_prompt_index: u32,
+    turn_count: u32,
+    attempt: u32,
+) -> Result<SelectedCaptureSpan, String> {
+    let selected = select_completed_turn_span(items, source_prompt_index, turn_count)?;
+    let nothing_new = span_has_nothing_new(&selected);
+    Ok(SelectedCaptureSpan {
+        transcript: condense_turn_transcript(selected, TranscriptBudget::for_attempt(attempt))?,
+        nothing_new,
+    })
+}
+
+#[cfg(test)]
 async fn load_durable_capture_transcript(
     persistence_tx: tokio::sync::mpsc::UnboundedSender<PersistenceMsg>,
     session_dir: std::path::PathBuf,
@@ -419,6 +479,26 @@ async fn load_durable_capture_transcript(
     attempt: u32,
     cancel: &tokio_util::sync::CancellationToken,
 ) -> Result<CondensedTranscript, CaptureExtractionFailure> {
+    load_durable_capture_span(
+        persistence_tx,
+        session_dir,
+        source_prompt_index,
+        1,
+        attempt,
+        cancel,
+    )
+    .await
+    .map(|span| span.transcript)
+}
+
+async fn load_durable_capture_span(
+    persistence_tx: tokio::sync::mpsc::UnboundedSender<PersistenceMsg>,
+    session_dir: std::path::PathBuf,
+    source_prompt_index: u32,
+    turn_count: u32,
+    attempt: u32,
+    cancel: &tokio_util::sync::CancellationToken,
+) -> Result<SelectedCaptureSpan, CaptureExtractionFailure> {
     let (respond_to, response) = tokio::sync::oneshot::channel();
     persistence_tx
         .send(PersistenceMsg::FlushAndAck { respond_to })
@@ -471,7 +551,7 @@ async fn load_durable_capture_transcript(
             })?;
         // A missing source prompt means the durable log and the queue
         // disagree; another read of the same log cannot fix that.
-        select_completed_turn_transcript(items, source_prompt_index, attempt).map_err(|detail| {
+        select_capture_span(items, source_prompt_index, turn_count, attempt).map_err(|detail| {
             CaptureExtractionFailure {
                 class: MemoryV2FailureClass::Storage,
                 detail,
@@ -498,8 +578,50 @@ impl SessionActor {
         if !self.v2_capture_enabled() {
             return;
         }
-        let Some(storage) = self.memory.storage() else {
+        if self.memory.v2_config.capture_trigger.is_deferred() {
+            // Collect the turn; one extraction call covers the whole span
+            // when the trigger fires (session end, compaction, or `/flush`).
+            if let Ok(index) = u32::try_from(source_prompt_index) {
+                self.memory.v2_deferred.record(index);
+            }
             return;
+        }
+        self.enqueue_v2_turn_span(source_prompt_index, 1).await;
+    }
+
+    /// Enqueue the deferred span collected so far and start the worker.
+    /// With `wait`, block for a bounded time so session-end capture can finish
+    /// before shutdown; unfinished work stays queued durably.
+    pub(super) async fn trigger_deferred_v2_capture(self: &Arc<Self>, wait: bool) {
+        if !self.v2_capture_enabled() {
+            return;
+        }
+        let Some((turns, prompt_index)) = self.memory.v2_deferred.take() else {
+            return;
+        };
+        if !self.enqueue_v2_turn_span(prompt_index as usize, turns).await {
+            self.memory.v2_deferred.restore(turns, prompt_index);
+            return;
+        }
+        if wait {
+            let deadline = tokio::time::Instant::now() + DEFERRED_CAPTURE_WAIT;
+            while self.memory.capture_worker_is_running()
+                && tokio::time::Instant::now() < deadline
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+    }
+
+    /// Enqueue `turns` completed turns ending at `source_prompt_index` as one
+    /// capture job. Returns whether a job was queued.
+    async fn enqueue_v2_turn_span(
+        self: &Arc<Self>,
+        source_prompt_index: usize,
+        turns: u32,
+    ) -> bool {
+        let Some(storage) = self.memory.storage() else {
+            return false;
         };
         let session_id = self.session_info.id.to_string();
         let workspace_dir = storage.workspace_dir().to_path_buf();
@@ -517,14 +639,14 @@ impl SessionActor {
                     Some((MemoryV2FailureClass::Convergence, error.to_string())),
                 )
                 .await;
-                return;
+                return false;
             }
         };
         let range = match tokio::task::spawn_blocking(move || {
             let store = V2CaptureStore::open(workspace_dir, V2MemoryScope::Workspace)?;
             store.ensure_session(&session_id)?;
             let cursors = store.cursors(&session_id)?;
-            let completed_turn = cursors.requested.saturating_add(1);
+            let completed_turn = cursors.requested.saturating_add(turns.max(1));
             let Some(range) = missing_range(cursors.requested, completed_turn)? else {
                 return Ok(None);
             };
@@ -539,7 +661,7 @@ impl SessionActor {
         .await
         {
             Ok(Ok(Some(range))) => range,
-            Ok(Ok(None)) => return,
+            Ok(Ok(None)) => return false,
             Ok(Err(error)) => {
                 let failure_class = classify_capture_error(&error);
                 self.emit_v2_capture_activity(
@@ -552,7 +674,7 @@ impl SessionActor {
                     Some((failure_class, error.to_string())),
                 )
                 .await;
-                return;
+                return false;
             }
             Err(error) => {
                 self.emit_v2_capture_activity(
@@ -568,7 +690,7 @@ impl SessionActor {
                     )),
                 )
                 .await;
-                return;
+                return false;
             }
         };
         self.emit_v2_capture_activity(
@@ -582,6 +704,7 @@ impl SessionActor {
         )
         .await;
         self.start_v2_capture_worker().await;
+        true
     }
 
     pub(super) async fn resume_v2_capture(self: &Arc<Self>) {
@@ -957,14 +1080,23 @@ impl SessionActor {
         let persistence_tx = session_snapshot.notifications.persistence_tx.clone();
         let chat_state_handle = session_snapshot.chat_state_handle.clone();
         drop(session_snapshot);
-        let transcript = load_durable_capture_transcript(
+        let span = load_durable_capture_span(
             persistence_tx,
             session_dir,
             source_prompt_index,
+            range.through_turn() - range.from_turn() + 1,
             attempt,
             cancel,
         )
         .await?;
+        if span.nothing_new {
+            // Nothing worth remembering: record a no-op without a model call.
+            return Ok((
+                CaptureOutcomeDraft::Noop,
+                supercharge_telemetry::memory_telemetry::MemoryV2ModelUsage::default(),
+            ));
+        }
+        let transcript = span.transcript;
         log_condensation(range, attempt, &transcript.stats);
         let Some(session_snapshot) = session.upgrade() else {
             return Err(CaptureExtractionFailure::retryable(
@@ -985,16 +1117,22 @@ impl SessionActor {
                 ))?,
         };
         let models_manager = session_snapshot.models_manager.clone();
+        // In v2 mode the flush model slot holds `[memory_v2] capture_model`
+        // (or the configured background summary model).
+        let capture_model = session_snapshot.memory.flush_config.flush_model.clone();
         drop(session_snapshot);
-        let model = tokio::select! {
-            biased;
-            _ = cancel.cancelled() => return Err(CaptureExtractionFailure::retryable(
-                MemoryV2FailureClass::Convergence,
-                "capture worker cancelled".to_owned(),
-            )),
-            config = chat_state_handle.get_sampling_config() => config
-                .map(|config| config.model)
-                .unwrap_or_default(),
+        let model = match capture_model {
+            Some(model) => model,
+            None => tokio::select! {
+                biased;
+                _ = cancel.cancelled() => return Err(CaptureExtractionFailure::retryable(
+                    MemoryV2FailureClass::Convergence,
+                    "capture worker cancelled".to_owned(),
+                )),
+                config = chat_state_handle.get_sampling_config() => config
+                    .map(|config| config.model)
+                    .unwrap_or_default(),
+            },
         };
         let (model, reasoning_effort) = resolve_memory_model_and_effort(&models_manager, model);
         let request = build_extraction_request(
@@ -1073,6 +1211,8 @@ impl SessionActor {
                 supercharge_telemetry::memory_telemetry::MemoryV2FailureClass::Disabled,
             );
         };
+        // `/flush` is an explicit trigger: queue any deferred turns first.
+        self.trigger_deferred_v2_capture(false).await;
         let session_id = self.session_info.id.to_string();
         let workspace_dir = storage.workspace_dir().to_path_buf();
         let open_session_id = session_id.clone();
@@ -1600,6 +1740,77 @@ mod tests {
     }
 
     #[test]
+    fn deferred_span_selects_every_turn_in_the_range() {
+        let marked_user = |text: &str, prompt_index: usize| {
+            let mut item = ConversationItem::user(text);
+            item.set_prompt_index(prompt_index);
+            item
+        };
+        let items = vec![
+            marked_user("first question about the build", 0),
+            ConversationItem::assistant("first answer"),
+            marked_user("second question about the deploy", 1),
+            ConversationItem::assistant("second answer"),
+            marked_user("third question about the tests", 2),
+            ConversationItem::assistant("third answer"),
+        ];
+        let span = select_capture_span(items.clone(), 2, 2, 1).unwrap();
+        assert!(span.transcript.json.contains("second answer"));
+        assert!(span.transcript.json.contains("third answer"));
+        assert!(!span.transcript.json.contains("first answer"));
+        assert!(!span.nothing_new);
+        // A span longer than the transcript starts at the first turn.
+        let all = select_capture_span(items, 2, 9, 1).unwrap();
+        assert!(all.transcript.json.contains("first answer"));
+    }
+
+    #[test]
+    fn trivial_turns_have_nothing_new_and_skip_the_model() {
+        let marked_user = |text: &str, prompt_index: usize| {
+            let mut item = ConversationItem::user(text);
+            item.set_prompt_index(prompt_index);
+            item
+        };
+        let trivial = select_capture_span(
+            vec![marked_user("thanks!", 0), ConversationItem::assistant("You're welcome.")],
+            0,
+            1,
+            1,
+        )
+        .unwrap();
+        assert!(trivial.nothing_new);
+        let substantive = select_capture_span(
+            vec![
+                marked_user("Always use CARGO_BUILD_JOBS=1 on this box", 0),
+                ConversationItem::assistant("Noted."),
+            ],
+            0,
+            1,
+            1,
+        )
+        .unwrap();
+        assert!(!substantive.nothing_new);
+    }
+
+    #[test]
+    fn extraction_output_is_capped_at_two_thousand_tokens() {
+        assert_eq!(EXTRACTION_MAX_OUTPUT_TOKENS, 2 * 1024);
+    }
+
+    #[test]
+    fn deferred_capture_accumulates_and_restores() {
+        let deferred = crate::session::memory_state::V2DeferredCapture::default();
+        assert_eq!(deferred.take(), None);
+        deferred.record(3);
+        deferred.record(4);
+        assert_eq!(deferred.take(), Some((2, 4)));
+        assert_eq!(deferred.take(), None);
+        deferred.restore(2, 4);
+        deferred.record(5);
+        assert_eq!(deferred.take(), Some((3, 5)));
+    }
+
+    #[test]
     fn transcript_selection_is_range_scoped_and_bounded() {
         let marked_user = |text: &str, prompt_index: usize| {
             let mut item = ConversationItem::user(text);
@@ -1984,6 +2195,7 @@ mod tests {
             // These tests exercise capture, which is opt-in by default.
             v2: crate::config::MemoryV2Config {
                 capture_enabled: true,
+                capture_trigger: crate::config::MemoryV2CaptureTrigger::Turn,
                 ..Default::default()
             },
             ..Default::default()

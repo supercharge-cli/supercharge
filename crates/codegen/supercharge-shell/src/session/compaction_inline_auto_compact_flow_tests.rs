@@ -144,6 +144,7 @@ async fn create_test_actor(
             capture_worker: std::cell::RefCell::new(None),
             dream_workers: crate::session::memory_state::V2DreamWorkers::default(),
             last_capture_failure: std::cell::RefCell::new(None),
+            v2_deferred: Default::default(),
             last_flush_compaction: std::sync::atomic::AtomicU64::new(0),
             storage: std::cell::RefCell::new(None),
             save_on_end: true,

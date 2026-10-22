@@ -2291,7 +2291,7 @@ impl Config {
     ) -> crate::config::MemoryConfig {
         let default_flush = crate::config::MemoryFlushSettings::default();
         let default_pruning = crate::config::PruningSettings::default();
-        crate::config::MemoryConfig::resolve_settings(
+        let mut memory = crate::config::MemoryConfig::resolve_settings(
             memory_enabled_override,
             &self.memory,
             &self.memory_v2,
@@ -2301,7 +2301,12 @@ impl Config {
                 .unwrap_or(&default_flush),
             self.compaction.pruning.as_ref().unwrap_or(&default_pruning),
             remote,
-        )
+        );
+        if memory.v2_capture_model.is_none() {
+            memory.v2_capture_model =
+                configured_background_model(self.session_summary_model.as_deref());
+        }
+        memory
     }
     /// Re-resolve eagerly-resolved runtime fields using the current `Config` state and fresh `raw_config`.
     /// Builds a [`RuntimeResolutionContext`] from the CLI flags already stored on this `Config`.
@@ -5433,3 +5438,33 @@ fn force_login_team_from_requirements() -> Option<supercharge_login::ForceLoginT
 #[cfg(test)]
 #[path = "config_tests.rs"]
 mod tests;
+
+/// The background summary model when the user configured one. The compiled
+/// default is skipped: it may not exist on the user's own provider, and the
+/// session model is the safer fallback for memory capture.
+fn configured_background_model(session_summary_model: Option<&str>) -> Option<String> {
+    session_summary_model
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .filter(|model| *model != crate::models::default_session_summary_model())
+        .map(str::to_owned)
+}
+
+#[cfg(test)]
+mod capture_model_fallback_tests {
+    #[test]
+    fn capture_model_falls_back_to_a_configured_background_model_only() {
+        assert_eq!(
+            super::configured_background_model(Some("small-model")).as_deref(),
+            Some("small-model")
+        );
+        assert_eq!(super::configured_background_model(Some("  ")), None);
+        assert_eq!(super::configured_background_model(None), None);
+        assert_eq!(
+            super::configured_background_model(Some(
+                crate::models::default_session_summary_model()
+            )),
+            None
+        );
+    }
+}

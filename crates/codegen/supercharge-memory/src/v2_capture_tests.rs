@@ -97,6 +97,51 @@ fn captured_observations_with_secrets_are_dropped() {
 }
 
 #[test]
+fn commit_drops_observations_memory_already_holds() {
+    let (_temp, store) = setup();
+    store.enqueue("dedupe-session", range(1, 1)).unwrap();
+    let first = claim(&store, "worker", 10);
+    let committed = store
+        .commit(
+            &first,
+            &observation_pair(
+                "Release builds run with CARGO_BUILD_JOBS=1 on the shared box",
+                "Release builds run with CARGO_BUILD_JOBS=1 on the shared box!",
+            ),
+            12,
+        )
+        .unwrap();
+    assert_eq!(committed.files.len(), 1, "batch repeat is dropped");
+
+    store.enqueue("dedupe-session", range(2, 2)).unwrap();
+    let second = claim(&store, "worker", 20);
+    let committed = store
+        .commit(
+            &second,
+            &observation_pair(
+                "Release builds always run with CARGO_BUILD_JOBS=1 on the shared box",
+                "The user wants one push per release",
+            ),
+            22,
+        )
+        .unwrap();
+    assert_eq!(committed.files.len(), 1, "near duplicate of memory is dropped");
+
+    // Replaying the same commit is still idempotent.
+    let replay = store
+        .commit(
+            &second,
+            &observation_pair(
+                "Release builds always run with CARGO_BUILD_JOBS=1 on the shared box",
+                "The user wants one push per release",
+            ),
+            23,
+        )
+        .unwrap();
+    assert!(replay.was_already_committed);
+}
+
+#[test]
 fn promotion_updates_running_hidden_job_before_it_commits() {
     let (temp, store) = setup();
     store

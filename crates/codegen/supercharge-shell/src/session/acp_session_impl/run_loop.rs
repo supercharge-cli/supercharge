@@ -736,6 +736,7 @@ pub(super) async fn run_session(
                         let end_timer = session_end::SessionEndTimer::new_shared();
                         turn_end_queue.flush().await;
                         fire_session_end_hooks(&session, "channel_closed", &end_timer, &mut deferred_start).await;
+                        session.trigger_deferred_v2_capture(true).await;
                         session.memory.stop_capture_worker().await;
                         session.memory.dream_workers.cancel_and_join().await;
                         // Stop the dream before the end-pipeline reindex so their index writes cannot race.
@@ -2341,6 +2342,7 @@ pub(super) async fn run_session(
                             // Hooks fire BEFORE memory auto-save
                             turn_end_queue.flush().await;
                             fire_session_end_hooks(&session, "shutdown", &end_timer, &mut deferred_start).await;
+                            session.trigger_deferred_v2_capture(true).await;
                             session.memory.stop_capture_worker().await;
                             session.memory.dream_workers.cancel_and_join().await;
                             // Stop the dream before the end-pipeline reindex so their index writes cannot race.

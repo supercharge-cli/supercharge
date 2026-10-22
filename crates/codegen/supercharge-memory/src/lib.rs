@@ -48,6 +48,7 @@ mod v2_access;
 pub mod v2_capture;
 mod v2_clock;
 pub mod v2_consolidation;
+mod v2_dedupe;
 mod v2_maintenance;
 pub mod watcher;
 

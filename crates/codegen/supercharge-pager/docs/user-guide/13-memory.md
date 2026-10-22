@@ -29,7 +29,20 @@ key, token, password, private key, or credential-bearing URL is refused (or, for
 legacy session logs, masked).
 
 Automatic per-turn capture is off by default, so memory adds no hidden model
-calls. Opt in with `[memory_v2] capture_enabled = true`.
+calls. Opt in with `[memory_v2] capture_enabled = true`. Capture is cheap:
+
+```toml
+[memory_v2]
+capture_enabled = true
+capture_trigger = "session_end"   # off | session_end | compaction | turn
+capture_model = "your-small-model" # optional; defaults to [models] session_summary, then the session model
+```
+
+`session_end` (the default) makes one extraction call for the whole session,
+`compaction` one before each compaction, and `turn` one per turn. Each call's
+output is capped at 2k tokens, trivial turns ("ok", "thanks") are skipped
+without a model call, and observations memory already holds (same words, or
+80% word overlap) are dropped before they are saved.
 
 ### Turning memory off
 

@@ -9,7 +9,7 @@ pub use supercharge_config_types::{
     MemoryGcConfig, MemoryGcSettings, MemoryIndexConfig, MemoryIndexSettings,
     MemoryInitialInjectionConfig, MemoryInitialInjectionSettings, MemoryMode, MemorySearchConfig,
     MemorySearchSettings, MemorySessionConfig, MemorySessionSettings, MemorySettings,
-    MemoryV2Config, MemoryV2Rollout, MemoryV2Settings, MemoryWatcherConfig, MemoryWatcherSettings,
+    MemoryV2CaptureTrigger, MemoryV2Config, MemoryV2Rollout, MemoryV2Settings, MemoryWatcherConfig, MemoryWatcherSettings,
     MmrConfig, MmrSettings, PruningConfig, PruningSettings, TemporalDecayConfig,
     TemporalDecaySettings,
 };

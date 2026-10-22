@@ -1875,9 +1875,12 @@ pub(crate) async fn spawn_session_actor(
                     if mc.mode.is_legacy() {
                         mc.flush.clone()
                     } else {
+                        // The legacy flush is off in v2 mode; its model slot
+                        // carries the resolved memory-v2 capture model.
                         crate::config::MemoryFlushConfig {
                             enabled: false,
                             idle_timeout_secs: None,
+                            flush_model: mc.v2_capture_model.clone(),
                             ..Default::default()
                         }
                     }
@@ -1887,6 +1890,7 @@ pub(crate) async fn spawn_session_actor(
             capture_worker: std::cell::RefCell::new(None),
             dream_workers: crate::session::memory_state::V2DreamWorkers::default(),
             last_capture_failure: std::cell::RefCell::new(None),
+            v2_deferred: Default::default(),
             last_flush_compaction: std::sync::atomic::AtomicU64::new(0),
             storage: std::cell::RefCell::new(memory_storage_for_session),
             save_on_end: memory_config

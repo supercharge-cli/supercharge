@@ -537,6 +537,12 @@ impl SessionActor {
             .count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             + 1;
+        if self.memory.v2_config.capture_trigger == crate::config::MemoryV2CaptureTrigger::Compaction
+        {
+            // The durable transcript survives compaction, so queue the
+            // collected turns without blocking the compaction itself.
+            self.trigger_deferred_v2_capture(false).await;
+        }
         if !self.agent.borrow().compaction_policy().memory_flush_enabled {
             return;
         }

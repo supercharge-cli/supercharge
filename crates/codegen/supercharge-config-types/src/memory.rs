@@ -35,6 +35,31 @@ pub enum MemoryV2Rollout {
     Active,
 }
 
+/// When memory-v2 automatic capture runs its extraction model call.
+///
+/// Capture itself also needs `capture_enabled = true`. Deferred triggers
+/// collect completed turns and extract them in one call.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryV2CaptureTrigger {
+    /// Never capture automatically (`/flush` is also unavailable).
+    Off,
+    /// One extraction call for the whole session when it ends.
+    #[default]
+    SessionEnd,
+    /// One extraction call before each compaction, plus one at session end.
+    Compaction,
+    /// One extraction call after every completed turn.
+    Turn,
+}
+
+impl MemoryV2CaptureTrigger {
+    /// Whether completed turns are collected and extracted later in one call.
+    pub fn is_deferred(self) -> bool {
+        matches!(self, Self::SessionEnd | Self::Compaction)
+    }
+}
+
 impl MemoryV2Rollout {
     /// xai-codegen-lint: allow(manual_strum)
     pub fn as_str(self) -> &'static str {
@@ -113,6 +138,11 @@ pub struct MemoryV2Settings {
     pub capture_status_enabled: Option<bool>,
     pub rollout: Option<MemoryV2Rollout>,
     pub capture_enabled: Option<bool>,
+    /// When automatic capture runs; see [`MemoryV2CaptureTrigger`].
+    pub capture_trigger: Option<MemoryV2CaptureTrigger>,
+    /// Model for capture extraction. Falls back to the background summary
+    /// model, then the session model.
+    pub capture_model: Option<String>,
     pub automatic_dream_enabled: Option<bool>,
     pub manual_dream_enabled: Option<bool>,
     pub batch_dream_enabled: Option<bool>,
@@ -130,6 +160,7 @@ pub struct MemoryV2Config {
     pub rollout: MemoryV2Rollout,
     pub capture_status_enabled: bool,
     pub capture_enabled: bool,
+    pub capture_trigger: MemoryV2CaptureTrigger,
     pub automatic_dream_enabled: bool,
     pub manual_dream_enabled: bool,
     pub batch_dream_enabled: bool,
@@ -148,6 +179,7 @@ impl Default for MemoryV2Config {
             // Off by default: automatic capture runs an extra model call after
             // every turn. The agent saves memories itself through file tools.
             capture_enabled: false,
+            capture_trigger: MemoryV2CaptureTrigger::SessionEnd,
             automatic_dream_enabled: true,
             manual_dream_enabled: true,
             batch_dream_enabled: false,
@@ -162,7 +194,10 @@ impl Default for MemoryV2Config {
 
 impl MemoryV2Config {
     pub fn can_capture(self) -> bool {
-        self.rollout.allows_capture() && self.capture_enabled && self.file_writes_enabled
+        self.rollout.allows_capture()
+            && self.capture_enabled
+            && self.capture_trigger != MemoryV2CaptureTrigger::Off
+            && self.file_writes_enabled
     }
 
     pub fn can_run_maintenance(self) -> bool {
@@ -663,6 +698,9 @@ pub struct MemoryConfig {
     pub flush: MemoryFlushConfig,
     #[serde(skip)]
     pub pruning: PruningConfig,
+    /// Model for memory-v2 capture extraction; `None` uses the session model.
+    #[serde(skip)]
+    pub v2_capture_model: Option<String>,
     #[serde(skip)]
     pub root_dir_override: Option<std::path::PathBuf>,
     #[serde(skip)]
@@ -939,6 +977,9 @@ impl MemoryConfig {
                         remote_v2.and_then(|settings| settings.capture_enabled),
                         defaults.v2.capture_enabled,
                     ),
+                    capture_trigger: memory_v2
+                        .capture_trigger
+                        .unwrap_or(defaults.v2.capture_trigger),
                     automatic_dream_enabled: restrict_flag(
                         memory_v2.automatic_dream_enabled,
                         remote_v2.and_then(|settings| settings.automatic_dream_enabled),
@@ -1048,6 +1089,12 @@ impl MemoryConfig {
                     .hard_clear_age_turns
                     .unwrap_or(defaults.pruning.hard_clear_age_turns),
             },
+            v2_capture_model: memory_v2
+                .capture_model
+                .as_deref()
+                .map(str::trim)
+                .filter(|model| !model.is_empty())
+                .map(str::to_owned),
             root_dir_override: None,
             flat_memory_root: false,
         }
@@ -1200,6 +1247,48 @@ mod tests {
         let resolved = MemoryConfig::resolve(false, false, &config, None);
         assert_eq!(resolved.mode, MemoryMode::V2);
         assert!(resolved.v2.can_capture());
+    }
+
+    #[test]
+    fn capture_trigger_defaults_to_session_end_and_parses_every_value() {
+        assert_eq!(
+            MemoryV2Config::default().capture_trigger,
+            MemoryV2CaptureTrigger::SessionEnd
+        );
+        for (raw, expected) in [
+            ("off", MemoryV2CaptureTrigger::Off),
+            ("session_end", MemoryV2CaptureTrigger::SessionEnd),
+            ("compaction", MemoryV2CaptureTrigger::Compaction),
+            ("turn", MemoryV2CaptureTrigger::Turn),
+        ] {
+            let config: toml::Value = toml::from_str(&format!(
+                "[memory_v2]\ncapture_enabled = true\ncapture_trigger = \"{raw}\""
+            ))
+            .unwrap();
+            let resolved = MemoryConfig::resolve(false, false, &config, None);
+            assert_eq!(resolved.v2.capture_trigger, expected);
+            assert_eq!(
+                resolved.v2.can_capture(),
+                expected != MemoryV2CaptureTrigger::Off,
+                "{raw}"
+            );
+        }
+        assert!(MemoryV2CaptureTrigger::SessionEnd.is_deferred());
+        assert!(MemoryV2CaptureTrigger::Compaction.is_deferred());
+        assert!(!MemoryV2CaptureTrigger::Turn.is_deferred());
+    }
+
+    #[test]
+    fn capture_model_is_trimmed_and_blank_means_unset() {
+        let config: toml::Value =
+            toml::from_str("[memory_v2]\ncapture_model = \"  small-model  \"").unwrap();
+        let resolved = MemoryConfig::resolve(false, false, &config, None);
+        assert_eq!(resolved.v2_capture_model.as_deref(), Some("small-model"));
+        let blank: toml::Value = toml::from_str("[memory_v2]\ncapture_model = \" \"").unwrap();
+        assert_eq!(
+            MemoryConfig::resolve(false, false, &blank, None).v2_capture_model,
+            None
+        );
     }
 
     #[test]

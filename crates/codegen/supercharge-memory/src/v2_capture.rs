@@ -590,7 +590,13 @@ impl V2CaptureStore {
             )
             .optional()?
         {
-            if existing_hash != prepared.hash {
+            // Deduplication reads memory that may have changed since the
+            // first commit, so a replay also matches the undeduplicated form.
+            let matches_replay = existing_hash == prepared.hash
+                || self
+                    .prepare_outcome_with(&lease.job, outcome, &safe_session, false)
+                    .is_ok_and(|raw| raw.hash == existing_hash);
+            if !matches_replay {
                 return Err(V2CaptureError::Conflict(
                     "job was already committed with a different outcome".to_owned(),
                 ));
@@ -1144,6 +1150,16 @@ impl V2CaptureStore {
         outcome: &CaptureOutcomeDraft,
         safe_session: &str,
     ) -> Result<PreparedOutcome> {
+        self.prepare_outcome_with(job, outcome, safe_session, true)
+    }
+
+    fn prepare_outcome_with(
+        &self,
+        job: &CaptureJob,
+        outcome: &CaptureOutcomeDraft,
+        safe_session: &str,
+        dedupe: bool,
+    ) -> Result<PreparedOutcome> {
         let files = match outcome {
             CaptureOutcomeDraft::Noop => Vec::new(),
             CaptureOutcomeDraft::Observations(observations) => {
@@ -1154,10 +1170,23 @@ impl V2CaptureStore {
                 }
                 // Never persist an extracted observation that carries a
                 // credential; drop it and keep the rest.
-                let observations: Vec<&ObservationDraft> = observations
+                let mut observations: Vec<&ObservationDraft> = observations
                     .iter()
                     .filter(|observation| !observation.contains_secret())
                     .collect();
+                if dedupe {
+                    // Drop observations memory already holds, and repeats
+                    // within this batch, so the inbox stays compact.
+                    let own_prefix = format!(
+                        "{safe_session}__t{:06}-{:06}__",
+                        job.range.from_turn, job.range.through_turn
+                    );
+                    let mut known = crate::v2_dedupe::KnownStatements::load(
+                        &self.scope_dir,
+                        &own_prefix,
+                    );
+                    observations.retain(|observation| known.insert_if_new(&observation.statement));
+                }
                 observations
                     .iter()
                     .copied()
