@@ -89,6 +89,35 @@ impl GrokRequestHeaders<'_> {
     }
 }
 
+/// Providers often omit the nested usage breakdowns; fill zeros so partial usage blocks still parse.
+pub(crate) fn fill_missing_usage_details(value: &mut serde_json::Value) {
+    for ptr in ["/usage", "/response/usage"] {
+        if let Some(usage) = value.pointer_mut(ptr).and_then(|v| v.as_object_mut()) {
+            for (key, inner) in [
+                ("input_tokens_details", "cached_tokens"),
+                ("output_tokens_details", "reasoning_tokens"),
+            ] {
+                let entry = usage.entry(key).or_insert_with(|| serde_json::json!({}));
+                if !entry.is_object() {
+                    *entry = serde_json::json!({});
+                }
+                if let Some(obj) = entry.as_object_mut() {
+                    let v = obj.entry(inner).or_insert(serde_json::json!(0));
+                    if !v.is_u64() {
+                        *v = serde_json::json!(0);
+                    }
+                }
+            }
+            for key in ["input_tokens", "output_tokens", "total_tokens"] {
+                let v = usage.entry(key).or_insert(serde_json::json!(0));
+                if !v.is_u64() {
+                    *v = serde_json::json!(0);
+                }
+            }
+        }
+    }
+}
+
 /// Deserialize a Responses SSE event, stripping unknown tools and rewriting terminal `total_tokens` from `context_details`.
 pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStreamEvent> {
     let mut event = match serde_json::from_str::<rs::ResponseStreamEvent>(data) {
@@ -104,6 +133,7 @@ pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStrea
                 {
                     tools.retain(|t| serde_json::from_value::<rs::Tool>(t.clone()).is_ok());
                 }
+                fill_missing_usage_details(&mut value);
                 if let Ok(mut event) = serde_json::from_value::<rs::ResponseStreamEvent>(value) {
                     apply_terminal_event_overrides(&mut event, data);
                     return Ok(event);
@@ -1555,7 +1585,13 @@ impl SamplingClient {
             });
         }
 
-        let response_obj = serde_json::from_slice::<rs::Response>(&bytes).map_err(|e| {
+        let response_obj = serde_json::from_slice::<rs::Response>(&bytes)
+            .or_else(|e| {
+                let mut value = serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|_| e)?;
+                fill_missing_usage_details(&mut value);
+                serde_json::from_value::<rs::Response>(value)
+            })
+            .map_err(|e| {
             let raw_body = String::from_utf8_lossy(&bytes);
             tracing::error!(
                 error = %e,
@@ -3763,5 +3799,23 @@ mod tests {
         let mut request = CreateResponseWrapper::new(rs::CreateResponse::default());
         without.apply_response_defaults(&mut request).unwrap();
         assert_eq!(request.inner.reasoning, None);
+    }
+}
+
+#[cfg(test)]
+mod partial_usage_tests {
+    use super::*;
+
+    #[test]
+    fn responses_completed_event_without_usage_details_parses() {
+        let data = r#"{"type":"response.completed","sequence_number":3,"response":{"id":"r1","object":"response","created_at":1,"model":"m","status":"completed","output":[],"usage":{"input_tokens":5,"output_tokens":2,"total_tokens":7}}}"#;
+        let event = deserialize_response_event(data).expect("partial usage should parse");
+        let rs::ResponseStreamEvent::ResponseCompleted(done) = event else {
+            panic!("unexpected event");
+        };
+        let usage = done.response.usage.expect("usage");
+        assert_eq!(usage.output_tokens_details.reasoning_tokens, 0);
+        assert_eq!(usage.input_tokens_details.cached_tokens, 0);
+        assert_eq!(usage.output_tokens, 2);
     }
 }

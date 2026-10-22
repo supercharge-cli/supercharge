@@ -48,10 +48,30 @@ where
     Option::<T>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
 }
 
+fn serialize_wire_messages<S>(messages: &[ChatRequestMessage], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeSeq;
+    let mut seq = serializer.serialize_seq(Some(messages.len()))?;
+    for msg in messages {
+        if msg.model_id.is_some() {
+            let mut wire = msg.clone();
+            wire.model_id = None;
+            seq.serialize_element(&wire)?;
+        } else {
+            seq.serialize_element(msg)?;
+        }
+    }
+    seq.end()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChatCompletionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Internal-only fields such as `model_id` are stripped on the wire; strict providers reject unknown keys.
+    #[serde(serialize_with = "serialize_wire_messages")]
     pub messages: Vec<ChatRequestMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
@@ -1652,5 +1672,23 @@ mod messages_thinking_budget_tests {
         assert_eq!(E::Xhigh.messages_thinking_budget(20000), Some(19999));
         assert_eq!(E::Xhigh.messages_thinking_budget(0), Some(32768));
         assert_eq!(E::High.messages_thinking_budget(1000), None);
+    }
+}
+
+#[cfg(test)]
+mod wire_model_id_tests {
+    use super::*;
+
+    #[test]
+    fn chat_completion_request_messages_never_carry_model_id() {
+        let msg = ChatRequestMessage::assistant("hi", "some-model", None);
+        assert_eq!(msg.model_id.as_deref(), Some("some-model"));
+        let persisted = serde_json::to_value(&msg).unwrap();
+        assert_eq!(persisted["model_id"], "some-model");
+        let req = ChatCompletionRequest::new("m", vec![ChatRequestMessage::user("q"), msg]);
+        let body = serde_json::to_value(&req).unwrap();
+        for m in body["messages"].as_array().unwrap() {
+            assert!(m.get("model_id").is_none(), "model_id leaked: {m}");
+        }
     }
 }
