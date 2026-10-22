@@ -1747,12 +1747,7 @@ impl acp::Agent for MvpAgent {
             }
             "x.ai/session/repair" => crate::extensions::repair::handle(self, &args).await,
             "x.ai/session/usage" => crate::extensions::usage::handle(self, &args).await,
-            "x.ai/memory/flush"
-            | "x.ai/memory/rewrite"
-            | crate::extensions::memory::LEGACY_MEMORY_FORGET_METHOD => {
-                crate::extensions::memory::handle(self, &args).await
-            }
-            m if crate::extensions::memory::is_primary_memory_method(m) => {
+            m if crate::extensions::memory::memory_method(m).is_some() => {
                 crate::extensions::memory::handle(self, &args).await
             }
             "x.ai/skills/refresh-baseline" => {

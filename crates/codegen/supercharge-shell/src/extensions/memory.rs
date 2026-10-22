@@ -15,11 +15,33 @@ use crate::session::{CompactConversationRequest, CompactConversationResponse, Se
 pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     match args.method.as_ref() {
         m if m.starts_with("x.ai/compact_conversation") => handle_compact(agent, args).await,
-        MEMORY_FLUSH_METHOD | "x.ai/memory/flush" => handle_flush(agent, args).await,
-        MEMORY_DREAM_METHOD | "x.ai/memory/dream" => handle_dream(agent, args).await,
-        MEMORY_REWRITE_METHOD | "x.ai/memory/rewrite" => handle_rewrite(agent, args).await,
-        MEMORY_FORGET_METHOD | LEGACY_MEMORY_FORGET_METHOD => handle_forget(agent, args).await,
-        _ => Err(acp::Error::method_not_found()),
+        m => match memory_method(m) {
+            Some(MemoryMethod::Flush) => handle_flush(agent, args).await,
+            Some(MemoryMethod::Dream) => handle_dream(agent, args).await,
+            Some(MemoryMethod::Rewrite) => handle_rewrite(agent, args).await,
+            Some(MemoryMethod::Forget) => handle_forget(agent, args).await,
+            None => Err(acp::Error::method_not_found()),
+        },
+    }
+}
+
+/// A memory extension, independent of which ACP name the client used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryMethod {
+    Flush,
+    Dream,
+    Rewrite,
+    Forget,
+}
+
+/// Resolve a memory extension by its primary or pre-rename ACP name.
+pub fn memory_method(method: &str) -> Option<MemoryMethod> {
+    match method {
+        MEMORY_FLUSH_METHOD | "x.ai/memory/flush" => Some(MemoryMethod::Flush),
+        MEMORY_DREAM_METHOD | "x.ai/memory/dream" => Some(MemoryMethod::Dream),
+        MEMORY_REWRITE_METHOD | "x.ai/memory/rewrite" => Some(MemoryMethod::Rewrite),
+        MEMORY_FORGET_METHOD | LEGACY_MEMORY_FORGET_METHOD => Some(MemoryMethod::Forget),
+        _ => None,
     }
 }
 
@@ -30,14 +52,6 @@ pub const MEMORY_DREAM_METHOD: &str = "_supercharge/memory/dream";
 pub const MEMORY_REWRITE_METHOD: &str = "_supercharge/memory/rewrite";
 pub const MEMORY_FORGET_METHOD: &str = "_supercharge/memory/forget";
 pub const LEGACY_MEMORY_FORGET_METHOD: &str = "x.ai/memory/forget";
-
-/// Whether `method` is a memory extension under its primary name.
-pub fn is_primary_memory_method(method: &str) -> bool {
-    matches!(
-        method,
-        MEMORY_FLUSH_METHOD | MEMORY_DREAM_METHOD | MEMORY_REWRITE_METHOD | MEMORY_FORGET_METHOD
-    )
-}
 
 /// Largest note `_supercharge/memory/forget` will hash and delete, for both v2 and legacy stores.
 pub const MEMORY_FORGET_MAX_FILE_BYTES: u64 = supercharge_memory::MAX_FORGET_FILE_BYTES;
@@ -221,5 +235,32 @@ mod dream_response_tests {
                 outcome
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod method_name_tests {
+    use super::*;
+
+    #[test]
+    fn primary_and_pre_rename_memory_methods_are_accepted() {
+        for (primary, legacy, kind) in [
+            (MEMORY_FLUSH_METHOD, "x.ai/memory/flush", MemoryMethod::Flush),
+            (MEMORY_DREAM_METHOD, "x.ai/memory/dream", MemoryMethod::Dream),
+            (MEMORY_REWRITE_METHOD, "x.ai/memory/rewrite", MemoryMethod::Rewrite),
+            (MEMORY_FORGET_METHOD, "x.ai/memory/forget", MemoryMethod::Forget),
+        ] {
+            assert!(primary.starts_with("_supercharge/memory/"));
+            assert_eq!(memory_method(primary), Some(kind), "{primary}");
+            assert_eq!(memory_method(legacy), Some(kind), "{legacy}");
+        }
+        assert_eq!(memory_method("_supercharge/memory/unknown"), None);
+        assert_eq!(memory_method("x.ai/memory/unknown"), None);
+    }
+
+    #[test]
+    fn memory_mode_meta_has_primary_and_legacy_keys() {
+        assert_eq!(crate::session::MEMORY_MODE_META_KEY, "_supercharge/memoryMode");
+        assert_eq!(crate::session::LEGACY_MEMORY_MODE_META_KEY, "x.ai/memoryMode");
     }
 }
