@@ -1916,7 +1916,7 @@ pub(crate) fn execute(
             let tx = acp_tx.clone();
             tasks.spawn(async move {
                 let params = serde_json::json!({ "session_id": session_id.0.to_string() });
-                let req = acp::ExtRequest::new("x.ai/memory/flush",
+                let req = acp::ExtRequest::new(supercharge_shell::extensions::memory::MEMORY_FLUSH_METHOD,
                     serde_json::value::to_raw_value(&params).expect("serialize memory flush").into());
                 let result = acp_send(req, &tx).await.map_err(|e| sanitize_user_error(&e.to_string()))
                     .and_then(|resp| {
@@ -1933,7 +1933,7 @@ pub(crate) fn execute(
             let tx = acp_tx.clone();
             tasks.spawn(async move {
                 let params = serde_json::json!({ "session_id": session_id.0.to_string() });
-                let req = acp::ExtRequest::new("x.ai/memory/dream",
+                let req = acp::ExtRequest::new(supercharge_shell::extensions::memory::MEMORY_DREAM_METHOD,
                     serde_json::value::to_raw_value(&params).expect("serialize memory dream").into());
                 let result = acp_send(req, &tx).await.map_err(|e| sanitize_user_error(&e.to_string()))
                     .and_then(|resp| {
@@ -4320,7 +4320,7 @@ pub(crate) fn execute(
             tasks
                 .spawn(async move {
                     let request = acp::ExtRequest::new(
-                        "x.ai/memory/rewrite",
+                        supercharge_shell::extensions::memory::MEMORY_REWRITE_METHOD,
                         serde_json::value::to_raw_value(
                                 &serde_json::json!({
                         "sessionId": session_id.0.to_string(),

@@ -7,7 +7,7 @@ use crate::{
 };
 use supercharge_config_types::MemoryFlushConfig;
 
-const LOG: &str = "xai_memory";
+const LOG: &str = "supercharge_memory";
 
 /// Check whether a memory flush should run before the next compaction.
 /// A flush runs at most once per compaction cycle, once token usage reaches the compact threshold minus `soft_threshold_tokens` headroom.

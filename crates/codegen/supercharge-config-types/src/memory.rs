@@ -115,6 +115,9 @@ impl MemoryMode {
 #[serde(default)]
 pub struct MemorySettings {
     pub enabled: Option<bool>,
+    /// `legacy` opts into the old summary/search pipeline. Anything else
+    /// (including unset) uses memory v2.
+    pub mode: Option<MemoryMode>,
     pub index: Option<MemoryIndexSettings>,
     pub embedding: Option<MemoryEmbeddingSettings>,
     pub search: Option<MemorySearchSettings>,
@@ -875,13 +878,24 @@ impl MemoryConfig {
         // It runs entirely on local files; see `MemoryV2Config::default`.
         let nothing_configured = v2_enabled.is_none()
             && legacy_enabled.source == crate::ConfigSource::Default;
-        let v2_selected = v2_enabled == Some(true) || nothing_configured;
-        let enabled = !globally_disabled && (v2_selected || legacy_enabled.value);
-        let mode = if v2_selected {
+        // The legacy pipeline only runs when explicitly requested with
+        // `[memory] mode = "legacy"` (and v2 is not explicitly enabled).
+        let legacy_requested = memory.mode == Some(MemoryMode::Legacy);
+        let mode = if v2_enabled == Some(true) || !legacy_requested {
             MemoryMode::V2
         } else {
             MemoryMode::Legacy
         };
+        let enabled = !globally_disabled
+            && match mode {
+                MemoryMode::V2 => {
+                    v2_enabled == Some(true)
+                        || (v2_enabled.is_none() && (nothing_configured || legacy_enabled.value))
+                }
+                MemoryMode::Legacy => {
+                    legacy_enabled.value || legacy_enabled.source == crate::ConfigSource::Default
+                }
+            };
 
         Self {
             enabled,
@@ -1214,6 +1228,22 @@ mod tests {
     }
 
     #[test]
+    fn legacy_pipeline_requires_explicit_mode() {
+        let enabled: toml::Value = toml::from_str("[memory]\nenabled = true").unwrap();
+        let resolved = MemoryConfig::resolve(false, false, &enabled, None);
+        assert_eq!((resolved.enabled, resolved.mode), (true, MemoryMode::V2));
+        let legacy: toml::Value = toml::from_str("[memory]\nmode = \"legacy\"").unwrap();
+        let resolved = MemoryConfig::resolve(false, false, &legacy, None);
+        assert_eq!((resolved.enabled, resolved.mode), (true, MemoryMode::Legacy));
+        let legacy_off: toml::Value =
+            toml::from_str("[memory]\nmode = \"legacy\"\nenabled = false").unwrap();
+        assert!(!MemoryConfig::resolve(false, false, &legacy_off, None).enabled);
+        let v2_wins: toml::Value =
+            toml::from_str("[memory]\nmode = \"legacy\"\n[memory_v2]\nenabled = true").unwrap();
+        assert_eq!(MemoryConfig::resolve(false, false, &v2_wins, None).mode, MemoryMode::V2);
+    }
+
+    #[test]
     fn memory_mode_defaults_to_legacy() {
         assert_eq!(MemoryConfig::default().mode, MemoryMode::Legacy);
     }
@@ -1223,10 +1253,10 @@ mod tests {
         let cases = [
             (Some(true), Some(false), true, MemoryMode::V2),
             (Some(true), Some(true), true, MemoryMode::V2),
-            (Some(false), Some(true), true, MemoryMode::Legacy),
-            (Some(false), Some(false), false, MemoryMode::Legacy),
-            (None, Some(true), true, MemoryMode::Legacy),
-            (None, Some(false), false, MemoryMode::Legacy),
+            (Some(false), Some(true), false, MemoryMode::V2),
+            (Some(false), Some(false), false, MemoryMode::V2),
+            (None, Some(true), true, MemoryMode::V2),
+            (None, Some(false), false, MemoryMode::V2),
             (None, None, true, MemoryMode::V2),
         ];
 
@@ -1305,7 +1335,8 @@ mod tests {
 
     #[test]
     fn explicit_legacy_opt_in_keeps_legacy() {
-        let config: toml::Value = toml::from_str("[memory]\nenabled = true").unwrap();
+        let config: toml::Value =
+            toml::from_str("[memory]\nenabled = true\nmode = \"legacy\"").unwrap();
         let resolved = MemoryConfig::resolve(false, false, &config, None);
         assert!(resolved.enabled);
         assert_eq!(resolved.mode, MemoryMode::Legacy);
@@ -1397,13 +1428,13 @@ mod tests {
     }
 
     #[test]
-    fn memory_v2_cannot_be_selected_from_legacy_memory_section() {
+    fn memory_section_mode_v2_selects_v2() {
         let config: toml::Value =
             toml::from_str("[memory]\nenabled = true\nmode = \"v2\"").unwrap();
         let resolved = MemoryConfig::resolve(false, false, &config, None);
 
         assert!(resolved.enabled);
-        assert_eq!(resolved.mode, MemoryMode::Legacy);
+        assert_eq!(resolved.mode, MemoryMode::V2);
     }
 
     #[test]
@@ -1439,9 +1470,14 @@ mod tests {
     }
 
     #[test]
-    fn explicit_memory_v2_false_falls_back_to_legacy() {
+    fn memory_v2_false_is_an_off_switch_unless_legacy_mode() {
         let config: toml::Value =
             toml::from_str("[memory]\nenabled = true\n[memory_v2]\nenabled = false").unwrap();
+        assert!(!MemoryConfig::resolve(false, false, &config, None).enabled);
+        let config: toml::Value = toml::from_str(
+            "[memory]\nenabled = true\nmode = \"legacy\"\n[memory_v2]\nenabled = false",
+        )
+        .unwrap();
         let resolved = MemoryConfig::resolve(false, false, &config, None);
 
         assert!(resolved.enabled);
@@ -1449,7 +1485,7 @@ mod tests {
     }
 
     #[test]
-    fn local_memory_v2_false_overrides_remote_v2_true_then_falls_back() {
+    fn local_memory_v2_false_overrides_remote_v2_true() {
         let config: toml::Value = toml::from_str("[memory_v2]\nenabled = false").unwrap();
         let remote = crate::RemoteSettings {
             memory_v2: Some(MemoryV2Settings {
@@ -1461,8 +1497,8 @@ mod tests {
         };
         let resolved = MemoryConfig::resolve(false, false, &config, Some(&remote));
 
-        assert!(resolved.enabled);
-        assert_eq!(resolved.mode, MemoryMode::Legacy);
+        assert!(!resolved.enabled);
+        assert_eq!(resolved.mode, MemoryMode::V2);
     }
 
     #[test]
@@ -1547,12 +1583,12 @@ mod tests {
     }
 
     #[test]
-    fn deprecated_positive_memory_override_keeps_legacy_default() {
+    fn positive_memory_override_enables_v2() {
         let resolved =
             MemoryConfig::resolve(true, false, &toml::Value::Table(Default::default()), None);
 
         assert!(resolved.enabled);
-        assert_eq!(resolved.mode, MemoryMode::Legacy);
+        assert_eq!(resolved.mode, MemoryMode::V2);
     }
 
     #[test]

@@ -124,12 +124,10 @@ cursors, queue counts, pending age, Dream lease/snapshot, last outcomes, and
 archive/tombstone counts. The existing `/memory`, `/memory on`, and `/memory
 off` behavior is unchanged.
 
-`memory_v2.enabled` is the primary v2 switch. When it is true, v2 takes
-precedence over the legacy `[memory] enabled` setting. When it is false, the
-legacy setting is resolved unchanged. When neither `[memory_v2] enabled` nor
-`[memory] enabled` (nor `SUPERCHARGE_MEMORY`) is set, memory v2 is used. An
-explicit `[memory] enabled = true` keeps legacy memory so existing legacy users
-are not migrated unexpectedly. An explicit `[memory] enabled = false` in your TOML turns off both
+Memory v2 is the only pipeline unless you opt into the old one with
+`[memory] mode = "legacy"`. `[memory] enabled = true` or `SUPERCHARGE_MEMORY=1`
+turns on memory v2, and `[memory_v2] enabled = false` turns memory off (unless
+legacy mode is selected, in which case it only stops v2 from taking over). An explicit `[memory] enabled = false` in your TOML turns off both
 implementations, including a v2 rollout enabled remotely; only an explicit
 `[memory_v2] enabled = true` in the same TOML overrides it.
 
@@ -231,9 +229,11 @@ You can also toggle from inside the `/memory` modal by pressing `t`.
 3. `memory_v2.enabled` resolves from effective TOML, then the dedicated
    `grok_build_memory_v2_enabled` managed setting. If true, v2 is selected
    regardless of legacy `memory_enabled`.
-4. Otherwise, legacy enablement resolves through its existing compatibility
-   CLI, `SUPERCHARGE_MEMORY`, effective TOML, and managed-remote tiers.
-5. If neither gate is enabled, memory is disabled.
+4. Otherwise the legacy pipeline is used only with `[memory] mode = "legacy"`;
+   its enablement resolves through the CLI, `SUPERCHARGE_MEMORY`, effective
+   TOML, and managed-remote tiers (on by default once selected).
+5. Without legacy mode, v2 is used. It is on when nothing is configured or when
+   a legacy enablement tier is true, and off when `memory_v2.enabled` is false.
 
 All managed v2 behavior comes from the dedicated
 `grok_build_memory_v2_settings` object. Memory v2 does not consume fields from

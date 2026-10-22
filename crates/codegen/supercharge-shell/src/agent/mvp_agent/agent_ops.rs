@@ -3588,6 +3588,10 @@ impl MvpAgent {
                 MEMORY_MODE_META_KEY.to_string(),
                 serde_json::json!(memory_mode),
             );
+            meta.insert(
+                crate::session::LEGACY_MEMORY_MODE_META_KEY.to_string(),
+                serde_json::json!(memory_mode),
+            );
         }
     }
     /// Seed the global sampling config with login auth when available. Only sets the `api_key` if missing. Does NOT resolve `base_url` from `current_model_id`. That is deferred to session creation time.

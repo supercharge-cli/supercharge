@@ -364,7 +364,10 @@ pub(crate) fn parse_session_memory_mode(
     resp_meta: Option<&acp::Meta>,
 ) -> Option<supercharge_shell::config::MemoryMode> {
     resp_meta
-        .and_then(|meta| meta.get(supercharge_shell::session::MEMORY_MODE_META_KEY))
+        .and_then(|meta| {
+            meta.get(supercharge_shell::session::MEMORY_MODE_META_KEY)
+                .or_else(|| meta.get(supercharge_shell::session::LEGACY_MEMORY_MODE_META_KEY))
+        })
         .cloned()
         .and_then(|value| serde_json::from_value(value).ok())
 }

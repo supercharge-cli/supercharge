@@ -1,5 +1,5 @@
-//! Extension handlers for `x.ai/compact_conversation`, `x.ai/memory/flush`, `x.ai/memory/rewrite`,
-//! and `x.ai/memory/forget`.
+//! Extension handlers for conversation compaction and the memory extensions
+//! (`_supercharge/memory/{flush,dream,rewrite,forget}`; pre-rename names are still accepted).
 //! `memory/rewrite` turns a raw memory note into structured markdown with a one-shot LLM call.
 //! `memory/forget` deletes one note from the `/memory` modal through the store's tombstone path.
 
@@ -15,17 +15,31 @@ use crate::session::{CompactConversationRequest, CompactConversationResponse, Se
 pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     match args.method.as_ref() {
         m if m.starts_with("x.ai/compact_conversation") => handle_compact(agent, args).await,
-        "x.ai/memory/flush" => handle_flush(agent, args).await,
-        "x.ai/memory/dream" => handle_dream(agent, args).await,
-        "x.ai/memory/rewrite" => handle_rewrite(agent, args).await,
-        MEMORY_FORGET_METHOD => handle_forget(agent, args).await,
+        MEMORY_FLUSH_METHOD | "x.ai/memory/flush" => handle_flush(agent, args).await,
+        MEMORY_DREAM_METHOD | "x.ai/memory/dream" => handle_dream(agent, args).await,
+        MEMORY_REWRITE_METHOD | "x.ai/memory/rewrite" => handle_rewrite(agent, args).await,
+        MEMORY_FORGET_METHOD | LEGACY_MEMORY_FORGET_METHOD => handle_forget(agent, args).await,
         _ => Err(acp::Error::method_not_found()),
     }
 }
 
-pub const MEMORY_FORGET_METHOD: &str = "x.ai/memory/forget";
+/// Primary ACP names for the memory extensions. The pre-rename names are
+/// still accepted from older clients.
+pub const MEMORY_FLUSH_METHOD: &str = "_supercharge/memory/flush";
+pub const MEMORY_DREAM_METHOD: &str = "_supercharge/memory/dream";
+pub const MEMORY_REWRITE_METHOD: &str = "_supercharge/memory/rewrite";
+pub const MEMORY_FORGET_METHOD: &str = "_supercharge/memory/forget";
+pub const LEGACY_MEMORY_FORGET_METHOD: &str = "x.ai/memory/forget";
 
-/// Largest note `x.ai/memory/forget` will hash and delete, for both v2 and legacy stores.
+/// Whether `method` is a memory extension under its primary name.
+pub fn is_primary_memory_method(method: &str) -> bool {
+    matches!(
+        method,
+        MEMORY_FLUSH_METHOD | MEMORY_DREAM_METHOD | MEMORY_REWRITE_METHOD | MEMORY_FORGET_METHOD
+    )
+}
+
+/// Largest note `_supercharge/memory/forget` will hash and delete, for both v2 and legacy stores.
 pub const MEMORY_FORGET_MAX_FILE_BYTES: u64 = supercharge_memory::MAX_FORGET_FILE_BYTES;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

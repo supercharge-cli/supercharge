@@ -1066,7 +1066,7 @@ mod tests {
     /// Kept in sync with that source.
     const GLOBAL_STUB: &str = "# Global Memory\n\
          \n\
-         > This file is automatically managed by Grok's memory system.\n\
+         > This file is automatically managed by the Supercharge memory system.\n\
          > You can also edit it manually — changes will be indexed on next session.\n\
          \n\
          ## Preferences\n\

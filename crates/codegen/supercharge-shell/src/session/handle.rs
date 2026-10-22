@@ -29,7 +29,9 @@ pub(crate) enum SessionLiveState {
     Attaching,
 }
 /// `_meta` key carrying the persistent-memory implementation pinned at session spawn.
-pub const MEMORY_MODE_META_KEY: &str = "x.ai/memoryMode";
+pub const MEMORY_MODE_META_KEY: &str = "_supercharge/memoryMode";
+/// Pre-rename key, still sent and read for older clients and shells.
+pub const LEGACY_MEMORY_MODE_META_KEY: &str = "x.ai/memoryMode";
 /// Everything the `session/new` reply reads from session state; built before the actor task starts so the reply cannot wait on it.
 #[derive(Clone)]
 pub struct SpawnSnapshot {

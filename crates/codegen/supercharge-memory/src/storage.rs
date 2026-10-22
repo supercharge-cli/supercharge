@@ -27,7 +27,7 @@ pub enum SaveRememberNoteError {
 
 /// Handles file I/O for the memory storage layer.
 /// Memory files are human-readable/editable Markdown stored under `~/.supercharge/memory/`.
-/// Workspace-scoped files live under a directory named `{project-slug}-{hash8}`, e.g. `~/.supercharge/memory/xai-a3f7b2c9/`.
+/// Workspace-scoped files live under a directory named `{project-slug}-{hash8}`, e.g. `~/.supercharge/memory/myproject-a3f7b2c9/`.
 #[derive(Debug, Clone)]
 pub struct MemoryStorage {
     mode: MemoryMode,
@@ -514,7 +514,7 @@ impl MemoryStorage {
                 &global_file,
                 "# Global Memory\n\
                  \n\
-                 > This file is automatically managed by Grok's memory system.\n\
+                 > This file is automatically managed by the Supercharge memory system.\n\
                  > You can also edit it manually — changes will be indexed on next session.\n\
                  \n\
                  ## Preferences\n\

@@ -36,7 +36,7 @@ fn observation(statement: &str) -> ObservationDraft {
         statement: statement.to_owned(),
         keywords: vec!["durable".to_owned(), "sqlite".to_owned()],
         aliases: vec!["persistence".to_owned()],
-        extraction_model: "grok-test".to_owned(),
+        extraction_model: "test-model".to_owned(),
         prompt_version: "capture-v1".to_owned(),
         created_at: 1_788_000_000,
         body: Some("Bounded supporting detail.".to_owned()),

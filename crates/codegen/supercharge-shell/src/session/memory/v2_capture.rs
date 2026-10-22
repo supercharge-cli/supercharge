@@ -425,7 +425,7 @@ mod tests {
     fn host_owns_provenance_fields() {
         let outcome = parse_model_outcome(
             r#"{"outcome":"observations","observations":[{"type":"project","topic_hint":"capture","statement":"Use durable ranges","keywords":["durable"],"aliases":[],"body":null}]}"#,
-            "grok-test",
+            "test-model",
             42,
         )
         .unwrap();
@@ -435,7 +435,7 @@ mod tests {
         let Some(observation) = observations.first() else {
             panic!("expected at least one observation");
         };
-        assert_eq!(observation.extraction_model, "grok-test");
+        assert_eq!(observation.extraction_model, "test-model");
         assert_eq!(observation.prompt_version, PROMPT_VERSION);
         assert_eq!(observation.created_at, 42);
     }

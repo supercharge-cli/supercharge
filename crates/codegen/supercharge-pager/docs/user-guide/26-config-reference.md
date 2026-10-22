@@ -349,7 +349,8 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 | Key | Type / Values | Requirements | Managed | Details |
 | --- | --- | --- | --- | --- |
 | `memory.enabled` | `boolean` | `pin` | `user` | Legacy memory switch. Also `SUPERCHARGE_MEMORY`; superseded when the v2 gate is enabled. |
-| `memory_v2.enabled` | `boolean` | `pin` | `user` | Primary memory-v2 switch. When true, v2 takes precedence over legacy `memory.enabled`. When false, legacy enablement is resolved normally. When neither switch nor `SUPERCHARGE_MEMORY` is set, v2 is on. Set `false` (or `SUPERCHARGE_MEMORY=0`, or `--no-memory`) to turn memory off. Default: on. |
+| `memory.mode` | `string` | `pin` | `user` | `legacy` selects the old summary/search memory pipeline; anything else uses memory v2. Default: v2. |
+| `memory_v2.enabled` | `boolean` | `pin` | `user` | Primary memory-v2 switch. When true, v2 is used even with `memory.mode = "legacy"`. When false, memory is off unless legacy mode is selected. When neither switch nor `SUPERCHARGE_MEMORY` is set, v2 is on. Set `false` (or `SUPERCHARGE_MEMORY=0`, or `--no-memory`) to turn memory off. Default: on. |
 | `memory_v2.rollout` | `"off"`, `"record_only"`, `"shadow"`, `"active"` | — | `user` | Advanced staged-rollout control for new v2 sessions. Default: `"active"` after enabling v2. Most users should leave this unset. |
 | `memory_v2.capture_status_enabled` | `boolean` | — | `user` | Shows memory-v2 capture lifecycle messages in the UI for debugging. Successful captures are expandable and include generated content plus links to committed observation files. Telemetry and debug logs are always recorded. Default: `false`. |
 | `memory_v2.capture_enabled` | `boolean` | — | `user` | Enables automatic memory-v2 extraction. The agent still saves memories itself when this is off. Default: `false`. |

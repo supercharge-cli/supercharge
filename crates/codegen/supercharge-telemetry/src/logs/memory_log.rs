@@ -1,4 +1,4 @@
-//! Provides a dedicated tracing target (`xai_memory`) with an optional
+//! Provides a dedicated tracing target (`supercharge_memory`) with an optional
 //! file logger that writes to `~/.supercharge/logs/memory.log`.
 //!
 //! ## When to use
@@ -15,7 +15,7 @@
 //! ```
 
 /// Tracing target for all memory system operations.
-pub const TARGET: &str = "xai_memory";
+pub const TARGET: &str = "supercharge_memory";
 
 #[cfg(feature = "memory-log")]
 mod inner {
@@ -60,7 +60,7 @@ mod inner {
         }
     }
 
-    /// Writes to `~/.supercharge/logs/memory.log`. Filters to `xai_memory=trace`.
+    /// Writes to `~/.supercharge/logs/memory.log`. Filters to `supercharge_memory=trace`.
     /// Set `SUPERCHARGE_MEMORY_LOG=0` to disable, `SUPERCHARGE_MEMORY_LOG=/path` to redirect.
     pub fn layer<S>() -> Option<impl Layer<S>>
     where

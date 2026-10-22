@@ -1609,7 +1609,10 @@ async fn run_headless_memory_flush(
     let params = serde_json::json!({ "session_id": session_id.0.to_string() });
     let raw = serde_json::value::to_raw_value(&params)
         .map_err(|e| anyhow::anyhow!("serialize memory flush params: {e}"))?;
-    let request = acp::ExtRequest::new("x.ai/memory/flush", raw.into());
+    let request = acp::ExtRequest::new(
+        supercharge_shell::extensions::memory::MEMORY_FLUSH_METHOD,
+        raw.into(),
+    );
     let mut flush_fut = Box::pin(acp_send(request, acp_tx));
     let t0 = Instant::now();
     let mut ttf_logged = true;

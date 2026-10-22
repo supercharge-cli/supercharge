@@ -1,4 +1,4 @@
-//! Cross-session memory for Grok.
+//! Cross-session memory for Supercharge.
 //!
 //! Two isolated pipelines. They do not share files, search, flush, or Dream.
 //! See the crate `AGENTS.md` before changing either path.
@@ -90,7 +90,7 @@ pub use v2_maintenance::{
     RetentionPolicy, V2MaintenanceError, V2MaintenanceStore, V2ScopeStatus,
 };
 
-pub(crate) const MEMORY_LOG_TARGET: &str = "xai_memory";
+pub(crate) const MEMORY_LOG_TARGET: &str = "supercharge_memory";
 
 /// Embed all chunks that don't have embeddings yet.
 /// Call after reindex, flush writes, or session-end writes.

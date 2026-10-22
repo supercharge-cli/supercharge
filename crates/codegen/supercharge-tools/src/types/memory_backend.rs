@@ -11,7 +11,7 @@
 ///
 /// Use `tracing::info!(target: MEMORY_LOG_TARGET, ...)` in `supercharge-tools`.
 /// Mirrors `supercharge_shell::session::memory_log::TARGET`.
-pub const MEMORY_LOG_TARGET: &str = "xai_memory";
+pub const MEMORY_LOG_TARGET: &str = "supercharge_memory";
 
 /// Staleness threshold (days): show a note suggesting verification.
 const STALE_NOTE_DAYS: f64 = 1.0;
