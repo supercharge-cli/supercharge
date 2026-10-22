@@ -732,8 +732,10 @@ pub fn select_eager_auth_method(
     auth_methods: &[acp::AuthMethod],
     default_auth_method_id: Option<&acp::AuthMethodId>,
 ) -> Option<acp::AuthMethodId> {
+    // Agents without account login advertise no methods and authenticate as
+    // a no-op; their default (the configured provider key) is still valid.
     if let Some(default_id) = default_auth_method_id
-        && auth_methods.iter().any(|m| m.id() == default_id)
+        && (auth_methods.is_empty() || auth_methods.iter().any(|m| m.id() == default_id))
     {
         return Some(default_id.clone());
     }
@@ -751,6 +753,12 @@ pub fn select_eager_auth_method(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn empty_auth_list_falls_back_to_default_method() {
+        let default = acp::AuthMethodId::new("provider.api_key");
+        assert_eq!(select_eager_auth_method(&[], Some(&default)), Some(default));
+        assert_eq!(select_eager_auth_method(&[], None), None);
+    }
     #[test]
     fn is_session_update_ext_method_covers_both_carriers() {
         assert!(is_session_update_ext_method("x.ai/session_notification"));
