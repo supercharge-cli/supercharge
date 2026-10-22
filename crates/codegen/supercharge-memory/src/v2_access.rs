@@ -88,6 +88,18 @@ pub enum V2AccessError {
         "refused to save {path}: it looks like it contains a secret ({kind}). Memory must never store API keys, tokens, passwords, or other credentials; remove the value and save only a description of it."
     )]
     Secret { path: PathBuf, kind: &'static str },
+    #[error(
+        "refused to add {path}: it nearly duplicates the existing note {existing}. Read {existing} and edit it (replace the outdated lines) instead of adding a new note."
+    )]
+    NearDuplicate { path: PathBuf, existing: PathBuf },
+    #[error(
+        "the project note is limited to {limit} characters (got {chars}); keep only the most useful facts: {path}"
+    )]
+    ProjectNoteTooLong {
+        path: PathBuf,
+        limit: usize,
+        chars: usize,
+    },
     #[error("memory v2 path is durably excluded and cannot be recreated: {0}")]
     Excluded(PathBuf),
     #[error(
@@ -133,6 +145,8 @@ pub struct V2MemoryAccessPolicy {
     workspace_canonical_root: PathBuf,
     snapshots: parking_lot::Mutex<HashMap<PathBuf, blake3::Hash>>,
     write_lock: parking_lot::Mutex<()>,
+    /// `(configured, canonical)` project-note directory, when one exists.
+    project_root: Option<(PathBuf, PathBuf)>,
 }
 
 struct ValidatedV2Write {
@@ -155,7 +169,153 @@ impl V2MemoryAccessPolicy {
             workspace_canonical_root: canonicalize_root(workspace_root)?,
             snapshots: parking_lot::Mutex::new(HashMap::new()),
             write_lock: parking_lot::Mutex::new(()),
+            project_root: None,
         })
+    }
+
+    /// Also govern the curated project note in `project_dir`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`V2AccessError::Inspect`] if the directory cannot be canonicalized.
+    pub fn with_project_dir(mut self, project_dir: &Path) -> V2AccessResult<Self> {
+        self.project_root = Some((project_dir.to_path_buf(), canonicalize_root(project_dir)?));
+        Ok(self)
+    }
+
+    /// The project note path when `path` targets the project directory.
+    /// Anything in that directory except `PROJECT.md` is protected.
+    fn project_target(&self, path: &Path) -> V2AccessResult<Option<PathBuf>> {
+        let Some((root, canonical_root)) = &self.project_root else {
+            return Ok(None);
+        };
+        if !path.is_absolute() {
+            return Ok(None);
+        }
+        let inside = path.starts_with(root)
+            || resolve_nearest_existing(path)?.starts_with(canonical_root);
+        if !inside {
+            return Ok(None);
+        }
+        if path.starts_with(root) {
+            reject_symlink_components(root, path)?;
+        }
+        let target = canonical_root.join(crate::v2_project::PROJECT_NOTE_FILE);
+        let matches = path == root.join(crate::v2_project::PROJECT_NOTE_FILE)
+            || resolve_nearest_existing(path)? == target;
+        if !matches {
+            return Err(V2AccessError::Protected(path.to_path_buf()));
+        }
+        Ok(Some(target))
+    }
+
+    fn validate_project_write(
+        &self,
+        path: &Path,
+        canonical: &Path,
+        contents: &[u8],
+    ) -> V2AccessResult<Option<Vec<u8>>> {
+        let chars = String::from_utf8_lossy(contents).chars().count();
+        if chars > crate::v2_project::PROJECT_NOTE_MAX_CHARS {
+            return Err(V2AccessError::ProjectNoteTooLong {
+                path: path.to_path_buf(),
+                limit: crate::v2_project::PROJECT_NOTE_MAX_CHARS,
+                chars,
+            });
+        }
+        if let Some(kind) = crate::secret_guard::find_secret_bytes(contents) {
+            return Err(V2AccessError::Secret {
+                path: path.to_path_buf(),
+                kind,
+            });
+        }
+        match read_previous_content(canonical) {
+            Ok(bytes) => {
+                let snapshots = self.snapshots.lock();
+                let Some(expected) = snapshots.get(canonical) else {
+                    return Err(V2AccessError::ReadRequired(canonical.to_path_buf()));
+                };
+                if *expected != blake3::hash(&bytes) {
+                    return Err(V2AccessError::Stale(canonical.to_path_buf()));
+                }
+                Ok(Some(bytes))
+            }
+            Err(V2AccessError::Inspect { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn write_project_note(
+        &self,
+        path: &Path,
+        canonical: &Path,
+        contents: &[u8],
+    ) -> V2AccessResult<MemoryV2Write> {
+        let _write_guard = self.write_lock.lock();
+        let previous_content = self.validate_project_write(path, canonical, contents)?;
+        persist_atomically(canonical, contents, previous_content.is_none())?;
+        crate::secret_guard::restrict_file(canonical);
+        self.snapshots
+            .lock()
+            .insert(canonical.to_path_buf(), blake3::hash(contents));
+        Ok(MemoryV2Write::Written { previous_content })
+    }
+
+    /// Refuse a brand-new topic whose words nearly match an existing topic.
+    fn check_new_topic_duplicate(&self, path: &Path, contents: &[u8]) -> V2AccessResult<()> {
+        let V2PathClass::Topic(scope) = self.classify_path(path)? else {
+            return Ok(());
+        };
+        if std::fs::symlink_metadata(path).is_ok() {
+            return Ok(());
+        }
+        let words = crate::v2_dedupe::note_word_set(&String::from_utf8_lossy(contents));
+        if words.len() < 4 {
+            return Ok(());
+        }
+        let topics_dir = self.root_for_scope(scope).join("topics");
+        let Ok(entries) = std::fs::read_dir(&topics_dir) else {
+            return Ok(());
+        };
+        for entry in entries.filter_map(Result::ok).take(512) {
+            let existing = entry.path();
+            if existing.extension().is_none_or(|ext| ext != "md")
+                || entry.metadata().map_or(true, |meta| !meta.is_file() || meta.len() > MAX_TOPIC_FILE_BYTES)
+            {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&existing) else {
+                continue;
+            };
+            let other = crate::v2_dedupe::note_word_set(&text);
+            if other.len() >= 4 && crate::v2_dedupe::jaccard(&words, &other) >= 0.8 {
+                return Err(V2AccessError::NearDuplicate {
+                    path: path.to_path_buf(),
+                    existing,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn record_topic_created(&self, path: &Path) {
+        let Ok(V2PathClass::Topic(scope)) = self.classify_path(path) else {
+            return;
+        };
+        let root = self.root_for_scope(scope);
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            return;
+        };
+        let mut ledger = crate::v2_usage::V2UsageLedger::default();
+        let now = crate::v2_clock::V2Clock::now_unix_seconds(&crate::v2_clock::SystemV2Clock);
+        ledger.ensure_created(&format!("topics/{name}"), now);
+        if let Err(error) = ledger.save_merged(root, &[]) {
+            tracing::debug!(%error, "could not record memory note creation");
+        }
     }
 
     /// Classify a path against both configured and resolved scope roots.
@@ -567,23 +727,61 @@ impl V2MemoryAccessPolicy {
 
 impl MemoryV2Access for V2MemoryAccessPolicy {
     fn validate_read(&self, path: &Path) -> Result<bool, String> {
+        match self.project_target(path) {
+            Ok(Some(_)) => return Ok(true),
+            Ok(None) => {}
+            Err(error) => return Err(error.to_string()),
+        }
         self.validate_read_inner(path)
             .map_err(|error| error.to_string())
     }
 
     fn record_read(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
+        match self.project_target(path) {
+            Ok(Some(canonical)) => {
+                self.snapshots
+                    .lock()
+                    .insert(canonical, blake3::hash(contents));
+                return Ok(());
+            }
+            Ok(None) => {}
+            Err(error) => return Err(error.to_string()),
+        }
         self.record_read_inner(path, contents)
             .map_err(|error| error.to_string())
     }
 
     fn preflight_write(&self, path: &Path, contents: &[u8]) -> Result<bool, String> {
-        self.preflight_write_inner(path, contents)
-            .map_err(|error| error.to_string())
+        (|| {
+            if let Some(canonical) = self.project_target(path)? {
+                let _write_guard = self.write_lock.lock();
+                self.validate_project_write(path, &canonical, contents)?;
+                return Ok(true);
+            }
+            self.check_new_topic_duplicate(path, contents)?;
+            self.preflight_write_inner(path, contents)
+        })()
+        .map_err(|error: V2AccessError| error.to_string())
     }
 
     fn write_file(&self, path: &Path, contents: &[u8]) -> Result<MemoryV2Write, String> {
-        self.write_file_inner(path, contents)
-            .map_err(|error| error.to_string())
+        (|| {
+            if let Some(canonical) = self.project_target(path)? {
+                return self.write_project_note(path, &canonical, contents);
+            }
+            self.check_new_topic_duplicate(path, contents)?;
+            let written = self.write_file_inner(path, contents)?;
+            if matches!(
+                written,
+                MemoryV2Write::Written {
+                    previous_content: None
+                }
+            ) {
+                self.record_topic_created(path);
+            }
+            Ok(written)
+        })()
+        .map_err(|error: V2AccessError| error.to_string())
     }
 
     fn scope_roots(&self) -> [PathBuf; 2] {

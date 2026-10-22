@@ -127,6 +127,14 @@ impl MemoryStorage {
         &self.workspace_dir
     }
 
+    /// Curated project-note directory (memory-v2, non-ephemeral workspaces only).
+    pub fn v2_project_dir(&self) -> Option<PathBuf> {
+        if !self.mode.is_v2() || self.ephemeral {
+            return None;
+        }
+        crate::v2_project::project_dir_for_workspace(&self.workspace_dir)
+    }
+
     /// Returns the original workspace path.
     pub fn workspace_path(&self) -> &Path {
         &self.workspace_path
@@ -492,6 +500,9 @@ impl MemoryStorage {
                     crate::v2::V2MemoryScope::Workspace,
                 )
                 .map_err(std::io::Error::other)?;
+                if let Some(project_dir) = self.v2_project_dir() {
+                    crate::v2_project::ensure_project_dir(root, &project_dir)?;
+                }
             }
             return Ok(());
         }

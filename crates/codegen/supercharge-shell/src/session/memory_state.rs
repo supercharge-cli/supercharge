@@ -161,6 +161,8 @@ pub(crate) struct V2Recall {
     /// Hash of the last user query recall ran for; tool-loop iterations of
     /// the same turn do not search again.
     pub last_query: std::cell::Cell<Option<u64>>,
+    /// Whether `seen` was seeded from recall blocks already in the conversation.
+    pub seeded: std::cell::Cell<bool>,
 }
 
 impl V2Recall {

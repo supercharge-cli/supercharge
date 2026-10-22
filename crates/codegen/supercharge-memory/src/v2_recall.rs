@@ -14,7 +14,7 @@ use crate::V2MemoryScope;
 use crate::query_expansion::extract_keywords;
 
 const MAX_FILES_PER_SCOPE: usize = 512;
-const MAX_FILE_BYTES: u64 = 64 * 1024;
+const MAX_FILE_BYTES: u64 = 256 * 1024;
 const TARGET_CHUNK_CHARS: usize = 700;
 const BM25_K1: f64 = 1.2;
 const BM25_B: f64 = 0.75;
@@ -34,6 +34,24 @@ pub struct V2RecallHit {
     /// Normalized relevance in `[0, 1)`.
     pub score: f64,
     pub text: String,
+    /// Created / last-used timestamps from the scope's usage ledger.
+    pub usage: Option<crate::v2_usage::V2NoteUsage>,
+}
+
+impl V2RecallHit {
+    /// `created 2026-01-02, last used 2026-03-04` style suffix, if known.
+    pub fn timestamp_label(&self) -> Option<String> {
+        let usage = self.usage?;
+        let day = |seconds: i64| {
+            chrono::DateTime::from_timestamp(seconds, 0)
+                .map(|time| time.format("%Y-%m-%d").to_string())
+        };
+        let mut label = format!("created {}", day(usage.created_at)?);
+        if let Some(used) = usage.last_used_at.and_then(day) {
+            label.push_str(&format!(", last used {used}"));
+        }
+        Some(label)
+    }
 }
 
 struct Chunk {
@@ -202,6 +220,7 @@ pub fn search_v2_notes(
                 end_line: chunk.end_line,
                 score,
                 text: chunk.text,
+                usage: None,
             })
         })
         .collect();
@@ -212,6 +231,21 @@ pub fn search_v2_notes(
             .then_with(|| left.chunk_id.cmp(&right.chunk_id))
     });
     hits.truncate(max_results);
+    let mut ledgers: Vec<(PathBuf, crate::v2_usage::V2UsageLedger)> = Vec::new();
+    for hit in &mut hits {
+        let Some((dir, _)) = scopes.iter().find(|(dir, _)| hit.path.starts_with(dir)) else {
+            continue;
+        };
+        if !ledgers.iter().any(|(loaded, _)| loaded == dir) {
+            ledgers.push((dir.to_path_buf(), crate::v2_usage::V2UsageLedger::load(dir)));
+        }
+        let Some((_, ledger)) = ledgers.iter().find(|(loaded, _)| loaded == dir) else {
+            continue;
+        };
+        if let Ok(relative) = hit.path.strip_prefix(dir) {
+            hit.usage = ledger.usage_or_mtime(dir, &relative.to_string_lossy().replace('\\', "/"));
+        }
+    }
     hits
 }
 
@@ -237,6 +271,20 @@ impl V2MemoryBackend {
             workspace_dir: workspace_dir.to_path_buf(),
             default_min_score,
         }
+    }
+
+    /// Record that these notes were shown to the model.
+    pub fn mark_used(&self, paths: &[PathBuf], now: i64) {
+        for dir in [&self.workspace_dir, &self.global_dir] {
+            let mine: Vec<PathBuf> = paths.iter().filter(|p| p.starts_with(dir)).cloned().collect();
+            if !mine.is_empty() {
+                crate::v2_usage::mark_notes_used(dir, &mine, now);
+            }
+        }
+    }
+
+    fn now() -> i64 {
+        crate::v2_clock::V2Clock::now_unix_seconds(&crate::v2_clock::SystemV2Clock)
     }
 
     pub fn search_hits(&self, query: &str, max_results: usize, min_score: f64) -> Vec<V2RecallHit> {
@@ -294,6 +342,10 @@ impl MemoryBackend for V2MemoryBackend {
             backend.search_hits(&query, max_results, min_score)
         })
         .await?;
+        self.mark_used(
+            &hits.iter().map(|hit| hit.path.clone()).collect::<Vec<_>>(),
+            Self::now(),
+        );
         Ok(hits
             .into_iter()
             .map(|hit| MemorySearchResult {
@@ -304,7 +356,7 @@ impl MemoryBackend for V2MemoryBackend {
                 score: hit.score,
                 snippet: hit.text,
                 source: scope_label(hit.scope).to_string(),
-                created_at: None,
+                created_at: hit.usage.map(|usage| usage.created_at),
             })
             .collect())
     }
@@ -322,6 +374,7 @@ impl MemoryBackend for V2MemoryBackend {
             return Err(format!("memory note is too large to read: {path}").into());
         }
         let content = std::fs::read_to_string(&resolved)?;
+        self.mark_used(std::slice::from_ref(&resolved), Self::now());
         let start = from.unwrap_or(1).saturating_sub(1);
         let count = lines.unwrap_or(MAX_GET_LINES).min(MAX_GET_LINES);
         Ok(content

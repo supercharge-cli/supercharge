@@ -188,6 +188,20 @@ pub struct V2ConsolidationStore {
 }
 
 impl V2ConsolidationStore {
+    /// Run deterministic topic hygiene (merge near-duplicates, archive stale
+    /// topics) for this store's scope.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying I/O error from [`crate::run_topic_hygiene`].
+    pub fn run_topic_hygiene(
+        &self,
+        now: i64,
+        policy: crate::V2HygienePolicy,
+    ) -> std::io::Result<crate::V2HygieneReport> {
+        crate::run_topic_hygiene(&self.scope_dir, self.scope, now, policy)
+    }
+
     /// Open and additively migrate one initialized v2 scope.
     pub fn open(
         scope_dir: impl AsRef<Path>,

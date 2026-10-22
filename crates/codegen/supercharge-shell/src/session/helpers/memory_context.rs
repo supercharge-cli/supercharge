@@ -84,8 +84,27 @@ pub fn format_v2_memory_context(
         crate::session::memory::V2ManifestBudget::default(),
     )
     .map_err(|error| error.to_string())?;
+    let project = storage
+        .v2_project_dir()
+        .filter(|dir| dir.is_dir())
+        .map(|dir| {
+            let path = dir.join(supercharge_memory::PROJECT_NOTE_FILE);
+            let body = supercharge_memory::read_project_note(&dir).unwrap_or_else(|| {
+                "(empty) Create it with a short summary of this project: purpose, layout, \
+                 how to build and test, and conventions."
+                    .to_string()
+            });
+            format!(
+                "## Project note\n\
+                 **File:** `{}` (curated, at most {} characters; edit it in place)\n\n{body}\n\n",
+                path.display(),
+                supercharge_memory::PROJECT_NOTE_MAX_CHARS,
+            )
+        })
+        .unwrap_or_default();
     let content = format!(
         "{MEMORY_CONTEXT_OPEN_TAG}\n\
+         {project}\
          ## Global memory manifest\n\
          **Scope root:** `{}`\n\n{}\n\
          ## Workspace memory manifest\n\

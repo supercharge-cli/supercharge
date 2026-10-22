@@ -159,6 +159,8 @@ pub struct MemoryV2Settings {
     pub file_writes_enabled: Option<bool>,
     pub archived_retention_days: Option<u64>,
     pub job_retention_days: Option<u64>,
+    /// Dream archives topics unused for this many days (`0` keeps them).
+    pub stale_days: Option<u64>,
 }
 
 /// Resolved per-turn recall settings for memory-v2.
@@ -230,6 +232,7 @@ pub struct MemoryV2Config {
     pub file_writes_enabled: bool,
     pub archived_retention_days: u64,
     pub job_retention_days: u64,
+    pub stale_days: u64,
 }
 
 impl Default for MemoryV2Config {
@@ -249,6 +252,7 @@ impl Default for MemoryV2Config {
             file_writes_enabled: true,
             archived_retention_days: 30,
             job_retention_days: 14,
+            stale_days: 90,
         }
     }
 }
@@ -1086,6 +1090,7 @@ impl MemoryConfig {
                         remote_v2.and_then(|settings| settings.job_retention_days),
                         defaults.v2.job_retention_days,
                     ),
+                    stale_days: memory_v2.stale_days.unwrap_or(defaults.v2.stale_days),
                 }
             },
             flush: MemoryFlushConfig {

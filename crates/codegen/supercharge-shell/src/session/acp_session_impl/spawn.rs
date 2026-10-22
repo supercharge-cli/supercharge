@@ -920,6 +920,51 @@ pub(crate) async fn spawn_session_actor(
             }
         }
     }
+    if v2_init_failure.is_none()
+        && let Some(storage) = memory_storage_for_session
+            .as_ref()
+            .filter(|storage| storage.mode().is_v2())
+        && let Some(mc) = memory_config.as_ref()
+        && mc.v2.automatic_dream_enabled
+        && mc.v2.file_writes_enabled
+    {
+        let scopes = [
+            (
+                storage.global_dir().to_path_buf(),
+                supercharge_memory::V2MemoryScope::Global,
+            ),
+            (
+                storage.workspace_dir().to_path_buf(),
+                supercharge_memory::V2MemoryScope::Workspace,
+            ),
+        ];
+        let policy = supercharge_memory::V2HygienePolicy {
+            stale_days: mc.v2.stale_days,
+            ..Default::default()
+        };
+        tokio::task::spawn_blocking(move || {
+            let now = supercharge_memory::system_v2_clock().now_unix_seconds();
+            for (dir, scope) in scopes {
+                if !dir.is_dir() {
+                    continue;
+                }
+                match supercharge_memory::run_topic_hygiene(&dir, scope, now, policy) {
+                    Ok(report) if !report.is_empty() => tracing::info!(
+                        target: supercharge_telemetry::memory_log::TARGET,
+                        merged = report.merged.len(),
+                        archived = report.archived_stale.len(),
+                        "MEMORY_INIT: topic hygiene merged duplicates and archived stale topics"
+                    ),
+                    Ok(_) => {}
+                    Err(error) => tracing::debug!(
+                        target: supercharge_telemetry::memory_log::TARGET,
+                        %error,
+                        "MEMORY_INIT: topic hygiene failed"
+                    ),
+                }
+            }
+        });
+    }
     let mut memory_v2_access = None;
     if v2_init_failure.is_none()
         && let Some(storage) = memory_storage_for_session
@@ -929,7 +974,11 @@ pub(crate) async fn spawn_session_actor(
         match crate::session::memory::V2MemoryAccessPolicy::new(
             storage.global_dir(),
             storage.workspace_dir(),
-        ) {
+        )
+        .and_then(|policy| match storage.v2_project_dir() {
+            Some(dir) if dir.is_dir() => policy.with_project_dir(&dir),
+            _ => Ok(policy),
+        }) {
             Ok(policy) => {
                 memory_v2_access =
                     Some(supercharge_tools::types::memory_v2::MemoryV2AccessResource(

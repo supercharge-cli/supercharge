@@ -51,6 +51,9 @@ pub mod v2_consolidation;
 mod v2_dedupe;
 mod v2_maintenance;
 pub mod v2_recall;
+pub mod v2_hygiene;
+pub mod v2_usage;
+pub mod v2_project;
 pub mod watcher;
 
 pub use backend::{EndpointScopedCredentials, MemoryBackendImpl, MemoryBackendParams};
@@ -61,6 +64,12 @@ pub use v2::{
     MAX_MANUAL_OBSERVATION_BYTES, V2Manifest, V2ManifestBudget, V2MemoryScope, V2StorageError,
     ensure_scope_initialized, ensure_scope_initialized_with_journal_mode,
     regenerate_scope_manifest, render_scope_manifest,
+};
+pub use v2_hygiene::{V2HygienePolicy, V2HygieneReport, run_topic_hygiene};
+pub use v2_usage::{V2NoteUsage, V2UsageLedger, mark_notes_used};
+pub use v2_project::{
+    PROJECT_NOTE_FILE, PROJECT_NOTE_MAX_CHARS, ensure_project_dir, project_dir_for_workspace,
+    read_project_note,
 };
 pub use v2_recall::{V2MemoryBackend, V2RecallHit, search_v2_notes};
 pub use v2_access::{V2AccessError, V2MemoryAccessPolicy, V2PathClass};

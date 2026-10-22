@@ -2152,6 +2152,10 @@ impl SessionActor {
             return false;
         };
         let conversation = self.chat_state_handle.get_conversation().await;
+        if !self.memory.v2_recall.seeded.replace(true) {
+            let restored = restored_recall_ids(&conversation);
+            self.memory.v2_recall.seen.borrow_mut().extend(restored);
+        }
         let Some(query) =
             crate::session::helpers::session_compact::extract_last_real_user_query(&conversation)
         else {
@@ -2172,6 +2176,7 @@ impl SessionActor {
             storage.workspace_dir(),
             config.min_score,
         );
+        let usage_backend = backend.clone();
         let candidates = config
             .max_results
             .saturating_mul(3)
@@ -2202,6 +2207,14 @@ impl SessionActor {
         else {
             return false;
         };
+        let used_paths: Vec<std::path::PathBuf> = fresh
+            .iter()
+            .filter(|hit| used.contains(&hit.chunk_id))
+            .map(|hit| hit.path.clone())
+            .collect();
+        tokio::task::spawn_blocking(move || {
+            usage_backend.mark_used(&used_paths, chrono::Utc::now().timestamp());
+        });
         self.memory
             .v2_recall
             .seen
@@ -4505,6 +4518,60 @@ mod last_sample_span_tests {
     }
 }
 
+/// Chunk ids already shown by recall blocks persisted in the conversation, so
+/// a resumed session does not repeat them. Headings look like
+/// `[workspace] /abs/path.md:3-9 (created ...)` with 1-based start lines.
+pub(crate) fn restored_recall_ids(
+    conversation: &[supercharge_sampling_types::ConversationItem],
+) -> Vec<String> {
+    let mut ids = Vec::new();
+    for item in conversation {
+        let text = serde_json::to_string(item).unwrap_or_default();
+        if !text.contains(MEMORY_RECALL_OPEN_TAG) {
+            continue;
+        }
+        let decoded: String = serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .map(|value| collect_strings(&value))
+            .unwrap_or_default();
+        ids.extend(parse_recall_ids(&decoded));
+    }
+    ids
+}
+
+fn collect_strings(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => text.clone(),
+        serde_json::Value::Array(items) => items.iter().map(collect_strings).collect::<Vec<_>>().join("\n"),
+        serde_json::Value::Object(map) => map.values().map(collect_strings).collect::<Vec<_>>().join("\n"),
+        _ => String::new(),
+    }
+}
+
+pub(crate) fn parse_recall_ids(text: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    for block in text.split(MEMORY_RECALL_OPEN_TAG).skip(1) {
+        let block = block.split("</memory-recall>").next().unwrap_or_default();
+        for line in block.lines() {
+            let Some(rest) = line
+                .strip_prefix("[workspace] ")
+                .or_else(|| line.strip_prefix("[global] "))
+            else {
+                continue;
+            };
+            let location = rest.split(" (").next().unwrap_or(rest);
+            let Some((path, range)) = location.rsplit_once(':') else {
+                continue;
+            };
+            let Some(start) = range.split('-').next().and_then(|n| n.parse::<usize>().ok()) else {
+                continue;
+            };
+            ids.push(format!("{path}:{}", start.saturating_sub(1)));
+        }
+    }
+    ids
+}
+
 /// Opening tag of the per-turn memory-v2 recall block.
 pub(crate) const MEMORY_RECALL_OPEN_TAG: &str = "<memory-recall>";
 
@@ -4524,8 +4591,12 @@ pub(crate) fn format_v2_recall_reminder(
             supercharge_memory::V2MemoryScope::Global => "global",
             supercharge_memory::V2MemoryScope::Workspace => "workspace",
         };
+        let stamp = hit
+            .timestamp_label()
+            .map(|label| format!(" ({label})"))
+            .unwrap_or_default();
         let heading = format!(
-            "\n[{scope}] {}:{}-{}\n",
+            "\n[{scope}] {}:{}-{}{stamp}\n",
             hit.path.display(),
             hit.start_line + 1,
             hit.end_line.max(hit.start_line + 1)
@@ -4567,6 +4638,7 @@ mod v2_recall_format_tests {
             end_line: 3,
             score: 0.9,
             text: text.to_string(),
+            usage: None,
         }
     }
 
@@ -4580,5 +4652,21 @@ mod v2_recall_format_tests {
         let (_, small) = format_v2_recall_reminder(&hits[..2], 4, 10_000).unwrap();
         assert_eq!(small, vec!["n0".to_string(), "n1".to_string()]);
         assert!(format_v2_recall_reminder(&[], 4, 1200).is_none());
+    }
+
+    #[test]
+    fn rendered_ids_round_trip_for_resume() {
+        let mut first = hit("n0", "alpha");
+        first.start_line = 4;
+        first.chunk_id = format!("{}:4", first.path.display());
+        first.usage = Some(supercharge_memory::V2NoteUsage {
+            created_at: 1_700_000_000,
+            last_used_at: Some(1_700_086_400),
+        });
+        let (body, used) = format_v2_recall_reminder(&[first, hit("n1", "beta")], 4, 1200).unwrap();
+        assert!(body.contains("(created 2023-11-14, last used 2023-11-15)"), "{body}");
+        let mut expected = used.clone();
+        expected[1] = "/m/topics/n1.md:0".to_string();
+        assert_eq!(parse_recall_ids(&body), expected);
     }
 }

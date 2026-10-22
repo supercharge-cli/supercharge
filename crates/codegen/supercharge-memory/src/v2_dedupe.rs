@@ -112,11 +112,16 @@ fn words(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// Word set of a whole note body (front matter and list markers stripped).
+pub(crate) fn note_word_set(text: &str) -> BTreeSet<String> {
+    body_lines(text).flat_map(words).collect()
+}
+
 fn hash_words(words: &[String]) -> blake3::Hash {
     blake3::hash(words.join(" ").as_bytes())
 }
 
-fn jaccard(left: &BTreeSet<String>, right: &BTreeSet<String>) -> f64 {
+pub(crate) fn jaccard(left: &BTreeSet<String>, right: &BTreeSet<String>) -> f64 {
     let union = left.union(right).count();
     if union == 0 {
         return 0.0;

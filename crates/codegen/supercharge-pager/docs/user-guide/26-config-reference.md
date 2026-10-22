@@ -359,6 +359,7 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 | `memory_v2.recall_max_results` | `number` | — | `user` | Most notes recalled per turn (capped at 16; `0` turns recall off). Default: `4`. |
 | `memory_v2.recall_max_tokens` | `number` | — | `user` | Token budget for one recall reminder (capped at 8192). Default: `1200`. |
 | `memory_v2.recall_min_score` | `number` | — | `user` | Minimum relevance, 0 to 1, for a note to be recalled or returned by `memory_search`. Default: `0.35`. |
+| `memory_v2.stale_days` | `number` | — | `user` | Archives topic notes unused (not recalled or read) for this many days to `archive/topics/`; `0` never archives. Default: `90`. |
 | `memory_v2.automatic_dream_enabled` | `boolean` | — | `user` | Enables event-driven memory-v2 Dream. Default: `true`. |
 | `memory_v2.manual_dream_enabled` | `boolean` | — | `user` | Enables explicitly requested memory-v2 Dream. Default: `true`. |
 | `memory_v2.file_writes_enabled` | `boolean` | — | `user` | Enables all memory-v2 file mutation; `false` fails closed before scaffold creation. Default: `true`. |

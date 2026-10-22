@@ -705,3 +705,66 @@ fn removal_rejects_oversized_topic_without_deleting_it() {
     ));
     assert!(path.is_file());
 }
+
+#[test]
+fn near_duplicate_new_topic_is_refused_with_replace_hint() {
+    let fixture = Fixture::new();
+    let first = fixture.workspace.join("topics/build.md");
+    fixture
+        .policy
+        .write_file(&first, b"# Build\n- Use CARGO_BUILD_JOBS=1 on the small box to avoid OOM\n")
+        .unwrap();
+    let ledger = crate::v2_usage::V2UsageLedger::load(&fixture.workspace);
+    assert!(ledger.get("topics/build.md").is_some(), "creation is recorded");
+    let second = fixture.workspace.join("topics/builds.md");
+    let contents = b"# Build\n- Use CARGO_BUILD_JOBS=1 on the small box to avoid OOM!\n";
+    let error = fixture.policy.preflight_write(&second, contents).unwrap_err();
+    assert!(error.contains("nearly duplicates") && error.contains("build.md"), "{error}");
+    assert!(fixture.policy.write_file(&second, contents).is_err());
+    assert!(!second.exists());
+    // Editing the existing note (a replace) is still allowed.
+    let bytes = std::fs::read(&first).unwrap();
+    fixture.policy.record_read(&first, &bytes).unwrap();
+    fixture
+        .policy
+        .write_file(&first, b"# Build\n- Use CARGO_BUILD_JOBS=2 now that the box is bigger\n")
+        .unwrap();
+    // Distinct notes are fine.
+    fixture
+        .policy
+        .write_file(
+            &fixture.workspace.join("topics/style.md"),
+            b"# Style\n- Prefer descriptive names in new code\n",
+        )
+        .unwrap();
+}
+
+#[test]
+fn project_note_is_capped_guarded_and_isolated() {
+    let fixture = Fixture::new();
+    let root = fixture.workspace.parent().unwrap().parent().unwrap().to_path_buf();
+    let project = crate::v2_project::project_dir_for_workspace(&fixture.workspace).unwrap();
+    crate::v2_project::ensure_project_dir(&root, &project).unwrap();
+    let policy = V2MemoryAccessPolicy::new(&fixture.global, &fixture.workspace)
+        .unwrap()
+        .with_project_dir(&project)
+        .unwrap();
+    let note = project.join("PROJECT.md");
+    let too_long = "x".repeat(1501);
+    let error = policy.write_file(&note, too_long.as_bytes()).unwrap_err();
+    assert!(error.contains("1500"), "{error}");
+    let secret = b"token sk-abcdefghijklmnopqrstuvwxyz123456";
+    assert!(policy.write_file(&note, secret).unwrap_err().contains("secret"));
+    assert!(matches!(
+        policy.write_file(&note, b"# Project\nRust CLI.\n").unwrap(),
+        MemoryV2Write::Written { previous_content: None }
+    ));
+    assert!(policy.validate_read(&note).unwrap());
+    // Our own write counts as observed; an outside change requires a re-read.
+    std::fs::write(&note, "changed elsewhere").unwrap();
+    assert!(policy.write_file(&note, b"# Project\nv2\n").unwrap_err().contains("changed"));
+    policy.record_read(&note, b"changed elsewhere").unwrap();
+    policy.write_file(&note, b"# Project\nv2\n").unwrap();
+    assert!(policy.write_file(&project.join("other.md"), b"x").unwrap_err().contains("protected"));
+    assert_eq!(crate::v2_project::read_project_note(&project).as_deref(), Some("# Project\nv2"));
+}

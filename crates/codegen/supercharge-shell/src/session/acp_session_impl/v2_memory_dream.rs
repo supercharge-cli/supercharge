@@ -1018,11 +1018,32 @@ impl SessionActor {
             };
         }
         let commit_clock = clock;
+        let hygiene_stale_days = self.memory.v2_config.stale_days;
         let committed = tokio::task::spawn_blocking(move || {
             let now = commit_clock.now_unix_seconds();
             let result = store.commit(&lease, &operations, now);
             if let Err(error) = &result {
                 let _ = store.fail_retryable(&lease, now, &format!("Dream commit failed: {error}"));
+            }
+            if result.is_ok() {
+                let policy = supercharge_memory::V2HygienePolicy {
+                    stale_days: hygiene_stale_days,
+                    ..Default::default()
+                };
+                match store.run_topic_hygiene(now, policy) {
+                    Ok(report) if !report.is_empty() => tracing::info!(
+                        target: supercharge_telemetry::memory_log::TARGET,
+                        merged = report.merged.len(),
+                        archived = report.archived_stale.len(),
+                        "MEMORY_DREAM: topic hygiene merged duplicates and archived stale topics"
+                    ),
+                    Ok(_) => {}
+                    Err(error) => tracing::warn!(
+                        target: supercharge_telemetry::memory_log::TARGET,
+                        %error,
+                        "MEMORY_DREAM: topic hygiene failed"
+                    ),
+                }
             }
             let coalesced = result
                 .as_ref()

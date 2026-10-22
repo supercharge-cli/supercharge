@@ -60,6 +60,24 @@ recall_max_tokens = 1200
 recall_min_score = 0.35    # 0..1
 ```
 
+### Project note and upkeep
+
+Each project gets one short, curated note at
+`~/.supercharge/memory-v2/projects/<workspace id>/PROJECT.md` (at most 1500
+characters). It is shown in full at session start; the agent edits it in place.
+
+Memory tracks when each topic note was created and last recalled or read.
+After Dream runs (and at session start), topics whose words nearly match
+(80% overlap) are merged into the most recently used one, and topics unused
+for `stale_days` (default 90) move to `archive/topics/`, where you can move
+them back. Adding a new topic that nearly duplicates an existing one is
+refused with a hint to edit the existing note instead.
+
+```toml
+[memory_v2]
+stale_days = 90   # 0 never archives
+```
+
 ### Turning memory off
 
 Any one of these turns memory off:
