@@ -1981,6 +1981,11 @@ mod tests {
             enabled: true,
             mode: crate::config::MemoryMode::V2,
             root_dir_override: Some(root.to_path_buf()),
+            // These tests exercise capture, which is opt-in by default.
+            v2: crate::config::MemoryV2Config {
+                capture_enabled: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let actor = super::super::memory_config_tests::create_test_actor_with_memory(
