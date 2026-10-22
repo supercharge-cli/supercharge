@@ -355,6 +355,10 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 | `memory_v2.capture_enabled` | `boolean` | — | `user` | Enables automatic memory-v2 extraction. The agent still saves memories itself when this is off. Default: `false`. |
 | `memory_v2.capture_trigger` | `string` | — | `user` | When automatic capture runs: `off`, `session_end` (one call per session), `compaction` (one call before each compaction and at session end), or `turn` (one call per turn). Turns with nothing new are skipped without a model call, and observations memory already holds are dropped. Default: `session_end`. |
 | `memory_v2.capture_model` | `string` | — | `user` | Model for capture extraction (output capped at 2k tokens). Falls back to `[models] session_summary` when configured, then the session model. |
+| `memory_v2.recall_enabled` | `boolean` | — | `user` | Adds matching saved notes to each turn as a hidden reminder. Default: `true`. |
+| `memory_v2.recall_max_results` | `number` | — | `user` | Most notes recalled per turn (capped at 16; `0` turns recall off). Default: `4`. |
+| `memory_v2.recall_max_tokens` | `number` | — | `user` | Token budget for one recall reminder (capped at 8192). Default: `1200`. |
+| `memory_v2.recall_min_score` | `number` | — | `user` | Minimum relevance, 0 to 1, for a note to be recalled or returned by `memory_search`. Default: `0.35`. |
 | `memory_v2.automatic_dream_enabled` | `boolean` | — | `user` | Enables event-driven memory-v2 Dream. Default: `true`. |
 | `memory_v2.manual_dream_enabled` | `boolean` | — | `user` | Enables explicitly requested memory-v2 Dream. Default: `true`. |
 | `memory_v2.file_writes_enabled` | `boolean` | — | `user` | Enables all memory-v2 file mutation; `false` fails closed before scaffold creation. Default: `true`. |

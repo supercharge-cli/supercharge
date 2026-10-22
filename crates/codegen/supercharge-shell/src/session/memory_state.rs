@@ -152,6 +152,26 @@ impl V2DeferredCapture {
     }
 }
 
+/// Per-turn memory-v2 recall settings and the chunks already shown this
+/// session, so the same note is not injected twice.
+#[derive(Default)]
+pub(crate) struct V2Recall {
+    pub config: crate::config::MemoryV2RecallConfig,
+    pub seen: RefCell<std::collections::HashSet<String>>,
+    /// Hash of the last user query recall ran for; tool-loop iterations of
+    /// the same turn do not search again.
+    pub last_query: std::cell::Cell<Option<u64>>,
+}
+
+impl V2Recall {
+    pub(crate) fn new(config: crate::config::MemoryV2RecallConfig) -> Self {
+        Self {
+            config,
+            ..Default::default()
+        }
+    }
+}
+
 pub(crate) struct SessionMemory {
     /// Mode resolved when the session was spawned. Kept even while memory is
     /// disabled so toggles, telemetry, and trace uploads cannot switch roots.
@@ -190,6 +210,8 @@ pub(crate) struct SessionMemory {
         RefCell<Option<supercharge_telemetry::memory_telemetry::MemoryV2FailureClass>>,
     /// Completed turns waiting for a deferred memory-v2 capture trigger.
     pub v2_deferred: V2DeferredCapture,
+    /// Per-turn recall state.
+    pub v2_recall: V2Recall,
     /// The compaction count at which the last flush ran (once-per-cycle guard).
     pub last_flush_compaction: AtomicU64,
     pub flush_count: AtomicU64,

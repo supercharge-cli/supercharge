@@ -909,6 +909,20 @@ impl SessionActor {
                             tracing::warn!(error = %e, "failed to initialize memory storage on re-enable");
                             format!("Memory could not be enabled: {e}")
                         } else if self.memory.mode() == Some(crate::config::MemoryMode::V2) {
+                            if self.memory.v2_config.can_expose_memory() {
+                                let backend: std::sync::Arc<
+                                    dyn supercharge_tools::types::memory_backend::MemoryBackend,
+                                > = std::sync::Arc::new(supercharge_memory::V2MemoryBackend::new(
+                                    storage.global_dir(),
+                                    storage.workspace_dir(),
+                                    self.memory.v2_recall.config.min_score,
+                                ));
+                                let bridge = self.agent.borrow().tool_bridge().clone();
+                                bridge.update_resource(backend).await;
+                                if let Err(e) = self.register_memory_tools(&bridge).await {
+                                    tracing::warn!(error = %e, "memory tool registration failed during toggle");
+                                }
+                            }
                             *self.memory.storage.borrow_mut() = Some(storage);
                             self.resume_v2_capture().await;
                             "Memory v2 enabled for this session.".to_owned()

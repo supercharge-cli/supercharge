@@ -44,6 +44,22 @@ output is capped at 2k tokens, trivial turns ("ok", "thanks") are skipped
 without a model call, and observations memory already holds (same words, or
 80% word overlap) are dropped before they are saved.
 
+### Recall
+
+Each turn, memory does a keyword (BM25) search of your saved notes for the
+current request and adds up to 4 matching snippets (about 1.2k tokens at most)
+as a hidden reminder. Snippets below the relevance threshold are left out, and
+a note already shown in the session is not shown again. The agent can also
+search and read notes itself with `memory_search` and `memory_get`.
+
+```toml
+[memory_v2]
+recall_enabled = true      # false turns per-turn recall off
+recall_max_results = 4
+recall_max_tokens = 1200
+recall_min_score = 0.35    # 0..1
+```
+
 ### Turning memory off
 
 Any one of these turns memory off:

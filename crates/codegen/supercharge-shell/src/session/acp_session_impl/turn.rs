@@ -2141,6 +2141,81 @@ impl SessionActor {
     pub(super) fn is_first_turn_memory_score_visible(score: f64) -> bool {
         format!("{score:.2}") != "0.00"
     }
+    /// Search memory-v2 notes for the latest user request and push a hidden
+    /// reminder with the best unseen matches. Runs once per user query.
+    pub(crate) async fn maybe_inject_v2_recall(&self) -> bool {
+        let config = self.memory.v2_recall.config;
+        if !config.enabled || !self.memory.can_expose_v2() {
+            return false;
+        }
+        let Some(storage) = self.memory.storage.borrow().clone() else {
+            return false;
+        };
+        let conversation = self.chat_state_handle.get_conversation().await;
+        let Some(query) =
+            crate::session::helpers::session_compact::extract_last_real_user_query(&conversation)
+        else {
+            return false;
+        };
+        let query_key = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            query.hash(&mut hasher);
+            hasher.finish()
+        };
+        if self.memory.v2_recall.last_query.get() == Some(query_key) {
+            return false;
+        }
+        self.memory.v2_recall.last_query.set(Some(query_key));
+        let backend = supercharge_memory::V2MemoryBackend::new(
+            storage.global_dir(),
+            storage.workspace_dir(),
+            config.min_score,
+        );
+        let candidates = config
+            .max_results
+            .saturating_mul(3)
+            .min(crate::config::MemoryV2RecallConfig::MAX_RESULTS_CEILING * 3);
+        let min_score = config.min_score;
+        let hits = match tokio::task::spawn_blocking(move || {
+            backend.search_hits(&query, candidates, min_score)
+        })
+        .await
+        {
+            Ok(hits) => hits,
+            Err(error) => {
+                tracing::warn!(
+                    target: supercharge_telemetry::memory_log::TARGET,
+                    %error,
+                    "MEMORY_RECALL: search task failed"
+                );
+                return false;
+            }
+        };
+        let fresh: Vec<_> = {
+            let seen = self.memory.v2_recall.seen.borrow();
+            hits.into_iter()
+                .filter(|hit| !seen.contains(&hit.chunk_id))
+                .collect()
+        };
+        let Some((body, used)) = format_v2_recall_reminder(&fresh, config.max_results, config.max_tokens)
+        else {
+            return false;
+        };
+        self.memory
+            .v2_recall
+            .seen
+            .borrow_mut()
+            .extend(used.into_iter());
+        let wrapped = supercharge_tools::reminders::wrap_reminder(&body);
+        self.chat_state_handle
+            .push_user_message(ConversationItem::system_reminder(wrapped));
+        tracing::info!(
+            target: supercharge_telemetry::memory_log::TARGET,
+            "MEMORY_RECALL: injected per-turn recall"
+        );
+        true
+    }
     /// Compute the first-turn memory reminder, if one should be injected.
     /// A block persisted by an earlier session segment (a prior `--resume` process, or a turn before a compaction) is reused verbatim.
     /// [`conversation_has_memory_context`]: crate::session::helpers::memory_context::conversation_has_memory_context.
@@ -2806,6 +2881,9 @@ impl SessionActor {
                 self.inject_pending_monitor_events().await;
             }
             let memory_reminder = self.first_turn_memory_reminder().await;
+            if !salvage.awaiting_continuation() {
+                self.maybe_inject_v2_recall().await;
+            }
             if memory_reminder.is_some() {
                 self.memory
                     .injection_count
@@ -4424,5 +4502,83 @@ mod last_sample_span_tests {
         );
         assert_eq!(f.bools.get("last_sample.has_tool_call"), Some(&true));
         assert_eq!(f.i64s.get("last_sample.output_tokens"), Some(&3));
+    }
+}
+
+/// Opening tag of the per-turn memory-v2 recall block.
+pub(crate) const MEMORY_RECALL_OPEN_TAG: &str = "<memory-recall>";
+
+/// Render up to `max_results` hits within roughly `max_tokens` (4 chars per
+/// token). Returns the body and the chunk ids it included.
+pub(crate) fn format_v2_recall_reminder(
+    hits: &[supercharge_memory::V2RecallHit],
+    max_results: usize,
+    max_tokens: usize,
+) -> Option<(String, Vec<String>)> {
+    const HEADER: &str = "Saved memory notes that may be relevant to this request. They can be stale: verify before relying on them, and open the file with memory_get for full context.\n";
+    let budget = max_tokens.saturating_mul(4);
+    let mut body = String::from(HEADER);
+    let mut used = Vec::new();
+    for hit in hits.iter().take(max_results) {
+        let scope = match hit.scope {
+            supercharge_memory::V2MemoryScope::Global => "global",
+            supercharge_memory::V2MemoryScope::Workspace => "workspace",
+        };
+        let heading = format!(
+            "\n[{scope}] {}:{}-{}\n",
+            hit.path.display(),
+            hit.start_line + 1,
+            hit.end_line.max(hit.start_line + 1)
+        );
+        let remaining = budget.saturating_sub(body.len() + heading.len());
+        if remaining < 80 {
+            break;
+        }
+        let text = if hit.text.len() > remaining {
+            let mut end = remaining.saturating_sub(4);
+            while !hit.text.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{} ...", &hit.text[..end])
+        } else {
+            hit.text.clone()
+        };
+        body.push_str(&heading);
+        body.push_str(&text);
+        body.push('\n');
+        used.push(hit.chunk_id.clone());
+    }
+    if used.is_empty() {
+        return None;
+    }
+    Some((format!("{MEMORY_RECALL_OPEN_TAG}\n{body}</memory-recall>"), used))
+}
+
+#[cfg(test)]
+mod v2_recall_format_tests {
+    use super::*;
+
+    fn hit(id: &str, text: &str) -> supercharge_memory::V2RecallHit {
+        supercharge_memory::V2RecallHit {
+            chunk_id: id.to_string(),
+            path: std::path::PathBuf::from(format!("/m/topics/{id}.md")),
+            scope: supercharge_memory::V2MemoryScope::Workspace,
+            start_line: 0,
+            end_line: 3,
+            score: 0.9,
+            text: text.to_string(),
+        }
+    }
+
+    #[test]
+    fn caps_hits_and_token_budget() {
+        let hits: Vec<_> = (0..6).map(|i| hit(&format!("n{i}"), &"word ".repeat(400))).collect();
+        let (body, used) = format_v2_recall_reminder(&hits, 4, 1200).unwrap();
+        assert!(used.len() <= 4);
+        assert!(body.len() <= 1200 * 4 + 64, "len {}", body.len());
+        assert!(body.starts_with(MEMORY_RECALL_OPEN_TAG));
+        let (_, small) = format_v2_recall_reminder(&hits[..2], 4, 10_000).unwrap();
+        assert_eq!(small, vec!["n0".to_string(), "n1".to_string()]);
+        assert!(format_v2_recall_reminder(&[], 4, 1200).is_none());
     }
 }

@@ -1118,7 +1118,25 @@ pub(crate) async fn spawn_session_actor(
                 "MEMORY_INIT: memory disabled, no storage created"
             );
         }
-        None
+        memory_storage_for_session
+            .as_ref()
+            .filter(|storage| storage.mode().is_v2())
+            .filter(|_| {
+                memory_config
+                    .as_ref()
+                    .is_some_and(|mc| mc.v2.can_expose_memory())
+            })
+            .map(|storage| {
+                let min_score = memory_config
+                    .as_ref()
+                    .map_or(0.0, |mc| mc.v2_recall.min_score);
+                std::sync::Arc::new(supercharge_memory::V2MemoryBackend::new(
+                    storage.global_dir(),
+                    storage.workspace_dir(),
+                    min_score,
+                ))
+                    as std::sync::Arc<dyn supercharge_tools::types::memory_backend::MemoryBackend>
+            })
     };
     drop(memory_init_span);
     let context_window_tokens = context_window_override
@@ -1891,6 +1909,11 @@ pub(crate) async fn spawn_session_actor(
             dream_workers: crate::session::memory_state::V2DreamWorkers::default(),
             last_capture_failure: std::cell::RefCell::new(None),
             v2_deferred: Default::default(),
+            v2_recall: crate::session::memory_state::V2Recall::new(
+                memory_config
+                    .as_ref()
+                    .map_or_else(Default::default, |mc| mc.v2_recall),
+            ),
             last_flush_compaction: std::sync::atomic::AtomicU64::new(0),
             storage: std::cell::RefCell::new(memory_storage_for_session),
             save_on_end: memory_config

@@ -50,6 +50,7 @@ mod v2_clock;
 pub mod v2_consolidation;
 mod v2_dedupe;
 mod v2_maintenance;
+pub mod v2_recall;
 pub mod watcher;
 
 pub use backend::{EndpointScopedCredentials, MemoryBackendImpl, MemoryBackendParams};
@@ -61,6 +62,7 @@ pub use v2::{
     ensure_scope_initialized, ensure_scope_initialized_with_journal_mode,
     regenerate_scope_manifest, render_scope_manifest,
 };
+pub use v2_recall::{V2MemoryBackend, V2RecallHit, search_v2_notes};
 pub use v2_access::{V2AccessError, V2MemoryAccessPolicy, V2PathClass};
 pub use v2_capture::{
     CaptureCursors, CaptureJob, CaptureLease, CaptureOutcomeDraft, CaptureRange, CaptureWorkState,

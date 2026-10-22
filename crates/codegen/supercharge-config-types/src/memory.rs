@@ -143,6 +143,14 @@ pub struct MemoryV2Settings {
     /// Model for capture extraction. Falls back to the background summary
     /// model, then the session model.
     pub capture_model: Option<String>,
+    /// Per-turn lexical recall of matching memory notes. Defaults to on.
+    pub recall_enabled: Option<bool>,
+    /// Most notes recalled per turn (default 4).
+    pub recall_max_results: Option<usize>,
+    /// Token budget for one recall reminder (default 1200).
+    pub recall_max_tokens: Option<usize>,
+    /// Minimum normalized relevance (0..1) a note needs to be recalled.
+    pub recall_min_score: Option<f64>,
     pub automatic_dream_enabled: Option<bool>,
     pub manual_dream_enabled: Option<bool>,
     pub batch_dream_enabled: Option<bool>,
@@ -151,6 +159,59 @@ pub struct MemoryV2Settings {
     pub file_writes_enabled: Option<bool>,
     pub archived_retention_days: Option<u64>,
     pub job_retention_days: Option<u64>,
+}
+
+/// Resolved per-turn recall settings for memory-v2.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MemoryV2RecallConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub max_tokens: usize,
+    pub min_score: f64,
+}
+
+impl Default for MemoryV2RecallConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_results: 4,
+            max_tokens: 1200,
+            min_score: 0.35,
+        }
+    }
+}
+
+impl MemoryV2RecallConfig {
+    /// Hard ceilings keep a misconfigured recall from flooding the context.
+    pub const MAX_RESULTS_CEILING: usize = 16;
+    pub const MAX_TOKENS_CEILING: usize = 8 * 1024;
+
+    pub fn from_settings(settings: &MemoryV2Settings) -> Self {
+        let defaults = Self::default();
+        Self {
+            enabled: settings.recall_enabled.unwrap_or(defaults.enabled),
+            max_results: settings
+                .recall_max_results
+                .unwrap_or(defaults.max_results)
+                .min(Self::MAX_RESULTS_CEILING),
+            max_tokens: settings
+                .recall_max_tokens
+                .unwrap_or(defaults.max_tokens)
+                .min(Self::MAX_TOKENS_CEILING),
+            min_score: settings
+                .recall_min_score
+                .filter(|score| score.is_finite())
+                .map_or(defaults.min_score, |score| score.clamp(0.0, 1.0)),
+        }
+        .normalized()
+    }
+
+    fn normalized(mut self) -> Self {
+        if self.max_results == 0 || self.max_tokens == 0 {
+            self.enabled = false;
+        }
+        self
+    }
 }
 
 /// Concrete memory-v2 controls pinned when a session is spawned.
@@ -701,6 +762,9 @@ pub struct MemoryConfig {
     /// Model for memory-v2 capture extraction; `None` uses the session model.
     #[serde(skip)]
     pub v2_capture_model: Option<String>,
+    /// Per-turn memory-v2 recall settings.
+    #[serde(skip)]
+    pub v2_recall: MemoryV2RecallConfig,
     #[serde(skip)]
     pub root_dir_override: Option<std::path::PathBuf>,
     #[serde(skip)]
@@ -1095,6 +1159,7 @@ impl MemoryConfig {
                 .map(str::trim)
                 .filter(|model| !model.is_empty())
                 .map(str::to_owned),
+            v2_recall: MemoryV2RecallConfig::from_settings(&memory_v2),
             root_dir_override: None,
             flat_memory_root: false,
         }
@@ -1276,6 +1341,25 @@ mod tests {
         assert!(MemoryV2CaptureTrigger::SessionEnd.is_deferred());
         assert!(MemoryV2CaptureTrigger::Compaction.is_deferred());
         assert!(!MemoryV2CaptureTrigger::Turn.is_deferred());
+    }
+
+    #[test]
+    fn recall_defaults_and_clamps() {
+        let empty: toml::Value = toml::from_str("").unwrap();
+        let resolved = MemoryConfig::resolve(false, false, &empty, None);
+        assert_eq!(resolved.v2_recall, MemoryV2RecallConfig::default());
+        let custom: toml::Value = toml::from_str(
+            "[memory_v2]\nrecall_max_results = 99\nrecall_max_tokens = 500\nrecall_min_score = 7.0",
+        )
+        .unwrap();
+        let recall = MemoryConfig::resolve(false, false, &custom, None).v2_recall;
+        assert!(recall.enabled);
+        assert_eq!(recall.max_results, MemoryV2RecallConfig::MAX_RESULTS_CEILING);
+        assert_eq!(recall.max_tokens, 500);
+        assert_eq!(recall.min_score, 1.0);
+        let off: toml::Value =
+            toml::from_str("[memory_v2]\nrecall_max_results = 0").unwrap();
+        assert!(!MemoryConfig::resolve(false, false, &off, None).v2_recall.enabled);
     }
 
     #[test]
