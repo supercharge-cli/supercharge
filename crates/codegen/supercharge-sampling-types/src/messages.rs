@@ -253,7 +253,9 @@ impl StopReason {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MessagesUsage {
+    #[serde(default)]
     pub input_tokens: u32,
+    #[serde(default)]
     pub output_tokens: u32,
     #[serde(default)]
     pub cache_creation_input_tokens: u32,
@@ -322,6 +324,7 @@ pub struct StopDetails {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MessageDeltaUsage {
+    #[serde(default)]
     pub output_tokens: u32,
     #[serde(default)]
     pub input_tokens: Option<u32>,

@@ -89,6 +89,59 @@ impl GrokRequestHeaders<'_> {
     }
 }
 
+/// Numeric keys where providers send `null`; zero keeps the required counters parseable.
+fn is_counter_key(key: &str) -> bool {
+    key.ends_with("_tokens")
+        || key.ends_with("_index")
+        || key == "index"
+        || key == "sequence_number"
+        || key == "created"
+        || key == "created_at"
+}
+
+/// Rewrite provider JSON so nulls never break parsing: null counters become 0, other nulls are dropped (Option/default fields).
+pub(crate) fn sanitize_provider_nulls(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.retain(|k, v| !v.is_null() || is_counter_key(k));
+            for (k, v) in map.iter_mut() {
+                if v.is_null() {
+                    *v = serde_json::json!(0);
+                } else if is_counter_key(k) && v.is_f64() {
+                    *v = serde_json::json!(v.as_f64().unwrap_or(0.0).max(0.0) as u64);
+                } else {
+                    sanitize_provider_nulls(v);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            items.retain(|v| !v.is_null());
+            items.iter_mut().for_each(sanitize_provider_nulls);
+        }
+        _ => {}
+    }
+}
+
+/// Parse provider JSON strictly, falling back to a null-sanitized retry; the original error wins if both fail.
+pub(crate) fn parse_lenient<T: serde::de::DeserializeOwned>(
+    data: &[u8],
+    responses_api: bool,
+) -> std::result::Result<T, serde_json::Error> {
+    match serde_json::from_slice::<T>(data) {
+        Ok(v) => Ok(v),
+        Err(first) => {
+            let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(data) else {
+                return Err(first);
+            };
+            sanitize_provider_nulls(&mut value);
+            if responses_api {
+                fill_missing_usage_details(&mut value);
+            }
+            serde_json::from_value::<T>(value).map_err(|_| first)
+        }
+    }
+}
+
 /// Providers often omit the nested usage breakdowns; fill zeros so partial usage blocks still parse.
 pub(crate) fn fill_missing_usage_details(value: &mut serde_json::Value) {
     for ptr in ["/usage", "/response/usage"] {
@@ -133,6 +186,7 @@ pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStrea
                 {
                     tools.retain(|t| serde_json::from_value::<rs::Tool>(t.clone()).is_ok());
                 }
+                sanitize_provider_nulls(&mut value);
                 fill_missing_usage_details(&mut value);
                 if let Ok(mut event) = serde_json::from_value::<rs::ResponseStreamEvent>(value) {
                     apply_terminal_event_overrides(&mut event, data);
@@ -967,7 +1021,7 @@ impl SamplingClient {
             });
         }
 
-        let completion = serde_json::from_slice::<ChatCompletionResponse>(&bytes).map_err(|e| {
+        let completion = parse_lenient::<ChatCompletionResponse>(&bytes, false).map_err(|e| {
             let raw_body = String::from_utf8_lossy(&bytes);
             tracing::error!(
                 error = %e,
@@ -1411,7 +1465,7 @@ impl SamplingClient {
                             Some(None)
                         } else {
                             Some(Some(
-                                serde_json::from_str::<ChatCompletionChunk>(data).map_err(|e| {
+                                parse_lenient::<ChatCompletionChunk>(data.as_bytes(), false).map_err(|e| {
                                     tracing::error!(
                                         error = %e,
                                         raw_data = %data,
@@ -1585,12 +1639,7 @@ impl SamplingClient {
             });
         }
 
-        let response_obj = serde_json::from_slice::<rs::Response>(&bytes)
-            .or_else(|e| {
-                let mut value = serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|_| e)?;
-                fill_missing_usage_details(&mut value);
-                serde_json::from_value::<rs::Response>(value)
-            })
+        let response_obj = parse_lenient::<rs::Response>(&bytes, true)
             .map_err(|e| {
             let raw_body = String::from_utf8_lossy(&bytes);
             tracing::error!(
@@ -1951,7 +2000,7 @@ impl SamplingClient {
         }
 
         let response_obj =
-            serde_json::from_slice::<messages::MessagesResponse>(&bytes).map_err(|e| {
+            parse_lenient::<messages::MessagesResponse>(&bytes, false).map_err(|e| {
                 let raw_body = String::from_utf8_lossy(&bytes);
                 tracing::error!(
                     error = %e,
@@ -2135,7 +2184,7 @@ impl SamplingClient {
                             Some(None)
                         } else {
                             Some(Some(
-                                serde_json::from_str::<messages::MessageStreamEvent>(data).map_err(
+                                parse_lenient::<messages::MessageStreamEvent>(data.as_bytes(), false).map_err(
                                     |e| {
                                         tracing::error!(
                                             error = %e,
@@ -3817,5 +3866,67 @@ mod partial_usage_tests {
         assert_eq!(usage.output_tokens_details.reasoning_tokens, 0);
         assert_eq!(usage.input_tokens_details.cached_tokens, 0);
         assert_eq!(usage.output_tokens, 2);
+    }
+}
+
+#[cfg(test)]
+mod null_tolerance_tests {
+    use super::*;
+
+    const RESP: &str = r#"{"id":"r1","object":"response","created_at":1,"model":"m","status":"completed","output":[]"#;
+
+    #[test]
+    fn responses_events_tolerate_nulls_and_gaps() {
+        let usages = [
+            r#"{"input_tokens":null,"output_tokens":null,"total_tokens":null,"input_tokens_details":null,"output_tokens_details":null}"#,
+            r#"{"input_tokens":5,"output_tokens":2,"total_tokens":7,"output_tokens_details":{"reasoning_tokens":null}}"#,
+            r#"{"input_tokens":5,"input_tokens_details":{"cached_tokens":null}}"#,
+            r#"{}"#,
+            r#"{"input_tokens":3.0,"output_tokens":1,"total_tokens":4}"#,
+        ];
+        for (i, usage) in usages.iter().enumerate() {
+            let data = format!(
+                r#"{{"type":"response.completed","sequence_number":null,"response":{RESP},"usage":{usage},"error":null,"incomplete_details":null}}}}"#
+            );
+            let event = deserialize_response_event(&data)
+                .unwrap_or_else(|e| panic!("case {i} failed: {e}: {data}"));
+            assert!(matches!(event, rs::ResponseStreamEvent::ResponseCompleted(_)), "case {i}");
+            let body = format!(r#"{RESP},"usage":{usage}}}"#);
+            parse_lenient::<rs::Response>(body.as_bytes(), true)
+                .unwrap_or_else(|e| panic!("non-stream case {i} failed: {e}"));
+        }
+        let delta = r#"{"type":"response.output_text.delta","sequence_number":null,"item_id":"i","output_index":null,"content_index":null,"delta":"hi","logprobs":null}"#;
+        deserialize_response_event(delta).expect("delta with null indexes");
+    }
+
+    #[test]
+    fn chat_completions_tolerate_nulls_and_gaps() {
+        let chunks = [
+            r#"{"id":"c","object":"chat.completion.chunk","created":null,"model":"m","choices":[{"index":null,"delta":{"content":"x","role":null},"finish_reason":null}]}"#,
+            r#"{"id":"c","object":"chat.completion.chunk","created":1,"model":"m","choices":[],"usage":{"prompt_tokens":null,"completion_tokens":null,"total_tokens":null,"prompt_tokens_details":null}}"#,
+            r#"{"id":"c","object":"chat.completion.chunk","created":1,"model":"m","choices":null,"usage":{"prompt_tokens":4}}"#,
+            r#"{"id":"c","object":"chat.completion.chunk","created":1,"model":"m","choices":[],"usage":{}}"#,
+        ];
+        for (i, c) in chunks.iter().enumerate() {
+            parse_lenient::<ChatCompletionChunk>(c.as_bytes(), false)
+                .unwrap_or_else(|e| panic!("chunk case {i} failed: {e}"));
+        }
+        let full = r#"{"id":"c","object":"chat.completion","created":null,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":null},"finish_reason":null}],"usage":{"prompt_tokens":null,"completion_tokens":1,"total_tokens":null,"completion_tokens_details":null}}"#;
+        parse_lenient::<ChatCompletionResponse>(full.as_bytes(), false).expect("full completion");
+    }
+
+    #[test]
+    fn messages_tolerate_nulls_and_gaps() {
+        let events = [
+            r#"{"type":"message_delta","delta":{"stop_reason":null,"stop_sequence":null},"usage":{"output_tokens":null,"input_tokens":null}}"#,
+            r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{}}"#,
+            r#"{"type":"content_block_delta","index":null,"delta":{"type":"text_delta","text":"x"}}"#,
+        ];
+        for (i, e) in events.iter().enumerate() {
+            parse_lenient::<messages::MessageStreamEvent>(e.as_bytes(), false)
+                .unwrap_or_else(|err| panic!("messages case {i} failed: {err}"));
+        }
+        let full = r#"{"id":"m","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":null,"output_tokens":null,"cache_read_input_tokens":null}}"#;
+        parse_lenient::<messages::MessagesResponse>(full.as_bytes(), false).expect("full messages");
     }
 }

@@ -472,6 +472,7 @@ pub struct ChatCompletionResponse {
     pub object: String,
     pub created: u64,
     pub model: String,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub choices: Vec<ChatChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
@@ -548,8 +549,11 @@ impl ToolCallFunction {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Usage {
+    #[serde(default)]
     pub prompt_tokens: u32,
+    #[serde(default)]
     pub completion_tokens: u32,
+    #[serde(default)]
     pub total_tokens: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_tokens_details: Option<PromptTokensDetails>,
@@ -588,6 +592,7 @@ pub struct ChatCompletionChunk {
     pub object: String,
     pub created: u64,
     pub model: String,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub choices: Vec<ChatChunkChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
