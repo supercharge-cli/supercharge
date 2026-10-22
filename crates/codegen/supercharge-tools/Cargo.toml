@@ -93,6 +93,7 @@ futures-util = { workspace = true }
 supercharge-sandbox = { path = "../supercharge-sandbox", default-features = false }
 supercharge-file-utils = { path = "../supercharge-file-utils" }
 supercharge-otel = { workspace = true }
+supercharge-secrets = { workspace = true }
 dhat = { workspace = true, optional = true }
 zstd = { workspace = true }
 

@@ -13,17 +13,48 @@ Without memory, each Supercharge AI session starts fresh: the model knows nothin
 - Carry architectural decisions forward across sessions.
 - Avoid re-asking questions it already has answers to.
 
-Memory is experimental and disabled by default.
+Memory v2 is on by default. It is fully local: plain Markdown files and SQLite
+databases under `~/.supercharge/memory-v2/`, created with owner-only
+permissions (`0700` directories, `0600` files on macOS and Linux). Nothing is
+uploaded and no remote service is involved.
 
-### Memory v2 (opt in)
+The agent manages memory itself. It saves preferences, corrections, decisions,
+and hard-won facts as soon as they are settled, reads only the topic files whose
+titles match the task, updates an existing topic instead of duplicating it, and
+removes notes that turn out to be wrong. Only a compact index of titles and
+one-line descriptions (at most 3 KB per scope) is placed in the prompt.
 
-Memory v2 is an isolated observation-and-topic pipeline. Enable it only for new
-sessions:
+Memory never stores secrets. Any memory write that looks like it contains an API
+key, token, password, private key, or credential-bearing URL is refused (or, for
+legacy session logs, masked).
+
+Automatic per-turn capture is off by default, so memory adds no hidden model
+calls. Opt in with `[memory_v2] capture_enabled = true`.
+
+### Turning memory off
+
+Any one of these turns memory off:
 
 ```toml
+# ~/.supercharge/config.toml
 [memory_v2]
-enabled = true
+enabled = false
 ```
+
+```toml
+[memory]
+enabled = false
+```
+
+```bash
+SUPERCHARGE_MEMORY=0 supercharge      # environment variable
+supercharge --no-memory               # one run
+```
+
+The always-loaded notes saved with the `memory` tool (`~/.supercharge/memories/`)
+are separate and stay available.
+
+### Memory v2 details
 
 It uses `~/.supercharge/memory-v2/global/` and
 `~/.supercharge/memory-v2/workspaces/<workspace-id>/`; it never reads, migrates, or
@@ -47,10 +78,11 @@ archive/tombstone counts. The existing `/memory`, `/memory on`, and `/memory
 off` behavior is unchanged.
 
 `memory_v2.enabled` is the primary v2 switch. When it is true, v2 takes
-precedence over the legacy `[memory] enabled` setting. When it is false or
-absent, the legacy setting is resolved unchanged so existing memory users are
-not migrated unexpectedly. If neither setting enables memory, memory remains
-off. An explicit `[memory] enabled = false` in your TOML turns off both
+precedence over the legacy `[memory] enabled` setting. When it is false, the
+legacy setting is resolved unchanged. When neither `[memory_v2] enabled` nor
+`[memory] enabled` (nor `SUPERCHARGE_MEMORY`) is set, memory v2 is used. An
+explicit `[memory] enabled = true` keeps legacy memory so existing legacy users
+are not migrated unexpectedly. An explicit `[memory] enabled = false` in your TOML turns off both
 implementations, including a v2 rollout enabled remotely; only an explicit
 `[memory_v2] enabled = true` in the same TOML overrides it.
 
@@ -96,7 +128,9 @@ paths, model output, or free-form errors.
 
 ## Enabling Memory
 
-### Memory v2 (Recommended)
+### Memory v2 (Default)
+
+Memory v2 needs no configuration. To make the choice explicit:
 
 ```toml
 # ~/.supercharge/config.toml

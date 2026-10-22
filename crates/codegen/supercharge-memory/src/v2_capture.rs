@@ -157,6 +157,15 @@ pub struct ObservationDraft {
 }
 
 impl ObservationDraft {
+    fn contains_secret(&self) -> bool {
+        std::iter::once(self.statement.as_str())
+            .chain(self.topic_hint.as_deref())
+            .chain(self.body.as_deref())
+            .chain(self.keywords.iter().map(String::as_str))
+            .chain(self.aliases.iter().map(String::as_str))
+            .any(|text| crate::secret_guard::find_secret(text).is_some())
+    }
+
     fn validate(&self) -> Result<()> {
         validate_text("statement", &self.statement, 1, MAX_STATEMENT_BYTES)?;
         validate_text(
@@ -1143,8 +1152,15 @@ impl V2CaptureStore {
                         "observations must contain 1..={MAX_OBSERVATIONS} entries"
                     )));
                 }
+                // Never persist an extracted observation that carries a
+                // credential; drop it and keep the rest.
+                let observations: Vec<&ObservationDraft> = observations
+                    .iter()
+                    .filter(|observation| !observation.contains_secret())
+                    .collect();
                 observations
                     .iter()
+                    .copied()
                     .enumerate()
                     .map(|(ordinal, observation)| {
                         observation.validate()?;

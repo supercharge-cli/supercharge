@@ -84,6 +84,10 @@ pub enum V2AccessError {
     Stale(PathBuf),
     #[error("memory v2 file is too large to edit safely (limit: {limit_bytes} bytes): {path}")]
     TooLarge { path: PathBuf, limit_bytes: u64 },
+    #[error(
+        "refused to save {path}: it looks like it contains a secret ({kind}). Memory must never store API keys, tokens, passwords, or other credentials; remove the value and save only a description of it."
+    )]
+    Secret { path: PathBuf, kind: &'static str },
     #[error("memory v2 path is durably excluded and cannot be recreated: {0}")]
     Excluded(PathBuf),
     #[error(
@@ -439,6 +443,12 @@ impl V2MemoryAccessPolicy {
             return Err(V2AccessError::TooLarge {
                 path: path.to_path_buf(),
                 limit_bytes,
+            });
+        }
+        if let Some(kind) = crate::secret_guard::find_secret_bytes(contents) {
+            return Err(V2AccessError::Secret {
+                path: path.to_path_buf(),
+                kind,
             });
         }
 

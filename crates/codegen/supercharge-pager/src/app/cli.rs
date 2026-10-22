@@ -731,12 +731,10 @@ pub struct PagerArgs {
         hide = true
     )]
     pub experimental_memory: bool,
-    /// Legacy compatibility flag for disabling cross-session memory.
-    #[arg(
-        long = "no-memory",
-        conflicts_with = "experimental_memory",
-        hide = true
-    )]
+    /// Turn off cross-session memory for this run. Memory is on by default; to turn it off
+    /// permanently set `[memory_v2] enabled = false` in ~/.supercharge/config.toml or
+    /// SUPERCHARGE_MEMORY=0.
+    #[arg(long = "no-memory", conflicts_with = "experimental_memory")]
     pub no_memory: bool,
     /// Run a memory flush after the headless turn (or instead of a prompt when resuming). Calls `x.ai/memory/flush` and waits for the flush LLM.
     /// resuming). Calls `x.ai/memory/flush` and waits for the flush LLM.

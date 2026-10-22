@@ -42,6 +42,11 @@ pub struct MemoryStorage {
 }
 
 impl MemoryStorage {
+    /// Legacy root used to restrict permissions on every directory below it.
+    fn root_for_permissions(&self) -> &Path {
+        &self.global_dir
+    }
+
     /// Create a new `MemoryStorage` rooted at `~/.supercharge/memory/`.
     /// The workspace directory name is `{slug}-{hash8}` where `slug` is the project directory name and `hash8` is 8 hex chars from blake3.
     /// Directories are created lazily on first write, not here.
@@ -209,6 +214,10 @@ impl MemoryStorage {
         }
 
         std::fs::create_dir_all(&sessions_dir)?;
+        crate::secret_guard::restrict_dir_chain(self.root_for_permissions(), &sessions_dir);
+        // Legacy logs are model-written summaries; mask any credential instead of losing the log.
+        let content = supercharge_secrets::redact_secrets(content);
+        let content = content.as_ref();
 
         if append && path.exists() {
             use std::io::Write;
@@ -218,6 +227,7 @@ impl MemoryStorage {
         } else {
             std::fs::write(&path, content)?;
         }
+        crate::secret_guard::restrict_file(&path);
         tracing::debug!(path = %path.display(), append, "wrote daily session log");
 
         Ok(path)
@@ -244,7 +254,11 @@ impl MemoryStorage {
             }
         };
 
-        std::fs::write(&path, content)?;
+        std::fs::write(&path, supercharge_secrets::redact_secrets(content).as_ref())?;
+        crate::secret_guard::restrict_file(&path);
+        if let Some(parent) = path.parent() {
+            crate::secret_guard::restrict_dir_chain(self.root_for_permissions(), parent);
+        }
         tracing::debug!(path = %path.display(), scope = ?scope, "wrote long-term memory");
 
         Ok(())
@@ -260,7 +274,7 @@ impl MemoryStorage {
             return Ok(());
         }
 
-        let normalized = normalize_memory_content(content);
+        let normalized = normalize_memory_content(&supercharge_secrets::redact_secrets(content));
         if normalized.is_empty() {
             return Ok(());
         }
@@ -288,6 +302,11 @@ impl MemoryStorage {
             write!(file, "{normalized}")?;
         }
 
+        drop(file);
+        crate::secret_guard::restrict_file(&path);
+        if let Some(parent) = path.parent() {
+            crate::secret_guard::restrict_dir_chain(self.root_for_permissions(), parent);
+        }
         tracing::debug!(path = %path.display(), scope = ?scope, "appended to memory");
         Ok(())
     }
@@ -493,6 +512,8 @@ impl MemoryStorage {
             )?;
             tracing::info!(path = %global_file.display(), "created global MEMORY.md template");
         }
+        crate::secret_guard::restrict_dir(&self.global_dir);
+        crate::secret_guard::restrict_file(&global_file);
 
         if self.ephemeral {
             tracing::debug!("MEMORY_EPHEMERAL_SKIP: workspace initialization skipped");
@@ -518,6 +539,8 @@ impl MemoryStorage {
                 "created workspace MEMORY.md template"
             );
         }
+        crate::secret_guard::restrict_dir_chain(&self.global_dir, &self.workspace_dir);
+        crate::secret_guard::restrict_file(&workspace_file);
 
         Ok(())
     }

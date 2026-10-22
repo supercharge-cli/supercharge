@@ -107,6 +107,61 @@ pub fn redact_secrets(input: &str) -> Cow<'_, str> {
     Cow::Owned(s)
 }
 
+/// Long opaque token: 32+ URL-safe characters mixing upper case, lower case,
+/// and digits, the shape of most generated API keys. Git SHAs and UUIDs are
+/// lower-case hex and never match.
+static OPAQUE_TOKEN_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| compile(r"[A-Za-z0-9_\-]{32,}"));
+/// Common key prefixes not covered above (`pk-`, `rk_`, `nsk-`, `key-`, `api-`).
+static EXTRA_KEY_PREFIX_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| compile(r"\b(?:pk|rk|nsk|key|api)[-_][A-Za-z0-9_-]{24,}"));
+/// Connection strings that embed a password (`scheme://user:pass@host`).
+static URL_CREDENTIALS_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| compile(r"\b[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@"));
+
+/// Return the kind of the first secret-looking value in `input`, if any.
+///
+/// Used to refuse persisting credentials (for example into agent memory).
+/// It is stricter than [`redact_secrets`]: plain URLs only count when they
+/// embed credentials or a sensitive query value.
+pub fn find_secret(input: &str) -> Option<&'static str> {
+    let checks: [(&LazyLock<Regex>, &'static str); 11] = [
+        (&PEM_PRIVATE_KEY_REGEX, "private key"),
+        (&API_KEY_PREFIX_REGEX, "API key"),
+        (&EXTRA_KEY_PREFIX_REGEX, "API key"),
+        (&AWS_ACCESS_KEY_REGEX, "access key"),
+        (&GITHUB_TOKEN_REGEX, "access token"),
+        (&VENDOR_TOKEN_REGEX, "access token"),
+        (&GOOGLE_API_KEY_REGEX, "API key"),
+        (&BEARER_TOKEN_REGEX, "bearer token"),
+        (&JWT_REGEX, "token"),
+        (&URL_CREDENTIALS_REGEX, "connection string with a password"),
+        (&SECRET_ASSIGNMENT_REGEX, "credential assignment"),
+    ];
+    for (regex, kind) in checks {
+        if regex.is_match(input) {
+            return Some(kind);
+        }
+    }
+    if OPAQUE_TOKEN_REGEX.find_iter(input).any(|m| {
+        let token = m.as_str();
+        token.chars().any(|c| c.is_ascii_uppercase())
+            && token.chars().any(|c| c.is_ascii_lowercase())
+            && token.chars().filter(char::is_ascii_digit).count() >= 2
+    }) {
+        return Some("opaque token");
+    }
+    let has_sensitive_url = URL_REGEX.find_iter(input).any(|m| {
+        url::Url::parse(m.as_str()).is_ok_and(|url| {
+            url.query_pairs().any(|(key, value)| {
+                SENSITIVE_QUERY_PARAMS.contains(&key.to_ascii_lowercase().as_str())
+                    && value.len() >= 8
+            })
+        })
+    });
+    has_sensitive_url.then_some("URL with a credential")
+}
+
 /// Use [`redact_json_string_values`] for the standard scrub; use this directly only when composing a custom one.
 pub fn walk_json_strings(value: &mut serde_json::Value, f: &mut impl FnMut(&mut String)) {
     match value {
@@ -554,5 +609,33 @@ mod tests {
             !out.contains("%5B") && !out.contains("%5D"),
             "placeholder bracket-encoded: {out}"
         );
+    }
+
+    #[test]
+    fn find_secret_flags_credentials_and_spares_ordinary_notes() {
+        for secret in [
+            "key is sk-abcdefghijklmnopqrstuvwxyz123456",
+            "use pk-AbCdEfGhIjKlMnOpQrStUvWx12",
+            "ghp_abcdefghijklmnopqrstuvwxyz0123",
+            "AKIAABCDEFGHIJKLMNOP",
+            "Authorization: Bearer abcdefghijklmnop1234",
+            "password = hunter2hunter2",
+            "postgres://admin:s3cretpass@db.local/app",
+            "token Zx9QmR7tLp2VbN8cKd4WsHy6FgJ3aE1u",
+            "https://api.example.com/v1?api_key=abcdef123456",
+            "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----",
+        ] {
+            assert!(find_secret(secret).is_some(), "missed: {secret}");
+        }
+        for benign in [
+            "Prefers short answers; run `cargo test -p supercharge-memory` before pushing.",
+            "Release commit 72e69fc4b9a1d2e3f4a5b6c7d8e9f0a1b2c3d4e5 fixed allowed_models.",
+            "Session 3f2b8c1e-9d4a-4c6b-8e2f-1a2b3c4d5e6f",
+            "max_tokens = 128000 and the token budget is small",
+            "Docs live at https://superchargeai.in/docs/memory",
+            "Path crates/codegen/supercharge-shell/src/session/helpers/memory_context.rs",
+        ] {
+            assert_eq!(find_secret(benign), None, "false positive: {benign}");
+        }
     }
 }

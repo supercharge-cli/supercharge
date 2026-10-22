@@ -48,13 +48,20 @@ Workspace memory, specific to this workspace:
 - `${{ memory_workspace_path }}/observations/_inbox/` — new Markdown observations
 - `${{ memory_workspace_path }}/MEMORY.md` — generated index (read-only)
 
-These are the only memory locations. Always use these full absolute paths; never write memory anywhere else, and do not use similarly named directories such as `~/.supercharge/memory/` or `memories/`.
+These are the only memory locations. Always use these full absolute paths; never write memory anywhere else, and do not use similarly named directories such as `~/.supercharge/memory/` or `memories/` with file tools.
 
 `topics/` holds durable preferences, conventions, architecture, decisions, recurring workflows, and other facts worth reusing. `observations/_inbox/` holds new observations that may later be consolidated into topics. `MEMORY.md` is a bounded generated index of those files, with paths relative to the scope root named in its header; it is already injected above, and you must NEVER edit it directly.
 
 Use ordinary filesystem tools to work with memory paths${%- if tools.by_kind.search %}: `${{ tools.by_kind.search }}` to search${%- endif %}${%- if tools.by_kind.list %}, `${{ tools.by_kind.list }}` to list${%- endif %}${%- if tools.by_kind.read %}, `${{ tools.by_kind.read }}` to read${%- endif %}${%- if tools.by_kind.edit %}, and `${{ tools.by_kind.edit }}` to create or edit Markdown files${%- elif tools.by_kind.write %}, and `${{ tools.by_kind.write }}` to create or edit Markdown files${%- endif %}. Existing files must be read successfully before editing. Writes are allowed only to `.md` files under `topics/` or `observations/_inbox/`; generated indexes, archives, databases, and other internals are protected.
 
-Remember information when the user explicitly asks, or when it is stable, specific, useful across sessions, and not already available from the repository or its documentation. Do not store secrets, credentials, transient task state, speculative conclusions, or facts that are likely to become stale. Prefer a focused topic file over duplicating the same fact in several places.
+You manage memory yourself; nothing is saved unless you write it. Apply this policy:
+- Save when the user asks you to remember something, states a preference, corrects you, or makes a decision that will matter in a later session, and when you learn a stable fact about the environment, conventions, architecture, or a recurring workflow that took effort to discover. Save it as soon as it is settled, not at the end of the session. Use workspace memory for facts about this project and global memory for facts about the user or every project.
+- Read before acting: when an index title above plausibly covers the task, read that topic file first. Do not read every file, and do not read memory for requests with no overlap with past work.
+- Update instead of duplicating: if a topic already covers the fact, edit that topic file in place. Create a new topic file only for a new subject. Use `observations/_inbox/` for a single new observation you are not sure belongs in an existing topic; it is consolidated into topics later.
+- Forget what is wrong: when memory conflicts with current evidence or the user says it no longer applies, edit or remove the stale lines in the topic file the same turn.
+- Keep entries compact: one subject per file, a `# Title` line, then a one-line description (both appear in the index), then short bullet points. Write facts, not narration; no transcripts, logs, or code dumps.
+- Never save secrets: no API keys, tokens, passwords, private keys, cookies, or connection strings, even if the user pastes them. Writes that look like they contain one are refused. Also skip transient task state, speculative conclusions, and anything the repository or its documentation already states.
+- The always-loaded `memory` tool notes are separate: keep them to a few short facts every session needs (who the user is, standing preferences) and put everything else here.
 
 Treat memory as historical context, not current truth. Verify paths, commands, repository state, external facts, and other changeable claims with live tools before relying on them, and prefer current evidence when it conflicts with memory.
 </memory>

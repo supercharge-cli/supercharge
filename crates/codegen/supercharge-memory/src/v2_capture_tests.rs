@@ -74,6 +74,29 @@ fn observation_pair(first: &str, second: &str) -> CaptureOutcomeDraft {
 }
 
 #[test]
+fn captured_observations_with_secrets_are_dropped() {
+    let (temp, store) = setup();
+    store.enqueue("secret-session", range(1, 1)).unwrap();
+    let lease = claim(&store, "worker", 10);
+    let committed = store
+        .commit(
+            &lease,
+            &observation_pair(
+                "The user prefers concise answers",
+                "The provider key is sk-abcdefghijklmnopqrstuvwxyz123456",
+            ),
+            12,
+        )
+        .unwrap();
+    assert_eq!(committed.files.len(), 1);
+    let saved =
+        std::fs::read_to_string(temp.path().join("scope").join(&committed.files[0])).unwrap();
+    assert!(saved.contains("concise answers"));
+    let manifest = std::fs::read_to_string(temp.path().join("scope/MEMORY.md")).unwrap();
+    assert!(!manifest.contains("sk-abcdefghijklmnop"));
+}
+
+#[test]
 fn promotion_updates_running_hidden_job_before_it_commits() {
     let (temp, store) = setup();
     store

@@ -50,6 +50,10 @@ pub enum V2StorageError {
         "v2 memory scope {path} is on a network filesystem; memory-v2 requires local shared-memory coordination"
     )]
     UnsupportedNetworkFilesystem { path: PathBuf },
+    #[error(
+        "refused to save the memory: it looks like it contains a secret ({kind}); memory never stores credentials"
+    )]
+    SecretDetected { kind: &'static str },
     #[error("memory observation is {actual_bytes} bytes, exceeding the {limit_bytes}-byte limit")]
     ObservationTooLarge {
         actual_bytes: usize,
@@ -82,7 +86,9 @@ pub struct V2ManifestBudget {
 impl Default for V2ManifestBudget {
     fn default() -> Self {
         Self {
-            max_bytes: 8 * 1024,
+            // About 750 tokens per scope: only titles and one-line
+            // descriptions are injected; topic bodies are read on demand.
+            max_bytes: 3 * 1024,
             max_entries: 64,
             max_description_bytes: MAX_DESCRIPTION_BYTES,
         }
@@ -124,9 +130,10 @@ pub fn ensure_scope_initialized_with_journal_mode(
         reject_symlink(&path, "initialize symlinked v2 memory directory")?;
         std::fs::create_dir_all(&path).map_err(|source| V2StorageError::Io {
             operation: "create v2 memory directory",
-            path,
+            path: path.clone(),
             source,
         })?;
+        crate::secret_guard::restrict_dir_chain(storage_root, &path);
     }
     ensure_canonical_descendant(
         storage_root,
@@ -149,6 +156,13 @@ pub fn ensure_scope_initialized_with_journal_mode(
     reject_symlink_components(storage_root, scope_dir)?;
     reject_symlink(&index_path, "initialize symlinked v2 lexical index")?;
     initialize_lexical_index(&index_path)?;
+    for database in [&state_path, &index_path] {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            let mut name = database.as_os_str().to_owned();
+            name.push(suffix);
+            crate::secret_guard::restrict_file(Path::new(&name));
+        }
+    }
 
     let manifest_path = scope_dir.join("MEMORY.md");
     reject_symlink_components(storage_root, scope_dir)?;
@@ -173,6 +187,9 @@ pub(crate) fn persist_observation(scope_dir: &Path, content: &str) -> Result<Pat
             actual_bytes: content.len(),
             limit_bytes: MAX_MANUAL_OBSERVATION_BYTES,
         });
+    }
+    if let Some(kind) = crate::secret_guard::find_secret(content) {
+        return Err(V2StorageError::SecretDetected { kind });
     }
 
     let inbox = scope_dir.join("observations/_inbox");

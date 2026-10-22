@@ -40,6 +40,7 @@ supercharge-config-types = { workspace = true }
 supercharge-http = { workspace = true }
 supercharge-tools = { workspace = true }
 supercharge-version = { workspace = true }
+supercharge-secrets = { workspace = true }
 supercharge-sqlite-journal = { workspace = true }
 supercharge-token-estimation = { workspace = true }
 

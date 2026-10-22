@@ -145,7 +145,9 @@ impl Default for MemoryV2Config {
         Self {
             rollout: MemoryV2Rollout::Active,
             capture_status_enabled: false,
-            capture_enabled: true,
+            // Off by default: automatic capture runs an extra model call after
+            // every turn. The agent saves memories itself through file tools.
+            capture_enabled: false,
             automatic_dream_enabled: true,
             manual_dream_enabled: true,
             batch_dream_enabled: false,
@@ -762,7 +764,12 @@ impl MemoryConfig {
         // A false v2 gate is not a global kill switch: it delegates to the
         // independent legacy waterfall. Local `[memory_v2]` has precedence
         // over the dedicated remote v2 settings.
-        let v2_selected = v2_enabled == Some(true);
+        // With nothing configured anywhere (no CLI/env flag, no `[memory]` or
+        // `[memory_v2]` enablement, no remote value), memory v2 is the default.
+        // It runs entirely on local files; see `MemoryV2Config::default`.
+        let nothing_configured = v2_enabled.is_none()
+            && legacy_enabled.source == crate::ConfigSource::Default;
+        let v2_selected = v2_enabled == Some(true) || nothing_configured;
         let enabled = !globally_disabled && (v2_selected || legacy_enabled.value);
         let mode = if v2_selected {
             MemoryMode::V2
@@ -1103,7 +1110,7 @@ mod tests {
             (Some(false), Some(false), false, MemoryMode::Legacy),
             (None, Some(true), true, MemoryMode::Legacy),
             (None, Some(false), false, MemoryMode::Legacy),
-            (None, None, false, MemoryMode::Legacy),
+            (None, None, true, MemoryMode::V2),
         ];
 
         for (memory_v2_enabled, memory_enabled, enabled, mode) in cases {
@@ -1141,6 +1148,58 @@ mod tests {
         assert_eq!(resolved.v2, MemoryV2Config::default());
         assert_eq!(resolved.v2.rollout, MemoryV2Rollout::Active);
         assert!(!resolved.v2.capture_status_enabled);
+    }
+
+    #[test]
+    fn unconfigured_memory_defaults_to_local_v2_without_capture() {
+        let resolved = MemoryConfig::resolve(
+            false,
+            false,
+            &toml::Value::Table(Default::default()),
+            None,
+        );
+        assert!(resolved.enabled);
+        assert_eq!(resolved.mode, MemoryMode::V2);
+        assert_eq!(resolved.v2.rollout, MemoryV2Rollout::Active);
+        assert!(!resolved.v2.capture_enabled, "no hidden per-turn model calls");
+        assert!(!resolved.v2.can_capture());
+        assert!(resolved.v2.can_run_automatic_dream());
+        assert!(resolved.v2.can_expose_memory());
+    }
+
+    #[test]
+    fn every_local_off_switch_disables_default_memory() {
+        for raw in [
+            "[memory]\nenabled = false",
+            "[memory_v2]\nenabled = false",
+        ] {
+            let config: toml::Value = toml::from_str(raw).unwrap();
+            let resolved = MemoryConfig::resolve(false, false, &config, None);
+            assert!(!resolved.enabled, "{raw} must turn memory off");
+        }
+        let no_memory = MemoryConfig::resolve(
+            false,
+            true,
+            &toml::Value::Table(Default::default()),
+            None,
+        );
+        assert!(!no_memory.enabled, "--no-memory must turn memory off");
+    }
+
+    #[test]
+    fn explicit_legacy_opt_in_keeps_legacy() {
+        let config: toml::Value = toml::from_str("[memory]\nenabled = true").unwrap();
+        let resolved = MemoryConfig::resolve(false, false, &config, None);
+        assert!(resolved.enabled);
+        assert_eq!(resolved.mode, MemoryMode::Legacy);
+    }
+
+    #[test]
+    fn capture_can_still_be_opted_in() {
+        let config: toml::Value = toml::from_str("[memory_v2]\ncapture_enabled = true").unwrap();
+        let resolved = MemoryConfig::resolve(false, false, &config, None);
+        assert_eq!(resolved.mode, MemoryMode::V2);
+        assert!(resolved.v2.can_capture());
     }
 
     #[test]
@@ -1347,6 +1406,7 @@ mod tests {
     fn v2_rollout_stage_matrix_is_exact() {
         let controls = |rollout| MemoryV2Config {
             rollout,
+            capture_enabled: true,
             ..MemoryV2Config::default()
         };
         let off = controls(MemoryV2Rollout::Off);

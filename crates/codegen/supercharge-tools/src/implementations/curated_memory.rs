@@ -317,6 +317,13 @@ fn clean_content(content: Option<&str>) -> Result<String, String> {
     {
         return Err("content looks like a prompt injection and was not saved".into());
     }
+    if let Some(kind) = supercharge_secrets::find_secret(content) {
+        return Err(format!(
+            "content looks like it contains a secret ({kind}) and was not saved. Memory never \
+             stores API keys, tokens, passwords, or other credentials; save only a description \
+             of where the user keeps it."
+        ));
+    }
     Ok(content.to_string())
 }
 
@@ -405,6 +412,7 @@ fn parse_entries(raw: &str) -> Vec<String> {
 fn write_entries(path: &Path, entries: &[String]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        restrict_mode(parent, 0o700);
     }
     let body = if entries.is_empty() {
         String::new()
@@ -422,9 +430,20 @@ fn write_entries(path: &Path, entries: &[String]) -> Result<(), String> {
         file.write_all(body.as_bytes()).map_err(|e| e.to_string())?;
         file.sync_all().ok();
     }
+    restrict_mode(&tmp, 0o600);
     fs::rename(&tmp, path).map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Memory notes are private to the owner: 0700 directories, 0600 files on unix.
+#[cfg(unix)]
+fn restrict_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+}
+
+#[cfg(not(unix))]
+fn restrict_mode(_path: &Path, _mode: u32) {}
 
 struct Lock {
     path: PathBuf,
@@ -553,5 +572,42 @@ mod tests {
         assert!(main_view.contains("User prefers short replies."));
         assert!(!main_view.contains("Coder bot owns the API folder."));
         let _ = fs::remove_dir_all(&runtime);
+    }
+
+    #[test]
+    fn secrets_are_never_saved_and_files_are_owner_only() {
+        let home = std::env::temp_dir().join(format!("sc-mem-secret-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&home);
+        let add = |content: &str| {
+            apply(
+                &home,
+                &CuratedMemoryInput {
+                    target: "memory".into(),
+                    action: Some("add".into()),
+                    content: Some(content.into()),
+                    old_text: None,
+                    operations: None,
+                },
+            )
+        };
+        for secret in [
+            "Pollinations key is sk-abcdefghijklmnopqrstuvwxyz123456",
+            "Use password = correct-horse-battery",
+            "Deploy token Zx9QmR7tLp2VbN8cKd4WsHy6FgJ3aE1u",
+        ] {
+            let err = add(secret).unwrap_err();
+            assert!(err.contains("secret"), "{err}");
+        }
+        assert!(!prompt_block_at(&home).contains("abcdefghijklmnop"));
+        add("The user keeps provider keys in a password manager.").unwrap();
+        assert!(prompt_block_at(&home).contains("password manager"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode(&home.join("memories")), 0o700);
+            assert_eq!(mode(&home.join("memories/MEMORY.md")), 0o600);
+        }
+        let _ = fs::remove_dir_all(&home);
     }
 }

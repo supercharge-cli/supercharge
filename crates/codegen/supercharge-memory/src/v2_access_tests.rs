@@ -40,6 +40,67 @@ impl Fixture {
 }
 
 #[test]
+fn writes_that_contain_secrets_are_refused_everywhere() {
+    let fixture = Fixture::new();
+    for path in [
+        fixture.workspace.join("topics/providers.md"),
+        fixture.global.join("observations/_inbox/key.md"),
+    ] {
+        let contents = b"# Providers\n\nKey: sk-abcdefghijklmnopqrstuvwxyz123456\n";
+        let preflight = fixture.policy.preflight_write(&path, contents).unwrap_err();
+        assert!(preflight.contains("secret"), "{preflight}");
+        let error = fixture.policy.write_file(&path, contents).unwrap_err();
+        assert!(error.contains("secret"), "{error}");
+        assert!(!path.exists(), "refused write must not create {}", path.display());
+    }
+    let topic = fixture.workspace.join("topics/providers.md");
+    fixture
+        .policy
+        .write_file(&topic, b"# Providers\n\nThe key lives in config.toml.\n")
+        .unwrap();
+    assert!(topic.exists());
+
+    let observation = crate::v2::persist_observation(
+        &fixture.global,
+        "Remember token Zx9QmR7tLp2VbN8cKd4WsHy6FgJ3aE1u",
+    )
+    .unwrap_err();
+    assert!(matches!(observation, crate::V2StorageError::SecretDetected { .. }));
+}
+
+#[cfg(unix)]
+#[test]
+fn memory_files_and_directories_are_owner_only() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let fixture = Fixture::new();
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    let root = fixture.global.parent().unwrap().to_path_buf();
+    for dir in [
+        root.clone(),
+        root.join("workspaces"),
+        fixture.global.clone(),
+        fixture.workspace.clone(),
+        fixture.workspace.join("topics"),
+        fixture.workspace.join("observations/_inbox"),
+        fixture.global.join("archive"),
+    ] {
+        assert_eq!(mode(&dir), 0o700, "{}", dir.display());
+    }
+    for file in [
+        fixture.global.join("MEMORY.md"),
+        fixture.global.join("memory_state.sqlite"),
+        fixture.workspace.join("index.sqlite"),
+    ] {
+        assert_eq!(mode(&file), 0o600, "{}", file.display());
+    }
+    let topic = fixture.workspace.join("topics/style.md");
+    fixture.policy.write_file(&topic, b"# Style\n\nUse Rust.\n").unwrap();
+    assert_eq!(mode(&topic), 0o600);
+    let observation = crate::v2::persist_observation(&fixture.global, "Prefers tabs.").unwrap();
+    assert_eq!(mode(&observation), 0o600);
+}
+
+#[test]
 fn classifies_both_scopes_and_protected_paths() {
     let fixture = Fixture::new();
     assert_eq!(

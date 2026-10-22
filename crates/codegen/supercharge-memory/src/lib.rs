@@ -39,6 +39,7 @@ pub mod observation;
 pub mod query_expansion;
 pub mod schema;
 pub mod search;
+pub mod secret_guard;
 pub mod storage;
 mod storage_v2;
 pub mod text_utils;
