@@ -59,7 +59,8 @@ fn capture_one_with_visibility(workspace: &Path, session: &str, is_exposed: bool
             &CaptureOutcomeDraft::Observations(vec![ObservationDraft {
                 observation_type: ObservationType::Project,
                 topic_hint: Some("build".to_owned()),
-                statement: "Use deterministic fixtures".to_owned(),
+                // Unique per session so commit-time deduplication keeps it.
+                statement: format!("Use deterministic fixtures in session {session}"),
                 keywords: vec!["fixtures".to_owned()],
                 aliases: Vec::new(),
                 extraction_model: "test".to_owned(),

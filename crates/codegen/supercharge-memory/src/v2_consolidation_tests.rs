@@ -73,7 +73,8 @@ impl Fixture {
                 &CaptureOutcomeDraft::Observations(vec![ObservationDraft {
                     observation_type: ObservationType::Project,
                     topic_hint: Some("dream".to_owned()),
-                    statement: statement.to_owned(),
+                    // Unique per job so commit-time deduplication keeps it.
+                    statement: format!("{statement} [{session} t{turn}]"),
                     keywords: vec!["durable".to_owned()],
                     aliases: Vec::new(),
                     extraction_model: "fake".to_owned(),
