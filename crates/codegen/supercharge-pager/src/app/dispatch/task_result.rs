@@ -2354,12 +2354,17 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                 .unwrap_or_default()
         }
         TaskResult::ProviderModelsFetched { generation, result } => {
+            // Accept while Fetching (empty seed) or PickModel (seeded catalog shown during refresh).
             let is_current = get_active_agent_mut(app).is_some_and(|agent| {
                 matches!(
                     agent.active_modal.as_ref(),
                     Some(crate::views::modal::ActiveModal::ProviderSetup { state })
                         if state.generation == generation
-                            && matches!(state.step, crate::views::setup_modal::SetupStep::Fetching)
+                            && matches!(
+                                state.step,
+                                crate::views::setup_modal::SetupStep::Fetching
+                                    | crate::views::setup_modal::SetupStep::PickModel
+                            )
                 )
             });
             if !is_current {

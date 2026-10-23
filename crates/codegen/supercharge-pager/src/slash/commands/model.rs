@@ -120,28 +120,35 @@ impl SlashCommand for ModelCommand {
             }
         }
 
-        // A trailing effort token on a reasoning model makes a session-scoped switch (not persisted as default)
-        // Resolve via the shared gate so a rejected level (e.g. `none` on grok-4.5) reports the effort error with the model's offered ids.
-        // Without it the fall-through reports "Unknown model: … none"
+        // A trailing effort token on a known model: session-scoped switch when supported,
+        // otherwise a clear effort error (never treat "Model high" as a free-text model id).
         if let Some((prefix, token)) = split_trailing_token(trimmed)
             && let Some(id) = resolve_model(ctx.models, prefix)
-            && ctx
+        {
+            let supports = ctx
                 .models
                 .available
                 .get(&id)
                 .map(supports_reasoning_effort)
-                .unwrap_or(false)
-        {
-            return match ctx.models.resolve_effort_for_model(&id, token) {
-                Ok(effort) => CommandResult::Action(Action::SwitchModel {
-                    model_id: id,
-                    effort: Some(effort),
-                }),
-                Err(err) => CommandResult::Error(err.message()),
-            };
+                .unwrap_or(false);
+            if supports {
+                return match ctx.models.resolve_effort_for_model(&id, token) {
+                    Ok(effort) => CommandResult::Action(Action::SwitchModel {
+                        model_id: id,
+                        effort: Some(effort),
+                    }),
+                    Err(err) => CommandResult::Error(err.message()),
+                };
+            }
+            return CommandResult::Error(format!(
+                "model '{prefix}' does not support reasoning effort (got '{token}')"
+            ));
         }
 
-        CommandResult::Error(format!("Unknown model: {trimmed}"))
+        // Not in the session catalog: open the live picker and ask once before using the typed id.
+        CommandResult::Action(Action::OpenLiveModelPickerUnknown {
+            model_id: trimmed.to_owned(),
+        })
     }
 }
 
@@ -584,9 +591,28 @@ mod tests {
         state.available.insert(id, info);
         let mut ctx = dummy_exec_ctx(&state);
         let result = ModelCommand.run(&mut ctx, "Supercharge Core high");
-        // Falls through to "is the whole string a model name?" — which
-        // it isn't, so we get an Unknown error.
-        assert!(matches!(result, CommandResult::Error(_)));
+        match result {
+            CommandResult::Error(msg) => {
+                assert!(
+                    msg.contains("does not support reasoning effort"),
+                    "expected non-reasoning effort error, got {msg}"
+                );
+            }
+            other => panic!("expected Error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn run_unknown_model_opens_live_picker_for_confirm() {
+        let state = ModelState::default();
+        let mut ctx = dummy_exec_ctx(&state);
+        let result = ModelCommand.run(&mut ctx, "totally-new-model");
+        match result {
+            CommandResult::Action(Action::OpenLiveModelPickerUnknown { model_id }) => {
+                assert_eq!(model_id, "totally-new-model");
+            }
+            other => panic!("expected OpenLiveModelPickerUnknown, got {other:?}"),
+        }
     }
 
     /// The bare `/model <name>` form dispatches `Action::SetDefaultModel(<ModelId>)` instead of the legacy `Action::SwitchModel { effort: None }`.

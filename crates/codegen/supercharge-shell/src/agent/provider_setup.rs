@@ -837,7 +837,7 @@ pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
             else {
                 continue;
             };
-            let name = ["display_name", "name"]
+            let name = ["display_name", "title", "name"]
                 .into_iter()
                 .filter_map(|key| obj.get(key).and_then(Value::as_str))
                 .map(str::trim)
@@ -1382,6 +1382,85 @@ pub fn load_existing_provider_setup() -> Option<(String, String)> {
     load_existing_provider_setup_details().map(|setup| (setup.base_url, setup.api_key))
 }
 
+/// Credentials for a single `[model.<id>]` entry (base URL + key + format).
+fn model_entry_provider_setup(
+    parsed: &toml::Value,
+    model_id: &str,
+) -> Option<ExistingProviderSetup> {
+    let model = parsed.get("model")?.get(model_id)?;
+    let provider_binding = model
+        .get("model_provider")
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned);
+    let provider = provider_binding.as_deref().and_then(|id| {
+        parsed.get("model_providers").and_then(|providers| providers.get(id))
+    });
+    let base_url = model
+        .get("base_url")
+        .or_else(|| model.get("api_base_url"))
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            provider?
+                .get("base_url")
+                .and_then(toml::Value::as_str)
+                .map(str::trim)
+                .filter(|url| !url.is_empty())
+                .map(str::to_owned)
+        })?;
+    let provider_id = provider_binding
+        .clone()
+        .unwrap_or_else(|| CUSTOM_PROVIDER_ID.to_owned());
+    let api_key = model
+        .get("api_key")
+        .and_then(toml::Value::as_str)
+        .map(sanitize_provider_api_key)
+        .filter(|key| !key.is_empty())
+        .or_else(|| {
+            provider?
+                .get("api_key")
+                .and_then(toml::Value::as_str)
+                .map(sanitize_provider_api_key)
+                .filter(|key| !key.is_empty())
+        })
+        .or_else(|| {
+            provider_setup_api_key_from_toml(parsed)
+                .map(|key| sanitize_provider_api_key(&key))
+                .filter(|key| !key.is_empty())
+        })
+        .unwrap_or_default();
+    let format = model
+        .get("api_backend")
+        .and_then(toml::Value::as_str)
+        .map(SetupWireFormat::from_api_backend)
+        .or_else(|| {
+            provider?
+                .get("api_backend")
+                .and_then(toml::Value::as_str)
+                .map(SetupWireFormat::from_api_backend)
+        })
+        .unwrap_or_else(|| setup_wire_format_from_config(parsed));
+    Some(ExistingProviderSetup {
+        base_url,
+        api_key,
+        format,
+        provider_id,
+    })
+}
+
+/// First `[model.*]` entry that carries a usable base URL (direct or via its provider).
+fn first_model_entry_setup(parsed: &toml::Value) -> Option<ExistingProviderSetup> {
+    let models = parsed.get("model")?.as_table()?;
+    for id in models.keys() {
+        if let Some(setup) = model_entry_provider_setup(parsed, id) {
+            return Some(setup);
+        }
+    }
+    None
+}
+
 fn first_model_provider_setup(parsed: &toml::Value) -> Option<ExistingProviderSetup> {
     let providers = parsed.get("model_providers")?.as_table()?;
     for (id, provider) in providers {
@@ -1460,8 +1539,29 @@ fn load_existing_provider_setup_details_at(path: &Path) -> Option<ExistingProvid
         if let Some(setup) = first_model_provider_setup(parsed) {
             return Some(setup);
         }
+        if let Some(setup) = first_model_entry_setup(parsed) {
+            return Some(setup);
+        }
     }
     None
+}
+
+/// Prefer the active model's own endpoint when `/models` is opened mid-session.
+pub fn load_existing_provider_setup_for_model(model_id: &str) -> Option<ExistingProviderSetup> {
+    load_existing_provider_setup_for_model_at(&crate::util::config::user_config_path(), model_id)
+}
+
+fn load_existing_provider_setup_for_model_at(
+    path: &Path,
+    model_id: &str,
+) -> Option<ExistingProviderSetup> {
+    let content = crate::util::config::read_to_string_or_empty(path).ok()?;
+    if content.trim().is_empty() {
+        return load_existing_provider_setup_details_at(path);
+    }
+    let parsed = toml::from_str::<toml::Value>(&content).ok()?;
+    model_entry_provider_setup(&parsed, model_id)
+        .or_else(|| load_existing_provider_setup_details_at(path))
 }
 
 #[cfg(test)]
@@ -2498,6 +2598,25 @@ mod tests {
     }
 
     #[test]
+    fn parses_title_as_display_name_fallback() {
+        // parse_openai_models_list sorts by id, so assert by id → name map.
+        let models = parse_openai_models_list(&json!({
+            "data": [
+                {"id": "pollinations/foo", "title": " Foo Title "},
+                {"id": "pollinations/bar", "display_name": "Bar", "title": "Ignored"},
+                {"id": "pollinations/baz", "title": " ", "name": "Baz Name"}
+            ]
+        }));
+        let by_id: std::collections::BTreeMap<_, _> = models
+            .into_iter()
+            .map(|m| (m.id, m.name))
+            .collect();
+        assert_eq!(by_id.get("pollinations/foo").map(String::as_str), Some("Foo Title"));
+        assert_eq!(by_id.get("pollinations/bar").map(String::as_str), Some("Bar"));
+        assert_eq!(by_id.get("pollinations/baz").map(String::as_str), Some("Baz Name"));
+    }
+
+    #[test]
     fn parses_anthropic_display_names_with_name_and_id_fallbacks() {
         let models = parse_openai_models_list(&json!({
             "data": [
@@ -2513,6 +2632,31 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["Claude A", "Claude B", "c"]
         );
+    }
+
+
+    #[test]
+    fn load_existing_falls_back_to_model_entry_base_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+            [model.my-custom]
+            model = "my-custom"
+            base_url = "https://custom.example/v1"
+            api_key = "sk-custom-key-1234567890"
+            api_backend = "responses"
+            "#,
+        )
+        .unwrap();
+        let setup = load_existing_provider_setup_details_at(&path).expect("model entry setup");
+        assert_eq!(setup.base_url, "https://custom.example/v1");
+        assert_eq!(setup.api_key, "sk-custom-key-1234567890");
+        assert_eq!(setup.format, SetupWireFormat::Responses);
+        let for_model =
+            load_existing_provider_setup_for_model_at(&path, "my-custom").expect("for model");
+        assert_eq!(for_model.base_url, "https://custom.example/v1");
     }
 
     #[test]

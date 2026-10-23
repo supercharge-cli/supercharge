@@ -268,6 +268,20 @@ pub(in crate::app::dispatch) fn dispatch_open_image_setup(app: &mut AppView) -> 
 }
 
 pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppView) -> Vec<Effect> {
+    dispatch_open_live_model_picker_inner(app, None)
+}
+
+pub(in crate::app::dispatch) fn dispatch_open_live_model_picker_unknown(
+    app: &mut AppView,
+    model_id: String,
+) -> Vec<Effect> {
+    dispatch_open_live_model_picker_inner(app, Some(model_id))
+}
+
+fn dispatch_open_live_model_picker_inner(
+    app: &mut AppView,
+    unknown_model_id: Option<String>,
+) -> Vec<Effect> {
     use crate::views::modal::ActiveModal;
     use crate::views::setup_modal::SetupModalState;
 
@@ -286,6 +300,7 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
                     .any(|a| !a.session.models.available.is_empty())
         }
     };
+    // No saved credentials and no session catalog: send through /setup (including typed unknown ids).
     if !has_setup && !has_catalog {
         return dispatch_open_setup(app);
     }
@@ -311,6 +326,7 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
             }
         }
     };
+    let fallback_models = app.models.clone();
     let Some(agent) = app.agents.get_mut(&id) else {
         return effects;
     };
@@ -318,10 +334,22 @@ pub(in crate::app::dispatch) fn dispatch_open_live_model_picker(app: &mut AppVie
         agent.active_modal = None;
         return effects;
     }
-    let (mut state, fetch) = SetupModalState::live_model_picker();
-    if fetch.is_none() {
-        state.seed_catalog_models(&agent.session.models);
+    let mut state = SetupModalState::live_model_picker();
+    if let Some(current) = agent.session.models.current_model_id_str()
+        && let Some(details) =
+            supercharge_shell::agent::provider_setup::load_existing_provider_setup_for_model(current)
+    {
+        state.apply_provider_details(details);
     }
+    if !agent.session.models.available.is_empty() {
+        state.seed_catalog_models(&agent.session.models);
+    } else {
+        state.seed_catalog_models(&fallback_models);
+    }
+    if let Some(model_id) = unknown_model_id {
+        state.prefill_unknown_confirm(model_id);
+    }
+    let fetch = state.begin_live_fetch();
     agent.active_modal = Some(ActiveModal::ProviderSetup {
         state: Box::new(state),
     });

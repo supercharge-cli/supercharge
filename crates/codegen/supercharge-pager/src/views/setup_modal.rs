@@ -83,6 +83,10 @@ pub struct SetupModalState {
     device_user_code: String,
     device_verification_uri: String,
     device_status: String,
+    /// Typed model id waiting for a second Enter (not in the live/catalog list).
+    pending_unknown: Option<String>,
+    /// Live `/models` fetch is in flight while a seeded catalog is already shown.
+    live_refreshing: bool,
 }
 
 #[derive(Debug)]
@@ -202,6 +206,8 @@ impl SetupModalState {
             device_user_code: String::new(),
             device_verification_uri: String::new(),
             device_status: String::new(),
+            pending_unknown: None,
+            live_refreshing: false,
         }
     }
 
@@ -237,12 +243,38 @@ impl SetupModalState {
         state
     }
 
-    /// `/model` picker: live-fetch `/models` with the saved URL + key.
-    pub fn live_model_picker() -> (Self, Option<SetupOutcome>) {
+    /// `/model` picker shell. Caller seeds the catalog, then calls [`Self::begin_live_fetch`].
+    pub fn live_model_picker() -> Self {
         let mut state = Self::with_kind(SetupKind::Chat);
         state.picker_only = true;
-        let outcome = state.begin_live_fetch();
-        (state, outcome)
+        state
+    }
+
+    /// Apply saved provider credentials (e.g. the current model's endpoint).
+    pub fn apply_provider_details(
+        &mut self,
+        details: supercharge_shell::agent::provider_setup::ExistingProviderSetup,
+    ) {
+        self.api_key_owner = normalize_provider_base_url(&details.base_url).ok();
+        self.base_url.set_text(details.base_url);
+        self.api_key.set_text(details.api_key);
+        self.api_key_prefilled = !self.api_key.text().is_empty();
+        self.format = details.format;
+        self.provider_id = details.provider_id;
+    }
+
+    /// Prefill the filter with an unknown id and arm the one-shot confirm.
+    pub fn prefill_unknown_confirm(&mut self, model_id: String) {
+        let id = model_id.trim().to_owned();
+        if id.is_empty() {
+            return;
+        }
+        self.filter.set_text(id.clone());
+        self.pending_unknown = Some(id);
+        self.selected = 0;
+        if !self.models.is_empty() || matches!(self.step, SetupStep::PickModel) {
+            self.step = SetupStep::PickModel;
+        }
     }
 
     pub fn seed_catalog_models(&mut self, models: &crate::acp::model_state::ModelState) {
@@ -274,8 +306,14 @@ impl SetupModalState {
         match normalize_provider_base_url(self.base_url.text()) {
             Ok(base_url) => {
                 self.generation = next_generation();
-                self.models.clear();
-                self.step = SetupStep::Fetching;
+                self.models_from_api = false;
+                self.live_refreshing = true;
+                // Keep any seeded catalog visible while the live list loads.
+                if self.models.is_empty() {
+                    self.step = SetupStep::Fetching;
+                } else {
+                    self.step = SetupStep::PickModel;
+                }
                 Some(SetupOutcome::Fetch {
                     base_url,
                     api_key: self.api_key.text().trim().to_owned(),
@@ -284,7 +322,10 @@ impl SetupModalState {
                     generation: self.generation,
                 })
             }
-            Err(_) => None,
+            Err(_) => {
+                self.live_refreshing = false;
+                None
+            }
         }
     }
 
@@ -317,7 +358,8 @@ impl SetupModalState {
     }
 
     fn filtered_models(&self) -> Vec<ProviderModel> {
-        let query = self.filter.text().trim().to_ascii_lowercase();
+        let raw_query = self.filter.text().trim();
+        let query = raw_query.to_ascii_lowercase();
         let mut models: Vec<ProviderModel> = self
             .models
             .iter()
@@ -328,7 +370,24 @@ impl SetupModalState {
             })
             .cloned()
             .collect();
-        if query.is_empty() || "custom".contains(&query) || "type".contains(&query) {
+        let exact_in_list = !raw_query.is_empty()
+            && self.models.iter().any(|model| {
+                model.id.eq_ignore_ascii_case(raw_query)
+                    || model.name.eq_ignore_ascii_case(raw_query)
+            });
+        if !raw_query.is_empty() && !exact_in_list {
+            let confirming = self.pending_unknown.as_deref() == Some(raw_query);
+            models.push(ProviderModel {
+                id: raw_query.to_owned(),
+                name: if confirming {
+                    format!("Press Enter again to use `{raw_query}`")
+                } else {
+                    format!("`{raw_query}` is not in the list — Enter to confirm")
+                },
+                context_window: None,
+                supports_thinking: false,
+            });
+        } else if query.is_empty() || "custom".contains(&query) || "type".contains(&query) {
             models.push(ProviderModel {
                 id: CUSTOM_MODEL_ID.to_owned(),
                 name: "Type a custom model id…".to_owned(),
@@ -351,6 +410,7 @@ impl SetupModalState {
         if generation != self.generation {
             return;
         }
+        self.live_refreshing = false;
         match result {
             Ok(models) => {
                 self.models = models;
@@ -361,7 +421,10 @@ impl SetupModalState {
                     };
                     return;
                 }
-                self.filter.reset();
+                // Keep a typed unknown confirm across a successful refresh.
+                if self.pending_unknown.is_none() {
+                    self.filter.reset();
+                }
                 self.selected = 0;
                 self.step = SetupStep::PickModel;
             }
@@ -372,6 +435,9 @@ impl SetupModalState {
                     self.selected = 0;
                     self.step = SetupStep::PickModel;
                     let _ = message;
+                } else if self.picker_only && !self.models.is_empty() {
+                    // Live refresh failed: keep the seeded catalog so `/models` is never a dead end.
+                    self.step = SetupStep::PickModel;
                 } else {
                     self.step = SetupStep::FetchError { message };
                 }
@@ -520,6 +586,9 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 SetupOutcome::Changed
             }
             SetupStep::PickModel => {
+                if state.pending_unknown.take().is_some() {
+                    return SetupOutcome::Changed;
+                }
                 if state.picker_only {
                     return SetupOutcome::Close;
                 }
@@ -834,59 +903,91 @@ fn handle_pick_model(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcom
             }
             SetupOutcome::Changed
         }
-        KeyCode::Enter => {
-            let Some(model) = state.selected_model() else {
-                state.step = SetupStep::FetchError {
-                    message: "no model selected".to_owned(),
-                };
-                return SetupOutcome::Changed;
-            };
-            if model.id == CUSTOM_MODEL_ID {
-                if state.custom_model.text().trim().is_empty()
-                    && let Some(profile) = find_setup_provider(&state.provider_id)
-                {
-                    state.custom_model.set_text(profile.default_model);
-                }
-                state.step = SetupStep::CustomModel;
-                return SetupOutcome::Changed;
-            }
-            if state.picker_only && model.supports_thinking {
-                state.effort_levels =
-                    supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(
-                        &model.id,
-                    )
-                    .iter()
-                    .map(|s| (*s).to_owned())
-                    .collect();
-                if state.effort_levels.is_empty() {
-                    state.effort_levels = ["high", "medium", "low"]
-                        .into_iter()
-                        .map(str::to_owned)
-                        .collect();
-                }
-                state.pending_model = Some(model);
-                state.selected = 0;
-                state.filter.reset();
-                state.step = SetupStep::PickEffort;
-                return SetupOutcome::Changed;
-            }
-            if state.picker_only && !state.models_from_api {
-                return SetupOutcome::SwitchSession {
-                    model_id: model.id,
-                    effort: None,
-                };
-            }
-            save_selected_model(state, model.id, model.name)
-        }
+        KeyCode::Enter => accept_pick_model_enter(state),
         _ => match state.filter.handle_key(key) {
             LineEditOutcome::TextChanged => {
                 state.selected = 0;
+                // Editing the filter cancels a pending unknown confirm.
+                state.pending_unknown = None;
                 SetupOutcome::Changed
             }
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
         },
     }
+}
+
+fn accept_pick_model_enter(state: &mut SetupModalState) -> SetupOutcome {
+    let query = state.filter.text().trim().to_owned();
+    if !query.is_empty() {
+        if let Some(model) = state.models.iter().find(|model| {
+            model.id.eq_ignore_ascii_case(&query) || model.name.eq_ignore_ascii_case(&query)
+        }) {
+            let model = model.clone();
+            state.pending_unknown = None;
+            return accept_listed_model(state, model);
+        }
+        if state.pending_unknown.as_deref() == Some(query.as_str()) {
+            state.pending_unknown = None;
+            return save_selected_model(state, query.clone(), query);
+        }
+        state.pending_unknown = Some(query);
+        return SetupOutcome::Changed;
+    }
+
+    let Some(model) = state.selected_model() else {
+        state.step = SetupStep::FetchError {
+            message: "no model selected".to_owned(),
+        };
+        return SetupOutcome::Changed;
+    };
+    if model.id == CUSTOM_MODEL_ID {
+        if state.custom_model.text().trim().is_empty()
+            && let Some(profile) = find_setup_provider(&state.provider_id)
+        {
+            state.custom_model.set_text(profile.default_model);
+        }
+        state.step = SetupStep::CustomModel;
+        return SetupOutcome::Changed;
+    }
+    // Highlighted "not in list" row with empty filter should not happen; treat as save.
+    if !state.models.iter().any(|m| m.id == model.id) {
+        if state.pending_unknown.as_deref() == Some(model.id.as_str()) {
+            state.pending_unknown = None;
+            return save_selected_model(state, model.id.clone(), model.id);
+        }
+        state.pending_unknown = Some(model.id);
+        return SetupOutcome::Changed;
+    }
+    accept_listed_model(state, model)
+}
+
+fn accept_listed_model(state: &mut SetupModalState, model: ProviderModel) -> SetupOutcome {
+    if state.picker_only && model.supports_thinking {
+        state.effort_levels =
+            supercharge_shell::agent::provider_setup::reasoning_effort_ids_for_model(&model.id)
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect();
+        if state.effort_levels.is_empty() {
+            state.effort_levels = ["high", "medium", "low"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+        }
+        state.pending_model = Some(model);
+        state.selected = 0;
+        state.filter.reset();
+        state.step = SetupStep::PickEffort;
+        return SetupOutcome::Changed;
+    }
+    if state.picker_only && !state.models_from_api {
+        return SetupOutcome::SwitchSession {
+            model_id: model.id,
+            effort: None,
+        };
+    }
+    save_selected_model(state, model.id, model.name)
 }
 
 fn handle_pick_effort(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
@@ -1353,7 +1454,14 @@ fn render_model_list(buf: &mut Buffer, area: Rect, theme: &Theme, state: &SetupM
     } else {
         format!("/{}", state.filter.text())
     };
-    Line::from(Span::styled(filter, Style::default().fg(theme.gray_dim)))
+    let status = if let Some(id) = state.pending_unknown.as_deref() {
+        format!("`{id}` is not in the list — Enter again to use it, Esc if that was a mistake")
+    } else if state.live_refreshing {
+        "Refreshing live models from the provider…".to_owned()
+    } else {
+        filter
+    };
+    Line::from(Span::styled(status, Style::default().fg(theme.gray_dim)))
         .render(Rect::new(area.x, area.y, area.width, 1), buf);
     let list_y = area.y.saturating_add(2);
     let list_height = area.height.saturating_sub(2);
@@ -1693,14 +1801,16 @@ mod tests {
     }
 
     #[test]
-    fn live_fetch_uses_saved_endpoint_and_key_without_cached_models() {
+    fn live_fetch_uses_saved_endpoint_and_keeps_seeded_catalog() {
         let mut state = SetupModalState::new();
+        state.picker_only = true;
         state.base_url.set_text("https://provider.example/v1");
         state.api_key.set_text("saved-key");
         state.models = vec![model("old-model")];
         let outcome = state.begin_live_fetch().expect("valid provider");
-        assert!(matches!(state.step, SetupStep::Fetching));
-        assert!(state.models.is_empty());
+        assert!(matches!(state.step, SetupStep::PickModel));
+        assert_eq!(state.models.len(), 1);
+        assert!(state.live_refreshing);
         match outcome {
             SetupOutcome::Fetch {
                 base_url, api_key, ..
@@ -1710,6 +1820,18 @@ mod tests {
             }
             other => panic!("expected fetch, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn live_fetch_without_seed_shows_fetching() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.base_url.set_text("https://provider.example/v1");
+        state.api_key.set_text("saved-key");
+        let outcome = state.begin_live_fetch().expect("valid provider");
+        assert!(matches!(state.step, SetupStep::Fetching));
+        assert!(state.models.is_empty());
+        assert!(matches!(outcome, SetupOutcome::Fetch { .. }));
     }
 
     fn saved_provider_a() -> SetupModalState {
@@ -1902,6 +2024,80 @@ mod tests {
         assert!(
             matches!(state.step, SetupStep::FetchError { ref message } if message == "HTTP 401")
         );
+    }
+
+
+    #[test]
+    fn picker_only_keeps_seed_when_live_fetch_fails() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.models = vec![model("seeded")];
+        state.step = SetupStep::PickModel;
+        state.live_refreshing = true;
+        state.apply_fetched_models(state.generation, Err("HTTP 401".to_owned()));
+        assert!(matches!(state.step, SetupStep::PickModel));
+        assert_eq!(state.models[0].id, "seeded");
+        assert!(!state.live_refreshing);
+    }
+
+    #[test]
+    fn unknown_typed_id_requires_second_enter_then_saves() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.format = SetupWireFormat::Openai;
+        state.base_url.set_text("https://provider.example/v1");
+        state.api_key.set_text("saved-key");
+        state.models = vec![model("listed-model")];
+        state.step = SetupStep::PickModel;
+        state.filter.set_text("brand-new-model");
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Changed
+        ));
+        assert_eq!(state.pending_unknown.as_deref(), Some("brand-new-model"));
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Save { setup, .. } => {
+                assert_eq!(setup.model_id, "brand-new-model");
+                assert_eq!(setup.model_name, "brand-new-model");
+                assert_eq!(setup.base_url, "https://provider.example/v1");
+            }
+            other => panic!("expected save on second Enter, got {other:?}"),
+        }
+        assert!(state.pending_unknown.is_none());
+    }
+
+    #[test]
+    fn unknown_confirm_escapes_without_saving() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.models = vec![model("listed-model")];
+        state.step = SetupStep::PickModel;
+        state.filter.set_text("typo-model");
+        handle_setup_key(&mut state, &enter());
+        assert!(state.pending_unknown.is_some());
+        assert!(matches!(
+            handle_setup_key(&mut state, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            SetupOutcome::Changed
+        ));
+        assert!(state.pending_unknown.is_none());
+        assert!(matches!(state.step, SetupStep::PickModel));
+    }
+
+    #[test]
+    fn exact_listed_id_skips_confirm() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.base_url.set_text("https://provider.example/v1");
+        state.api_key.set_text("k");
+        state.models_from_api = true;
+        state.models = vec![model("listed-model")];
+        state.step = SetupStep::PickModel;
+        state.filter.set_text("listed-model");
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Save { setup, .. } => assert_eq!(setup.model_id, "listed-model"),
+            other => panic!("expected immediate save, got {other:?}"),
+        }
+        assert!(state.pending_unknown.is_none());
     }
 
     #[test]

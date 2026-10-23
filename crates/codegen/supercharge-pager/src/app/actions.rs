@@ -594,6 +594,11 @@ pub enum Action {
     OpenImageSetup,
     /// Live-fetch `/models` with the saved `/setup` URL + key and pick a model.
     OpenLiveModelPicker,
+    /// Same as [`Self::OpenLiveModelPicker`], but the typed id is not in the
+    /// session catalog: open the picker and ask once before using it.
+    OpenLiveModelPickerUnknown {
+        model_id: String,
+    },
     /// Open the thinking-effort picker for the session's current model.
     OpenEffortPicker,
     /// Fetch `/models` for the in-progress setup wizard.
