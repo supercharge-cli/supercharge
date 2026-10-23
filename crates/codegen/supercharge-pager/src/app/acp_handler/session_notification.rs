@@ -1701,8 +1701,20 @@ pub(super) fn apply_retry_state(
                 );
             }
             if !*rate_limited && is_reauthable_failure(None, reason) {
-                is_reauth = true;
-                scrollback.push_block(RenderBlock::session_event(SessionEvent::ReAuthRequired));
+                if is_api_key_auth {
+                    // Static API key was already sent; keep the provider body instead of /setup.
+                    scrollback.push_block(RenderBlock::session_event(
+                        crate::app::error_display::format_request_failure(
+                            None,
+                            Some(crate::app::error_display::WireErrorType::ApiKeyRejected),
+                            reason,
+                        )
+                        .into_session_event(),
+                    ));
+                } else {
+                    is_reauth = true;
+                    scrollback.push_block(RenderBlock::session_event(SessionEvent::ReAuthRequired));
+                }
             } else if *rate_limited {
                 let error = crate::app::effects::sanitize_user_error(
                     &format_rate_limited_user_message(Some(reason.as_str()), is_api_key_auth),
@@ -1728,8 +1740,21 @@ pub(super) fn apply_retry_state(
                 session.model_incompatible = true;
             }
             if is_reauthable_failure(Some(error_type.as_str()), message) {
-                is_reauth = true;
-                scrollback.push_block(RenderBlock::session_event(SessionEvent::ReAuthRequired));
+                if is_api_key_auth {
+                    // Shell may still tag static-key 401s as "auth" (ManualLogin remedy). The
+                    // pager knows the session is API-key auth, so keep the provider body.
+                    scrollback.push_block(RenderBlock::session_event(
+                        crate::app::error_display::format_request_failure(
+                            None,
+                            Some(crate::app::error_display::WireErrorType::ApiKeyRejected),
+                            message,
+                        )
+                        .into_session_event(),
+                    ));
+                } else {
+                    is_reauth = true;
+                    scrollback.push_block(RenderBlock::session_event(SessionEvent::ReAuthRequired));
+                }
             } else if wire == crate::app::error_display::WireErrorType::DiskFull {
                 if !crate::app::dispatch::scrollback_has_recent_disk_full(scrollback) {
                     scrollback.push_block(RenderBlock::session_event(SessionEvent::DiskFull));

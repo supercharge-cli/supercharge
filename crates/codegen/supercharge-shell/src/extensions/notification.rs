@@ -1236,6 +1236,10 @@ pub const PROMPT_COMPLETE_ERROR_KIND_KEY: &str = "errorKind";
 /// Frozen shell ↔ pager wire value — old pagers match the literal.
 pub const CONTEXT_LENGTH_ERROR_TYPE: &str = "context_length";
 
+/// `RetryState::Failed.error_type` when a static `/setup` API key was sent and the provider still returned 401.
+/// Not re-authable: re-running `/setup` is only useful if the key itself must change; the real provider body (quota, wrong model, …) must stay visible.
+pub const API_KEY_REJECTED_ERROR_TYPE: &str = "api_key_rejected";
+
 /// State of a retry operation or error for visual feedback in the TUI
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -1275,8 +1279,12 @@ pub enum RetryState {
 /// Whether a terminal retry failure is a recoverable authentication error (expired/invalid credentials, 401). The user can fix those by signing in again; this drives the actionable re-auth banner.
 /// `legacy_auth` is excluded: its message carries its own migration guidance (`grok update` / `grok logout` / `grok login`), shown verbatim.
 /// `auth_transient` is excluded for the opposite reason: it is emitted only when the failure self-heals (`AuthManager::requires_manual_reauth`). Its message already says it recovers on its own, so no `/login` banner is shown.
+/// `api_key_rejected` is excluded: a static `/setup` key was already on the wire; the provider body (quota, wrong model, …) must stay visible instead of the generic “run /setup” banner.
 pub fn is_reauthable_failure(error_type: Option<&str>, message: &str) -> bool {
-    if matches!(error_type, Some("legacy_auth") | Some("auth_transient")) {
+    if matches!(
+        error_type,
+        Some("legacy_auth") | Some("auth_transient") | Some(API_KEY_REJECTED_ERROR_TYPE)
+    ) {
         return false;
     }
     error_type == Some("auth") || message.contains(UNAUTHORIZED_NEEDLE)

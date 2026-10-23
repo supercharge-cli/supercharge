@@ -1641,13 +1641,28 @@ impl SessionActor {
         } else {
             error.kind.as_ref()
         };
-        let (error_type, detailed_message) = match self.auth_manager.as_ref() {
-            Some(auth_manager) if error_type == "auth" => self.apply_auth_remedy(
-                &auth_manager.auth_remedy(),
+        // Static `/setup` API keys have no refresher, so AuthRemedy would be ManualLogin and the
+        // pager would show the generic "run /setup" re-auth banner — even when the key was sent
+        // and the provider rejected the request for quota, a wrong model id, or a temporary 401.
+        // Tag those as api_key_rejected so the provider body stays visible.
+        let static_api_key_401 = is_auth_401
+            && auth_mode == supercharge_login::AuthMode::ApiKey
+            && auth_provider.is_none()
+            && !self.auth_gate(&failed_model_id, &failed_base_url).active();
+        let (error_type, detailed_message) = if static_api_key_401 {
+            (
+                crate::extensions::notification::API_KEY_REJECTED_ERROR_TYPE,
                 detailed_message,
-                error.status_code,
-            ),
-            _ => (error_type, detailed_message),
+            )
+        } else {
+            match self.auth_manager.as_ref() {
+                Some(auth_manager) if error_type == "auth" => self.apply_auth_remedy(
+                    &auth_manager.auth_remedy(),
+                    detailed_message,
+                    error.status_code,
+                ),
+                _ => (error_type, detailed_message),
+            }
         };
         self.log_terminal_failure(error_type, error.status_code, &detailed_message);
         self.send_xai_notification(XaiSessionUpdate::RetryState(

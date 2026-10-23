@@ -385,6 +385,12 @@
             Some("auth_transient"),
             "Unauthorized (401)\n\nAuthentication is temporarily unavailable"
         ));
+        // Static `/setup` API-key 401s keep the provider body; even with Unauthorized in the
+        // message they must not fire the generic re-auth banner.
+        assert!(!is_reauthable_failure(
+            Some("api_key_rejected"),
+            "Unauthorized (401) from https://example.com/v1/chat/completions: insufficient_quota"
+        ));
         // Unrelated failures must not be treated as re-authable.
         assert!(!is_reauthable_failure(
             Some("api"),
@@ -414,6 +420,70 @@
             ),
             "auth 401 must surface the actionable re-auth prompt"
         );
+    }
+
+    /// Static `/setup` API-key 401s must keep the provider body, not the generic re-auth banner.
+    #[test]
+    fn apply_retry_state_api_key_rejected_keeps_provider_body() {
+        let mut session = make_session(Some("s1"));
+        let mut scrollback = ScrollbackState::new();
+        apply_retry_state(
+            &RetryState::Failed {
+                error_type: "api_key_rejected".into(),
+                message: "Unauthorized (401) from https://example.com/v1/chat/completions:                           {\"error\":{\"message\":\"insufficient_quota\"}}\n\n  Model:     foo\n  Auth:      ApiKey"
+                    .into(),
+            },
+            &mut session,
+            &mut scrollback,
+            true, /* is_api_key_auth */
+        );
+        match last_session_event(&scrollback) {
+            Some(SessionEvent::RequestFailed { headline, detail, .. }) => {
+                assert!(
+                    headline.contains("401"),
+                    "headline={headline}"
+                );
+                assert!(
+                    detail.to_ascii_lowercase().contains("insufficient_quota"),
+                    "detail lost provider body: {detail}"
+                );
+            }
+            other => panic!("expected RequestFailed, got {other:?}"),
+        }
+        assert!(
+            !matches!(
+                last_session_event(&scrollback),
+                Some(SessionEvent::ReAuthRequired)
+            ),
+            "static API-key 401 must not show the generic re-auth banner"
+        );
+    }
+
+    /// Even when the shell still tags a static-key 401 as `auth`, the pager's API-key auth flag must keep the provider body.
+    #[test]
+    fn apply_retry_state_auth_with_api_key_auth_keeps_provider_body() {
+        let mut session = make_session(Some("s1"));
+        let mut scrollback = ScrollbackState::new();
+        apply_retry_state(
+            &RetryState::Failed {
+                error_type: "auth".into(),
+                message: "Unauthorized (401) from https://example.com/v1/chat/completions: insufficient_quota"
+                    .into(),
+            },
+            &mut session,
+            &mut scrollback,
+            true, /* is_api_key_auth */
+        );
+        match last_session_event(&scrollback) {
+            Some(SessionEvent::RequestFailed { headline, detail, .. }) => {
+                assert!(headline.contains("401"), "headline={headline}");
+                assert!(
+                    detail.to_ascii_lowercase().contains("insufficient_quota"),
+                    "detail lost provider body: {detail}"
+                );
+            }
+            other => panic!("expected RequestFailed, got {other:?}"),
+        }
     }
 
     /// A recoverable auth failure preserves `in_flight_prompt` so the PromptResponse handler can stash it for auto-resubmit after re-auth.

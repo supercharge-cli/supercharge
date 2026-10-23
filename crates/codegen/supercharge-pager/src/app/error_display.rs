@@ -9,6 +9,8 @@
 pub(crate) enum WireErrorType {
     Auth,
     AuthTransient,
+    /// Static `/setup` API key was on the wire; provider still returned 401. Keep the provider body.
+    ApiKeyRejected,
     LegacyAuth,
     ContextLength,
     EncryptedContentMismatch,
@@ -32,6 +34,11 @@ impl WireErrorType {
         };
         match s {
             "auth_transient" => Self::AuthTransient,
+            s if s
+                == supercharge_shell::extensions::notification::API_KEY_REJECTED_ERROR_TYPE =>
+            {
+                Self::ApiKeyRejected
+            }
             "legacy_auth" => Self::LegacyAuth,
             s if s == supercharge_shell::extensions::notification::CONTEXT_LENGTH_ERROR_TYPE => {
                 Self::ContextLength
@@ -165,6 +172,11 @@ pub(crate) fn format_request_failure(
     } else {
         error_type.unwrap_or(WireErrorType::Other)
     };
+    // Static API-key 401s keep the provider body (quota / wrong model / …). Must run before the
+    // Auth/AuthTransient early return that discards `raw`.
+    if matches!(wire, WireErrorType::ApiKeyRejected) {
+        return format_api_key_rejected_failure(raw);
+    }
     // A sniffed status must not demote a dedicated wire-type headline to generic status copy
     // An `auth_transient` message contains "Unauthorized (401)", so only `Api` and `Other` recover a status from the text
     if looks_like_provider_api_key_error(raw)
@@ -367,6 +379,29 @@ fn format_provider_api_key_failure(status: Option<u16>) -> FormattedRequestFailu
         headline,
         detail,
         wire: WireErrorType::Auth,
+    }
+}
+
+/// Provider returned 401 for a request that already carried a static `/setup` API key.
+/// Preserve the provider's body so users see quota / wrong-model / temporary rejection instead of
+/// a generic "run /setup" prompt that implies credentials are missing.
+fn format_api_key_rejected_failure(raw: &str) -> FormattedRequestFailure {
+    let why = extract_error_detail(raw)
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| {
+            "The provider returned HTTP 401 for this request.".to_string()
+        });
+    let detail = compose_detail(
+        Some(&why),
+        Some(
+            "Check the model id, API key, and provider quota. Run /setup only if you need to change credentials.",
+        ),
+    );
+    FormattedRequestFailure {
+        status: Some(401),
+        headline: "Provider rejected the request (401)".to_string(),
+        detail,
+        wire: WireErrorType::ApiKeyRejected,
     }
 }
 
@@ -583,7 +618,32 @@ fn strip_from_url_clause(s: &str) -> String {
 }
 
 fn extract_from_json(s: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(s.trim()).ok()?;
+    let s = s.trim();
+    // Leading JSON object/array only: enriched 401 dumps append "\n\n  Model:" after the body.
+    let value: serde_json::Value = match serde_json::from_str(s) {
+        Ok(v) => v,
+        Err(_) => {
+            let bytes = s.as_bytes();
+            let start = bytes.iter().position(|&b| b == b'{' || b == b'[')?;
+            let open = bytes[start];
+            let close = if open == b'{' { b'}' } else { b']' };
+            let mut depth = 0i32;
+            let mut end = None;
+            for (i, &b) in bytes.iter().enumerate().skip(start) {
+                if b == open {
+                    depth += 1;
+                } else if b == close {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i + 1);
+                        break;
+                    }
+                }
+            }
+            let end = end?;
+            serde_json::from_str(s.get(start..end)?).ok()?
+        }
+    };
     if let Some(err) = value.get("error") {
         if let Some(msg) = err.as_str().filter(|m| !m.is_empty()) {
             return Some(msg.to_string());
@@ -858,6 +918,33 @@ mod tests {
     }
 
     #[test]
+    fn api_key_rejected_preserves_provider_body() {
+        let raw = "Unauthorized (401) from https://example.com/v1/chat/completions:                    {\"error\":{\"message\":\"insufficient_quota\"}}\n\n  Model:     foo\n  Auth:      ApiKey\n  Version:   1.3.50";
+        let formatted = format_request_failure(
+            None,
+            Some(WireErrorType::ApiKeyRejected),
+            raw,
+        );
+        assert_eq!(formatted.status, Some(401));
+        assert_eq!(formatted.headline, "Provider rejected the request (401)");
+        assert!(
+            formatted.detail.to_ascii_lowercase().contains("insufficient_quota"),
+            "detail lost provider body: {}",
+            formatted.detail
+        );
+        assert!(
+            formatted.detail.contains("/setup"),
+            "detail should still mention /setup as optional: {}",
+            formatted.detail
+        );
+        assert!(
+            !formatted.detail.contains("missing, wrong, or expired"),
+            "must not use the generic missing-key copy: {}",
+            formatted.detail
+        );
+    }
+
+    #[test]
     fn typed_headline_survives_status_in_message_text() {
         // `auth_transient` copy routinely embeds "Unauthorized (401)"
         // The sniffed status must not demote the dedicated headline to generic "Request failed (401)" copy
@@ -985,6 +1072,10 @@ mod tests {
         assert_eq!(
             WireErrorType::parse(Some("auth_transient")),
             WireErrorType::AuthTransient
+        );
+        assert_eq!(
+            WireErrorType::parse(Some("api_key_rejected")),
+            WireErrorType::ApiKeyRejected
         );
         assert_eq!(
             WireErrorType::parse(Some("encrypted_content_mismatch")),
