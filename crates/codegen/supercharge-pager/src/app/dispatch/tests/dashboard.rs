@@ -3057,9 +3057,10 @@ fn dashboard_slash_restricted_command_upsells_via_toast() {
 #[test]
 fn dashboard_slash_command_error_gets_error_glyph_prefix() {
     let mut app = test_app();
-    seed_model(&mut app, "grok-4.5", "Supercharge Core");
+    // Unknown ids now open the live picker; a bogus effort token on a model without effort support is a real error.
+    seed_model(&mut app, "core-model", "Supercharge Core");
     open_dashboard(&mut app);
-    let effects = dispatch_dashboard_dispatch_slash(&mut app, "/model nonexistent".into());
+    let effects = dispatch_dashboard_dispatch_slash(&mut app, "/model core-model nonexistent".into());
     assert!(effects.is_empty(), "a failed command must not dispatch");
     assert!(app.agents.is_empty(), "no session should be created");
     let toast = app

@@ -1162,8 +1162,20 @@ fn slash_new_uses_active_agent_cwd() {
 fn slash_model_invalid_arg_produces_scrollback_error() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);
+    // Unknown ids open the live picker; a bogus effort token on a model without effort support is a real error.
+    let model_id = acp::ModelId::new(std::sync::Arc::from("core-model"));
+    app.agents
+        .get_mut(&id)
+        .unwrap()
+        .session
+        .models
+        .available
+        .insert(
+            model_id.clone(),
+            acp::ModelInfo::new(model_id, "Supercharge Core".to_string()),
+        );
     let initial_scrollback = agent_ref(&app, id).scrollback.len();
-    let effects = dispatch(Action::SendPrompt("/model nonexistent".into()), &mut app);
+    let effects = dispatch(Action::SendPrompt("/model core-model nonexistent".into()), &mut app);
     assert!(effects.is_empty(), "error should not produce effects");
     assert_eq!(agent_ref(&app, id).scrollback.len(), initial_scrollback + 1);
     assert!(agent_ref(&app, id).prompt.text().is_empty());

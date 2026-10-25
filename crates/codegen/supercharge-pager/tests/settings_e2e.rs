@@ -2177,7 +2177,8 @@ fn settings_value_payload_matches_kind() {
             | SettingsKeyOutcome::Action(Action::SetCollapsedEditBlocks(_))
             | SettingsKeyOutcome::Action(Action::SetInvertScroll(_))
             | SettingsKeyOutcome::Action(Action::SetDisplayRefreshAutoCadence(_))
-            | SettingsKeyOutcome::Action(Action::SetVoiceKeybindEnabled(_)) => {}
+            | SettingsKeyOutcome::Action(Action::SetVoiceKeybindEnabled(_))
+            | SettingsKeyOutcome::Action(Action::SetDashboardPreview(_)) => {}
             other => panic!(
                 "expected a typed bool setter for `{}`, got {:?}",
                 meta.key, other
@@ -3778,19 +3779,25 @@ fn reset_overlay_dims_all_rows_except_target() {
         !action_rows.is_empty(),
         "reset/cancel action footer must be visible — found neither row",
     );
+    // The footer dims its descriptive labels (`reset`, `cancel`) by design; the shortcut keys themselves
+    // (`y`, `n`) are the action elements and must stay at full intensity.
     for action_y in action_rows {
-        let mut action_dim_count = 0usize;
-        for dx in 0..area.width {
-            if has_dim(area.x + dx, action_y) {
-                action_dim_count += 1;
-            }
+        let cells: Vec<(u16, String)> = (area.x..area.x + area.width)
+            .filter_map(|x| buf.cell((x, action_y)).map(|c| (x, c.symbol().to_string())))
+            .collect();
+        for key in ["y reset", "n cancel"] {
+            let chars: Vec<&str> = key.split("").filter(|c| !c.is_empty()).collect();
+            let pos = cells
+                .windows(chars.len())
+                .position(|w| w.iter().zip(&chars).all(|((_, sym), ch)| sym == ch))
+                .unwrap_or_else(|| panic!("`{key}` must render on the action footer row (y={action_y})"));
+            let key_x = cells[pos].0;
+            assert!(
+                !has_dim(key_x, action_y),
+                "shortcut key of `{key}` on the action footer row (y={action_y}) must not carry \
+                 Modifier::DIM — y/n shortcuts are action elements and must stay at full intensity",
+            );
         }
-        assert_eq!(
-            action_dim_count, 0,
-            "no cell on the action footer row (y={action_y}) may carry \
-             Modifier::DIM — y/n shortcuts are action elements and must \
-             stay at full intensity",
-        );
     }
 }
 
@@ -3832,8 +3839,10 @@ fn docs_footer_renders_for_browse_and_picker() {
             "[{fixture_label}] docs footer (`Ask Supercharge`) must appear in the rendered modal:\n\
              {all_text}"
         );
+        // The long example tip falls back to the short form when the modal is narrower than it.
         assert!(
-            all_text.contains("change theme to voltage-light"),
+            all_text.contains("change theme to voltage-light")
+                || all_text.contains("Ask Supercharge to change a setting"),
             "[{fixture_label}] docs footer must include the example phrasing"
         );
     }

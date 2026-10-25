@@ -456,14 +456,12 @@ mod tests {
         let mut ctx = make_ctx(&models);
         let cmd = model::ModelCommand;
         let result = cmd.run(&mut ctx, "nonexistent-model");
+        // Ids missing from the session catalog open the live picker to confirm the typed id.
         match result {
-            CommandResult::Error(msg) => {
-                assert!(
-                    msg.contains("nonexistent-model"),
-                    "error should contain the arg"
-                );
+            CommandResult::Action(Action::OpenLiveModelPickerUnknown { model_id }) => {
+                assert_eq!(model_id, "nonexistent-model");
             }
-            other => panic!("expected Error, got {other:?}"),
+            other => panic!("expected OpenLiveModelPickerUnknown, got {other:?}"),
         }
     }
     #[test]
