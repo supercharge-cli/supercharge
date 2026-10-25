@@ -624,9 +624,11 @@ impl JsonlStorageAdapter {
             if line.trim().is_empty() {
                 continue;
             }
-            let item: T = serde_json::from_str(line)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            items.push(item);
+            // A torn append (crash, full disk) must not make the whole session unloadable
+            match serde_json::from_str::<T>(line) {
+                Ok(item) => items.push(item),
+                Err(e) => tracing::warn!(path = %path.display(), error = %e, "Skipping corrupt JSONL line"),
+            }
         }
         Ok(items)
     }

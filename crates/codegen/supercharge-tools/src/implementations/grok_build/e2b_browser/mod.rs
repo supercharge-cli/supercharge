@@ -219,6 +219,9 @@ macro_rules! browser_tool {
             fn requires_expr(&self) -> Expr<ToolRequirement> {
                 Expr::True
             }
+            fn is_read_only(&self) -> bool {
+                $readonly
+            }
         }
 
         impl supercharge_tool_runtime::Tool for $name {
