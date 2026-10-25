@@ -205,6 +205,34 @@ pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStrea
     Ok(event)
 }
 
+/// What a single SSE `data:` payload means, so stray keep-alives and banners never abort a stream.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SseData {
+    /// End of stream (`[DONE]`, any case or spacing).
+    Done,
+    /// Blank or non-JSON noise such as `: ping`, `PROCESSING` or a bare quote; ignore it.
+    Skip,
+    /// Looks like JSON; parse it (truncated JSON still surfaces as a clear parse error).
+    Payload,
+}
+
+pub(crate) fn classify_sse_data(data: &str) -> SseData {
+    let trimmed = data.trim();
+    if trimmed.is_empty() {
+        return SseData::Skip;
+    }
+    let unbracketed = trimmed.trim_start_matches('[').trim_end_matches(']').trim();
+    if unbracketed.eq_ignore_ascii_case("done") {
+        return SseData::Done;
+    }
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        SseData::Payload
+    } else {
+        tracing::warn!(data = %trimmed.chars().take(200).collect::<String>(), "Skipping non-JSON SSE data line");
+        SseData::Skip
+    }
+}
+
 fn is_transport_event(event_name: &str, data: &str) -> bool {
     fn is_transport_type(value: &str) -> bool {
         matches!(value, "keepalive" | "ping" | "heartbeat")
@@ -1448,8 +1476,10 @@ impl SamplingClient {
                 let item = match event_res {
                     Ok(event) => {
                         let data = &event.data;
-                        if data == "[DONE]" {
-                            return std::future::ready(None);
+                        match classify_sse_data(data) {
+                            SseData::Done => return std::future::ready(None),
+                            SseData::Skip => return std::future::ready(Some(None)),
+                            SseData::Payload => {}
                         }
 
                         tracing::info!(
@@ -1840,8 +1870,10 @@ impl SamplingClient {
                 let item = match event_res {
                     Ok(event) => {
                         let data = &event.data;
-                        if data == "[DONE]" {
-                            return std::future::ready(None);
+                        match classify_sse_data(data) {
+                            SseData::Done => return std::future::ready(None),
+                            SseData::Skip => return std::future::ready(Some(None)),
+                            SseData::Payload => {}
                         }
 
                         tracing::info!(
@@ -2167,8 +2199,10 @@ impl SamplingClient {
                 let item = match event_res {
                     Ok(event) => {
                         let data = &event.data;
-                        if data == "[DONE]" {
-                            return std::future::ready(None);
+                        match classify_sse_data(data) {
+                            SseData::Done => return std::future::ready(None),
+                            SseData::Skip => return std::future::ready(Some(None)),
+                            SseData::Payload => {}
                         }
 
                         tracing::info!(
@@ -3928,5 +3962,42 @@ mod null_tolerance_tests {
         }
         let full = r#"{"id":"m","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":null,"output_tokens":null,"cache_read_input_tokens":null}}"#;
         parse_lenient::<messages::MessagesResponse>(full.as_bytes(), false).expect("full messages");
+    }
+}
+
+#[cfg(test)]
+mod malformed_stream_tests {
+    use super::*;
+
+    #[test]
+    fn sse_data_classification() {
+        for done in ["[DONE]", " [DONE] ", "[done]", "DONE", "[ DONE ]"] {
+            assert_eq!(classify_sse_data(done), SseData::Done, "{done}");
+        }
+        for skip in ["", "  ", "PROCESSING", ": ping", "<html><body>502</body></html>", "\"\""] {
+            assert_eq!(classify_sse_data(skip), SseData::Skip, "{skip}");
+        }
+        assert_eq!(classify_sse_data(r#"{"a":1}"#), SseData::Payload);
+    }
+
+    #[test]
+    fn malformed_payloads_error_without_panicking() {
+        let bad = [
+            r#"{"id":"c","choices":[{"delta":{"content":"x"#,
+            "<!DOCTYPE html><html>Bad Gateway</html>",
+            "",
+            "null",
+            "[]",
+            r#"{"choices":[{}]}"#,
+            r#"{"choices":[null]}"#,
+        ];
+        for b in bad {
+            let _ = parse_lenient::<ChatCompletionChunk>(b.as_bytes(), false);
+            let _ = parse_lenient::<ChatCompletionResponse>(b.as_bytes(), false);
+            let _ = parse_lenient::<messages::MessageStreamEvent>(b.as_bytes(), false);
+            let _ = deserialize_response_event(b);
+            let _ = try_parse_stream_error(b);
+        }
+        assert!(parse_lenient::<ChatCompletionChunk>(bad[0].as_bytes(), false).is_err());
     }
 }
