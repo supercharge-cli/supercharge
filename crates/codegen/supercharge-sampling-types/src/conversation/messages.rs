@@ -164,7 +164,9 @@ pub fn build_messages_request(req: &ConversationRequest) -> crate::messages::Mes
         }
     };
 
-    for item in &req.items {
+    let repaired_items = repair_tool_pairing_ref(&req.items);
+    let repaired_items: &[ConversationItem] = &repaired_items;
+    for item in repaired_items {
         match item {
             ConversationItem::System(s) => {
                 flush_assistant(&mut pending_assistant, &mut messages);

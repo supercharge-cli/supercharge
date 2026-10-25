@@ -698,3 +698,76 @@ fn upgrade_then_fold_through_conversation_to_chat_messages() {
         "reconstructed sibling folded onto assistant.reasoning_content"
     );
 }
+
+#[test]
+fn wire_sanitizer_table() {
+    let tc = |id: Option<&str>| {
+        let t = ToolCallRequest::function("read_file", "{}");
+        match id {
+            Some(id) => t.with_id(id.to_owned()),
+            None => t,
+        }
+    };
+    let tool_none = || {
+        let mut m = ChatRequestMessage::tool("", "ok");
+        m.tool_call_id = None;
+        m
+    };
+    let cases: Vec<(&str, Vec<ChatRequestMessage>, usize)> = vec![
+        (
+            "empty ids",
+            vec![
+                ChatRequestMessage::assistant_tool_call(tc(Some(""))),
+                ChatRequestMessage::tool("", "ok"),
+            ],
+            2,
+        ),
+        (
+            "missing ids",
+            vec![
+                ChatRequestMessage::assistant_tool_call(tc(None)),
+                tool_none(),
+            ],
+            2,
+        ),
+        (
+            "orphan",
+            vec![
+                ChatRequestMessage::user("hi"),
+                ChatRequestMessage::tool("ghost", "x"),
+            ],
+            2,
+        ),
+        (
+            "missing result",
+            vec![
+                ChatRequestMessage::assistant_tool_call(tc(Some("a"))),
+                ChatRequestMessage::user("hi"),
+            ],
+            3,
+        ),
+    ];
+    for (name, msgs, len) in cases {
+        let req = ChatCompletionRequest::new("m", msgs);
+        let v = serde_json::to_value(&req).unwrap();
+        let arr = v["messages"].as_array().unwrap();
+        assert_eq!(arr.len(), len, "{name}: {arr:?}");
+        let mut pending: Vec<String> = Vec::new();
+        for m in arr {
+            if m["role"] == "tool" {
+                let id = m["tool_call_id"].as_str().unwrap_or("");
+                assert!(!id.is_empty(), "{name}");
+                let pos = pending.iter().position(|p| p == id).expect(name);
+                pending.remove(pos);
+            } else {
+                assert!(pending.is_empty(), "{name}");
+                for t in m["tool_calls"].as_array().into_iter().flatten() {
+                    let id = t["id"].as_str().unwrap_or("").to_owned();
+                    assert!(!id.is_empty(), "{name}");
+                    pending.push(id);
+                }
+            }
+        }
+        assert!(pending.is_empty(), "{name}");
+    }
+}

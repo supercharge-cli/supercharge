@@ -194,7 +194,8 @@ pub fn stream_chat_completions<'a>(
                     let mut name_for_event: Option<String> = None;
                     let mut args_for_event: Option<String> = None;
 
-                    if let Some(id) = tc_delta.id {
+                    // Some providers omit the id or send "" on later chunks; never let that clobber a real id
+                    if let Some(id) = tc_delta.id.filter(|id| !id.is_empty()) {
                         entry.0 = id.clone();
                         id_for_event = Some(id);
                     }
@@ -266,7 +267,12 @@ pub fn stream_chat_completions<'a>(
         let mut tool_calls: Vec<ToolCall> = tool_call_acc
             .into_values()
             .map(|(id, name, arguments)| ToolCall {
-                id: std::sync::Arc::<str>::from(id),
+                // Strict providers reject the follow-up tool message when its id is empty, so synthesize a stable one
+                id: std::sync::Arc::<str>::from(if id.is_empty() {
+                    format!("call_{}", uuid::Uuid::new_v4().simple())
+                } else {
+                    id
+                }),
                 name,
                 arguments: std::sync::Arc::<str>::from(arguments),
             })
@@ -630,6 +636,54 @@ mod tests {
                 assert_eq!(response.tool_calls().len(), 1);
             }
             other => panic!("expected Completed(ToolCalls), got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_call_stream_without_ids_gets_synthesized_id() {
+        let mk = |id: Option<&str>, name: Option<&str>, args: &str| {
+            make_chunk(vec![ChatChunkDelta {
+                role: None,
+                content: None,
+                reasoning_content: None,
+                tool_calls: vec![ChunkToolCallDelta {
+                    index: 0,
+                    id: id.map(Into::into),
+                    kind: None,
+                    function: Some(ToolCallFunctionDelta {
+                        name: name.map(Into::into),
+                        arguments: Some(args.into()),
+                    }),
+                }],
+                tool_call_id: None,
+                function_call: None,
+            }])
+        };
+        for first_id in [None, Some(""), Some("call_keep")] {
+            let raw = stream::iter::<Vec<Result<ChatCompletionChunk, SamplingError>>>(vec![
+                Ok(mk(first_id, Some("do_thing"), "{")),
+                Ok(mk(Some(""), None, "}")),
+            ])
+            .boxed();
+            let events = collect(stream_chat_completions(
+                raw,
+                None,
+                rid(),
+                Duration::from_secs(60),
+            ))
+            .await;
+            match events.last().unwrap() {
+                SamplingEvent::Completed { response, .. } => {
+                    let calls = response.tool_calls();
+                    assert_eq!(calls.len(), 1);
+                    let id = nth(calls, 0).id.as_ref();
+                    assert!(!id.is_empty(), "{first_id:?}");
+                    if first_id == Some("call_keep") {
+                        assert_eq!(id, "call_keep");
+                    }
+                }
+                other => panic!("expected Completed, got {other:?}"),
+            }
         }
     }
 

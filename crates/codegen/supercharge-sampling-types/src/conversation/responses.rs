@@ -160,8 +160,7 @@ impl From<&ConversationRequest> for rs::CreateResponse {
 
 /// Reasoning items stay top-level siblings rather than folding into the assistant, so the input replays the model's original order.
 pub(super) fn build_responses_input(req: &ConversationRequest) -> rs::InputParam {
-    let items: Vec<rs::InputItem> = req
-        .items
+    let items: Vec<rs::InputItem> = repair_tool_pairing_ref(&req.items)
         .iter()
         .flat_map(conversation_item_to_input_items)
         .collect();

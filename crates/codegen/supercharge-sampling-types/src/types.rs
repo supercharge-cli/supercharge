@@ -48,11 +48,16 @@ where
     Option::<T>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
 }
 
-fn serialize_wire_messages<S>(messages: &[ChatRequestMessage], serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_wire_messages<S>(
+    messages: &[ChatRequestMessage],
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     use serde::ser::SerializeSeq;
+    let repaired = sanitize_chat_tool_sequence(messages);
+    let messages: &[ChatRequestMessage] = &repaired;
     let mut seq = serializer.serialize_seq(Some(messages.len()))?;
     for msg in messages {
         if msg.model_id.is_some() {
@@ -64,6 +69,116 @@ where
         }
     }
     seq.end()
+}
+
+fn chat_tool_sequence_is_valid(messages: &[ChatRequestMessage]) -> bool {
+    let mut pending: Vec<&str> = Vec::new();
+    for msg in messages {
+        if msg.role == Role::Tool {
+            let id = msg.tool_call_id.as_deref().unwrap_or("");
+            match pending.iter().position(|p| *p == id) {
+                Some(pos) if !id.is_empty() => {
+                    pending.remove(pos);
+                }
+                _ => return false,
+            }
+            continue;
+        }
+        if !pending.is_empty() {
+            return false;
+        }
+        let mut seen = std::collections::HashSet::new();
+        for tc in &msg.tool_calls {
+            let id = tc.id.as_deref().unwrap_or("");
+            if id.is_empty() || !seen.insert(id) {
+                return false;
+            }
+            pending.push(id);
+        }
+    }
+    pending.is_empty()
+}
+
+/// Last line of defense before Chat Completions hits the wire: every assistant tool call gets a non-empty id and exactly
+/// one tool message right after it (synthetic when missing), and tool messages nothing claims become user notes.
+/// Valid sequences are returned borrowed and unchanged.
+pub fn sanitize_chat_tool_sequence(
+    messages: &[ChatRequestMessage],
+) -> std::borrow::Cow<'_, [ChatRequestMessage]> {
+    use std::borrow::Cow;
+    use std::collections::HashSet;
+    if chat_tool_sequence_is_valid(messages) {
+        return Cow::Borrowed(messages);
+    }
+    let mut msgs = messages.to_vec();
+    let mut used: HashSet<String> = HashSet::new();
+    let mut unanswered: Vec<String> = Vec::new();
+    for (mi, msg) in msgs.iter_mut().enumerate() {
+        if msg.role == Role::Tool {
+            let id = msg.tool_call_id.clone().unwrap_or_default();
+            if id.is_empty() {
+                if !unanswered.is_empty() {
+                    msg.tool_call_id = Some(unanswered.remove(0));
+                }
+            } else if let Some(pos) = unanswered.iter().position(|p| *p == id) {
+                unanswered.remove(pos);
+            }
+            continue;
+        }
+        if !msg.tool_calls.is_empty() {
+            unanswered.clear();
+            used.clear();
+        }
+        for (ci, tc) in msg.tool_calls.iter_mut().enumerate() {
+            let id = tc.id.clone().unwrap_or_default();
+            let id = if id.is_empty() || used.contains(&id) {
+                let fresh = format!("call_auto_{mi}_{ci}");
+                tc.id = Some(fresh.clone());
+                fresh
+            } else {
+                id
+            };
+            used.insert(id.clone());
+            unanswered.push(id);
+        }
+    }
+    let mut consumed = vec![false; msgs.len()];
+    let mut out = Vec::with_capacity(msgs.len());
+    for i in 0..msgs.len() {
+        if consumed[i] {
+            continue;
+        }
+        consumed[i] = true;
+        let msg = &msgs[i];
+        if msg.role == Role::Tool {
+            let label = match msg.tool_call_id.as_deref() {
+                Some(id) if !id.is_empty() => format!("[earlier tool result {id}]"),
+                _ => "[earlier tool result]".to_owned(),
+            };
+            out.push(ChatRequestMessage::user(format!(
+                "{label}\n{}",
+                msg.text_content()
+            )));
+            continue;
+        }
+        out.push(msg.clone());
+        for tc in &msg.tool_calls {
+            let id = tc.id.as_deref().unwrap_or("");
+            let found = (i + 1..msgs.len()).find(|&j| {
+                !consumed[j]
+                    && msgs[j].role == Role::Tool
+                    && msgs[j].tool_call_id.as_deref() == Some(id)
+            });
+            match found {
+                Some(j) => {
+                    consumed[j] = true;
+                    out.push(msgs[j].clone());
+                }
+                None => out.push(ChatRequestMessage::tool(id, "[tool result unavailable]")),
+            }
+        }
+    }
+    Cow::Owned(out)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

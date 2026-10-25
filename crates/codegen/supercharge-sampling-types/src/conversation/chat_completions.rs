@@ -271,7 +271,8 @@ impl From<ChatResponseMessage> for ConversationItem {
 
 impl From<ConversationRequest> for ChatCompletionRequest {
     fn from(req: ConversationRequest) -> Self {
-        let messages: Vec<ChatRequestMessage> = conversation_to_chat_messages(req.items);
+        let messages: Vec<ChatRequestMessage> =
+            conversation_to_chat_messages(repair_tool_pairing(req.items));
 
         let tools_is_empty = req.tools.is_empty();
         let tools: Option<Vec<ToolDefinition>> = if tools_is_empty {

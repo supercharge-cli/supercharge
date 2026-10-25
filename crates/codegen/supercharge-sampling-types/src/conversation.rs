@@ -6,6 +6,8 @@
 mod chat_completions;
 mod messages;
 mod responses;
+mod tool_pairing;
+pub use tool_pairing::{MISSING_TOOL_RESULT, repair_tool_pairing, repair_tool_pairing_ref};
 
 pub use chat_completions::{conversation_item_to_chat_message, conversation_to_chat_messages};
 pub use messages::build_messages_request;

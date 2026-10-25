@@ -1482,11 +1482,11 @@ fn build_responses_input_multi_turn_reasoning_ordering() {
         ConversationItem::system("sys"),
         ConversationItem::user("u1"),
         reasoning_sibling("r1", "think 1", Some("enc1")),
-        ConversationItem::assistant("a1"),
+        assistant_with_call("a1", "tc1"),
         ConversationItem::tool_result("tc1", "result1"),
         ConversationItem::user("u2"),
         reasoning_sibling("r2", "think 2", Some("enc2")),
-        ConversationItem::assistant("a2"),
+        assistant_with_call("a2", "tc2"),
         ConversationItem::tool_result("tc2", "result2"),
         ConversationItem::user("u3"),
         reasoning_sibling("r3", "think 3", Some("enc3")),
@@ -1692,4 +1692,16 @@ fn serialized_body_contains_no_placeholder_strings() {
         2,
         "both reasoning siblings must be present"
     );
+}
+
+fn assistant_with_call(text: &str, id: &str) -> ConversationItem {
+    let mut item = ConversationItem::assistant(text);
+    if let ConversationItem::Assistant(a) = &mut item {
+        a.tool_calls.push(ToolCall {
+            id: id.into(),
+            name: "read_file".into(),
+            arguments: "{}".into(),
+        });
+    }
+    item
 }
