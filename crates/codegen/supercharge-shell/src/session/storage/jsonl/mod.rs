@@ -612,7 +612,20 @@ impl JsonlStorageAdapter {
     async fn write_jsonl<T: serde::Serialize>(&self, path: PathBuf, items: &[T]) -> io::Result<()> {
         super::write_jsonl_atomic_async(&path, items).await
     }
+    /// Strict read: any corrupt line is an error. Used by read-modify-write paths so a rewrite never silently drops data.
     fn read_jsonl<T: serde::de::DeserializeOwned>(&self, path: PathBuf) -> io::Result<Vec<T>> {
+        self.read_jsonl_inner(path, false)
+    }
+    /// Lenient read for session load: a torn append (crash, full disk) skips that line instead of making the
+    /// whole session unloadable.
+    fn read_jsonl_lenient<T: serde::de::DeserializeOwned>(&self, path: PathBuf) -> io::Result<Vec<T>> {
+        self.read_jsonl_inner(path, true)
+    }
+    fn read_jsonl_inner<T: serde::de::DeserializeOwned>(
+        &self,
+        path: PathBuf,
+        skip_corrupt: bool,
+    ) -> io::Result<Vec<T>> {
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -624,10 +637,12 @@ impl JsonlStorageAdapter {
             if line.trim().is_empty() {
                 continue;
             }
-            // A torn append (crash, full disk) must not make the whole session unloadable
             match serde_json::from_str::<T>(line) {
                 Ok(item) => items.push(item),
-                Err(e) => tracing::warn!(path = %path.display(), error = %e, "Skipping corrupt JSONL line"),
+                Err(e) if skip_corrupt => {
+                    tracing::warn!(path = %path.display(), error = %e, "Skipping corrupt JSONL line")
+                }
+                Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
             }
         }
         Ok(items)
@@ -1629,7 +1644,7 @@ impl StorageAdapter for JsonlStorageAdapter {
                 &self.goal_mode_state_file(info),
             )?;
         let workflow_runs = self.load_workflow_runs_sync(info)?;
-        let rewind_points = self.read_jsonl::<RewindPoint>(self.rewind_points_file(info))?;
+        let rewind_points = self.read_jsonl_lenient::<RewindPoint>(self.rewind_points_file(info))?;
         let result = PersistedData {
             summary,
             chat_history,
