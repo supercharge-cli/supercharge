@@ -736,7 +736,7 @@ fn wire_sanitizer_table() {
                 ChatRequestMessage::user("hi"),
                 ChatRequestMessage::tool("ghost", "x"),
             ],
-            2,
+            1,
         ),
         (
             "missing result",

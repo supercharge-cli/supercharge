@@ -6,6 +6,7 @@
 
 #![deny(clippy::indexing_slicing)]
 
+pub mod chat_wire;
 pub mod conversation;
 pub mod doom_loop;
 pub mod error;

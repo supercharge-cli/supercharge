@@ -57,16 +57,10 @@ where
 {
     use serde::ser::SerializeSeq;
     let repaired = sanitize_chat_tool_sequence(messages);
-    let messages: &[ChatRequestMessage] = &repaired;
+    let messages = crate::chat_wire::normalize_chat_wire_messages(&repaired);
     let mut seq = serializer.serialize_seq(Some(messages.len()))?;
-    for msg in messages {
-        if msg.model_id.is_some() {
-            let mut wire = msg.clone();
-            wire.model_id = None;
-            seq.serialize_element(&wire)?;
-        } else {
-            seq.serialize_element(msg)?;
-        }
+    for msg in &messages {
+        seq.serialize_element(msg)?;
     }
     seq.end()
 }

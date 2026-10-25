@@ -63,6 +63,12 @@ fn portable_function_parameters(parameters: &serde_json::Value) -> serde_json::V
         "type".to_owned(),
         serde_json::Value::String("object".to_owned()),
     );
+    if !object.get("properties").is_some_and(serde_json::Value::is_object) {
+        object.insert("properties".to_owned(), serde_json::Value::Object(Default::default()));
+    }
+    if object.get("required").is_some_and(|r| !r.is_array()) {
+        object.remove("required");
+    }
     for keyword in FORBIDDEN_ROOT_KEYWORDS {
         object.remove(keyword);
     }
