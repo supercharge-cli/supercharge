@@ -298,6 +298,15 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         curated: &["zhipu/glm-5.1", "deepseek/deepseek-v3"],
     },
     SetupProviderProfile {
+        id: "agentrouter",
+        name: "AgentRouter",
+        description: "GPT Sol models — Responses API, ZCode identity headers sent automatically",
+        base_url: "https://agentrouter.org/v1",
+        default_model: "gpt-5.6-sol",
+        format: SetupWireFormat::Responses,
+        curated: &["gpt-5.6-sol", "gpt-6.1-sol", "gpt-6-astra"],
+    },
+    SetupProviderProfile {
         id: "nous",
         name: "Nous Research",
         description: "Nous Portal OAuth — free-tier models",
@@ -869,6 +878,14 @@ fn apply_catalog_auth(
     api_key: &str,
     format: SetupWireFormat,
 ) -> reqwest::blocking::RequestBuilder {
+    // agentrouter.org rejects clients it cannot identify, even with a valid key.
+    if supercharge_sampler::agentrouter::is_agentrouter_base_url(base_url) {
+        let session_id = supercharge_sampler::agentrouter::new_session_id();
+        for (name, value) in supercharge_sampler::agentrouter::static_identity_headers(&session_id)
+        {
+            request = request.header(name, value);
+        }
+    }
     let key = api_key.trim();
     if key.is_empty() {
         return request;
@@ -2115,6 +2132,62 @@ mod tests {
                 (format == SetupWireFormat::Anthropic).then_some("2023-06-01")
             );
         }
+    }
+
+    #[test]
+    fn agentrouter_profile_uses_responses_api() {
+        let profile = find_setup_provider("agentrouter").expect("agentrouter profile");
+        assert_eq!(profile.base_url, "https://agentrouter.org/v1");
+        assert_eq!(profile.format, SetupWireFormat::Responses);
+        assert_eq!(profile.default_model, "gpt-5.6-sol");
+        assert_eq!(
+            provider_models_list_url(profile.base_url),
+            "https://agentrouter.org/v1/models"
+        );
+    }
+
+    #[test]
+    fn agentrouter_catalog_fetch_carries_zcode_identity() {
+        let client = crate::http::shared_startup_blocking_client();
+        let request = apply_catalog_auth(
+            client.get("https://agentrouter.org/v1/models"),
+            "https://agentrouter.org/v1",
+            "test-key",
+            SetupWireFormat::Responses,
+        )
+        .build()
+        .unwrap();
+        assert_eq!(
+            request
+                .headers()
+                .get("user-agent")
+                .and_then(|v| v.to_str().ok()),
+            Some(supercharge_sampler::agentrouter::USER_AGENT_VALUE),
+            "the shared client's default UA must be replaced by the ZCode one"
+        );
+        assert_eq!(
+            request.headers().get_all("user-agent").iter().count(),
+            1,
+            "exactly one user-agent line"
+        );
+        assert!(request.headers().contains_key("x-session-id"));
+        assert!(request.headers().contains_key("x-zcode-agent"));
+        assert!(request.headers().contains_key("authorization"));
+    }
+
+    #[test]
+    fn non_agentrouter_catalog_fetch_has_no_zcode_identity() {
+        let client = crate::http::shared_startup_blocking_client();
+        let request = apply_catalog_auth(
+            client.get("https://api.example.com/v1/models"),
+            "https://api.example.com/v1",
+            "test-key",
+            SetupWireFormat::Openai,
+        )
+        .build()
+        .unwrap();
+        assert!(!request.headers().contains_key("x-zcode-agent"));
+        assert!(!request.headers().contains_key("x-session-id"));
     }
 
     fn format_target_config() -> toml::Value {

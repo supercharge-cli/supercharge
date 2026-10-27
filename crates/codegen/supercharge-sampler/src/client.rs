@@ -10,6 +10,7 @@
 //! All trace-upload and URL-based header injection is intentionally *not* here.
 //! The session puts per-request headers (proxy auth, OTel context, etc.) into [`SamplerConfig::extra_headers`] before constructing the client.
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -445,6 +446,8 @@ pub struct SamplingClient {
     bearer_resolver: Option<crate::config::SharedBearerResolver>,
     /// Per-request header injection (OTel traceparent).
     header_injector: Option<crate::config::SharedHeaderInjector>,
+    /// Set when `base_url` is agentrouter: the session id shared by its identity headers.
+    agentrouter_session_id: Option<String>,
     /// Endpoint URL builder, resolved once from `base_url` and `query_params`.
     endpoint: EndpointTemplate,
     first_use_noted: Arc<AtomicBool>,
@@ -745,6 +748,21 @@ impl SamplingClient {
             }
         }
 
+        // agentrouter.org throttles unidentified clients; apply the captured ZCode
+        // identity after the default UA above so `user-agent` lands as ZCode's.
+        let agentrouter_session_id = crate::agentrouter::is_agentrouter_base_url(&config.base_url)
+            .then(crate::agentrouter::new_session_id);
+        if let Some(session_id) = &agentrouter_session_id {
+            for (name, value) in crate::agentrouter::static_identity_headers(session_id) {
+                if let (Ok(name), Ok(value)) = (
+                    HeaderName::from_str(name),
+                    HeaderValue::from_str(&value),
+                ) {
+                    headers.insert(name, value);
+                }
+            }
+        }
+
         if config.force_http1 {
             tracing::info!("Using HTTP/1.1 for sampling client (force_http1=true)");
         }
@@ -796,6 +814,7 @@ impl SamplingClient {
             attribution_callback: config.attribution_callback,
             bearer_resolver: config.bearer_resolver,
             header_injector: config.header_injector,
+            agentrouter_session_id,
             endpoint,
             first_use_noted: Arc::new(AtomicBool::new(false)),
         })
@@ -887,6 +906,14 @@ impl SamplingClient {
         let sent_bearer = Self::sent_fragment_from_headers(&headers, &self.defaults.auth_scheme);
         if let Some(injector) = &self.header_injector {
             injector.inject(&mut headers);
+        }
+        // Fresh ids on every request so long sessions do not reuse one id (see agentrouter module).
+        if self.agentrouter_session_id.is_some() {
+            for (name, value) in crate::agentrouter::per_request_headers() {
+                if let (Ok(name), Ok(value)) = (HeaderName::from_str(name), HeaderValue::from_str(&value)) {
+                    headers.insert(name, value);
+                }
+            }
         }
         SentRequest {
             builder: self.http.post(url).headers(headers),
@@ -3202,6 +3229,97 @@ mod tests {
     fn sampling_client_always_has_user_agent() {
         let client = SamplingClient::new(minimal_config()).expect("build");
         assert!(client.default_headers.contains_key(USER_AGENT));
+    }
+
+    fn agentrouter_config() -> SamplerConfig {
+        SamplerConfig {
+            api_key: Some("test-key".to_string()),
+            base_url: "https://agentrouter.org/v1".to_string(),
+            model: "gpt-5.6-sol".to_string(),
+            context_window: 8192,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn agentrouter_client_carries_zcode_identity() {
+        let client = SamplingClient::new(agentrouter_config()).expect("build");
+        assert_eq!(
+            client
+                .default_headers
+                .get(USER_AGENT)
+                .and_then(|v| v.to_str().ok()),
+            Some(crate::agentrouter::USER_AGENT_VALUE),
+            "agentrouter requests must present the ZCode user-agent, not the Supercharge one"
+        );
+        for name in [
+            "http-referer",
+            "x-session-id",
+            "x-zcode-agent",
+            "x-zcode-app-version",
+            "x-zcode-session-type",
+        ] {
+            assert!(
+                client.default_headers.contains_key(name),
+                "missing identity header {name}"
+            );
+        }
+        assert!(client.agentrouter_session_id.is_some());
+    }
+
+    #[test]
+    fn agentrouter_post_refreshes_request_ids() {
+        let client = SamplingClient::new(agentrouter_config()).expect("build");
+        let first = client
+            .post("http://localhost/test")
+            .builder
+            .build()
+            .expect("build request");
+        let second = client
+            .post("http://localhost/test")
+            .builder
+            .build()
+            .expect("build request");
+        for name in ["x-query-id", "x-request-id", "x-zcode-trace-id"] {
+            let a = first.headers().get(name).expect(name);
+            let b = second.headers().get(name).expect(name);
+            assert_ne!(a, b, "{name} must be fresh on every request");
+        }
+        assert_ne!(
+            first.headers().get("x-session-id"),
+            None,
+            "session id is stable per client"
+        );
+        assert_eq!(
+            first.headers().get("x-session-id"),
+            second.headers().get("x-session-id")
+        );
+    }
+
+    #[test]
+    fn non_agentrouter_client_has_no_zcode_identity() {
+        let client = SamplingClient::new(minimal_config()).expect("build");
+        assert!(client.agentrouter_session_id.is_none());
+        assert!(!client.default_headers.contains_key("x-zcode-agent"));
+        assert_ne!(
+            client
+                .default_headers
+                .get(USER_AGENT)
+                .and_then(|v| v.to_str().ok()),
+            Some(crate::agentrouter::USER_AGENT_VALUE)
+        );
+    }
+
+    #[test]
+    fn agentrouter_detection_matches_host_only() {
+        assert!(crate::agentrouter::is_agentrouter_base_url("https://agentrouter.org/v1"));
+        assert!(crate::agentrouter::is_agentrouter_base_url("https://AGENTROUTER.ORG"));
+        assert!(!crate::agentrouter::is_agentrouter_base_url(
+            "https://agentrouter.example.com/v1"
+        ));
+        assert!(!crate::agentrouter::is_agentrouter_base_url(
+            "https://api.zenllm.org/v1"
+        ));
     }
 
     // Regression: a past change dropped HeaderInjector (traceparent) from sampling requests.
