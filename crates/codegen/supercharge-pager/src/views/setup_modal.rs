@@ -919,6 +919,7 @@ fn handle_pick_model(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcom
 
 fn accept_pick_model_enter(state: &mut SetupModalState) -> SetupOutcome {
     let query = state.filter.text().trim().to_owned();
+    // Typing an exact catalog id or name selects it without arrowing down.
     if !query.is_empty() {
         if let Some(model) = state.models.iter().find(|model| {
             model.id.eq_ignore_ascii_case(&query) || model.name.eq_ignore_ascii_case(&query)
@@ -927,14 +928,10 @@ fn accept_pick_model_enter(state: &mut SetupModalState) -> SetupOutcome {
             state.pending_unknown = None;
             return accept_listed_model(state, model);
         }
-        if state.pending_unknown.as_deref() == Some(query.as_str()) {
-            state.pending_unknown = None;
-            return save_selected_model(state, query.clone(), query);
-        }
-        state.pending_unknown = Some(query);
-        return SetupOutcome::Changed;
     }
 
+    // Otherwise Enter accepts the highlighted row; the filter text becomes a
+    // model only through its own "not in the list" row below.
     let Some(model) = state.selected_model() else {
         state.step = SetupStep::FetchError {
             message: "no model selected".to_owned(),
@@ -950,7 +947,8 @@ fn accept_pick_model_enter(state: &mut SetupModalState) -> SetupOutcome {
         state.step = SetupStep::CustomModel;
         return SetupOutcome::Changed;
     }
-    // Highlighted "not in list" row with empty filter should not happen; treat as save.
+    // Synthetic "not in the list" row: first Enter arms the confirm, second
+    // Enter commits the typed id.
     if !state.models.iter().any(|m| m.id == model.id) {
         if state.pending_unknown.as_deref() == Some(model.id.as_str()) {
             state.pending_unknown = None;
@@ -2098,6 +2096,46 @@ mod tests {
             other => panic!("expected immediate save, got {other:?}"),
         }
         assert!(state.pending_unknown.is_none());
+    }
+
+    #[test]
+    fn filter_search_enter_accepts_highlighted_row_not_raw_query() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.models = vec![model("claude-sonnet-4"), model("grok-3")];
+        state.step = SetupStep::PickModel;
+        state.filter.set_text("sonnet");
+        // Searching must not turn the query into a custom model id.
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::SwitchSession { model_id, .. } => {
+                assert_eq!(model_id, "claude-sonnet-4");
+            }
+            other => panic!("expected highlighted-row switch, got {other:?}"),
+        }
+        assert!(state.pending_unknown.is_none());
+    }
+
+    #[test]
+    fn typed_unknown_row_still_confirms_raw_id_with_two_enters() {
+        let mut state = SetupModalState::new();
+        state.picker_only = true;
+        state.models = vec![model("o3-mini")];
+        state.step = SetupStep::PickModel;
+        state.filter.set_text("o3");
+        // Arrow past the match to the synthetic "not in the list" row first.
+        handle_setup_key(
+            &mut state,
+            &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+        );
+        assert!(matches!(
+            handle_setup_key(&mut state, &enter()),
+            SetupOutcome::Changed
+        ));
+        assert_eq!(state.pending_unknown.as_deref(), Some("o3"));
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Save { setup, .. } => assert_eq!(setup.model_id, "o3"),
+            other => panic!("expected save on second Enter, got {other:?}"),
+        }
     }
 
     #[test]
