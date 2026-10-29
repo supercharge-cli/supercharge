@@ -14,7 +14,7 @@ use crate::session::helpers::compaction_context::CompactionInputs;
 use crate::session::helpers::compaction_context::to_system_reminder;
 use crate::session::helpers::session_compact::{
     COMPACT_FAILED_PREFIX, CompactOutput, CompactionOutcome, build_two_pass_compaction_prompt,
-    generate_session_compact, is_context_length_error,
+    generate_session_compact, is_context_length_error, retain_session_asset_files,
 };
 use crate::session::persistence::PersistenceMsg;
 use crate::session::two_pass::{
@@ -1364,7 +1364,7 @@ impl SessionActor {
         let generate_session_compact = compact_output.content.clone();
         let user_message_prefix = self.build_user_message_prefix().await;
         let conversation = self.chat_state_handle.get_conversation().await;
-        let (discovered_agents_md, all_skills_for_compaction, _agent_edited_paths, state_context) =
+        let (discovered_agents_md, all_skills_for_compaction, _agent_edited_paths, mut state_context) =
             if use_short_prompt {
                 let empty_edited: std::collections::BTreeSet<String> = Default::default();
                 let ctx =
@@ -1569,6 +1569,37 @@ impl SessionActor {
                 };
                 (agents_md, skills, edited_paths, ctx)
             };
+        // Harvested `<image_files>` text is untrusted: only real files this shell wrote into the
+        // session assets dir survive into the compaction note.
+        let harvested_paths = std::mem::take(&mut state_context.images.attached_paths);
+        let (kept, dropped_paths) = if harvested_paths.is_empty() {
+            (Vec::new(), 0)
+        } else {
+            match crate::session::persistence::ensure_owner_only_session_dir(&self.session_info) {
+                Ok(session_dir) => {
+                    retain_session_asset_files(
+                        harvested_paths,
+                        &crate::session::image_describe::session_assets_dir(&session_dir),
+                    )
+                    .await
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        ?error,
+                        "compaction: session dir unavailable; attached image paths dropped"
+                    );
+                    (Vec::new(), harvested_paths.len())
+                }
+            }
+        };
+        state_context.images.attached_paths = kept;
+        if dropped_paths > 0 {
+            tracing::debug!(
+                session_id = %self.session_info.id.0,
+                dropped_paths,
+                "compaction: dropped attached image paths that are not session asset files"
+            );
+        }
         use crate::session::helpers::compaction_context::SubagentToolNames;
         let subagent_tool_names: Option<SubagentToolNames> =
             if use_short_prompt || state_context.running_subagents.is_empty() {

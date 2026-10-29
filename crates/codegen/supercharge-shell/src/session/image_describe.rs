@@ -263,18 +263,8 @@ impl ImageDescribeCache {
 /// `paths` should be in the same order the user supplied them.
 /// Each path goes through [`scrub_for_envelope`], so a user-controlled path containing a literal `</image_files>` cannot close the envelope early.
 pub(crate) fn render_image_files_block(paths: &[String]) -> Option<String> {
-    if paths.is_empty() {
-        return None;
-    }
-    let mut out = String::from(
-        "<image_files>\nThe following images were provided by the user and saved to the workspace for future use:\n",
-    );
-    for (i, p) in paths.iter().enumerate() {
-        let p = scrub_for_envelope(p);
-        out.push_str(&format!("{}. {p}\n", i + 1));
-    }
-    out.push_str("\nThese images can be copied for use in other locations.\n</image_files>");
-    Some(out)
+    // One renderer shared with the compaction harvester so the block format cannot drift.
+    supercharge_chat_state::compaction_image_context::render_image_files_block(paths)
 }
 /// Result of persisting one user-supplied image to the session's `assets/` directory.
 #[derive(Debug, Clone)]
@@ -286,6 +276,10 @@ pub(crate) struct PersistedImage {
     /// MIME type from the original [`ImageContent`].
     pub mime_type: String,
 }
+/// Directory under a session dir that holds every image [`persist_user_images`] writes.
+pub(crate) fn session_assets_dir(session_dir: &Path) -> std::path::PathBuf {
+    session_dir.join("assets")
+}
 /// Persist a batch of normalized images to `<session_dir>/assets/`.
 /// Each file is written as `image-<uuid>.<ext>` where `<ext>` is inferred from `mime_type` (falling back to `png`).
 /// Returns one [`PersistedImage`] per input, in input order, so callers can render the `<image_files>` list deterministically.
@@ -296,7 +290,7 @@ pub(crate) fn persist_user_images(
     if images.is_empty() {
         return Ok(Vec::new());
     }
-    let assets_dir = session_dir.join("assets");
+    let assets_dir = session_assets_dir(session_dir);
     crate::util::grok_home::create_dir_all_owner_only(&assets_dir)?;
     let mut out = Vec::with_capacity(images.len());
     for img in images {

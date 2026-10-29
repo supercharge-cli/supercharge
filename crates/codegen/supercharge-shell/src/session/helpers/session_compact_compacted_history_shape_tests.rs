@@ -318,6 +318,7 @@ fn fallback_minimal_history_has_no_tool_results() {
         agent_message_anchor: None,
         recent_messages: vec![],
         last_user_query: Some("fix the bug".to_string()),
+        images: Default::default(),
         agent_edited_paths: vec!["src/main.rs".to_string()],
         running_tasks: vec![],
         running_subagents: vec![],
@@ -532,6 +533,7 @@ fn fallback_preserves_subagents() {
         agent_message_anchor: None,
         recent_messages: vec![ConversationItem::assistant("working")],
         last_user_query: Some("fix the bug".to_string()),
+        images: Default::default(),
         agent_edited_paths: vec!["src/main.rs".to_string()],
         running_tasks: vec![BackgroundTaskSummary {
             task_id: "t1".into(),
@@ -565,6 +567,7 @@ fn fallback_preserves_subagents() {
         agent_message_anchor: original.agent_message_anchor.clone(),
         recent_messages: vec![],
         last_user_query: original.last_user_query.clone(),
+        images: Default::default(),
         agent_edited_paths: original.agent_edited_paths.clone(),
         running_tasks: vec![],
         running_subagents: original.running_subagents.clone(),
