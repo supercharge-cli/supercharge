@@ -4337,6 +4337,7 @@ impl AppView {
                                     )
                                 })
                                 .or(self.announcement.as_ref());
+                            let model_notice = self.models.current_notice();
                             let welcome_params = crate::views::welcome::WelcomeRenderParams {
                                 prompt_focus: if self.welcome_prompt_focused {
                                     WelcomePromptFocus::Focused
@@ -4356,6 +4357,7 @@ impl AppView {
                                 announcement: hero_announcement,
                                 tip,
                                 model_name: &model_name,
+                                model_notice: model_notice.as_ref(),
                                 flags: &flags_vec,
                                 selected: self.welcome_menu_index,
                                 team_name: self.team_name.as_deref(),

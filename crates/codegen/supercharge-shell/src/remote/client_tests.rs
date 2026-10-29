@@ -1014,3 +1014,36 @@ async fn auth_headers_do_not_collide_with_json() {
         assert_eq!(count, 1, "duplicate header {name}");
     }
 }
+
+#[test]
+fn parse_reads_notice_from_top_level_or_meta() {
+    use supercharge_sampling_types::{ModelNotice, ModelNoticeSeverity};
+    let deprecated = ModelNotice {
+        severity: ModelNoticeSeverity::Warning,
+        text: "Deprecated Oct 15".to_owned(),
+        label: Some("deprecated".to_owned()),
+    };
+    let top_level = serde_json::json!({
+        "id": "old-model",
+        "notice": {"severity": "warning", "text": "Deprecated Oct 15", "label": "deprecated"},
+        "_meta": {"notice": {"severity": "critical", "text": "ignored"}}
+    });
+    let in_meta = serde_json::json!({
+        "id": "old-model",
+        "_meta": {"notice": {"severity": "warning", "text": "Deprecated Oct 15", "label": "deprecated"}}
+    });
+    let from_top_level = parse_remote_model_value(&top_level, "https://default.url")
+        .expect("entry with an id parses");
+    let from_meta =
+        parse_remote_model_value(&in_meta, "https://default.url").expect("entry with an id parses");
+    assert_eq!(Some(deprecated.clone()), from_top_level.notice);
+    assert_eq!(Some(deprecated), from_meta.notice);
+}
+#[test]
+fn parse_keeps_the_model_when_its_notice_is_malformed() {
+    let value = serde_json::json!({"id": "old-model", "notice": {"severity": "warning"}});
+    let result =
+        parse_remote_model_value(&value, "https://default.url").expect("entry with an id parses");
+    assert_eq!("old-model", result.model);
+    assert_eq!(None, result.notice);
+}

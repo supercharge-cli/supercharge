@@ -15,7 +15,8 @@ use supercharge_agent::prompt::skills::SkillsConfig;
 use supercharge_login::{AuthManager, GrokComConfig, OidcAuthConfig};
 use supercharge_sampler::{AuthScheme, SamplerConfig};
 use supercharge_sampling_types::{
-    CompactionAtTokens, CompactionsRemaining, REASONING_EFFORT_META_KEY,
+    CompactionAtTokens, CompactionsRemaining, MODEL_NOTICE_META_KEY, ModelNotice,
+    REASONING_EFFORT_META_KEY,
     REASONING_EFFORTS_META_KEY, ReasoningEffort, ReasoningEffortOption, ReasoningSummary,
     reasoning_effort_meta_value, reasoning_efforts_meta_value,
 };
@@ -3678,6 +3679,8 @@ struct DefaultModelJson {
     auto_compact_threshold_percent: Option<u8>,
     #[serde(default)]
     system_prompt_label: Option<String>,
+    #[serde(default)]
+    notice: Option<ModelNotice>,
 }
 #[cfg(test)]
 fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryConfig> {
@@ -3713,6 +3716,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 api_base_url: Some(endpoints.api_base_url.clone()),
                 name: m.name,
                 description: m.description,
+                notice: m.notice.and_then(ModelNotice::normalized),
                 context_window,
                 context_windows: m.context_windows,
                 auto_compact_threshold_percent: m.auto_compact_threshold_percent,
@@ -3769,6 +3773,9 @@ pub struct ModelEntryConfig {
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Message clients show while this model is selected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<ModelNotice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_completion_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3881,6 +3888,7 @@ impl Default for ModelEntryConfig {
     /// default (they are required in config.toml); here they are empty / the inert minimum and real entries must set them.
     fn default() -> Self {
         Self {
+            notice: None,
             id: None,
             model: String::new(),
             model_family: None,
@@ -3943,6 +3951,8 @@ pub struct ConfigModelOverride {
     pub mtls_cert_dir: Option<PathBuf>,
     pub name: Option<String>,
     pub description: Option<String>,
+    /// A notice with blank `text` clears the inherited one.
+    pub notice: Option<ModelNotice>,
     pub api_key: Option<String>,
     /// Env var name(s) for the provider key: string or array in config.toml.
     pub env_key: Option<EnvKeys>,
@@ -4023,6 +4033,9 @@ impl ConfigModelOverride {
         }
         if self.description.is_some() {
             entry.info.description.clone_from(&self.description);
+        }
+        if let Some(notice) = &self.notice {
+            entry.info.notice = notice.clone().normalized();
         }
         if self.max_completion_tokens.is_some() {
             entry.info.max_completion_tokens = self.max_completion_tokens;
@@ -4161,6 +4174,9 @@ pub struct ModelInfo {
     /// Honored by both the picker (`/model`) and `/session-info`: when set, that's the label shown to users in either consumer.
     pub name: Option<String>,
     pub description: Option<String>,
+    /// Message clients show while this model is selected; sent as ACP `_meta.notice`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<ModelNotice>,
     pub max_completion_tokens: Option<u32>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
@@ -4246,6 +4262,7 @@ impl ModelInfo {
     /// Used when a configured model ID isn't found in presets or remote models.
     pub fn fallback(slug: &str) -> Self {
         ModelInfo {
+            notice: None,
             user_selectable: true,
             id: None,
             model: slug.to_owned(),
@@ -4296,6 +4313,7 @@ impl ModelInfo {
             base_url: entry.base_url.clone(),
             name: entry.name.clone(),
             description: entry.description.clone(),
+            notice: entry.notice.clone(),
             max_completion_tokens: entry.max_completion_tokens,
             temperature: entry.temperature,
             top_p: entry.top_p,
@@ -4984,6 +5002,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
     if let Some(bearer) = xai_bearer {
         let entry = ModelEntry {
             info: ModelInfo {
+                notice: None,
                 user_selectable: false,
                 id: None,
                 model_family: None,
@@ -5219,6 +5238,7 @@ fn resolve_hidden_default_web_search_sampling_config(
 ) -> SamplerConfig {
     let entry = ModelEntry {
         info: ModelInfo {
+            notice: None,
             id: None,
             model_family: None,
             model: model_id.to_owned(),
@@ -5364,6 +5384,9 @@ pub(crate) fn to_acp_model_info(
                         REASONING_EFFORTS_META_KEY.to_string(),
                         reasoning_efforts_meta_value(&info.reasoning_efforts),
                     );
+                }
+                if let Some(notice) = &info.notice {
+                    map.insert(MODEL_NOTICE_META_KEY.to_owned(), notice.to_meta_value());
                 }
                 if map.is_empty() { None } else { Some(map) }
             };

@@ -2,6 +2,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::num::NonZeroU64;
 
+mod model_notice;
+
+pub use self::model_notice::{
+    MODEL_NOTICE_META_KEY, ModelNotice, ModelNoticeSeverity, parse_model_notice_meta,
+};
+
 // ============================================================================
 // TraceContext — cloneable, type-erased context for request tracing
 // ============================================================================

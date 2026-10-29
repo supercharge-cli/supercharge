@@ -688,6 +688,10 @@ pub(crate) fn parse_remote_model_value(
         base_url,
         name,
         description: get_string(obj, "description"),
+        notice: obj
+            .get(supercharge_sampling_types::MODEL_NOTICE_META_KEY)
+            .or_else(|| meta.and_then(|m| m.get(supercharge_sampling_types::MODEL_NOTICE_META_KEY)))
+            .and_then(supercharge_sampling_types::ModelNotice::from_value),
         max_completion_tokens: get_u64(obj, "maxCompletionTokens")
             .or_else(|| get_u64(obj, "max_completion_tokens"))
             .and_then(|v| u32::try_from(v).ok()),

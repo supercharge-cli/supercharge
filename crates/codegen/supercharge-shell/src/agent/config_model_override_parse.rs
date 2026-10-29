@@ -721,6 +721,11 @@ mod tests {
             mtls_cert_dir: Some("/run/model-identity".into()),
             name: Some("Model M".into()),
             description: Some("desc".into()),
+            notice: Some(supercharge_sampling_types::ModelNotice {
+                severity: Default::default(),
+                text: "Retiring soon".into(),
+                label: Some("deprecated".into()),
+            }),
             api_key: Some("key".into()),
             env_key: Some(crate::agent::config::EnvKeys::single("ENV_KEY")),
             auth_provider: Some("corp-gateway".into()),

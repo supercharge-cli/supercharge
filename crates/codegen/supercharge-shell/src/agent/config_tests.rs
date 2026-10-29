@@ -8497,3 +8497,87 @@ async fn process_key_from_model_env_key() {
         Some(TOKEN)
     );
 }
+
+#[test]
+fn config_model_notice_reaches_acp_meta() {
+    use supercharge_sampling_types::{ModelNotice, ModelNoticeSeverity, parse_model_notice_meta};
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [model.old-model]
+            model = "old-model"
+            base_url = "https://api.example.com/v1"
+            context_window = 200000
+            notice = { severity = "warning", text = "Deprecated Oct 15", label = "deprecated" }
+            "#,
+    )
+    .expect("test TOML parses");
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+    let models = resolve_model_list(&cfg, None);
+    let acp_models = to_acp_model_info(&models);
+    let meta = acp_models
+        .get(&acp::ModelId::new("old-model"))
+        .and_then(|model| model.meta.as_ref())
+        .expect("configured model has meta");
+    assert_eq!(
+        Some(
+            &serde_json::json!({"severity": "warning", "text": "Deprecated Oct 15", "label": "deprecated"})
+        ),
+        meta.get("notice")
+    );
+    assert_eq!(
+        Some(ModelNotice {
+            severity: ModelNoticeSeverity::Warning,
+            text: "Deprecated Oct 15".to_owned(),
+            label: Some("deprecated".to_owned()),
+        }),
+        parse_model_notice_meta(Some(meta))
+    );
+}
+#[test]
+fn config_blank_notice_clears_the_inherited_notice() {
+    use supercharge_sampling_types::{ModelNotice, ModelNoticeSeverity};
+    let mut base = test_model_entry("old-model", "https://test.api/v1", None, None, None);
+    base.info.notice = Some(ModelNotice {
+        severity: ModelNoticeSeverity::Critical,
+        text: "Retired".to_owned(),
+        label: None,
+    });
+    let over: ConfigModelOverride =
+        toml::from_str(r#"notice = { text = "" }"#).expect("override TOML parses");
+    let entry = over.apply("old-model", Some(base), &EndpointsConfig::default());
+    assert_eq!(None, entry.info.notice);
+}
+#[test]
+fn acp_model_meta_omits_notice_when_unset() {
+    let mut models = IndexMap::new();
+    models.insert(
+        "m".to_owned(),
+        test_model_entry("m", "https://test.api/v1", None, None, None),
+    );
+    let acp_models = to_acp_model_info(&models);
+    let meta = acp_models
+        .values()
+        .next()
+        .and_then(|model| model.meta.as_ref())
+        .expect("model has meta");
+    assert_eq!(None, meta.get("notice"));
+}
+#[test]
+fn model_entry_config_notice_survives_a_serde_round_trip() {
+    use supercharge_sampling_types::{ModelNotice, ModelNoticeSeverity};
+    let entry = ModelEntryConfig {
+        model: "old-model".to_owned(),
+        base_url: "https://test.api/v1".to_owned(),
+        context_window: NonZeroU64::new(200_000).expect("non-zero"),
+        notice: Some(ModelNotice {
+            severity: ModelNoticeSeverity::Warning,
+            text: "Deprecated Oct 15".to_owned(),
+            label: None,
+        }),
+        ..Default::default()
+    };
+    let json = serde_json::to_value(&entry).expect("entry serializes");
+    let back: ModelEntryConfig = serde_json::from_value(json).expect("entry deserializes");
+    assert_eq!(entry.notice, back.notice);
+    assert_eq!(entry.notice, ModelInfo::from_config(&back).notice);
+}

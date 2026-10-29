@@ -176,6 +176,8 @@ pub use render::{AppRenderParams, OverlayHeader};
 mod dock_input_tests;
 #[cfg(test)]
 mod header_tests;
+#[cfg(test)]
+mod model_notice_tests;
 mod rewind;
 mod role;
 pub(crate) use role::{AgentRole, ChildLink, ComposerRoute, ViewSurface};

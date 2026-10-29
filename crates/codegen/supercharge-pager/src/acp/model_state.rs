@@ -1,8 +1,8 @@
 use agent_client_protocol as acp;
 use indexmap::IndexMap;
 use supercharge_shell::sampling::types::{
-    ReasoningEffort, ReasoningEffortOption, parse_reasoning_effort_meta,
-    parse_reasoning_efforts_meta, supports_reasoning_effort_meta,
+    ModelNotice, ReasoningEffort, ReasoningEffortOption, parse_reasoning_effort_meta,
+    parse_model_notice_meta, parse_reasoning_efforts_meta, supports_reasoning_effort_meta,
 };
 
 use crate::slash::commands::effort_levels::{effort_options_from_ids, legacy_effort_options};
@@ -156,6 +156,12 @@ impl ModelState {
     /// Used for subagent views where SubagentProgress reports an actual window that may differ from the inherited model's metadata.
     pub fn override_context_window(&mut self, tokens: u64) {
         self.context_window_override = Some(tokens);
+    }
+
+    /// The notice the current model carries in `meta.notice`, if any.
+    pub fn current_notice(&self) -> Option<ModelNotice> {
+        let info = self.available.get(self.current.as_ref()?)?;
+        parse_model_notice_meta(info.meta.as_ref())
     }
 
     /// Replace the available-model list.
