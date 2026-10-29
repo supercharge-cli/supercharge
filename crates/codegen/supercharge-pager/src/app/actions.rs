@@ -827,6 +827,10 @@ pub enum Action {
     DoctorFixCancelled(DoctorFixTarget),
     /// Persist the memory modal fullscreen preference to config.toml.
     PersistMemoryFullscreen(bool),
+    /// Copy text selected in the `/memory` modal; the outcome is shown in the modal's status line.
+    MemoryCopy {
+        text: String,
+    },
     /// Delete one note from the `/memory` modal; the shell verifies the hash before removing.
     MemoryForget {
         path: String,

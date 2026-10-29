@@ -16,7 +16,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crossterm::event::KeyModifiers;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -31,6 +31,9 @@ use crate::render::SafeBuf;
 use crate::render::scrollbar::{ScrollbarClickResult, render_scrollbar, scrollbar_click_to_offset};
 use crate::scrollback::blocks::markdown_content::MarkdownContent;
 use crate::theme::Theme;
+use crate::views::drag_select::{
+    TextDrag, TextEndpoint, endpoint_at, endpoint_at_clamped, paint_text_drag, text_for_drag,
+};
 use crate::views::modal_window::{
     self, ModalContentArea, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
@@ -139,6 +142,14 @@ pub struct MemoryStatusLine {
     pub is_error: bool,
 }
 
+/// Left-button press on the preview before the movement threshold promotes a drag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingPress {
+    column: u16,
+    row: u16,
+    endpoint: TextEndpoint,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryModalMode {
     Browse,
@@ -181,9 +192,17 @@ pub struct MemoryModalState {
     filtered_cache: Vec<usize>,
     /// Cached total lines in the preview (for scrollbar rendering).
     preview_total_lines: usize,
+    /// Plain text of the wrapped preview lines as last rendered, for drag-select geometry and copy.
+    preview_plain_lines: Vec<String>,
+    /// Width `preview_plain_lines` was wrapped at; `0` forces a rebuild on the next render.
+    preview_plain_width: u16,
+    pending_press: Option<PendingPress>,
+    text_drag: Option<TextDrag>,
     /// Hit-test rects for mouse interaction (set during render).
     list_area: Rect,
     preview_area: Rect,
+    /// The preview's text columns (the preview area minus its scrollbar gutter).
+    preview_text_area: Rect,
     list_scrollbar_area: Option<Rect>,
     preview_scrollbar_area: Option<Rect>,
 }
@@ -211,8 +230,13 @@ impl MemoryModalState {
             fullscreen: load_fullscreen_pref(),
             filtered_cache,
             preview_total_lines: 0,
+            preview_plain_lines: Vec::new(),
+            preview_plain_width: 0,
+            pending_press: None,
+            text_drag: None,
             list_area: Rect::default(),
             preview_area: Rect::default(),
+            preview_text_area: Rect::default(),
             list_scrollbar_area: None,
             preview_scrollbar_area: None,
         };
@@ -482,8 +506,36 @@ impl MemoryModalState {
         self.load_preview();
     }
 
+    fn clear_text_drag(&mut self) {
+        self.pending_press = None;
+        self.text_drag = None;
+    }
+
+    fn preview_endpoint_clamped(&self, column: u16, row: u16) -> Option<TextEndpoint> {
+        endpoint_at_clamped(
+            &self.preview_plain_lines,
+            self.preview_text_area,
+            self.preview_scroll,
+            column,
+            row,
+        )
+    }
+
+    /// Show the outcome of an `Action::MemoryCopy` in the status line (the agent-view toast is
+    /// painted under the modal).
+    pub fn report_copy(&mut self, delivery: &crate::clipboard::CopyDelivery) {
+        self.status = Some(MemoryStatusLine {
+            text: delivery.toast_message().into_owned(),
+            is_error: !delivery.success(),
+        });
+    }
+
     fn load_preview(&mut self) {
         self.preview_scroll = 0;
+        // New content: the cached wrap and any gesture over the old text are stale.
+        self.preview_plain_lines.clear();
+        self.preview_plain_width = 0;
+        self.clear_text_drag();
         self.preview_hash = None;
         self.status = None;
         let path = self
@@ -948,6 +1000,10 @@ fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, th
     if state.preview_markdown.is_none() {
         state.preview_total_lines = 0;
         state.preview_scrollbar_area = None;
+        state.preview_text_area = Rect::default();
+        state.preview_plain_lines.clear();
+        state.preview_plain_width = 0;
+        state.clear_text_drag();
         let msg = "No file selected";
         let style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
         let cy = area.y + area.height / 2;
@@ -994,8 +1050,28 @@ fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, th
         total_at_full
     };
 
+    // Plain text of the wrapped lines drives drag-select geometry and the copied text.
+    if state.preview_plain_width != content_width as u16 {
+        state.preview_plain_lines = state.preview_markdown.as_ref().unwrap().with_wrapped_lines(
+            content_width,
+            |wrapped| {
+                wrapped
+                    .lines
+                    .iter()
+                    .map(|line| line.spans.iter().map(|s| s.content.as_ref()).collect())
+                    .collect()
+            },
+        );
+        state.preview_plain_width = content_width as u16;
+        state.clear_text_drag();
+    }
+
     state.preview_total_lines = total;
     state.preview_scrollbar_area = sb_area;
+    state.preview_text_area = Rect {
+        width: content_width as u16,
+        ..area
+    };
     state.preview_scroll = state.preview_scroll.min(total.saturating_sub(visible));
     let scroll = state.preview_scroll;
 
@@ -1011,6 +1087,17 @@ fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, th
                 }
             }
         });
+
+    if let Some(drag) = state.text_drag {
+        paint_text_drag(
+            drag,
+            &state.preview_plain_lines,
+            state.preview_text_area,
+            scroll,
+            buf,
+            theme,
+        );
+    }
 
     render_scrollbar(
         buf,
@@ -1138,12 +1225,16 @@ pub fn handle_memory_mouse(
 
     let on_list = in_rect(state.list_area);
     let on_preview = in_rect(state.preview_area);
+    let on_preview_text = in_rect(state.preview_text_area);
     let on_list_sb = state.list_scrollbar_area.is_some_and(&in_rect);
     let on_preview_sb = state.preview_scrollbar_area.is_some_and(&in_rect);
 
     match kind {
-        MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        | MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+        MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) => {
+            // A press on the preview text, or a gesture already under way, is a drag-select.
+            if on_preview_text || state.text_drag.is_some() || state.pending_press.is_some() {
+                return handle_preview_drag(state, kind, column, row);
+            }
             // Click/drag on list scrollbar: jump-scroll and select nearest entry
             if on_list_sb {
                 let sb = state.list_scrollbar_area.unwrap();
@@ -1194,6 +1285,8 @@ pub fn handle_memory_mouse(
                     .preview_total_lines
                     .saturating_sub(state.preview_area.height as usize);
                 state.preview_scroll = state.preview_scroll.saturating_add(3).min(max);
+                // Content moves under a still pointer; drop an unfinished gesture.
+                state.clear_text_drag();
                 return InputOutcome::Changed;
             }
             InputOutcome::Unchanged
@@ -1212,13 +1305,117 @@ pub fn handle_memory_mouse(
             }
             if on_preview || on_preview_sb {
                 state.preview_scroll = state.preview_scroll.saturating_sub(3);
+                state.clear_text_drag();
                 return InputOutcome::Changed;
             }
             InputOutcome::Unchanged
         }
 
+        MouseEventKind::Up(MouseButton::Left) => finish_preview_drag(state, column, row),
+
+        MouseEventKind::Moved => {
+            // A bare Moved with an active drag is a lost Up: finish it so the band does not
+            // linger without copying.
+            if state.text_drag.is_some() {
+                return finish_preview_drag(state, column, row);
+            }
+            InputOutcome::Unchanged
+        }
+
+        MouseEventKind::Down(_) => {
+            // A non-left press ends a stuck drag.
+            if state.text_drag.take().is_some() || state.pending_press.take().is_some() {
+                InputOutcome::Changed
+            } else {
+                InputOutcome::Unchanged
+            }
+        }
+
         _ => InputOutcome::Unchanged,
     }
+}
+
+/// Left press / drag over the preview text. A press is held until a 1-cell move promotes it to a
+/// drag (same threshold as scrollback); the drag auto-scrolls when the pointer leaves the pane.
+fn handle_preview_drag(
+    state: &mut MemoryModalState,
+    kind: MouseEventKind,
+    column: u16,
+    row: u16,
+) -> InputOutcome {
+    let rect = state.preview_text_area;
+    if matches!(kind, MouseEventKind::Down(_)) {
+        let Some(endpoint) = endpoint_at(
+            &state.preview_plain_lines,
+            rect,
+            state.preview_scroll,
+            column,
+            row,
+        ) else {
+            state.clear_text_drag();
+            return InputOutcome::Unchanged;
+        };
+        state.pending_press = Some(PendingPress {
+            column,
+            row,
+            endpoint,
+        });
+        state.text_drag = None;
+        return InputOutcome::Changed;
+    }
+    if let Some(pending) = state.pending_press {
+        if pending.column == column && pending.row == row {
+            return InputOutcome::Unchanged;
+        }
+        state.pending_press = None;
+        state.text_drag = Some(TextDrag {
+            anchor: pending.endpoint,
+            head: pending.endpoint,
+        });
+    }
+    if state.text_drag.is_none() {
+        return InputOutcome::Unchanged;
+    }
+    if rect.width == 0 || rect.height == 0 {
+        state.clear_text_drag();
+        return InputOutcome::Changed;
+    }
+    if row < rect.y {
+        state.preview_scroll = state.preview_scroll.saturating_sub(1);
+    } else if row >= rect.y.saturating_add(rect.height) {
+        let max = state
+            .preview_total_lines
+            .saturating_sub(rect.height as usize);
+        state.preview_scroll = state.preview_scroll.saturating_add(1).min(max);
+    }
+    let head = state.preview_endpoint_clamped(column, row);
+    if let (Some(head), Some(drag)) = (head, state.text_drag.as_mut()) {
+        drag.head = head;
+    }
+    InputOutcome::Changed
+}
+
+/// Mouse-up (or a lost Up) over the preview: a non-empty drag copies its text.
+fn finish_preview_drag(state: &mut MemoryModalState, column: u16, row: u16) -> InputOutcome {
+    if state.pending_press.take().is_some() {
+        return InputOutcome::Changed;
+    }
+    let Some(mut drag) = state.text_drag.take() else {
+        return InputOutcome::Unchanged;
+    };
+    if let Some(head) = state.preview_endpoint_clamped(column, row) {
+        drag.head = head;
+    }
+    if drag.is_non_empty()
+        && let Some(text) = text_for_drag(
+            drag,
+            &state.preview_plain_lines,
+            state.preview_text_area.width,
+        )
+    {
+        return InputOutcome::Action(Action::MemoryCopy { text });
+    }
+    InputOutcome::Changed
 }
 
 /// Keys while the filter input is focused: all chars go to the filter, only Escape exits filter mode.
@@ -2375,5 +2572,147 @@ mod tests {
                 size_bytes: 0,
             },
         ]
+    }
+
+    fn long_note_state() -> (tempfile::TempDir, MemoryModalState) {
+        use supercharge_shell::extensions::notification::MemoryFileInfo;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("topics")).unwrap();
+        let body: String = (1..=60).map(|i| format!("line {i}\n\n")).collect();
+        let path = dir.path().join("topics/long.md");
+        std::fs::write(&path, &body).unwrap();
+        let state = MemoryModalState::new(build_entries(vec![MemoryFileInfo {
+            path: path.to_string_lossy().into_owned(),
+            source: "workspace".into(),
+            size_bytes: body.len() as u64,
+            modified_epoch_secs: None,
+            generated: false,
+        }]));
+        (dir, state)
+    }
+
+    fn mouse(state: &mut MemoryModalState, kind: MouseEventKind, col: u16, row: u16) -> InputOutcome {
+        handle_memory_mouse(state, kind, col, row)
+    }
+
+    #[test]
+    fn dragging_over_the_preview_copies_the_selected_text() {
+        let (_dir, mut state) = long_note_state();
+        render_full(&mut state);
+        let area = state.preview_text_area;
+        assert!(area.width > 10 && area.height > 3, "{area:?}");
+        let down = MouseEventKind::Down(MouseButton::Left);
+        let drag = MouseEventKind::Drag(MouseButton::Left);
+        // Press on "line 2" (row 2), drag past the end of "line 3" (row 4), release.
+        assert!(matches!(mouse(&mut state, down, area.x, area.y + 2), InputOutcome::Changed));
+        // A press without movement is not a drag.
+        assert!(matches!(mouse(&mut state, drag, area.x, area.y + 2), InputOutcome::Unchanged));
+        assert!(state.text_drag.is_none());
+        mouse(&mut state, drag, area.x + 6, area.y + 4);
+        assert!(state.text_drag.is_some());
+        // The band is painted while dragging, and the render keeps the drag.
+        render_full(&mut state);
+        assert!(state.text_drag.is_some());
+        match mouse(&mut state, MouseEventKind::Up(MouseButton::Left), area.x + 6, area.y + 4) {
+            InputOutcome::Action(Action::MemoryCopy { text }) => assert_eq!(text, "line 2\n\nline 3"),
+            other => panic!("unexpected outcome {other:?}"),
+        }
+        assert!(state.text_drag.is_none());
+    }
+
+    #[test]
+    fn a_click_on_the_preview_copies_nothing_and_keeps_the_selection() {
+        let (_dir, mut state) = long_note_state();
+        render_full(&mut state);
+        let area = state.preview_text_area;
+        let before = state.selected;
+        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Up(MouseButton::Left), area.x, area.y),
+            InputOutcome::Changed
+        ));
+        assert_eq!(state.selected, before);
+        assert!(state.text_drag.is_none() && state.pending_press.is_none());
+    }
+
+    #[test]
+    fn a_lost_mouse_up_still_copies_on_the_next_move() {
+        let (_dir, mut state) = long_note_state();
+        render_full(&mut state);
+        let area = state.preview_text_area;
+        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 6, area.y);
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Moved, area.x + 6, area.y),
+            InputOutcome::Action(Action::MemoryCopy { text }) if text == "line 1"
+        ));
+        assert!(state.text_drag.is_none());
+        // With no gesture, a move is ignored.
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Moved, area.x, area.y),
+            InputOutcome::Unchanged
+        ));
+    }
+
+    #[test]
+    fn scrolling_or_another_button_drops_an_unfinished_drag() {
+        let (_dir, mut state) = long_note_state();
+        render_full(&mut state);
+        let area = state.preview_text_area;
+        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 3, area.y + 1);
+        assert!(state.text_drag.is_some());
+        mouse(&mut state, MouseEventKind::ScrollDown, area.x + 3, area.y + 1);
+        assert!(state.text_drag.is_none());
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Up(MouseButton::Left), area.x + 3, area.y + 1),
+            InputOutcome::Unchanged
+        ));
+
+        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 3, area.y + 1);
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Down(MouseButton::Right), area.x, area.y),
+            InputOutcome::Changed
+        ));
+        assert!(state.text_drag.is_none());
+    }
+
+    #[test]
+    fn dragging_below_the_pane_scrolls_the_preview() {
+        let (_dir, mut state) = long_note_state();
+        render_full(&mut state);
+        let area = state.preview_text_area;
+        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        let below = area.y + area.height;
+        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 2, below);
+        assert_eq!(state.preview_scroll, 1);
+        assert!(state.text_drag.is_some());
+    }
+
+    #[test]
+    fn a_drag_before_any_render_is_ignored() {
+        let (_dir, mut state) = long_note_state();
+        // No render yet: no text geometry, so nothing to select and nothing panics.
+        state.preview_area = Rect::new(40, 0, 30, 10);
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Up(MouseButton::Left), 45, 3),
+            InputOutcome::Unchanged
+        ));
+        assert!(matches!(
+            mouse(&mut state, MouseEventKind::Moved, 45, 3),
+            InputOutcome::Unchanged
+        ));
+    }
+
+    #[test]
+    fn copy_outcome_lands_in_the_status_line() {
+        let (_dir, mut state) = long_note_state();
+        state.report_copy(&crate::clipboard::CopyDelivery::File {
+            path: std::path::PathBuf::from("/tmp/last-copy.txt"),
+        });
+        let status = state.status.clone().expect("status");
+        assert!(!status.is_error);
+        assert!(status.text.contains("/tmp/last-copy.txt"), "{}", status.text);
     }
 }
