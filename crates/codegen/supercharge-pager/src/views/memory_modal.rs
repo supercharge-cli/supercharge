@@ -41,8 +41,10 @@ use crate::views::modal_window::{
 use supercharge_shell::extensions::memory::{MEMORY_FORGET_MAX_FILE_BYTES, MemoryForgetResponse};
 use supercharge_shell::extensions::notification::MemoryDisabledReason;
 
-const SPLIT_MIN_WIDTH: u16 = 80;
+const SPLIT_MIN_WIDTH: u16 = 64;
 const LIST_WIDTH_RATIO: f64 = 0.40;
+/// Below this list width the size column is dropped so labels keep room (age only).
+const NARROW_LIST_WIDTH: u16 = 48;
 const MAX_PREVIEW_BYTES: u64 = 1_048_576;
 /// Content search reads run on the UI thread, so they are capped per note and in total.
 const MAX_SEARCH_BYTES_PER_NOTE: u64 = 262_144;
@@ -111,9 +113,9 @@ pub struct MemoryFileEntry {
     /// `"global"`, `"workspace"`, or `"session"`.
     pub source: String,
     pub label: String,
-    /// Pre-formatted `"size · modified"` string for the list row.
-    /// Empty for headers.
-    pub meta_display: String,
+    /// Formatted size and age for the list row's metadata column. Empty for headers.
+    pub size_text: String,
+    pub age_text: String,
     pub is_header: bool,
     /// Store-generated index, not a note (see `MemoryFileInfo::generated`).
     pub generated: bool,
@@ -121,6 +123,17 @@ pub struct MemoryFileEntry {
 }
 
 impl MemoryFileEntry {
+    /// Metadata column text. Narrow lists drop the size so labels keep room.
+    fn meta_text(&self, narrow: bool) -> String {
+        if self.is_header {
+            String::new()
+        } else if narrow {
+            self.age_text.clone()
+        } else {
+            format!("{} \u{00B7} {}", self.size_text, self.age_text)
+        }
+    }
+
     /// What `x` may remove: v2 topics and inbox observations, or legacy session logs.
     /// Mirrors the store's own rule so the hint never advertises a delete the shell would refuse.
     pub fn is_deletable(&self) -> bool {
@@ -189,6 +202,9 @@ pub enum MemoryModalMode {
     ConfirmingDelete {
         idx: usize,
     },
+    /// The preview has keyboard focus: arrows scroll the note; Esc or Enter return to the list.
+    /// On narrow terminals (no split) the preview covers the whole modal while focused.
+    PreviewFocused,
 }
 
 #[derive(Debug, Clone)]
@@ -236,6 +252,8 @@ pub struct MemoryModalState {
     /// Hit-test rects for mouse interaction (set during render).
     list_area: Rect,
     preview_area: Rect,
+    /// The last render showed list and preview side by side (drives Enter and the footer hints).
+    split_shown: bool,
     /// The preview's text columns (the preview area minus its scrollbar gutter).
     preview_text_area: Rect,
     list_scrollbar_area: Option<Rect>,
@@ -273,6 +291,7 @@ impl MemoryModalState {
             text_drag: None,
             list_area: Rect::default(),
             preview_area: Rect::default(),
+            split_shown: true,
             preview_text_area: Rect::default(),
             list_scrollbar_area: None,
             preview_scrollbar_area: None,
@@ -577,6 +596,15 @@ impl MemoryModalState {
         self.load_preview();
     }
 
+    fn scroll_preview_by(&mut self, delta: isize) {
+        let max = self
+            .preview_total_lines
+            .saturating_sub(self.preview_text_area.height as usize);
+        self.preview_scroll = self.preview_scroll.saturating_add_signed(delta).min(max);
+        // Content moves under a still pointer; drop an unfinished gesture.
+        self.clear_text_drag();
+    }
+
     fn clear_text_drag(&mut self) {
         self.pending_press = None;
         self.text_drag = None;
@@ -722,9 +750,6 @@ pub fn build_entries(
 
     for f in files {
         let label = file_label(&f.path);
-        let size = crate::util::format_bytes(f.size_bytes);
-        let modified = format_modified(f.modified_epoch_secs, now_secs);
-        let meta_display = format!("{size} \u{00B7} {modified}");
         let bucket = match f.source.as_str() {
             "global" => &mut global,
             "workspace" => &mut workspace,
@@ -732,7 +757,8 @@ pub fn build_entries(
         };
         bucket.push(MemoryFileEntry {
             label,
-            meta_display,
+            size_text: crate::util::format_bytes(f.size_bytes),
+            age_text: format_modified(f.modified_epoch_secs, now_secs),
             path: f.path.into(),
             source: f.source,
             is_header: false,
@@ -750,7 +776,8 @@ pub fn build_entries(
             entries.push(MemoryFileEntry {
                 path: PathBuf::new(),
                 source: String::new(),
-                meta_display: String::new(),
+                size_text: String::new(),
+                age_text: String::new(),
                 label: label.to_string(),
                 is_header: true,
                 generated: false,
@@ -832,6 +859,19 @@ pub fn render_memory_modal(
     }
 
     let show_preview = content_area.width >= SPLIT_MIN_WIDTH;
+    state.split_shown = show_preview;
+    if !show_preview && state.mode == MemoryModalMode::PreviewFocused {
+        state.list_area = Rect::default();
+        state.list_scrollbar_area = None;
+        let status_rows = render_status_line(buf, content_area, state, &theme);
+        let preview_area = Rect {
+            height: content_area.height.saturating_sub(status_rows),
+            ..content_area
+        };
+        state.preview_area = preview_area;
+        render_preview(buf, preview_area, state, &theme);
+        return;
+    }
     let list_width = if show_preview {
         (content_area.width as f64 * LIST_WIDTH_RATIO) as u16
     } else {
@@ -1004,6 +1044,15 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
         return;
     }
 
+    // Labels truncate before the metadata column so long names cannot run into it.
+    let narrow = content_width < NARROW_LIST_WIDTH;
+    let meta_col_w = state
+        .entries
+        .iter()
+        .filter(|e| !e.is_header)
+        .map(|e| e.meta_text(narrow).width())
+        .max()
+        .unwrap_or(0);
     let filtered = state.filtered_indices();
     let end = filtered.len().min(state.scroll_offset + available_height);
     let visible = filtered.get(state.scroll_offset..end).unwrap_or(&[]);
@@ -1043,7 +1092,8 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
             };
             buf.set_style(row_rect, Style::default().bg(bg));
 
-            let max_label_w = content_width.saturating_sub(2) as usize;
+            // 1 col left pad, 2 col gap before the metadata column, 1 col right pad.
+            let max_label_w = (content_width as usize).saturating_sub(meta_col_w + 4);
             let truncated_label: Cow<str> = if entry.label.width() > max_label_w {
                 let trunc = truncate_to_width(&entry.label, max_label_w.saturating_sub(3));
                 format!("{trunc}...").into()
@@ -1070,15 +1120,11 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
                     hint_w,
                 );
             } else {
-                let meta_w = entry.meta_display.width() as u16;
+                let meta = entry.meta_text(narrow);
+                let meta_w = meta.width() as u16;
                 let meta_x = (area.x + content_width).saturating_sub(meta_w + 1);
                 if meta_x > area.x + 1 {
-                    buf.set_span(
-                        meta_x,
-                        y,
-                        &Span::styled(&entry.meta_display, meta_style),
-                        meta_w,
-                    );
+                    buf.set_span(meta_x, y, &Span::styled(meta.as_str(), meta_style), meta_w);
                 }
             }
 
@@ -1276,8 +1322,33 @@ pub fn handle_memory_key(state: &mut MemoryModalState, key: &KeyEvent) -> InputO
     match state.mode {
         MemoryModalMode::ConfirmingDelete { .. } => unreachable!("handled above"),
         MemoryModalMode::FilterFocused => handle_filter_focused(state, key),
+        MemoryModalMode::PreviewFocused => handle_preview_focused(state, key),
         MemoryModalMode::Browse => handle_browse(state, key),
     }
+}
+
+/// Keys while the preview has focus: scroll the note; Esc or Enter return to the list.
+fn handle_preview_focused(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
+    if key.code == KeyCode::Char('f') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        state.fullscreen = !state.fullscreen;
+        return InputOutcome::Action(Action::PersistMemoryFullscreen(state.fullscreen));
+    }
+    let page = state.preview_text_area.height.max(1) as isize;
+    let delta = match key.code {
+        KeyCode::Esc | KeyCode::Enter => {
+            state.mode = MemoryModalMode::Browse;
+            return InputOutcome::Changed;
+        }
+        KeyCode::Down | KeyCode::Char('j') => 1,
+        KeyCode::Up | KeyCode::Char('k') => -1,
+        KeyCode::PageDown => page,
+        KeyCode::PageUp => -page,
+        KeyCode::Home => isize::MIN,
+        KeyCode::End => isize::MAX,
+        _ => return InputOutcome::Unchanged,
+    };
+    state.scroll_preview_by(delta);
+    InputOutcome::Changed
 }
 
 pub fn handle_memory_paste(state: &mut MemoryModalState, text: &str) -> InputOutcome {
@@ -1680,6 +1751,13 @@ fn handle_browse(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
             }
             InputOutcome::Unchanged
         }
+        KeyCode::Enter => {
+            if state.preview_markdown.is_none() {
+                return InputOutcome::Unchanged;
+            }
+            state.mode = MemoryModalMode::PreviewFocused;
+            InputOutcome::Changed
+        }
         KeyCode::Char('t') if key.modifiers.is_empty() => {
             if state.memory_enabled {
                 // Optimistic; the next MemoryFiles notification re-syncs if the command fails
@@ -1753,6 +1831,11 @@ fn build_shortcuts(state: &MemoryModalState) -> Vec<Shortcut<'static>> {
             let mut shortcuts = vec![
                 plain("\u{2191}/\u{2193} nav"),
                 plain("/ search"),
+                plain(if state.split_shown {
+                    "Enter read"
+                } else {
+                    "Enter open"
+                }),
                 plain("y copy path"),
             ];
             if state.can_delete_selected() {
@@ -1767,6 +1850,16 @@ fn build_shortcuts(state: &MemoryModalState) -> Vec<Shortcut<'static>> {
             modal_window::push_vim_nav_search_hint(&mut shortcuts, false);
             shortcuts
         }
+        MemoryModalMode::PreviewFocused => vec![
+            plain("\u{2191}/\u{2193} scroll"),
+            plain("drag to copy"),
+            plain(if state.split_shown {
+                "Esc list"
+            } else {
+                "Esc back"
+            }),
+            plain(fullscreen_label),
+        ],
         MemoryModalMode::FilterFocused => vec![
             Shortcut {
                 label: "type to filter",
@@ -2007,7 +2100,8 @@ mod tests {
             path: PathBuf::from("/legacy/MEMORY.md"),
             source: "global".into(),
             label: "MEMORY.md".into(),
-            meta_display: String::new(),
+            size_text: String::new(),
+            age_text: String::new(),
             is_header: false,
             generated: false,
             size_bytes: 0,
@@ -2370,7 +2464,8 @@ mod tests {
             path,
             source: "workspace".to_owned(),
             label: "conventions.md".to_owned(),
-            meta_display: String::new(),
+            size_text: String::new(),
+            age_text: String::new(),
             is_header: false,
             generated: false,
             size_bytes: 52,
@@ -2676,7 +2771,8 @@ mod tests {
             MemoryFileEntry {
                 path: PathBuf::new(),
                 source: String::new(),
-                meta_display: String::new(),
+                size_text: String::new(),
+                age_text: String::new(),
                 label: "Global".to_string(),
                 is_header: true,
                 generated: false,
@@ -2685,7 +2781,8 @@ mod tests {
             MemoryFileEntry {
                 path: PathBuf::from("/test/MEMORY.md"),
                 source: "global".into(),
-                meta_display: "1KB \u{00B7} 1d ago".into(),
+                size_text: "1KB".into(),
+                age_text: "1d ago".into(),
                 label: "MEMORY.md".to_string(),
                 is_header: false,
                 generated: false,
@@ -2694,7 +2791,8 @@ mod tests {
             MemoryFileEntry {
                 path: PathBuf::new(),
                 source: String::new(),
-                meta_display: String::new(),
+                size_text: String::new(),
+                age_text: String::new(),
                 label: "Sessions".to_string(),
                 is_header: true,
                 generated: false,
@@ -2703,7 +2801,8 @@ mod tests {
             MemoryFileEntry {
                 path: PathBuf::from("/test/session.md"),
                 source: "session".into(),
-                meta_display: "500B \u{00B7} 2d ago".into(),
+                size_text: "500B".into(),
+                age_text: "2d ago".into(),
                 label: "session-log.md".to_string(),
                 is_header: false,
                 generated: false,
@@ -3070,5 +3169,147 @@ mod tests {
         assert_eq!(first_match_line(&lines, "gamma zz"), Some(1));
         assert_eq!(first_match_line(&lines, "   "), None);
         assert_eq!(first_match_line(&[], "x"), None);
+    }
+
+    fn render_at(state: &mut MemoryModalState, width: u16, height: u16) -> String {
+        let area = Rect::new(0, 0, width, height);
+        let mut buf = Buffer::empty(area);
+        render_memory_modal(&mut buf, area, state, false);
+        buffer_text(&buf)
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn enter_focuses_preview_for_keyboard_scrolling_and_esc_returns() {
+        let (_dir, mut state) = long_note_state();
+        render_full(&mut state);
+        assert!(matches!(
+            handle_memory_key(&mut state, &key(KeyCode::Enter)),
+            InputOutcome::Changed
+        ));
+        assert_eq!(state.mode, MemoryModalMode::PreviewFocused);
+        let before = state.selected;
+        handle_memory_key(&mut state, &key(KeyCode::Down));
+        handle_memory_key(&mut state, &key(KeyCode::Down));
+        assert_eq!(state.preview_scroll, 2);
+        assert_eq!(state.selected, before, "list selection is untouched");
+        handle_memory_key(&mut state, &key(KeyCode::Up));
+        assert_eq!(state.preview_scroll, 1);
+        handle_memory_key(&mut state, &key(KeyCode::Home));
+        assert_eq!(state.preview_scroll, 0);
+        handle_memory_key(&mut state, &key(KeyCode::End));
+        assert!(render_full(&mut state).contains("line 60"));
+        // Scrolling past the end clamps instead of overflowing.
+        let end = state.preview_scroll;
+        handle_memory_key(&mut state, &key(KeyCode::PageDown));
+        assert_eq!(state.preview_scroll, end);
+        let labels: Vec<&str> = build_shortcuts(&state).iter().map(|s| s.label).collect();
+        assert!(labels.contains(&"drag to copy"), "{labels:?}");
+        assert!(labels.contains(&"Esc list"), "{labels:?}");
+        handle_memory_key(&mut state, &key(KeyCode::Esc));
+        assert_eq!(state.mode, MemoryModalMode::Browse);
+    }
+
+    #[test]
+    fn enter_without_a_preview_does_nothing() {
+        let (_dir, mut state) = v2_store_state();
+        state.set_query("xyzzy");
+        state.invalidate_filter();
+        state.clamp_selected();
+        state.load_preview();
+        state.mode = MemoryModalMode::Browse;
+        assert!(matches!(
+            handle_memory_key(&mut state, &key(KeyCode::Enter)),
+            InputOutcome::Unchanged
+        ));
+        assert_eq!(state.mode, MemoryModalMode::Browse);
+    }
+
+    #[test]
+    fn narrow_modal_hides_preview_until_enter_opens_it_full_width() {
+        let (_dir, mut state) = long_note_state();
+        // 70 columns: the modal content is under SPLIT_MIN_WIDTH, so only the list shows.
+        let text = render_at(&mut state, 70, 30);
+        assert!(text.contains("long.md"), "{text}");
+        assert!(!text.contains("line 2"), "{text}");
+        assert!(!state.split_shown);
+        let labels: Vec<&str> = build_shortcuts(&state).iter().map(|s| s.label).collect();
+        assert!(labels.contains(&"Enter open"), "{labels:?}");
+
+        handle_memory_key(&mut state, &key(KeyCode::Enter));
+        let text = render_at(&mut state, 70, 30);
+        assert!(text.contains("line 2"), "{text}");
+        assert!(!text.contains("long.md"), "{text}");
+        assert_eq!(state.list_area, Rect::default());
+        let labels: Vec<&str> = build_shortcuts(&state).iter().map(|s| s.label).collect();
+        assert!(labels.contains(&"Esc back"), "{labels:?}");
+
+        handle_memory_key(&mut state, &key(KeyCode::Esc));
+        let text = render_at(&mut state, 70, 30);
+        assert!(text.contains("long.md"), "{text}");
+        // Tiny terminals render without panicking in either mode.
+        for (w, h) in [(1, 1), (5, 3), (20, 6)] {
+            render_at(&mut state, w, h);
+            state.mode = MemoryModalMode::PreviewFocused;
+            render_at(&mut state, w, h);
+            state.mode = MemoryModalMode::Browse;
+        }
+    }
+
+    #[test]
+    fn narrow_list_drops_the_size_column() {
+        use supercharge_shell::extensions::notification::MemoryFileInfo;
+        let info = MemoryFileInfo {
+            path: "/s/topics/anyrun.md".into(),
+            source: "workspace".into(),
+            size_bytes: 13_900,
+            modified_epoch_secs: Some(0),
+            generated: false,
+        };
+        let theme = Theme::current();
+        let mut state = MemoryModalState::new(build_entries(vec![info.clone()]));
+        let wide = Rect::new(0, 0, 60, 4);
+        let mut buf = Buffer::empty(wide);
+        render_file_list(&mut buf, wide, &mut state, &theme);
+        let text = buffer_text(&buf);
+        assert!(text.contains('\u{00B7}'), "{text}");
+
+        let mut state = MemoryModalState::new(build_entries(vec![info]));
+        let narrow = Rect::new(0, 0, 40, 4);
+        let mut buf = Buffer::empty(narrow);
+        render_file_list(&mut buf, narrow, &mut state, &theme);
+        let text = buffer_text(&buf);
+        assert!(!text.contains('\u{00B7}'), "{text}");
+        let row = text.lines().find(|l| l.contains("anyrun.md")).unwrap();
+        assert!(row.trim_end().ends_with("ago"), "{row:?}");
+    }
+
+    #[test]
+    fn long_labels_stop_before_the_metadata_column() {
+        let entry = MemoryFileEntry {
+            path: PathBuf::from("/s/topics/x.md"),
+            source: "workspace".into(),
+            label: "a-very-long-memory-note-name-that-keeps-going.md".into(),
+            size_text: "1KB".into(),
+            age_text: "1d ago".into(),
+            is_header: false,
+            generated: false,
+            size_bytes: 1024,
+        };
+        let mut state = MemoryModalState::new(vec![entry]);
+        let theme = Theme::current();
+        let area = Rect::new(0, 0, 40, 4);
+        let mut buf = Buffer::empty(area);
+        render_file_list(&mut buf, area, &mut state, &theme);
+        let text = buffer_text(&buf);
+        let row = text
+            .lines()
+            .find(|l| l.contains("a-very-long"))
+            .expect("label row");
+        assert!(row.contains("..."), "{row:?}");
+        assert!(row.trim_end().ends_with("1d ago"), "{row:?}");
     }
 }
