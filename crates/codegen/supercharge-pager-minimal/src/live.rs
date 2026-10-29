@@ -966,6 +966,7 @@ mod tests {
                 max_retries: 3,
                 reason: "transient error".to_string(),
                 error_type: None,
+                retry_in_ms: None,
             }),
             None,
             &theme,
