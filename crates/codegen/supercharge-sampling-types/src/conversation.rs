@@ -6,7 +6,9 @@
 mod chat_completions;
 mod messages;
 mod responses;
+mod tool_names;
 mod tool_pairing;
+pub use tool_names::{MAX_WIRE_TOOL_NAME_LEN, WireToolNames, is_wire_safe_tool_name};
 pub use tool_pairing::{MISSING_TOOL_RESULT, repair_tool_pairing, repair_tool_pairing_ref};
 
 pub use chat_completions::{conversation_item_to_chat_message, conversation_to_chat_messages};

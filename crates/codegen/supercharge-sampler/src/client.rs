@@ -2295,6 +2295,10 @@ impl SamplingClient {
             request.max_output_tokens = self.defaults.max_completion_tokens;
         }
 
+        // Idempotent: the actor and collect paths already swapped unsafe names and hold the reverse map.
+        // This catches direct callers so no request ever reaches a strict provider with a rejected name.
+        let _ = supercharge_sampling_types::WireToolNames::apply(request);
+
         Ok(())
     }
 
@@ -2500,6 +2504,8 @@ impl SamplingClient {
     ) -> Result<ConversationResponse> {
         let request_id = crate::types::RequestId::random();
         let length_policy = request.length_policy;
+        let mut request = request;
+        let names = supercharge_sampling_types::WireToolNames::apply(&mut request);
         let result = match self.api_backend() {
             ApiBackend::ChatCompletions => {
                 let (raw, meta) = self.conversation_stream(request).await?;
@@ -2519,9 +2525,10 @@ impl SamplingClient {
                 crate::stream::collect_response(events).await
             }
         };
-        let response = result
+        let mut response = result
             .map(|(response, _metrics)| response)
             .map_err(stream_collect_error)?;
+        names.restore_response(&mut response);
         apply_length_policy(length_policy, response)
     }
 }

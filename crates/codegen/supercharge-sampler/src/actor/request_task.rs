@@ -17,6 +17,7 @@ use tracing::Instrument;
 use supercharge_sampling_types::{
     ApiErrorCode, AssistantItem, ChatCompletionResponse, ConversationItem, ConversationRequest,
     ConversationResponse, EmptyResponseContext, SamplingError, SentCredential, ToolCall,
+    WireToolNames,
     error::Result as SamplingResult, reported_cost_ticks, synthesized_reasoning_item,
 };
 
@@ -524,6 +525,10 @@ async fn sleep_or_cancel(
 
 /// Run a single attempt: build the raw stream, drive it through the matching L2 transform, and forward all non-terminal events to `event_tx`.
 /// `None` disarms the mid-stream abort and the terminal confidence check so the attempt completes and its response can be accepted.
+///
+/// Tool names a strict provider would reject are swapped for wire-safe aliases before sending.
+/// Every tool call coming back (streamed deltas, the final response, recovery items) is restored to the real name here,
+/// so nothing past the sampler ever sees an alias.
 #[allow(clippy::too_many_arguments)]
 async fn run_one_attempt(
     client: &SamplingClient,
@@ -534,6 +539,84 @@ async fn run_one_attempt(
     cancel_token: &CancellationToken,
     doom_check: Option<supercharge_sampling_types::DoomLoopRecoveryPolicy>,
     output_observed: Arc<AtomicBool>,
+) -> AttemptOutcome {
+    let mut request = request;
+    let names = WireToolNames::apply(&mut request);
+    let outcome = run_wire_attempt(
+        client,
+        request,
+        request_id,
+        idle_timeout,
+        event_tx,
+        cancel_token,
+        doom_check,
+        output_observed,
+        &names,
+    )
+    .await;
+    restore_outcome_tool_names(outcome, &names)
+}
+
+/// Put real tool names back on everything an attempt returns.
+fn restore_outcome_tool_names(outcome: AttemptOutcome, names: &WireToolNames) -> AttemptOutcome {
+    if names.is_empty() {
+        return outcome;
+    }
+    match outcome {
+        AttemptOutcome::Completed {
+            mut response,
+            metrics,
+        } => {
+            names.restore_response(&mut response);
+            AttemptOutcome::Completed { response, metrics }
+        }
+        AttemptOutcome::Failed {
+            error,
+            doom_loop_signals,
+            mut recovery_items,
+        } => {
+            names.restore_items(&mut recovery_items);
+            AttemptOutcome::Failed {
+                error,
+                doom_loop_signals,
+                recovery_items,
+            }
+        }
+        other => other,
+    }
+}
+
+/// Put the real tool name back on a forwarded streaming event.
+fn restore_event_tool_name(event: SamplingEvent, names: &WireToolNames) -> SamplingEvent {
+    match event {
+        SamplingEvent::ToolCallDelta {
+            request_id,
+            tool_index,
+            id,
+            name: Some(name),
+            arguments_delta,
+        } if !names.is_empty() => SamplingEvent::ToolCallDelta {
+            request_id,
+            tool_index,
+            id,
+            name: Some(names.real_name(&name).to_string()),
+            arguments_delta,
+        },
+        other => other,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_wire_attempt(
+    client: &SamplingClient,
+    request: ConversationRequest,
+    request_id: RequestId,
+    idle_timeout: Duration,
+    event_tx: &mpsc::UnboundedSender<SamplingEvent>,
+    cancel_token: &CancellationToken,
+    doom_check: Option<supercharge_sampling_types::DoomLoopRecoveryPolicy>,
+    output_observed: Arc<AtomicBool>,
+    names: &WireToolNames,
 ) -> AttemptOutcome {
     let length_policy = request.length_policy;
     match client.api_backend() {
@@ -558,6 +641,7 @@ async fn run_one_attempt(
                 FailedResponseCapture::default(),
                 Arc::clone(&output_observed),
                 length_policy,
+                names,
             )
             .await;
             if matches!(outcome, AttemptOutcome::Empty { .. })
@@ -568,6 +652,7 @@ async fn run_one_attempt(
                     event_tx,
                     cancel_token,
                     output_observed,
+                    names,
                 )
                 .await
             {
@@ -612,6 +697,7 @@ async fn run_one_attempt(
                 failed_response,
                 output_observed,
                 length_policy,
+                names,
             )
             .await
         }
@@ -632,6 +718,7 @@ async fn run_one_attempt(
                 FailedResponseCapture::default(),
                 output_observed,
                 length_policy,
+                names,
             )
             .await
         }
@@ -648,6 +735,7 @@ async fn non_streaming_chat_fallback(
     event_tx: &mpsc::UnboundedSender<SamplingEvent>,
     cancel_token: &CancellationToken,
     output_observed: Arc<AtomicBool>,
+    names: &WireToolNames,
 ) -> Option<AttemptOutcome> {
     let started = std::time::Instant::now();
     let response = tokio::select! {
@@ -693,7 +781,7 @@ async fn non_streaming_chat_fallback(
             request_id: request_id.clone(),
             tool_index: index as u32,
             id: Some(tool_call.id.to_string()),
-            name: Some(tool_call.name.clone()),
+            name: Some(names.real_name(&tool_call.name).to_string()),
             arguments_delta: Some(tool_call.arguments.to_string()),
         });
     }
@@ -832,6 +920,7 @@ async fn drive_l2(
     failed_response: FailedResponseCapture,
     output_observed: Arc<AtomicBool>,
     length_policy: supercharge_sampling_types::LengthPolicy,
+    names: &WireToolNames,
 ) -> AttemptOutcome {
     let mut l2 = pin!(l2);
     let mut doom_loop_signals = Vec::new();
@@ -935,7 +1024,7 @@ async fn drive_l2(
                         output_observed.store(true, Ordering::Relaxed);
                         await_first_output_span.take();
                     }
-                    let _ = event_tx.send(retag(other, &request_id));
+                    let _ = event_tx.send(retag(restore_event_tool_name(other, names), &request_id));
                 }
                 None => {
                     // L2 streams always terminate with Completed or Failed
@@ -1280,6 +1369,7 @@ mod tests {
             FailedResponseCapture::default(),
             Arc::new(AtomicBool::new(false)),
             policy,
+            &WireToolNames::default(),
         )
         .await
     }
@@ -1300,6 +1390,7 @@ mod tests {
             FailedResponseCapture::default(),
             Arc::new(AtomicBool::new(false)),
             supercharge_sampling_types::LengthPolicy::Fail,
+            &WireToolNames::default(),
         )
         .await
     }
@@ -1364,6 +1455,7 @@ mod tests {
             FailedResponseCapture::default(),
             Arc::new(AtomicBool::new(false)),
             supercharge_sampling_types::LengthPolicy::Fail,
+            &WireToolNames::default(),
         )
         .await;
 
@@ -1721,5 +1813,98 @@ mod tests {
             SamplingError::EventStreamError(msg) => assert_eq!(msg, "first"),
             other => panic!("expected EventStreamError, got {other:?}"),
         }
+    }
+
+    fn dotted_names() -> WireToolNames {
+        let mut req = ConversationRequest {
+            tools: vec![supercharge_sampling_types::ToolSpec {
+                name: "docs__files.read".into(),
+                description: None,
+                parameters: serde_json::json!({"type": "object"}),
+            }],
+            ..Default::default()
+        };
+        let names = WireToolNames::apply(&mut req);
+        assert_ne!(req.tools[0].name, "docs__files.read");
+        names
+    }
+
+    #[test]
+    fn streamed_tool_call_deltas_get_real_names_back() {
+        let names = dotted_names();
+        let wire = names.wire_name("docs__files.read").to_string();
+        let restored = restore_event_tool_name(
+            SamplingEvent::ToolCallDelta {
+                request_id: RequestId::from("r"),
+                tool_index: 0,
+                id: Some("c1".into()),
+                name: Some(wire),
+                arguments_delta: None,
+            },
+            &names,
+        );
+        let SamplingEvent::ToolCallDelta { name, .. } = restored else {
+            panic!("event kind changed");
+        };
+        assert_eq!(name.as_deref(), Some("docs__files.read"));
+        // A name the provider made up stays as sent, so the shell reports it as unknown instead of guessing.
+        let other = restore_event_tool_name(
+            SamplingEvent::ToolCallDelta {
+                request_id: RequestId::from("r"),
+                tool_index: 1,
+                id: None,
+                name: Some("made_up".into()),
+                arguments_delta: Some("{".into()),
+            },
+            &names,
+        );
+        let SamplingEvent::ToolCallDelta { name, .. } = other else {
+            panic!()
+        };
+        assert_eq!(name.as_deref(), Some("made_up"));
+    }
+
+    #[test]
+    fn completed_and_recovery_tool_calls_get_real_names_back() {
+        let names = dotted_names();
+        let wire = names.wire_name("docs__files.read").to_string();
+        let with_call = || {
+            let mut item = ConversationItem::assistant("");
+            if let ConversationItem::Assistant(a) = &mut item {
+                a.tool_calls.push(ToolCall {
+                    id: "c1".into(),
+                    name: wire.clone(),
+                    arguments: "{}".into(),
+                });
+            }
+            item
+        };
+        let mut response = completed_response(None, "");
+        response.items = vec![with_call()];
+        let AttemptOutcome::Completed { response, .. } = restore_outcome_tool_names(
+            AttemptOutcome::Completed {
+                response: Box::new(response),
+                metrics: InferenceLatencyStats::default(),
+            },
+            &names,
+        ) else {
+            panic!()
+        };
+        assert_eq!(response.tool_calls()[0].name, "docs__files.read");
+
+        let AttemptOutcome::Failed { recovery_items, .. } = restore_outcome_tool_names(
+            AttemptOutcome::Failed {
+                error: SamplingError::EventStreamError("x".into()),
+                doom_loop_signals: Vec::new(),
+                recovery_items: vec![with_call()],
+            },
+            &names,
+        ) else {
+            panic!()
+        };
+        let ConversationItem::Assistant(a) = &recovery_items[0] else {
+            panic!()
+        };
+        assert_eq!(a.tool_calls[0].name, "docs__files.read");
     }
 }
