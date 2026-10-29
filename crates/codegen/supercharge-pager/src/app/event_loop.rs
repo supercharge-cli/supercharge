@@ -1944,7 +1944,12 @@ pub(crate) async fn run(
         }
         if let VoiceState::ColdStart { hold, target } = app.voice_state {
             if app.voice_cmd_tx.is_none() && app.voice_can_start_pipeline() {
-                let stt_routes = crate::voice::build_stt_routes(voice_auth_factory.clone());
+                let clip_route = crate::voice::clip_route_for(&app.voice_config);
+                let stt_routes = crate::voice::build_stt_routes(
+                    voice_auth_factory.clone(),
+                    clip_route,
+                    &app.voice_config.user_agent,
+                );
                 app.voice_auth = Some(stt_routes.auth.clone());
                 let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(32);
                 let (event_tx, event_rx) = tokio::sync::mpsc::channel(128);

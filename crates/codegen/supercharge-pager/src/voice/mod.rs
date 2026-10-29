@@ -23,7 +23,7 @@
 mod auth;
 mod handle;
 
-pub use auth::build_stt_routes;
+pub use auth::{build_stt_routes, clip_route_for};
 pub use handle::handle_tagged_voice_event;
 #[cfg(test)]
 pub(crate) use handle::handle_voice_event;

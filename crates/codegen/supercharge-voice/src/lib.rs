@@ -1,4 +1,4 @@
-//! Voice input for Supercharge AI CLI: an xAI streaming STT client and the [`run_voice_pipeline`] task that emits [`VoiceEvent`]s for the pager.
+//! Voice input for Supercharge AI CLI: a streaming STT client, a clip route for standard transcription endpoints, and the [`run_voice_pipeline`] task that emits [`VoiceEvent`]s for the pager.
 //!
 //! Voice is dictation only: the mic streams to STT and the transcript lands in the prompt box.
 //!
@@ -13,9 +13,11 @@ pub mod auth;
 // The clip route only runs with capture compiled in; its tests need no device.
 #[cfg(any(test, feature = "audio"))]
 mod clip;
+pub mod clip_route;
 pub mod config;
 pub mod error;
 pub mod event;
+pub mod http_transcriber;
 pub mod language;
 pub mod pipeline;
 pub mod probe;
@@ -25,6 +27,7 @@ pub mod transcriber;
 mod wav;
 
 pub use auth::{SharedVoiceAuth, StaticVoiceAuth, VoiceAuthError, VoiceAuthProvider};
+pub use clip_route::{ClipRoute, ProviderEndpoint, TranscriptionSettings, resolve_clip_route};
 pub use config::VoiceConfig;
 pub use error::VoiceError;
 pub use event::{TaggedVoiceEvent, VoiceEvent, VoiceRoute, VoiceSessionId};
@@ -40,6 +43,9 @@ pub use probe::{
     run_streaming_probe,
 };
 
+pub use http_transcriber::{
+    DEFAULT_TRANSCRIPTION_MODEL, HttpClipTranscriber, TranscriptionEndpoint,
+};
 pub use transcriber::{
     AudioClip, ClipTranscriber, FINAL_TIMEOUT, SharedClipTranscriber, TranscribeError,
 };

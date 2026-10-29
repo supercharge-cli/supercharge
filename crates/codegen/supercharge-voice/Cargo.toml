@@ -8,6 +8,7 @@ description = "Voice dictation (streaming STT) for Supercharge AI CLI"
 [dependencies]
 anyhow = { workspace = true }
 futures-util = { workspace = true }
+reqwest = { workspace = true, features = ["multipart"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -58,7 +59,7 @@ path = "src/bin/voice_probe.rs"
 required-features = ["audio"]
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util", "net", "io-util"] }
 
 [lints]
 workspace = true

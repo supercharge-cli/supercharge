@@ -25,6 +25,9 @@ pub struct VoiceConfig {
     pub client_identifier: String,
     #[serde(skip)]
     pub user_agent: String,
+    /// Clip-route keys (`[voice] model`, `base_url`, `api_key`, `env_key`), read raw by [`Self::from_config_table`].
+    #[serde(skip)]
+    pub transcription: crate::clip_route::TranscriptionSettings,
 }
 
 impl Default for VoiceConfig {
@@ -38,6 +41,7 @@ impl Default for VoiceConfig {
             stt_interim_results: true,
             client_identifier: String::new(),
             user_agent: String::new(),
+            transcription: crate::clip_route::TranscriptionSettings::default(),
         }
     }
 }
@@ -77,6 +81,7 @@ impl VoiceConfig {
         .or_else(|| non_empty_str(resolved_endpoints_base))
         .map(|base| base.trim_end_matches('/').to_owned())
         .unwrap_or_else(|| Self::default().api_base);
+        cfg.transcription = crate::clip_route::TranscriptionSettings::from_voice_table(voice_table);
         cfg
     }
 }
@@ -284,5 +289,27 @@ language = "es"
         assert_eq!(cfg.language, "es");
         assert!(cfg.client_identifier.is_empty());
         assert!(cfg.user_agent.is_empty());
+    }
+
+    #[test]
+    fn transcription_keys_are_read_without_disturbing_the_rest() {
+        let root: toml::Table = r#"
+            [voice]
+            language = "de"
+            model = "stt-1"
+            base_url = "https://stt.example/v1"
+            env_key = "STT_KEY"
+            "#
+        .parse()
+        .unwrap();
+        let cfg = VoiceConfig::from_config_table(&root, None);
+        assert_eq!("de", cfg.language);
+        assert_eq!(Some("stt-1"), cfg.transcription.model.as_deref());
+        assert_eq!(
+            Some("https://stt.example/v1"),
+            cfg.transcription.base_url.as_deref()
+        );
+        assert_eq!(Some("STT_KEY"), cfg.transcription.env_key.as_deref());
+        assert_eq!(None, cfg.transcription.api_key);
     }
 }

@@ -12534,6 +12534,7 @@ dependencies = [
  "anyhow",
  "cpal",
  "futures-util",
+ "reqwest 0.12.24",
  "serde",
  "serde_json",
  "strum 0.27.2",

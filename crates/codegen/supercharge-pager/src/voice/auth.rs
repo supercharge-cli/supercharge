@@ -1,8 +1,9 @@
 //! Bridge the shell's `AuthManager` onto the voice crate's STT routes.
 //!
 //! The streaming STT endpoint accepts both API keys and OAuth2 tokens and attributes per-user billing for OAuth.
-//! The voice channel reuses the same bearer the agent uses for chat (no separate env var). No clip transcriber is
-//! wired yet, so a login without a bearer reports [`VoiceAuthError::NotSignedIn`] and no socket opens.
+//! The voice channel reuses the same bearer the agent uses for chat (no separate env var). When the configured
+//! provider is not the streaming host (or `[voice] model` / `base_url` is set), dictation records a clip and sends
+//! it to that provider's standard `/audio/transcriptions` endpoint instead (see [`resolve_clip_route`]).
 //!
 //! Resolved per request: the agent's refreshing manager in direct-spawn mode.
 //! In leader mode, a non-refreshing one adopts the agent's rotated `auth.json` token under the file lock (see [`crate::acp`]).
@@ -12,7 +13,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use supercharge_tools::types::SharedApiKeyProvider;
-use supercharge_voice::{SharedVoiceAuth, SttRoutes, VoiceAuthError, VoiceAuthProvider};
+use supercharge_voice::{
+    ClipRoute, HttpClipTranscriber, ProviderEndpoint, SharedVoiceAuth, SttRoutes, VoiceAuthError,
+    VoiceAuthProvider, VoiceConfig, resolve_clip_route,
+};
 
 /// Adapts the shell's `ApiKeyProvider` onto [`VoiceAuthProvider`].
 ///
@@ -47,12 +51,52 @@ fn build_voice_auth(auth_manager: Arc<supercharge_login::AuthManager>) -> Shared
     ))
 }
 
-/// Streaming bearer, plus the clip transcriber on builds that can transcribe for the signed-in login. The pipeline
-/// consults the transcriber only after [`VoiceAuthError::ForeignSession`], so an accepted bearer always streams.
-pub fn build_stt_routes(auth_manager: Arc<supercharge_login::AuthManager>) -> SttRoutes {
+/// Always defers to the clip route: the pipeline only consults the transcriber after [`VoiceAuthError::ForeignSession`].
+#[derive(Debug)]
+struct ClipOnlyAuth;
+
+impl VoiceAuthProvider for ClipOnlyAuth {
+    fn bearer(&self) -> Pin<Box<dyn Future<Output = Result<String, VoiceAuthError>> + Send + '_>> {
+        Box::pin(async { Err(VoiceAuthError::ForeignSession) })
+    }
+}
+
+/// The clip route for this config and the agent's provider, or `None` to stream.
+pub fn clip_route_for(voice_config: &VoiceConfig) -> Option<ClipRoute> {
+    let provider = supercharge_shell::agent::provider_setup::load_existing_provider_setup_details()
+        .map(|setup| ProviderEndpoint {
+            base_url: setup.base_url,
+            api_key: setup.api_key,
+        });
+    resolve_clip_route(
+        &voice_config.transcription,
+        provider.as_ref(),
+        &voice_config.api_base,
+        &|name| std::env::var(name).ok(),
+    )
+}
+
+/// Streaming bearer, or (when `clip` is set) the clip transcriber for the provider's `/audio/transcriptions`.
+pub fn build_stt_routes(
+    auth_manager: Arc<supercharge_login::AuthManager>,
+    clip: Option<ClipRoute>,
+    user_agent: &str,
+) -> SttRoutes {
+    let agent_auth = build_voice_auth(auth_manager);
+    let Some(clip) = clip else {
+        return SttRoutes {
+            auth: agent_auth,
+            clip_transcriber: None,
+        };
+    };
+    let mut transcriber =
+        HttpClipTranscriber::new(clip.endpoint, user_agent).with_interims(clip.interim_transcripts);
+    if clip.agent_key_allowed {
+        transcriber = transcriber.with_fallback_key(agent_auth);
+    }
     SttRoutes {
-        auth: build_voice_auth(auth_manager),
-        clip_transcriber: None,
+        auth: Arc::new(ClipOnlyAuth),
+        clip_transcriber: Some(Arc::new(transcriber)),
     }
 }
 

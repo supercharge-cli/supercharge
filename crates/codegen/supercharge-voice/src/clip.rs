@@ -139,7 +139,8 @@ impl Interims {
 
     fn tick(&mut self, pcm: &[u8]) {
         self.next_at = Instant::now() + self.interval(pcm.len());
-        if self.duration_of(pcm.len()) < INTERIM_FIRST
+        if !self.transcriber.interims()
+            || self.duration_of(pcm.len()) < INTERIM_FIRST
             || self.attempted_len == Some(pcm.len())
             || is_silent(pcm)
         {

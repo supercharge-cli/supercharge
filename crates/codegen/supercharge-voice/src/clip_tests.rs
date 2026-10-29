@@ -843,3 +843,49 @@ async fn reader_ends_every_session_with_transcribing_then_one_terminal_event() {
         assert_eq!(expected, events_so_far(&mut events));
     }
 }
+
+/// A transcriber that opts out of interims (a metered endpoint) gets no request while recording.
+#[derive(Debug)]
+struct NoInterims(Arc<ScriptedTranscriber>);
+
+impl ClipTranscriber for NoInterims {
+    fn transcribe(
+        &self,
+        clip: AudioClip,
+    ) -> Pin<Box<dyn Future<Output = Result<String, TranscribeError>> + Send + '_>> {
+        self.0.transcribe(clip)
+    }
+
+    fn interims(&self) -> bool {
+        false
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn interims_are_skipped_when_the_transcriber_opts_out() {
+    let (transcriber, _release) = ScriptedTranscriber::shared(indexed, vec![]);
+    let shared: SharedClipTranscriber = Arc::new(NoInterims(transcriber.clone()));
+    let (tx, mut events) = mpsc::channel(64);
+    let mut interims = Interims::new(shared, RATE, "en".to_owned(), SessionEvents::for_test(tx));
+    let (pcm_tx, mut pcm_rx) = mpsc::channel::<Vec<u8>>(8);
+    let (finish_tx, mut finish_rx) = mpsc::channel::<()>(1);
+    pcm_tx.send(loud(secs(3.0))).await.unwrap();
+    let collect = collect_clip(
+        &mut pcm_rx,
+        &mut finish_rx,
+        usize::MAX,
+        || std::future::ready(()),
+        Some(&mut interims),
+    );
+    let feed = async {
+        for _ in 0..5 {
+            tokio::time::advance(Duration::from_secs(1)).await;
+            tokio::task::yield_now().await;
+        }
+        finish_tx.send(()).await.unwrap();
+        drop(pcm_tx);
+    };
+    let _ = tokio::join!(collect, feed);
+    assert!(transcriber.pcm_lens().is_empty());
+    assert!(events_so_far(&mut events).is_empty());
+}

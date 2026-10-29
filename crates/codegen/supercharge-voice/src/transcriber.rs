@@ -1,6 +1,6 @@
 //! Whole-clip transcription, the second STT route. When the login holds no credential the streaming STT
 //! endpoint accepts ([`crate::auth::VoiceAuthError::ForeignSession`]) the pipeline records to a buffer and hands
-//! the clip to a host-provided [`ClipTranscriber`]. The host owns the client and credentials; this crate only defines the seam.
+//! the clip to a host-provided [`ClipTranscriber`]. The host owns the credentials; [`crate::http_transcriber`] is the HTTP implementation.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -60,6 +60,12 @@ pub trait ClipTranscriber: std::fmt::Debug + Send + Sync + 'static {
         &self,
         clip: AudioClip,
     ) -> Pin<Box<dyn Future<Output = Result<String, TranscribeError>> + Send + '_>>;
+
+    /// Whether the pipeline may re-upload the growing clip for progressive interim transcripts. A metered
+    /// endpoint the user pays for per request can opt out; the final transcript is unaffected.
+    fn interims(&self) -> bool {
+        true
+    }
 }
 
 pub type SharedClipTranscriber = Arc<dyn ClipTranscriber>;
