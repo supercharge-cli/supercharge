@@ -26,6 +26,15 @@ pub type Result<T> = std::result::Result<T, V2MaintenanceError>;
 #[error("{0}")]
 struct AccessSnapshotError(String);
 
+/// What reconciling one tombstone did to its file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TombstoneReconciliation {
+    /// The file was still present and has now been unlinked.
+    Removed,
+    /// Nothing on disk to remove; the tombstone was settled earlier.
+    AlreadyGone,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum V2MaintenanceError {
     #[error("invalid memory-v2 maintenance request: {0}")]
@@ -640,6 +649,7 @@ impl V2MaintenanceStore {
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?
         };
+        let mut manifest_stale = false;
         for (relative, kind, expected_content_hash) in &targets {
             let class = if kind == "topic" {
                 V2PathClass::Topic(self.scope)
@@ -648,37 +658,46 @@ impl V2MaintenanceStore {
             } else {
                 V2PathClass::Observation(self.scope)
             };
-            if let Err(error) = self.remove_expected_tombstoned_file(
+            match self.remove_expected_tombstoned_file(
                 Path::new(relative),
                 class,
                 expected_content_hash,
                 &transaction,
             ) {
-                if !matches!(
-                    &error,
-                    V2MaintenanceError::EvidenceMismatch | V2MaintenanceError::Protected
-                ) {
-                    return Err(error);
+                Ok(TombstoneReconciliation::Removed) => manifest_stale = true,
+                Ok(TombstoneReconciliation::AlreadyGone) => {}
+                Err(
+                    error @ (V2MaintenanceError::EvidenceMismatch | V2MaintenanceError::Protected),
+                ) => {
+                    tracing::warn!(
+                        relative_path = relative,
+                        error = %error,
+                        "tombstoned path no longer matches its evidence; quarantining the path"
+                    );
+                    let inserted = transaction.execute(
+                        "INSERT INTO memory_v2_quarantined_paths(
+                            relative_path, reason, expected_hash, observed_hash, quarantined_at
+                         ) VALUES (?1, 'tombstone_mismatch', ?2, NULL, ?3)
+                         ON CONFLICT(relative_path) DO NOTHING",
+                        params![relative, expected_content_hash, now],
+                    )?;
+                    // A newly quarantined path drops out of the manifest too.
+                    manifest_stale |= inserted > 0;
                 }
-                tracing::warn!(
-                    relative_path = relative,
-                    error = %error,
-                    "tombstoned path no longer matches its evidence; quarantining the path"
-                );
-                transaction.execute(
-                    "INSERT INTO memory_v2_quarantined_paths(
-                        relative_path, reason, expected_hash, observed_hash, quarantined_at
-                     ) VALUES (?1, 'tombstone_mismatch', ?2, NULL, ?3)
-                     ON CONFLICT(relative_path) DO NOTHING",
-                    params![relative, expected_content_hash, now],
-                )?;
+                Err(error) => return Err(error),
             }
         }
         transaction.commit()?;
         if targets.is_empty() {
             return Ok(());
         }
-        self.converge_excluded_paths(targets.iter().map(|target| target.0.as_str()))?;
+        self.drop_from_index(targets.iter().map(|target| target.0.as_str()))?;
+        // Rendering the manifest re-runs the exclusion scan over the whole state
+        // database, so settled tombstones (the common case on every open) skip it.
+        if manifest_stale {
+            regenerate_scope_manifest(&self.scope_dir, self.scope, V2ManifestBudget::default())
+                .map_err(V2MaintenanceError::Manifest)?;
+        }
         Ok(())
     }
 
@@ -688,11 +707,13 @@ impl V2MaintenanceStore {
         class: V2PathClass,
         expected_content_hash: &str,
         transaction: &rusqlite::Transaction<'_>,
-    ) -> Result<()> {
+    ) -> Result<TombstoneReconciliation> {
         let absolute = self.scope_dir.join(relative);
         let metadata = match std::fs::symlink_metadata(&absolute) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(TombstoneReconciliation::AlreadyGone);
+            }
             Err(error) => return Err(error.into()),
         };
         if !metadata.file_type().is_file() {
@@ -712,10 +733,10 @@ impl V2MaintenanceStore {
         } else {
             std::fs::remove_file(&absolute)?;
         }
-        Ok(())
+        Ok(TombstoneReconciliation::Removed)
     }
 
-    fn converge_excluded_paths<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Result<()> {
+    fn drop_from_index<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Result<()> {
         let storage = MemoryStorage::new_flat(&self.scope_dir, &self.scope_dir);
         let mut index = MemoryIndex::open_or_create(
             &self.scope_dir.join("index.sqlite"),
@@ -729,8 +750,6 @@ impl V2MaintenanceStore {
                 .delete_path(&self.scope_dir.join(relative))
                 .map_err(V2MaintenanceError::Index)?;
         }
-        regenerate_scope_manifest(&self.scope_dir, self.scope, V2ManifestBudget::default())
-            .map_err(V2MaintenanceError::Manifest)?;
         Ok(())
     }
 
@@ -824,7 +843,11 @@ pub(crate) fn migrate_v2_hardening(connection: &rusqlite::Connection) -> Result<
             operation_id TEXT NOT NULL,
             archive_path TEXT NOT NULL UNIQUE,
             content_hash TEXT NOT NULL
-        );",
+        );
+        -- The exclusion joins compare REPLACE(source_path, char(92), '/'); without this
+        -- expression index each of them scans every archive row per observation file.
+        CREATE INDEX IF NOT EXISTS consolidation_archives_source_path_normalized
+            ON consolidation_archives(REPLACE(source_path, char(92), '/'));",
     )?;
     connection.execute(
         "INSERT OR IGNORE INTO consolidation_lock(singleton, generation) VALUES (1, 0)",
