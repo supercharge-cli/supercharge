@@ -4,6 +4,12 @@ use std::path::Path;
 use super::find_project_root;
 use super::items::{ImportPlan, ImportRuleAction, ImportableItem, PathKind, format_rule_string};
 
+/// Display form of an environment value. Values can hold tokens, so only the length is
+/// shown, which is enough for the user to recognise it.
+pub fn redacted_env_value(value: &str) -> String {
+    format!("<redacted, {} chars>", value.chars().count())
+}
+
 impl ImportPlan {
     /// Human-readable summary of the plan. Environment values are redacted.
     #[must_use]
@@ -77,12 +83,7 @@ fn format_item_summary(items: &[ImportableItem]) -> String {
     if !envs.is_empty() {
         let _ = writeln!(out, "  - {} environment variable(s)", envs.len());
         for (key, value) in &envs {
-            // Values can hold tokens; show only the length so the user can recognise it.
-            let _ = writeln!(
-                out,
-                "      {key} = <redacted, {} chars>",
-                value.chars().count()
-            );
+            let _ = writeln!(out, "      {key} = {}", redacted_env_value(value));
         }
     }
 
@@ -189,6 +190,7 @@ mod tests {
         let summary = plan.summary(dir.path());
         assert!(summary.contains("  - 1 permission rule(s) (1 deny)\n      deny Read(.env)\n"));
         assert!(summary.contains("API_TOKEN = <redacted, 6 chars>"));
+        assert_eq!(redacted_env_value("é1"), "<redacted, 2 chars>");
         assert!(!summary.contains("sëcret"));
         assert!(summary.contains("Stop [*] true (timeout: 4s)"));
         assert!(summary.contains("  - 1 extra rule dir(s)\n      /r\n"));

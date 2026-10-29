@@ -21,6 +21,7 @@ pub use items::{
 };
 pub use rewrite::{apply_import, is_import_marked_at, write_import_marker};
 pub use scan::{ScanInputs, scan_importable_settings};
+pub use summary::redacted_env_value;
 
 use std::path::{Path, PathBuf};
 

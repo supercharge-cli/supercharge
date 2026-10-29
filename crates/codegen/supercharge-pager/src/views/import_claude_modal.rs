@@ -1006,7 +1006,10 @@ fn format_item_label(item: &ImportableItem) -> String {
             format!("{action:5} {tool}({pattern})")
         }
         ImportableItem::EnvVar { key, value } => {
-            format!("{key} = {value:?}")
+            format!(
+                "{key} = {}",
+                supercharge_agent_import::redacted_env_value(value)
+            )
         }
         ImportableItem::McpServer { name, .. } => name.to_string(),
         ImportableItem::Hook {
@@ -1081,6 +1084,16 @@ mod tests {
                 path: ".claude/skills".into(),
             }],
         }
+    }
+
+    #[test]
+    fn env_var_labels_redact_the_value() {
+        let label = format_item_label(&ImportableItem::EnvVar {
+            key: "API_TOKEN".into(),
+            value: "s3cr3t".into(),
+        });
+        assert_eq!(label, "API_TOKEN = <redacted, 6 chars>");
+        assert!(!label.contains("s3cr3t"));
     }
 
     #[test]
