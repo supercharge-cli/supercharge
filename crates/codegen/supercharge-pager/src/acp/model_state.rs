@@ -241,16 +241,26 @@ impl ModelState {
         }
     }
 
-    /// [`Self::resolve_effort_token`] scoped to a specific catalog model id.
+    /// [`Self::resolve_effort_token`] scoped to a specific catalog model id: a menu id, a menu
+    /// label (what the picker shows), or a canonical level the menu offers, in that order.
     pub(crate) fn resolve_effort_token_for(
         &self,
         id: &acp::ModelId,
         token: &str,
     ) -> Option<ReasoningEffort> {
+        let token = token.trim();
+        if token.is_empty() {
+            return None;
+        }
         let options = self.reasoning_effort_options_for(id);
         if let Some(option) = options
             .iter()
             .find(|opt| opt.id.eq_ignore_ascii_case(token))
+            .or_else(|| {
+                options
+                    .iter()
+                    .find(|opt| opt.label.trim().eq_ignore_ascii_case(token))
+            })
         {
             return Some(option.value);
         }
@@ -559,6 +569,34 @@ mod tests {
         assert!(state.resolve_effort_token("minimal").is_none());
         assert!(state.resolve_effort_token("none").is_none());
         assert!(state.resolve_effort_token("bogus").is_none());
+    }
+
+    #[test]
+    fn resolve_effort_token_accepts_menu_label() {
+        let state = state_with_meta(Some(serde_json::json!({
+            "supportsReasoningEffort": true,
+            "reasoningEfforts": [
+                { "id": "deep", "value": "xhigh", "label": "Deep Think" },
+                { "id": "fast", "value": "low", "label": "Quick" },
+            ],
+        })));
+        // The label shown in the picker resolves, case- and padding-insensitively
+        assert_eq!(
+            state.resolve_effort_token("deep think"),
+            Some(ReasoningEffort::Xhigh)
+        );
+        assert_eq!(
+            state.resolve_effort_token("  QUICK "),
+            Some(ReasoningEffort::Low)
+        );
+        // Ids and offered canonical levels still win as before
+        assert_eq!(state.resolve_effort_token("fast"), Some(ReasoningEffort::Low));
+        assert_eq!(state.resolve_effort_token("xhigh"), Some(ReasoningEffort::Xhigh));
+        // An empty or unknown token is never a match, even against a blank label
+        assert!(state.resolve_effort_token("").is_none());
+        assert!(state.resolve_effort_token("   ").is_none());
+        assert!(state.resolve_effort_token("Deep Thinker").is_none());
+        assert!(state.resolve_effort_token("high").is_none());
     }
 
     #[test]
