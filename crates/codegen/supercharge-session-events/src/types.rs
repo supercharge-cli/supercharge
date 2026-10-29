@@ -421,6 +421,8 @@ pub enum TurnOutcomeLabel {
     Completed,
     Cancelled,
     Error,
+    /// Written at session load for a `turn_started` the previous process never closed.
+    Interrupted,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

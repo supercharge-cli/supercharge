@@ -579,6 +579,7 @@ pub(crate) mod telemetry;
 pub mod testkit;
 pub mod tool_definitions_artifact;
 pub mod tool_index;
+pub mod interrupted_turn;
 pub mod turn_completion;
 pub mod unified_list;
 pub(crate) mod user_message;

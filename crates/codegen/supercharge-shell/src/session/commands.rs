@@ -548,6 +548,10 @@ pub enum SessionCommand {
         respond_to: oneshot::Sender<Option<crate::extensions::notification::PromptUsage>>,
     },
     /// Persist the monotonic telemetry turn counter ("next trace turn") for the session.
+    /// Tell the model, at its next prompt, that the turn a previous process was running never finished.
+    NoteInterruptedTurn {
+        turn: crate::session::interrupted_turn::InterruptedTurn,
+    },
     SetNextTraceTurn {
         next_trace_turn: u64,
         request_id: Option<String>,

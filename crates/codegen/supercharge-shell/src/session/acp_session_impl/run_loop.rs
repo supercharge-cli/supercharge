@@ -1482,6 +1482,14 @@ pub(super) async fn run_session(
                                     request_id,
                                 });
                         }
+                        SessionCommand::NoteInterruptedTurn { turn } => {
+                            session.push_system_reminder(&turn.model_reminder());
+                            tracing::info!(
+                                trace_turn = turn.trace_turn,
+                                prompt_id = %turn.prompt_id,
+                                "Injected interrupted-turn reminder for the model"
+                            );
+                        }
                         SessionCommand::CopyFile { respond_to } => {
                             // Flush the actor-owned replay buffer before tearing down the running turn.
                             // Chunks still pending at cancel (notably AgentThoughtChunk reasoning text) then get committed to updates.jsonl.

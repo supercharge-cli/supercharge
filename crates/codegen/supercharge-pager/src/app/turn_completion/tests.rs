@@ -1565,3 +1565,24 @@ fn viewer_finalize_truncation_wire_pair_renders_exact_user_copy() {
         other => panic!("expected TurnFailed, got {other:?}"),
     }
 }
+
+#[test]
+fn interrupted_stop_reason_paints_a_failure_with_the_shell_text() {
+    assert_eq!(
+        TurnStopReason::from(supercharge_shell::session::interrupted_turn::INTERRUPTED_STOP_REASON),
+        TurnStopReason::Interrupted
+    );
+    let mut input = base_input(TurnStopReason::Interrupted);
+    input.agent_result = Some("process restarted");
+    assert!(matches!(
+        terminal_marker(input),
+        Some(SessionEvent::TurnFailed { ref error, .. }) if error == "process restarted"
+    ));
+    let mut input = base_input(TurnStopReason::Interrupted);
+    input.agent_result = None;
+    assert!(matches!(
+        terminal_marker(input),
+        Some(SessionEvent::TurnFailed { ref error, .. })
+            if error == supercharge_shell::session::interrupted_turn::INTERRUPTED_MESSAGE
+    ));
+}
