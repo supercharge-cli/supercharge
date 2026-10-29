@@ -1193,16 +1193,19 @@ impl AgentView {
             s.is_running() && !s.attempt.is_background && s.attempt.workflow_run_id.is_none()
         })
     }
-    /// Display subject for a foreground-subagent wait; `None` when no running child has a description.
+    /// Display subject for a foreground-subagent wait. With no description to show, parallel children
+    /// still read as `Waiting for N subagents`; `None` (the generic label) only for a lone undescribed child.
     fn subagent_wait_subject(&self) -> Option<String> {
         use crate::acp::tracker::{MAX_ACTIVITY_SUBJECT_CHARS, clamp_activity_subject};
         let mut running: Vec<_> = self.running_foreground_subagents().collect();
         running.sort_by_key(|info| info.attempt.started_at);
-        let description = running.iter().find_map(|info| {
+        let Some(description) = running.iter().find_map(|info| {
             let (_, desc) = crate::app::subagent::parse_tag_prefix(info.description.trim());
             let desc = clamp_activity_subject(desc);
             (!desc.is_empty()).then_some(desc)
-        })?;
+        }) else {
+            return (running.len() > 1).then(|| format!("Waiting for {} subagents", running.len()));
+        };
         if running.len() > 1 {
             let n = running.len();
             return Some(budgeted_subject(
@@ -1850,6 +1853,17 @@ mod resolve_turn_activity_tests {
             panic!("expected waiting activity");
         };
         assert_eq!(reason.label(), "Waiting on subagent…");
+    }
+    #[test]
+    fn parallel_undescribed_subagents_are_counted() {
+        let mut view = running_view();
+        for id in ["child-1", "child-2", "child-3"] {
+            view.subagent_sessions.insert(id.into(), running_child(""));
+        }
+        let Some(TurnActivity::Waiting(reason)) = view.resolve_turn_activity() else {
+            panic!("expected waiting activity");
+        };
+        assert_eq!(reason.label(), "Waiting for 3 subagents…");
     }
     #[test]
     fn tracker_subagent_wait_is_enriched() {
