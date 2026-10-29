@@ -715,7 +715,7 @@ fn inline_feedback_sends_immediately_while_a_turn_runs() {
 /// staged temp file that FeedbackImages Drop would otherwise unlink, and is visible.
 #[test]
 fn refused_bare_feedback_keeps_the_composer_image_and_is_visible() {
-    use crate::app::app_view::{VoiceState, VoiceTarget};
+    use crate::app::app_view::{Partial, VoiceState, VoiceTarget};
     use strum::IntoEnumIterator as _;
 
     #[derive(Debug, Clone, Copy, strum::EnumIter)]
@@ -729,7 +729,8 @@ fn refused_bare_feedback_keeps_the_composer_image_and_is_visible() {
     let recording = VoiceState::Recording {
         hold: false,
         target: VoiceTarget::Agent(id),
-        interim: Some("dictated text".to_owned()),
+        partial: Partial::Shown("dictated text".to_owned()),
+        route: None,
     };
     for refusal in Refusal::iter() {
         let mut app = test_app_with_agent();
@@ -806,7 +807,7 @@ fn refused_bare_feedback_keeps_the_composer_image_and_is_visible() {
 /// Minimal cannot show a toast, so the voice refusal lands in scrollback and the modal stays closed.
 #[test]
 fn minimal_voice_refusal_is_a_scrollback_block() {
-    use crate::app::app_view::{VoiceState, VoiceTarget};
+    use crate::app::app_view::{Partial, VoiceState, VoiceTarget};
 
     let mut app = test_app_with_agent();
     let id = AgentId(0);
@@ -814,7 +815,8 @@ fn minimal_voice_refusal_is_a_scrollback_block() {
     app.voice_state = VoiceState::Recording {
         hold: false,
         target: VoiceTarget::Agent(id),
-        interim: Some("dictated text".to_owned()),
+        partial: Partial::Shown("dictated text".to_owned()),
+        route: None,
     };
     app.agents
         .get_mut(&id)
@@ -1075,7 +1077,7 @@ fn feedback_modal_open_refuses_visibly_on_dashboard() {
 /// question card, a line viewer, a plan approval) without touching the owner or the main draft.
 #[test]
 fn feedback_modal_open_refuses_visibly_under_every_input_owner() {
-    use crate::app::app_view::{VoiceState, VoiceTarget};
+    use crate::app::app_view::{Partial, VoiceState, VoiceTarget};
     use crate::views::question_view::QuestionViewState;
     use strum::IntoEnumIterator as _;
 
@@ -1111,13 +1113,15 @@ fn feedback_modal_open_refuses_visibly_under_every_input_owner() {
                 app.voice_state = VoiceState::Recording {
                     hold: false,
                     target: VoiceTarget::Agent(id),
-                    interim: Some("partial".to_owned()),
+                    partial: Partial::Shown("partial".to_owned()),
+                    route: None,
                 };
             }
             Owner::VoiceStopping => {
                 app.voice_state = VoiceState::Stopping {
                     target: VoiceTarget::Agent(id),
-                    interim: Some("partial".to_owned()),
+                    partial: Partial::Shown("partial".to_owned()),
+                    route: None,
                 };
             }
             Owner::QuestionCard => {

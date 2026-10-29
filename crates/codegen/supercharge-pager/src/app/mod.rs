@@ -70,6 +70,7 @@ mod startup_failure;
 mod turn_completion;
 pub(crate) mod workspace_layout;
 pub(crate) mod workspace_membership;
+pub(crate) mod voice_state;
 pub(crate) mod workspace_sync;
 #[cfg(test)]
 pub(crate) mod workspace_test_fixtures;

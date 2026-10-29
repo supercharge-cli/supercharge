@@ -688,7 +688,8 @@ fn voice_final_appends_to_dashboard_dispatch() {
     dispatch.set_cursor("fix".len());
     app.voice_state = VoiceState::Stopping {
         target: VoiceTarget::DashboardDispatch,
-        interim: None,
+        partial: Partial::None,
+        route: None,
     };
     crate::voice::handle_voice_event(
         &mut app,
@@ -727,7 +728,8 @@ fn voice_final_appends_to_peek_reply_when_peek_open() {
     dash.peek_reply.set_cursor("reply".len());
     app.voice_state = VoiceState::Stopping {
         target: VoiceTarget::DashboardPeekReply(id),
-        interim: None,
+        partial: Partial::None,
+        route: None,
     };
     crate::voice::handle_voice_event(
         &mut app,
@@ -771,7 +773,8 @@ fn voice_final_discarded_when_peek_row_changed_after_stop() {
     ensure_dashboard_state(&mut app);
     app.voice_state = VoiceState::Stopping {
         target: VoiceTarget::DashboardPeekReply(AgentId(0)),
-        interim: None,
+        partial: Partial::None,
+        route: None,
     };
     app.dashboard.as_mut().unwrap().peek = Some(peek_for(DashboardRowId::TopLevel(AgentId(1))));
     crate::voice::handle_voice_event(
@@ -797,7 +800,8 @@ fn voice_dashboard_dispatch_submit_tears_down_voice() {
     app.voice_state = VoiceState::Recording {
         hold: false,
         target: VoiceTarget::DashboardDispatch,
-        interim: Some("the build".into()),
+        partial: Partial::Shown("the build".into()),
+        route: Some(supercharge_voice::VoiceRoute::Streaming),
     };
     let _ = dispatch_dashboard_dispatch(&mut app, "fix the build".into(), false);
     assert!(!app.voice_listening(), "submit stops capture");
@@ -808,7 +812,7 @@ fn voice_dashboard_dispatch_submit_tears_down_voice() {
     assert!(app.voice_interim().is_none());
     assert!(matches!(
         rx.try_recv(),
-        Ok(supercharge_voice::VoiceCommand::PttRelease)
+        Ok(supercharge_voice::VoiceCommand::Abort)
     ));
     crate::voice::handle_voice_event(
         &mut app,
@@ -839,7 +843,7 @@ fn submit_cancels_pending_voice_cold_start() {
     };
     let _ = dispatch_dashboard_dispatch(&mut app, "ship it".into(), false);
     assert!(
-        !app.voice_state.pending_cold_start(),
+        !app.voice_state.is_pending_cold_start(),
         "submit cancels the queued spawn"
     );
     assert!(app.voice_recording_target().is_none());
@@ -855,7 +859,8 @@ fn voice_dashboard_peek_reply_submit_tears_down_voice() {
     app.voice_state = VoiceState::Recording {
         hold: false,
         target: VoiceTarget::DashboardPeekReply(AgentId(0)),
-        interim: None,
+        partial: Partial::None,
+        route: Some(supercharge_voice::VoiceRoute::Streaming),
     };
     let _ = dispatch_dashboard_peek_reply(
         &mut app,
@@ -870,7 +875,7 @@ fn voice_dashboard_peek_reply_submit_tears_down_voice() {
     );
     assert!(matches!(
         rx.try_recv(),
-        Ok(supercharge_voice::VoiceCommand::PttRelease)
+        Ok(supercharge_voice::VoiceCommand::Abort)
     ));
 }
 #[test]
@@ -942,7 +947,8 @@ fn voice_auto_stops_when_peek_row_changes() {
     app.voice_state = VoiceState::Recording {
         hold: false,
         target: VoiceTarget::DashboardPeekReply(AgentId(0)),
-        interim: None,
+        partial: Partial::None,
+        route: None,
     };
     app.dashboard.as_mut().unwrap().peek = Some(peek_for(DashboardRowId::TopLevel(AgentId(0))));
     app.enforce_voice_session_bound();
@@ -972,7 +978,8 @@ fn voice_suppressed_while_dashboard_popup_open() {
     app.voice_state = VoiceState::Recording {
         hold: false,
         target: VoiceTarget::DashboardDispatch,
-        interim: None,
+        partial: Partial::None,
+        route: None,
     };
     app.enforce_voice_session_bound();
     assert!(
@@ -999,7 +1006,7 @@ fn voice_off_target_surface_does_not_enable_or_record() {
     );
     assert!(!app.voice_ui_active, "voice mode must not arm off-target");
     assert!(!app.voice_listening());
-    assert!(!app.voice_state.pending_cold_start());
+    assert!(!app.voice_state.is_pending_cold_start());
     assert!(rx.try_recv().is_err(), "no PttPress without a target");
 }
 /// `grok dashboard` before login: the startup hook consumes the `SUPERCHARGE_OPEN_DASHBOARD_AT_STARTUP` env var and stashes
@@ -3060,7 +3067,8 @@ fn dashboard_slash_command_error_gets_error_glyph_prefix() {
     // Unknown ids now open the live picker; a bogus effort token on a model without effort support is a real error.
     seed_model(&mut app, "core-model", "Supercharge Core");
     open_dashboard(&mut app);
-    let effects = dispatch_dashboard_dispatch_slash(&mut app, "/model core-model nonexistent".into());
+    let effects =
+        dispatch_dashboard_dispatch_slash(&mut app, "/model core-model nonexistent".into());
     assert!(effects.is_empty(), "a failed command must not dispatch");
     assert!(app.agents.is_empty(), "no session should be created");
     let toast = app

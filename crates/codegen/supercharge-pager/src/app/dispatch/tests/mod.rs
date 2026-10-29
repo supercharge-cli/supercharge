@@ -21,6 +21,7 @@ mod task_result;
 mod transcript;
 mod turn;
 mod voice;
+mod voice_clip;
 use super::cta::{
     CTA_MCP_ABSENT_MAX_ATTEMPTS, CTA_MCP_POLL_MAX_ATTEMPTS, cta_impression_plugin_name,
     cta_install_error_category, cta_install_relative_path, plugin_cta_phase_for,
@@ -65,7 +66,7 @@ use crate::app::actions::{
 use crate::app::agent::{AgentId, AgentSession, AgentState};
 use crate::app::agent_view::{ActivePane, AgentView, PromptMode};
 use crate::app::app_view::{
-    ActiveView, AppView, AuthMode, AuthState, TrustState, VoiceState, VoiceTarget,
+    ActiveView, AppView, AuthMode, AuthState, Partial, TrustState, VoiceState, VoiceTarget,
     WelcomeAnnouncementState,
 };
 use crate::scrollback::block::RenderBlock;
@@ -313,6 +314,9 @@ fn test_app() -> AppView {
         voice_auth: None,
         voice_cmd_tx: None,
         voice_state: VoiceState::Idle,
+        voice_session: supercharge_voice::VoiceSessionId::default(),
+        voice_trailing_final: None,
+        voice_clip_deadline: None,
     }
 }
 /// Build a default `AgentSession` for tests.

@@ -1675,7 +1675,7 @@ pub(crate) async fn run(
     let mut acp_peek: Option<AcpClientMessage> = None;
     let (progress_tx, mut progress_rx) =
         tokio::sync::mpsc::unbounded_channel::<effects::RestoreProgressMsg>();
-    let mut voice_rx = None::<tokio::sync::mpsc::Receiver<supercharge_voice::VoiceEvent>>;
+    let mut voice_rx = None::<tokio::sync::mpsc::Receiver<supercharge_voice::TaggedVoiceEvent>>;
     let voice_auth_factory = connection.auth_manager.clone();
     let mut tick_interval = tick_interval;
     let mut animation_tick_at: Option<Instant> = None;
@@ -1944,17 +1944,17 @@ pub(crate) async fn run(
         }
         if let VoiceState::ColdStart { hold, target } = app.voice_state {
             if app.voice_cmd_tx.is_none() && app.voice_can_start_pipeline() {
-                let voice_auth = crate::voice::build_voice_auth(voice_auth_factory.clone());
+                let stt_routes = crate::voice::build_stt_routes(voice_auth_factory.clone());
+                app.voice_auth = Some(stt_routes.auth.clone());
                 let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(32);
                 let (event_tx, event_rx) = tokio::sync::mpsc::channel(128);
                 let voice_config = app.voice_config.clone();
                 tokio::spawn(supercharge_voice::run_voice_pipeline(
                     voice_config,
-                    voice_auth.clone(),
+                    stt_routes,
                     cmd_rx,
                     event_tx,
                 ));
-                app.voice_auth = Some(voice_auth);
                 app.voice_cmd_tx = Some(cmd_tx);
                 voice_rx = Some(event_rx);
                 tracing::info!("voice pipeline started (/voice or Ctrl+Space)");
@@ -1964,19 +1964,20 @@ pub(crate) async fn run(
                 ) {
                     app.voice_begin_recording(target, hold);
                 } else {
-                    app.voice_state = VoiceState::Idle;
+                    app.voice_reset();
                     app.voice_ui_active = false;
                 }
             } else if app.voice_cmd_tx.is_none() {
-                app.voice_state = VoiceState::Idle;
+                app.voice_reset();
                 app.voice_ui_active = false;
                 app.show_toast("Voice could not start. Restart Supercharge AI.");
             } else {
-                app.voice_state = VoiceState::Idle;
+                app.voice_reset();
             }
             presenter.request_presentation(&mut app, terminal, false);
         }
         app.enforce_voice_session_bound();
+        app.voice_expire_outstanding_clip(std::time::Instant::now());
         let want_gboom_keyboard = app.gboom_active();
         if want_gboom_keyboard {
             if !gboom_keyboard_pushed {
@@ -2851,7 +2852,7 @@ pub(crate) async fn run(
             } => {
                 match ev {
                     Some(ev) => {
-                        let needs_draw = crate::voice::handle_voice_event(&mut app, ev);
+                        let needs_draw = crate::voice::handle_tagged_voice_event(&mut app, ev);
                         if needs_draw {
                             schedule_tick(&mut animation_tick_at, &app, tick_interval);
                             let now = Instant::now();
@@ -3247,7 +3248,7 @@ async fn drain_and_process(
             && is_voice_chord(ke)
             && !app.voice_hold_owned()
             && !app.voice_listening()
-            && !app.voice_state.pending_cold_start()
+            && !app.voice_state.is_pending_cold_start()
             && active_feedback_modal_open(app)
         {
             return false;

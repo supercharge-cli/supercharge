@@ -181,7 +181,7 @@ fn external_prompt_editor_refuses_elements_with_visible_message() {
 #[test]
 fn external_prompt_editor_refuses_voice_and_pending_paste_with_visible_messages() {
     use crate::app::agent_view::AgentDeferredSend;
-    use crate::app::app_view::{VoiceState, VoiceTarget};
+    use crate::app::app_view::{Partial, VoiceState, VoiceTarget};
     for voice_state in [
         VoiceState::ColdStart {
             hold: false,
@@ -190,11 +190,13 @@ fn external_prompt_editor_refuses_voice_and_pending_paste_with_visible_messages(
         VoiceState::Recording {
             hold: false,
             target: VoiceTarget::Agent(AgentId(0)),
-            interim: Some("partial".to_owned()),
+            partial: Partial::Shown("partial".to_owned()),
+            route: None,
         },
         VoiceState::Stopping {
             target: VoiceTarget::Agent(AgentId(0)),
-            interim: Some("partial".to_owned()),
+            partial: Partial::Shown("partial".to_owned()),
+            route: None,
         },
     ] {
         let mut app = test_app_with_agent();
@@ -1175,7 +1177,10 @@ fn slash_model_invalid_arg_produces_scrollback_error() {
             acp::ModelInfo::new(model_id, "Supercharge Core".to_string()),
         );
     let initial_scrollback = agent_ref(&app, id).scrollback.len();
-    let effects = dispatch(Action::SendPrompt("/model core-model nonexistent".into()), &mut app);
+    let effects = dispatch(
+        Action::SendPrompt("/model core-model nonexistent".into()),
+        &mut app,
+    );
     assert!(effects.is_empty(), "error should not produce effects");
     assert_eq!(agent_ref(&app, id).scrollback.len(), initial_scrollback + 1);
     assert!(agent_ref(&app, id).prompt.text().is_empty());
