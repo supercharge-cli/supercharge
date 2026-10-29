@@ -15,6 +15,8 @@
 //! Installing a custom handler would change the disposition inherited by fork+exec children (MCP servers, hooks) from `SIG_IGN` to `SIG_DFL`.
 //! That re-introduces a prior SIGPIPE regression.
 
+#[cfg(any(unix, windows))]
+use crate::signal_streams::SignalStreams;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use agent_client_protocol as acp;
@@ -88,29 +90,34 @@ pub(crate) fn mark_restored() {
 }
 
 fn spawn_async_signal_task() {
-    tokio::spawn(async {
-        #[cfg(unix)]
-        {
-            use tokio::signal::unix::{SignalKind, signal};
-            let mut sigterm = signal(SignalKind::terminate()).ok();
-            let mut sighup = signal(SignalKind::hangup()).ok();
+    // Streams are claimed here, synchronously, so a signal that lands before the task first runs
+    // is queued instead of taking its default action and leaving the terminal in raw mode.
+    #[cfg(unix)]
+    {
+        let mut streams = SignalStreams::install();
+        tokio::spawn(async move {
             // First signal requests the graceful quit; a second forces exit.
-            let code = next_signal_code(&mut sigterm, &mut sighup).await;
+            let code = streams.next_code().await;
             request_graceful_or_exit(code);
-            let code2 = next_signal_code(&mut sigterm, &mut sighup).await;
+            let code2 = streams.next_code().await;
             shutdown_with_terminal_restore(code2);
-        }
-        #[cfg(windows)]
-        {
-            // ctrl_c gets the first-graceful / second-force treatment
-            // Console close, logoff, and shutdown stay immediate: the OS grants only a short window, so graceful teardown may not finish
-            use tokio::signal::windows;
-            let mut ctrl_close = windows::ctrl_close().ok();
-            let mut ctrl_logoff = windows::ctrl_logoff().ok();
-            let mut ctrl_shutdown = windows::ctrl_shutdown().ok();
+        });
+    }
+    #[cfg(windows)]
+    {
+        // ctrl_c gets the first-graceful / second-force treatment
+        // Console close, logoff, and shutdown stay immediate: the OS grants only a short window, so graceful teardown may not finish
+        use tokio::signal::windows;
+        let mut streams = SignalStreams::install();
+        let mut ctrl_close = windows::ctrl_close().ok();
+        let mut ctrl_logoff = windows::ctrl_logoff().ok();
+        let mut ctrl_shutdown = windows::ctrl_shutdown().ok();
+        tokio::spawn(async move {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    handle_windows_ctrl_c_double().await;
+                code = streams.next_code() => {
+                    request_graceful_or_exit(code);
+                    let code2 = streams.next_code().await;
+                    shutdown_with_terminal_restore(code2);
                 }
                 _ = recv_optional_ctrl_close(&mut ctrl_close) => {
                     shutdown_with_terminal_restore(1);
@@ -122,48 +129,18 @@ fn spawn_async_signal_task() {
                     shutdown_with_terminal_restore(0);
                 }
             }
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
+        });
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        tokio::spawn(async {
             if tokio::signal::ctrl_c().await.is_ok() {
                 request_graceful_or_exit(130);
                 let _ = tokio::signal::ctrl_c().await;
                 shutdown_with_terminal_restore(130);
             }
-        }
-    });
-}
-
-/// Wait for the next SIGINT/SIGTERM/SIGHUP and map it to its exit code.
-///
-/// Shared with the agent binary (`supercharge-pager-bin`) so the 130/143/129 map cannot drift between TUI and agent signal handlers.
-#[cfg(unix)]
-pub async fn next_signal_code(
-    sigterm: &mut Option<tokio::signal::unix::Signal>,
-    sighup: &mut Option<tokio::signal::unix::Signal>,
-) -> i32 {
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => 130,
-        _ = recv_optional_unix_signal(sigterm) => 143,
-        _ = recv_optional_unix_signal(sighup) => 129,
+        });
     }
-}
-
-/// Await one recv on an optional unix signal stream, or pend forever if absent.
-#[cfg(unix)]
-pub async fn recv_optional_unix_signal(sig: &mut Option<tokio::signal::unix::Signal>) {
-    if let Some(s) = sig.as_mut() {
-        let _ = s.recv().await;
-    } else {
-        std::future::pending::<()>().await;
-    }
-}
-
-#[cfg(windows)]
-async fn handle_windows_ctrl_c_double() {
-    request_graceful_or_exit(130);
-    let _ = tokio::signal::ctrl_c().await;
-    shutdown_with_terminal_restore(130);
 }
 
 // Tokio exposes distinct CtrlClose / CtrlLogoff / CtrlShutdown types with no shared trait; generate the three identical recv helpers from one body
