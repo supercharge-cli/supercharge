@@ -146,6 +146,7 @@ supercharge-tools = { path = "../supercharge-tools" }
 supercharge-tty-utils = { workspace = true }
 supercharge-workflow = { path = "../supercharge-workflow" }
 supercharge-workspace = { workspace = true }
+supercharge-agent-import = { workspace = true }
 # Backs the compatibility-only `supercharge_shell::foreign_sessions` re-export.
 supercharge-foreign-sessions = { workspace = true }
 supercharge-subagent-resolution = { path = "../supercharge-subagent-resolution" }

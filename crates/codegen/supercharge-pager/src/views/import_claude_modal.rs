@@ -10,8 +10,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::path::PathBuf;
+use supercharge_agent_import::ImportRuleAction;
 use supercharge_shell::claude_import::{ImportPlan, ImportableItem, PathKind, find_project_root};
-use supercharge_workspace::permission::types::RuleAction;
 
 use crate::theme::Theme;
 use crate::views::modal_window::{
@@ -997,9 +997,9 @@ fn format_item_label(item: &ImportableItem) -> String {
     match item {
         ImportableItem::Permission(rule) => {
             let action = match rule.action {
-                RuleAction::Allow => "allow",
-                RuleAction::Deny => "deny",
-                RuleAction::Ask => "ask",
+                ImportRuleAction::Allow => "allow",
+                ImportRuleAction::Deny => "deny",
+                ImportRuleAction::Ask => "ask",
             };
             let pattern = rule.pattern.as_deref().unwrap_or("*");
             let tool = format!("{:?}", rule.tool);
@@ -1059,17 +1059,17 @@ fn is_selectable(row: &Row) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use supercharge_agent_import::{ImportPatternMode, ImportPermission, ImportTool};
     use supercharge_shell::claude_import::PathKind;
-    use supercharge_workspace::permission::types::{PatternMode, PermissionRule, ToolFilter};
 
     fn sample_plan() -> ImportPlan {
         ImportPlan {
             global_items: vec![
-                ImportableItem::Permission(PermissionRule {
-                    action: RuleAction::Allow,
-                    tool: ToolFilter::Bash,
+                ImportableItem::Permission(ImportPermission {
+                    action: ImportRuleAction::Allow,
+                    tool: ImportTool::Bash,
                     pattern: Some("cargo test *".into()),
-                    pattern_mode: PatternMode::Glob,
+                    pattern_mode: ImportPatternMode::Glob,
                 }),
                 ImportableItem::EnvVar {
                     key: "RUST_LOG".into(),
@@ -1128,9 +1128,9 @@ mod tests {
     /// De-selecting an MCP server must skip THAT MCP server in `filtered_plan`, not another item sharing the deselected slot's index.
     #[test]
     fn filtered_plan_respects_per_item_selection_after_grouping() {
+        use supercharge_agent_import::{ImportPatternMode, ImportPermission, ImportTool};
         use supercharge_shell::claude_import::ImportableItem;
         use supercharge_shell::util::config::{McpServerConfig, McpServerTransportConfig};
-        use supercharge_workspace::permission::types::{PatternMode, PermissionRule, ToolFilter};
 
         // Mix Permissions, MCP servers, and EnvVars in a non-sorted order so the display order (sorted by ItemKind) differs from the source order
         let mcp = |name: &str| ImportableItem::McpServer {
@@ -1154,11 +1154,11 @@ mod tests {
         let plan = ImportPlan {
             global_items: vec![
                 mcp("alpha"),
-                ImportableItem::Permission(PermissionRule {
-                    action: RuleAction::Allow,
-                    tool: ToolFilter::Bash,
+                ImportableItem::Permission(ImportPermission {
+                    action: ImportRuleAction::Allow,
+                    tool: ImportTool::Bash,
                     pattern: Some("true".into()),
-                    pattern_mode: PatternMode::Glob,
+                    pattern_mode: ImportPatternMode::Glob,
                 }),
                 mcp("beta"),
                 ImportableItem::EnvVar {

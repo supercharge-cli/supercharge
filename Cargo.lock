@@ -10531,6 +10531,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercharge-agent-import"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "git2",
+ "serde_json",
+ "supercharge-config-types",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "supercharge-agent-lifecycle"
 version = "0.1.0"
 dependencies = [
@@ -11421,6 +11435,7 @@ dependencies = [
  "supercharge-acp-lib",
  "supercharge-active-sessions",
  "supercharge-agent",
+ "supercharge-agent-import",
  "supercharge-announcements",
  "supercharge-chat-state",
  "supercharge-config",
@@ -11934,6 +11949,7 @@ dependencies = [
  "strum 0.27.2",
  "supercharge-acp-lib",
  "supercharge-agent",
+ "supercharge-agent-import",
  "supercharge-agent-lifecycle",
  "supercharge-announcements",
  "supercharge-auth",

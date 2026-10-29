@@ -119,6 +119,7 @@ supercharge-shell = { workspace = true }
 # from upstream of the crate that fills it in.
 supercharge-status-line = { workspace = true }
 supercharge-workspace = { workspace = true }
+supercharge-agent-import = { workspace = true }
 # Foreign coding-agent session discovery.
 supercharge-foreign-sessions = { workspace = true }
 supercharge-token-estimation = { workspace = true }
