@@ -886,7 +886,6 @@ impl CompactionsRemaining {
     PartialEq,
     Eq,
     serde::Serialize,
-    serde::Deserialize,
     strum::AsRefStr,
     strum::IntoStaticStr,
 )]
@@ -980,6 +979,17 @@ impl std::str::FromStr for ReasoningEffort {
                 "invalid reasoning effort: {s:?} (expected one of: none, minimal, low, medium, high, xhigh, max)"
             )),
         }
+    }
+}
+
+/// Case-insensitive, so a hand-written `reasoning_effort = "xHigh"` in config.toml still loads.
+impl<'de> serde::Deserialize<'de> for ReasoningEffort {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        raw.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -1457,6 +1467,39 @@ impl From<crate::messages::MessagesRequest> for MessagesRequestWrapper {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn reasoning_effort_deserializes_mixed_case() {
+        for (raw, want) in [
+            ("\"xHigh\"", ReasoningEffort::Xhigh),
+            ("\"HIGH\"", ReasoningEffort::High),
+            ("\"medium\"", ReasoningEffort::Medium),
+            ("\"Max\"", ReasoningEffort::Max),
+        ] {
+            let got: ReasoningEffort = serde_json::from_str(raw).unwrap();
+            assert_eq!(got, want, "{raw}");
+        }
+        // Serialization stays canonical lowercase
+        assert_eq!(
+            serde_json::to_string(&ReasoningEffort::Xhigh).unwrap(),
+            "\"xhigh\""
+        );
+        // Unknown and non-string values are errors, never a silent default
+        assert!(serde_json::from_str::<ReasoningEffort>("\"turbo\"").is_err());
+        assert!(serde_json::from_str::<ReasoningEffort>("\"\"").is_err());
+        assert!(serde_json::from_str::<ReasoningEffort>("3").is_err());
+        assert!(serde_json::from_str::<ReasoningEffort>("null").is_err());
+    }
+
+    #[test]
+    fn reasoning_effort_field_accepts_mixed_case() {
+        #[derive(serde::Deserialize)]
+        struct Cfg {
+            reasoning_effort: ReasoningEffort,
+        }
+        let cfg: Cfg = serde_json::from_value(json!({ "reasoning_effort": "xHigh" })).unwrap();
+        assert_eq!(cfg.reasoning_effort, ReasoningEffort::Xhigh);
+    }
 
     #[test]
     fn reasoning_effort_serde_lowercase_round_trip() {
