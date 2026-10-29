@@ -7,11 +7,12 @@
 //!
 //! Layout collapses to single-pane (list only) on narrow terminals (under 80 cols).
 //!
-//! `/` enters filter mode (type to search, Escape to exit).
+//! `/` enters filter mode (type to search names and note contents, Escape to exit).
 //! `x` deletes with double-press confirmation: v2 topics and inbox observations via the shell's
 //! `x.ai/memory/forget` (tombstone + index + manifest update), legacy session logs by unlink.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -43,6 +44,9 @@ use supercharge_shell::extensions::notification::MemoryDisabledReason;
 const SPLIT_MIN_WIDTH: u16 = 80;
 const LIST_WIDTH_RATIO: f64 = 0.40;
 const MAX_PREVIEW_BYTES: u64 = 1_048_576;
+/// Content search reads run on the UI thread, so they are capped per note and in total.
+const MAX_SEARCH_BYTES_PER_NOTE: u64 = 262_144;
+const MAX_SEARCH_BYTES_TOTAL: u64 = 8 * 1_048_576;
 const NOTICE_MAX_WIDTH: u16 = 72;
 
 // Notices use bold leads rather than `#` headings: heading text takes the theme accent color.
@@ -135,11 +139,37 @@ impl MemoryFileEntry {
     }
 }
 
-/// Status shown under the file list.
+/// Status shown under the file list. Transient messages (copy outcomes) carry a tick countdown
+/// like the agent-view toast; the rest stay until the next action replaces them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryStatusLine {
     pub text: String,
     pub is_error: bool,
+    pub ticks_remaining: Option<u8>,
+}
+
+/// What the modal can read from a note on disk.
+enum NoteRead {
+    Text(String),
+    TooLarge,
+    Unreadable,
+}
+
+/// Bounded read: the file may grow between a size check and the read.
+fn read_note(path: &Path, limit: u64) -> NoteRead {
+    let mut bytes = Vec::new();
+    let read =
+        std::fs::File::open(path).and_then(|file| file.take(limit + 1).read_to_end(&mut bytes));
+    if read.is_err() {
+        return NoteRead::Unreadable;
+    }
+    if bytes.len() as u64 > limit {
+        return NoteRead::TooLarge;
+    }
+    match String::from_utf8(bytes) {
+        Ok(text) => NoteRead::Text(text),
+        Err(_) => NoteRead::Unreadable,
+    }
 }
 
 /// Left-button press on the preview before the movement threshold promotes a drag.
@@ -190,6 +220,11 @@ pub struct MemoryModalState {
     /// Cached filtered indices.
     /// Recomputed when `query` or `entries` change.
     filtered_cache: Vec<usize>,
+    /// Lower-cased note contents for the filter, read once per listing on the first non-empty query.
+    /// `None` marks notes that could not be read (or are over the search cap).
+    content_cache: HashMap<PathBuf, Option<String>>,
+    /// Scroll the preview to the first query match on the next render (set by `load_preview`).
+    preview_jump_pending: bool,
     /// Cached total lines in the preview (for scrollbar rendering).
     preview_total_lines: usize,
     /// Plain text of the wrapped preview lines as last rendered, for drag-select geometry and copy.
@@ -209,7 +244,7 @@ pub struct MemoryModalState {
 
 impl MemoryModalState {
     pub fn new(entries: Vec<MemoryFileEntry>) -> Self {
-        let filtered_cache = compute_filtered(&entries, "");
+        let filtered_cache = (0..entries.len()).collect();
         let mut state = Self {
             window: ModalWindowState::new(),
             entries,
@@ -229,6 +264,8 @@ impl MemoryModalState {
             status: None,
             fullscreen: load_fullscreen_pref(),
             filtered_cache,
+            content_cache: HashMap::new(),
+            preview_jump_pending: false,
             preview_total_lines: 0,
             preview_plain_lines: Vec::new(),
             preview_plain_width: 0,
@@ -321,6 +358,7 @@ impl MemoryModalState {
                     .iter()
                     .position(|e| e.path == Path::new(path))
                     .map(|idx| self.entries.remove(idx).label);
+                self.content_cache.remove(Path::new(path));
                 self.drop_empty_headers();
                 self.invalidate_filter();
                 if let Some(pos) = selected_path.and_then(|p| {
@@ -335,11 +373,13 @@ impl MemoryModalState {
                 MemoryStatusLine {
                     text: format!("Deleted {}.", label.unwrap_or_default()),
                     is_error: false,
+                    ticks_remaining: None,
                 }
             }
             Ok(MemoryForgetResponse::Rejected { message, .. }) | Err(message) => MemoryStatusLine {
                 text: message,
                 is_error: true,
+                ticks_remaining: None,
             },
         });
     }
@@ -372,7 +412,38 @@ impl MemoryModalState {
     }
 
     fn invalidate_filter(&mut self) {
-        self.filtered_cache = compute_filtered(&self.entries, self.query());
+        let terms = query_terms(self.query());
+        if !terms.is_empty() {
+            self.fill_content_cache();
+        }
+        self.filtered_cache = compute_filtered(&self.entries, &terms, &self.content_cache);
+    }
+
+    /// Read every listed note not yet cached. Runs on the first non-empty query; later keystrokes
+    /// only hit the cache. Notes past the total budget are cached as unreadable (name-only match).
+    fn fill_content_cache(&mut self) {
+        let mut budget = MAX_SEARCH_BYTES_TOTAL;
+        for entry in self.entries.iter().filter(|e| !e.is_header) {
+            self.content_cache
+                .entry(entry.path.clone())
+                .or_insert_with(|| {
+                    if budget == 0 {
+                        return None;
+                    }
+                    match read_note(&entry.path, MAX_SEARCH_BYTES_PER_NOTE.min(budget)) {
+                        NoteRead::Text(text) => {
+                            budget = budget.saturating_sub(text.len() as u64);
+                            Some(text.to_lowercase())
+                        }
+                        NoteRead::TooLarge | NoteRead::Unreadable => None,
+                    }
+                });
+        }
+    }
+
+    /// The filter is active but matches nothing.
+    fn filter_has_no_matches(&self) -> bool {
+        self.filtered_cache.is_empty() && !self.query().is_empty()
     }
 
     pub fn selected_entry(&self) -> Option<&MemoryFileEntry> {
@@ -527,7 +598,33 @@ impl MemoryModalState {
         self.status = Some(MemoryStatusLine {
             text: delivery.toast_message().into_owned(),
             is_error: !delivery.success(),
+            ticks_remaining: Some(delivery.toast_ticks()),
         });
+    }
+
+    /// A status message with a countdown is showing (keeps the animation tick alive).
+    pub fn status_is_transient(&self) -> bool {
+        self.status
+            .as_ref()
+            .is_some_and(|s| s.ticks_remaining.is_some())
+    }
+
+    /// Advance a transient status message by one animation tick.
+    /// Returns `true` if it just expired (a redraw is needed to erase it).
+    pub fn tick_status(&mut self) -> bool {
+        let Some(ticks) = self
+            .status
+            .as_mut()
+            .and_then(|s| s.ticks_remaining.as_mut())
+        else {
+            return false;
+        };
+        if *ticks == 0 {
+            self.status = None;
+            return true;
+        }
+        *ticks -= 1;
+        false
     }
 
     fn load_preview(&mut self) {
@@ -538,73 +635,75 @@ impl MemoryModalState {
         self.clear_text_drag();
         self.preview_hash = None;
         self.status = None;
+        self.preview_jump_pending = !self.query().is_empty();
         let path = self
             .selected_entry()
             .filter(|e| !e.is_header)
             .map(|e| e.path.clone());
-        self.preview_markdown = path.and_then(|path| {
-            // Bounded read: the file may grow between a size check and the read.
-            let mut bytes = Vec::new();
-            std::fs::File::open(&path)
-                .ok()?
-                .take(MAX_PREVIEW_BYTES + 1)
-                .read_to_end(&mut bytes)
-                .ok()?;
-            if bytes.len() as u64 > MAX_PREVIEW_BYTES {
-                return Some(MarkdownContent::new("*(File too large to preview)*"));
+        self.preview_markdown = path.and_then(|path| match read_note(&path, MAX_PREVIEW_BYTES) {
+            NoteRead::Text(text) => {
+                self.preview_hash = Some(blake3::hash(text.as_bytes()).to_hex().to_string());
+                Some(MarkdownContent::new(text))
             }
-            let text = String::from_utf8(bytes).ok()?;
-            self.preview_hash = Some(blake3::hash(text.as_bytes()).to_hex().to_string());
-            Some(MarkdownContent::new(text))
+            NoteRead::TooLarge => Some(MarkdownContent::new("*(File too large to preview)*")),
+            NoteRead::Unreadable => None,
         });
     }
 }
 
-/// Compute filtered indices from entries and query.
+/// Lower-cased whitespace-separated filter terms; every term must match.
+fn query_terms(query: &str) -> Vec<String> {
+    query.split_whitespace().map(str::to_lowercase).collect()
+}
+
+/// Line to scroll the preview to for `query`: the first line containing every term, else the first
+/// containing the longest term (a short common word alone would pin the preview to the top).
+fn first_match_line(lines: &[String], query: &str) -> Option<usize> {
+    let terms = query_terms(query);
+    let longest = terms.iter().max_by_key(|t| t.len())?;
+    let lowered: Vec<String> = lines.iter().map(|l| l.to_lowercase()).collect();
+    lowered
+        .iter()
+        .position(|line| terms.iter().all(|t| line.contains(t.as_str())))
+        .or_else(|| {
+            lowered
+                .iter()
+                .position(|line| line.contains(longest.as_str()))
+        })
+}
+
+/// Compute filtered indices from entries and query terms. An entry matches when every term occurs
+/// in its label, scope name, or (cached) note contents.
 /// Section headers are preserved only when at least one entry in the section matches.
-fn compute_filtered(entries: &[MemoryFileEntry], query: &str) -> Vec<usize> {
-    if query.is_empty() {
+fn compute_filtered(
+    entries: &[MemoryFileEntry],
+    terms: &[String],
+    contents: &HashMap<PathBuf, Option<String>>,
+) -> Vec<usize> {
+    if terms.is_empty() {
         return (0..entries.len()).collect();
     }
-    let needle = query.to_lowercase();
+    let matches = |entry: &MemoryFileEntry| {
+        let label = entry.label.to_lowercase();
+        let source = entry.source.to_lowercase();
+        let content = contents.get(&entry.path).and_then(Option::as_deref);
+        terms.iter().all(|term| {
+            label.contains(term.as_str())
+                || source.contains(term.as_str())
+                || content.is_some_and(|c| c.contains(term.as_str()))
+        })
+    };
     let mut result = Vec::new();
     let mut pending_header: Option<usize> = None;
-    let mut section_has_match = false;
     for (i, entry) in entries.iter().enumerate() {
         if entry.is_header {
-            // `pending_header` is `Some` here only when the previous section had zero matches (`.take()` clears it on first match)
-            // `section_has_match` is then always false; this guard is a defensive no-op
-            // Kept for safety
-            if let Some(h) = pending_header
-                && section_has_match
-            {
+            pending_header = Some(i);
+        } else if matches(entry) {
+            if let Some(h) = pending_header.take() {
                 result.push(h);
             }
-            pending_header = Some(i);
-            section_has_match = false;
-        } else {
-            let label_matches = entry.label.to_lowercase().contains(&needle);
-            let source_matches = entry.source.to_lowercase().contains(&needle);
-            let content_matches = !label_matches
-                && !source_matches
-                && !entry.is_header
-                && std::fs::read_to_string(&entry.path)
-                    .ok()
-                    .is_some_and(|content| content.to_lowercase().contains(&needle));
-            if label_matches || source_matches || content_matches {
-                if let Some(h) = pending_header.take() {
-                    result.push(h);
-                    section_has_match = true;
-                }
-                result.push(i);
-            }
+            result.push(i);
         }
-    }
-    // Same defensive no-op as the in-loop guard above.
-    if let Some(h) = pending_header
-        && section_has_match
-    {
-        result.push(h);
     }
     result
 }
@@ -900,6 +999,11 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
         area.width
     };
 
+    if state.filter_has_no_matches() {
+        render_no_matches(buf, area, entries_start_y, state.query(), theme);
+        return;
+    }
+
     let filtered = state.filtered_indices();
     let end = filtered.len().min(state.scroll_offset + available_height);
     let visible = filtered.get(state.scroll_offset..end).unwrap_or(&[]);
@@ -996,6 +1100,24 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
     );
 }
 
+/// Shown under the query row when the filter matches nothing.
+fn render_no_matches(buf: &mut Buffer, area: Rect, y: u16, query: &str, theme: &Theme) {
+    let width = area.width as usize;
+    let style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
+    let lines = [
+        format!("No notes match \u{201C}{query}\u{201D}"),
+        "Backspace clears the filter".to_owned(),
+    ];
+    for (row, text) in lines.iter().enumerate() {
+        let y = y + row as u16;
+        if y >= area.y + area.height {
+            break;
+        }
+        let text = crate::render::line_utils::truncate_str(text, width);
+        buf.set_span(area.x, y, &Span::styled(text.as_str(), style), area.width);
+    }
+}
+
 fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, theme: &Theme) {
     if state.preview_markdown.is_none() {
         state.preview_total_lines = 0;
@@ -1004,11 +1126,14 @@ fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, th
         state.preview_plain_lines.clear();
         state.preview_plain_width = 0;
         state.clear_text_drag();
-        let msg = "No file selected";
-        let style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
-        let cy = area.y + area.height / 2;
-        let cx = area.x + area.width.saturating_sub(msg.width() as u16) / 2;
-        buf.set_span(cx, cy, &Span::styled(msg, style), area.width);
+        // With a filter that matches nothing the list already explains; an empty pane is clearer.
+        if !state.filter_has_no_matches() {
+            let msg = "No file selected";
+            let style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
+            let cy = area.y + area.height / 2;
+            let cx = area.x + area.width.saturating_sub(msg.width() as u16) / 2;
+            buf.set_span(cx, cy, &Span::styled(msg, style), area.width);
+        }
         return;
     }
 
@@ -1052,18 +1177,27 @@ fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, th
 
     // Plain text of the wrapped lines drives drag-select geometry and the copied text.
     if state.preview_plain_width != content_width as u16 {
-        state.preview_plain_lines = state.preview_markdown.as_ref().unwrap().with_wrapped_lines(
-            content_width,
-            |wrapped| {
-                wrapped
-                    .lines
-                    .iter()
-                    .map(|line| line.spans.iter().map(|s| s.content.as_ref()).collect())
-                    .collect()
-            },
-        );
+        state.preview_plain_lines =
+            state
+                .preview_markdown
+                .as_ref()
+                .unwrap()
+                .with_wrapped_lines(content_width, |wrapped| {
+                    wrapped
+                        .lines
+                        .iter()
+                        .map(|line| line.spans.iter().map(|s| s.content.as_ref()).collect())
+                        .collect()
+                });
         state.preview_plain_width = content_width as u16;
         state.clear_text_drag();
+    }
+
+    if state.preview_jump_pending {
+        state.preview_jump_pending = false;
+        if let Some(line) = first_match_line(&state.preview_plain_lines, state.query()) {
+            state.preview_scroll = line;
+        }
     }
 
     state.preview_total_lines = total;
@@ -1129,6 +1263,7 @@ pub fn handle_memory_key(state: &mut MemoryModalState, key: &KeyEvent) -> InputO
             state.status = Some(MemoryStatusLine {
                 text: format!("Deleting {}…", entry.label),
                 is_error: false,
+                ticks_remaining: None,
             });
             return InputOutcome::Action(Action::MemoryForget {
                 path: path.to_string_lossy().into_owned(),
@@ -1504,6 +1639,7 @@ fn handle_browse(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
                 state.status = Some(MemoryStatusLine {
                     text: "Can't delete: this note couldn't be read for verification.".to_owned(),
                     is_error: true,
+                    ticks_remaining: None,
                 });
                 return InputOutcome::Changed;
             }
@@ -1517,6 +1653,7 @@ fn handle_browse(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
                     entry.label
                 ),
                 is_error: false,
+                ticks_remaining: None,
             });
             state.mode = MemoryModalMode::ConfirmingDelete {
                 idx: state.selected,
@@ -1536,7 +1673,8 @@ fn handle_browse(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
                     });
                 state.status = Some(MemoryStatusLine {
                     text: delivery.toast_message().to_string(),
-                    is_error: matches!(delivery, crate::clipboard::CopyDelivery::Failed { .. }),
+                    is_error: !delivery.success(),
+                    ticks_remaining: Some(delivery.toast_ticks()),
                 });
                 return InputOutcome::Changed;
             }
@@ -2578,7 +2716,13 @@ mod tests {
         use supercharge_shell::extensions::notification::MemoryFileInfo;
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("topics")).unwrap();
-        let body: String = (1..=60).map(|i| format!("line {i}\n\n")).collect();
+        let body: String = (1..=60)
+            .map(|i| match i {
+                10 => "line 10 states the obvious\n\n".to_owned(),
+                40 => "line 40 has the needle\n\n".to_owned(),
+                _ => format!("line {i}\n\n"),
+            })
+            .collect();
         let path = dir.path().join("topics/long.md");
         std::fs::write(&path, &body).unwrap();
         let state = MemoryModalState::new(build_entries(vec![MemoryFileInfo {
@@ -2591,7 +2735,12 @@ mod tests {
         (dir, state)
     }
 
-    fn mouse(state: &mut MemoryModalState, kind: MouseEventKind, col: u16, row: u16) -> InputOutcome {
+    fn mouse(
+        state: &mut MemoryModalState,
+        kind: MouseEventKind,
+        col: u16,
+        row: u16,
+    ) -> InputOutcome {
         handle_memory_mouse(state, kind, col, row)
     }
 
@@ -2604,17 +2753,30 @@ mod tests {
         let down = MouseEventKind::Down(MouseButton::Left);
         let drag = MouseEventKind::Drag(MouseButton::Left);
         // Press on "line 2" (row 2), drag past the end of "line 3" (row 4), release.
-        assert!(matches!(mouse(&mut state, down, area.x, area.y + 2), InputOutcome::Changed));
+        assert!(matches!(
+            mouse(&mut state, down, area.x, area.y + 2),
+            InputOutcome::Changed
+        ));
         // A press without movement is not a drag.
-        assert!(matches!(mouse(&mut state, drag, area.x, area.y + 2), InputOutcome::Unchanged));
+        assert!(matches!(
+            mouse(&mut state, drag, area.x, area.y + 2),
+            InputOutcome::Unchanged
+        ));
         assert!(state.text_drag.is_none());
         mouse(&mut state, drag, area.x + 6, area.y + 4);
         assert!(state.text_drag.is_some());
         // The band is painted while dragging, and the render keeps the drag.
         render_full(&mut state);
         assert!(state.text_drag.is_some());
-        match mouse(&mut state, MouseEventKind::Up(MouseButton::Left), area.x + 6, area.y + 4) {
-            InputOutcome::Action(Action::MemoryCopy { text }) => assert_eq!(text, "line 2\n\nline 3"),
+        match mouse(
+            &mut state,
+            MouseEventKind::Up(MouseButton::Left),
+            area.x + 6,
+            area.y + 4,
+        ) {
+            InputOutcome::Action(Action::MemoryCopy { text }) => {
+                assert_eq!(text, "line 2\n\nline 3")
+            }
             other => panic!("unexpected outcome {other:?}"),
         }
         assert!(state.text_drag.is_none());
@@ -2626,9 +2788,19 @@ mod tests {
         render_full(&mut state);
         let area = state.preview_text_area;
         let before = state.selected;
-        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        mouse(
+            &mut state,
+            MouseEventKind::Down(MouseButton::Left),
+            area.x,
+            area.y,
+        );
         assert!(matches!(
-            mouse(&mut state, MouseEventKind::Up(MouseButton::Left), area.x, area.y),
+            mouse(
+                &mut state,
+                MouseEventKind::Up(MouseButton::Left),
+                area.x,
+                area.y
+            ),
             InputOutcome::Changed
         ));
         assert_eq!(state.selected, before);
@@ -2640,8 +2812,18 @@ mod tests {
         let (_dir, mut state) = long_note_state();
         render_full(&mut state);
         let area = state.preview_text_area;
-        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
-        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 6, area.y);
+        mouse(
+            &mut state,
+            MouseEventKind::Down(MouseButton::Left),
+            area.x,
+            area.y,
+        );
+        mouse(
+            &mut state,
+            MouseEventKind::Drag(MouseButton::Left),
+            area.x + 6,
+            area.y,
+        );
         assert!(matches!(
             mouse(&mut state, MouseEventKind::Moved, area.x + 6, area.y),
             InputOutcome::Action(Action::MemoryCopy { text }) if text == "line 1"
@@ -2659,20 +2841,55 @@ mod tests {
         let (_dir, mut state) = long_note_state();
         render_full(&mut state);
         let area = state.preview_text_area;
-        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
-        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 3, area.y + 1);
+        mouse(
+            &mut state,
+            MouseEventKind::Down(MouseButton::Left),
+            area.x,
+            area.y,
+        );
+        mouse(
+            &mut state,
+            MouseEventKind::Drag(MouseButton::Left),
+            area.x + 3,
+            area.y + 1,
+        );
         assert!(state.text_drag.is_some());
-        mouse(&mut state, MouseEventKind::ScrollDown, area.x + 3, area.y + 1);
+        mouse(
+            &mut state,
+            MouseEventKind::ScrollDown,
+            area.x + 3,
+            area.y + 1,
+        );
         assert!(state.text_drag.is_none());
         assert!(matches!(
-            mouse(&mut state, MouseEventKind::Up(MouseButton::Left), area.x + 3, area.y + 1),
+            mouse(
+                &mut state,
+                MouseEventKind::Up(MouseButton::Left),
+                area.x + 3,
+                area.y + 1
+            ),
             InputOutcome::Unchanged
         ));
 
-        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
-        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 3, area.y + 1);
+        mouse(
+            &mut state,
+            MouseEventKind::Down(MouseButton::Left),
+            area.x,
+            area.y,
+        );
+        mouse(
+            &mut state,
+            MouseEventKind::Drag(MouseButton::Left),
+            area.x + 3,
+            area.y + 1,
+        );
         assert!(matches!(
-            mouse(&mut state, MouseEventKind::Down(MouseButton::Right), area.x, area.y),
+            mouse(
+                &mut state,
+                MouseEventKind::Down(MouseButton::Right),
+                area.x,
+                area.y
+            ),
             InputOutcome::Changed
         ));
         assert!(state.text_drag.is_none());
@@ -2683,9 +2900,19 @@ mod tests {
         let (_dir, mut state) = long_note_state();
         render_full(&mut state);
         let area = state.preview_text_area;
-        mouse(&mut state, MouseEventKind::Down(MouseButton::Left), area.x, area.y);
+        mouse(
+            &mut state,
+            MouseEventKind::Down(MouseButton::Left),
+            area.x,
+            area.y,
+        );
         let below = area.y + area.height;
-        mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), area.x + 2, below);
+        mouse(
+            &mut state,
+            MouseEventKind::Drag(MouseButton::Left),
+            area.x + 2,
+            below,
+        );
         assert_eq!(state.preview_scroll, 1);
         assert!(state.text_drag.is_some());
     }
@@ -2713,6 +2940,135 @@ mod tests {
         });
         let status = state.status.clone().expect("status");
         assert!(!status.is_error);
-        assert!(status.text.contains("/tmp/last-copy.txt"), "{}", status.text);
+        assert!(
+            status.text.contains("/tmp/last-copy.txt"),
+            "{}",
+            status.text
+        );
+    }
+
+    #[test]
+    fn filter_matches_note_contents_and_requires_all_terms() {
+        let (_dir, mut state) = v2_store_state();
+        let labels = |state: &MemoryModalState| {
+            state
+                .filtered_indices()
+                .iter()
+                .filter_map(|&i| state.entries.get(i))
+                .filter(|e| !e.is_header)
+                .map(|e| e.label.clone())
+                .collect::<Vec<_>>()
+        };
+        // "notes" occurs only in anyrun.md's body, not in any label.
+        state.set_query("NOTES");
+        state.invalidate_filter();
+        assert_eq!(labels(&state), ["anyrun.md"]);
+        // Every term must match, across label and content.
+        state.set_query("anyrun notes");
+        state.invalidate_filter();
+        assert_eq!(labels(&state), ["anyrun.md"]);
+        state.set_query("zulu notes");
+        state.invalidate_filter();
+        assert!(labels(&state).is_empty());
+        assert!(state.filter_has_no_matches());
+        state.set_query("");
+        state.invalidate_filter();
+        assert_eq!(labels(&state).len(), 4);
+    }
+
+    #[test]
+    fn filter_reads_each_note_once_and_skips_oversized_or_missing_notes() {
+        let (dir, mut state) = v2_store_state();
+        let big = dir.path().join("workspace/topics/zulu.md");
+        let mut body = "x".repeat(MAX_SEARCH_BYTES_PER_NOTE as usize + 1);
+        body.push_str(" hidden");
+        std::fs::write(&big, body).unwrap();
+        std::fs::remove_file(dir.path().join("workspace/MEMORY.md")).unwrap();
+        state.set_query("hidden");
+        state.invalidate_filter();
+        // Oversized notes match by name only; a vanished note neither matches nor panics.
+        assert!(state.filter_has_no_matches());
+        state.set_query("zulu");
+        state.invalidate_filter();
+        assert!(!state.filter_has_no_matches());
+        // Later keystrokes use the cache instead of re-reading every note.
+        let anyrun = dir.path().join("workspace/topics/anyrun.md");
+        std::fs::write(&anyrun, "rewritten\n").unwrap();
+        state.set_query("notes");
+        state.invalidate_filter();
+        assert!(!state.filter_has_no_matches());
+        assert!(state.content_cache.len() <= state.entries.len());
+    }
+
+    #[test]
+    fn no_match_filter_explains_itself_instead_of_no_file_selected() {
+        let (_dir, mut state) = v2_store_state();
+        state.set_query("xyzzy");
+        state.invalidate_filter();
+        state.clamp_selected();
+        let text = render_full(&mut state);
+        assert!(
+            text.contains("No notes match \u{201C}xyzzy\u{201D}"),
+            "{text}"
+        );
+        assert!(text.contains("Backspace clears the filter"), "{text}");
+        assert!(!text.contains("No file selected"), "{text}");
+    }
+
+    #[test]
+    fn copy_outcome_is_transient_but_other_status_text_stays() {
+        let (_dir, mut state) = long_note_state();
+        state.report_copy(&crate::clipboard::CopyDelivery::File {
+            path: std::path::PathBuf::from("/tmp/last-copy.txt"),
+        });
+        assert!(state.status_is_transient());
+        assert!(render_full(&mut state).contains("Clipboard unreachable"));
+        let ticks = state
+            .status
+            .as_ref()
+            .and_then(|s| s.ticks_remaining)
+            .expect("copy message is transient");
+        for _ in 0..ticks {
+            assert!(!state.tick_status());
+        }
+        assert!(state.tick_status());
+        assert!(state.status.is_none());
+        assert!(!state.status_is_transient());
+        state.status = Some(MemoryStatusLine {
+            text: "Deleting…".into(),
+            is_error: false,
+            ticks_remaining: None,
+        });
+        assert!(!state.tick_status());
+        assert!(state.status.is_some());
+        assert!(!state.status_is_transient());
+    }
+
+    #[test]
+    fn filter_scrolls_preview_to_first_match() {
+        let (_dir, mut state) = long_note_state();
+        let text = render_full(&mut state);
+        assert!(!text.contains("needle"), "{text}");
+        // A common first term must not pin the jump to its first occurrence (line 10).
+        state.set_query("the needle");
+        state.invalidate_filter();
+        state.clamp_selected();
+        state.load_preview();
+        let text = render_full(&mut state);
+        assert!(text.contains("line 40 has the needle"), "{text}");
+        assert_eq!(state.preview_scroll, 78);
+    }
+
+    #[test]
+    fn first_match_line_prefers_all_terms_then_longest_term() {
+        let lines: Vec<String> = ["alpha", "beta gamma", "gamma beta delta"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(first_match_line(&lines, "DELTA beta"), Some(2));
+        assert_eq!(first_match_line(&lines, "beta zzzzzz"), None);
+        assert_eq!(first_match_line(&lines, "gamma zz"), Some(1));
+        assert_eq!(first_match_line(&lines, "   "), None);
+        assert_eq!(first_match_line(&[], "x"), None);
     }
 }

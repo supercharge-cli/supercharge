@@ -5262,6 +5262,7 @@ impl AppView {
                 );
             }
             needs_redraw |= agent.tick_extensions_result_notice();
+            needs_redraw |= agent.tick_memory_modal_status();
             needs_redraw |= agent.tick_ephemeral_tip();
             needs_redraw |= agent.tick_mode_banner();
             needs_redraw |= agent.tick_selection_highlight();
@@ -5530,6 +5531,7 @@ impl AppView {
                         .extensions_modal
                         .as_ref()
                         .is_some_and(|m| m.result_notice.is_some() || m.needs_spinner_tick())
+                    || agent.memory_modal_status_needs_tick()
                     || agent.ephemeral_tip_needs_tick()
                     || agent.mode_switch_banner.is_some()
                     || agent.has_drag_autoscroll()
