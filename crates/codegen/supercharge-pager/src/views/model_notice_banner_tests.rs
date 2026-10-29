@@ -64,6 +64,8 @@ fn long_notice_wraps_under_a_hanging_indent() {
 
 #[test]
 fn warning_notice_paints_in_the_warning_color() {
+    // Hold the theme still: other tests switch it concurrently.
+    let _theme = crate::theme::cache::pin_theme();
     let buf = paint(&restricted_notice(ModelNoticeSeverity::Warning), 76);
 
     let theme = Theme::current();
@@ -73,6 +75,8 @@ fn warning_notice_paints_in_the_warning_color() {
 
 #[test]
 fn critical_notice_paints_in_the_error_color() {
+    // Hold the theme still: other tests switch it concurrently.
+    let _theme = crate::theme::cache::pin_theme();
     let buf = paint(&restricted_notice(ModelNoticeSeverity::Critical), 76);
 
     assert_eq!(
@@ -83,6 +87,8 @@ fn critical_notice_paints_in_the_error_color() {
 
 #[test]
 fn info_notice_uses_the_info_prefix() {
+    // Hold the theme still: other tests switch it concurrently.
+    let _theme = crate::theme::cache::pin_theme();
     let notice = ModelNotice {
         severity: ModelNoticeSeverity::Info,
         text: "Preview model".to_owned(),
