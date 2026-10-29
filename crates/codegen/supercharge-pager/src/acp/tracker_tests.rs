@@ -5143,3 +5143,203 @@ fn hook_gate_survives_a_text_chunk_stamped_before_the_batch() {
         Some(TurnActivity::Waiting(WaitingReason::Hooks { .. }))
     ));
 }
+fn failed_call(
+    id: &'static str,
+    kind: acp::ToolKind,
+    title: &str,
+    raw_input: serde_json::Value,
+    text: &str,
+) -> acp::ToolCall {
+    let content = if text.is_empty() {
+        vec![]
+    } else {
+        vec![acp::ToolCallContent::from(acp::ContentBlock::Text(
+            acp::TextContent::new(text.to_string()),
+        ))]
+    };
+    acp::ToolCall::new(acp::ToolCallId::new(Arc::from(id)), title.to_string())
+        .kind(kind)
+        .status(acp::ToolCallStatus::Failed)
+        .raw_input(Some(raw_input))
+        .content(content)
+        .locations(vec![])
+}
+fn block_for(tc: &acp::ToolCall) -> RenderBlock {
+    tool_call_to_block(tc, None, &SubagentLabelRegistry::default())
+}
+#[test]
+fn failed_search_shows_tool_reason() {
+    let tc = failed_call(
+        "s1",
+        acp::ToolKind::Search,
+        "Search",
+        serde_json::json!({ "pattern": "foo(" }),
+        "  regex parse error: unclosed group\n",
+    );
+    let RenderBlock::ToolCall(ToolCallBlock::Search(search)) = block_for(&tc) else {
+        panic!("expected search block");
+    };
+    assert_eq!(
+        search.error.as_deref(),
+        Some("regex parse error: unclosed group")
+    );
+}
+#[test]
+fn failed_search_without_reason_keeps_generic_label() {
+    let tc = failed_call(
+        "s2",
+        acp::ToolKind::Search,
+        "Search",
+        serde_json::json!({ "pattern": "foo" }),
+        "   ",
+    );
+    let RenderBlock::ToolCall(ToolCallBlock::Search(search)) = block_for(&tc) else {
+        panic!("expected search block");
+    };
+    assert_eq!(search.error.as_deref(), Some("Search failed"));
+}
+#[test]
+fn failed_web_search_shows_reason_not_content() {
+    let tc = failed_call(
+        "w1",
+        acp::ToolKind::Search,
+        "Web search: \"rust\"",
+        serde_json::json!({ "variant": "WebSearch", "search_term": "rust" }),
+        "provider returned 503",
+    );
+    let RenderBlock::ToolCall(ToolCallBlock::WebSearch(ws)) = block_for(&tc) else {
+        panic!("expected web search block");
+    };
+    assert_eq!(ws.error.as_deref(), Some("provider returned 503"));
+    assert!(
+        ws.content.is_none(),
+        "failure text must not render as results"
+    );
+}
+#[test]
+fn failed_integration_search_shows_reason() {
+    let tc = failed_call(
+        "i1",
+        acp::ToolKind::Other,
+        "Search tools",
+        serde_json::json!({ "variant": "SearchTool", "query": "linear" }),
+        "index unavailable",
+    );
+    let RenderBlock::ToolCall(ToolCallBlock::IntegrationSearch(block)) = block_for(&tc) else {
+        panic!("expected integration search block");
+    };
+    assert_eq!(block.error.as_deref(), Some("index unavailable"));
+    assert!(block.content.is_none());
+}
+#[test]
+fn failed_edit_shows_tool_reason() {
+    let tc = failed_call(
+        "e1",
+        acp::ToolKind::Edit,
+        "Edit",
+        serde_json::json!({ "path": "/tmp/a.rs", "old_string": "a", "new_string": "b" }),
+        "Permission denied (os error 13)",
+    );
+    let RenderBlock::ToolCall(ToolCallBlock::Edit(edit)) = block_for(&tc) else {
+        panic!("expected edit block");
+    };
+    assert_eq!(
+        edit.error.as_deref(),
+        Some("Permission denied (os error 13)")
+    );
+    let tc = failed_call(
+        "e2",
+        acp::ToolKind::Edit,
+        "Edit",
+        serde_json::json!({ "path": "/tmp/a.rs" }),
+        "",
+    );
+    let RenderBlock::ToolCall(ToolCallBlock::Edit(edit)) = block_for(&tc) else {
+        panic!("expected edit block");
+    };
+    assert_eq!(edit.error.as_deref(), Some("Edit failed"));
+}
+#[test]
+fn failure_reason_caps_runaway_text_on_char_boundary() {
+    let long = "\u{4e2d}".repeat(5000);
+    let tc = failed_call(
+        "e3",
+        acp::ToolKind::Edit,
+        "Edit",
+        serde_json::json!({ "path": "/tmp/a.rs" }),
+        &long,
+    );
+    let reason = failure_reason(&tc, "Edit failed");
+    assert_eq!(reason.chars().count(), 2001);
+    assert!(reason.ends_with('…'));
+}
+#[test]
+fn bg_tool_accepts_lenient_background_flags() {
+    let call = |input: serde_json::Value| {
+        acp::ToolCall::new(acp::ToolCallId::new(Arc::from("b")), "Run".to_string())
+            .kind(acp::ToolKind::Execute)
+            .raw_input(Some(input))
+    };
+    for flag in [
+        serde_json::json!(true),
+        serde_json::json!("true"),
+        serde_json::json!(" YES "),
+        serde_json::json!("1"),
+        serde_json::json!(1),
+    ] {
+        assert!(
+            is_bg_tool(&call(
+                serde_json::json!({ "command": "sleep 9", "is_background": flag })
+            )),
+            "{flag} should request background"
+        );
+    }
+    assert!(is_bg_tool(&call(
+        serde_json::json!({ "command": "sleep 9", "background": "true" })
+    )));
+    for flag in [
+        serde_json::json!(false),
+        serde_json::json!("false"),
+        serde_json::json!("0"),
+        serde_json::json!(0),
+        serde_json::json!(2),
+        serde_json::json!(null),
+        serde_json::json!({}),
+        serde_json::json!("maybe"),
+    ] {
+        assert!(
+            !is_bg_tool(&call(
+                serde_json::json!({ "command": "ls", "is_background": flag })
+            )),
+            "{flag} should stay foreground"
+        );
+    }
+    let read = acp::ToolCall::new(acp::ToolCallId::new(Arc::from("r")), "Read".to_string())
+        .kind(acp::ToolKind::Read)
+        .raw_input(Some(serde_json::json!({ "is_background": true })));
+    assert!(!is_bg_tool(&read));
+}
+#[test]
+fn string_background_flag_defers_execute_to_bg_task() {
+    let mut sb = ScrollbackState::new();
+    let mut tracker = AcpUpdateTracker::new();
+    tracker.handle_update(
+        tool_call("tc1", acp::ToolKind::Execute, "Execute `sleep 9999`"),
+        &meta(),
+        &mut sb,
+    );
+    let update = acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        acp::ToolCallId::new(Arc::from("tc1")),
+        acp::ToolCallUpdateFields::new()
+            .status(Some(acp::ToolCallStatus::InProgress))
+            .raw_input(Some(serde_json::json!({
+                "command": "sleep 9999",
+                "is_background": "true"
+            }))),
+    ));
+    tracker.handle_update(update, &meta(), &mut sb);
+    assert!(
+        tracker.bg_deferred_tools.contains_key("tc1"),
+        "a string background flag must defer to a live task row"
+    );
+}

@@ -1955,6 +1955,7 @@ fn tool_call_to_block(
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
             let query = extract_raw_field(tc, "query")
+                .or_else(|| extract_raw_field(tc, "search_term"))
                 .or_else(|| {
                     tc.title
                         .strip_prefix("Web search: ")
@@ -2065,7 +2066,7 @@ fn tool_call_to_block(
                     }
                     block.citations = ws.citations;
                 }
-                if block.content.is_none() {
+                if success && block.content.is_none() {
                     let text = content_text(tc);
                     if !text.is_empty() {
                         block.content = Some(text);
@@ -2073,7 +2074,7 @@ fn tool_call_to_block(
                 }
             }
             if !success {
-                block = block.with_error("Web search failed");
+                block = block.with_error(failure_reason(tc, "Web search failed"));
             }
             RenderBlock::ToolCall(ToolCallBlock::WebSearch(block))
         }
@@ -2092,7 +2093,7 @@ fn tool_call_to_block(
             block.file_matches = grep.file_matches;
             block.file_paths = grep.file_paths;
             if !success {
-                block.error = Some("Search failed".into());
+                block.error = Some(failure_reason(tc, "Search failed"));
             }
             RenderBlock::ToolCall(ToolCallBlock::Search(block))
         }
@@ -2152,7 +2153,15 @@ fn tool_call_to_block(
                 block.content = Some(content);
             }
             if !success {
-                block = block.with_error("Search failed");
+                // A failed search's text content is its reason, not results.
+                let error = block
+                    .content
+                    .take()
+                    .filter(|_| block.results.is_empty())
+                    .map(|text| text.trim().to_owned())
+                    .filter(|text| !text.is_empty())
+                    .unwrap_or_else(|| failure_reason(tc, "Search failed"));
+                block = block.with_error(error);
             }
             RenderBlock::ToolCall(ToolCallBlock::IntegrationSearch(block))
         }
@@ -2480,9 +2489,8 @@ fn task_ids_from_raw_input(raw: &serde_json::Value) -> Vec<String> {
     }
     out
 }
-/// Check if a tool call is a background execute (`is_background=true`). These are deferred from scrollback; the
-/// `x.ai/task_backgrounded` notification creates a `BgTask` block instead of an `Execute` block. Still treat those
-/// as execute tools when `raw_input` requests background so we don't flash the function name.
+/// True when an execute tool call asked to run in the background. Scrollback skips these; the
+/// task-backgrounded notification adds a live `BgTask` row for them instead of an `Execute` block.
 fn is_bg_tool(tc: &acp::ToolCall) -> bool {
     let looks_like_execute =
         tc.kind == acp::ToolKind::Execute || is_execute_tool_function_name(&tc.title);
@@ -2491,8 +2499,21 @@ fn is_bg_tool(tc: &acp::ToolCall) -> bool {
             .raw_input
             .as_ref()
             .and_then(|v| v.get("is_background").or_else(|| v.get("background")))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
+            .is_some_and(raw_flag_is_true)
+}
+/// Mirrors the shell tool's lenient background flag: a bool, `1`, or a `"true"` / `"yes"` / `"1"` string.
+fn raw_flag_is_true(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Bool(b) => *b,
+        serde_json::Value::Number(n) => n.as_i64() == Some(1),
+        serde_json::Value::String(s) => {
+            let s = s.trim();
+            ["true", "yes", "1"]
+                .iter()
+                .any(|lit| s.eq_ignore_ascii_case(lit))
+        }
+        _ => false,
+    }
 }
 /// Check if an Edit-kind tool call is a whole-file write (write) rather than a targeted replacement (search_replace / edit).
 ///
@@ -2572,7 +2593,8 @@ fn extract_raw_field(tc: &acp::ToolCall, field: &str) -> Option<String> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
 }
-/// Extract a short, user-friendly error label from a failed Edit tool call.
+/// The error shown on a failed Edit block: a short label for a structured search_replace output, else the
+/// tool's own text reason.
 fn extract_edit_error(tc: &acp::ToolCall) -> String {
     use supercharge_tools::types::output::SearchReplaceOutput;
     if let Some(ref raw) = tc.raw_output
@@ -2588,7 +2610,21 @@ fn extract_edit_error(tc: &acp::ToolCall) -> String {
             SearchReplaceOutput::EditsApplied(_) => "Edit failed".to_owned(),
         };
     }
-    "Edit failed".to_owned()
+    failure_reason(tc, "Edit failed")
+}
+/// A failed search or edit streams nothing else, so its text content is the reason; `default` covers an empty one.
+/// Capped so a runaway reply can't flood the row.
+fn failure_reason(tc: &acp::ToolCall, default: &str) -> String {
+    const MAX_CHARS: usize = 2000;
+    let reason = content_text(tc);
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return default.to_owned();
+    }
+    match reason.char_indices().nth(MAX_CHARS) {
+        Some((cut, _)) => format!("{}…", &reason[..cut]),
+        None => reason.to_owned(),
+    }
 }
 /// Extract search input metadata from a tool call's rawInput.
 fn extract_search_meta(tc: &acp::ToolCall) -> SearchInputMeta {
