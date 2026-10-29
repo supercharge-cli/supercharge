@@ -4,10 +4,10 @@ use crate::sampling::{
     ToolDefinition, ToolSpec, conversation_to_chat_messages,
 };
 use agent_client_protocol as acp;
-use std::path::{Component, Path};
 use async_openai::types::responses::ResponseStreamEvent;
 use futures_util::StreamExt;
 use reqwest::StatusCode;
+use std::path::{Component, Path};
 use supercharge_sampler::SamplerConfig as SamplingConfig;
 
 // Re-export compaction utilities from supercharge-chat-state so existing callers that import from this module continue to work
@@ -469,7 +469,9 @@ pub(crate) async fn generate_session_compact(
     if cancel.is_cancelled() {
         return Err(CompactFailure::Cancelled);
     }
-    let prepared_history = chat_history.into().prepare(compaction_tool_tokens);
+    let prepared_history = chat_history
+        .into()
+        .prepare(sampling_config.max_request_bytes, compaction_tool_tokens);
     let budget = prepared_history.image_budget;
     if budget.inline_images > 0 {
         tracing::info!(
