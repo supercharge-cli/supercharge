@@ -349,6 +349,7 @@ pub(super) struct BridgeToolSuccess<'a> {
     pub effective_tool_name: &'a str,
     pub drained: DrainedToolSuccess,
     pub concatenated_json_count: usize,
+    pub coercion_note: Option<&'a str>,
     pub model_id: &'a str,
     pub tool_parsed_args: &'a serde_json::Value,
     pub model_output_override: Option<String>,
@@ -1063,6 +1064,7 @@ impl SessionActor {
                             effective_tool_name: &effective_tool_name,
                             drained,
                             concatenated_json_count: prepared.concatenated_json_count,
+                            coercion_note: prepared.coercion_note.as_deref(),
                             model_id: &prepared.model_id,
                             tool_parsed_args: &prepared.parsed_args,
                             model_output_override,
@@ -1090,6 +1092,7 @@ impl SessionActor {
                             prepared.dispatch_target_name.as_deref(),
                             &err,
                             &prepared.model_id,
+                            prepared.coercion_note.as_deref(),
                         )
                         .await;
                     deferred_followups.extend(err_followups);
@@ -1425,6 +1428,7 @@ impl SessionActor {
                     None,
                     &err,
                     &model_id_str,
+                    None,
                 )
                 .await;
             deferred_followups.extend(followups);
@@ -1520,7 +1524,9 @@ impl SessionActor {
         let mut rewriting_hook: Option<String> = None;
         let mut hook_ask: Option<HookAsk> = None;
         let mut hook_additional_context = Vec::new();
-        if self.may_have_hooks_for(supercharge_hooks::event::HookEventName::PreToolUse) {
+        let has_pre_tool_use_hooks =
+            self.may_have_hooks_for(supercharge_hooks::event::HookEventName::PreToolUse);
+        if has_pre_tool_use_hooks {
             let gate = match self
                 .apply_pre_tool_use_gate(
                     &call,
@@ -1542,6 +1548,64 @@ impl SessionActor {
                 raw_input = rewrite.raw_input;
                 concatenated_json_count = 0;
                 rewriting_hook = Some(rewrite.hook_name);
+            }
+        }
+        // Connector tools: fix a provable string/object/array shape mismatch against the tool's schema.
+        // An unsafe mismatch leaves the call untouched and only adds a note telling the model what to fix.
+        let input_before_coercion = has_pre_tool_use_hooks.then(|| raw_input.clone());
+        let reminder_tag = self.reminder_wrapper_tag();
+        let mut coercion_note =
+            mcp_argument_coercion::target_name(&call.function.name, &tool_input).and_then(
+                |qualified_name| {
+                    let schema = {
+                        let snapshot = self
+                            .tool_metadata_snapshot
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        mcp_argument_coercion::input_schema_for(&snapshot.tools, &qualified_name)
+                            .cloned()
+                    }?;
+                    let toolset = self.tool_bridge_handle().toolset();
+                    mcp_argument_coercion::apply_mcp_argument_coercion(
+                        mcp_argument_coercion::CoercionRequest {
+                            schema: &schema,
+                            wire_name: &call.function.name,
+                            qualified_name: &qualified_name,
+                            tool_input: &mut tool_input,
+                            raw_input: &mut raw_input,
+                            toolset: toolset.as_ref(),
+                            reminder_tag,
+                        },
+                    )
+                },
+            );
+        if input_before_coercion.is_some_and(|before| before != raw_input) {
+            // Hooks must approve what is actually sent, so the reshaped arguments go through the gate again.
+            let gate = match self
+                .apply_pre_tool_use_gate(
+                    &call,
+                    &tool_call_id,
+                    &resolved_tool_name,
+                    &dispatch_target_name,
+                    &raw_input,
+                )
+                .await?
+            {
+                Ok(gate) => gate,
+                Err(blocked) => return Ok(Err(blocked)),
+            };
+            hook_ask = gate.hook_ask;
+            hook_additional_context = gate.additional_context;
+            if let Some(rewrite) = gate.rewrite {
+                let sent_coerced_value = rewrite.raw_input == raw_input;
+                tool_input = rewrite.tool_input;
+                raw_arguments = rewrite.raw_arguments;
+                raw_input = rewrite.raw_input;
+                concatenated_json_count = 0;
+                rewriting_hook = Some(rewrite.hook_name);
+                if !sent_coerced_value {
+                    coercion_note = None;
+                }
             }
         }
         let access_kind = access_kind_for_resolved_tool(&resolved_tool_name, &tool_input);
@@ -1956,6 +2020,7 @@ impl SessionActor {
             parsed_args: raw_input.clone(),
             model_id: model_id_str,
             concatenated_json_count,
+            coercion_note,
             dispatch_target_name,
             is_read_only,
             rewriting_hook,
@@ -2774,6 +2839,7 @@ impl SessionActor {
             effective_tool_name,
             drained,
             concatenated_json_count,
+            coercion_note,
             model_id,
             tool_parsed_args,
             model_output_override,
@@ -2896,6 +2962,8 @@ impl SessionActor {
             )
             .await
         };
+        let prompt_text =
+            mcp_argument_coercion::append_coercion_reminder(prompt_text, coercion_note);
         let tool_chat = if inline_images.is_empty() {
             ConversationItem::tool_result(call_id.to_string(), prompt_text)
         } else {
@@ -3072,6 +3140,7 @@ impl SessionActor {
         effective_tool_name: Option<&str>,
         err: &anyhow::Error,
         model_id: &str,
+        coercion_note: Option<&str>,
     ) -> Vec<ConversationItem> {
         tracing::error!(
             session_id = %self.session_info.id.0,
@@ -3095,6 +3164,7 @@ impl SessionActor {
             }
             _ => format!("Tool `{requested_tool_name}` failed: {err_str}"),
         };
+        let message = mcp_argument_coercion::append_coercion_reminder(message, coercion_note);
         self.send_update(
             acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
                 tool_call_id.clone(),

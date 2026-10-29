@@ -153,6 +153,8 @@ mod parent_message;
 use mcp_init::*;
 #[path = "acp_session_impl/hooks_plugins.rs"]
 mod hooks_plugins;
+#[path = "acp_session_impl/mcp_argument_coercion.rs"]
+mod mcp_argument_coercion;
 #[path = "acp_session_impl/mcp_failed_reminder.rs"]
 mod mcp_failed_reminder;
 #[path = "acp_session_impl/model_switch.rs"]
@@ -645,6 +647,9 @@ pub(crate) struct PreparedToolCall {
     model_id: String,
     /// Whether concatenated JSON recovery was used, and how many objects were found.
     concatenated_json_count: usize,
+    /// Reminder appended to the model-visible tool result when connector arguments were reshaped to match the schema.
+    /// `None` when the call was sent exactly as the model wrote it.
+    coercion_note: Option<String>,
     /// Resolved target for meta-dispatch tools (`use_tool`, `CallMcpTool`); `None` for ordinary tools.
     /// See [`ToolInput::dispatch_target_name`].
     dispatch_target_name: Option<String>,

@@ -1005,6 +1005,7 @@ async fn post_tool_use_dispatch_merges_file_then_client_contributions() {
                 parsed_args: serde_json::json!({}),
                 model_id: "test-model".to_string(),
                 concatenated_json_count: 0,
+                coercion_note: None,
                 dispatch_target_name: None,
                 is_read_only: false,
                 rewriting_hook: None,
