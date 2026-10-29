@@ -93,6 +93,8 @@ pub(crate) struct AgentRebuildSpec {
     pub media_gen_batch_limits: supercharge_tools::media_gen_limits::MediaGenBatchLimits,
     pub write_file_enabled: bool,
     pub active_agent_messages_enabled: bool,
+    /// `[subagents] inherit_model`: offer no Task model choices and accept any (it is dropped at spawn).
+    pub subagent_model_inheritance: bool,
     pub subagents_enabled: bool,
     pub subagent_toggle: HashMap<String, bool>,
     pub background_workflows_enabled: bool,
@@ -202,6 +204,7 @@ impl AgentRebuildSpec {
             media_gen_batch_limits: _,
             write_file_enabled,
             active_agent_messages_enabled,
+            subagent_model_inheritance,
             subagents_enabled,
             subagent_toggle,
             background_workflows_enabled,
@@ -304,13 +307,15 @@ impl AgentRebuildSpec {
         .with_child_nested_subagents_allowed(1 < *subagents_max_depth)
         .with_subagent_toggle(subagent_toggle.clone())
         .with_background_workflows_enabled(*background_workflows_enabled)
-        .with_task_model_slugs(
+        .with_task_model_slugs(if *subagent_model_inheritance {
+            Vec::new()
+        } else {
             models_manager
                 .available()
                 .keys()
                 .map(|model_id| model_id.0.to_string())
-                .collect::<Vec<_>>(),
-        )
+                .collect::<Vec<_>>()
+        })
         .with_ask_user_question_enabled(*ask_user_question_enabled)
         .with_persona_summaries(persona_summaries.clone())
         .with_prompt_audience(*prompt_audience)
@@ -366,13 +371,18 @@ impl AgentRebuildSpec {
         crate::waterfall::mark(session_id_str, crate::waterfall::stage::SB_BUILDER_DONE);
         let agent_build_elapsed = build_phase_start.elapsed();
         let model_validator = models_manager.clone();
+        let inherit_model = *subagent_model_inheritance;
         agent
             .tool_bridge()
             .update_resources_with(|resources| {
                 resources
                     .insert(
                         TaskModelValidator::new(move |requested| {
-                            model_validator.task_model_error(requested)
+                            if inherit_model {
+                                None
+                            } else {
+                                model_validator.task_model_error(requested)
+                            }
                         }),
                     );
                 if let Some(event_tx) = subagent_event_tx.clone() {
@@ -533,6 +543,7 @@ pub(crate) fn test_rebuild_spec_default() -> Arc<AgentRebuildSpec> {
         media_gen_batch_limits: supercharge_tools::media_gen_limits::MediaGenBatchLimits::default(),
         write_file_enabled: true,
         active_agent_messages_enabled: false,
+        subagent_model_inheritance: false,
         subagents_enabled: false,
         subagent_toggle: HashMap::new(),
         background_workflows_enabled: false,

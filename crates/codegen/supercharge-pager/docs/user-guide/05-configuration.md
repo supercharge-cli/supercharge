@@ -348,6 +348,7 @@ dimensions = 1024                     # vector dimensions
 ```toml
 [subagents]
 enabled = true
+inherit_model = false                 # true: subagents always run on the parent model; Task.model is ignored (SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE)
 sampling_limit = 12                   # concurrent in-flight subagent sampling calls per process; defaults to max_concurrent (32) when unset (SUPERCHARGE_SUBAGENT_SAMPLING_LIMIT)
 
 [subagents.toggle]
@@ -787,6 +788,7 @@ The key ones. See the README for the complete list.
 |----------|-------------|
 | `SUPERCHARGE_MEMORY` | Enable (`1`) or disable (`0`) cross-session memory |
 | `SUPERCHARGE_SUBAGENTS` | Enable (`1`) or disable (`0`) subagents |
+| `SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE` | `1` keeps subagents on the parent model and ignores `Task.model`; overrides `[subagents] inherit_model` |
 | `SUPERCHARGE_WORKFLOWS` | Enable (`1`) or disable (`0`) background workflows and select the `/goal` driver (default on: host-owned workflow driver; off: legacy `update_goal`) |
 | `SUPERCHARGE_WEB_FETCH` | Enable (`1`) or disable (`0`) the web_fetch tool |
 | `SUPERCHARGE_WEB_FETCH_ALLOW_LOCAL` | Allow `web_fetch` to explicit loopback hosts only (`localhost` / `127.0.0.0/8` / `::1`). Same as `[toolset.web_fetch] allow_local`. Default off; private/metadata stay blocked. |

@@ -58,6 +58,7 @@ pub(crate) fn ctx_with_toggle(toggle: HashMap<String, bool>) -> SubagentSpawnCon
         app_builder_deployer_config: Default::default(),
         write_file_enabled: true,
         active_agent_messages_enabled: false,
+        subagent_model_inheritance: false,
         goal_enabled: false,
         background_workflows_enabled: false,
         ask_user_question_enabled: false,

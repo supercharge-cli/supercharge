@@ -1478,6 +1478,9 @@ pub struct Config {
     /// Set alongside `subagents_enabled` from `SubagentsConfig::resolve()`.
     #[serde(skip)]
     pub subagent_model_overrides: std::collections::HashMap<String, String>,
+    /// Resolved `[subagents] inherit_model` / `SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE`.
+    #[serde(skip)]
+    pub subagent_model_inheritance: bool,
     /// Per-subagent enable/disable toggles from `[subagents.toggle]` in config.toml.
     /// Keys are agent names, values are booleans. Omitted agents default to enabled.
     #[serde(skip)]
@@ -1743,6 +1746,7 @@ impl Default for Config {
             cli_agents: Vec::new(),
             cli_agent_overrides: CliAgentOverrides::default(),
             subagents_enabled: true,
+            subagent_model_inheritance: false,
             subagents_max_depth: crate::config::SubagentsConfig::DEFAULT_MAX_DEPTH,
             subagents_max_concurrent:
                 supercharge_tools::implementations::grok_build::task::admission::DEFAULT_MAX_CONCURRENT,
@@ -2185,6 +2189,12 @@ impl Config {
         let remote_settings = self.remote_settings.clone();
         self.resolve_subagent_limits(&sa, remote_settings.as_ref());
         self.subagents_enabled = sa.enabled;
+        self.subagent_model_inheritance = crate::config::SubagentsConfig::resolve_inherit_model(
+            std::env::var(crate::config::SubagentsConfig::ENV_INHERIT_MODEL)
+                .ok()
+                .as_deref(),
+            sa.inherit_model,
+        );
         self.subagent_model_overrides = sa.models;
         self.subagent_toggle = sa.toggle;
         self.subagent_roles = sa.roles;

@@ -276,6 +276,17 @@ explore = "grok-4.6"                 # route explore to a specific model
 
 Per-type model overrides apply for any parent. Without an override, a subagent inherits the parent's model.
 
+To keep every subagent on the parent's model, turn on model inheritance:
+
+```toml
+[subagents]
+inherit_model = true                 # or SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE=1
+```
+
+With inheritance on, a model the agent picks through the Task tool's `model` argument is ignored
+and the Task tool no longer offers a model list. Pins under `[subagents.models]`, role models, and
+persona models still apply. The environment variable wins over the config file.
+
 ### Custom Roles and Personas
 
 Define custom roles with their own capability and model defaults:

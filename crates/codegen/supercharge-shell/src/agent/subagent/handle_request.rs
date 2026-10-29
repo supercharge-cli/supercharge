@@ -314,6 +314,18 @@ pub(super) fn task_model_override_error(
     let requested = requested?;
     crate::agent::remote_config::task_model_error_for_catalog(requested, available, is_session_auth)
 }
+/// With `[subagents] inherit_model`, drop a model the agent picked through `Task.model` so the
+/// child runs on the parent model. Harness, role, persona, and config models are untouched.
+/// Returns the dropped model id.
+pub(super) fn drop_model_facing_override(
+    inherit_model: bool,
+    overrides: &mut SubagentRuntimeOverrides,
+) -> Option<String> {
+    if !inherit_model || overrides.model_override_provenance != ModelOverrideProvenance::Tool {
+        return None;
+    }
+    overrides.model.take()
+}
 #[tracing::instrument(
     name = "subagent.handle_request",
     skip_all,
@@ -417,6 +429,16 @@ pub(crate) async fn run_shell_child(
         .parent_session_info
         .as_ref()
         .map(|i| std::path::Path::new(&i.cwd));
+    if let Some(dropped) = drop_model_facing_override(
+        ctx.subagent_model_inheritance,
+        &mut request.runtime_overrides,
+    ) {
+        tracing::info!(
+            subagent_id = %request.id,
+            model = %dropped,
+            "subagent model inheritance is on; ignoring Task.model and using the parent model"
+        );
+    }
     let mut effective_runtime = supercharge_subagent_resolution::resolve_runtime_config(
         &request.subagent_type,
         &request.runtime_overrides,
@@ -1589,6 +1611,7 @@ pub(crate) async fn run_shell_child(
         ctx.app_builder_deployer_config.clone(),
         ctx.write_file_enabled,
         active_agent_messages_enabled,
+        ctx.subagent_model_inheritance,
         agent_message_sender,
         ctx.goal_enabled,
         ctx.background_workflows_enabled,

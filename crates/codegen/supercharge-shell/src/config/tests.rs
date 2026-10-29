@@ -4369,3 +4369,22 @@ fn plugin_config_writes_keep_the_caller_local_set_live() {
     );
     holder.join().unwrap();
 }
+#[test]
+fn subagents_inherit_model_resolution() {
+    assert!(!SubagentsConfig::resolve_inherit_model(None, None));
+    assert!(SubagentsConfig::resolve_inherit_model(None, Some(true)));
+    assert!(!SubagentsConfig::resolve_inherit_model(Some("0"), Some(true)));
+    assert!(SubagentsConfig::resolve_inherit_model(Some(" TRUE "), Some(false)));
+    assert!(SubagentsConfig::resolve_inherit_model(Some("maybe"), Some(true)));
+    assert!(!SubagentsConfig::resolve_inherit_model(Some(""), None));
+}
+#[test]
+fn subagents_inherit_model_parses_from_toml() {
+    let dir = tempfile::tempdir().unwrap();
+    let raw: toml::Value = toml::from_str("[subagents]\ninherit_model = true\n").unwrap();
+    let sa = SubagentsConfig::resolve_base_with_sources(false, &raw, None, dir.path());
+    assert_eq!(sa.inherit_model, Some(true));
+    let raw: toml::Value = toml::from_str("[subagents]\nenabled = true\n").unwrap();
+    let sa = SubagentsConfig::resolve_base_with_sources(false, &raw, None, dir.path());
+    assert_eq!(sa.inherit_model, None);
+}

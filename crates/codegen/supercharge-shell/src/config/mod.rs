@@ -9,9 +9,9 @@ pub use supercharge_config_types::{
     MemoryGcConfig, MemoryGcSettings, MemoryIndexConfig, MemoryIndexSettings,
     MemoryInitialInjectionConfig, MemoryInitialInjectionSettings, MemoryMode, MemorySearchConfig,
     MemorySearchSettings, MemorySessionConfig, MemorySessionSettings, MemorySettings,
-    MemoryV2CaptureTrigger, MemoryV2Config, MemoryV2RecallConfig, MemoryV2Rollout, MemoryV2Settings, MemoryWatcherConfig, MemoryWatcherSettings,
-    MmrConfig, MmrSettings, PruningConfig, PruningSettings, TemporalDecayConfig,
-    TemporalDecaySettings,
+    MemoryV2CaptureTrigger, MemoryV2Config, MemoryV2RecallConfig, MemoryV2Rollout,
+    MemoryV2Settings, MemoryWatcherConfig, MemoryWatcherSettings, MmrConfig, MmrSettings,
+    PruningConfig, PruningSettings, TemporalDecayConfig, TemporalDecaySettings,
 };
 /// Read the memory mode selected by the current effective config.
 ///
@@ -55,6 +55,10 @@ pub struct SubagentsConfig {
     /// Raw `[subagents] max_depth` (i64 so out-of-range parses; clamped to at least 1 at resolve).
     #[serde(default)]
     pub max_depth: Option<i64>,
+    /// `[subagents] inherit_model`: children run on the parent's model and a model picked through
+    /// the Task tool's `model` argument is ignored. `[subagents.models]` pins, roles, and personas still apply.
+    #[serde(default)]
+    pub inherit_model: Option<bool>,
     #[serde(default)]
     pub max_concurrent: Option<i64>,
     /// Concurrent subagent turn-sampling limit. See [`Self::resolve_sampling_limit`].
@@ -231,6 +235,23 @@ impl SubagentsConfig {
     }
     pub const ENV_MAX_DEPTH: &'static str = "SUPERCHARGE_SUBAGENTS_MAX_DEPTH";
     pub const DEFAULT_MAX_DEPTH: u32 = 1;
+    pub const ENV_INHERIT_MODEL: &'static str = "SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE";
+    /// Env beats `[subagents] inherit_model`; an unrecognized env value is ignored. Off by default.
+    pub fn resolve_inherit_model(env: Option<&str>, config: Option<bool>) -> bool {
+        let from_env = env.and_then(|raw| match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => {
+                tracing::warn!(
+                    var = Self::ENV_INHERIT_MODEL,
+                    value = raw,
+                    "unrecognized boolean; ignoring"
+                );
+                None
+            }
+        });
+        from_env.or(config).unwrap_or(false)
+    }
     /// Clamp to `1..=u32::MAX`. Values below 1 (including 0 and negatives) warn and become 1 so nesting is never accidentally disabled.
     pub(crate) fn clamp_max_depth(raw: i64, source: &str) -> u32 {
         if raw < i64::from(Self::DEFAULT_MAX_DEPTH) {

@@ -256,6 +256,8 @@ pub(crate) struct SubagentSpawnContext {
         supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
     pub write_file_enabled: bool,
     pub active_agent_messages_enabled: bool,
+    /// `[subagents] inherit_model`: drop a model-facing `Task.model` so children run on the parent model.
+    pub subagent_model_inheritance: bool,
     /// Whether goal mode (`/goal`) is enabled.
     pub goal_enabled: bool,
     pub background_workflows_enabled: bool,

@@ -2805,3 +2805,29 @@ async fn join_worker_task_drop_aborts_worker() {
         .expect("abort must reach the worker task")
         .expect("drop probe fires on abort");
 }
+#[test]
+fn model_inheritance_drops_only_model_facing_task_model() {
+    let tool = |model: Option<&str>| SubagentRuntimeOverrides {
+        model: model.map(str::to_string),
+        model_override_provenance: ModelOverrideProvenance::Tool,
+        ..Default::default()
+    };
+    let mut on = tool(Some("picked"));
+    assert_eq!(
+        super::handle_request::drop_model_facing_override(true, &mut on).as_deref(),
+        Some("picked")
+    );
+    assert!(on.model.is_none());
+    let mut off = tool(Some("picked"));
+    assert!(super::handle_request::drop_model_facing_override(false, &mut off).is_none());
+    assert_eq!(off.model.as_deref(), Some("picked"));
+    let mut harness = SubagentRuntimeOverrides {
+        model: Some("role-model".to_string()),
+        model_override_provenance: ModelOverrideProvenance::Harness,
+        ..Default::default()
+    };
+    assert!(super::handle_request::drop_model_facing_override(true, &mut harness).is_none());
+    assert_eq!(harness.model.as_deref(), Some("role-model"));
+    let mut empty = tool(None);
+    assert!(super::handle_request::drop_model_facing_override(true, &mut empty).is_none());
+}

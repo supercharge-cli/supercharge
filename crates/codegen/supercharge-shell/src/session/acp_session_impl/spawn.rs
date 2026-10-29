@@ -259,6 +259,7 @@ pub(crate) async fn spawn_session_actor(
     app_builder_deployer_config: supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
     write_file_enabled: bool,
     active_agent_messages_enabled: bool,
+    subagent_model_inheritance: bool,
     agent_message_sender: Option<
         supercharge_tools::implementations::grok_build::task::types::AgentMessageSender,
     >,
@@ -1270,6 +1271,7 @@ pub(crate) async fn spawn_session_actor(
         media_gen_batch_limits,
         write_file_enabled,
         active_agent_messages_enabled,
+        subagent_model_inheritance,
         agent_message_sender,
         subagents_enabled,
         subagent_toggle: subagent_toggle.clone(),
@@ -2676,6 +2678,7 @@ pub(crate) async fn spawn_session_on_thread(
     app_builder_deployer_config: supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
     write_file_enabled: bool,
     active_agent_messages_enabled: bool,
+    subagent_model_inheritance: bool,
     agent_message_sender: Option<
         supercharge_tools::implementations::grok_build::task::types::AgentMessageSender,
     >,
@@ -2885,6 +2888,7 @@ pub(crate) async fn spawn_session_on_thread(
                     app_builder_deployer_config,
                     write_file_enabled,
                     active_agent_messages_enabled,
+                    subagent_model_inheritance,
                     agent_message_sender,
                     goal_enabled,
                     background_workflows_enabled,
