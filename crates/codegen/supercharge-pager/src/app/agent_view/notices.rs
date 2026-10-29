@@ -338,6 +338,40 @@ impl AgentView {
             }
         }
     }
+
+    /// Re-bind orphan `[Image #N]` text to the images the composer still holds, then name the
+    /// placeholders no record backs. Logged against this session; the caller shows the message.
+    pub(crate) fn unbound_image_placeholder_notice(&mut self) -> Option<String> {
+        self.prompt.rebind_image_placeholders();
+        let unbound = self.prompt.unbound_image_placeholders();
+        if unbound.is_empty() {
+            return None;
+        }
+        let numbers = image_number_list(&unbound);
+        let message = if unbound.len() == 1 {
+            format!("Image {numbers} not attached — placeholder sent as text")
+        } else {
+            format!("Images {numbers} not attached — placeholders sent as text")
+        };
+        crate::unified_log::warn(
+            "prompt.image_placeholder_unbound",
+            self.session.session_id.as_ref().map(|s| s.0.as_ref()),
+            Some(serde_json::json!({
+                "display_numbers": unbound,
+                "attached": self.prompt.images.len(),
+            })),
+        );
+        Some(message)
+    }
+}
+
+/// `#1, #3` for a toast.
+fn image_number_list(display_numbers: &[usize]) -> String {
+    display_numbers
+        .iter()
+        .map(|n| format!("#{n}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[cfg(test)]

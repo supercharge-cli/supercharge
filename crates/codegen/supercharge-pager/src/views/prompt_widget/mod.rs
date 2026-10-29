@@ -1014,6 +1014,11 @@ impl PromptWidget {
         self.image_undo_stash.push(image);
     }
 
+    #[cfg(test)]
+    pub(crate) fn image_undo_stash_len(&self) -> usize {
+        self.image_undo_stash.len()
+    }
+
     /// Get the current cursor position (byte offset into text).
     pub fn cursor(&self) -> usize {
         self.textarea.cursor()
@@ -1038,6 +1043,8 @@ impl PromptWidget {
 
     /// Move the current prompt state into a snapshot for later restoration.
     pub fn stash(&mut self) -> StashedPrompt {
+        // Bind orphan placeholders first so the chip snapshot and the drained images agree.
+        self.rebind_image_placeholders();
         let chip_elements = self
             .textarea
             .elements()
@@ -1085,13 +1092,32 @@ impl PromptWidget {
         self.set_images(images);
         self.image_counter = self.image_counter.max(image_counter);
         self.image_undo_stash = image_undo_stash;
+        self.rechip_orphan_image_placeholders();
         self.set_cursor(cursor);
         self.update_file_search_context();
     }
 
-    /// Set the text content. Orphan `PastedImage` records without matching chips can't be reached by
-    /// the user. Callers that restore an in-flight prompt after `set_text` must also restore its chip
-    /// elements and images.
+    /// [`Self::set_text`] for text that is not this draft's: a recalled history line or a rewound
+    /// prompt. Its `[Image #N]` placeholders name images from another send, so the records this
+    /// composer still holds are released first instead of re-binding to a matching number.
+    pub fn set_text_discarding_images(&mut self, text: &str) {
+        crate::prompt_images::drain_and_cleanup(
+            crate::prompt_images::SessionPathPolicy::Preserve,
+            &mut self.images,
+        );
+        crate::prompt_images::drain_and_cleanup(
+            crate::prompt_images::SessionPathPolicy::Preserve,
+            &mut self.image_undo_stash,
+        );
+        crate::prompt_images::reset_counter(&mut self.image_counter);
+        self.set_text(text);
+    }
+
+    /// Set the text content. A non-empty `text` that still names `[Image #N]` placeholders keeps the
+    /// `PastedImage` records, unbound until the next sync, `set_images`, or `stash` re-chips them.
+    /// No re-chip happens here: callers that restore an in-flight prompt follow with
+    /// `restore_chip_elements` and `set_images`, and a re-chip first would bind a stale undo-stash
+    /// record ahead of the restored one.
     pub fn set_text(&mut self, text: &str) {
         self.post_insert_image_preview = None;
         self.hovered_image_element_id = None;
@@ -2406,6 +2432,8 @@ impl PromptWidget {
         use std::collections::HashMap;
         use std::collections::hash_map::Entry;
 
+        self.rechip_orphan_image_placeholders();
+
         let live_image_elements: Vec<(ElementId, std::ops::Range<usize>)> = self
             .textarea
             .elements()
@@ -2444,8 +2472,10 @@ impl PromptWidget {
 
         // Fallback for elements restored by an undo/redo cycle. Keying by `display_number` is safe here
         // because the monotonic counter never recycles numbers within a prompt lifetime.
+        // A same-number duplicate is no redo target but still owns files, so it stays in the stash.
         let mut stash_by_number: HashMap<usize, PastedImage> =
             HashMap::with_capacity(self.image_undo_stash.len());
+        let mut stash_duplicates: Vec<PastedImage> = Vec::new();
         for img in self.image_undo_stash.drain(..) {
             let display_number = img.display_number;
             let element_id = img.element_id;
@@ -2459,8 +2489,9 @@ impl PromptWidget {
                         display_number,
                         element_id = ?element_id,
                         "sync_images_with_textarea: duplicate display_number \
-                         in undo stash — dropping later entry",
+                         in undo stash — kept aside, not a redo target",
                     );
+                    stash_duplicates.push(img);
                 }
             }
         }
@@ -2499,6 +2530,7 @@ impl PromptWidget {
         let mut new_stash: Vec<PastedImage> = stored_by_id
             .into_values()
             .chain(stash_by_number.into_values())
+            .chain(stash_duplicates)
             .collect();
         let stash_cap = Self::IMAGE_CAP * 2;
         if new_stash.len() > stash_cap {
@@ -2598,9 +2630,9 @@ impl PromptWidget {
         self.images.iter().find(|img| img.element_id == id)
     }
 
-    /// Drain all prompt-side images for submission. Reconciles against live `TextArea` elements first
-    /// so deleted chips are never included. Returns the drained images; the prompt-side storage is left
-    /// empty.
+    /// Drain all prompt-side images for submission. Re-binds orphan `[Image #N]` text to the records
+    /// that name it, then reconciles against live `TextArea` elements so deleted chips are never
+    /// included. Returns the drained images; the prompt-side storage is left empty.
     pub fn drain_images(&mut self) -> Vec<PastedImage> {
         self.post_insert_image_preview = None;
         self.reconciled_images();
@@ -2643,8 +2675,10 @@ impl PromptWidget {
         );
     }
 
-    /// Reconcile against live `TextArea` elements, dropping deleted chips before a drain.
+    /// Re-bind orphan placeholders, then reconcile against live `TextArea` elements before a drain,
+    /// dropping the records whose chip text is gone as well.
     pub(crate) fn reconciled_images(&mut self) -> &[PastedImage] {
+        self.rebind_image_placeholders();
         let live_ids: std::collections::HashSet<_> = self
             .textarea
             .elements()
@@ -2652,11 +2686,20 @@ impl PromptWidget {
             .filter(|e| e.kind == KIND_IMAGE)
             .map(|e| e.id)
             .collect();
+        let len_before = self.images.len();
         crate::prompt_images::reconcile(
             crate::prompt_images::SessionPathPolicy::Preserve,
             &mut self.images,
             &live_ids,
         );
+        let removed = len_before.saturating_sub(self.images.len());
+        if removed > 0 {
+            tracing::warn!(
+                target: PROMPT_IMAGES_TRACING_TARGET,
+                removed,
+                "prompt_widget: image records without chip text discarded at drain",
+            );
+        }
         &self.images
     }
 
@@ -2736,14 +2779,28 @@ impl PromptWidget {
         // Align with the monotonic contract in `sync_images_with_textarea`: the counter only ever advances upward within a prompt lifetime
         self.image_counter = self.image_counter.max(images_high_water(&images));
         self.images = images;
+        // A record whose stored chip range went stale still binds to the placeholder text that names it.
+        self.rechip_orphan_image_placeholders();
     }
 
     /// Re-register all chip elements (paste blocks, @-file refs, image chips) after a `set_text` restore.
-    /// Uses the byte ranges stored at capture time; no buffer re-scanning.
+    /// Uses the byte ranges stored at capture time; no buffer re-scanning. A range an element of the
+    /// same kind already covers is skipped, so a re-chipped image never gets a second element.
     pub fn restore_chip_elements(&mut self, elems: &[crate::app::agent::ChipElement]) {
+        let covered: Vec<(ElementKind, std::ops::Range<usize>)> = self
+            .textarea
+            .elements()
+            .iter()
+            .map(|e| (e.kind, e.range.clone()))
+            .collect();
         self.textarea.restore_elements(
             elems
                 .iter()
+                .filter(|e| {
+                    !covered.iter().any(|(kind, range)| {
+                        *kind == e.kind && range.start < e.range.end && e.range.start < range.end
+                    })
+                })
                 .map(|e| (e.range.clone(), e.kind, e.display.clone())),
         );
     }
@@ -3776,3 +3833,5 @@ fn images_high_water(images: &[PastedImage]) -> usize {
 
 #[cfg(test)]
 mod tests;
+
+mod image_state;

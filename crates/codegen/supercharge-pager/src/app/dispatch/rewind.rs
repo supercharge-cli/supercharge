@@ -472,7 +472,7 @@ pub(super) fn dispatch_rewind_success(
             agent.prompt.restore(draft);
         }
     } else if let Some(ref prompt_text) = response.prompt_text {
-        agent.prompt.set_text(prompt_text);
+        agent.prompt.set_text_discarding_images(prompt_text);
     } else if let Some(draft) = stashed_draft {
         agent.prompt.restore(draft);
     }
@@ -494,7 +494,8 @@ pub(super) fn dispatch_rewind_success(
         // View switched mid-rewind: fall back to prefilling that composer, appending so an existing draft isn't clobbered
         if let Some(agent) = app.agents.get_mut(&agent_id) {
             if agent.prompt.text().trim().is_empty() {
-                agent.prompt.set_text(&text);
+                // Text from an earlier send: its placeholders must not bind to this composer's records.
+                agent.prompt.set_text_discarding_images(&text);
             } else {
                 agent.prompt.append_text(&format!("\n{text}"));
             }

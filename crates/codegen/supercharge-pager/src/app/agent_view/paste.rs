@@ -334,6 +334,9 @@ impl AgentView {
                 if !ActionRegistry::interjection_possible(self.can_send_now(), !text.is_empty()) {
                     return None;
                 }
+                if let Some(notice) = self.unbound_image_placeholder_notice() {
+                    self.show_toast(&notice);
+                }
                 let images = self.prompt.drain_images();
                 self.prompt.set_text("");
                 self.note_draft_consumed();

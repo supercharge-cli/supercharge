@@ -581,7 +581,10 @@ impl AgentView {
                                 self.deferred_send = Some(AgentDeferredSend::Interject);
                                 return InputOutcome::Changed;
                             }
-                            // Drain images BEFORE set_text("") wipes the chip elements.
+                            // Name placeholders that go out as text, then drain images BEFORE set_text("") wipes the chip elements.
+                            if let Some(notice) = self.unbound_image_placeholder_notice() {
+                                self.show_toast(&notice);
+                            }
                             let images = self.prompt.drain_images();
                             self.prompt.set_text("");
                             self.note_draft_consumed();
@@ -865,10 +868,10 @@ impl AgentView {
     fn populate_prompt_from_history(&mut self, text: &str) {
         if let Some(cmd) = text.strip_prefix("! ") {
             self.prompt_input_mode = PromptInputMode::Bash;
-            self.prompt.set_text(cmd);
+            self.prompt.set_text_discarding_images(cmd);
         } else {
             self.prompt_input_mode = PromptInputMode::Normal;
-            self.prompt.set_text(text);
+            self.prompt.set_text_discarding_images(text);
         }
         let len = self.prompt.textarea.text().len();
         self.prompt.textarea.set_cursor(len);
@@ -897,12 +900,12 @@ impl AgentView {
             && let Some(cmd) = text.strip_prefix("! ")
         {
             self.prompt_input_mode = PromptInputMode::Bash;
-            self.prompt.set_text(cmd);
+            self.prompt.set_text_discarding_images(cmd);
         } else if self.prompt_input_mode == PromptInputMode::Bash {
             self.prompt_input_mode = PromptInputMode::Normal;
-            self.prompt.set_text(text);
+            self.prompt.set_text_discarding_images(text);
         } else {
-            self.prompt.set_text(text);
+            self.prompt.set_text_discarding_images(text);
         }
 
         let len = self.prompt.textarea.text().len();
@@ -1986,5 +1989,58 @@ mod queue_recall_tests {
 
         assert_eq!(agent.active_pane, AgentPane::Prompt);
         assert_eq!(agent.prompt.text(), "an older prompt");
+    }
+
+    fn pasted_png() -> crate::prompt_images::PastedImage {
+        crate::prompt_images::PastedImage {
+            element_id: supercharge_ratatui_textarea::ElementId::from_raw(0),
+            display_number: 0,
+            mime_type: "image/png".into(),
+            dimensions: Some((100, 80)),
+            byte_len: 2048,
+            encoded_bytes: Some(vec![0u8; 16].into()),
+            source_path: None,
+            staged_temp_path: None,
+            session_image_path: None,
+            preview: crate::prompt_images::PromptImagePreview::default(),
+        }
+    }
+
+    /// A recalled history line names images from an earlier send; it must not re-bind to the
+    /// image this draft still holds, and its placeholder is reported as text, not attached.
+    #[test]
+    fn history_recall_releases_draft_images_and_reports_the_placeholder() {
+        let mut agent = super::test_fixtures::make_agent();
+        agent.prompt.insert_image(pasted_png()).expect("insert");
+        assert_eq!(agent.prompt.images.len(), 1);
+
+        agent.accept_history_entry("compare [Image #1] again");
+
+        assert_eq!(agent.prompt.text(), "compare [Image #1] again");
+        assert!(agent.prompt.images.is_empty(), "draft image must be released");
+        assert_eq!(
+            agent.unbound_image_placeholder_notice().as_deref(),
+            Some("Image #1 not attached — placeholder sent as text"),
+        );
+    }
+
+    /// A draft whose placeholders all have records yields no notice.
+    #[test]
+    fn attached_image_placeholder_yields_no_notice() {
+        let mut agent = super::test_fixtures::make_agent();
+        agent.prompt.insert_image(pasted_png()).expect("insert");
+        assert_eq!(agent.unbound_image_placeholder_notice(), None);
+        assert_eq!(agent.prompt.images.len(), 1);
+    }
+
+    /// Several unbound placeholders are listed together, in the order the text names them.
+    #[test]
+    fn several_unbound_placeholders_are_listed_together() {
+        let mut agent = super::test_fixtures::make_agent();
+        agent.prompt.set_text("[Image #3] and [Image #1]");
+        assert_eq!(
+            agent.unbound_image_placeholder_notice().as_deref(),
+            Some("Images #3, #1 not attached — placeholders sent as text"),
+        );
     }
 }

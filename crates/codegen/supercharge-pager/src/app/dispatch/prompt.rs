@@ -1039,6 +1039,12 @@ pub(super) fn dispatch_send_prompt_submission(
             agent.clear_follow_ups();
         }
 
+        // Bind `[Image #N]` text left behind by undo/yank/history back to its image before routing
+        // (an image-bearing prompt can't take the immediate path), and say which placeholders go out as text.
+        if consume_input && let Some(notice) = agent.unbound_image_placeholder_notice() {
+            agent.show_toast(&notice);
+        }
+
         // Composer-recognized slash tokens at submit time: they style the scrollback echo and travel in the wire meta so replay restyles it
         let skill_token_ranges = agent
             .prompt
