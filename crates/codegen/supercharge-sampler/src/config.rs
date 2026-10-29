@@ -13,7 +13,7 @@ use supercharge_sampling_types::{
 };
 
 use crate::attribution::SharedAttributionCallback;
-use crate::retry::{DEFAULT_MAX_RETRIES, RATE_LIMIT_RETRY_THRESHOLD};
+use crate::retry::RATE_LIMIT_RETRY_THRESHOLD;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -209,7 +209,7 @@ pub struct RetryPolicy {
 impl Default for RetryPolicy {
     fn default() -> Self {
         Self {
-            max_retries: DEFAULT_MAX_RETRIES,
+            max_retries: crate::retry::retry_settings().max_attempts_server_error,
             rate_limit_retry_threshold: RATE_LIMIT_RETRY_THRESHOLD,
             retry_only_before_output: false,
         }

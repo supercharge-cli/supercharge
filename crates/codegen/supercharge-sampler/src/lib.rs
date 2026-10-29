@@ -18,20 +18,21 @@ pub mod client;
 pub mod commands;
 pub mod config;
 pub mod doom_loop;
-pub mod dynamic_credentials;
 mod doom_loop_recovery;
+pub mod dynamic_credentials;
 pub mod events;
 pub mod handle;
 pub mod metrics;
 mod prewarm;
 mod request_compression;
 pub mod retry;
+pub mod retry_after;
 pub mod sampling_log;
 mod shared_http;
 mod span_timing;
 pub mod stream;
-pub mod thinking_probe;
 mod stream_classify;
+pub mod thinking_probe;
 pub mod types;
 
 // Public re-exports: the API consumers see
@@ -54,8 +55,9 @@ pub use metrics::{InferenceLatencyStats, compute_percentiles};
 pub use prewarm::{PrewarmOutcome, PrewarmReport, prewarm_transport};
 pub use retry::{
     DEFAULT_MAX_RETRIES, MAX_RETRY_BACKOFF, RATE_LIMIT_RETRY_DISABLED, RATE_LIMIT_RETRY_THRESHOLD,
-    RetryDecision, classify_error, format_sampling_error, jitter_backoff, resolve_max_retries,
-    retry_after_or_backoff, retry_backoff_with_jitter,
+    RetryDecision, RetrySettings, classify_error, classify_error_with_budget,
+    format_sampling_error, jitter_backoff, resolve_max_retries, retry_after_or_backoff,
+    retry_backoff_with_jitter, retry_settings, set_retry_settings, side_call_retry_wait,
 };
 pub use sampling_log::AuthInfo;
 pub use stream::{collect_response, stream_chat_completions, stream_messages, stream_responses};

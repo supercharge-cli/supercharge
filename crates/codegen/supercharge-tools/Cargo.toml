@@ -21,6 +21,7 @@ supercharge-config = { path = "../supercharge-config" }
 supercharge-extra-ca = { workspace = true }
 supercharge-feedback = { workspace = true }
 supercharge-tools-api = { path = "../supercharge-tools-api" }
+supercharge-sampler = { workspace = true }
 supercharge-workspace-types = { path = "../supercharge-workspace-types" }
 supercharge-version = { workspace = true }
 supercharge-interjection-core = { workspace = true }

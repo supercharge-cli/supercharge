@@ -1977,6 +1977,7 @@ impl SessionActor {
                     human_duration(announced)
                 ),
                 error_type: None,
+                retry_in_ms: Some(u64::try_from(announced.as_millis()).unwrap_or(u64::MAX)),
             },
         ))
         .await;

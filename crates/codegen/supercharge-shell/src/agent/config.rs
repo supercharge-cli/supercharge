@@ -16,9 +16,8 @@ use supercharge_login::{AuthManager, GrokComConfig, OidcAuthConfig};
 use supercharge_sampler::{AuthScheme, SamplerConfig};
 use supercharge_sampling_types::{
     CompactionAtTokens, CompactionsRemaining, MODEL_NOTICE_META_KEY, ModelNotice,
-    REASONING_EFFORT_META_KEY,
-    REASONING_EFFORTS_META_KEY, ReasoningEffort, ReasoningEffortOption, ReasoningSummary,
-    reasoning_effort_meta_value, reasoning_efforts_meta_value,
+    REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort, ReasoningEffortOption,
+    ReasoningSummary, reasoning_effort_meta_value, reasoning_efforts_meta_value,
 };
 use supercharge_tools::types::compat::{
     COMPAT_CELLS, CompatConfig, CompatConfigToml, CompatRemoteKey, CompatSurface, CompatVendor,
@@ -1233,6 +1232,36 @@ impl ImageProviderConfig {
     }
 }
 
+/// `[retry]` in config.toml. Env overrides: `SUPERCHARGE_RETRY_MAX_ATTEMPTS`,
+/// `SUPERCHARGE_RETRY_MAX_ATTEMPTS_SERVER_ERROR`, `SUPERCHARGE_RETRY_MAX_WAIT_SECS`,
+/// `SUPERCHARGE_RETRY_MAX_TOTAL_WAIT_SECS`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetryConfig {
+    /// Total attempts for a 429 rate limit, first try included (default 5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_attempts: Option<u32>,
+    /// Total attempts for 5xx / 529 / connection resets, first try included (default 15).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_attempts_server_error: Option<u32>,
+    /// Longest single wait in seconds, server hints included (default 60).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_wait_secs: Option<u64>,
+    /// Longest cumulative wait per request in seconds (default 300).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_total_wait_secs: Option<u64>,
+}
+
+impl RetryConfig {
+    pub fn to_settings(&self) -> supercharge_sampler::RetrySettings {
+        supercharge_sampler::RetrySettings::from_parts(
+            self.max_attempts,
+            self.max_attempts_server_error,
+            self.max_wait_secs,
+            self.max_total_wait_secs,
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub features: Features,
@@ -1298,6 +1327,9 @@ pub struct Config {
     pub agent: AgentSelectionConfig,
     #[serde(default)]
     pub repo_changes_dedup: RepoChangesDedupConfig,
+    /// `[retry]` section: 429 / 5xx / 529 / connection-reset retry policy for every model request.
+    #[serde(default)]
+    pub retry: RetryConfig,
     #[serde(default)]
     pub skills: SkillsConfig,
     /// Raw `[compat]` vendor-compatibility config (per-vendor, per-surface toggles).
@@ -1666,6 +1698,7 @@ impl Default for Config {
             session: SessionConfig::default(),
             agent: AgentSelectionConfig::default(),
             repo_changes_dedup: RepoChangesDedupConfig::default(),
+            retry: RetryConfig::default(),
             skills: SkillsConfig::default(),
             compat: CompatConfigToml::default(),
             plugins: PluginsConfig::default(),
@@ -2141,6 +2174,7 @@ impl Config {
         config.image_description_model = model_overrides.image_description;
         config.prompt_suggest_model_pin = model_overrides.prompt_suggestion;
         config.apply_env_overrides();
+        supercharge_sampler::set_retry_settings(config.retry.to_settings());
         Ok(config)
     }
     /// Populate trust-independent `#[serde(skip)]` subagent base fields.
@@ -3404,13 +3438,13 @@ pub(crate) fn resolve_model_list(
         if entry.info.api_backend == ApiBackend::Messages {
             continue;
         }
-        let probed = supercharge_sampler::thinking_probe::lookup(&entry.info.base_url, &entry.info.model)
-            .or_else(|| {
-                entry
-                    .api_base_url
-                    .as_deref()
-                    .and_then(|u| supercharge_sampler::thinking_probe::lookup(u, &entry.info.model))
-            });
+        let probed =
+            supercharge_sampler::thinking_probe::lookup(&entry.info.base_url, &entry.info.model)
+                .or_else(|| {
+                    entry.api_base_url.as_deref().and_then(|u| {
+                        supercharge_sampler::thinking_probe::lookup(u, &entry.info.model)
+                    })
+                });
         if let Some(probed) = probed {
             entry.info.supports_reasoning_effort = probed.supported();
             entry.info.reasoning_efforts = if probed.supported() {
@@ -4103,9 +4137,15 @@ impl ConfigModelOverride {
             if !thinking {
                 entry.info.reasoning_efforts.clear();
             } else if entry.info.reasoning_efforts.is_empty() {
-                let ids = crate::agent::provider_setup::reasoning_effort_ids_for_model(&entry.info.model);
-                let ids: &[&str] = if ids.is_empty() { &["high", "medium", "low"] } else { ids };
-                entry.info.reasoning_efforts = crate::agent::session_config::effort_options_from_ids(ids);
+                let ids =
+                    crate::agent::provider_setup::reasoning_effort_ids_for_model(&entry.info.model);
+                let ids: &[&str] = if ids.is_empty() {
+                    &["high", "medium", "low"]
+                } else {
+                    ids
+                };
+                entry.info.reasoning_efforts =
+                    crate::agent::session_config::effort_options_from_ids(ids);
             }
         }
         if !self.reasoning_efforts.is_empty() {
@@ -5484,10 +5524,42 @@ mod capture_model_fallback_tests {
         assert_eq!(super::configured_background_model(Some("  ")), None);
         assert_eq!(super::configured_background_model(None), None);
         assert_eq!(
-            super::configured_background_model(Some(
-                crate::models::default_session_summary_model()
-            )),
+            super::configured_background_model(
+                Some(crate::models::default_session_summary_model())
+            ),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod retry_config_tests {
+    use super::RetryConfig;
+    use std::time::Duration;
+
+    #[test]
+    fn retry_section_parses_and_clamps() {
+        let cfg: RetryConfig =
+            toml::from_str("max_attempts = 3\nmax_attempts_server_error = 9\nmax_wait_secs = 10\nmax_total_wait_secs = 90\n")
+                .unwrap();
+        let s = cfg.to_settings();
+        assert_eq!(s.max_attempts, 3);
+        assert_eq!(s.max_attempts_server_error, 9);
+        assert_eq!(s.max_wait, Duration::from_secs(10));
+        assert_eq!(s.max_total_wait, Duration::from_secs(90));
+
+        let defaults = RetryConfig::default().to_settings();
+        assert_eq!(defaults.max_attempts, 5);
+        assert_eq!(defaults.max_attempts_server_error, 15);
+        assert_eq!(defaults.max_wait, Duration::from_secs(60));
+        assert_eq!(defaults.max_total_wait, Duration::from_secs(300));
+
+        let wild: RetryConfig =
+            toml::from_str("max_attempts = 0\nmax_wait_secs = 99999999\n").unwrap();
+        let s = wild.to_settings();
+        assert_eq!(s.max_attempts, 1);
+        assert!(s.max_wait <= Duration::from_secs(15 * 60));
+        // A negative or non-integer value is a parse error, not a silent default.
+        assert!(toml::from_str::<RetryConfig>("max_attempts = -1").is_err());
     }
 }

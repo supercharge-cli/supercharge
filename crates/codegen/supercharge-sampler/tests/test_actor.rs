@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use axum::routing::post;
 use futures_util::stream::{self, StreamExt};
@@ -1018,8 +1019,126 @@ async fn rate_limit_exhausts_at_default_threshold_and_yields_failed() {
     assert_eq!(
         counter.load(Ordering::SeqCst),
         2,
-        "the default threshold permits one retry after the initial request"
+        "the request's retry budget (2 in this fixture) caps 429 attempts below `[retry] max_attempts`"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rate_limit_429_then_200_honors_retry_after_ms_and_reports_wait() {
+    let counter = Arc::new(AtomicU32::new(0));
+    let counter_handler = Arc::clone(&counter);
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(move || {
+            let counter = Arc::clone(&counter_handler);
+            async move {
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                if n == 0 {
+                    (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        [("retry-after-ms", "1200")],
+                        json!({ "error": { "message": "Rate limit reached: requests per minute" } })
+                            .to_string(),
+                    )
+                        .into_response()
+                } else {
+                    let events = sse::chat_completion_events("ok", "test-model");
+                    Sse::new(stream::iter(
+                        events.into_iter().map(Ok::<_, std::convert::Infallible>),
+                    ))
+                    .into_response()
+                }
+            }
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+    let cfg = test_config(server.base_url(), "test-model");
+    let handle = SamplerActor::spawn(cfg, RetryPolicy::default(), event_tx);
+
+    let started = std::time::Instant::now();
+    handle.submit(RequestId::from("req-429-200"), user_request("hi"));
+    let events = drain_until_terminal(&mut event_rx, Duration::from_secs(30)).await;
+    server.shutdown();
+
+    let retry = events
+        .iter()
+        .find_map(|e| match e {
+            SamplingEvent::Retrying {
+                attempt,
+                max_retries,
+                retry_in_ms,
+                kind,
+                ..
+            } => Some((*attempt, *max_retries, *retry_in_ms, *kind)),
+            _ => None,
+        })
+        .expect("a Retrying event");
+    assert_eq!(retry.0, 1);
+    assert_eq!(retry.3, SamplingErrorKind::RateLimited);
+    // retry-after-ms 1200 rounds up to whole seconds for the wait.
+    assert_eq!(retry.2, Some(2_000));
+    assert!(
+        started.elapsed() >= Duration::from_millis(1_900),
+        "the hint was honored"
+    );
+    assert!(
+        matches!(events.last(), Some(SamplingEvent::Completed { .. })),
+        "expected Completed after the 429, got {events:?}"
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quota_429_fails_immediately_with_provider_message() {
+    let counter = Arc::new(AtomicU32::new(0));
+    let counter_handler = Arc::clone(&counter);
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(move || {
+            let counter = Arc::clone(&counter_handler);
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [("retry-after", "1")],
+                    json!({ "error": {
+                        "message": "You exceeded your current quota, please check your plan and billing details.",
+                        "type": "insufficient_quota",
+                        "code": "insufficient_quota"
+                    } })
+                    .to_string(),
+                )
+            }
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+    let cfg = test_config(server.base_url(), "test-model");
+    let handle = SamplerActor::spawn(cfg, RetryPolicy::default(), event_tx);
+
+    handle.submit(RequestId::from("req-quota"), user_request("hi"));
+    let events = drain_until_terminal(&mut event_rx, Duration::from_secs(10)).await;
+    server.shutdown();
+
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, SamplingEvent::Retrying { .. })),
+        "quota errors are never retried: {events:?}"
+    );
+    match events.last().unwrap() {
+        SamplingEvent::Failed { error, .. } => {
+            assert_ne!(error.kind, SamplingErrorKind::RateLimited);
+            assert!(
+                error.message.contains("exceeded your current quota"),
+                "provider text surfaces: {}",
+                error.message
+            );
+        }
+        other => panic!("expected Failed, got {other:?}"),
+    }
+    assert_eq!(counter.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -12380,6 +12380,7 @@ dependencies = [
  "supercharge-interjection-core",
  "supercharge-message-delivery-core",
  "supercharge-otel",
+ "supercharge-sampler",
  "supercharge-sandbox",
  "supercharge-secrets",
  "supercharge-test-support",

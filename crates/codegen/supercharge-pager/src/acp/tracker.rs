@@ -243,6 +243,8 @@ pub enum TurnActivity {
         reason: String,
         /// Sampler error kind when the shell forwarded one.
         error_type: Option<String>,
+        /// Announced wait before the next attempt, when the shell sent one.
+        retry_in_ms: Option<u64>,
     },
     /// The model is streaming tool-call arguments; see [`WritingToolCall`].
     WritingToolCall(WritingToolCall),

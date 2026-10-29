@@ -2203,7 +2203,8 @@ impl SessionActor {
                 .filter(|hit| !seen.contains(&hit.chunk_id))
                 .collect()
         };
-        let Some((body, used)) = format_v2_recall_reminder(&fresh, config.max_results, config.max_tokens)
+        let Some((body, used)) =
+            format_v2_recall_reminder(&fresh, config.max_results, config.max_tokens)
         else {
             return false;
         };
@@ -3199,6 +3200,7 @@ impl SessionActor {
                             max_retries: display_max,
                             reason: format!("{cause}; retrying request"),
                             error_type: Some(kind.as_ref().to_string()),
+                            retry_in_ms: None,
                         },
                     ))
                     .await;
@@ -3246,6 +3248,7 @@ impl SessionActor {
                                              credential); retrying request"
                                         .to_string(),
                                     error_type: None,
+                                    retry_in_ms: None,
                                 },
                             ))
                             .await;
@@ -3278,6 +3281,7 @@ impl SessionActor {
                                     reason: "Re-authenticated after 401; retrying request"
                                         .to_string(),
                                     error_type: None,
+                                    retry_in_ms: None,
                                 },
                             ))
                             .await;
@@ -3499,6 +3503,7 @@ impl SessionActor {
                         max_retries: MAX_MEDIA_GEN_OVER_CAP_RESAMPLES,
                         reason: "Too many parallel media-gen calls; retrying".to_string(),
                         error_type: None,
+                        retry_in_ms: None,
                     },
                 ))
                 .await;
@@ -4542,8 +4547,16 @@ pub(crate) fn restored_recall_ids(
 fn collect_strings(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::String(text) => text.clone(),
-        serde_json::Value::Array(items) => items.iter().map(collect_strings).collect::<Vec<_>>().join("\n"),
-        serde_json::Value::Object(map) => map.values().map(collect_strings).collect::<Vec<_>>().join("\n"),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(collect_strings)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        serde_json::Value::Object(map) => map
+            .values()
+            .map(collect_strings)
+            .collect::<Vec<_>>()
+            .join("\n"),
         _ => String::new(),
     }
 }
@@ -4563,7 +4576,11 @@ pub(crate) fn parse_recall_ids(text: &str) -> Vec<String> {
             let Some((path, range)) = location.rsplit_once(':') else {
                 continue;
             };
-            let Some(start) = range.split('-').next().and_then(|n| n.parse::<usize>().ok()) else {
+            let Some(start) = range
+                .split('-')
+                .next()
+                .and_then(|n| n.parse::<usize>().ok())
+            else {
                 continue;
             };
             ids.push(format!("{path}:{}", start.saturating_sub(1)));
@@ -4622,7 +4639,10 @@ pub(crate) fn format_v2_recall_reminder(
     if used.is_empty() {
         return None;
     }
-    Some((format!("{MEMORY_RECALL_OPEN_TAG}\n{body}</memory-recall>"), used))
+    Some((
+        format!("{MEMORY_RECALL_OPEN_TAG}\n{body}</memory-recall>"),
+        used,
+    ))
 }
 
 #[cfg(test)]
@@ -4644,7 +4664,9 @@ mod v2_recall_format_tests {
 
     #[test]
     fn caps_hits_and_token_budget() {
-        let hits: Vec<_> = (0..6).map(|i| hit(&format!("n{i}"), &"word ".repeat(400))).collect();
+        let hits: Vec<_> = (0..6)
+            .map(|i| hit(&format!("n{i}"), &"word ".repeat(400)))
+            .collect();
         let (body, used) = format_v2_recall_reminder(&hits, 4, 1200).unwrap();
         assert!(used.len() <= 4);
         assert!(body.len() <= 1200 * 4 + 64, "len {}", body.len());
@@ -4664,7 +4686,10 @@ mod v2_recall_format_tests {
             last_used_at: Some(1_700_086_400),
         });
         let (body, used) = format_v2_recall_reminder(&[first, hit("n1", "beta")], 4, 1200).unwrap();
-        assert!(body.contains("(created 2023-11-14, last used 2023-11-15)"), "{body}");
+        assert!(
+            body.contains("(created 2023-11-14, last used 2023-11-15)"),
+            "{body}"
+        );
         let mut expected = used.clone();
         expected[1] = "/m/topics/n1.md:0".to_string();
         assert_eq!(parse_recall_ids(&body), expected);

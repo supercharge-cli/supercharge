@@ -185,6 +185,93 @@ impl WebSearchClient {
             sent_bearer,
         );
     }
+    /// POST one `/responses` request and parse the reply. 429, 5xx / 529 and transport failures
+    /// are retried with the same policy (and `[retry]` settings) as model sampling; quota and
+    /// billing errors and other 4xx are surfaced at once. Dropping the future (tool cancel) stops
+    /// any pending wait immediately.
+    async fn post_responses(
+        &self,
+        request: &serde_json::Value,
+    ) -> Result<rs::Response, supercharge_tool_runtime::ToolError> {
+        let tool_err = |msg: String| {
+            supercharge_tool_runtime::ToolError::execution(
+                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
+                msg,
+            )
+        };
+        let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
+        let settings = supercharge_sampler::retry_settings();
+        let mut attempts: u32 = 0;
+        let mut waited = std::time::Duration::ZERO;
+        loop {
+            attempts += 1;
+            let sent_bearer = self.current_bearer().await;
+            let mut req = self.http.post(&url).json(request);
+            if let Some(ref key) = sent_bearer {
+                req = req.header(AUTHORIZATION, format!("Bearer {key}"));
+            }
+            let response = match req.send().await {
+                Ok(response) => response,
+                Err(e) => {
+                    let message = format!("HTTP request failed: {e}");
+                    match supercharge_sampler::side_call_retry_wait(
+                        None, "", None, attempts, waited, &settings,
+                    ) {
+                        Some(wait) => {
+                            tracing::warn!(attempt = attempts, wait_ms = wait.as_millis() as u64, error = %e, "web search request failed; retrying");
+                            waited += wait;
+                            tokio::time::sleep(wait).await;
+                            continue;
+                        }
+                        None => return Err(tool_err(message)),
+                    }
+                }
+            };
+            let status = response.status();
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                self.record_401_attribution(sent_bearer.as_deref());
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Failed to read error body".to_string());
+                return Err(supercharge_tool_runtime::ToolError::unauthorized(format!(
+                    "Responses API returned 401 Unauthorized: {body}"
+                ))
+                .with_details(serde_json::json!({
+                    "tool_id": "web_search",
+                    "status": 401,
+                })));
+            }
+            if !status.is_success() {
+                let hint =
+                    supercharge_sampler::retry_after::wait_hint_from_headers(response.headers());
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Failed to read error body".to_string());
+                if let Some(wait) = supercharge_sampler::side_call_retry_wait(
+                    Some(status.as_u16()),
+                    &body,
+                    hint,
+                    attempts,
+                    waited,
+                    &settings,
+                ) {
+                    tracing::warn!(attempt = attempts, %status, wait_ms = wait.as_millis() as u64, "web search request failed; retrying");
+                    waited += wait;
+                    tokio::time::sleep(wait).await;
+                    continue;
+                }
+                return Err(tool_err(format!("Responses API returned {status}: {body}")));
+            }
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| tool_err(format!("Failed to read response body: {e}")))?;
+            return serde_json::from_slice(&bytes)
+                .map_err(|e| tool_err(format!("Failed to parse response: {e}")));
+        }
+    }
     /// Perform a web search query using the Responses API. Returns `(content, citations)` where
     /// content is the assistant's text and citations are unique URLs found in the response
     /// annotations.
@@ -195,55 +282,7 @@ impl WebSearchClient {
     ) -> Result<(String, Vec<String>), supercharge_tool_runtime::ToolError> {
         let (allowed, excluded) = self.resolve_filters(allowed_domains);
         let request = self.build_request_json(query, allowed, excluded)?;
-        let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
-        let sent_bearer = self.current_bearer().await;
-        let mut req = self.http.post(&url).json(&request);
-        if let Some(ref key) = sent_bearer {
-            req = req.header(AUTHORIZATION, format!("Bearer {key}"));
-        }
-        let response = req.send().await.map_err(|e| {
-            supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("HTTP request failed: {e}"),
-            )
-        })?;
-        let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            self.record_401_attribution(sent_bearer.as_deref());
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(supercharge_tool_runtime::ToolError::unauthorized(format!(
-                "Responses API returned 401 Unauthorized: {body}"
-            ))
-            .with_details(serde_json::json!({
-                "tool_id": "web_search",
-                "status": 401,
-            })));
-        }
-        if !status.is_success() {
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("Responses API returned {status}: {body}"),
-            ));
-        }
-        let bytes = response.bytes().await.map_err(|e| {
-            supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("Failed to read response body: {e}"),
-            )
-        })?;
-        let response_obj: rs::Response = serde_json::from_slice(&bytes).map_err(|e| {
-            supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("Failed to parse response: {e}"),
-            )
-        })?;
+        let response_obj = self.post_responses(&request).await?;
         let content = response_obj
             .output_text()
             .unwrap_or_else(|| "No search results found.".to_string());
@@ -260,55 +299,7 @@ impl WebSearchClient {
     ) -> Result<(String, Vec<(String, String)>), supercharge_tool_runtime::ToolError> {
         let (allowed, excluded) = self.resolve_filters(allowed_domains);
         let request = self.build_request_json(query, allowed, excluded)?;
-        let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
-        let sent_bearer = self.current_bearer().await;
-        let mut req = self.http.post(&url).json(&request);
-        if let Some(ref key) = sent_bearer {
-            req = req.header(AUTHORIZATION, format!("Bearer {key}"));
-        }
-        let response = req.send().await.map_err(|e| {
-            supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("HTTP request failed: {e}"),
-            )
-        })?;
-        let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            self.record_401_attribution(sent_bearer.as_deref());
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(supercharge_tool_runtime::ToolError::unauthorized(format!(
-                "Responses API returned 401 Unauthorized: {body}"
-            ))
-            .with_details(serde_json::json!({
-                "tool_id": "web_search",
-                "status": 401,
-            })));
-        }
-        if !status.is_success() {
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("Responses API returned {status}: {body}"),
-            ));
-        }
-        let bytes = response.bytes().await.map_err(|e| {
-            supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("Failed to read response body: {e}"),
-            )
-        })?;
-        let response_obj: rs::Response = serde_json::from_slice(&bytes).map_err(|e| {
-            supercharge_tool_runtime::ToolError::execution(
-                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                format!("Failed to parse response: {e}"),
-            )
-        })?;
+        let response_obj = self.post_responses(&request).await?;
         let content = response_obj
             .output_text()
             .unwrap_or_else(|| "No search results found.".to_string());
@@ -814,6 +805,101 @@ mod tests {
             .await
             .expect("search must succeed with static key fallback");
         assert_eq!(content, "search result");
+    }
+    fn ok_body() -> serde_json::Value {
+        serde_json::json!({
+            "id": "resp_test",
+            "object": "response",
+            "created_at": 1234567890,
+            "status": "completed",
+            "model": "test-model",
+            "output": [{
+                "type": "message",
+                "id": "msg_1",
+                "status": "completed",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "search result", "annotations": []}]
+            }]
+        })
+    }
+    fn retry_test_client(uri: String) -> WebSearchClient {
+        let config = WebSearchConfig::Enabled {
+            api_key: "k".to_string(),
+            base_url: uri,
+            model: "test-model".to_string(),
+            extra_headers: IndexMap::new(),
+            alpha_test_key: None,
+            allowed_domains: None,
+            excluded_domains: None,
+        };
+        WebSearchClient::new(&config, None).expect("client should build")
+    }
+    /// A 429 with a wait hint and a 503 are retried (same policy as model sampling), then succeed.
+    #[tokio::test]
+    async fn rate_limit_and_overload_are_retried_then_succeed() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("retry-after-ms", "50")
+                    .set_body_string("slow down"),
+            )
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(503).set_body_string("busy"))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(ok_body()))
+            .mount(&server)
+            .await;
+        let client = retry_test_client(server.uri());
+        let (content, _) = client.search("q", None).await.expect("retried to success");
+        assert_eq!(content, "search result");
+        assert_eq!(server.received_requests().await.unwrap().len(), 3);
+    }
+    /// Quota / billing 429s and plain 4xx are surfaced on the first attempt with the provider text.
+    #[tokio::test]
+    async fn quota_and_client_errors_are_not_retried() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        for (status, body) in [
+            (
+                429u16,
+                r#"{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}"#,
+            ),
+            (400, "bad request"),
+            (404, "no such model"),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/responses"))
+                .respond_with(ResponseTemplate::new(status).set_body_string(body))
+                .mount(&server)
+                .await;
+            let client = retry_test_client(server.uri());
+            let err = client
+                .search_with_titles("q", None)
+                .await
+                .expect_err("must surface");
+            assert!(
+                err.to_string().contains(&status.to_string()),
+                "{status}: {err}"
+            );
+            assert_eq!(
+                server.received_requests().await.unwrap().len(),
+                1,
+                "{status}"
+            );
+        }
     }
     /// When the provider returns a fresh key, it overrides the static one.
     #[tokio::test]

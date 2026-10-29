@@ -1255,6 +1255,9 @@ pub enum RetryState {
         /// Sampler error kind when known; absent on old shells and non-sampler paces.
         #[serde(default)]
         error_type: Option<String>,
+        /// Milliseconds until the next attempt is sent; absent when the retry is immediate or the wait is unknown.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        retry_in_ms: Option<u64>,
     },
     /// All retries have been exhausted
     Exhausted {
@@ -1938,6 +1941,52 @@ mod tests {
         assert!(matches!(
             update,
             SessionUpdate::RetryState(RetryState::Failed { .. })
+        ));
+    }
+
+    #[test]
+    fn retry_state_retrying_wait_is_additive() {
+        let update = SessionUpdate::RetryState(RetryState::Retrying {
+            attempt: 2,
+            max_retries: 5,
+            reason: "rate limited".into(),
+            error_type: Some("rate_limited".into()),
+            retry_in_ms: Some(7_500),
+        });
+        let v = serde_json::to_value(&update).unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({
+                "sessionUpdate": "retry_state",
+                "type": "retrying",
+                "attempt": 2,
+                "max_retries": 5,
+                "reason": "rate limited",
+                "error_type": "rate_limited",
+                "retry_in_ms": 7500,
+            })
+        );
+        // Unknown waits are omitted, and older payloads without the field still parse.
+        let none = SessionUpdate::RetryState(RetryState::Retrying {
+            attempt: 1,
+            max_retries: 5,
+            reason: "overloaded".into(),
+            error_type: None,
+            retry_in_ms: None,
+        });
+        assert!(
+            serde_json::to_value(&none)
+                .unwrap()
+                .get("retry_in_ms")
+                .is_none()
+        );
+        let old = r#"{"sessionUpdate":"retry_state","type":"retrying","attempt":1,"max_retries":3,"reason":"x"}"#;
+        assert!(matches!(
+            serde_json::from_str::<SessionUpdate>(old).unwrap(),
+            SessionUpdate::RetryState(RetryState::Retrying {
+                retry_in_ms: None,
+                ..
+            })
         ));
     }
 

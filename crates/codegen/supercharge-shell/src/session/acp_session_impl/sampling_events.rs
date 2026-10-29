@@ -408,6 +408,7 @@ impl SessionActor {
                 request_id,
                 attempt,
                 max_retries,
+                retry_in_ms,
                 kind,
                 reason,
                 doom_loop_triggers,
@@ -452,6 +453,7 @@ impl SessionActor {
                         "sampler_request_id": request_id.as_str(),
                         "attempt": attempt,
                         "max_retries": max_retries,
+                        "retry_in_ms": retry_in_ms,
                         "kind": kind.as_ref(),
                         "reason": crate::util::truncate(&reason, 300),
                     })),
@@ -462,6 +464,7 @@ impl SessionActor {
                         max_retries,
                         reason,
                         error_type: Some(kind.as_ref().to_string()),
+                        retry_in_ms,
                     },
                 ))
                 .await;

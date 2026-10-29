@@ -312,13 +312,10 @@ fn splice_extra_tool_entries(
     }
 }
 
-/// Parse `Retry-After` as integer seconds, capped at 120; HTTP-dates yield `None`.
+/// Server wait hint in whole seconds (rounded up); see [`crate::retry_after`] for the accepted headers.
+/// The retry policy clamps this to its per-wait cap.
 fn extract_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
-    headers
-        .get(reqwest::header::RETRY_AFTER)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<u64>().ok())
-        .map(|s| s.min(120))
+    crate::retry_after::wait_hint_from_headers(headers).map(crate::retry_after::ceil_secs)
 }
 
 fn extract_should_retry(headers: &reqwest::header::HeaderMap) -> Option<bool> {
@@ -754,10 +751,9 @@ impl SamplingClient {
             .then(crate::agentrouter::new_session_id);
         if let Some(session_id) = &agentrouter_session_id {
             for (name, value) in crate::agentrouter::static_identity_headers(session_id) {
-                if let (Ok(name), Ok(value)) = (
-                    HeaderName::from_str(name),
-                    HeaderValue::from_str(&value),
-                ) {
+                if let (Ok(name), Ok(value)) =
+                    (HeaderName::from_str(name), HeaderValue::from_str(&value))
+                {
                     headers.insert(name, value);
                 }
             }
@@ -910,7 +906,9 @@ impl SamplingClient {
         // Fresh ids on every request so long sessions do not reuse one id (see agentrouter module).
         if self.agentrouter_session_id.is_some() {
             for (name, value) in crate::agentrouter::per_request_headers() {
-                if let (Ok(name), Ok(value)) = (HeaderName::from_str(name), HeaderValue::from_str(&value)) {
+                if let (Ok(name), Ok(value)) =
+                    (HeaderName::from_str(name), HeaderValue::from_str(&value))
+                {
                     headers.insert(name, value);
                 }
             }
@@ -1131,7 +1129,10 @@ impl SamplingClient {
             sent_bearer,
         } = self.post(self.endpoint("chat/completions"));
         let built_request = self
-            .build_json_request(grok_headers.apply(builder), &self.reshape_chat_payload(&payload)?)
+            .build_json_request(
+                grok_headers.apply(builder),
+                &self.reshape_chat_payload(&payload)?,
+            )
             .await?;
         let response = self.send(built_request).await?;
 
@@ -1149,7 +1150,10 @@ impl SamplingClient {
     /// the shell marked this endpoint as accepting it.
     /// Serialize a Chat Completions payload and rewrite its thinking parameter to the shape
     /// the capability probe found for this provider + model (no-op when nothing is cached).
-    fn reshape_chat_payload<T: Serialize + ?Sized>(&self, payload: &T) -> Result<serde_json::Value> {
+    fn reshape_chat_payload<T: Serialize + ?Sized>(
+        &self,
+        payload: &T,
+    ) -> Result<serde_json::Value> {
         let mut body = serde_json::to_value(payload).map_err(SamplingError::Serialization)?;
         if body.get("reasoning_effort").is_some() {
             let model = body
@@ -1197,7 +1201,11 @@ impl SamplingClient {
                     "messages".into(),
                     serde_json::json!([{ "role": "user", "content": "Reply with OK." }]),
                 );
-                let max = if shape == ThinkingShape::ThinkingBudget { 1_100 } else { 16 };
+                let max = if shape == ThinkingShape::ThinkingBudget {
+                    1_100
+                } else {
+                    16
+                };
                 ("chat/completions", "max_tokens", max)
             };
             body.insert(max_key.into(), serde_json::json!(max));
@@ -1274,7 +1282,10 @@ impl SamplingClient {
                 if tokio::time::Instant::now() >= deadline {
                     break;
                 }
-                let ok = matches!(send(shape, level).await, ProbeVerdict::Clear | ProbeVerdict::Tentative);
+                let ok = matches!(
+                    send(shape, level).await,
+                    ProbeVerdict::Clear | ProbeVerdict::Tentative
+                );
                 match level {
                     "xhigh" => xhigh_ok = ok,
                     _ => none_ok = ok,
@@ -1419,7 +1430,10 @@ impl SamplingClient {
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
         let built_request = self
-            .build_json_request(http_request, &self.reshape_chat_payload(&streaming_request)?)
+            .build_json_request(
+                http_request,
+                &self.reshape_chat_payload(&streaming_request)?,
+            )
             .await?;
 
         tracing::debug!(
@@ -1522,14 +1536,15 @@ impl SamplingClient {
                             Some(None)
                         } else {
                             Some(Some(
-                                parse_lenient::<ChatCompletionChunk>(data.as_bytes(), false).map_err(|e| {
-                                    tracing::error!(
-                                        error = %e,
-                                        raw_data = %data,
-                                        "Failed to deserialize ChatCompletionChunk from stream"
-                                    );
-                                    SamplingError::Serialization(e)
-                                }),
+                                parse_lenient::<ChatCompletionChunk>(data.as_bytes(), false)
+                                    .map_err(|e| {
+                                        tracing::error!(
+                                            error = %e,
+                                            raw_data = %data,
+                                            "Failed to deserialize ChatCompletionChunk from stream"
+                                        );
+                                        SamplingError::Serialization(e)
+                                    }),
                             ))
                         }
                     }
@@ -1696,8 +1711,7 @@ impl SamplingClient {
             });
         }
 
-        let response_obj = parse_lenient::<rs::Response>(&bytes, true)
-            .map_err(|e| {
+        let response_obj = parse_lenient::<rs::Response>(&bytes, true).map_err(|e| {
             let raw_body = String::from_utf8_lossy(&bytes);
             tracing::error!(
                 error = %e,
@@ -2245,16 +2259,18 @@ impl SamplingClient {
                             Some(None)
                         } else {
                             Some(Some(
-                                parse_lenient::<messages::MessageStreamEvent>(data.as_bytes(), false).map_err(
-                                    |e| {
-                                        tracing::error!(
-                                            error = %e,
-                                            raw_data = %data,
-                                            "Failed to deserialize MessageStreamEvent from stream"
-                                        );
-                                        SamplingError::Serialization(e)
-                                    },
-                                ),
+                                parse_lenient::<messages::MessageStreamEvent>(
+                                    data.as_bytes(),
+                                    false,
+                                )
+                                .map_err(|e| {
+                                    tracing::error!(
+                                        error = %e,
+                                        raw_data = %data,
+                                        "Failed to deserialize MessageStreamEvent from stream"
+                                    );
+                                    SamplingError::Serialization(e)
+                                }),
                             ))
                         }
                     }
@@ -3076,10 +3092,12 @@ mod tests {
     }
 
     #[test]
-    fn extract_retry_after_caps_at_120() {
+    fn extract_retry_after_keeps_long_hints_for_the_policy_to_clamp() {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(reqwest::header::RETRY_AFTER, "3600".parse().unwrap());
-        assert_eq!(extract_retry_after(&headers), Some(120));
+        assert_eq!(extract_retry_after(&headers), Some(3600));
+        headers.insert(reqwest::header::RETRY_AFTER, "99999999999".parse().unwrap());
+        assert_eq!(extract_retry_after(&headers), Some(24 * 60 * 60));
     }
 
     #[test]
@@ -3090,12 +3108,25 @@ mod tests {
     }
 
     #[test]
-    fn extract_retry_after_ignores_http_date() {
+    fn extract_retry_after_past_http_date_means_now() {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::RETRY_AFTER,
-            "Fri, 31 Dec 2025 23:59:59 GMT".parse().unwrap(),
+            "Wed, 31 Dec 2025 23:59:59 GMT".parse().unwrap(),
         );
+        assert_eq!(extract_retry_after(&headers), Some(0));
+    }
+
+    #[test]
+    fn extract_retry_after_reads_ms_and_reset_headers() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("retry-after-ms", "1500".parse().unwrap());
+        assert_eq!(extract_retry_after(&headers), Some(2));
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("x-ratelimit-reset-tokens", "1m30s".parse().unwrap());
+        assert_eq!(extract_retry_after(&headers), Some(90));
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::RETRY_AFTER, "garbage".parse().unwrap());
         assert_eq!(extract_retry_after(&headers), None);
     }
 
@@ -3319,8 +3350,12 @@ mod tests {
 
     #[test]
     fn agentrouter_detection_matches_host_only() {
-        assert!(crate::agentrouter::is_agentrouter_base_url("https://agentrouter.org/v1"));
-        assert!(crate::agentrouter::is_agentrouter_base_url("https://AGENTROUTER.ORG"));
+        assert!(crate::agentrouter::is_agentrouter_base_url(
+            "https://agentrouter.org/v1"
+        ));
+        assert!(crate::agentrouter::is_agentrouter_base_url(
+            "https://AGENTROUTER.ORG"
+        ));
         assert!(!crate::agentrouter::is_agentrouter_base_url(
             "https://agentrouter.example.com/v1"
         ));
@@ -4049,7 +4084,10 @@ mod null_tolerance_tests {
             );
             let event = deserialize_response_event(&data)
                 .unwrap_or_else(|e| panic!("case {i} failed: {e}: {data}"));
-            assert!(matches!(event, rs::ResponseStreamEvent::ResponseCompleted(_)), "case {i}");
+            assert!(
+                matches!(event, rs::ResponseStreamEvent::ResponseCompleted(_)),
+                "case {i}"
+            );
             let body = format!(r#"{RESP},"usage":{usage}}}"#);
             parse_lenient::<rs::Response>(body.as_bytes(), true)
                 .unwrap_or_else(|e| panic!("non-stream case {i} failed: {e}"));
@@ -4099,7 +4137,14 @@ mod malformed_stream_tests {
         for done in ["[DONE]", " [DONE] ", "[done]", "DONE", "[ DONE ]"] {
             assert_eq!(classify_sse_data(done), SseData::Done, "{done}");
         }
-        for skip in ["", "  ", "PROCESSING", ": ping", "<html><body>502</body></html>", "\"\""] {
+        for skip in [
+            "",
+            "  ",
+            "PROCESSING",
+            ": ping",
+            "<html><body>502</body></html>",
+            "\"\"",
+        ] {
             assert_eq!(classify_sse_data(skip), SseData::Skip, "{skip}");
         }
         assert_eq!(classify_sse_data(r#"{"a":1}"#), SseData::Payload);

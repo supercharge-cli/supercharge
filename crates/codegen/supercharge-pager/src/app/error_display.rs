@@ -135,6 +135,28 @@ pub(crate) fn format_retry_activity_label(
     }
 }
 
+/// Like [`format_retry_activity_label`], but a rate-limit retry with an announced wait reads
+/// `Rate limited, retrying in Ns (attempt k/n)`.
+pub(crate) fn format_retry_activity_label_with_wait(
+    attempt: u32,
+    max_retries: u32,
+    reason: &str,
+    error_type: Option<&str>,
+    retry_in_ms: Option<u64>,
+    style: RetryLabelStyle,
+) -> String {
+    match (error_type, retry_in_ms) {
+        (Some("rate_limited"), Some(ms)) => rate_limited_wait_label(attempt, max_retries, ms),
+        _ => format_retry_activity_label(attempt, max_retries, reason, error_type, style),
+    }
+}
+
+/// `Rate limited, retrying in Ns (attempt k/n)`; whole seconds, rounded up, never `0s`.
+pub(crate) fn rate_limited_wait_label(attempt: u32, max_retries: u32, retry_in_ms: u64) -> String {
+    let secs = retry_in_ms.div_ceil(1000).max(1);
+    format!("Rate limited, retrying in {secs}s (attempt {attempt}/{max_retries})")
+}
+
 pub(crate) fn retry_clause(attempt: u32, max_retries: u32, style: RetryLabelStyle) -> String {
     // Longer headline plus U+2026 wraps this status row into the prompt.
     match style {
@@ -1168,6 +1190,45 @@ mod tests {
             )
             .headline,
             "Request failed"
+        );
+    }
+
+    #[test]
+    fn rate_limited_wait_label_shows_seconds_and_attempt() {
+        assert_eq!(
+            format_retry_activity_label_with_wait(
+                2,
+                5,
+                "429",
+                Some("rate_limited"),
+                Some(12_000),
+                RetryLabelStyle::Status
+            ),
+            "Rate limited, retrying in 12s (attempt 2/5)"
+        );
+        // Sub-second and partial seconds round up; zero never renders as "0s".
+        assert_eq!(rate_limited_wait_label(1, 5, 250), "Rate limited, retrying in 1s (attempt 1/5)");
+        assert_eq!(rate_limited_wait_label(1, 5, 1_001), "Rate limited, retrying in 2s (attempt 1/5)");
+        assert_eq!(rate_limited_wait_label(1, 5, 0), "Rate limited, retrying in 1s (attempt 1/5)");
+        assert_eq!(
+            rate_limited_wait_label(3, 5, u64::MAX),
+            format!("Rate limited, retrying in {}s (attempt 3/5)", u64::MAX.div_ceil(1000))
+        );
+        // Without a wait, or for other kinds, the classic label is kept.
+        assert_eq!(
+            format_retry_activity_label_with_wait(2, 5, "", None, Some(5_000), RetryLabelStyle::Status),
+            "Retrying (attempt 2)..."
+        );
+        assert_eq!(
+            format_retry_activity_label_with_wait(
+                2,
+                5,
+                "slow down",
+                Some("rate_limited"),
+                None,
+                RetryLabelStyle::Compact
+            ),
+            format_retry_activity_label(2, 5, "slow down", Some("rate_limited"), RetryLabelStyle::Compact)
         );
     }
 }

@@ -151,12 +151,36 @@
             max_retries: 3,
             reason: "rate limited".into(),
             error_type: None,
+            retry_in_ms: None,
         };
         apply_retry_state(&retry, &mut session, &mut scrollback, false);
         assert!(
             session.in_flight_prompt.is_none(),
             "RetryState bypasses session/update in_flight hook"
         );
+    }
+
+    #[test]
+    fn apply_retry_state_carries_rate_limit_wait_to_activity() {
+        let mut session = make_session(Some("s1"));
+        let mut scrollback = ScrollbackState::new();
+        let retry = RetryState::Retrying {
+            attempt: 2,
+            max_retries: 5,
+            reason: "API error (status 429)".into(),
+            error_type: Some("rate_limited".into()),
+            retry_in_ms: Some(7_500),
+        };
+        apply_retry_state(&retry, &mut session, &mut scrollback, false);
+        assert!(matches!(
+            session.tracker.activity(),
+            Some(crate::acp::tracker::TurnActivity::Retrying {
+                attempt: 2,
+                max_retries: 5,
+                retry_in_ms: Some(7_500),
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -1089,6 +1113,7 @@
                     max_retries: 3,
                     reason: "overloaded".into(),
                     error_type: None,
+                    retry_in_ms: None,
                 }));
             agent.running_wake_turn = Some(crate::app::agent_view::RunningWakeTurn {
                 prompt_id: "task-completed-1".into(),

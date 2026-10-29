@@ -17,8 +17,8 @@ use tracing::Instrument;
 use supercharge_sampling_types::{
     ApiErrorCode, AssistantItem, ChatCompletionResponse, ConversationItem, ConversationRequest,
     ConversationResponse, EmptyResponseContext, SamplingError, SentCredential, ToolCall,
-    WireToolNames,
-    error::Result as SamplingResult, reported_cost_ticks, synthesized_reasoning_item,
+    WireToolNames, error::Result as SamplingResult, reported_cost_ticks,
+    synthesized_reasoning_item,
 };
 
 use crate::actor::request_metadata::{
@@ -30,9 +30,7 @@ use crate::doom_loop_recovery::{FailedResponseCapture, append_recovery_context};
 use crate::events::{SamplingErrorInfo, SamplingErrorKind, SamplingEvent, StripReason};
 use crate::handle::CollectedSamplingResult;
 use crate::metrics::InferenceLatencyStats;
-use crate::retry::{
-    self as retry_mod, RetryDecision, classify_error, clone_error, resolve_max_retries,
-};
+use crate::retry::{self as retry_mod, RetryDecision, clone_error, resolve_max_retries};
 use crate::stream::responses::stream_responses_tracked;
 use crate::stream::{stream_chat_completions, stream_messages};
 use crate::types::RequestId;
@@ -123,6 +121,9 @@ pub(crate) async fn run_request_task(
 
     let mut request = request;
     let mut retry_count: u32 = 0;
+    // Read once per request so a mid-request config change cannot shift the budget under a running retry loop
+    let retry_settings = crate::retry::retry_settings();
+    let mut waited = Duration::ZERO;
     // Doom-loop recovery keeps its own resample budget, independent of the transport/empty budget above
     let doom_policy = config.doom_loop_recovery;
     let doom_max_retries = doom_policy.map_or(0, |p| p.max_retries);
@@ -231,6 +232,8 @@ pub(crate) async fn run_request_task(
                     &mut retry_count,
                     effective_max_retries,
                     &retry_policy,
+                    &retry_settings,
+                    &mut waited,
                     &event_tx,
                     &request_id,
                     &mut request,
@@ -292,6 +295,7 @@ pub(crate) async fn run_request_task(
                         doom_retry_count,
                         doom_max_retries,
                         &error,
+                        Some(backoff),
                     );
                     if sleep_or_cancel(backoff, &cancel_token, doom_retry_count, &sampling_span)
                         .await
@@ -306,6 +310,8 @@ pub(crate) async fn run_request_task(
                     &mut retry_count,
                     effective_max_retries,
                     &retry_policy,
+                    &retry_settings,
+                    &mut waited,
                     &event_tx,
                     &request_id,
                     &mut request,
@@ -330,6 +336,8 @@ pub(crate) async fn run_request_task(
                     &mut retry_count,
                     effective_max_retries,
                     &retry_policy,
+                    &retry_settings,
+                    &mut waited,
                     &event_tx,
                     &request_id,
                     &mut request,
@@ -356,6 +364,8 @@ async fn apply_retry_decision(
     retry_count: &mut u32,
     max_retries: u32,
     retry_policy: &RetryPolicy,
+    retry_settings: &crate::retry::RetrySettings,
+    waited: &mut Duration,
     event_tx: &mpsc::UnboundedSender<SamplingEvent>,
     request_id: &RequestId,
     request: &mut ConversationRequest,
@@ -368,7 +378,14 @@ async fn apply_retry_decision(
     let rate_limit_threshold = config
         .rate_limit_retry_threshold
         .unwrap_or(retry_policy.rate_limit_retry_threshold);
-    let decision = classify_error(err, *retry_count, max_retries, rate_limit_threshold);
+    let decision = retry_mod::classify_error_with_budget(
+        err,
+        *retry_count,
+        max_retries,
+        rate_limit_threshold,
+        retry_settings,
+        *waited,
+    );
 
     // Connection-reset / broken-pipe on body upload often means nginx rejected an oversized payload before responding 413
     // Strip images proactively before any retry of those errors so we don't burn budget re-uploading the same large body
@@ -399,7 +416,15 @@ async fn apply_retry_decision(
     match decision {
         RetryDecision::Retry { backoff } => {
             *retry_count += 1;
-            emit_retrying(event_tx, request_id, *retry_count, max_retries, err);
+            emit_retrying(
+                event_tx,
+                request_id,
+                *retry_count,
+                max_retries,
+                err,
+                Some(backoff),
+            );
+            *waited = waited.saturating_add(backoff);
             if sleep_or_cancel(backoff, cancel_token, *retry_count, parent).await {
                 true
             } else {
@@ -407,9 +432,25 @@ async fn apply_retry_decision(
                 false
             }
         }
-        RetryDecision::RetryWithBackoff { backoff, .. } => {
+        RetryDecision::RetryWithBackoff {
+            backoff,
+            is_rate_limited,
+        } => {
             *retry_count += 1;
-            emit_retrying(event_tx, request_id, *retry_count, max_retries, err);
+            let shown_max = if is_rate_limited {
+                retry_mod::rate_limit_attempt_cap(max_retries, rate_limit_threshold, retry_settings)
+            } else {
+                max_retries
+            };
+            emit_retrying(
+                event_tx,
+                request_id,
+                *retry_count,
+                shown_max,
+                err,
+                Some(backoff),
+            );
+            *waited = waited.saturating_add(backoff);
             if sleep_or_cancel(backoff, cancel_token, *retry_count, parent).await {
                 true
             } else {
@@ -435,12 +476,20 @@ async fn apply_retry_decision(
             );
             emit_images_stripped(event_tx, request_id, stripped_urls, reason);
             *retry_count += 1;
-            emit_retrying(event_tx, request_id, *retry_count, max_retries, err);
+            emit_retrying(event_tx, request_id, *retry_count, max_retries, err, None);
             true
         }
         RetryDecision::RetryWithClientRebuild { backoff } => {
             *retry_count += 1;
-            emit_retrying(event_tx, request_id, *retry_count, max_retries, err);
+            emit_retrying(
+                event_tx,
+                request_id,
+                *retry_count,
+                max_retries,
+                err,
+                Some(backoff),
+            );
+            *waited = waited.saturating_add(backoff);
             if !sleep_or_cancel(backoff, cancel_token, *retry_count, parent).await {
                 handle_cancellation(event_tx, request_id, completion);
                 return false;
@@ -475,7 +524,12 @@ async fn apply_retry_decision(
             let server_said_stop = matches!(err.should_retry_header(), Some(false));
             let budget_exhausted = !server_said_stop
                 && if err.is_rate_limited() {
-                    next_attempt >= max_retries.min(rate_limit_threshold)
+                    next_attempt
+                        >= retry_mod::rate_limit_attempt_cap(
+                            max_retries,
+                            rate_limit_threshold,
+                            retry_settings,
+                        )
                 } else {
                     err.is_retryable() && next_attempt >= max_retries
                 };
@@ -1166,12 +1220,14 @@ fn emit_retrying(
     attempt: u32,
     max_retries: u32,
     err: &SamplingError,
+    delay: Option<Duration>,
 ) {
     let info = SamplingErrorInfo::from(err);
     let _ = event_tx.send(SamplingEvent::Retrying {
         request_id: request_id.clone(),
         attempt,
         max_retries,
+        retry_in_ms: delay.map(|d| d.as_millis().min(u64::MAX as u128) as u64),
         kind: info.kind,
         reason: err.detail_with_causes(),
         doom_loop_triggers: info.doom_loop_triggers,
@@ -1763,12 +1819,15 @@ mod tests {
         };
         let mut client = SamplingClient::new(config.clone()).expect("test client");
         let error = SamplingError::EventStreamError("retry me".into());
+        let mut waited = Duration::ZERO;
 
         let should_continue = apply_retry_decision(
             &error,
             &mut retry_count,
             2,
             &RetryPolicy::default(),
+            &crate::retry::RetrySettings::default(),
+            &mut waited,
             &event_tx,
             &RequestId::from("cancel-backoff"),
             &mut request,

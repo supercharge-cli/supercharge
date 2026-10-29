@@ -230,6 +230,59 @@ pub enum ApiErrorCode {
     Other(String),
 }
 
+/// Wire codes that mean the account is out of quota or credits rather than briefly throttled.
+pub fn is_quota_error_code(code: &str) -> bool {
+    let code = code.trim().to_ascii_lowercase();
+    matches!(
+        code.as_str(),
+        "insufficient_quota"
+            | "quota_exceeded"
+            | "quota_exhausted"
+            | "billing_hard_limit_reached"
+            | "billing_not_active"
+            | "billing_error"
+            | "insufficient_credits"
+            | "credits_exhausted"
+            | "out_of_credits"
+            | "payment_required"
+            | "spending_limit_reached"
+    )
+}
+
+/// Provider message text that signals quota or billing exhaustion.
+/// Per-interval throttles ("requests per minute") stay rate limits even when they say "quota".
+pub fn is_quota_message(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    const PER_INTERVAL: [&str; 6] = [
+        "per minute",
+        "per second",
+        "per hour",
+        "requests per",
+        "tokens per",
+        "rate limit",
+    ];
+    const STRONG: [&str; 9] = [
+        "insufficient_quota",
+        "insufficient quota",
+        "exceeded your current quota",
+        "credit balance is too low",
+        "out of credits",
+        "insufficient credits",
+        "billing_hard_limit",
+        "spending limit",
+        "payment required",
+    ];
+    if STRONG.iter().any(|needle| lower.contains(needle)) {
+        return true;
+    }
+    if PER_INTERVAL.iter().any(|needle| lower.contains(needle)) {
+        return false;
+    }
+    ["quota exceeded", "quota exhausted", "billing", "monthly limit", "usage limit reached"]
+        .iter()
+        .any(|needle| lower.contains(needle))
+}
+
 impl ApiErrorCode {
     pub fn parse(code: &str) -> Self {
         match code {
@@ -328,6 +381,7 @@ impl SamplingError {
         )
     }
 
+    /// A transient 429. Quota or billing exhaustion is excluded: waiting will not help, see [`Self::is_quota_exhausted`].
     pub fn is_rate_limited(&self) -> bool {
         matches!(
             self,
@@ -335,7 +389,34 @@ impl SamplingError {
                 status: StatusCode::TOO_MANY_REQUESTS,
                 ..
             }
-        )
+        ) && !self.is_quota_exhausted()
+    }
+
+    /// The account is out of quota, credits, or billing headroom (typically a 429 or 402).
+    /// Never retried: the provider message is surfaced immediately.
+    pub fn is_quota_exhausted(&self) -> bool {
+        let SamplingError::Api {
+            status,
+            message,
+            error_code,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        if *status == StatusCode::PAYMENT_REQUIRED {
+            return true;
+        }
+        if *status != StatusCode::TOO_MANY_REQUESTS && *status != StatusCode::FORBIDDEN {
+            return false;
+        }
+        if error_code
+            .as_ref()
+            .is_some_and(|code| is_quota_error_code(code.as_str()))
+        {
+            return true;
+        }
+        is_quota_message(message)
     }
 
     pub fn is_payload_too_large(&self) -> bool {
@@ -408,6 +489,9 @@ impl SamplingError {
     }
 
     pub fn is_retryable(&self) -> bool {
+        if self.is_quota_exhausted() {
+            return false;
+        }
         match self {
             SamplingError::Auth { .. } => false,
             SamplingError::InvalidConfiguration(_) => false,
@@ -1782,4 +1866,77 @@ mod tests {
             );
         }
     }
+
+    fn api_429(message: &str, code: Option<&str>) -> SamplingError {
+        SamplingError::Api {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            message: message.to_string(),
+            model_metadata: None,
+            retry_after_secs: None,
+            should_retry: None,
+            error_code: code.map(ApiErrorCode::parse),
+        }
+    }
+
+    #[test]
+    fn quota_429_is_not_a_rate_limit_and_never_retryable() {
+        for err in [
+            api_429("You exceeded your current quota, please check your plan.", None),
+            api_429("whatever", Some("insufficient_quota")),
+            api_429("Your credit balance is too low to access the API.", None),
+            api_429("Monthly spending limit reached", None),
+            api_429("Billing account is inactive", None),
+        ] {
+            assert!(err.is_quota_exhausted(), "{err}");
+            assert!(!err.is_rate_limited(), "{err}");
+            assert!(!err.is_retryable(), "{err}");
+        }
+    }
+
+    #[test]
+    fn per_interval_429_stays_a_rate_limit() {
+        for err in [
+            api_429("Rate limit reached for requests", None),
+            api_429("Quota exceeded for metric: requests per minute", None),
+            api_429("Too many tokens per minute", Some("rate_limit_exceeded")),
+            api_429("", None),
+        ] {
+            assert!(!err.is_quota_exhausted(), "{err}");
+            assert!(err.is_rate_limited(), "{err}");
+            assert!(err.is_retryable(), "{err}");
+        }
+    }
+
+    #[test]
+    fn payment_required_is_quota_and_other_statuses_are_not() {
+        let mut err = api_429("pay up", None);
+        if let SamplingError::Api { status, .. } = &mut err {
+            *status = StatusCode::PAYMENT_REQUIRED;
+        }
+        assert!(err.is_quota_exhausted());
+        assert!(!err.is_retryable());
+        if let SamplingError::Api { status, .. } = &mut err {
+            *status = StatusCode::INTERNAL_SERVER_ERROR;
+        }
+        assert!(!err.is_quota_exhausted(), "5xx text is never classified as quota");
+        assert!(err.is_retryable());
+        for status in [400u16, 401, 403, 404] {
+            let err = SamplingError::Api {
+                status: StatusCode::from_u16(status).unwrap(),
+                message: "nope".into(),
+                model_metadata: None,
+                retry_after_secs: None,
+                should_retry: None,
+                error_code: None,
+            };
+            assert!(!err.is_retryable(), "{status} must never be retried");
+        }
+    }
+
+    #[test]
+    fn quota_code_matching_is_case_insensitive() {
+        assert!(is_quota_error_code("Insufficient_Quota"));
+        assert!(!is_quota_error_code("rate_limit_exceeded"));
+    }
+
 }

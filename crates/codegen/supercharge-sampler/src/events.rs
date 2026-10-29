@@ -110,6 +110,8 @@ pub enum SamplingEvent {
         request_id: RequestId,
         attempt: u32,
         max_retries: u32,
+        /// How long the sampler waits before this attempt; `None` when it retries immediately.
+        retry_in_ms: Option<u64>,
         /// Typed retry class so consumers never have to sniff `reason` (e.g. the shell's doom-loop recovery counter).
         kind: SamplingErrorKind,
         reason: String,

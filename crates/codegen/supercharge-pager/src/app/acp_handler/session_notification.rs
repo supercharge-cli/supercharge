@@ -1672,12 +1672,14 @@ pub(super) fn apply_retry_state(
             max_retries,
             reason,
             error_type,
+            retry_in_ms,
         } => {
             session.set_retry_activity(Some(TurnActivity::Retrying {
                 attempt: *attempt,
                 max_retries: *max_retries,
                 reason: reason.clone(),
                 error_type: error_type.clone(),
+                retry_in_ms: *retry_in_ms,
             }));
         }
         RetryState::Exhausted {

@@ -636,14 +636,16 @@ fn compute_activity(
                 max_retries,
                 reason,
                 error_type,
+                retry_in_ms,
             }),
         ) => (
             Style::default().fg(theme.warning),
-            crate::app::error_display::format_retry_activity_label(
+            crate::app::error_display::format_retry_activity_label_with_wait(
                 *attempt,
                 *max_retries,
                 reason,
                 error_type.as_deref(),
+                *retry_in_ms,
                 crate::app::error_display::RetryLabelStyle::Status,
             ),
             false,

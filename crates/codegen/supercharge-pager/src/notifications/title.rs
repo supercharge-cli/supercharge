@@ -227,12 +227,14 @@ fn write_activity(buf: &mut String, activity: &TurnActivity) {
             max_retries,
             reason,
             error_type,
+            retry_in_ms,
         } => {
-            buf.push_str(&crate::app::error_display::format_retry_activity_label(
+            buf.push_str(&crate::app::error_display::format_retry_activity_label_with_wait(
                 *attempt,
                 *max_retries,
                 reason,
                 error_type.as_deref(),
+                *retry_in_ms,
                 crate::app::error_display::RetryLabelStyle::Compact,
             ));
         }
@@ -502,6 +504,7 @@ mod tests {
             max_retries: 5,
             reason: "API error (status 504 Gateway Timeout): upstream timeout".to_owned(),
             error_type: None,
+            retry_in_ms: None,
         };
         let state = TitleState {
             activity: Some(&activity),

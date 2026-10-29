@@ -2,11 +2,24 @@ use std::time::Duration;
 
 use supercharge_sampling_types::{SamplingError, is_retryable_api_status};
 
-pub const RATE_LIMIT_RETRY_THRESHOLD: u32 = 2;
+/// Default per-model 429 ceiling: no extra cap beyond `[retry] max_attempts` (see [`rate_limit_attempt_cap`]).
+pub const RATE_LIMIT_RETRY_THRESHOLD: u32 = u32::MAX;
 
 pub const RATE_LIMIT_RETRY_DISABLED: u32 = 1;
 
-pub const DEFAULT_MAX_RETRIES: u32 = 15;
+/// Default attempt budget for 5xx / 529 / connection resets when neither config, env, nor model sets one.
+pub const DEFAULT_MAX_RETRIES: u32 = RetrySettings::DEFAULT_MAX_ATTEMPTS_SERVER_ERROR;
+
+/// Total attempts allowed for a 429: the request budget, the per-model threshold and `[retry] max_attempts`, whichever is lowest.
+pub fn rate_limit_attempt_cap(
+    max_retries: u32,
+    rate_limit_threshold: u32,
+    settings: &RetrySettings,
+) -> u32 {
+    max_retries
+        .min(rate_limit_threshold)
+        .min(settings.max_attempts)
+}
 
 pub const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
@@ -19,7 +32,7 @@ pub(crate) fn resolve_max_retries_with_env(
     env_override
         .and_then(|value| value.parse::<u32>().ok())
         .or(model_max_retries)
-        .unwrap_or(DEFAULT_MAX_RETRIES)
+        .unwrap_or_else(|| retry_settings().max_attempts_server_error)
 }
 
 pub fn resolve_max_retries(model_max_retries: Option<u32>) -> u32 {
@@ -63,6 +76,186 @@ pub fn jitter_backoff(base: Duration) -> Duration {
     Duration::from_millis(base_ms - jitter_range + jitter)
 }
 
+/// User-tunable retry policy (`[retry]` in config.toml, overridable via env).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetrySettings {
+    /// Total attempts (first try included) for 429 rate limits.
+    pub max_attempts: u32,
+    /// Total attempts (first try included) for 5xx / 529 / connection resets.
+    pub max_attempts_server_error: u32,
+    /// Ceiling on any single wait, including server-provided hints.
+    pub max_wait: Duration,
+    /// Ceiling on the sum of waits for one request; once exceeded the error is surfaced.
+    pub max_total_wait: Duration,
+}
+
+impl RetrySettings {
+    pub const DEFAULT_MAX_ATTEMPTS: u32 = 5;
+    pub const DEFAULT_MAX_ATTEMPTS_SERVER_ERROR: u32 = 15;
+    pub const DEFAULT_MAX_WAIT: Duration = Duration::from_secs(60);
+    pub const DEFAULT_MAX_TOTAL_WAIT: Duration = Duration::from_secs(300);
+    /// Hard caps so a typo cannot pin a session for hours.
+    pub const MAX_ATTEMPTS_CAP: u32 = 50;
+    pub const MAX_WAIT_CAP: Duration = Duration::from_secs(15 * 60);
+    pub const MAX_TOTAL_WAIT_CAP: Duration = Duration::from_secs(2 * 60 * 60);
+
+    pub const ENV_MAX_ATTEMPTS: &'static str = "SUPERCHARGE_RETRY_MAX_ATTEMPTS";
+    pub const ENV_MAX_ATTEMPTS_SERVER_ERROR: &'static str =
+        "SUPERCHARGE_RETRY_MAX_ATTEMPTS_SERVER_ERROR";
+    pub const ENV_MAX_WAIT_SECS: &'static str = "SUPERCHARGE_RETRY_MAX_WAIT_SECS";
+    pub const ENV_MAX_TOTAL_WAIT_SECS: &'static str = "SUPERCHARGE_RETRY_MAX_TOTAL_WAIT_SECS";
+
+    /// Build from optional config values, clamped to sane bounds. `max_attempts = 0` is treated as 1 (no retries).
+    pub fn from_parts(
+        max_attempts: Option<u32>,
+        max_attempts_server_error: Option<u32>,
+        max_wait_secs: Option<u64>,
+        max_total_wait_secs: Option<u64>,
+    ) -> Self {
+        let d = Self::default();
+        Self {
+            max_attempts: max_attempts
+                .unwrap_or(d.max_attempts)
+                .clamp(1, Self::MAX_ATTEMPTS_CAP),
+            max_attempts_server_error: max_attempts_server_error
+                .unwrap_or(d.max_attempts_server_error)
+                .clamp(1, Self::MAX_ATTEMPTS_CAP),
+            max_wait: max_wait_secs
+                .map(Duration::from_secs)
+                .unwrap_or(d.max_wait)
+                .min(Self::MAX_WAIT_CAP),
+            max_total_wait: max_total_wait_secs
+                .map(Duration::from_secs)
+                .unwrap_or(d.max_total_wait)
+                .min(Self::MAX_TOTAL_WAIT_CAP),
+        }
+    }
+
+    /// Apply env overrides on top of `self`; unparseable values are ignored.
+    pub fn with_env_overrides(self, lookup: impl Fn(&str) -> Option<String>) -> Self {
+        let num = |name: &str| lookup(name).and_then(|v| v.trim().parse::<u64>().ok());
+        Self::from_parts(
+            Some(
+                num(Self::ENV_MAX_ATTEMPTS)
+                    .map(|v| v.min(u32::MAX as u64) as u32)
+                    .unwrap_or(self.max_attempts),
+            ),
+            Some(
+                num(Self::ENV_MAX_ATTEMPTS_SERVER_ERROR)
+                    .map(|v| v.min(u32::MAX as u64) as u32)
+                    .unwrap_or(self.max_attempts_server_error),
+            ),
+            Some(num(Self::ENV_MAX_WAIT_SECS).unwrap_or(self.max_wait.as_secs())),
+            Some(num(Self::ENV_MAX_TOTAL_WAIT_SECS).unwrap_or(self.max_total_wait.as_secs())),
+        )
+    }
+}
+
+impl Default for RetrySettings {
+    fn default() -> Self {
+        Self {
+            max_attempts: Self::DEFAULT_MAX_ATTEMPTS,
+            max_attempts_server_error: Self::DEFAULT_MAX_ATTEMPTS_SERVER_ERROR,
+            max_wait: Self::DEFAULT_MAX_WAIT,
+            max_total_wait: Self::DEFAULT_MAX_TOTAL_WAIT,
+        }
+    }
+}
+
+static CONFIGURED_RETRY_SETTINGS: std::sync::RwLock<Option<RetrySettings>> =
+    std::sync::RwLock::new(None);
+
+/// Install the `[retry]` config for every sampler request in this process (main turns and side calls alike).
+pub fn set_retry_settings(settings: RetrySettings) {
+    if let Ok(mut slot) = CONFIGURED_RETRY_SETTINGS.write() {
+        *slot = Some(settings);
+    }
+}
+
+/// Effective settings: configured values (or defaults) with env overrides applied.
+pub fn retry_settings() -> RetrySettings {
+    let base = CONFIGURED_RETRY_SETTINGS
+        .read()
+        .ok()
+        .and_then(|slot| *slot)
+        .unwrap_or_default();
+    base.with_env_overrides(|name| std::env::var(name).ok())
+}
+
+/// Full-jitter exponential backoff: uniform in `[floor, min(cap, 1s * 2^(attempt-1))]`.
+pub fn full_jitter_backoff(attempt: u32, cap: Duration) -> Duration {
+    use std::hash::{Hash, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static JITTER_SEQ: AtomicU64 = AtomicU64::new(0);
+    const FLOOR_MS: u64 = 250;
+
+    let shift = attempt.saturating_sub(1).min(32);
+    let upper_ms = 1000u64
+        .checked_shl(shift)
+        .unwrap_or(u64::MAX)
+        .min(cap.as_millis().min(u64::MAX as u128) as u64)
+        .max(FLOOR_MS.min(cap.as_millis() as u64));
+    let floor_ms = FLOOR_MS.min(upper_ms);
+    let mut hasher = std::hash::DefaultHasher::new();
+    JITTER_SEQ.fetch_add(1, Ordering::Relaxed).hash(&mut hasher);
+    std::thread::current().id().hash(&mut hasher);
+    std::time::SystemTime::now().hash(&mut hasher);
+    let span = upper_ms - floor_ms;
+    Duration::from_millis(floor_ms + hasher.finish() % (span + 1))
+}
+
+/// Wait before retry `attempt`: the server hint clamped to `max_wait`, else full-jitter backoff.
+pub fn policy_backoff(attempt: u32, hint_secs: Option<u64>, settings: &RetrySettings) -> Duration {
+    match hint_secs {
+        Some(secs) => Duration::from_secs(secs).min(settings.max_wait),
+        None => full_jitter_backoff(attempt, settings.max_wait),
+    }
+}
+
+/// Wait before a 5xx / 529 / transport retry: the established exponential schedule (2s base, jittered,
+/// server hints clamped and jittered), additionally bounded by the user's `max_wait`.
+/// Full-jitter backoff is reserved for 429s; server errors keep their longer, steadier spacing.
+fn server_error_backoff(
+    attempt: u32,
+    retry_after_secs: Option<u64>,
+    settings: &RetrySettings,
+) -> Duration {
+    retry_after_or_backoff(attempt, retry_after_secs).min(settings.max_wait)
+}
+
+/// Retry decision for a plain HTTP call made outside the sampler actor (e.g. a tool hitting the
+/// inference API directly). `status` is `None` for a transport failure (connect, timeout, reset).
+/// `attempts_made` counts the attempts already sent, first try included. Returns the wait before
+/// the next attempt, or `None` when the failure must be surfaced as-is.
+///
+/// Same policy as model sampling: 429 gets `max_attempts` unless the body names a quota or billing
+/// limit (never retried); 5xx / 529 / transport failures get `max_attempts_server_error`; every
+/// other status is surfaced immediately; total waiting stays within `max_total_wait`.
+pub fn side_call_retry_wait(
+    status: Option<u16>,
+    body: &str,
+    hint: Option<Duration>,
+    attempts_made: u32,
+    waited: Duration,
+    settings: &RetrySettings,
+) -> Option<Duration> {
+    let limit = match status {
+        Some(429) if supercharge_sampling_types::error::is_quota_message(body) => return None,
+        Some(429) => settings.max_attempts,
+        Some(500..=599) | None => settings.max_attempts_server_error,
+        Some(_) => return None,
+    };
+    if attempts_made >= limit {
+        return None;
+    }
+    let wait = match hint {
+        Some(h) => h.min(settings.max_wait),
+        None => full_jitter_backoff(attempts_made, settings.max_wait),
+    };
+    (waited.saturating_add(wait) <= settings.max_total_wait).then_some(wait)
+}
+
 pub fn retry_after_or_backoff(attempt: u32, retry_after_secs: Option<u64>) -> Duration {
     match retry_after_secs.filter(|secs| *secs > 0) {
         Some(secs) => jitter_backoff(Duration::from_secs(secs).min(MAX_RETRY_BACKOFF)),
@@ -98,6 +291,59 @@ pub fn classify_error(
     max_retries: u32,
     rate_limit_threshold: u32,
 ) -> RetryDecision {
+    classify_error_with_budget(
+        err,
+        retry_count,
+        max_retries,
+        rate_limit_threshold,
+        &RetrySettings::default(),
+        Duration::ZERO,
+    )
+}
+
+/// [`classify_error`] with explicit settings and the time already spent waiting on this request.
+/// A wait that would push `waited` past `settings.max_total_wait` surfaces the error instead.
+pub fn classify_error_with_budget(
+    err: &SamplingError,
+    retry_count: u32,
+    max_retries: u32,
+    rate_limit_threshold: u32,
+    settings: &RetrySettings,
+    waited: Duration,
+) -> RetryDecision {
+    let decision = classify_error_inner(
+        err,
+        retry_count,
+        max_retries,
+        rate_limit_threshold,
+        settings,
+    );
+    let backoff = match &decision {
+        RetryDecision::Retry { backoff }
+        | RetryDecision::RetryWithBackoff { backoff, .. }
+        | RetryDecision::RetryWithClientRebuild { backoff } => Some(*backoff),
+        _ => None,
+    };
+    if let Some(backoff) = backoff
+        && !matches!(err, SamplingError::DoomLoopDetected { .. })
+        && waited.saturating_add(backoff) > settings.max_total_wait
+    {
+        return RetryDecision::Fatal(clone_error(err));
+    }
+    decision
+}
+
+fn classify_error_inner(
+    err: &SamplingError,
+    retry_count: u32,
+    max_retries: u32,
+    rate_limit_threshold: u32,
+    settings: &RetrySettings,
+) -> RetryDecision {
+    if err.is_quota_exhausted() {
+        // Out of quota or credits: waiting cannot help, surface the provider message now
+        return RetryDecision::Fatal(clone_error(err));
+    }
     if err.is_auth_error() {
         return RetryDecision::EmitToSession(clone_error(err));
     }
@@ -129,13 +375,10 @@ pub fn classify_error(
 
     if err.is_rate_limited() {
         let next_attempt = retry_count + 1;
-        if next_attempt >= max_retries.min(rate_limit_threshold) {
+        if next_attempt >= rate_limit_attempt_cap(max_retries, rate_limit_threshold, settings) {
             return RetryDecision::Fatal(clone_error(err));
         }
-        let backoff = err
-            .retry_after()
-            .map(Duration::from_secs)
-            .unwrap_or_else(|| retry_backoff_with_jitter(next_attempt));
+        let backoff = policy_backoff(next_attempt, err.retry_after(), settings);
         return RetryDecision::RetryWithBackoff {
             backoff,
             is_rate_limited: true,
@@ -150,12 +393,12 @@ pub fn classify_error(
         if next_attempt == 1 {
             let backoff = match err {
                 SamplingError::Http(_) => jitter_backoff(TRANSPORT_REBUILD_BACKOFF),
-                _ => retry_after_or_backoff(next_attempt, err.retry_after()),
+                _ => server_error_backoff(next_attempt, err.retry_after(), settings),
             };
             return RetryDecision::RetryWithClientRebuild { backoff };
         }
         return RetryDecision::Retry {
-            backoff: retry_after_or_backoff(next_attempt, err.retry_after()),
+            backoff: server_error_backoff(next_attempt, err.retry_after(), settings),
         };
     }
 
@@ -368,6 +611,283 @@ mod tests {
             retry_after_secs: Some(retry_after),
             should_retry: None,
             error_code: None,
+        }
+    }
+
+    fn settings(attempts: u32, wait: u64, total: u64) -> RetrySettings {
+        RetrySettings::from_parts(Some(attempts), Some(15), Some(wait), Some(total))
+    }
+
+    fn decide(
+        err: &SamplingError,
+        retry_count: u32,
+        s: &RetrySettings,
+        waited: Duration,
+    ) -> RetryDecision {
+        classify_error_with_budget(
+            err,
+            retry_count,
+            s.max_attempts_server_error,
+            RATE_LIMIT_RETRY_THRESHOLD,
+            s,
+            waited,
+        )
+    }
+
+    #[test]
+    fn rate_limit_retries_up_to_max_attempts() {
+        let s = settings(5, 60, 300);
+        let err = api_err(StatusCode::TOO_MANY_REQUESTS, "slow down");
+        for retry_count in 0..4 {
+            assert!(
+                matches!(
+                    decide(&err, retry_count, &s, Duration::ZERO),
+                    RetryDecision::RetryWithBackoff {
+                        is_rate_limited: true,
+                        ..
+                    }
+                ),
+                "attempt {} of 5 must retry",
+                retry_count + 1
+            );
+        }
+        assert!(matches!(
+            decide(&err, 4, &s, Duration::ZERO),
+            RetryDecision::Fatal(_)
+        ));
+    }
+
+    #[test]
+    fn rate_limit_hint_is_honored_and_clamped_to_max_wait() {
+        let s = settings(5, 60, 300);
+        match decide(
+            &api_err_with_retry_after(StatusCode::TOO_MANY_REQUESTS, 7),
+            0,
+            &s,
+            Duration::ZERO,
+        ) {
+            RetryDecision::RetryWithBackoff { backoff, .. } => {
+                assert_eq!(backoff, Duration::from_secs(7))
+            }
+            other => panic!("expected wait, got {other:?}"),
+        }
+        match decide(
+            &api_err_with_retry_after(StatusCode::TOO_MANY_REQUESTS, 86_400),
+            0,
+            &s,
+            Duration::ZERO,
+        ) {
+            RetryDecision::RetryWithBackoff { backoff, .. } => {
+                assert_eq!(backoff, Duration::from_secs(60))
+            }
+            other => panic!("expected clamped wait, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn total_wait_budget_surfaces_the_error() {
+        let s = settings(10, 60, 100);
+        let err = api_err_with_retry_after(StatusCode::TOO_MANY_REQUESTS, 30);
+        assert!(matches!(
+            decide(&err, 1, &s, Duration::from_secs(70)),
+            RetryDecision::RetryWithBackoff { .. }
+        ));
+        assert!(matches!(
+            decide(&err, 2, &s, Duration::from_secs(71)),
+            RetryDecision::Fatal(_)
+        ));
+    }
+
+    #[test]
+    fn quota_429_is_fatal_on_first_attempt() {
+        let s = settings(5, 60, 300);
+        let err = api_err(
+            StatusCode::TOO_MANY_REQUESTS,
+            "You exceeded your current quota, please check your plan and billing details.",
+        );
+        match decide(&err, 0, &s, Duration::ZERO) {
+            RetryDecision::Fatal(SamplingError::Api { message, .. }) => {
+                assert!(message.contains("current quota"), "provider text kept")
+            }
+            other => panic!("quota must surface immediately, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn overloaded_and_5xx_share_the_policy() {
+        let s = RetrySettings::from_parts(Some(5), Some(3), Some(60), Some(300));
+        for status in [500u16, 502, 503, 529] {
+            let err = api_err(StatusCode::from_u16(status).unwrap(), "busy");
+            assert!(
+                !matches!(decide(&err, 0, &s, Duration::ZERO), RetryDecision::Fatal(_)),
+                "{status} first failure retries"
+            );
+            assert!(
+                matches!(decide(&err, 2, &s, Duration::ZERO), RetryDecision::Fatal(_)),
+                "{status} stops at max_attempts_server_error"
+            );
+        }
+    }
+
+    #[test]
+    fn client_errors_are_never_retried() {
+        let s = settings(5, 60, 300);
+        for status in [400u16, 401, 403, 404] {
+            let err = api_err(StatusCode::from_u16(status).unwrap(), "no");
+            assert!(
+                matches!(
+                    decide(&err, 0, &s, Duration::ZERO),
+                    RetryDecision::Fatal(_) | RetryDecision::EmitToSession(_)
+                ),
+                "{status} must not retry"
+            );
+        }
+    }
+
+    #[test]
+    fn full_jitter_stays_within_bounds() {
+        for attempt in [0u32, 1, 2, 5, 40, u32::MAX] {
+            for _ in 0..50 {
+                let d = full_jitter_backoff(attempt, Duration::from_secs(60));
+                assert!(d >= Duration::from_millis(250), "{attempt}: {d:?}");
+                assert!(d <= Duration::from_secs(60), "{attempt}: {d:?}");
+            }
+        }
+        assert!(full_jitter_backoff(1, Duration::from_secs(1)) <= Duration::from_secs(1));
+        assert_eq!(full_jitter_backoff(3, Duration::ZERO), Duration::ZERO);
+    }
+
+    #[test]
+    fn settings_clamp_and_env_overrides() {
+        let s = RetrySettings::from_parts(Some(0), Some(999), Some(999_999), Some(u64::MAX));
+        assert_eq!(s.max_attempts, 1);
+        assert_eq!(s.max_attempts_server_error, RetrySettings::MAX_ATTEMPTS_CAP);
+        assert_eq!(s.max_wait, RetrySettings::MAX_WAIT_CAP);
+        assert_eq!(s.max_total_wait, RetrySettings::MAX_TOTAL_WAIT_CAP);
+
+        let base = RetrySettings::default();
+        let env = |name: &str| match name {
+            RetrySettings::ENV_MAX_ATTEMPTS => Some("8".to_string()),
+            RetrySettings::ENV_MAX_ATTEMPTS_SERVER_ERROR => Some(" 20 ".to_string()),
+            RetrySettings::ENV_MAX_WAIT_SECS => Some("garbage".to_string()),
+            RetrySettings::ENV_MAX_TOTAL_WAIT_SECS => Some("-4".to_string()),
+            _ => None,
+        };
+        let s = base.with_env_overrides(env);
+        assert_eq!(s.max_attempts, 8);
+        assert_eq!(s.max_attempts_server_error, 20);
+        assert_eq!(s.max_wait, RetrySettings::DEFAULT_MAX_WAIT);
+        assert_eq!(s.max_total_wait, RetrySettings::DEFAULT_MAX_TOTAL_WAIT);
+        assert_eq!(base.with_env_overrides(|_| None), base);
+    }
+
+    #[test]
+    fn defaults_keep_server_error_resilience_and_cap_429_lower() {
+        let s = RetrySettings::default();
+        assert_eq!(s.max_attempts, 5);
+        assert_eq!(s.max_attempts_server_error, 15);
+        assert_eq!(DEFAULT_MAX_RETRIES, 15);
+        let budget = s.max_attempts_server_error;
+        let rl = api_err(StatusCode::TOO_MANY_REQUESTS, "slow down");
+        let busy = api_err(StatusCode::SERVICE_UNAVAILABLE, "busy");
+        // Small hints keep the total-wait budget out of the way.
+        let roomy = RetrySettings::from_parts(None, None, Some(1), Some(7200));
+        let run = |err: &SamplingError| {
+            (0..budget)
+                .take_while(|n| {
+                    !matches!(
+                        classify_error_with_budget(
+                            err,
+                            *n,
+                            budget,
+                            RATE_LIMIT_RETRY_THRESHOLD,
+                            &roomy,
+                            Duration::ZERO
+                        ),
+                        RetryDecision::Fatal(_)
+                    )
+                })
+                .count() as u32
+                + 1
+        };
+        assert_eq!(run(&rl), 5, "429 attempts");
+        assert_eq!(run(&busy), 15, "503 attempts");
+        assert_eq!(
+            rate_limit_attempt_cap(15, RATE_LIMIT_RETRY_THRESHOLD, &s),
+            5
+        );
+        assert_eq!(rate_limit_attempt_cap(15, 2, &s), 2);
+        assert_eq!(rate_limit_attempt_cap(3, RATE_LIMIT_RETRY_THRESHOLD, &s), 3);
+    }
+
+    #[test]
+    fn side_call_policy_matches_sampling_policy() {
+        let s = RetrySettings::default();
+        let z = Duration::ZERO;
+        // 429: honors the hint (clamped), stops at max_attempts.
+        assert_eq!(
+            side_call_retry_wait(
+                Some(429),
+                "slow down",
+                Some(Duration::from_millis(1500)),
+                1,
+                z,
+                &s
+            ),
+            Some(Duration::from_millis(1500))
+        );
+        assert_eq!(
+            side_call_retry_wait(Some(429), "", Some(Duration::from_secs(900)), 1, z, &s),
+            Some(s.max_wait)
+        );
+        assert!(side_call_retry_wait(Some(429), "", None, 4, z, &s).is_some());
+        assert!(side_call_retry_wait(Some(429), "", None, 5, z, &s).is_none());
+        // Quota / billing 429 is never retried.
+        assert!(
+            side_call_retry_wait(
+                Some(429),
+                r#"{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}"#,
+                None,
+                1,
+                z,
+                &s
+            )
+            .is_none()
+        );
+        // 5xx, 529 and transport failures keep the larger budget.
+        for status in [Some(500u16), Some(503), Some(529), None] {
+            assert!(
+                side_call_retry_wait(status, "", None, 14, z, &s).is_some(),
+                "{status:?}"
+            );
+            assert!(
+                side_call_retry_wait(status, "", None, 15, z, &s).is_none(),
+                "{status:?}"
+            );
+        }
+        // Client errors are surfaced at once.
+        for status in [400u16, 401, 403, 404, 413] {
+            assert!(
+                side_call_retry_wait(Some(status), "", None, 1, z, &s).is_none(),
+                "{status}"
+            );
+        }
+        // Total wait budget.
+        assert!(
+            side_call_retry_wait(
+                Some(503),
+                "",
+                Some(Duration::from_secs(10)),
+                1,
+                s.max_total_wait,
+                &s
+            )
+            .is_none()
+        );
+        // Jittered wait never exceeds the per-wait cap.
+        for n in 1..14 {
+            let w = side_call_retry_wait(Some(502), "", None, n, z, &s).unwrap();
+            assert!(w <= s.max_wait, "{n}: {w:?}");
         }
     }
 
@@ -620,7 +1140,7 @@ mod tests {
     #[test]
     fn classify_rate_limited_capped_at_threshold() {
         let err = api_err(StatusCode::TOO_MANY_REQUESTS, "slow");
-        match classify_error(&err, 1, 5, RATE_LIMIT_RETRY_THRESHOLD) {
+        match classify_error(&err, 1, 5, 2) {
             RetryDecision::Fatal(SamplingError::Api { status, .. }) => {
                 assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
             }
@@ -743,7 +1263,8 @@ mod tests {
         let rate_limited = api_err_with_retry_after(StatusCode::TOO_MANY_REQUESTS, 120);
         match classify_error(&rate_limited, 0, 15, RATE_LIMIT_RETRY_THRESHOLD) {
             RetryDecision::RetryWithBackoff { backoff, .. } => {
-                assert_eq!(backoff, Duration::from_secs(120));
+                // A 429 hint is honored verbatim (no jitter) but never beyond `[retry] max_wait` (60s).
+                assert_eq!(backoff, RetrySettings::DEFAULT_MAX_WAIT);
             }
             other => panic!("expected RetryWithBackoff for 429, got {other:?}"),
         }
