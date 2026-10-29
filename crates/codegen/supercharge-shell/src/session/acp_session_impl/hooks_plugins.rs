@@ -959,12 +959,19 @@ impl SessionActor {
         // Unchanged servers stay connected; only added, changed, or removed ones are re-initialized.
         // The order-sensitive `update_configs` would tear everything down instead, because merge order is non-deterministic.
         let t_mcp = std::time::Instant::now();
-        let new_mcp_servers = crate::session::managed_mcp::merge_managed_mcp_servers(
+        let mut new_mcp_servers = crate::session::managed_mcp::merge_managed_mcp_servers(
             self.initial_client_mcp_servers.clone(),
             session_cwd,
             new_registry_snapshot.as_deref(),
             &self.rebuild_spec.compat,
         );
+        if !self.startup_hints.is_subagent {
+            crate::session::agent_mcp::apply_agent_mcp_overlay(
+                &mut new_mcp_servers,
+                self.agent.borrow().definition(),
+                session_cwd,
+            );
+        }
         let (mcp_change, dispatch_event_tx) = {
             let mut mcp_state = self.mcp_state.lock().await;
             let change = self.update_mcp_configs(&mut mcp_state, new_mcp_servers);

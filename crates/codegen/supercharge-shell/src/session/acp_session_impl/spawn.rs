@@ -316,6 +316,14 @@ pub(crate) async fn spawn_session_actor(
     }
     let wf_sid: String = session_info.id.0.to_string();
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+    let mut mcp_servers = mcp_servers;
+    if !startup_hints.is_subagent {
+        crate::session::agent_mcp::apply_agent_mcp_overlay(
+            &mut mcp_servers,
+            &agent_definition,
+            tool_context.cwd.as_path(),
+        );
+    }
     tracing::info!(
         "Session '{}' created with {} MCP servers",
         session_info.id.0,

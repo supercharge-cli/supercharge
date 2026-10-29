@@ -1341,76 +1341,9 @@ pub(crate) async fn run_shell_child(
             }
         }
     }
-    let agent_mcp_servers: Vec<_> = if definition.mcp_servers.is_empty() {
-        vec![]
-    } else if is_plugin_agent {
-        tracing::warn!(
-            agent = %definition.name,
-            plugin = ?definition.plugin_name,
-            "ignoring mcpServers on plugin agent (not supported for security)"
-        );
-        vec![]
-    } else if !crate::agent::folder_trust::agent_inline_hooks_allowed(definition.scope, || {
-        crate::agent::folder_trust::project_scope_allowed(&ctx.parent_cwd)
-    }) {
-        tracing::warn!(
-            agent = %definition.name,
-            "ignoring mcpServers on untrusted project agent (folder not trusted; re-run with --trust)"
-        );
-        vec![]
-    } else {
-        definition
-                .mcp_servers
-                .iter()
-                .filter_map(|entry| match entry {
-                    supercharge_agent::config::McpServerRef::Named(name) => {
-                        ctx.parent_mcp_configs
-                            .iter()
-                            .find(|s| {
-                                crate::session::mcp_servers::mcp_server_name(s) == name
-                            })
-                            .cloned()
-                            .or_else(|| {
-                                tracing::warn!(agent = %definition.name, server = name, "mcpServers: named ref not found in parent");
-                                None
-                            })
-                    }
-                    supercharge_agent::config::McpServerRef::Inline { name, config } => {
-                        if let serde_json::Value::Object(obj) = config
-                            && obj.contains_key("type")
-                        {
-                            let mut flat = obj.clone();
-                            flat.insert(
-                                "name".to_string(),
-                                serde_json::Value::String(name.clone()),
-                            );
-                            if let Ok(server) = serde_json::from_value::<
-                                agent_client_protocol::McpServer,
-                            >(serde_json::Value::Object(flat)) {
-                                return Some(server);
-                            }
-                            tracing::debug!(agent = %definition.name, server = name, "ACP wire format parse failed, trying map-keyed");
-                        }
-                        if let Some(inner_obj) = config.as_object() {
-                            let mut flat = inner_obj.clone();
-                            flat.insert(
-                                "name".to_string(),
-                                serde_json::Value::String(name.clone()),
-                            );
-                            if let Ok(server) = serde_json::from_value::<
-                                agent_client_protocol::McpServer,
-                            >(serde_json::Value::Object(flat)) {
-                                return Some(server);
-                            }
-                        }
-                        tracing::warn!(agent = %definition.name, server = name, "mcpServers: inline config could not be parsed");
-                        None
-                    }
-                })
-                .collect()
-    };
-    let agent_mcp_servers = crate::session::managed_mcp::filter_policy_blocked_agent_mcp(
-        agent_mcp_servers,
+    let agent_mcp_servers = crate::session::agent_mcp::materialize_agent_mcp_servers(
+        &definition,
+        &ctx.parent_mcp_configs,
         &ctx.parent_cwd,
     );
     let parent_mcp_pool =

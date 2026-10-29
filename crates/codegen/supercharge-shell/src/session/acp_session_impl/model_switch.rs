@@ -284,6 +284,7 @@ impl SessionActor {
             }
         }
         let new_agent_name = definition.name.clone();
+        let previous_mcp_servers = self.agent.borrow().definition().mcp_servers.clone();
         tracing::info!(
             session_id = %self.session_info.id.0,
             new_agent_type = %new_agent_name,
@@ -369,7 +370,18 @@ impl SessionActor {
             }
             self.inject_deny_read_globs().await;
         }
-        let claim = self.restart_mcp_init(&mut *self.mcp_state.lock().await);
+        let desired_mcp = self.agent_seat_mcp_servers(&previous_mcp_servers).await;
+        let (claim, config_diff, dispatch_event_tx) = {
+            let mut mcp_state = self.mcp_state.lock().await;
+            let config_diff =
+                desired_mcp.and_then(|servers| mcp_state.update_configs_diff(servers));
+            let dispatch_event_tx = mcp_state.client_event_tx();
+            let claim = self.restart_mcp_init(&mut mcp_state);
+            (claim, config_diff, dispatch_event_tx)
+        };
+        if let Some(diff) = config_diff {
+            self.apply_mcp_config_diff(&diff, dispatch_event_tx);
+        }
         self.re_register_mcp_tools_on_rebuilt_bridge().await;
         self.run_mcp_init_with_claim(claim).await;
         self.deferred_prefix.cancel();
@@ -415,6 +427,36 @@ impl SessionActor {
     /// Apply a client-supplied `systemPromptOverride` on attach without wiping user/assistant history: swap only the leading `System` message.
     /// The swap happens atomically inside the `ChatStateActor`.
     /// `system_prompt.txt` (not owned by the persistence actor) is saved directly, even on a head no-op, so a diverged secondary artifact self-heals.
+    /// Agent switch: the new agent's agent.md `mcpServers` replace the previous agent's over a
+    /// fresh disk/client merge; runtime-added servers are kept. `None` leaves the servers alone.
+    async fn agent_seat_mcp_servers(
+        &self,
+        previous_mcp_servers: &[supercharge_agent::config::McpServerRef],
+    ) -> Option<Vec<acp::McpServer>> {
+        if self.startup_hints.is_subagent {
+            return None;
+        }
+        let definition = self.agent.borrow().definition().clone();
+        if previous_mcp_servers.is_empty() && definition.mcp_servers.is_empty() {
+            return None;
+        }
+        let plugin_registry = self.plugin_registry.borrow().clone();
+        let live = self.mcp_state.lock().await.configs.clone();
+        Some(
+            crate::session::agent_mcp::rematerialize_live_for_agent_seat(
+                &live,
+                previous_mcp_servers,
+                crate::session::agent_mcp::RematerializeParams {
+                    initial_client_mcp_servers: self.initial_client_mcp_servers.clone(),
+                    cwd: std::path::Path::new(&self.session_info.cwd),
+                    plugin_registry: plugin_registry.as_deref(),
+                    compat: &self.rebuild_spec.compat,
+                    definition: &definition,
+                },
+            ),
+        )
+    }
+
     pub(super) async fn handle_replace_system_prompt(&self, system_prompt: String) {
         if self.startup_hints.preserve_inherited_system {
             tracing::debug!(

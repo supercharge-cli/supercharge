@@ -1554,6 +1554,12 @@ pub(super) async fn run_session(
                                 let _ = respond_to.send(Ok(()));
                                 continue;
                             }
+                            let mut mcp_servers = mcp_servers;
+                            crate::session::agent_mcp::apply_agent_mcp_overlay(
+                                &mut mcp_servers,
+                                session.agent.borrow().definition(),
+                                std::path::Path::new(&session.session_info.cwd),
+                            );
                             tracing::info!(
                                 "Updating MCP servers for session '{}' ({} servers)",
                                 session.session_info.id.0,
