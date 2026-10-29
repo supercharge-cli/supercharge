@@ -1,4 +1,4 @@
-//! HTTP client for the xAI sampling APIs.
+//! HTTP client for the inference sampling APIs.
 //!
 //! Owns the `reqwest::Client`, default request headers, and per-method defaults.
 //! Talks to three backend shapes:
@@ -45,15 +45,15 @@ use supercharge_auth::bearer_suffix;
 
 pub use supercharge_sampling_types::ApiBackend;
 
-/// Process-level fallback for the `x-grok-client-identifier` header.
+/// Process-level fallback for the client-identifier request header.
 const DEFAULT_CLIENT_IDENTIFIER: &str = "grok-shell";
 
 /// Product identifier baked into User-Agent strings.
 const AGENT_PRODUCT: &str = "grok-shell";
 const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 128_000;
 
-/// Per-request `x-grok-*` headers. Optional fields are skipped when empty/`None`.
-struct GrokRequestHeaders<'a> {
+/// Per-request tracking headers. Optional fields are skipped when empty/`None`.
+struct SuperchargeRequestHeaders<'a> {
     conv_id: &'a str,
     req_id: &'a str,
     model_id: &'a str,
@@ -66,7 +66,7 @@ struct GrokRequestHeaders<'a> {
     user_id: Option<&'a str>,
 }
 
-impl GrokRequestHeaders<'_> {
+impl SuperchargeRequestHeaders<'_> {
     fn apply(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         let mut b = builder
             .header("x-grok-conv-id", self.conv_id)
@@ -179,7 +179,7 @@ pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStrea
         Err(first_err) => {
             // Try sanitizing: parse as Value, strip unknown tools, retry.
             if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(data) {
-                // Strip tools that async_openai's rs::Tool can't deserialize (e.g., xAI-specific "x_search")
+                // Strip tools that async_openai's rs::Tool can't deserialize (e.g., the provider-specific "x_search")
                 // Instead of maintaining a hardcoded allowlist, try deserializing each tool entry; if it fails, drop it
                 if let Some(tools) = value
                     .pointer_mut("/response/tools")
@@ -684,7 +684,7 @@ impl SamplingClient {
             &mut headers,
         );
 
-        // Add x-grok-client-version header for version gating at the proxy.
+        // Add the client-version header for version gating at the proxy.
         if let Some(client_version) = config.client_version.as_ref()
             && let Ok(header_value) = HeaderValue::from_str(client_version)
         {
@@ -1095,8 +1095,8 @@ impl SamplingClient {
         request: ChatCompletionRequest,
     ) -> Result<ChatCompletionResponse> {
         let payload = self.apply_defaults(request)?;
-        let x_grok_conv_id = &payload.x_grok_conv_id.clone().unwrap_or_default();
-        let x_grok_req_id = &payload.x_grok_req_id.clone().unwrap_or_default();
+        let conv_id_header = &payload.x_grok_conv_id.clone().unwrap_or_default();
+        let req_id_header = &payload.x_grok_req_id.clone().unwrap_or_default();
         let model_id = payload.model.clone().unwrap_or_default();
 
         let request_region = crate::span_timing::Region::from_span(tracing::info_span!(
@@ -1112,9 +1112,9 @@ impl SamplingClient {
             "Sending chat completion request"
         );
 
-        let grok_headers = GrokRequestHeaders {
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+        let supercharge_headers = SuperchargeRequestHeaders {
+            conv_id: conv_id_header,
+            req_id: req_id_header,
             model_id: &model_id,
             session_id: payload.x_grok_session_id.as_deref().unwrap_or_default(),
             turn_idx: payload.x_grok_turn_idx.as_deref(),
@@ -1130,7 +1130,7 @@ impl SamplingClient {
         } = self.post(self.endpoint("chat/completions"));
         let built_request = self
             .build_json_request(
-                grok_headers.apply(builder),
+                supercharge_headers.apply(builder),
                 &self.reshape_chat_payload(&payload)?,
             )
             .await?;
@@ -1397,8 +1397,8 @@ impl SamplingClient {
     )> {
         let mut span_timing = StreamSpanTiming::start(region);
         let payload = self.apply_defaults(request)?;
-        let x_grok_conv_id = &payload.x_grok_conv_id.clone().unwrap_or_default();
-        let x_grok_req_id = &payload.x_grok_req_id.clone().unwrap_or_default();
+        let conv_id_header = &payload.x_grok_conv_id.clone().unwrap_or_default();
+        let req_id_header = &payload.x_grok_req_id.clone().unwrap_or_default();
         let model_id = payload.model.clone().unwrap_or_default();
 
         // Wrap the request with streaming fields and serialize once.
@@ -1410,9 +1410,9 @@ impl SamplingClient {
             },
         };
 
-        let grok_headers = GrokRequestHeaders {
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+        let supercharge_headers = SuperchargeRequestHeaders {
+            conv_id: conv_id_header,
+            req_id: req_id_header,
             model_id: &model_id,
             session_id: payload.x_grok_session_id.as_deref().unwrap_or_default(),
             turn_idx: payload.x_grok_turn_idx.as_deref(),
@@ -1426,7 +1426,7 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("chat/completions"));
-        let http_request = grok_headers
+        let http_request = supercharge_headers
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
         let built_request = self
@@ -1620,8 +1620,8 @@ impl SamplingClient {
     ) -> Result<rs::Response> {
         self.apply_response_defaults(&mut request)?;
 
-        let x_grok_conv_id = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let x_grok_req_id = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone().unwrap_or_default();
 
         let request_region = crate::span_timing::Region::from_span(tracing::info_span!(
@@ -1638,9 +1638,9 @@ impl SamplingClient {
         tracing::debug!("create_response: {:?}", &request);
         tracing::debug!("endpoint: {:?}", self.endpoint("responses"));
 
-        let grok_headers = GrokRequestHeaders {
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+        let supercharge_headers = SuperchargeRequestHeaders {
+            conv_id: conv_id_header,
+            req_id: req_id_header,
             model_id: &model_id,
             session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
             turn_idx: request.x_grok_turn_idx.as_deref(),
@@ -1665,7 +1665,7 @@ impl SamplingClient {
             sent_bearer,
         } = self.post(self.endpoint("responses"));
         let built_request = self
-            .build_json_request(grok_headers.apply(builder), &request_body)
+            .build_json_request(supercharge_headers.apply(builder), &request_body)
             .await?;
         let response = self.send(built_request).await?;
 
@@ -1766,8 +1766,8 @@ impl SamplingClient {
 
         request.inner.stream = Some(true);
 
-        let x_grok_conv_id = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let x_grok_req_id = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone().unwrap_or_default();
 
         // Drop process-local trace data (see note in `create_response`).
@@ -1779,9 +1779,9 @@ impl SamplingClient {
             "Sending responses API stream request"
         );
 
-        let grok_headers = GrokRequestHeaders {
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+        let supercharge_headers = SuperchargeRequestHeaders {
+            conv_id: conv_id_header,
+            req_id: req_id_header,
             model_id: &model_id,
             session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
             turn_idx: request.x_grok_turn_idx.as_deref(),
@@ -1795,7 +1795,7 @@ impl SamplingClient {
             tracing::error!("Failed to serialize responses request: {}", e);
             SamplingError::Serialization(e)
         })?;
-        // Inject xAI-specific fields not in async-openai's CreateResponse type.
+        // Inject provider-specific fields not in async-openai's CreateResponse type.
         if self.defaults.stream_tool_calls
             && let Some(obj) = request_body.as_object_mut()
         {
@@ -1814,7 +1814,7 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("responses"));
-        let mut http_request = grok_headers
+        let mut http_request = supercharge_headers
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
         if let Some(policy) = self.defaults.doom_loop_recovery {
@@ -1992,8 +1992,8 @@ impl SamplingClient {
     ) -> Result<messages::MessagesResponse> {
         self.apply_message_defaults(&mut request)?;
 
-        let x_grok_conv_id = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let x_grok_req_id = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone();
 
         let request_region = crate::span_timing::Region::from_span(tracing::info_span!(
@@ -2009,9 +2009,9 @@ impl SamplingClient {
         tracing::debug!("create_message: {:?}", &request.inner);
         tracing::debug!("endpoint: {:?}", self.endpoint("messages"));
 
-        let grok_headers = GrokRequestHeaders {
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+        let supercharge_headers = SuperchargeRequestHeaders {
+            conv_id: conv_id_header,
+            req_id: req_id_header,
             model_id: &model_id,
             session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
             turn_idx: request.x_grok_turn_idx.as_deref(),
@@ -2026,7 +2026,7 @@ impl SamplingClient {
             sent_bearer,
         } = self.post(self.endpoint("messages"));
         let built_request = self
-            .build_json_request(grok_headers.apply(builder), &request.inner)
+            .build_json_request(supercharge_headers.apply(builder), &request.inner)
             .await?;
         let response = self.send(built_request).await?;
 
@@ -2122,8 +2122,8 @@ impl SamplingClient {
 
         request.inner.stream = Some(true);
 
-        let x_grok_conv_id = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let x_grok_req_id = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone();
 
         // Drop process-local trace data.
@@ -2135,9 +2135,9 @@ impl SamplingClient {
             "Sending Messages API stream request"
         );
 
-        let grok_headers = GrokRequestHeaders {
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+        let supercharge_headers = SuperchargeRequestHeaders {
+            conv_id: conv_id_header,
+            req_id: req_id_header,
             model_id: &model_id,
             session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
             turn_idx: request.x_grok_turn_idx.as_deref(),
@@ -2151,7 +2151,7 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("messages"));
-        let http_request = grok_headers
+        let http_request = supercharge_headers
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
         let built_request = self
@@ -2368,8 +2368,8 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let x_grok_conv_id = request.x_grok_conv_id.clone();
-        let x_grok_req_id = request.x_grok_req_id.clone();
+        let conv_id_header = request.x_grok_conv_id.clone();
+        let req_id_header = request.x_grok_req_id.clone();
         let x_grok_session_id = request.x_grok_session_id.clone();
         let x_grok_turn_idx = request.x_grok_turn_idx.clone();
         let x_grok_transient_retry = request.x_grok_transient_retry.clone();
@@ -2381,8 +2381,8 @@ impl SamplingClient {
         let responses_request: rs::CreateResponse = (&request).into();
 
         let mut wrapper = CreateResponseWrapper::new(responses_request);
-        wrapper.x_grok_conv_id = x_grok_conv_id;
-        wrapper.x_grok_req_id = x_grok_req_id;
+        wrapper.x_grok_conv_id = conv_id_header;
+        wrapper.x_grok_req_id = req_id_header;
         wrapper.x_grok_session_id = x_grok_session_id;
         wrapper.x_grok_turn_idx = x_grok_turn_idx;
         wrapper.x_grok_transient_retry = x_grok_transient_retry;
@@ -2405,8 +2405,8 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let x_grok_conv_id = request.x_grok_conv_id.clone();
-        let x_grok_req_id = request.x_grok_req_id.clone();
+        let conv_id_header = request.x_grok_conv_id.clone();
+        let req_id_header = request.x_grok_req_id.clone();
         let x_grok_session_id = request.x_grok_session_id.clone();
         let x_grok_turn_idx = request.x_grok_turn_idx.clone();
         let x_grok_transient_retry = request.x_grok_transient_retry.clone();
@@ -2418,8 +2418,8 @@ impl SamplingClient {
         let responses_request: rs::CreateResponse = (&request).into();
 
         let mut wrapper = CreateResponseWrapper::new(responses_request);
-        wrapper.x_grok_conv_id = x_grok_conv_id;
-        wrapper.x_grok_req_id = x_grok_req_id;
+        wrapper.x_grok_conv_id = conv_id_header;
+        wrapper.x_grok_req_id = req_id_header;
         wrapper.x_grok_session_id = x_grok_session_id;
         wrapper.x_grok_turn_idx = x_grok_turn_idx;
         wrapper.x_grok_transient_retry = x_grok_transient_retry;
@@ -2444,8 +2444,8 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let x_grok_conv_id = request.x_grok_conv_id.clone();
-        let x_grok_req_id = request.x_grok_req_id.clone();
+        let conv_id_header = request.x_grok_conv_id.clone();
+        let req_id_header = request.x_grok_req_id.clone();
         let x_grok_session_id = request.x_grok_session_id.clone();
         let x_grok_turn_idx = request.x_grok_turn_idx.clone();
         let x_grok_transient_retry = request.x_grok_transient_retry.clone();
@@ -2454,8 +2454,8 @@ impl SamplingClient {
         let messages_request = build_messages_request(&request);
 
         let mut wrapper = MessagesRequestWrapper::new(messages_request);
-        wrapper.x_grok_conv_id = x_grok_conv_id;
-        wrapper.x_grok_req_id = x_grok_req_id;
+        wrapper.x_grok_conv_id = conv_id_header;
+        wrapper.x_grok_req_id = req_id_header;
         wrapper.x_grok_session_id = x_grok_session_id;
         wrapper.x_grok_turn_idx = x_grok_turn_idx;
         wrapper.x_grok_transient_retry = x_grok_transient_retry;
@@ -2477,8 +2477,8 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let x_grok_conv_id = request.x_grok_conv_id.clone();
-        let x_grok_req_id = request.x_grok_req_id.clone();
+        let conv_id_header = request.x_grok_conv_id.clone();
+        let req_id_header = request.x_grok_req_id.clone();
         let x_grok_session_id = request.x_grok_session_id.clone();
         let x_grok_turn_idx = request.x_grok_turn_idx.clone();
         let x_grok_transient_retry = request.x_grok_transient_retry.clone();
@@ -2487,8 +2487,8 @@ impl SamplingClient {
         let messages_request = build_messages_request(&request);
 
         let mut wrapper = MessagesRequestWrapper::new(messages_request);
-        wrapper.x_grok_conv_id = x_grok_conv_id;
-        wrapper.x_grok_req_id = x_grok_req_id;
+        wrapper.x_grok_conv_id = conv_id_header;
+        wrapper.x_grok_req_id = req_id_header;
         wrapper.x_grok_session_id = x_grok_session_id;
         wrapper.x_grok_turn_idx = x_grok_turn_idx;
         wrapper.x_grok_transient_retry = x_grok_transient_retry;
@@ -3464,7 +3464,7 @@ mod tests {
             version: None,
         };
         let ua = user_agent_string_for(&origin);
-        // No slash between product and the grok-shell agent product.
+        // No slash between product and the agent product.
         assert!(ua.starts_with("my-client grok-shell/"));
     }
 
