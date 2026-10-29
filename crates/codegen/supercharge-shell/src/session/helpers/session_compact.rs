@@ -440,7 +440,17 @@ pub(crate) async fn generate_session_compact(
             "Applied image budget to compaction request"
         );
     }
-    let chat_history = prepared_history.items;
+    // Strict providers reject connector tool names with dots or other punctuation, in definitions and in history alike.
+    // Compaction only reads text back, so the reverse map is not needed here.
+    let (chat_history, tools) = {
+        let mut wire = ConversationRequest {
+            items: prepared_history.items,
+            tools,
+            ..Default::default()
+        };
+        let _ = supercharge_sampling_types::WireToolNames::apply(&mut wire);
+        (wire.items, wire.tools)
+    };
     let num_messages = chat_history.len();
     let wire_tool_choice = match tool_choice {
         crate::util::config::CompactionToolChoice::Auto => ToolChoice::auto(),
