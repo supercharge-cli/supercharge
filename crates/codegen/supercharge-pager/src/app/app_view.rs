@@ -5107,7 +5107,7 @@ impl AppView {
     /// Produces redraws when there are running entries with animated accents.
     pub fn tick(&mut self) -> bool {
         let mut needs_redraw = false;
-        needs_redraw |= self.minimal_state.transcript.is_some();
+        needs_redraw |= self.minimal_state.needs_frames();
         needs_redraw |= self.poll_clipboard_focus_tip();
         if matches!(self.active_view, ActiveView::Welcome) {
             self.welcome_tick = self.welcome_tick.wrapping_add(1);
@@ -5463,7 +5463,7 @@ impl AppView {
         if self.pending_action.is_some() {
             return TickDemand::Fast;
         }
-        if self.minimal_state.transcript.is_some() {
+        if self.minimal_state.needs_frames() {
             return TickDemand::Fast;
         }
         if self
