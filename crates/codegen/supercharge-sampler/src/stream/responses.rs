@@ -626,7 +626,10 @@ pub(crate) fn stream_responses_tracked<'a>(
         let cost_usd_ticks = response
             .metadata
             .as_mut()
-            .and_then(|m| m.remove(crate::client::COST_USD_TICKS_METADATA_KEY))
+            .and_then(|m| {
+                let legacy = m.remove(crate::client::LEGACY_COST_USD_TICKS_METADATA_KEY);
+                m.remove(crate::client::COST_USD_TICKS_METADATA_KEY).or(legacy)
+            })
             .and_then(|s| s.parse::<i64>().ok());
 
         let status = response.status.clone();

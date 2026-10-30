@@ -282,7 +282,9 @@ fn apply_terminal_event_overrides(event: &mut rs::ResponseStreamEvent, data: &st
 }
 
 /// Metadata key that carries cost ticks through the typed Response events, which have no field for them.
-pub(crate) const COST_USD_TICKS_METADATA_KEY: &str = "xai.cost_usd_ticks";
+pub(crate) const COST_USD_TICKS_METADATA_KEY: &str = "supercharge.cost_usd_ticks";
+/// Pre-rename key, still accepted on read.
+pub(crate) const LEGACY_COST_USD_TICKS_METADATA_KEY: &str = "xai.cost_usd_ticks";
 
 /// Read `response.usage.context_details.{input_tokens, output_tokens}` from the parsed terminal-event JSON and return their sum.
 /// Returns `None` if either field is missing or out of `u32` range.
