@@ -280,7 +280,8 @@ fn map_grove_skip(skip: GroveSkip) -> CloneFallbackReason {
         | GroveSkip::PreserveOnInconclusiveLinkedView
         | GroveSkip::JjSourceRepo
         | GroveSkip::PreserveNonHeadRef
-        | GroveSkip::HeadUnreadableAfterAdopt => CloneFallbackReason::Other,
+        | GroveSkip::HeadUnreadableAfterAdopt
+        | GroveSkip::NotInThisBuild => CloneFallbackReason::Other,
     }
 }
 

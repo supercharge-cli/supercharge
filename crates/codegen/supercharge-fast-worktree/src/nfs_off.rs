@@ -52,12 +52,16 @@ pub(crate) fn dest_path_contains(parent: &Path, child: &Path) -> bool {
 }
 
 #[derive(Debug, Clone)]
-pub struct NfsWorktreeClient;
+pub struct NfsWorktreeClient {
+    control_sock: Option<std::path::PathBuf>,
+}
 
 impl NfsWorktreeClient {
     #[must_use]
-    pub fn from_opts(_opts: &NfsWorktreeOpts) -> Self {
-        Self
+    pub fn from_opts(opts: &NfsWorktreeOpts) -> Self {
+        Self {
+            control_sock: opts.control_sock.clone(),
+        }
     }
 
     pub fn detach_worktree(&self, _dest: &Path, _allow_copy: bool) -> Result<DetachReply> {
@@ -72,12 +76,34 @@ impl NfsWorktreeClient {
         anyhow::bail!("not available in this build")
     }
 
+    /// Reads the daemon's redirect telemetry ring and acks every entry through
+    /// `ack_through` (`0` acks nothing). Returns the entries and the next seq.
+    /// This build ships no daemon of its own, so only an explicitly configured
+    /// control socket is ever dialed.
     pub fn redirect_events(
         &self,
-        _ack_through: u64,
-        _timeout: std::time::Duration,
+        ack_through: u64,
+        timeout: std::time::Duration,
     ) -> Result<(Vec<serde_json::Value>, u64)> {
-        anyhow::bail!("not available in this build")
+        let Some(sock) = self.control_sock.as_deref() else {
+            anyhow::bail!("no Grove control socket is configured in this build")
+        };
+        let request = serde_json::json!({"op": "redirect_events", "v": 1, "ack_through": ack_through});
+        let reply = control_request(sock, &request, timeout)?;
+        let data = reply.get("data").cloned().unwrap_or_default();
+        if reply.get("status").and_then(serde_json::Value::as_str) != Some("ok") {
+            let error = data.get("error").and_then(serde_json::Value::as_str).unwrap_or("unknown error");
+            anyhow::bail!("redirect_events refused: {error}")
+        }
+        let events = match data.get("redirect_events") {
+            Some(serde_json::Value::Array(events)) => events.clone(),
+            _ => Vec::new(),
+        };
+        let next_seq = data
+            .get("redirect_next_seq")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(ack_through.saturating_add(1));
+        Ok((events, next_seq))
     }
 
     pub fn status_for_dir(&self, _dest: &Path) -> Option<NfsStatusView> {
@@ -98,10 +124,44 @@ pub fn try_nfs_remove(_worktree_path: &Path) -> Result<Option<crate::RemoveRepor
     Ok(None)
 }
 
+/// A plan that asked for Grove records why it fell through, so the copy that
+/// serves it still reports the request; a plan that did not ask skips silently.
 pub(crate) fn try_grove_worktree(
-    _plan: &crate::worktree::plan::WorktreePlan,
+    plan: &crate::worktree::plan::WorktreePlan,
 ) -> Result<Option<GroveTry>> {
+    if plan.nfs.as_ref().is_some_and(|opts| opts.enabled) {
+        return Ok(Some(GroveTry::Skipped(
+            crate::worktree::GroveSkip::NotInThisBuild,
+        )));
+    }
     Ok(None)
+}
+
+/// One newline-delimited JSON request and reply on the daemon control socket.
+#[cfg(unix)]
+fn control_request(
+    sock: &Path,
+    request: &serde_json::Value,
+    timeout: std::time::Duration,
+) -> Result<serde_json::Value> {
+    use std::io::{BufRead, BufReader, Write};
+    let timeout = timeout.max(std::time::Duration::from_millis(1));
+    let mut stream = std::os::unix::net::UnixStream::connect(sock)?;
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
+    writeln!(stream, "{request}")?;
+    let mut line = String::new();
+    BufReader::new(&stream).read_line(&mut line)?;
+    Ok(serde_json::from_str(line.trim())?)
+}
+
+#[cfg(not(unix))]
+fn control_request(
+    _sock: &Path,
+    _request: &serde_json::Value,
+    _timeout: std::time::Duration,
+) -> Result<serde_json::Value> {
+    anyhow::bail!("the Grove control socket is unix-only in this build")
 }
 
 #[must_use]

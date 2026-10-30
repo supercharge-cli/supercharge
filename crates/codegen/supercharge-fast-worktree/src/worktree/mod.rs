@@ -76,6 +76,8 @@ pub enum GroveSkip {
     PreserveNonHeadRef,
     HeadUnreadableAfterAdopt,
     DaemonDeclined,
+    /// Grove was requested, but this build carries no Grove client.
+    NotInThisBuild,
 }
 
 impl GroveSkip {
@@ -115,6 +117,7 @@ impl std::fmt::Display for GroveSkip {
             }
             Self::HeadUnreadableAfterAdopt => "the new worktree's HEAD could not be read",
             Self::DaemonDeclined => "the Grove daemon declined or was unreachable",
+            Self::NotInThisBuild => "Grove worktrees are not part of this build",
         })
     }
 }
