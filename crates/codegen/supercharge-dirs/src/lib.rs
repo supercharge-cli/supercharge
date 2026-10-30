@@ -89,6 +89,11 @@ pub fn default_grok_home() -> PathBuf {
     grok_home_in(&home_dir().unwrap_or_else(|| PathBuf::from(".")))
 }
 
+/// The state directory (`$SUPERCHARGE_HOME` or `~/.supercharge`), created if missing.
+pub fn supercharge_home() -> PathBuf {
+    grok_home()
+}
+
 /// The grok home, created if missing and cached for the process; falls back to
 /// [`default_grok_home`] when neither `$SUPERCHARGE_HOME` nor a home resolves.
 pub fn grok_home() -> PathBuf {

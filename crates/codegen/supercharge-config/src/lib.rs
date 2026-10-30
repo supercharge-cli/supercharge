@@ -20,6 +20,7 @@ pub mod deserialize;
 mod display_refresh;
 mod env_overlay;
 pub mod fs_atomic;
+pub mod sandbox_mode;
 pub mod global_hook_sources;
 mod loader;
 mod macos_managed;
@@ -79,7 +80,7 @@ pub use paths::{
     claude_managed_settings_path, claude_managed_settings_probe_path, create_dir_all_owner_only,
     decode_cwd_from_dirname, default_grok_home, encode_cwd_dirname, ensure_sessions_cwd_dir,
     ensure_sessions_cwd_dir_in, grok_application, grok_application_in, grok_home, sessions_cwd_dir,
-    sessions_cwd_dir_in, set_dir_owner_only, system_config_dir, user_grok_home,
+    sessions_cwd_dir_in, set_dir_owner_only, supercharge_home, system_config_dir, user_grok_home,
 };
 pub use validation::{
     RequirementsError, RequirementsLayer, RequirementsSource, load_merged_requirements,
