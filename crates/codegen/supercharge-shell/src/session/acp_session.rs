@@ -49,7 +49,6 @@ use crate::session::signals::{SessionSignalsHandle, TurnDeltaSnapshot};
 use crate::session::slash_commands::{self, BuiltinAction, SlashCommandOutcome};
 use crate::session::storage::SessionUpdate;
 use crate::session::user_message::construct_user_message_minimal;
-use crate::session::user_message::extract_user_query;
 use crate::terminal::TerminalRunRequest;
 use crate::tools::ToolContext;
 use agent_client_protocol as acp;
