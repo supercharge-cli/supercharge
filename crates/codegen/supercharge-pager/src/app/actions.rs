@@ -455,6 +455,8 @@ pub enum Action {
     SetVimMode(bool),
     /// Built-in Ponytail YAGNI mode. Persisted to `[ui].ponytail`.
     SetPonytail(bool),
+    /// Built-in REA (reverse-engineer-anything) mode. Persisted to `[rea].enabled`.
+    SetReaMode(bool),
     /// Toggle the per-tool "Always allow …" prompt options. SHELL-owned;
     /// persisted to `[ui].remember_tool_approvals`. Applies to new sessions.
     SetRememberToolApprovals(bool),

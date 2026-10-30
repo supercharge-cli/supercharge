@@ -47,6 +47,7 @@ pub mod personas;
 pub mod plan;
 pub mod plugin;
 pub mod pony;
+pub mod rea_mode;
 pub mod privacy;
 pub mod queue;
 pub mod recap;
@@ -149,6 +150,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(timeline::TimelineCommand),
         Arc::new(cd::CdCommand),
         Arc::new(pony::PonyCommand),
+        Arc::new(rea_mode::ReaModeCommand),
         Arc::new(imagine::ImagineCommand),
         Arc::new(imagine_video::ImagineVideoCommand),
         // Docs, account and one-off maintenance.

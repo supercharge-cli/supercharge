@@ -114,6 +114,7 @@ supercharge-voice = { path = "../supercharge-voice", default-features = false, f
 supercharge-login = { workspace = true }
 supercharge-models = { workspace = true }
 supercharge-shell = { workspace = true }
+supercharge-shared = { workspace = true }
 # The status-line contract: the config the user writes and the payload the
 # agent sends. A leaf crate rather than the agent's, so the client reads it
 # from upstream of the crate that fills it in.

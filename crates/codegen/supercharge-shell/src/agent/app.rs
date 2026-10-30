@@ -227,6 +227,8 @@ pub async fn run_stdio_agent(
         );
     }
     supercharge_telemetry::unified_log::set_version(supercharge_version::VERSION);
+    // Before any skill discovery, so built-in skills are listed from the first session.
+    crate::util::rea::ensure_builtin_skills();
     supercharge_file_utils::queue::cleanup_orphaned_uploads(
         &grok_home::grok_home(),
         supercharge_file_utils::queue::DEFAULT_MAX_AGE,

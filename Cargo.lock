@@ -11463,6 +11463,7 @@ dependencies = [
  "supercharge-ratatui-textarea",
  "supercharge-sampling-types",
  "supercharge-sandbox",
+ "supercharge-shared",
  "supercharge-shell",
  "supercharge-status-line",
  "supercharge-telemetry",

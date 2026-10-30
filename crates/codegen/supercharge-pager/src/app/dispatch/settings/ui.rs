@@ -1082,6 +1082,8 @@ pub(in crate::app::dispatch) fn apply_setting_rollback(
     let mut companion_effects: Vec<Effect> = Vec::new();
     match (key, rollback_value) {
         ("compact_mode", SettingValue::Bool(b)) => set_compact_mode_inner(app, *b),
+        ("ponytail", SettingValue::Bool(b)) => crate::ponytail::set_enabled(*b),
+        ("rea_mode", SettingValue::Bool(b)) => crate::rea_mode::set_enabled(*b),
         ("show_timestamps", SettingValue::Bool(b)) => set_timestamps_inner(app, *b),
         ("show_timeline", SettingValue::Bool(b)) => set_timeline_inner(app, *b),
         ("dashboard_preview", SettingValue::Bool(b)) => set_dashboard_preview_inner(app, *b),

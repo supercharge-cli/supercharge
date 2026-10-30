@@ -400,6 +400,11 @@ pub async fn set_ponytail(value: bool) -> Result<()> {
     update_config(|cfg| cfg.ui.ponytail = Some(value)).await
 }
 
+/// Persist `[rea].enabled` (built-in REA mode).
+pub async fn set_rea_enabled(value: bool) -> Result<()> {
+    update_config(|cfg| cfg.rea.enabled = Some(value)).await
+}
+
 /// Persist `[models].default_reasoning_effort`. Empty / invalid clears the key.
 pub async fn set_default_reasoning_effort(value: String) -> Result<()> {
     update_config(|cfg| {

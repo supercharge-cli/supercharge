@@ -1223,6 +1223,14 @@ pub(crate) async fn persist_setting(
                 .await
                 .map_err(|e| e.to_string())
         }
+        "rea_mode" => {
+            let SettingValue::Bool(b) = value else {
+                return Err(kind_mismatch("rea_mode", "Bool", &value));
+            };
+            supercharge_shell::util::config::set_rea_enabled(b)
+                .await
+                .map_err(|e| e.to_string())
+        }
         "ponytail" => {
             let SettingValue::Bool(b) = value else {
                 return Err(kind_mismatch("ponytail", "Bool", &value));

@@ -6,6 +6,7 @@
 pub mod clipboard;
 pub mod placeholder_images;
 pub mod ponytail;
+pub mod rea;
 pub mod session;
 pub mod stderr;
 pub mod ui_config;

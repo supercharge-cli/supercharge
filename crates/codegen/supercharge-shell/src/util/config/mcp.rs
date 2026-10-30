@@ -50,6 +50,15 @@ pub struct Config {
     pub telemetry: TelemetryPersistConfig,
     /// `[features]`: only the key the pager persists round-trips.
     pub features: FeaturesPersistConfig,
+    /// `[rea]`: built-in REA mode toggle.
+    pub rea: ReaPersistConfig,
+}
+
+/// The `[rea]` section: whether REA mode adds the reverse-engineering guide to the system prompt.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ReaPersistConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
 }
 
 /// The `[telemetry]` slice the pager is allowed to write back.

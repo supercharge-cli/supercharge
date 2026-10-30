@@ -161,6 +161,29 @@ fn features_merge_writes_feedback_trace_card_without_splatting_section() {
         "all-None must leave the existing section untouched"
     );
 }
+/// `[rea] enabled` round-trips, and an unset toggle writes nothing.
+#[test]
+fn rea_merge_writes_enabled_and_reloads() {
+    let mut root = TomlMap::new();
+    merge_section(
+        &mut root,
+        "rea",
+        &super::super::mcp::ReaPersistConfig::default(),
+    );
+    assert!(root.get("rea").is_none(), "unset toggle must not create [rea]");
+    let rea = super::super::mcp::ReaPersistConfig {
+        enabled: Some(true),
+    };
+    merge_section(&mut root, "rea", &rea);
+    assert_eq!(
+        root.get("rea")
+            .and_then(|v| v.get("enabled"))
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    let reparsed = load_config_from_toml(&TomlValue::Table(root));
+    assert_eq!(reparsed.rea.enabled, Some(true));
+}
 #[test]
 fn transport_oauth_client_id_takes_priority_over_block() {
     let json = r#"{

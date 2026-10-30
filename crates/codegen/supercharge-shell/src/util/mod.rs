@@ -3,6 +3,7 @@ pub mod config;
 pub use supercharge_login::grok_auth_credentials;
 pub mod hooks;
 pub mod limits;
+pub mod rea;
 pub(crate) mod text_sanitize;
 pub(crate) mod user_identity;
 

@@ -1030,6 +1030,10 @@ impl SessionActor {
             self.chat_state_handle.get_system_message().await
         {
             let block = supercharge_shared::ponytail::SYSTEM_BLOCK;
+            // Already present once: leave it where it is so the cached prefix and other blocks keep their order.
+            if enabled && system.content.matches(block).count() == 1 {
+                return;
+            }
             let mut prompt = system.content.replace(&format!("\n\n{block}"), "");
             prompt = prompt.replace(block, "");
             if enabled {
@@ -1042,6 +1046,28 @@ impl SessionActor {
         }
     }
 
+    /// Add (`Some(block)`) or remove (`None`) the REA mode block.
+    /// Like the ponytail block, only our own tagged block changes; a current block stays in place.
+    pub(crate) async fn refresh_rea_system_prompt(&self, block: Option<&str>) {
+        if self.startup_hints.preserve_inherited_system {
+            return;
+        }
+        let Some(supercharge_sampling_types::ConversationItem::System(system)) =
+            self.chat_state_handle.get_system_message().await
+        else {
+            return;
+        };
+        let prompt = supercharge_shared::rea::apply_system_block(
+            &system.content,
+            block.unwrap_or_default(),
+            block.is_some(),
+        );
+        if prompt != system.content.as_ref() {
+            let prompt = prompt.into_owned();
+            self.handle_replace_system_prompt(prompt).await;
+        }
+    }
+
     /// Refresh auth and push a fresh `SamplerConfig` before each turn.
     pub(crate) async fn prepare_sampler_for_turn(&self) {
         // Read the saved toggle each turn, including resumed sessions.
@@ -1050,6 +1076,12 @@ impl SessionActor {
             .and_then(|cfg| cfg.get("ui")?.get("ponytail")?.as_bool())
             .unwrap_or(false);
         self.refresh_ponytail_system_prompt(ponytail_enabled).await;
+        let rea_block = crate::util::rea::enabled().then(|| {
+            supercharge_shared::rea::system_block(
+                crate::util::rea::ensure_builtin_skills().as_deref(),
+            )
+        });
+        self.refresh_rea_system_prompt(rea_block.as_deref()).await;
         self.refresh_token_if_expired().await;
         let mut sampler_config = self.reconstruct_full_config().await;
         if self.tool_context.task_output_token_budget.is_some()

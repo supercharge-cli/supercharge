@@ -45,6 +45,7 @@ pub mod notifications;
 pub mod obf;
 pub mod plugin_cmd;
 pub(crate) mod ponytail;
+pub(crate) mod rea_mode;
 pub mod pty_wrap;
 pub mod recent_dirs;
 pub mod scrollback;

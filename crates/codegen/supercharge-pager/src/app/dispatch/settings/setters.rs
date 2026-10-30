@@ -2027,6 +2027,34 @@ pub(in crate::app::dispatch) fn set_ponytail(app: &mut AppView, new: bool) -> Ve
     }]
 }
 
+/// Outer dispatcher for `Action::SetReaMode`. The shell picks the new value up at the next turn.
+pub(in crate::app::dispatch) fn set_rea_mode(app: &mut AppView, new: bool) -> Vec<Effect> {
+    let prev = crate::rea_mode::is_enabled();
+    if prev == new {
+        app.show_toast(if new {
+            "REA mode is already on"
+        } else {
+            "REA mode is already off"
+        });
+        return vec![];
+    }
+    crate::rea_mode::set_enabled(new);
+    tracing::info!(target: "settings", key = "rea_mode", value = new, "setting changed");
+    if new {
+        app.show_toast(&format!(
+            "REA mode on from the next turn. {}",
+            crate::rea_mode::setup_hint()
+        ));
+    } else {
+        app.show_toast("REA mode off from the next turn");
+    }
+    vec![Effect::PersistSetting {
+        key: "rea_mode",
+        value: crate::settings::SettingValue::Bool(new),
+        rollback_value: crate::settings::SettingValue::Bool(prev),
+    }]
+}
+
 pub(in crate::app::dispatch) fn set_auto_update(app: &mut AppView, new: bool) -> Vec<Effect> {
     let prev_state = app.auto_update;
     let prev_effective = prev_state.unwrap_or(true);

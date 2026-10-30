@@ -63,6 +63,9 @@ pub fn has_project_skill_dirs_in<'a>(chain_dirs: impl IntoIterator<Item = &'a Pa
     })
 }
 
+/// Folder under the app home holding skills shipped inside the binary (`Bundled` scope).
+pub const BUILTIN_SKILLS_DIR: &str = "builtin-skills";
+
 /// List discovered skills. Priority: local, intermediate, repo, user, extra paths, server, then bundled.
 /// Same-name skills from higher-priority sources override. `working_directory: None` returns only User-scoped skills.
 /// `compat` gates vendor dirs; `CompatConfig::default()` preserves all-vendors behavior.
@@ -111,6 +114,14 @@ pub async fn list_skills_with_plugins(
         &config.bundled_skill_dirs,
         SkillScope::Bundled,
     ));
+    // Skills shipped inside the binary are written under the app home at startup.
+    let builtin_root = grok_home.join(BUILTIN_SKILLS_DIR);
+    if builtin_root.is_dir() {
+        skills.extend(collect_injected_skills(
+            &[builtin_root.to_string_lossy().into_owned()],
+            SkillScope::Bundled,
+        ));
+    }
 
     let mut skills = filter_skills(skills, &config.ignore);
     skills.sort_by_key(|s| s.scope);

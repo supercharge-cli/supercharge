@@ -109,6 +109,7 @@ pub fn load_config_from_toml(root: &TomlValue) -> Config {
         consent: section(table, "consent"),
         telemetry: section(table, "telemetry"),
         features: section(table, "features"),
+        rea: section(table, "rea"),
     }
 }
 #[cfg(test)]

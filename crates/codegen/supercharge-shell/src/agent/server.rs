@@ -665,6 +665,7 @@ pub async fn run_agent_server(
     config: ServerConfig,
     agent_config: AgentConfig,
 ) -> anyhow::Result<()> {
+    crate::util::rea::ensure_builtin_skills();
     let state = Arc::new(ServerState {
         agent_config,
         secret: config.secret,

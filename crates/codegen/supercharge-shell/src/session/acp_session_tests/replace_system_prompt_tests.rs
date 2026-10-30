@@ -62,6 +62,49 @@ async fn ponytail_toggle_preserves_inherited_system_verbatim() {
         .await;
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn rea_block_toggles_once_and_keeps_ponytail_order() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let actor = actor_with_history(vec![
+                ConversationItem::system("base policy"),
+                ConversationItem::user("/setup custom-key"),
+            ])
+            .await;
+            let pony = supercharge_shared::ponytail::SYSTEM_BLOCK;
+            let rea = supercharge_shared::rea::system_block(None);
+            let both = format!("base policy\n\n{pony}\n\n{rea}");
+            // Two turns with both modes on: the head settles and is not rewritten again.
+            for _ in 0..2 {
+                actor.refresh_ponytail_system_prompt(true).await;
+                actor.refresh_rea_system_prompt(Some(&rea)).await;
+                let conv = actor.chat_state_handle.get_conversation().await;
+                assert_eq!(head_text(&conv).as_deref(), Some(both.as_str()));
+            }
+            actor.refresh_rea_system_prompt(None).await;
+            let conv = actor.chat_state_handle.get_conversation().await;
+            assert_eq!(
+                head_text(&conv).unwrap(),
+                format!("base policy\n\n{pony}")
+            );
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn rea_block_skips_inherited_system() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let mut actor = actor_with_history(vec![ConversationItem::system("parent policy")]).await;
+            actor.startup_hints.preserve_inherited_system = true;
+            let rea = supercharge_shared::rea::system_block(None);
+            actor.refresh_rea_system_prompt(Some(&rea)).await;
+            let conv = actor.chat_state_handle.get_conversation().await;
+            assert_eq!(head_text(&conv).as_deref(), Some("parent policy"));
+        })
+        .await;
+}
+
 fn head_text(conv: &[ConversationItem]) -> Option<String> {
     match conv.first() {
         Some(ConversationItem::System(sys)) => Some(sys.content.to_string()),
