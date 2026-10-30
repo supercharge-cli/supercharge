@@ -13,8 +13,23 @@ pub const SKILL_NAME: &str = "reverse-engineer-anything";
 /// Folder under the app home that holds skills shipped inside the binary.
 pub const BUILTIN_SKILLS_DIR: &str = "builtin-skills";
 
-/// Command users run themselves to register the REA MCP server. Never run automatically.
-pub const SETUP_COMMAND: &str = "npx rea-agents setup";
+/// Native tool names active when `[rea] enabled` is on.
+pub const NATIVE_TOOLS: &[&str] = &[
+    "rea_identify",
+    "rea_hash",
+    "rea_strings",
+    "rea_binary",
+    "rea_disassemble",
+    "rea_asar",
+    "rea_asar_extract",
+    "rea_apk",
+    "rea_pcap",
+    "rea_external_tools",
+];
+
+fn tool_list() -> String {
+    NATIVE_TOOLS.iter().map(|t| format!("`{t}`")).collect::<Vec<_>>().join(", ")
+}
 
 const BLOCK_OPEN: &str = "<reverse-engineer-anything-mode>";
 const BLOCK_CLOSE: &str = "</reverse-engineer-anything-mode>";
@@ -107,12 +122,13 @@ pub fn system_block(skill_dir: Option<&Path>) -> String {
     };
     format!(
         "{BLOCK_OPEN}\n\
-REA mode is on. Apply the reverse-engineer-anything guide below to reverse-engineering, binary, artifact and protocol analysis work.\n\
+REA mode is on. Native investigation tools are built in: {tools}. Prefer them; no extra setup is needed.\n\
 {references}\n\
-If the `rea` MCP tools are not available, say so and suggest the user run `{SETUP_COMMAND}` themselves. Never run REA setup or install commands on your own.\n\
+Optional engines (Ghidra, tshark, jadx, objdump) are used only when present on PATH; call `rea_external_tools` to check. Never install them unprompted.\n\
 Guide adapted from morluto/rea (MIT License).\n\n\
 {body}\n\
 {BLOCK_CLOSE}",
+        tools = tool_list(),
         body = skill_body().trim_end(),
     )
 }
@@ -151,28 +167,9 @@ pub fn apply_system_block<'a>(prompt: &'a str, block: &str, enabled: bool) -> Co
     Cow::Owned(format!("{stripped}\n\n{block}"))
 }
 
-/// Whether a `node` executable is on `PATH`. Looks at the file system only; spawns nothing.
-pub fn node_on_path() -> bool {
-    let Some(path) = std::env::var_os("PATH") else {
-        return false;
-    };
-    let names: &[&str] = if cfg!(windows) {
-        &["node.exe", "node.cmd"]
-    } else {
-        &["node"]
-    };
-    std::env::split_paths(&path).any(|dir| names.iter().any(|n| dir.join(n).is_file()))
-}
-
-/// One-line hint about registering the REA tools, adjusted for whether Node.js was found.
-pub fn setup_hint(node_found: bool) -> String {
-    if node_found {
-        format!("For the REA tools, run `{SETUP_COMMAND}` yourself (it is never run for you).")
-    } else {
-        format!(
-            "For the REA tools, install Node.js, then run `{SETUP_COMMAND}` yourself (it is never run for you)."
-        )
-    }
+/// One-line hint: native tools are built-in when REA mode is on.
+pub fn setup_hint() -> String {
+    format!("Native REA tools are built in while REA mode is on: {}.", NATIVE_TOOLS.join(", "))
 }
 
 #[cfg(test)]
@@ -204,7 +201,7 @@ mod tests {
         let with = apply_system_block(base, &block, true).into_owned();
         assert_eq!(with, format!("{base}\n\n{block}"));
         assert!(with.contains("/tmp/home/builtin-skills/reverse-engineer-anything/references"));
-        assert!(with.contains(SETUP_COMMAND));
+        assert!(with.contains("rea_identify"));
         assert_eq!(strip_system_block(&with), base);
         assert!(matches!(strip_system_block(base), Cow::Borrowed(_)));
     }
@@ -272,9 +269,17 @@ mod tests {
     }
 
     #[test]
-    fn hint_mentions_node_only_when_missing() {
-        assert!(setup_hint(false).contains("Node.js"));
-        assert!(!setup_hint(true).contains("Node.js"));
-        assert!(setup_hint(true).contains(SETUP_COMMAND));
+    fn hint_points_at_native_tools() {
+        let hint = setup_hint();
+        assert!(hint.contains("rea_identify"));
+        assert!(!hint.contains("npx"));
+        assert!(!hint.contains("Node.js"));
+    }
+
+    #[test]
+    fn native_tool_list_is_nonempty() {
+        assert!(NATIVE_TOOLS.contains(&"rea_identify"));
+        assert!(NATIVE_TOOLS.contains(&"rea_hash"));
+        assert!(NATIVE_TOOLS.contains(&"rea_strings"));
     }
 }

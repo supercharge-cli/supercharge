@@ -43,6 +43,13 @@ pdf_oxide = { workspace = true }
 # drag aes/bzip2/lzma/zstd into the shipped pager binary. PPTX entries are
 # only ever stored or deflated.
 zip = { version = "3", default-features = false, features = ["deflate-flate2"] }
+blake3 = { workspace = true }
+# Native binary inspection for REA mode: header/section/symbol parsing and an
+# x86 decoder only (no encoder, no other syntaxes) to keep the binary small.
+object = { version = "0.37", default-features = false, features = ["read", "std"] }
+iced-x86 = { version = "1", default-features = false, features = ["std", "decoder", "intel"] }
+md5 = { workspace = true }
+sha2 = { workspace = true }
 quick-xml = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 minijinja = { version = "2", features = ["custom_syntax"] }
@@ -75,6 +82,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "net",
     "sync",
+    "time",
 ] }
 tokio-util = { workspace = true, features = ["compat"] }
 tonic = { workspace = true }

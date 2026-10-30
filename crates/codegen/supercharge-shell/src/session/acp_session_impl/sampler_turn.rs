@@ -1082,6 +1082,17 @@ impl SessionActor {
             )
         });
         self.refresh_rea_system_prompt(rea_block.as_deref()).await;
+        // Sync native REA tools with the config toggle each turn.
+        {
+            let bridge = self.agent.borrow().tool_bridge().clone();
+            if rea_block.is_some() {
+                if let Err(e) = supercharge_tools::implementations::register_rea_tools(&bridge) {
+                    tracing::warn!(error = %e, "REA tool registration failed");
+                }
+            } else {
+                let _ = supercharge_tools::implementations::unregister_rea_tools(&bridge);
+            }
+        }
         self.refresh_token_if_expired().await;
         let mut sampler_config = self.reconstruct_full_config().await;
         if self.tool_context.task_output_token_budget.is_some()

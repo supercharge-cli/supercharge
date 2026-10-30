@@ -42,6 +42,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn advertised_tool_names_match_registered_tools() {
+        assert_eq!(
+            supercharge_shared::rea::NATIVE_TOOLS,
+            supercharge_tools::implementations::REA_TOOL_NAMES
+        );
+    }
+
+    #[test]
     fn toggle_reads_only_a_bool_enabled_key() {
         let on: toml::Value = toml::from_str("[rea]\nenabled = true\n").unwrap();
         let off: toml::Value = toml::from_str("[rea]\nenabled = false\n").unwrap();

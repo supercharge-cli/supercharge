@@ -30,7 +30,7 @@ pub fn status_message(on: bool) -> String {
     )
 }
 
-/// Hint about registering the REA tools. Checks `PATH` for Node.js without running anything.
+/// Hint about native REA tools (built-in; no Node setup).
 pub fn setup_hint() -> String {
-    supercharge_shared::rea::setup_hint(supercharge_shared::rea::node_on_path())
+    supercharge_shared::rea::setup_hint()
 }

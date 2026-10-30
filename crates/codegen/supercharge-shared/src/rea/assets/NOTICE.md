@@ -8,3 +8,7 @@ See `LICENSE` for the full license text and copyright notice.
 Changes from upstream: references to specific third-party agent products were
 replaced with generic client wording. The workflow and tool guidance are
 otherwise unchanged.
+
+Additional changes: core investigation tools were reimplemented as
+native Rust agent tools (no Node.js MCP server required for triage,
+hashes, strings, and optional-engine detection).

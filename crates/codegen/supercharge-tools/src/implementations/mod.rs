@@ -7,6 +7,7 @@ pub mod grok_build_concise;
 pub mod grok_build_hashline;
 pub mod lsp;
 pub mod memory;
+pub mod rea;
 pub mod opencode;
 pub mod read_file;
 pub mod search_tool;
@@ -30,3 +31,7 @@ pub use opencode::{
 pub use search_tool::{SEARCH_TOOL_NAME, SearchTool};
 pub use use_tool::{USE_TOOL_NAME, UseTool, UseToolInput};
 pub use web_search::WebSearchConfig;
+
+pub use rea::{
+    REA_TOOL_NAMES, register_all as register_rea_tools, unregister_all as unregister_rea_tools,
+};

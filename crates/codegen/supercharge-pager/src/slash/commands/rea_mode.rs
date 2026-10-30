@@ -121,10 +121,8 @@ mod tests {
             panic!("expected a status message");
         };
         assert!(text.contains("REA mode is on"), "{text}");
-        assert!(
-            text.contains(supercharge_shared::rea::SETUP_COMMAND),
-            "{text}"
-        );
+        assert!(text.contains("rea_identify"), "{text}");
+        assert!(!text.contains("npx"), "{text}");
     }
 
     #[test]

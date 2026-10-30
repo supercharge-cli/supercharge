@@ -111,14 +111,14 @@ fn assert_messages_rides_parent_prefix(
         expected.len() + 1,
         "{label}: exactly one instruction message must be appended"
     );
+    // Reasoning effort is sent as an explicit thinking budget.
     assert_eq!(
         j(j(body, "thinking"), "type"),
-        "adaptive",
+        "enabled",
         "{label}: {body:#}"
     );
-    assert_eq!(
-        j(j(body, "output_config"), "effort"),
-        "high",
+    assert!(
+        j(j(body, "thinking"), "budget_tokens").as_u64().is_some_and(|b| b > 0),
         "{label}: {body:#}"
     );
 }
