@@ -305,7 +305,7 @@ Supported `defaultMode` values include `default`, `auto`, `acceptEdits`, `bypass
 - Rules naming an unrecognized tool, and parameter rules such as `Agent(model:opus)`, are skipped with a warning rather than failing the load.
 - `permissions.additionalDirectories` is parsed but not supported.
 
-You can import existing Claude settings interactively with **Ctrl+I** ("Import external settings").
+You can import existing settings from `~/.claude/` interactively with **Ctrl+I** ("Import external settings").
 
 ---
 

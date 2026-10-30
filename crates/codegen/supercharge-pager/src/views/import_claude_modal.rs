@@ -1,6 +1,6 @@
 //! Interactive modal for selectively importing Claude settings.
 //!
-//! Shown when the user runs `/import-settings` (in-session) or presses `i` on the welcome screen with new Claude settings detected.
+//! Shown when the user runs `/import-settings` (in-session) or presses `i` on the welcome screen when new importable settings are detected.
 //! Users review each discovered item, toggle which to import, and confirm. Only checked items are written to `.supercharge/config.toml`.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
