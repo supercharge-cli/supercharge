@@ -288,7 +288,7 @@ async fn tokenize_one(
     let resp = client
         .post(url)
         .header(reqwest::header::AUTHORIZATION, auth)
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .json(&serde_json::json!({
             "text": text,
             "model": model,

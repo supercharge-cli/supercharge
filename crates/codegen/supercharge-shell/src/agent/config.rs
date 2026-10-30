@@ -2537,7 +2537,7 @@ impl Config {
             "has_remote_settings": self.remote_settings.is_some(),
         })
     }
-    /// Server-side doom-loop check policy. It covers the `x-grok-doom-loop-check` header, trigger parsing, and confident-signal resampling, all applied by the sampler.
+    /// Server-side doom-loop check policy. It covers the `x-supercharge-doom-loop-check` header, trigger parsing, and confident-signal resampling, all applied by the sampler.
     /// Merged PER-FIELD across the `[doom_loop_recovery]` TOML table and the remote settings `doom_loop_recovery` object. A partial remote object only overrides the fields it sets.
     /// Gate precedence: env `SUPERCHARGE_DOOM_LOOP_RECOVERY` > TOML `enabled` > remote `enabled` > default ON. Each layer's `false` is an independent kill switch, and `None` IS the off state, so disabled has exactly one spelling. Tunables have no env layer (TOML > remote > default) and are clamped to their documented ranges.
     pub(crate) fn resolve_doom_loop_recovery(

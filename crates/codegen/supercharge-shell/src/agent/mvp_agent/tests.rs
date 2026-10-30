@@ -3872,7 +3872,7 @@ async fn prepare_image_gen_config_requires_explicit_image_provider() {
     assert!(matches!(agent.prepare_image_gen_config(), ImageGenConfig::Disabled));
 }
 /// The imagine tools bypass cli-chat-proxy (direct API calls).
-/// The server can only scope the coding data-retention opt-out (`/privacy opt-out`) to Build traffic via the `x-grok-client-identifier` header.
+/// The server can only scope the coding data-retention opt-out (`/privacy opt-out`) to Build traffic via the `x-supercharge-client-identifier` header.
 /// If this header is dropped, opted-out users' imagine prompts are logged/retained server-side.
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_image_gen_config_sends_client_identifier_header() {
@@ -3888,7 +3888,7 @@ async fn prepare_image_gen_config_sends_client_identifier_header() {
     };
     assert_eq!(
         extra_headers
-            .get("x-grok-client-identifier")
+            .get("x-supercharge-client-identifier")
             .map(String::as_str),
         Some(crate::http::process_client_identifier().as_str()),
         "imagine API calls must carry the client identifier so the server \
@@ -3911,7 +3911,7 @@ async fn prepare_image_gen_config_keeps_custom_provider_credentials_and_headers_
     };
     assert_eq!(api_key, "image-key");
     assert_eq!(format, ImageProviderFormat::Custom);
-    for name in ["x-grok-client-identifier", "X-XAI-Token-Auth", "x-authenticateresponse"] {
+    for name in ["x-supercharge-client-identifier", "X-XAI-Token-Auth", "x-authenticateresponse"] {
         assert!(!extra_headers.contains_key(name), "must not leak {name} to custom provider");
     }
 }
@@ -3927,7 +3927,7 @@ async fn prepare_video_gen_config_sends_client_identifier_header() {
     };
     assert_eq!(
         extra_headers
-            .get("x-grok-client-identifier")
+            .get("x-supercharge-client-identifier")
             .map(String::as_str),
         Some(crate::http::process_client_identifier().as_str()),
         "video gen API calls must carry the client identifier so the server \

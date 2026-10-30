@@ -247,7 +247,7 @@ pub fn process_client_identifier() -> String {
     std::env::var("SUPERCHARGE_CLIENT_NAME").unwrap_or_else(|_| "grok-shell".to_string())
 }
 
-pub const CLIENT_MODE_HEADER: &str = "x-grok-client-mode";
+pub const CLIENT_MODE_HEADER: &str = "x-supercharge-client-mode";
 
 static CLIENT_MODE: OnceLock<&'static str> = OnceLock::new();
 

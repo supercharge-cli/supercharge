@@ -106,9 +106,9 @@ impl WorkspacesClient {
                 self.auth.grok_com_config().token_header.clone(),
             )
             .header("x-userid", &auth.user_id)
-            .header("x-grok-client-version", supercharge_version::VERSION)
+            .header("x-supercharge-client-version", supercharge_version::VERSION)
             .header(
-                "x-grok-client-identifier",
+                "x-supercharge-client-identifier",
                 crate::http::process_client_identifier(),
             )
             .header(

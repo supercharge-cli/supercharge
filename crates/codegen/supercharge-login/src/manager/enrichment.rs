@@ -61,7 +61,7 @@ async fn fetch_user_info(manager: &AuthManager, key: &str, log_label: &str) -> O
         .timeout(USER_FETCH_TIMEOUT)
         .header("Authorization", format!("Bearer {}", key))
         .header("X-XAI-Token-Auth", token_header.as_str())
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .header(
             supercharge_http::CLIENT_MODE_HEADER,
             supercharge_http::process_client_mode(),

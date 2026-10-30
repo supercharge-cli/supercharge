@@ -51,7 +51,7 @@ impl ModelSource for OaiModelSource {
                     .header("Authorization", format!("Bearer {}", &auth.key))
                     .header("X-XAI-Token-Auth", "xai-grok-cli")
                     .header("x-userid", &auth.user_id)
-                    .header("x-grok-client-version", supercharge_version::VERSION)
+                    .header("x-supercharge-client-version", supercharge_version::VERSION)
                     .header(
                         crate::http::CLIENT_MODE_HEADER,
                         crate::http::process_client_mode(),

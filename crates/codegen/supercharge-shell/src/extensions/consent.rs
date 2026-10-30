@@ -54,11 +54,11 @@ async fn handle_record(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         .timeout(RECORD_TIMEOUT)
         // The server re-runs the same targeting rules, and those read this header.
         .header(
-            "x-grok-client-identifier",
+            "x-supercharge-client-identifier",
             crate::http::process_client_identifier(),
         )
         .header("X-XAI-Token-Auth", &token_header)
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .header(
             crate::http::CLIENT_MODE_HEADER,
             crate::http::process_client_mode(),

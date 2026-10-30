@@ -133,7 +133,7 @@ impl EmbeddingProvider for ApiEmbeddingProvider {
                     .post(format!("{}/embeddings", self.api_base))
                     .json(&body_json)
                     .header("X-XAI-Token-Auth", "xai-grok-cli")
-                    .header("x-grok-client-version", supercharge_version::VERSION);
+                    .header("x-supercharge-client-version", supercharge_version::VERSION);
 
                 let req = match request.build() {
                     Ok(r) => r,

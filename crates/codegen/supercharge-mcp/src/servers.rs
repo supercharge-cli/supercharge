@@ -57,7 +57,7 @@ pub use supercharge_workspace_types::MCP_TOOL_NAME_DELIMITER;
 
 /// Routing hint for first-party local app MCP endpoints: which agent/session a request belongs to. **Advisory only, never authentication** — any local process can set it, so receivers must not treat it as proof of identity.
 /// Caller-supplied configs cannot smuggle it: the header is stripped from every HTTP/SSE config and re-added only when the spawn context asks for it (mirroring the `SUPERCHARGE_SESSION_ID` env protection on stdio servers).
-pub const SUPERCHARGE_AGENT_ID_HEADER: &str = "X-Grok-Agent-ID";
+pub const SUPERCHARGE_AGENT_ID_HEADER: &str = "X-Supercharge-Agent-ID";
 
 /// Reqwest 0.13 twin of the 0.12 adapters in `supercharge_extra_ca`.
 fn with_extra_root_certificates(mut builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {

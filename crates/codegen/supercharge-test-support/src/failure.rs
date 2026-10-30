@@ -14,7 +14,7 @@ pub const CUT_REPLY: &str = "MOCK-CUT-PART-ONE";
 /// The text of a reply from a model caught looping.
 pub const LOOPING_REPLY: &str = "MOCK-LOOP MOCK-LOOP MOCK-LOOP MOCK-LOOP";
 /// The header a client sends to opt into the inference API's loop detector.
-pub const DOOM_LOOP_CHECK_HEADER: &str = "x-grok-doom-loop-check";
+pub const DOOM_LOOP_CHECK_HEADER: &str = "x-supercharge-doom-loop-check";
 /// The detector report a looping reply carries: the tightest tail repetition on the thinking channel.
 pub const DOOM_LOOP_TRIGGER: &str = "tail_repetition:2@thinking";
 

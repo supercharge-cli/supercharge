@@ -398,7 +398,7 @@ curl -s -N -X POST "https://cli-chat-proxy.grok.com/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $(jq -r '."https://accounts.x.ai/sign-in".key' ~/.supercharge/auth.json)" \
   -H "X-XAI-Token-Auth: xai-grok-cli" \
-  -H "x-grok-model-override: supercharge-core" \
+  -H "x-supercharge-model-override: supercharge-core" \
   -d '{
     "model": "supercharge-core",
     "messages": [{"role": "user", "content": "Hello!"}],
@@ -412,7 +412,7 @@ curl -s -N -X POST "https://cli-chat-proxy.grok.com/v1/chat/completions" \
 | -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Authorization: Bearer <token>`  | Yes      | Provider credential from the configured Supercharge profile                                                                                                                              |
 | `X-XAI-Token-Auth: xai-grok-cli` | Yes      | Tells the auth middleware to validate as a CLI session token                                                                                                                              |
-| `x-grok-model-override: <model>` | Yes\*    | The proxy uses this header (not the JSON body) to route to the correct backend. \*Can be omitted for `supercharge-core` which is on the default route, but always safe to include. |
+| `x-supercharge-model-override: <model>` | Yes\*    | The proxy uses this header (not the JSON body) to route to the correct backend. \*Can be omitted for `supercharge-core` which is on the default route, but always safe to include. |
 
 **Streaming vs non-streaming:**
 

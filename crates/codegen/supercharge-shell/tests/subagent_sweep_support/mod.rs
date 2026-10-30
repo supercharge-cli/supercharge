@@ -74,12 +74,12 @@ pub fn spawn_probe_sse(probe: &SpawnProbe<'_>) -> ScriptedResponse {
     ])
 }
 
-/// Title and other side queries hit the same path without `x-grok-turn-idx`.
+/// Title and other side queries hit the same path without `x-supercharge-turn-idx`.
 pub fn is_foreground(entry: &LogEntry) -> bool {
     entry.method == "POST"
         && entry.path.contains("chat/completions")
         && entry
-            .header("x-grok-turn-idx")
+            .header("x-supercharge-turn-idx")
             .is_some_and(|v| !v.trim().is_empty())
 }
 

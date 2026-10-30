@@ -799,7 +799,7 @@ impl BindMcpConfig {
         self
     }
     /// Mark servers (by configured name) as FIRST-PARTY app endpoints: local desktop processes addressed by agent id.
-    /// Only these receive the `X-Grok-Agent-ID` header (the bound session id) and the local-agent-endpoint transport posture (no OAuth probe, no proxy, no redirects).
+    /// Only these receive the `X-Supercharge-Agent-ID` header (the bound session id) and the local-agent-endpoint transport posture (no OAuth probe, no proxy, no redirects).
     /// Defaults OFF for every server — a user-configured third-party MCP server must never receive the session id or lose its OAuth/proxy path.
     pub fn with_first_party_servers(mut self, names: impl IntoIterator<Item = String>) -> Self {
         self.first_party = std::sync::Arc::new(names.into_iter().collect());

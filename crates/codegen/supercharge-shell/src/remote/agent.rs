@@ -58,7 +58,7 @@ impl SandboxClient {
             .header("Authorization", format!("Bearer {}", &auth.key))
             .header("X-XAI-Token-Auth", GrokComConfig::default().token_header)
             .header("x-userid", &auth.user_id)
-            .header("x-grok-client-version", supercharge_version::VERSION);
+            .header("x-supercharge-client-version", supercharge_version::VERSION);
 
         if let Some(email) = &auth.email {
             builder = builder.header("x-email", email);
@@ -66,7 +66,7 @@ impl SandboxClient {
 
         builder = builder
             .header(
-                "x-grok-client-identifier",
+                "x-supercharge-client-identifier",
                 crate::http::process_client_identifier(),
             )
             .header(

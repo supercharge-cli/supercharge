@@ -88,7 +88,7 @@ pub struct SamplerConfig {
     pub client_identifier: Option<String>,
     pub deployment_id: Option<String>,
     pub user_id: Option<String>,
-    /// Stable root conversation identifier emitted as `x-grok-conv-group-id`.
+    /// Stable root conversation identifier emitted as `x-supercharge-conv-group-id`.
     #[serde(default)]
     pub conversation_group_id: Option<ConversationGroupId>,
     pub client_version: Option<String>,

@@ -40,7 +40,7 @@ pub struct CampaignOverride {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct DoomLoopRecoverySettings {
-    /// Send the `x-grok-doom-loop-check` header, parse the reported triggers, and resample confident loops.
+    /// Send the `x-supercharge-doom-loop-check` header, parse the reported triggers, and resample confident loops.
     /// `Some(false)` is a kill-switch; absent uses the client default (on).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<bool>,
@@ -52,7 +52,7 @@ pub struct DoomLoopRecoverySettings {
     /// Resample budget per turn (clamped to 0..=5); absent uses the client default (2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_retries: Option<u32>,
-    /// Detector window sent as the value of `x-grok-doom-loop-check` (honored in 512..=4096, otherwise 4096; absent uses the client default, 1024).
+    /// Detector window sent as the value of `x-supercharge-doom-loop-check` (honored in 512..=4096, otherwise 4096; absent uses the client default, 1024).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_tokens: Option<u32>,
 }

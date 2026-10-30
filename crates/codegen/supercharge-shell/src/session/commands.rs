@@ -427,7 +427,7 @@ pub enum SessionCommand {
     },
     /// Signals then report the override model rather than the agent-level default.
     /// `SetSessionModel` does NOT update `primaryModelId` in signals; the resolved model is already tracked via inference responses.
-    /// Keeps the existing base_url, api_key, and other config; only the `model` field in the `x-grok-model-override` header changes.
+    /// Keeps the existing base_url, api_key, and other config; only the `model` field in the `x-supercharge-model-override` header changes.
     OverrideModelName {
         model_name: String,
         extra_headers: indexmap::IndexMap<String, String>,

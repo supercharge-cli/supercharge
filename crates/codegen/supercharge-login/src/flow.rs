@@ -975,10 +975,10 @@ async fn fetch_login_device_flow(cli_chat_proxy_base_url: &str) -> Option<bool> 
     let response = client
         .get(&url)
         .timeout(std::time::Duration::from_millis(1500))
-        .header("x-grok-agent-id", agent_id)
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-agent-id", agent_id)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .header(
-            "x-grok-client-identifier",
+            "x-supercharge-client-identifier",
             supercharge_http::process_client_identifier(),
         )
         .header(
@@ -2061,14 +2061,14 @@ mod tests {
                                 authorization: header_str(&headers, "authorization"),
                                 user_id: header_str(&headers, "x-userid"),
                                 email: header_str(&headers, "x-email"),
-                                agent_id: header_str(&headers, "x-grok-agent-id"),
+                                agent_id: header_str(&headers, "x-supercharge-agent-id"),
                                 client_identifier: header_str(
                                     &headers,
-                                    "x-grok-client-identifier",
+                                    "x-supercharge-client-identifier",
                                 ),
                                 client_version: header_str(
                                     &headers,
-                                    "x-grok-client-version",
+                                    "x-supercharge-client-version",
                                 ),
                             });
                         (state.status_code, state.body)
@@ -2125,15 +2125,15 @@ mod tests {
                 .expect("server should have received one request");
             assert!(
                 h.agent_id.as_deref().is_some_and(|v| !v.is_empty()),
-                "must send x-grok-agent-id (the bucketing key)"
+                "must send x-supercharge-agent-id (the bucketing key)"
             );
             assert!(
                 h.client_identifier.is_some(),
-                "must send x-grok-client-identifier"
+                "must send x-supercharge-client-identifier"
             );
             assert!(
                 h.client_version.is_some(),
-                "must send x-grok-client-version"
+                "must send x-supercharge-client-version"
             );
             assert_eq!(h.authorization, None, "must not send Authorization");
             assert_eq!(h.user_id, None, "must not send x-userid");

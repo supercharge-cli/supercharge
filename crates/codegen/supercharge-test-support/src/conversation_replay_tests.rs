@@ -29,9 +29,9 @@ pub(super) fn respond_with_headers(
     for earlier in 1..conversation.number() {
         conversations.assign(ConversationKey::SessionId(format!("session-{earlier}")));
     }
-    headers.insert("x-grok-turn-idx", HeaderValue::from_static("1"));
+    headers.insert("x-supercharge-turn-idx", HeaderValue::from_static("1"));
     headers.insert(
-        "x-grok-session-id",
+        "x-supercharge-session-id",
         HeaderValue::from_str(&format!("session-{}", conversation.number())).unwrap(),
     );
     let request = InferenceRequest::new(

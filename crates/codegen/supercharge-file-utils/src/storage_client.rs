@@ -517,7 +517,7 @@ impl StorageClient {
     }
 
     /// Configures the client identity reported to the storage backend on all storage requests.
-    /// Becomes `x-grok-client-version` and `x-grok-client-identifier` so 400/403s can be attributed.
+    /// Becomes `x-supercharge-client-version` and `x-supercharge-client-identifier` so 400/403s can be attributed.
     /// Prefer `build_storage_client_for_proxy` from the shell; direct callers use `with_client_identity`.
     pub fn with_client_identity(
         mut self,
@@ -529,7 +529,7 @@ impl StorageClient {
         self
     }
 
-    /// Sets the `x-grok-client-mode` value forwarded to cli-chat-proxy
+    /// Sets the `x-supercharge-client-mode` value forwarded to cli-chat-proxy
     /// (`headless` / `interactive`), for the `client_mode` metric label.
     pub fn with_client_mode(mut self, mode: impl Into<String>) -> Self {
         self.client_mode = Some(mode.into());
@@ -1009,14 +1009,14 @@ impl StorageClient {
             .client_version
             .as_deref()
             .unwrap_or(supercharge_version::VERSION);
-        let mut builder = builder.header("x-grok-client-version", version);
+        let mut builder = builder.header("x-supercharge-client-version", version);
 
         if let Some(id) = &self.client_identifier {
-            builder = builder.header("x-grok-client-identifier", id);
+            builder = builder.header("x-supercharge-client-identifier", id);
         }
 
         if let Some(mode) = &self.client_mode {
-            builder = builder.header("x-grok-client-mode", mode);
+            builder = builder.header("x-supercharge-client-mode", mode);
         }
 
         for (name, value) in supercharge_otel::trace_context_headers().iter() {
@@ -1814,7 +1814,7 @@ async fn upload_part_streaming(
         let mut request = client
             .post(&url)
             .header("Content-Type", "application/octet-stream")
-            .header("x-grok-client-version", supercharge_version::VERSION)
+            .header("x-supercharge-client-version", supercharge_version::VERSION)
             .header("Content-Length", length.to_string());
         for (name, value) in supercharge_otel::trace_context_headers().iter() {
             request = request.header(name.clone(), value.clone());

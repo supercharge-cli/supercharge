@@ -351,8 +351,8 @@ mod tests {
         let (path, body) = foreground_request(endpoint);
         reqwest::Client::new()
             .post(format!("{url}{path}"))
-            .header("x-grok-turn-idx", "1")
-            .header("x-grok-req-id", format!("direct-{endpoint:?}"))
+            .header("x-supercharge-turn-idx", "1")
+            .header("x-supercharge-req-id", format!("direct-{endpoint:?}"))
             .json(&body)
             .send()
             .await

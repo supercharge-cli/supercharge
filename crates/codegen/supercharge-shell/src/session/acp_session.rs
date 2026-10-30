@@ -808,7 +808,7 @@ pub(crate) struct SessionActor {
     pub(crate) compaction_at_tokens:
         std::cell::Cell<Option<supercharge_sampling_types::CompactionAtTokens>>,
     /// Server-side doom-loop check policy, resolved once at spawn by `Config::resolve_doom_loop_recovery`; `None` means disabled.
-    /// `reconstruct_full_config` threads it into the sampler config, and the sampler itself sends the matching `x-grok-doom-loop-check` header.
+    /// `reconstruct_full_config` threads it into the sampler config, and the sampler itself sends the matching `x-supercharge-doom-loop-check` header.
     pub(crate) doom_loop_recovery: Option<supercharge_sampling_types::DoomLoopRecoveryPolicy>,
     /// Telemetry-only per-turn detector/recovery tally (deduplicated labels, attempts, budget-spent accept, tightest recovery trigger).
     /// Accumulated by the event drainer and taken at turn end for analytics events.

@@ -669,7 +669,7 @@ pub struct ConversationRequest {
     pub x_grok_req_id: Option<String>,
     pub x_grok_session_id: Option<String>,
     pub x_grok_turn_idx: Option<String>,
-    /// Turn-level resubmit attempt (absent on first submissions); sent as `x-grok-transient-retry` so the proxy can count retry traffic.
+    /// Turn-level resubmit attempt (absent on first submissions); sent as `x-supercharge-transient-retry` so the proxy can count retry traffic.
     pub x_grok_transient_retry: Option<String>,
     pub x_grok_agent_id: Option<String>,
     pub x_grok_deployment_id: Option<String>,
@@ -862,7 +862,7 @@ pub struct ConversationResponse {
     /// Reasoning/thought chunks are **not** counted.
     /// The caller should then emit a fallback `AgentMessageChunk` so downstream consumers see the turn as complete.
     pub message_chunks_emitted: u64,
-    /// Server-reported doom-loop triggers for this response (Responses API only, opt-in via the `x-grok-doom-loop-check` header).
+    /// Server-reported doom-loop triggers for this response (Responses API only, opt-in via the `x-supercharge-doom-loop-check` header).
     /// Empty when the check is disabled or nothing was reported; deduplicated by raw label.
     /// See [`crate::doom_loop`].
     pub doom_loop_signals: Vec<crate::doom_loop::DoomLoopSignal>,

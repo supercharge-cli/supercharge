@@ -16,7 +16,7 @@ pub const MANAGED_POLICY_TYP: &str = "grok.managed_policy.v1";
 pub const MANAGED_IDENTITY_TYP: &str = "grok.managed_identity.v1";
 
 /// Client echoes its persisted envelope `nonce` on this header for the server probe.
-pub const MANAGED_CONFIG_NONCE_ECHO_HEADER: &str = "x-grok-managed-config-nonce";
+pub const MANAGED_CONFIG_NONCE_ECHO_HEADER: &str = "x-supercharge-managed-config-nonce";
 
 /// Shape of a server-minted nonce (16 random bytes as hex): what `fresh_nonce`
 /// produces and the only shape the client echoes (hex is HTTP-header-safe).

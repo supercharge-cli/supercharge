@@ -57,7 +57,7 @@ pub(crate) fn build_static_headers(
 ) -> std::collections::HashMap<String, String> {
     let mut static_headers = std::collections::HashMap::new();
     static_headers.insert(
-        "x-grok-client-version".to_string(),
+        "x-supercharge-client-version".to_string(),
         client_version.to_string(),
     );
     let _ = (alpha_test_key, traces_url);

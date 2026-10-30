@@ -126,7 +126,7 @@ async fn start_bundle_server(
                             None
                         },
                         client_version: headers
-                            .get("x-grok-client-version")
+                            .get("x-supercharge-client-version")
                             .and_then(|v| v.to_str().ok())
                             .map(str::to_owned),
                     });
@@ -162,7 +162,7 @@ async fn start_bundle_server(
                             None
                         },
                         client_version: headers
-                            .get("x-grok-client-version")
+                            .get("x-supercharge-client-version")
                             .and_then(|v| v.to_str().ok())
                             .map(str::to_owned),
                     });

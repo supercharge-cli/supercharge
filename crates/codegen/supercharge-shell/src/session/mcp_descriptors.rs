@@ -174,8 +174,10 @@ fn is_gateway_owned_descriptor(path: &Path) -> bool {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&contents) else {
         return false;
     };
+    // Descriptors written before the rename carry the legacy key.
     value
-        .get("x-grok-managed-gateway")
+        .get("x-supercharge-managed-gateway")
+        .or_else(|| value.get("x-grok-managed-gateway"))
         .and_then(|v| v.as_bool())
         == Some(true)
 }
@@ -334,6 +336,16 @@ mod tests {
                 "name": "gateway_tool",
                 "description": "Gateway tool",
                 "inputSchema": {"type": "object"},
+                "x-supercharge-managed-gateway": true,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            tools_dir.join("legacy_gateway_tool.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "name": "legacy_gateway_tool",
+                "inputSchema": {"type": "object"},
                 "x-grok-managed-gateway": true,
             }))
             .unwrap(),
@@ -350,6 +362,7 @@ mod tests {
         .await;
         assert!(tools_dir.join("local_tool.json").exists());
         assert!(!tools_dir.join("gateway_tool.json").exists());
+        assert!(!tools_dir.join("legacy_gateway_tool.json").exists());
     }
 
     #[tokio::test]

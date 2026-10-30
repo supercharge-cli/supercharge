@@ -171,7 +171,7 @@ async fn get_authenticated_json<T: serde::de::DeserializeOwned>(
         .timeout(std::time::Duration::from_secs(10))
         .header("Authorization", format!("Bearer {auth_key}"))
         .header("X-XAI-Token-Auth", "xai-grok-cli")
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .send()
         .await
     {
@@ -224,7 +224,7 @@ pub async fn call_gateway_tool(
         .timeout(GATEWAY_TOOL_CALL_TIMEOUT)
         .header("Authorization", format!("Bearer {auth_key}"))
         .header("X-XAI-Token-Auth", "xai-grok-cli")
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .json(&request)
         .send()
         .await

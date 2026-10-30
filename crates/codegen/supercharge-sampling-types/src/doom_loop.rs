@@ -1,7 +1,7 @@
 //! Server-side doom-loop check: wire contract types and tolerant parsers.
 //!
 //! The inference API reports selected generation-loop detector families on streaming `/v1/responses` requests.
-//! `x-grok-doom-loop-check` selects legacy labels, while `x-grok-exact-repetition-check` selects exact-repetition labels.
+//! `x-supercharge-doom-loop-check` selects legacy labels, while `x-supercharge-exact-repetition-check` selects exact-repetition labels.
 //! Reports use two places:
 //!
 //! * a non-standard mid-stream SSE event (`response.doom_loop_check`) emitted as new triggers appear, carrying the **cumulative** trigger set:
@@ -20,11 +20,11 @@ use serde::{Deserialize, Serialize};
 
 /// Legacy detector reporting header.
 /// Its value is the tail/token-diversity detector window (decimal token count).
-/// Exact-repetition labels use the independent `x-grok-exact-repetition-check` sibling header.
-pub const DOOM_LOOP_CHECK_HEADER: &str = "x-grok-doom-loop-check";
+/// Exact-repetition labels use the independent `x-supercharge-exact-repetition-check` sibling header.
+pub const DOOM_LOOP_CHECK_HEADER: &str = "x-supercharge-doom-loop-check";
 /// Exact-repetition reporting sibling header.
 /// The default client value is the production-safe minimum of 64 tokens.
-pub const EXACT_REPETITION_CHECK_HEADER: &str = "x-grok-exact-repetition-check";
+pub const EXACT_REPETITION_CHECK_HEADER: &str = "x-supercharge-exact-repetition-check";
 pub const DEFAULT_EXACT_REPETITION_MIN_TOKENS: usize = 64;
 
 /// `type` of the non-standard mid-stream SSE event, also its SSE `event:` name.

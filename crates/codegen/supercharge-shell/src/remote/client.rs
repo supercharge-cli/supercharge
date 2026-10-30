@@ -30,14 +30,14 @@ fn add_cli_chat_proxy_headers_blocking(
         .header("Authorization", format!("Bearer {}", &auth.key))
         .header("X-XAI-Token-Auth", GrokComConfig::default().token_header)
         .header("x-userid", &auth.user_id)
-        .header("x-grok-client-version", supercharge_version::VERSION);
+        .header("x-supercharge-client-version", supercharge_version::VERSION);
     if let Some(email) = &auth.email {
         builder = builder.header("x-email", email);
     }
     let _ = (alpha_test_key, url);
     builder
         .header(
-            "x-grok-client-identifier",
+            "x-supercharge-client-identifier",
             crate::http::process_client_identifier(),
         )
         .header(
@@ -69,7 +69,7 @@ async fn add_bundle_fetch_headers(
     credentials.alpha_test_key = alpha_test_key.map(str::to_owned);
     let mut builder = credentials
         .apply(builder, url)
-        .header("x-grok-client-version", supercharge_version::VERSION);
+        .header("x-supercharge-client-version", supercharge_version::VERSION);
     if deployment_key.is_none()
         && let Some(auth) = &resolved_auth
     {
@@ -80,7 +80,7 @@ async fn add_bundle_fetch_headers(
     }
     builder = builder
         .header(
-            "x-grok-client-identifier",
+            "x-supercharge-client-identifier",
             crate::http::process_client_identifier(),
         )
         .header(
@@ -171,7 +171,7 @@ async fn fetch_bundle_inner(
     let mut request = client
         .get(&archive_url)
         .timeout(std::time::Duration::from_secs(30))
-        .header("x-grok-client-version", supercharge_version::VERSION)
+        .header("x-supercharge-client-version", supercharge_version::VERSION)
         .header(
             crate::http::CLIENT_MODE_HEADER,
             crate::http::process_client_mode(),
@@ -403,14 +403,14 @@ impl BackendClient {
             headers.insert("x-email", v);
         }
         if let Ok(v) = HeaderValue::from_str(&crate::http::process_client_identifier()) {
-            headers.insert("x-grok-client-identifier", v);
+            headers.insert("x-supercharge-client-identifier", v);
         }
         headers.insert(
             crate::http::CLIENT_MODE_HEADER,
             HeaderValue::from_static(crate::http::process_client_mode()),
         );
         headers.insert(
-            "x-grok-client-version",
+            "x-supercharge-client-version",
             HeaderValue::from_static(supercharge_version::VERSION),
         );
         Ok(headers)

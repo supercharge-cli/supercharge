@@ -384,7 +384,7 @@ pub(super) async fn exchange_code(
     let resp = with_alpha_test_key(
         supercharge_http::shared_client()
             .post(token_endpoint)
-            .header("x-grok-client-version", supercharge_version::VERSION)
+            .header("x-supercharge-client-version", supercharge_version::VERSION)
             .form(&[
                 ("grant_type", "authorization_code"),
                 ("code", code),

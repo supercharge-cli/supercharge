@@ -33,7 +33,7 @@ pub enum DeviceCodeError {
 
 // --- Public types ---
 
-/// Low-cardinality hint sent to the OAuth2 provider as the `x-grok-client-surface` header. It lets device-flow metrics separate logins a human can actually finish (`Ui`, `Cli`) from headless automation (`Headless`).
+/// Low-cardinality hint sent to the OAuth2 provider as the `x-supercharge-client-surface` header. It lets device-flow metrics separate logins a human can actually finish (`Ui`, `Cli`) from headless automation (`Headless`).
 /// Headless automation mints a device code but can never reach the browser consent page. That traffic otherwise pollutes the device-flow conversion denominator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
@@ -121,9 +121,9 @@ pub async fn request_device_code(
         client
             .post(&url)
             // Lets oauth2-provider segment device-flow success by client version.
-            .header("x-grok-client-version", supercharge_version::VERSION)
+            .header("x-supercharge-client-version", supercharge_version::VERSION)
             // Lets oauth2-provider separate human-completable logins from headless automation in the device-flow funnel metrics
-            .header("x-grok-client-surface", surface.as_ref())
+            .header("x-supercharge-client-surface", surface.as_ref())
             .form(&[
                 ("client_id", client_id),
                 ("scope", scope_str.as_str()),
@@ -204,8 +204,8 @@ pub async fn complete_device_code_login(
         let resp = with_alpha_test_key(
             client
                 .post(&token_url)
-                .header("x-grok-client-version", supercharge_version::VERSION)
-                .header("x-grok-client-surface", surface.as_ref())
+                .header("x-supercharge-client-version", supercharge_version::VERSION)
+                .header("x-supercharge-client-surface", surface.as_ref())
                 .form(&[
                     ("grant_type", DEVICE_GRANT_TYPE),
                     ("device_code", device_code.device_code.as_str()),

@@ -4666,7 +4666,7 @@ async fn grok_agent_id_header_rejects_invalid_session_id() {
         Ok(_) => panic!("invalid header value must fail closed"),
         Err(error) => error,
     };
-    assert!(error.to_string().contains("invalid X-Grok-Agent-ID value"));
+    assert!(error.to_string().contains("invalid X-Supercharge-Agent-ID value"));
 }
 
 #[test]

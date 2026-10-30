@@ -5,9 +5,9 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
-const TURN_INDEX_HEADER: &str = "x-grok-turn-idx";
-const REQUEST_ID_HEADER: &str = "x-grok-req-id";
-const SESSION_ID_HEADER: &str = "x-grok-session-id";
+const TURN_INDEX_HEADER: &str = "x-supercharge-turn-idx";
+const REQUEST_ID_HEADER: &str = "x-supercharge-req-id";
+const SESSION_ID_HEADER: &str = "x-supercharge-session-id";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InferenceEndpoint {
     ChatCompletions,
