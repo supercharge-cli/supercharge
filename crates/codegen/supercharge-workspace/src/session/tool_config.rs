@@ -285,6 +285,10 @@ pub struct WorkspaceSessionContextFactory {
     tool_state_home: Option<PathBuf>,
     /// The ids a pinned bind may name and this factory will serve.
     served_tool_ids: Arc<std::collections::HashSet<String>>,
+    /// The per-command sandbox seam (`supercharge_tools::sandbox_launch`): handed to the terminal
+    /// backend and stored in `Resources` so every shell spawn goes through it. `None` runs
+    /// commands unwrapped.
+    sandbox_launch: Option<supercharge_tools::sandbox_launch::SandboxLaunchHook>,
 }
 impl Default for WorkspaceSessionContextFactory {
     fn default() -> Self {
@@ -298,6 +302,7 @@ impl WorkspaceSessionContextFactory {
             api_base_url: None,
             tool_state_home: None,
             served_tool_ids: REGISTRY_TOOL_IDS.clone(),
+            sandbox_launch: None,
         }
     }
     /// Factory with auth: gen tools use the provider's live token.
@@ -310,6 +315,7 @@ impl WorkspaceSessionContextFactory {
             api_base_url: Some(api_base_url),
             tool_state_home: None,
             served_tool_ids: REGISTRY_TOOL_IDS.clone(),
+            sandbox_launch: None,
         }
     }
     /// Factory for a host whose credential only serves the hub. Sessions get no credential, and the
@@ -331,6 +337,14 @@ impl WorkspaceSessionContextFactory {
     /// Callers should only invoke this when [`tool_state_enabled`] is `true`.
     pub fn with_tool_state_home(mut self, home: PathBuf) -> Self {
         self.tool_state_home = Some(home);
+        self
+    }
+    /// Route every shell spawn of the sessions this factory builds through `hook`.
+    pub fn with_sandbox_launch(
+        mut self,
+        hook: supercharge_tools::sandbox_launch::SandboxLaunchHook,
+    ) -> Self {
+        self.sandbox_launch = Some(hook);
         self
     }
     /// `<tool_state_home>/sessions/<sanitized_id>/tool_state.json`, or empty when persistence is disabled or dir creation fails.
@@ -452,12 +466,21 @@ impl SessionContextFactory for WorkspaceSessionContextFactory {
         }
     }
     fn build_terminal_backend(&self) -> crate::config::SessionTerminalBackend {
-        crate::config::SessionTerminalBackend::local(
-            supercharge_tools::computer::local::LocalTerminalBackend::new(),
-        )
+        let backend = match &self.sandbox_launch {
+            Some(hook) => {
+                supercharge_tools::computer::local::LocalTerminalBackend::new_with_sandbox_launch(
+                    hook.shared(),
+                )
+            }
+            None => supercharge_tools::computer::local::LocalTerminalBackend::new(),
+        };
+        crate::config::SessionTerminalBackend::local(backend)
     }
     fn registry_builder(&self) -> ToolRegistryBuilder {
-        ToolRegistryBuilder::new()
+        match &self.sandbox_launch {
+            Some(hook) => ToolRegistryBuilder::new().with_sandbox_launch(hook.clone()),
+            None => ToolRegistryBuilder::new(),
+        }
     }
     fn known_tool_ids(&self) -> Arc<std::collections::HashSet<String>> {
         self.served_tool_ids.clone()
@@ -524,6 +547,7 @@ pub mod test_support {
     pub struct TestSessionContextFactory {
         pub temp: TempDir,
         tool_state: bool,
+        sandbox_launch: Option<supercharge_tools::sandbox_launch::SandboxLaunchHook>,
     }
     impl Default for TestSessionContextFactory {
         fn default() -> Self {
@@ -535,6 +559,7 @@ pub mod test_support {
             Self {
                 temp: TempDir::new().expect("create temp dir"),
                 tool_state: true,
+                sandbox_launch: None,
             }
         }
         /// Matches production, where `SUPERCHARGE_WORKSPACE_TOOL_STATE_ENABLED` is unset and the real factory returns an empty path.
@@ -543,6 +568,15 @@ pub mod test_support {
                 tool_state: false,
                 ..Self::new()
             }
+        }
+        /// Route every shell spawn through `hook`, as the production factory does for a served
+        /// folder's `WorkspaceSandbox`.
+        pub fn with_sandbox_launch(
+            mut self,
+            hook: supercharge_tools::sandbox_launch::SandboxLaunchHook,
+        ) -> Self {
+            self.sandbox_launch = Some(hook);
+            self
         }
     }
     impl SessionContextFactory for TestSessionContextFactory {
@@ -588,10 +622,17 @@ pub mod test_support {
             }
         }
         fn build_terminal_backend(&self) -> crate::config::SessionTerminalBackend {
-            crate::config::SessionTerminalBackend::local(LocalTerminalBackend::new())
+            let backend = match &self.sandbox_launch {
+                Some(hook) => LocalTerminalBackend::new_with_sandbox_launch(hook.shared()),
+                None => LocalTerminalBackend::new(),
+            };
+            crate::config::SessionTerminalBackend::local(backend)
         }
         fn registry_builder(&self) -> ToolRegistryBuilder {
-            ToolRegistryBuilder::new()
+            match &self.sandbox_launch {
+                Some(hook) => ToolRegistryBuilder::new().with_sandbox_launch(hook.clone()),
+                None => ToolRegistryBuilder::new(),
+            }
         }
     }
     /// `ToolConfig` builder helper.

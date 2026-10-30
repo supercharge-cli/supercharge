@@ -538,6 +538,7 @@ async fn run(
             on_handshake_refused: None,
             bind_mcp: None,
             host_kind,
+            sandbox: None,
         },
     )
     .await

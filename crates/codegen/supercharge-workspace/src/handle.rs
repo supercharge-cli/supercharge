@@ -630,6 +630,7 @@ impl WorkspaceHandle {
             tool_approval: config.tool_approval,
             host_kind: config.host_kind,
             root_cwd: config.root_cwd.clone(),
+            sandbox: config.sandbox,
             sessions: parking_lot::RwLock::new(sessions),
             session_factory: config.session_factory,
             bind_mcp: config.bind_mcp.map(parking_lot::RwLock::new),
@@ -697,6 +698,11 @@ impl WorkspaceHandle {
     /// Use from async callers.
     pub async fn hub_server_blocking(&self) -> Option<supercharge_computer_hub_sdk::ToolServer> {
         self.shared.hub_server_blocking().await
+    }
+    /// The folder's per-command shell sandbox, when the host built the workspace with one (the
+    /// daemon does; the CLI and the remote sandbox server do not).
+    pub fn sandbox(&self) -> Option<Arc<crate::sandbox::WorkspaceSandbox>> {
+        self.shared.sandbox()
     }
     pub(crate) fn root_cwd(&self) -> crate::error::WorkspaceResult<PathBuf> {
         Ok(self.shared.root_cwd.clone())
@@ -1636,6 +1642,11 @@ impl WorkspaceHandle {
     /// Does **not** drop the session; the server's `unbind_session` path handles that.
     pub fn on_session_ended(&self, session_id: &str) {
         self.shared.activity_tracker.session_ended(session_id);
+        if let Some(sandbox) = self.shared.sandbox() {
+            let session_id = session_id.to_owned();
+            let owner = sandbox.clone();
+            owner.spawn_owned(async move { sandbox.end_session(&session_id).await });
+        }
         self.shared.session_event_writers.remove(session_id);
         self.shared
             .inflight_enqueues
@@ -4237,6 +4248,10 @@ pub struct LocalWorkspaceConnectOptions {
     /// the gen and search tools and the upload queue; the default (`Daemon`)
     /// is hub-only.
     pub host_kind: crate::host_kind::WorkspaceHostKind,
+    /// The folder's per-command shell sandbox (`crate::sandbox`): its launch hook is handed to
+    /// every session's terminal backend and tool registry, and the hub's result path decodes
+    /// denials through it. `None` (the default) runs commands unwrapped.
+    pub sandbox: Option<Arc<crate::sandbox::WorkspaceSandbox>>,
 }
 /// Create a [`WorkspaceHandle`] and connect it to the hub. Sessions are bound dynamically by clients calling `bind_server`.
 pub async fn connect_local_workspace(
@@ -4282,6 +4297,7 @@ pub(crate) async fn build_local_workspace(
         bind_mcp,
         on_handshake_refused,
         host_kind,
+        sandbox,
     } = options;
     let identity: crate::upload::environment::WorkspaceIdentity =
         auth.identity().map(Into::into).unwrap_or_default();
@@ -4299,6 +4315,11 @@ pub(crate) async fn build_local_workspace(
     let mut factory = host_kind.session_context_factory(auth.clone(), api_base_url.clone());
     if crate::session::tool_config::tool_state_enabled() {
         factory = factory.with_tool_state_home(workspace_home.clone());
+    }
+    if let Some(sandbox) = &sandbox {
+        factory = factory.with_sandbox_launch(
+            supercharge_tools::sandbox_launch::SandboxLaunchHook::new(sandbox.clone()),
+        );
     }
     let hub_cfg = crate::hub::HubConfig {
         url: hub_url,
@@ -4329,6 +4350,7 @@ pub(crate) async fn build_local_workspace(
     }
     ws_config.tool_approval = crate::permission::approval_gate_for(host_kind);
     ws_config.host_kind = host_kind;
+    ws_config.sandbox = sandbox;
     if let Ok(dir) = std::env::var("SUPERCHARGE_WORKSPACE_SERVER_SKILLS_DIR")
         && !dir.is_empty()
     {
@@ -4904,6 +4926,7 @@ impl WorkspaceHandle {
             bind_mcp: None,
             tool_approval: crate::permission::ToolApprovalGate::Off,
             host_kind: Default::default(),
+            sandbox: None,
         };
         Self::build(
             config,
@@ -4949,6 +4972,7 @@ impl WorkspaceHandle {
             bind_mcp: None,
             tool_approval: crate::permission::ToolApprovalGate::Off,
             host_kind: Default::default(),
+            sandbox: None,
         }
     }
     /// Test handle backed by a temp dir. Zero sessions; `TempDir` kept alive via `Arc`.
@@ -4965,6 +4989,24 @@ impl WorkspaceHandle {
         let factory = std::sync::Arc::new(TestSessionContextFactory::new());
         Self::new(Self::test_config(root.to_path_buf(), factory))
             .expect("test workspace handle construction must succeed")
+    }
+    /// Like [`Self::for_test_in`] with the folder's command sandbox wired the way
+    /// `build_local_workspace` wires it: every shell spawn goes through `sandbox`, the hub's
+    /// result path decodes what it stopped, and hub calls meet `tool_approval` first (the
+    /// daemon's is `approval_gate_for(WorkspaceHostKind::Daemon)`).
+    pub fn for_test_in_with_sandbox(
+        root: &std::path::Path,
+        sandbox: std::sync::Arc<crate::sandbox::WorkspaceSandbox>,
+        tool_approval: crate::permission::ToolApprovalGate,
+    ) -> Self {
+        use crate::session::tool_config::test_support::TestSessionContextFactory;
+        let factory = std::sync::Arc::new(TestSessionContextFactory::new().with_sandbox_launch(
+            supercharge_tools::sandbox_launch::SandboxLaunchHook::new(sandbox.clone()),
+        ));
+        let mut config = Self::test_config(root.to_path_buf(), factory);
+        config.tool_approval = tool_approval;
+        config.sandbox = Some(sandbox);
+        Self::new(config).expect("test workspace handle construction must succeed")
     }
 }
 #[cfg(test)]

@@ -13,6 +13,9 @@ mod prompter;
 pub mod reasons;
 pub mod resolution;
 pub mod rules;
+mod sandbox_gate;
+mod sandbox_network;
+pub mod sandbox_wire;
 mod shell_access;
 mod state;
 pub mod types;
@@ -56,11 +59,19 @@ pub use auto_mode::{
 };
 pub use gate_preflight::GatePreflight;
 
+pub(crate) use hub_gate::grant_store_access;
 pub(crate) use hub_gate::{SessionApproval, approve_hub_call};
 pub use hub_gate::{ToolApprovalGate, approval_gate_for};
 pub use hub_permission::{
     PermissionHookTransport, ToolServerPermissionTransport, hitl_permission_live_enabled,
     prompt_outcome_allows, request_permission_via_hub,
+};
+pub(crate) use sandbox_gate::{
+    SandboxPath, SettleContext, ViolationSettlement, refuse_mode_layer_write, settle_violation,
+};
+pub use sandbox_network::{
+    GrantView, HoldAnswer, SandboxNetworkDecider, SandboxNetworkDeciderConfig, ViolationSink,
+    WebFetchDomainFile, WebFetchDomains,
 };
 
 pub(crate) fn init_metrics() {
@@ -90,6 +101,9 @@ pub use prompter::{
 pub use shell_access::{ProtectedEditPermission, ProtectedEditReason};
 pub use state::PermissionState;
 pub use state::cleanup_stale_permission_state;
+/// The folder's grant store, for tests of the hub path that seed a `permission.toml` row.
+#[cfg(test)]
+pub(crate) use state::{StateFileAccess, load_state_from_disk, persist_state};
 pub use types::{
     AccessKind, ClientType, Decision, HOOK_ASK_META_KEY, HookAsk, PermissionCommand,
     PermissionEvent, PermissionRequest, PermissionResolution,

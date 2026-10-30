@@ -115,6 +115,7 @@ fn make_handle_with_factory(
         bind_mcp: None,
         tool_approval,
         host_kind: Default::default(),
+        sandbox: None,
     };
     let handle = WorkspaceHandle::build(
         config,
@@ -1279,6 +1280,7 @@ fn make_persistent_shell_handle() -> WorkspaceHandle {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -1731,6 +1733,7 @@ pub(crate) fn make_handle_with_events() -> (WorkspaceHandle, tempfile::TempDir) 
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -2426,6 +2429,7 @@ fn make_queue_backed_handle_with(
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -3112,6 +3116,7 @@ async fn hook_registry_loads_from_settings_file() {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -3150,6 +3155,7 @@ async fn hook_registry_loads_from_directory() {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -3210,6 +3216,7 @@ async fn hook_load_errors_reported_for_bad_file() {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -3254,6 +3261,7 @@ async fn hook_registry_global_and_project_sources_merge() {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -3285,6 +3293,7 @@ async fn hook_registry_missing_source_is_non_fatal() {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -3320,6 +3329,7 @@ async fn hook_registry_empty_directory_yields_empty_registry() {
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };
@@ -7785,6 +7795,7 @@ fn make_handle_with_queue_routing(
         require_explicit_toolset: false,
         confine_fs_to_workspace_root: false,
         host_kind: Default::default(),
+        sandbox: None,
         bind_mcp: None,
         tool_approval: crate::permission::ToolApprovalGate::Off,
     };

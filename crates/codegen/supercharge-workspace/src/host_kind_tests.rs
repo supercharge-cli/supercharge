@@ -111,7 +111,8 @@ async fn only_a_sandbox_session_carries_the_credential() {
             factory.build_terminal_backend().backend().clone(),
         );
         assert_eq!(expected, ctx.auth_provider.is_some(), "{host:?}");
-        assert_eq!(expected, ctx.image_gen_config.has_credentials(), "{host:?}");
+        // Image gen is off on every host: sessions never hand it the credential.
+        assert!(!ctx.image_gen_config.has_credentials(), "{host:?}");
         assert_eq!(expected, ctx.video_gen_config.is_enabled(), "{host:?}");
         assert_eq!(
             expected,
@@ -125,7 +126,7 @@ async fn only_a_sandbox_session_carries_the_credential() {
             resources.contains::<SharedAuthProvider>(),
             "{host:?}"
         );
-        assert_eq!(expected, resources.contains::<ImageGenClient>(), "{host:?}");
+        assert!(!resources.contains::<ImageGenClient>(), "{host:?}");
         assert_eq!(expected, resources.contains::<VideoGenClient>(), "{host:?}");
         assert_eq!(
             expected,
