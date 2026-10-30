@@ -74,7 +74,9 @@ pub(super) fn sampler_surfaces_429() -> supercharge_sampler::RetryPolicy {
 fn sampler_retries_429() -> supercharge_sampler::RetryPolicy {
     supercharge_sampler::RetryPolicy {
         max_retries: 5,
-        rate_limit_retry_threshold: supercharge_sampler::RATE_LIMIT_RETRY_THRESHOLD,
+        // Pinned to two attempts (own attempt + one retry); the sampler default is now
+        // uncapped beyond `[retry] max_attempts`, which would let the second 429 recover.
+        rate_limit_retry_threshold: 2,
         ..Default::default()
     }
 }

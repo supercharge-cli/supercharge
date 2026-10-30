@@ -2129,6 +2129,16 @@ fn build_minimal_agent_for_tests() -> MvpAgent {
     let cfg = AgentConfig::default();
     MvpAgent::new(gateway, &cfg, auth_manager, None, None).expect("valid test config")
 }
+/// Seed a credentialed catalog entry and select it, so `prompt` gets past the provider-only "no model configured" gate.
+fn select_configured_test_model(agent: &MvpAgent) {
+    use crate::agent::config::{EndpointsConfig, ModelEntry};
+    let mut entry = ModelEntry::fallback("test-model", &EndpointsConfig::default());
+    entry.api_key = Some("sk-test".to_owned());
+    agent.models_manager.insert_test_entry("test-model", entry);
+    agent
+        .models_manager
+        .set_current_model_id(acp::ModelId::new("test-model"));
+}
 fn session_usage_request(session_id: &str) -> acp::ExtRequest {
     acp::ExtRequest::new(
         "x.ai/session/usage",
@@ -3759,12 +3769,11 @@ async fn cached_token_fallthrough_falls_to_grok_com_without_credentials() {
         "no API-key creds and no kill switch -> interactive grok.com login",
     );
 }
-/// A provider-only deployment has no account session to offer, so every session
-/// method must be refused with setup guidance instead of starting the inherited
-/// first-party sign-in.
+/// There is no account login: `authenticate` is a harmless no-op for every method id
+/// (provider credentials come from `/setup`), and session auth stays disabled.
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
-async fn provider_only_deployment_refuses_session_auth_methods() {
+async fn authenticate_is_a_noop_without_account_login() {
     use supercharge_test_support::EnvGuard;
     let _oidc_issuer = EnvGuard::unset("SUPERCHARGE_OIDC_ISSUER");
     let _oauth2_issuer = EnvGuard::unset("SUPERCHARGE_OAUTH2_ISSUER");
@@ -3775,18 +3784,17 @@ async fn provider_only_deployment_refuses_session_auth_methods() {
         "the agent default must not enable session auth"
     );
     for method in ["cached_token", "supercharge.ai", "oidc"] {
-        let err = acp::Agent::authenticate(
+        acp::Agent::authenticate(
             &agent,
             acp::AuthenticateRequest::new(acp::AuthMethodId::new(method)),
         )
         .await
-        .expect_err("session auth must be refused without a configured authority");
-        assert_eq!(
-            err.data.as_ref().and_then(|d| d.as_str()),
-            Some(crate::agent::auth_method::AUTH_ERROR_SESSION_DISABLED),
-            "method {method} must be refused with setup guidance",
-        );
+        .unwrap_or_else(|e| panic!("method {method} must be accepted as a no-op: {e:?}"));
     }
+    assert!(
+        agent.auth_manager.current().is_none(),
+        "a no-op authenticate must not create an account session"
+    );
 }
 /// Verifies the 4-state matrix of `(disable_zdr_incompatible_tools, zdr_video_output_s3)`: | ZDR flag | S3 config | Result | |----------|-----------|---------------------------------------------| | false | None | Enabled, no S3 (normal non-ZDR mode) | | true | None | Disabled (ZDR with no escape hatch) | | false | Some | Enabled, S3 **not** threaded (non-ZDR) | | true | Some | Enabled, S3 threaded (ZDR with upload path) |
 #[tokio::test(flavor = "current_thread")]
@@ -5994,6 +6002,7 @@ fn cancel_never_overtakes_in_flight_prompt_intake() {
     use acp::Agent as _;
     run_local_for_bridge_test(|| async {
         let agent = build_minimal_agent_for_tests();
+        select_configured_test_model(&agent);
         let sid = acp::SessionId::new("sess-cancel-intake-race");
         let (handle, _tx, mut cmd_rx) = make_live_session_handle(&sid, None);
         agent.insert_resident(&sid, handle);
@@ -6022,8 +6031,9 @@ fn cancel_never_overtakes_in_flight_prompt_intake() {
             vec![acp::ContentBlock::from("hi")],
         ));
         let cancel_fut = async {
-            intake_parked_rx
+            tokio::time::timeout(std::time::Duration::from_secs(10), intake_parked_rx)
                 .await
+                .expect("prompt intake must reach the fake actor, not return early")
                 .expect("prompt intake reaches the fake actor");
             let _ = agent
                 .cancel(acp::CancelNotification::new(sid.clone()))

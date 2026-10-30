@@ -461,6 +461,8 @@ mod tests {
     }
 
     #[test]
+    // Serial: it reads the release-build and trust env vars that serial tests set.
+    #[serial_test::serial]
     fn record_and_lookup_round_trip() {
         // `repo_tmp` git-inits the dir so `workspace_key` yields a unique key
         // It returns the git-repo root, which would otherwise collapse to a shared ambient root if `$TMPDIR` is inside a checkout

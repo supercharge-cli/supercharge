@@ -771,3 +771,30 @@ fn wire_sanitizer_table() {
         assert!(pending.is_empty(), "{name}");
     }
 }
+
+#[test]
+fn system_fold_keeps_user_image_blocks() {
+    let mut user = match ConversationItem::user("what is this?") {
+        ConversationItem::User(u) => u,
+        _ => unreachable!(),
+    };
+    user.content.push(ContentPart::Image {
+        url: std::sync::Arc::<str>::from("data:image/png;base64,AAAA"),
+    });
+    let msgs = conversation_to_chat_messages(vec![
+        ConversationItem::system("be brief"),
+        ConversationItem::User(user),
+    ]);
+    let [msg] = msgs.as_slice() else {
+        panic!("expected one message: {msgs:?}");
+    };
+    assert_eq!(msg.role, Role::User);
+    let MessageContent::Blocks(blocks) = &msg.content else {
+        panic!("image message must stay multipart: {:?}", msg.content);
+    };
+    assert_matches!(&blocks[0], ChatContentBlock::Text { text } if text == "be brief");
+    assert!(
+        blocks.iter().any(|b| matches!(b, ChatContentBlock::ImageUrl { image_url } if image_url.url == "data:image/png;base64,AAAA")),
+        "image block must survive the system fold: {blocks:?}"
+    );
+}

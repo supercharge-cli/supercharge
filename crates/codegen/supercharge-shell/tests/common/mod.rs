@@ -315,12 +315,19 @@ pub async fn start_seeded_mock(
         .await
         .expect("start mock server");
     std::fs::write(home.join("agent_id"), "test-agent-id").expect("seed agent_id");
-    let scope = supercharge_login::GrokComConfig::default().auth_scope();
+    // Session auth is opt-in: a provider-only build reads a session token (and fetches remote
+    // settings with it) only when the operator configures an issuer, so the seeded deployment does.
+    // SAFETY: single-test binaries; no other thread reads or writes the environment.
+    unsafe {
+        std::env::set_var("SUPERCHARGE_OAUTH2_ISSUER", server.url());
+        std::env::set_var("SUPERCHARGE_OAUTH2_CLIENT_ID", "test-client");
+    }
+    let scope = supercharge_login::GrokComConfig::provider_only_default().auth_scope();
     let auth = serde_json::json!({
         scope: {
             "key": "test-session-token",
             "auth_mode": "oidc",
-            "oidc_issuer": supercharge_login::xai_oauth2_issuer(),
+            "oidc_issuer": server.url(),
             "create_time": "2026-01-01T00:00:00Z",
             "expires_at": "2099-01-01T00:00:00Z",
             "user_id": "test-user",
@@ -330,8 +337,9 @@ pub async fn start_seeded_mock(
     std::fs::write(
         home.join("config.toml"),
         format!(
-            "[endpoints]\ncli_chat_proxy_base_url = \"{}\"\n",
-            server.url()
+            // A provider-only build fetches a catalog only from a configured provider, as `/setup` writes it.
+            "[endpoints]\ncli_chat_proxy_base_url = \"{url}\"\nmodels_base_url = \"{url}\"\n",
+            url = server.url()
         ),
     )
     .expect("write config.toml");

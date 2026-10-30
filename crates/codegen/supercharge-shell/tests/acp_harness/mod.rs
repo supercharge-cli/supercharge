@@ -130,6 +130,18 @@ fn spawn_agent_local(
 
     let mut agent_config = AgentConfig::default();
     agent_config.remote_settings = remote;
+    // A provider-only build only treats models with their own credential as configured,
+    // so give each mock model the test key (as `/setup` would write it).
+    let api_key = std::env::var("SUPERCHARGE_API_KEY").unwrap_or_else(|_| "test-key-for-ci".into());
+    for id in MOCK_MODEL_IDS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter() {
+        agent_config.config_models.insert(
+            id.clone(),
+            supercharge_shell::agent::config::ConfigModelOverride {
+                api_key: Some(api_key.clone()),
+                ..Default::default()
+            },
+        );
+    }
     let auth_manager = Arc::new(agent_config.create_auth_manager());
     let (gw_tx, gw_rx) = tokio::sync::mpsc::unbounded_channel();
     let agent = MvpAgent::new(
@@ -232,16 +244,17 @@ where
     .expect("initialize timed out")
     .expect("initialize failed");
 
-    // API-key auth so sessions resolve the mock's `test-model`.
-    let method = init
-        .auth_methods
-        .iter()
-        .find(|m| &*m.id().0 == "xai.api_key")
-        .expect("xai.api_key auth method not advertised");
+    // No account login is advertised: credentials come from the `[model.*]` key seeded by
+    // `spawn_agent_local`. Clients may still call `authenticate`; it must succeed as a no-op.
+    assert!(
+        init.auth_methods.is_empty(),
+        "no auth method is advertised; got {:?}",
+        init.auth_methods.iter().map(|m| m.id().0.to_string()).collect::<Vec<_>>()
+    );
     tokio::time::timeout(
         RPC_TIMEOUT,
         client_conn.authenticate(
-            acp::AuthenticateRequest::new(method.id().clone())
+            acp::AuthenticateRequest::new(PROVIDER_API_KEY_METHOD_ID)
                 .meta(json!({ "headless": true }).as_object().cloned()),
         ),
     )
@@ -347,6 +360,8 @@ fn set_test_env(supercharge_home: &std::path::Path, server_url: &str) {
         std::env::set_var("SUPERCHARGE_HOME", supercharge_home);
         std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server_url);
         std::env::set_var("SUPERCHARGE_API_BASE_URL", server_url);
+        // The mock is the configured provider; a provider-only build lists models only from one.
+        std::env::set_var("SUPERCHARGE_MODELS_BASE_URL", server_url);
         std::env::set_var("SUPERCHARGE_API_KEY", "test-key-for-ci");
         std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
         std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");
@@ -391,6 +406,10 @@ pub fn run_agent_test_with_models<F, Fut>(
     supercharge_extra_ca::ensure_default_crypto_provider();
 
     // Own thread: agent startup blocks on a models prefetch and would starve the mock.
+    *MOCK_MODEL_IDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+        models.iter().map(|m| m.id().to_owned()).collect();
     let mock_rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
@@ -417,6 +436,12 @@ pub fn run_agent_test_with_models<F, Fut>(
         std::rc::Rc::clone(&server),
     )));
 }
+
+/// Method id a client sends for a configured provider key; `authenticate` accepts it as a no-op.
+const PROVIDER_API_KEY_METHOD_ID: &str = "provider.api_key";
+
+/// Model ids the current test's mock serves; read by [`spawn_agent_local`].
+static MOCK_MODEL_IDS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn hold_global_env() -> MutexGuard<'static, ()> {
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();

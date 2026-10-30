@@ -236,8 +236,15 @@ fn fold_system_into_first_user(msgs: &mut Vec<ChatRequestMessage>) {
     // Find the first user message and prepend.
     for msg in msgs.iter_mut() {
         if msg.role == Role::User {
-            let merged = format!("{system_text}\n\n{}", msg.text_content());
-            msg.content = MessageContent::Text(merged);
+            match &mut msg.content {
+                MessageContent::Text(text) => {
+                    *text = format!("{system_text}\n\n{text}");
+                }
+                // Keep image blocks: prepend the system text as its own block.
+                MessageContent::Blocks(blocks) => {
+                    blocks.insert(0, ChatContentBlock::Text { text: system_text });
+                }
+            }
             return;
         }
     }

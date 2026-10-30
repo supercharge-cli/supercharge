@@ -52,6 +52,11 @@ pub struct MockModelEntry {
 }
 
 impl MockModelEntry {
+    /// The model id this entry advertises on `/v1/models`.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
     pub fn new(id: impl Into<String>) -> Self {
         MockModelEntry {
             id: id.into(),

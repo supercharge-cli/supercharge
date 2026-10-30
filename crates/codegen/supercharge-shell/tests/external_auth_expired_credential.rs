@@ -254,6 +254,7 @@ fn ambient_mint_endpoints() -> Vec<String> {
 }
 
 #[test]
+#[ignore = "account login was removed (authenticate is a no-op; credentials come from /setup); no login method exists to route to"]
 fn expired_external_credential_routes_to_the_provider_login_flow() {
     supercharge_extra_ca::ensure_default_crypto_provider();
 
