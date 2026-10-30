@@ -118,7 +118,7 @@ fn make_http_server(name: &str, url: &str) -> acp::McpServer {
 }
 
 fn session_ctx(event_writer: &supercharge_session_events::EventWriter) -> McpSpawnCtx<'_> {
-    supercharge_mcp::isolate_grok_home_for_tests();
+    supercharge_mcp::isolate_supercharge_home_for_tests();
     McpSpawnCtx::for_session(
         "sess",
         event_writer,
@@ -128,7 +128,7 @@ fn session_ctx(event_writer: &supercharge_session_events::EventWriter) -> McpSpa
 }
 
 fn seed_login_without_token(server_name: &str, url: &url::Url) {
-    supercharge_mcp::isolate_grok_home_for_tests();
+    supercharge_mcp::isolate_supercharge_home_for_tests();
     McpCredentialStore::load_default()
         .unwrap_or_default()
         .insert_and_save(
@@ -140,7 +140,7 @@ fn seed_login_without_token(server_name: &str, url: &url::Url) {
 }
 
 fn seed_stored_token(server_name: &str, url: &url::Url) {
-    supercharge_mcp::isolate_grok_home_for_tests();
+    supercharge_mcp::isolate_supercharge_home_for_tests();
     let creds: rmcp::transport::auth::StoredCredentials = serde_json::from_str(&format!(
         r#"{{"client_id":"c","token_response":{{"access_token":"{TOKEN}","token_type":"bearer","refresh_token":"rt-1"}}}}"#
     ))
@@ -152,7 +152,7 @@ fn seed_stored_token(server_name: &str, url: &url::Url) {
 }
 
 fn seed_expired_token(server_name: &str, url: &url::Url, refresh_token: Option<&str>) {
-    supercharge_mcp::isolate_grok_home_for_tests();
+    supercharge_mcp::isolate_supercharge_home_for_tests();
     let received_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock")

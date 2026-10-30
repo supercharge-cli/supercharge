@@ -1214,7 +1214,7 @@
 
         impl Drop for Scenario {
             fn drop(&mut self) {
-                crate::app::subagent::set_replay_grok_home_for_tests(None);
+                crate::app::subagent::set_replay_supercharge_home_for_tests(None);
             }
         }
 
@@ -1222,7 +1222,7 @@
             /// Live-spawn `child_sid`, first writing `updates` to the child's `updates.jsonl` (`None` persists nothing).
             fn spawn(child_sid: &'static str, updates: Option<String>) -> Self {
                 let home = replay_disk_test_home();
-                crate::app::subagent::set_replay_grok_home_for_tests(Some(home.to_path_buf()));
+                crate::app::subagent::set_replay_supercharge_home_for_tests(Some(home.to_path_buf()));
                 let mut app = make_app_with_agent("sess-parent");
                 spawn_subagent_with_optional_updates(&mut app, child_sid, updates.as_deref());
                 Scenario { app, child_sid }
@@ -1596,7 +1596,7 @@
                 child_tool_line(child_sid)
             );
             write_child_updates_jsonl(replay_disk_test_home(), child_sid, &inherited);
-            crate::app::subagent::set_replay_grok_home_for_tests(Some(
+            crate::app::subagent::set_replay_supercharge_home_for_tests(Some(
                 replay_disk_test_home().to_path_buf(),
             ));
             let mut app = make_app_with_agent("sess-parent");

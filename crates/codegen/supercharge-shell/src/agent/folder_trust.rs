@@ -550,8 +550,8 @@ mod tests {
         // HOME overridden so workspace_key sees the tempdir as home; SUPERCHARGE_HOME-isolated store SUPERCHARGE_FOLDER_TRUST unset so the default-on flag applies.
         let home = tempfile::tempdir().unwrap();
         let _home = EnvGuard::set("HOME", home.path());
-        let grok_home = tempfile::tempdir().unwrap();
-        let _env = EnvGuard::set("SUPERCHARGE_HOME", grok_home.path());
+        let supercharge_home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set("SUPERCHARGE_HOME", supercharge_home.path());
         let _flag = EnvGuard::unset("SUPERCHARGE_FOLDER_TRUST");
         git2::Repository::init(home.path()).unwrap();
         // Repo-local code-exec config, so the final allow is the unrecordable-key rule at work

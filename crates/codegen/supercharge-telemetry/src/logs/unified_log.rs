@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use supercharge_config::grok_home;
+use supercharge_config::supercharge_home;
 
 /// Binary version stamped into every log entry.
 /// Set once at startup via [`set_version()`]; entries emitted before that get `None`.
@@ -155,7 +155,7 @@ fn log_path() -> PathBuf {
     if TEST_REDIRECT.load(std::sync::atomic::Ordering::Relaxed) {
         return test_log_dir().join(LOG_FILE);
     }
-    grok_home().join(LOG_DIR).join(LOG_FILE)
+    supercharge_home().join(LOG_DIR).join(LOG_FILE)
 }
 
 /// Owner-only (0o700), freshly-created directory for the test redirect. The non-recursive `create` fails on any
@@ -478,7 +478,7 @@ mod tests {
         redirect_to_temp_for_tests();
     }
 
-    /// The redirect must cover both the writer and the snapshot readers: an emit lands in a per-process temp file, never under `grok_home()`.
+    /// The redirect must cover both the writer and the snapshot readers: an emit lands in a per-process temp file, never under `supercharge_home()`.
     #[test]
     fn redirect_routes_writes_and_snapshots_to_process_temp_file() {
         info(
@@ -493,7 +493,7 @@ mod tests {
         );
         assert!(
             log_path().starts_with(std::env::temp_dir()),
-            "the shared file must live under the temp dir, not grok_home(): {}",
+            "the shared file must live under the temp dir, not supercharge_home(): {}",
             log_path().display()
         );
     }

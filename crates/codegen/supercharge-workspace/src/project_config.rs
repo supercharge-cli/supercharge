@@ -40,7 +40,7 @@ pub(crate) fn find_mcp_json_files_in(chain_dirs: &[PathBuf]) -> Vec<PathBuf> {
 
 /// True when `config_path` is the user-home `config.toml` (user tier, not project).
 fn is_user_grok_config_file(config_path: &Path) -> bool {
-    let Some(user_home) = supercharge_config::user_grok_home() else {
+    let Some(user_home) = supercharge_config::user_supercharge_home() else {
         return false;
     };
     let user_config = user_home.join("config.toml");
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn find_project_configs_excludes_user_grok_config_file() {
-        let Some(user_home) = supercharge_config::user_grok_home() else {
+        let Some(user_home) = supercharge_config::user_supercharge_home() else {
             return;
         };
         let user_config = user_home.join("config.toml");

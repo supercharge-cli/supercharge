@@ -202,10 +202,10 @@ async fn word_select_tip_skipped_when_contextual_hint_disabled() {
     let content = ContentController::start().await.expect("start content");
     // Flash mode with the tip explicitly disabled
     // SUPERCHARGE_CONTEXTUAL_HINTS stays unset here; that master switch would force all tips on and defeat the config opt-out
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create .supercharge");
     std::fs::write(
-        grok_home.join("config.toml"),
+        supercharge_home.join("config.toml"),
         "[ui]\n\
          keep_text_selection = \"flash\"\n\
          [ui.contextual_hints]\n\

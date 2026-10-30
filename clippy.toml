@@ -21,7 +21,7 @@ allow-indexing-slicing-in-tests = true
 # started it, while an enrolled one dies with its scope. Allow with a reason
 # where a child is waited on or deliberately detached.
 #
-# Ban std::env::home_dir: hand-rolled grok-home resolution drifted across
+# Ban std::env::home_dir: hand-rolled supercharge-home resolution drifted across
 # crates ($HOME-only reads broke Windows GUI-spawned processes, which have
 # USERPROFILE but no HOME). supercharge-dirs carries the one sanctioned call.
 # Deliberately scoped to crates/codegen: the tree that ships to Windows
@@ -38,14 +38,14 @@ allow-indexing-slicing-in-tests = true
 # `just lint-rs` only: the Bazel lint aspect pins the repo-root config, which
 # does not carry them.
 disallowed-methods = [
-    { path = "reqwest::Client::new", reason = "bypasses the grok TLS policy (backend pin, OS roots, SUPERCHARGE_EXTRA_CA_BUNDLE); build through supercharge_extra_ca; localhost-only clients allow with a reason" },
-    { path = "reqwest::blocking::Client::new", reason = "bypasses the grok TLS policy (backend pin, OS roots, SUPERCHARGE_EXTRA_CA_BUNDLE); build through supercharge_extra_ca; localhost-only clients allow with a reason" },
-    { path = "reqwest::ClientBuilder::build", reason = "use supercharge_extra_ca::build_reqwest_client: it applies the grok TLS policy and survives a broken OS store; localhost/test clients allow with a reason" },
-    { path = "reqwest::blocking::ClientBuilder::build", reason = "use supercharge_extra_ca::build_blocking_reqwest_client: it applies the grok TLS policy and survives a broken OS store; localhost/test clients allow with a reason" },
+    { path = "reqwest::Client::new", reason = "bypasses the TLS policy (backend pin, OS roots, SUPERCHARGE_EXTRA_CA_BUNDLE); build through supercharge_extra_ca; localhost-only clients allow with a reason" },
+    { path = "reqwest::blocking::Client::new", reason = "bypasses the TLS policy (backend pin, OS roots, SUPERCHARGE_EXTRA_CA_BUNDLE); build through supercharge_extra_ca; localhost-only clients allow with a reason" },
+    { path = "reqwest::ClientBuilder::build", reason = "use supercharge_extra_ca::build_reqwest_client: it applies the TLS policy and survives a broken OS store; localhost/test clients allow with a reason" },
+    { path = "reqwest::blocking::ClientBuilder::build", reason = "use supercharge_extra_ca::build_blocking_reqwest_client: it applies the TLS policy and survives a broken OS store; localhost/test clients allow with a reason" },
     { path = "std::fs::canonicalize", reason = "returns \\\\?\\ verbatim paths on Windows; use dunce::canonicalize" },
     { path = "std::path::Path::canonicalize", reason = "returns \\\\?\\ verbatim paths on Windows; use dunce::canonicalize" },
     { path = "tokio::fs::canonicalize", reason = "returns \\\\?\\ verbatim paths on Windows; use supercharge_tools::util::fs helpers or spawn_blocking + dunce::canonicalize" },
-    { path = "std::env::home_dir", reason = "grok-home resolution goes through supercharge-dirs (uncached) or supercharge_config::grok_home (cached); generic home via supercharge_dirs::home_dir" },
+    { path = "std::env::home_dir", reason = "supercharge-home resolution goes through supercharge-dirs (uncached) or supercharge_config::supercharge_home (cached); generic home via supercharge_dirs::home_dir" },
     # allow-invalid: most codegen crates no longer depend on `dirs` at all,
     # which would otherwise warn that the banned path is unreachable.
     { path = "dirs::home_dir", reason = "home-anchored paths resolve via supercharge_dirs::home_dir so all sites agree; Node-based tools use os.homedir, which matches it, not the known-folder API", allow-invalid = true },

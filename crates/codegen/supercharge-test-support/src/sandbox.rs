@@ -17,7 +17,7 @@ const REDACTED: &str = "<redacted>";
 pub struct TestSandbox {
     root: TempDir,
     home: PathBuf,
-    grok_home: PathBuf,
+    supercharge_home: PathBuf,
     workspace: PathBuf,
     temp: PathBuf,
     env: BTreeMap<OsString, OsString>,
@@ -45,8 +45,8 @@ impl TestSandbox {
     }
 
     /// Explicit grok state root.
-    pub fn grok_home(&self) -> &Path {
-        &self.grok_home
+    pub fn supercharge_home(&self) -> &Path {
+        &self.supercharge_home
     }
 
     /// Isolated working directory.
@@ -157,10 +157,10 @@ impl TestSandbox {
     /// Secret-bearing values are never included.
     pub fn diagnostic_summary(&self) -> String {
         let mut summary = format!(
-            "root={} home={} grok_home={} workspace={} temp={}",
+            "root={} home={} supercharge_home={} workspace={} temp={}",
             self.root().display(),
             self.home.display(),
-            self.grok_home.display(),
+            self.supercharge_home.display(),
             self.workspace.display(),
             self.temp.display(),
         );
@@ -210,16 +210,16 @@ impl TestSandboxBuilder {
     pub fn build(self) -> TestSandbox {
         let root = TempDir::new().expect("create test sandbox root");
         let home = root.path().join("home");
-        let grok_home = home.join(".supercharge");
+        let supercharge_home = home.join(".supercharge");
         let workspace = root.path().join("workspace");
         let temp = root.path().join("tmp");
-        for path in [&home, &grok_home, &workspace, &temp] {
+        for path in [&home, &supercharge_home, &workspace, &temp] {
             std::fs::create_dir_all(path)
                 .unwrap_or_else(|e| panic!("create sandbox path {}: {e}", path.display()));
         }
 
         let parent_cwd = std::env::current_dir().expect("read parent cwd for test sandbox");
-        let mut env = baseline_env(&home, &grok_home, &temp, &parent_cwd);
+        let mut env = baseline_env(&home, &supercharge_home, &temp, &parent_cwd);
         if let Some(url) = self.mock_url {
             apply_mock_url(&mut env, url);
         }
@@ -227,7 +227,7 @@ impl TestSandboxBuilder {
         let sandbox = TestSandbox {
             root,
             home,
-            grok_home,
+            supercharge_home,
             workspace,
             temp,
             env,
@@ -291,17 +291,17 @@ fn apply_mock_url(env: &mut BTreeMap<OsString, OsString>, url: String) {
 
 fn baseline_env(
     home: &Path,
-    grok_home: &Path,
+    supercharge_home: &Path,
     temp: &Path,
     parent_cwd: &Path,
 ) -> BTreeMap<OsString, OsString> {
     let parent_env = std::env::vars_os().collect();
-    baseline_env_from_parent(home, grok_home, temp, parent_cwd, &parent_env)
+    baseline_env_from_parent(home, supercharge_home, temp, parent_cwd, &parent_env)
 }
 
 fn baseline_env_from_parent(
     home: &Path,
-    grok_home: &Path,
+    supercharge_home: &Path,
     temp: &Path,
     parent_cwd: &Path,
     parent_env: &BTreeMap<OsString, OsString>,
@@ -321,7 +321,7 @@ fn baseline_env_from_parent(
     for (key, value) in [
         ("HOME", home),
         ("USERPROFILE", home),
-        ("SUPERCHARGE_HOME", grok_home),
+        ("SUPERCHARGE_HOME", supercharge_home),
         ("TMPDIR", temp),
         ("TMP", temp),
         ("TEMP", temp),
@@ -365,7 +365,7 @@ fn baseline_env_from_parent(
     }
     env.insert(
         "GIT_CONFIG_GLOBAL".into(),
-        grok_home.join("gitconfig").into_os_string(),
+        supercharge_home.join("gitconfig").into_os_string(),
     );
     env
 }
@@ -571,7 +571,7 @@ mod tests {
         let sandbox = TestSandbox::new();
         for path in [
             sandbox.home(),
-            sandbox.grok_home(),
+            sandbox.supercharge_home(),
             sandbox.workspace(),
             sandbox.temp_dir(),
         ] {
@@ -580,7 +580,7 @@ mod tests {
         }
         assert_ne!(sandbox.home(), sandbox.workspace());
         assert_ne!(sandbox.home(), sandbox.temp_dir());
-        assert_eq!(sandbox.grok_home(), sandbox.home().join(".supercharge"));
+        assert_eq!(sandbox.supercharge_home(), sandbox.home().join(".supercharge"));
     }
 
     #[test]
@@ -709,7 +709,7 @@ mod tests {
         );
         let sandbox = TestSandbox {
             home: root.path().join("home"),
-            grok_home: root.path().join("home/.supercharge"),
+            supercharge_home: root.path().join("home/.supercharge"),
             workspace: root.path().join("workspace"),
             temp: root.path().join("tmp"),
             root,
@@ -777,7 +777,7 @@ mod tests {
         assert_eq!(env_value(&sandbox, "HOME"), Some(sandbox.home().into()));
         assert_eq!(
             env_value(&sandbox, "SUPERCHARGE_HOME"),
-            Some(sandbox.grok_home().into())
+            Some(sandbox.supercharge_home().into())
         );
         assert_eq!(
             env_value(&sandbox, "TMPDIR"),

@@ -30,11 +30,11 @@ use crate::session::WorkspaceSession;
 
 static DECISION_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_permission_decision_total",
+        "supercharge_workspace_permission_decision_total",
         "Hub tool calls settled by the approval gate, by how they were settled",
         &["decision"]
     )
-    .expect("grok_workspace_permission_decision_total must register once")
+    .expect("supercharge_workspace_permission_decision_total must register once")
 });
 
 const DECISIONS: [&str; 8] = [

@@ -273,7 +273,7 @@ fn repos_manifest_search_dirs(start: &std::path::Path) -> Vec<std::path::PathBuf
     {
         global_manifests.push(std::path::PathBuf::from(v).join("repos.json"));
     }
-    if let Some(user_home) = supercharge_config::user_grok_home() {
+    if let Some(user_home) = supercharge_config::user_supercharge_home() {
         global_manifests.push(user_home.join("repos.json"));
     }
     let mut out = Vec::new();
@@ -1883,7 +1883,7 @@ mod tests {
         );
     }
     #[test]
-    fn repos_manifest_search_dirs_skips_user_global_grok_home() {
+    fn repos_manifest_search_dirs_skips_user_global_supercharge_home() {
         let _lock = crate::ENV_TEST_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());

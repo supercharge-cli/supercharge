@@ -16,7 +16,7 @@
 //! Other workspace keys under the path, including nested git roots, are not covered.
 //! The persisted file is written atomically with owner-only (`0600`) permissions.
 //!
-//! The store is rooted at a fresh [`supercharge_dirs::resolve_grok_home`], never `grok_home()` or a cwd-relative `./.supercharge`.
+//! The store is rooted at a fresh [`supercharge_dirs::resolve_supercharge_home`], never `supercharge_home()` or a cwd-relative `./.supercharge`.
 //! Home is `None` when `$SUPERCHARGE_HOME` and the user home are unset, or when the resolved home is relative.
 //! In that no-home environment [`TrustStore::load`] yields an empty store that trusts nothing and persists nothing.
 //! So a cloned repo can never ship a `./.supercharge/trusted_folders.toml` that self-trusts its own checkout (fail closed).
@@ -109,7 +109,7 @@ pub struct TrustStore {
 }
 
 impl TrustStore {
-    /// Load the trust store from a fresh user-home resolve (never the `grok_home()` OnceLock). When no user home resolves (see the module-level fail-closed note) the path is `None` and this returns an [`Self::empty`] store.
+    /// Load the trust store from a fresh user-home resolve (never the `supercharge_home()` OnceLock). When no user home resolves (see the module-level fail-closed note) the path is `None` and this returns an [`Self::empty`] store.
     pub fn load() -> Self {
         match Self::default_path() {
             Some(path) => Self::load_from(path),
@@ -160,14 +160,14 @@ impl TrustStore {
         self.path.is_some()
     }
 
-    /// `<user_grok_home>/trusted_folders.toml`, or `None` when no absolute home resolves.
+    /// `<user_supercharge_home>/trusted_folders.toml`, or `None` when no absolute home resolves.
     pub fn default_path() -> Option<PathBuf> {
         Self::default_path_in(trust_store_home())
     }
 
     /// Relative home is `None`: joining it would write a cwd-relative store.
-    fn default_path_in(user_grok_home: Option<PathBuf>) -> Option<PathBuf> {
-        let home = user_grok_home?;
+    fn default_path_in(user_supercharge_home: Option<PathBuf>) -> Option<PathBuf> {
+        let home = user_supercharge_home?;
         if !home.is_absolute() {
             return None;
         }
@@ -445,9 +445,9 @@ fn workspace_id(path: &Path) -> PathBuf {
     workspace_key(path.ancestors().find(|p| p.exists()).unwrap_or(path))
 }
 
-/// Fresh `$SUPERCHARGE_HOME` or `<home>/.supercharge`. Does not call `grok_home()` and does not create directories.
+/// Fresh `$SUPERCHARGE_HOME` or `<home>/.supercharge`. Does not call `supercharge_home()` and does not create directories.
 pub(crate) fn trust_store_home() -> Option<PathBuf> {
-    supercharge_dirs::resolve_grok_home()
+    supercharge_dirs::resolve_supercharge_home()
 }
 
 fn canonicalize_or_owned(path: &Path) -> PathBuf {
@@ -496,8 +496,8 @@ pub fn migrate_legacy_hook_trust() {
     }
     static MIGRATED: Once = Once::new();
     MIGRATED.call_once(|| {
-        // Same fresh home as the store; do not follow user_grok_home()'s OnceLock.
-        let Some(home) = supercharge_dirs::resolve_grok_home() else {
+        // Same fresh home as the store; do not follow user_supercharge_home()'s OnceLock.
+        let Some(home) = supercharge_dirs::resolve_supercharge_home() else {
             return;
         };
         let legacy_file = home.join(supercharge_config::TRUSTED_HOOK_PROJECTS_FILENAME);
@@ -778,7 +778,7 @@ mod tests {
         );
 
         // With NO resolvable home the path is `None`, never a synthesized fallback
-        // This is the regression guard that keeps the store off the cwd-relative `./.supercharge` that grok_home() would invent
+        // This is the regression guard that keeps the store off the cwd-relative `./.supercharge` that supercharge_home() would invent
         // That is how a cloned repo's own `<repo>/.supercharge/trusted_folders.toml` could masquerade as the user-global store and self-trust the checkout
         assert_eq!(TrustStore::default_path_in(None), None);
 
@@ -793,11 +793,11 @@ mod tests {
     }
 
     #[test]
-    fn default_path_follows_live_grok_home_not_once_lock() {
+    fn default_path_follows_live_supercharge_home_not_once_lock() {
         let _lock = crate::ENV_TEST_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        let _pin = supercharge_config::grok_home();
+        let _pin = supercharge_config::supercharge_home();
         let home = tempfile::tempdir().unwrap();
         let _env = crate::TestEnvGuard::set("SUPERCHARGE_HOME", home.path());
         let fresh = TrustStore::default_path().expect("SUPERCHARGE_HOME set");
@@ -808,7 +808,7 @@ mod tests {
     fn default_path_sources_from_fresh_home_not_once_lock() {
         assert_eq!(
             TrustStore::default_path(),
-            supercharge_dirs::resolve_grok_home()
+            supercharge_dirs::resolve_supercharge_home()
                 .filter(|h| h.is_absolute())
                 .map(|h| h.join(TRUST_FILE_NAME))
         );
@@ -1732,7 +1732,7 @@ trusted = true
 
     #[test]
     fn workspace_key_ignores_registry_for_cwd_outside_worktrees_dir() {
-        // A populated registry must NOT collapse a cwd OUTSIDE `<grok_home>/worktrees` `worktree_record_for_cwd` skips the registry there, so the key falls back to
+        // A populated registry must NOT collapse a cwd OUTSIDE `<supercharge_home>/worktrees` `worktree_record_for_cwd` skips the registry there, so the key falls back to
         // git/cwd Non-vacuous: the registry IS populated with a real git source repo that WOULD be returned for a worktree cwd `outside` is its OWN git repo (under
         // grok HOME but not under its `worktrees/`), so the fallback is deterministic (no conditional skip) We assert the key is `outside`'s own root, never the source repo
         let temp = tempfile::TempDir::new().unwrap();
@@ -1752,7 +1752,7 @@ trusted = true
         assert_eq!(
             key,
             canonicalize_or_owned(&outside),
-            "a cwd outside <grok_home>/worktrees keys on its own repo root"
+            "a cwd outside <supercharge_home>/worktrees keys on its own repo root"
         );
         assert_ne!(
             key,

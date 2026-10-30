@@ -1687,7 +1687,7 @@ pub(super) fn run_subagent_lifecycle_via_method(
     (spawn, finish)
 }
 /// Shared temp `SUPERCHARGE_HOME` for disk-replay tests.
-/// `grok_home()` uses a process-wide `OnceLock`, so parallel tests must not each set `SUPERCHARGE_HOME` to a different tempdir.
+/// `supercharge_home()` uses a process-wide `OnceLock`, so parallel tests must not each set `SUPERCHARGE_HOME` to a different tempdir.
 pub(super) fn replay_disk_test_home() -> &'static std::path::Path {
     use std::sync::OnceLock;
     static HOME: OnceLock<tempfile::TempDir> = OnceLock::new();
@@ -1701,28 +1701,28 @@ pub(super) fn replay_disk_test_home() -> &'static std::path::Path {
         .path()
 }
 /// Runs `f` with a thread-local grok home override.
-/// Disk replay tests then do not depend on process-wide `grok_home()` cache order when the full suite runs.
+/// Disk replay tests then do not depend on process-wide `supercharge_home()` cache order when the full suite runs.
 pub(super) fn with_replay_disk_home<R>(f: impl FnOnce(&std::path::Path) -> R) -> R {
     let home = replay_disk_test_home();
-    crate::app::subagent::set_replay_grok_home_for_tests(Some(home.to_path_buf()));
+    crate::app::subagent::set_replay_supercharge_home_for_tests(Some(home.to_path_buf()));
     let out = f(home);
-    crate::app::subagent::set_replay_grok_home_for_tests(None);
+    crate::app::subagent::set_replay_supercharge_home_for_tests(None);
     out
 }
 pub(super) fn write_child_updates_jsonl(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     child_sid: &str,
     content: &str,
 ) {
-    write_child_updates_jsonl_under_cwd(grok_home, "/tmp", child_sid, content);
+    write_child_updates_jsonl_under_cwd(supercharge_home, "/tmp", child_sid, content);
 }
 pub(super) fn write_child_updates_jsonl_under_cwd(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     cwd: &str,
     child_sid: &str,
     content: &str,
 ) {
-    let sessions_dir = grok_home
+    let sessions_dir = supercharge_home
         .join("sessions")
         .join(supercharge_config::encode_cwd_dirname(cwd))
         .join(child_sid);
@@ -1771,12 +1771,12 @@ pub(super) fn child_user_message_line(child_sid: &str, text: &str) -> String {
         )
 }
 pub(super) fn write_subagent_meta_json(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     parent_sid: &str,
     subagent_id: &str,
     prompt: &str,
 ) {
-    let sessions_dir = grok_home
+    let sessions_dir = supercharge_home
         .join("sessions")
         .join(urlencoding::encode("/tmp").as_ref())
         .join(parent_sid)

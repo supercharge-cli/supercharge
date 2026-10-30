@@ -585,8 +585,8 @@ fn fork_summary(
         head_commit: source.head_commit,
         head_branch: source.head_branch,
         request_id: None,
-        // Fresh local grok_home, not inherited from source: the fork lives on this machine.
-        grok_home: crate::session::persistence::grok_home_string(),
+        // Fresh local supercharge_home, not inherited from source: the fork lives on this machine.
+        supercharge_home: crate::session::persistence::supercharge_home_string(),
         last_active_at: source.last_active_at,
         generated_title: source.generated_title,
         // A fork keeps the parent's title, so whether that title was set manually carries over too

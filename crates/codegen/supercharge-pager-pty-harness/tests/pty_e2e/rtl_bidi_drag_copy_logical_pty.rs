@@ -21,10 +21,10 @@ async fn rtl_bidi_drag_copy_logical_pty() {
     ));
 
     // Enable app-side RTL reordering via appearance config (pager.toml).
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create .supercharge");
     std::fs::write(
-        grok_home.join("pager.toml"),
+        supercharge_home.join("pager.toml"),
         "[scrollback.display]\nrtl_bidi = true\n",
     )
     .expect("write pager.toml");

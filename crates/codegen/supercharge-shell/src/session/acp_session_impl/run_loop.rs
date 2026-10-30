@@ -439,7 +439,7 @@ pub(super) async fn run_session(
     }
     let _workflow_watch = crate::config::watcher::ProjectDiscoveryWatcher::start(
         std::path::Path::new(session.session_info.cwd.as_str()),
-        &crate::util::grok_home::grok_home(),
+        &crate::util::supercharge_home::supercharge_home(),
     )
     .map(|(mut watcher, mut changes)| {
         let session = session.clone();

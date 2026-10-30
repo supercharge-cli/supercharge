@@ -205,8 +205,8 @@ impl GrokHomeFixture {
         let _ = std::fs::remove_dir_all(Self::sessions_cwd_dir(cwd).join(id));
     }
     fn sessions_cwd_dir(cwd: &str) -> std::path::PathBuf {
-        let encoded = supercharge_shell::util::grok_home::encode_cwd_dirname(cwd);
-        supercharge_shell::util::grok_home::grok_home()
+        let encoded = supercharge_shell::util::supercharge_home::encode_cwd_dirname(cwd);
+        supercharge_shell::util::supercharge_home::supercharge_home()
             .join("sessions")
             .join(&encoded)
     }

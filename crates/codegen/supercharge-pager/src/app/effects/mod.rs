@@ -528,7 +528,7 @@ pub(crate) fn execute(
                     }
                 });
         }
-        Effect::ScanForeignSessions { cwd, compat, grok_home, coordinator, seq } => {
+        Effect::ScanForeignSessions { cwd, compat, supercharge_home, coordinator, seq } => {
             if coordinator.latest_seq() != seq {
                 return (false, meta);
             }
@@ -550,7 +550,7 @@ pub(crate) fn execute(
                     }
                     let enabled = crate::app::foreign_sessions::gated_sources_async(
                             compat,
-                            &grok_home,
+                            &supercharge_home,
                         )
                         .await;
                     if latest_seq.load(std::sync::atomic::Ordering::Acquire) != seq
@@ -606,7 +606,7 @@ pub(crate) fn execute(
         Effect::DetectForeignResumeHint {
             canonical_cwd,
             compat,
-            grok_home,
+            supercharge_home,
             launch_token,
         } => {
             tasks
@@ -614,7 +614,7 @@ pub(crate) fn execute(
                     let cwd_for_scan = canonical_cwd.clone();
                     let recent = crate::app::foreign_sessions::with_gated_sources_async(
                             compat,
-                            &grok_home,
+                            &supercharge_home,
                             |enabled| async move {
                                 tokio::task::spawn_blocking(move || supercharge_foreign_sessions::most_recent_foreign_session(
                                         &cwd_for_scan,
@@ -5386,7 +5386,7 @@ async fn session_rename_rpc(
 /// `cwd` comes from the `x.ai/session/info` response.
 async fn lookup_session_title(session_id: &acp::SessionId, cwd: &str) -> Option<String> {
     lookup_session_title_in(
-            supercharge_shell::util::grok_home::grok_home(),
+            supercharge_shell::util::supercharge_home::supercharge_home(),
             session_id,
             cwd,
         )

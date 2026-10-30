@@ -20,10 +20,10 @@ async fn campaign_nudges_default_until_dismissed_by_model_pick() {
     content.set_response(format!("{MOCK_RESPONSE_SENTINEL} ok."));
 
     // Seed config.toml with the user's own default model.
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create SUPERCHARGE_HOME");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create SUPERCHARGE_HOME");
     std::fs::write(
-        grok_home.join("config.toml"),
+        supercharge_home.join("config.toml"),
         format!("[models]\ndefault = \"{CONFIG_MODEL}\"\n"),
     )
     .expect("write config.toml");
@@ -84,7 +84,7 @@ async fn campaign_nudges_default_until_dismissed_by_model_pick() {
             .expect("pick model");
 
         // Deterministically wait for the dismiss to land on disk.
-        let state_path = grok_home.join("campaigns_state.json");
+        let state_path = supercharge_home.join("campaigns_state.json");
         let deadline = Instant::now() + Duration::from_secs(15);
         loop {
             h.update(Duration::from_millis(200));

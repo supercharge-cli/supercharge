@@ -2419,7 +2419,7 @@ mod prompt_file_tests {
             id: agent_client_protocol::SessionId::new("cwd-marker-sync"),
             cwd: long_cwd,
         };
-        let cwd_dir = crate::util::grok_home::sessions_cwd_dir_in(home.path(), &info.cwd);
+        let cwd_dir = crate::util::supercharge_home::sessions_cwd_dir_in(home.path(), &info.cwd);
         let cwd_file = cwd_dir.join(".cwd");
 
         let events = std::cell::RefCell::new(Vec::new());

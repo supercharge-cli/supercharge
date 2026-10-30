@@ -776,7 +776,7 @@ async fn handle_add_source(url: &str) -> supercharge_hooks_plugins_types::Action
 
     // Run the write under the config write guard (SAVE_LOCK + init flock), off the reactor; an
     // unguarded add is exactly the read-modify-write race the guard prevents.
-    let config_path = supercharge_config::grok_home().join("config.toml");
+    let config_path = supercharge_config::supercharge_home().join("config.toml");
     let _save_guard = match crate::util::config::lock_config_writes().await {
         Ok(guard) => guard,
         Err(e) => {
@@ -861,7 +861,7 @@ fn remove_source_locked(
     use crate::plugin;
     use supercharge_hooks_plugins_types::{ActionOutcome, OutcomeStatus};
 
-    let grok_home = supercharge_config::grok_home();
+    let supercharge_home = supercharge_config::supercharge_home();
 
     // Fail closed before touching config: removing the source while its
     // installs can't be deregistered would orphan them.
@@ -877,7 +877,7 @@ fn remove_source_locked(
         }
     };
 
-    let config_path = grok_home.join("config.toml");
+    let config_path = supercharge_home.join("config.toml");
     match plugin::remove_marketplace_source_from_stores(&config_path, source_url_or_path) {
         Ok(plugin::MarketplaceSourceRemoval::NotFound) => {
             return ActionOutcome {
@@ -973,10 +973,10 @@ fn read_default_skills_installs_purged(config_path: &std::path::Path) -> bool {
 /// One-shot purge of legacy marketplace `default-skills` installs.
 /// Gated by the sticky `default_skills_installs_purged` flag in config.toml.
 /// Best-effort: errors are logged and never block startup.
-pub(crate) fn purge_default_skills_installs(grok_home: &std::path::Path) {
+pub(crate) fn purge_default_skills_installs(supercharge_home: &std::path::Path) {
     let install_dir =
         supercharge_agent::plugins::install_registry::InstallRegistry::resolve_install_dir();
-    purge_default_skills_installs_impl(grok_home, &install_dir, || {
+    purge_default_skills_installs_impl(supercharge_home, &install_dir, || {
         supercharge_agent::plugins::install_registry::InstallRegistry::try_load_from(
             install_dir.clone(),
         )
@@ -988,25 +988,25 @@ pub(crate) fn purge_default_skills_installs(grok_home: &std::path::Path) {
 const PURGE_REGISTRY_LOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
 
 fn purge_default_skills_installs_impl(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     install_dir: &std::path::Path,
     load_registry: impl FnOnce() -> Result<
         supercharge_agent::plugins::install_registry::InstallRegistry,
         supercharge_agent::plugins::install_registry::InstallError,
     >,
 ) {
-    let config_path = grok_home.join("config.toml");
+    let config_path = supercharge_home.join("config.toml");
 
     if read_default_skills_installs_purged(&config_path) {
         return;
     }
 
-    let _lock = match acquire_init_lock(grok_home) {
+    let _lock = match acquire_init_lock(supercharge_home) {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!(
                 error = %e,
-                path = %grok_home.join(".config-init.lock").display(),
+                path = %supercharge_home.join(".config-init.lock").display(),
                 "skipping default-skills purge: failed to acquire init lock"
             );
             return;
@@ -1091,9 +1091,9 @@ fn purge_default_skills_installs_impl(
 
 /// Auto-register the official xAI marketplace source on first run. Gated by the caller (`init_process`); see `Config::resolve_official_marketplace_auto_register`. No-op once `official_marketplace_auto_installed` is set.
 /// Under a process-wide flock it adds the source (or just sets the flag if it's already present in config.toml or a JSON store). Best-effort: errors are logged and never block startup.
-pub(crate) fn ensure_official_marketplace_source(grok_home: &std::path::Path) {
+pub(crate) fn ensure_official_marketplace_source(supercharge_home: &std::path::Path) {
     ensure_official_marketplace_source_with(
-        grok_home,
+        supercharge_home,
         &supercharge_workspace::permission::resolution::managed_settings().marketplace_allowlist,
     );
 }
@@ -1101,10 +1101,10 @@ pub(crate) fn ensure_official_marketplace_source(grok_home: &std::path::Path) {
 /// [`ensure_official_marketplace_source`] with the marketplace policy injected — the OnceLock
 /// seam, so tests can pin the blocked-skip behavior.
 fn ensure_official_marketplace_source_with(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     policy: &supercharge_workspace::permission::resolution::MarketplacePolicy,
 ) {
-    let config_path = grok_home.join("config.toml");
+    let config_path = supercharge_home.join("config.toml");
 
     if read_official_marketplace_auto_installed(&config_path) {
         return;
@@ -1128,12 +1128,12 @@ fn ensure_official_marketplace_source_with(
         return;
     }
 
-    let _lock = match acquire_init_lock(grok_home) {
+    let _lock = match acquire_init_lock(supercharge_home) {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!(
                 error = %e,
-                path = %grok_home.join(".config-init.lock").display(),
+                path = %supercharge_home.join(".config-init.lock").display(),
                 "skipping official marketplace auto-register: failed to acquire init lock"
             );
             return;
@@ -1160,13 +1160,13 @@ fn ensure_official_marketplace_source_with(
         }
     };
 
-    // "Already present" means the official URL is in the config.toml sources or in a JSON store (settings.json, known_marketplaces.json) under grok_home
-    // The scan is scoped to grok_home only (not ~/.claude) to keep tests hermetic
+    // "Already present" means the official URL is in the config.toml sources or in a JSON store (settings.json, known_marketplaces.json) under supercharge_home
+    // The scan is scoped to supercharge_home only (not ~/.claude) to keep tests hermetic
     // A user with the URL solely in ~/.claude gets one duplicate entry that the UI dedupes by URL
     let toml_sources = supercharge_plugin_marketplace::load_sources(&parsed);
     let json_sources = supercharge_plugin_marketplace::load_extra_sources_from_settings_in(
         &toml_sources,
-        std::slice::from_ref(&grok_home.to_path_buf()),
+        std::slice::from_ref(&supercharge_home.to_path_buf()),
     );
     let already_present = toml_sources.iter().chain(json_sources.iter()).any(|s| {
         matches!(&s.kind, supercharge_plugin_marketplace::SourceKind::Git { url, .. }

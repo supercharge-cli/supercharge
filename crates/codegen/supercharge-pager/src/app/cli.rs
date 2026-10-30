@@ -393,7 +393,7 @@ impl ServeArgs {
 }
 /// Location of the persisted `agent serve` key.
 pub fn serve_key_path() -> std::path::PathBuf {
-    supercharge_dirs::grok_home().join("agent-serve.key")
+    supercharge_dirs::supercharge_home().join("agent-serve.key")
 }
 /// Read the key at `path`, or create it with owner-only permissions.
 fn load_or_create_serve_key(path: &std::path::Path) -> std::io::Result<String> {

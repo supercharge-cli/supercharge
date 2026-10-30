@@ -341,7 +341,7 @@ pub async fn connect_via_leader(
     )?;
     let auth_manager =
         std::sync::Arc::new(supercharge_login::AuthManager::new_with_proxy_base_url(
-            &supercharge_shell::util::grok_home::grok_home(),
+            &supercharge_shell::util::supercharge_home::supercharge_home(),
             agent_config.grok_com_config.clone(),
             agent_config.endpoints.proxy_url(),
         ));
@@ -392,7 +392,7 @@ fn unsupported_leader_flags(flags: &ConnectFlags) -> Vec<&'static str> {
 }
 /// Write config.toml fields based on CLI flags.
 pub(super) fn apply_config_writes(flags: &ConnectFlags) {
-    let config_path = supercharge_shell::util::grok_home::grok_home()
+    let config_path = supercharge_shell::util::supercharge_home::supercharge_home()
         .join(supercharge_config::USER_CONFIG_FILENAME);
     let content = std::fs::read_to_string(&config_path).unwrap_or_default();
     let mut doc = content

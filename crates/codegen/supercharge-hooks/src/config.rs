@@ -416,7 +416,7 @@ pub fn parse_hooks_from_value_with_dir(
 pub fn parse_hooks_from_config_layers(
     layers: &[supercharge_config::HookConfigLayer],
 ) -> (Vec<HookSpec>, Vec<HookError>) {
-    let home = supercharge_config::user_grok_home();
+    let home = supercharge_config::user_supercharge_home();
     let mut all_specs = Vec::new();
     let mut all_errors = Vec::new();
 

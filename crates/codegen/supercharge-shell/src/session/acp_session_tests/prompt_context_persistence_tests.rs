@@ -15,7 +15,7 @@ fn test_json_round_trip() {
 
 /// Test that PromptContext survives a JSON write to disk and read back with field-level fidelity.
 /// This exercises serde and filesystem I/O but not the `save_prompt_context`/`load_prompt_context` wrappers.
-/// Those wrappers depend on `grok_home()` and `SessionInfo` path encoding.
+/// Those wrappers depend on `supercharge_home()` and `SessionInfo` path encoding.
 #[test]
 fn test_json_round_trip_via_filesystem() {
     let tmp = tempfile::tempdir().unwrap();

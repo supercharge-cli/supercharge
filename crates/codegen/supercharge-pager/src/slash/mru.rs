@@ -22,7 +22,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::util::grok_home;
+use crate::util::supercharge_home;
 
 const RECENCY_HALF_LIFE_SECS: f64 = 7.0 * 86_400.0;
 const RECENCY_FLOOR: f64 = 0.1;
@@ -73,7 +73,7 @@ impl SlashMru {
     }
 
     fn store_path() -> PathBuf {
-        grok_home().join("slash-mru.json")
+        supercharge_home().join("slash-mru.json")
     }
 
     fn normalize_command(command_name: &str) -> Option<String> {

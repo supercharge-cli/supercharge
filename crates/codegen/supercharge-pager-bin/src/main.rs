@@ -1421,7 +1421,7 @@ async fn run_agent_command(
     });
     let managed_install = is_managed_install(
         std::env::current_exe().ok(),
-        &supercharge_shell::util::grok_home::grok_home(),
+        &supercharge_shell::util::supercharge_home::supercharge_home(),
     );
     if stdio_auto_update_enabled(
         is_stdio,
@@ -2124,11 +2124,11 @@ fn main() {
             disabled: supercharge_shell::agent::config::is_error_reporting_disabled_sync(),
         });
     supercharge_pager::docs::extract_user_guide_docs(
-        &supercharge_shell::util::grok_home::grok_home(),
+        &supercharge_shell::util::supercharge_home::supercharge_home(),
     );
     supercharge_crash_handler::install_terminal_restore_only();
     if supercharge_shell::util::config::load_crash_handler_enabled_sync() {
-        let crash_dir = supercharge_shell::util::grok_home::grok_home().join("crash");
+        let crash_dir = supercharge_shell::util::supercharge_home::supercharge_home().join("crash");
         if let Some(report) = supercharge_crash_handler::check_previous_crash(&crash_dir) {
             eprintln!("Supercharge AI crashed during your last session.");
             eprintln!("  Signal:  {}", report.signal_name);
@@ -2227,7 +2227,7 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
             Ok(agent_cfg) => {
                 let auth_manager =
                     std::sync::Arc::new(supercharge_login::AuthManager::new_with_proxy_base_url(
-                        &supercharge_shell::util::grok_home::grok_home(),
+                        &supercharge_shell::util::supercharge_home::supercharge_home(),
                         agent_cfg.grok_com_config.clone(),
                         agent_cfg.endpoints.proxy_url(),
                     ));
@@ -2574,7 +2574,7 @@ fn relaunch_after_update() {
             } else {
                 "supercharge"
             };
-            let p = supercharge_shell::util::grok_home::grok_home()
+            let p = supercharge_shell::util::supercharge_home::supercharge_home()
                 .join("bin")
                 .join(name);
             p.exists().then_some(p)
@@ -2693,17 +2693,17 @@ fn stdio_auto_update_enabled(
 ) -> bool {
     is_stdio && !use_leader && updates_enabled && managed_install
 }
-/// True when `exe` is the binary `<grok_home>/bin/grok` resolves to, the install that adopts a staged update on
+/// True when `exe` is the binary `<supercharge_home>/bin/grok` resolves to, the install that adopts a staged update on
 /// respawn. Both sides are canonicalized; any failure reports unmanaged and skips the update. The npm shim
 /// hardcodes `~/.supercharge`, so a custom `SUPERCHARGE_HOME` skips here too.
-fn is_managed_install(exe: Option<std::path::PathBuf>, grok_home: &std::path::Path) -> bool {
-    if grok_home.as_os_str().is_empty() {
+fn is_managed_install(exe: Option<std::path::PathBuf>, supercharge_home: &std::path::Path) -> bool {
+    if supercharge_home.as_os_str().is_empty() {
         return false;
     }
     let Some(exe) = exe else {
         return false;
     };
-    let managed = supercharge_config::grok_application_in(grok_home);
+    let managed = supercharge_config::grok_application_in(supercharge_home);
     match (dunce::canonicalize(&exe), dunce::canonicalize(&managed)) {
         (Ok(exe), Ok(managed)) => exe == managed,
         _ => false,
@@ -2775,7 +2775,7 @@ async fn run_update_command(
     if let Some(agent_cfg) = telemetry_cfg {
         let auth_manager =
             std::sync::Arc::new(supercharge_login::AuthManager::new_with_proxy_base_url(
-                &supercharge_shell::util::grok_home::grok_home(),
+                &supercharge_shell::util::supercharge_home::supercharge_home(),
                 agent_cfg.grok_com_config.clone(),
                 agent_cfg.endpoints.proxy_url(),
             ));

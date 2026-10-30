@@ -1512,7 +1512,7 @@ pub enum Effect {
     ScanForeignSessions {
         cwd: std::path::PathBuf,
         compat: supercharge_foreign_sessions::EnabledForeignSessionSources,
-        grok_home: std::path::PathBuf,
+        supercharge_home: std::path::PathBuf,
         coordinator: crate::app::ForeignScanCoordinator,
         seq: u64,
     },
@@ -1525,7 +1525,7 @@ pub enum Effect {
     DetectForeignResumeHint {
         canonical_cwd: std::path::PathBuf,
         compat: supercharge_foreign_sessions::EnabledForeignSessionSources,
-        grok_home: std::path::PathBuf,
+        supercharge_home: std::path::PathBuf,
         launch_token: u64,
     },
     /// Fetch a picker session list.

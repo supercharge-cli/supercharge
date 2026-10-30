@@ -7,7 +7,7 @@ use tokio::fs;
 use tokio::process::Command;
 
 use supercharge_shell::env::GrokBuildEnvironment;
-use supercharge_shell::util::grok_home::grok_home;
+use supercharge_shell::util::supercharge_home::supercharge_home;
 
 const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
 const NPM_PACKAGE: &str = "@supercharge-cli/supercharge";
@@ -471,7 +471,7 @@ pub async fn fetch_latest_version(installer: &str, config: &UpdateConfig) -> Res
 /// version is current (no update needed) or after a successful install. `stable_version` records the current stable
 /// channel pointer so that `channel_label()` can derive `[alpha]` vs `[stable]` without network I/O.
 pub async fn write_version_cache(version: &str, stable_version: Option<&str>) {
-    let version_path = grok_home().join("version.json");
+    let version_path = supercharge_home().join("version.json");
     let now = time::OffsetDateTime::now_utc();
     let json = GrokVersion::new(
         version.to_string(),
@@ -513,7 +513,7 @@ pub async fn get_latest_version(installer: &str, config: &UpdateConfig) -> Resul
 
 /// True if `version.json` exists and is within TTL.
 pub async fn is_version_cache_fresh() -> bool {
-    let version_path = grok_home().join("version.json");
+    let version_path = supercharge_home().join("version.json");
     let now = time::OffsetDateTime::now_utc();
     if let Ok(version_str) = fs::read_to_string(&version_path).await
         && let Ok(version) = serde_json::from_str::<GrokVersion>(&version_str)
@@ -532,7 +532,7 @@ pub use supercharge_version::installed as get_installed_grok_version;
 pub fn installed_on_disk_version() -> Option<String> {
     #[cfg(unix)]
     {
-        let app = supercharge_shell::util::grok_home::grok_application();
+        let app = supercharge_shell::util::supercharge_home::grok_application();
         let target = std::fs::read_link(&app).ok()?;
         // metadata() follows the symlink: Err means the target is gone (dangling link) and the version it names is not actually on disk
         std::fs::metadata(&app).ok()?;
@@ -582,7 +582,7 @@ pub(crate) async fn try_fetch_stable_pointer() -> Option<String> {
 ///
 /// Returns `None` if the file doesn't exist, can't be parsed, or has no `stable_version` field (e.g. written by an older binary).
 pub fn cached_stable_version() -> Option<String> {
-    let version_path = grok_home().join("version.json");
+    let version_path = supercharge_home().join("version.json");
     let content = std::fs::read_to_string(&version_path).ok()?;
     let gv: GrokVersion = serde_json::from_str(&content).ok()?;
     gv.stable_version

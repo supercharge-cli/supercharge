@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use super::flow::{report_signed_in, run_external_auth_provider};
 use super::{AuthManager, GrokAuth, GrokComConfig, try_ensure_fresh_auth};
-use supercharge_shell_base::util::grok_home;
+use supercharge_shell_base::util::supercharge_home;
 
 /// Whether the pager should attempt a pre-TUI provider login.
 /// Fresh-credential and `--force-login` checks are async and live in [`maybe_run_pre_tui_external_login`].
@@ -57,7 +57,7 @@ pub async fn maybe_run_pre_tui_external_login(
     }
 
     let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home::grok_home(),
+        &supercharge_home::supercharge_home(),
         grok_com_config.clone(),
         proxy_base_url,
     ));
@@ -66,7 +66,7 @@ pub async fn maybe_run_pre_tui_external_login(
 }
 
 /// Runs the provider and persists the result.
-/// The `AuthManager` is injected so tests can use a temp grok-home instead of the process-cached [`grok_home::grok_home`].
+/// The `AuthManager` is injected so tests can use a temp grok-home instead of the process-cached [`supercharge_home::supercharge_home`].
 pub async fn run_pre_tui_external_login_with(
     auth_manager: &Arc<AuthManager>,
     command: &str,

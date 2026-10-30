@@ -114,7 +114,7 @@ async fn load_session_prompts(
     summaries.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
 
     // Load only user prompts via load_prompts_only, which avoids loading full session data
-    let root_dir = crate::util::grok_home::grok_home();
+    let root_dir = crate::util::supercharge_home::supercharge_home();
     let storage = JsonlStorageAdapter::with_root(root_dir);
 
     // Load prompts from sessions with bounded concurrency using stream

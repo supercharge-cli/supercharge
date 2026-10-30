@@ -105,7 +105,7 @@ pub(crate) async fn handle_import(args: &acp::ExtRequest) -> ExtResult {
             return Err(acp::Error::invalid_params().data("summary column is not a valid summary"));
         }
         // Write the `.cwd` sidecar for hash-based (long-path) dirs so the session stays recoverable by id, not just by (id, cwd)
-        crate::util::grok_home::ensure_sessions_cwd_dir(&request.cwd)
+        crate::util::supercharge_home::ensure_sessions_cwd_dir(&request.cwd)
             .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
         write_import(&dir, &request.state, &request.updates, &request.session_id)
             .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
@@ -137,8 +137,8 @@ fn sanitize_summary_for_host(summary: &mut serde_json::Map<String, Value>, id: &
     }
     set_or_remove(
         summary,
-        "grok_home",
-        crate::session::persistence::grok_home_string(),
+        "supercharge_home",
+        crate::session::persistence::supercharge_home_string(),
     );
     set_or_remove(
         summary,
@@ -166,7 +166,7 @@ fn write_import(
     updates: &[Value],
     session_id: &str,
 ) -> std::io::Result<()> {
-    crate::util::grok_home::create_dir_all_owner_only(dir)?;
+    crate::util::supercharge_home::create_dir_all_owner_only(dir)?;
 
     // Clear every file this import owns so a leftover from a failed attempt can't merge with the new snapshot; this import is authoritative
     let _ = std::fs::remove_file(dir.join(st::CHAT_HISTORY_FILE));

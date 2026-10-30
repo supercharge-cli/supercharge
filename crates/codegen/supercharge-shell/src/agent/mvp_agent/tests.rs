@@ -2277,10 +2277,10 @@ async fn feedback_trace_offer_suppressed_for_managed_deployments() {
 }
 /// Pin every env var feeding the trace-offer / one-shot ladders and sandbox
 /// `SUPERCHARGE_HOME`, so a developer's shell can't flip a gate under test.
-fn trace_gate_env(grok_home: &std::path::Path) -> Vec<supercharge_test_support::EnvGuard> {
+fn trace_gate_env(supercharge_home: &std::path::Path) -> Vec<supercharge_test_support::EnvGuard> {
     use supercharge_test_support::EnvGuard;
     vec![
-        EnvGuard::set("SUPERCHARGE_HOME", grok_home),
+        EnvGuard::set("SUPERCHARGE_HOME", supercharge_home),
         EnvGuard::unset("SUPERCHARGE_TELEMETRY_ENABLED"),
         EnvGuard::unset("DISABLE_TELEMETRY"),
         EnvGuard::unset("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD"),
@@ -2774,8 +2774,8 @@ async fn ensure_plugin_registry_lazily_populates_snapshot() {
     use crate::agent::config::Config as AgentConfig;
     use supercharge_login::{AuthManager, GrokComConfig};
     use supercharge_test_support::EnvGuard;
-    let grok_home = tempfile::tempdir().unwrap();
-    let _env = EnvGuard::set("SUPERCHARGE_HOME", grok_home.path());
+    let supercharge_home = tempfile::tempdir().unwrap();
+    let _env = EnvGuard::set("SUPERCHARGE_HOME", supercharge_home.path());
     let plugin_dir = tempfile::tempdir().unwrap();
     std::fs::write(
         plugin_dir.path().join("plugin.json"),
@@ -2846,7 +2846,7 @@ async fn ensure_plugin_registry_lazily_populates_snapshot() {
 /// registries, which read disk, were right. The shared rebuild must read disk too.
 ///
 /// Exercised through a project `.supercharge/config.toml` (merged by `resolve_effective_plugins_config` for
-/// the given cwd): `grok_home()` is a process-wide `OnceLock`, so the user layer cannot be isolated
+/// the given cwd): `supercharge_home()` is a process-wide `OnceLock`, so the user layer cannot be isolated
 /// per test.
 #[tokio::test]
 async fn shared_plugin_registry_snapshot_reads_plugins_config_from_disk() {
@@ -4179,7 +4179,7 @@ async fn diagnostic_upload_skipped_after_mid_session_trace_upload_kill_switch() 
 use crate::session::storage::search::IndexDecision;
 /// A grok home of its own, with the switch left at its registered default.
 /// `decide_search_index` stops short of a session store, but do not reach `bootstrap_once`.
-/// `bootstrap_once` takes the process-cached `grok_home()`, which these guards cannot redirect, so it could index the developer's own store.
+/// `bootstrap_once` takes the process-cached `supercharge_home()`, which these guards cannot redirect, so it could index the developer's own store.
 fn search_index_env() -> (tempfile::TempDir, [supercharge_test_support::EnvGuard; 2]) {
     use supercharge_test_support::EnvGuard;
     let home = tempfile::tempdir().unwrap();
@@ -4250,7 +4250,7 @@ async fn search_before_the_decision_asks_the_caller_to_retry() {
     );
     let resp = crate::session::storage::search::execute_search(
         agent.search_index(),
-        &crate::util::grok_home::grok_home(),
+        &crate::util::supercharge_home::supercharge_home(),
         &crate::session::storage::search::SessionSearchRequest {
             query: "zzqqpending".to_string(),
             cwd: None,
@@ -5146,7 +5146,7 @@ fn new_session_registers_root_identity() {
             crate::session::persistence::STAMPS_SERVED.get(),
             "winner stamps once, superseded loader stamps zero"
         );
-        let summary_path = crate::util::grok_home::sessions_cwd_dir(&cwd.path().to_string_lossy())
+        let summary_path = crate::util::supercharge_home::sessions_cwd_dir(&cwd.path().to_string_lossy())
             .join(sid.0.as_ref())
             .join("summary.json");
         let summary: crate::session::persistence::Summary =

@@ -21,7 +21,7 @@ use supercharge_login::AuthManager;
 use supercharge_shell::{
     agent::{MvpAgent, activity::SESSION_FLUSH_GRACE, config::Config as AgentConfig},
     config::watcher::{DiscoveryChange, SkillsFileWatcher},
-    util::grok_home::grok_home,
+    util::supercharge_home::supercharge_home,
 };
 
 /// Extra slack when joining the agent OS thread after cancel so the flush
@@ -270,7 +270,7 @@ pub async fn spawn_grok_shell(
     cancel: &CancellationToken,
     memory_config: Option<supercharge_shell::config::MemoryConfig>,
 ) -> Result<SpawnedAgent> {
-    let auth_manager = boot_auth_manager(&grok_home(), &agent_config);
+    let auth_manager = boot_auth_manager(&supercharge_home(), &agent_config);
     // Pause token refreshes across system sleep so an OIDC refresh can't
     // straddle a suspend (which can revoke the refresh token and force
     // re-login). No-op where the OS listener is unavailable.

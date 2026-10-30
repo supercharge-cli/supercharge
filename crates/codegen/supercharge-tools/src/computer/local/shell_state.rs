@@ -49,7 +49,7 @@ pub fn shell_env_overrides() -> HashMap<String, String> {
         ("TERM".to_string(), "dumb".to_string()),
         ("NO_COLOR".to_string(), "1".to_string()),
         ("FORCE_COLOR".to_string(), "0".to_string()),
-        // Re-applied last via [`crate::util::apply_grok_agent_marker`] so request
+        // Re-applied last via [`crate::util::apply_agent_marker`] so request
         // env cannot clear it.
         (
             crate::util::SUPERCHARGE_AGENT_ENV.to_string(),
@@ -90,11 +90,11 @@ dump_bash_state() {
     local content="$1"
     local var_name="$2"
     if [[ -n "$content" ]]; then
-      builtin printf 'grok_snap_%s=$(command base64 -d <<'"'"'SUPERCHARGE_SNAP_EOF_%s'"'"'\n' "$var_name" "$var_name"
+      builtin printf 'supercharge_snap_%s=$(command base64 -d <<'"'"'SUPERCHARGE_SNAP_EOF_%s'"'"'\n' "$var_name" "$var_name"
       command base64 <<<"$content" | command tr -d '\n'
       builtin printf '\nSUPERCHARGE_SNAP_EOF_%s\n' "$var_name"
       builtin printf ')\n'
-      builtin printf 'eval "$grok_snap_%s"\n' "$var_name"
+      builtin printf 'eval "$supercharge_snap_%s"\n' "$var_name"
     fi
   }
 
@@ -146,11 +146,11 @@ function dump_zsh_state() {
     local content="$1"
     local var_name="$2"
     if [[ -n "$content" ]]; then
-      builtin printf 'grok_snap_%s=$(command base64 -d <<'"'"'SUPERCHARGE_SNAP_EOF_%s'"'"'\n' "$var_name" "$var_name"
+      builtin printf 'supercharge_snap_%s=$(command base64 -d <<'"'"'SUPERCHARGE_SNAP_EOF_%s'"'"'\n' "$var_name" "$var_name"
       command base64 <<<"$content" | command tr -d '\n'
       builtin printf '\nSUPERCHARGE_SNAP_EOF_%s\n' "$var_name"
       builtin printf ')\n'
-      builtin printf 'eval "$grok_snap_%s"\n' "$var_name"
+      builtin printf 'eval "$supercharge_snap_%s"\n' "$var_name"
     fi
   }
 
@@ -399,9 +399,9 @@ impl ShellState {
                  builtin export PWD=\"$(builtin pwd)\"; \
                  builtin shopt -s expand_aliases 2>/dev/null; {sudo_inject}{search_inject}\
                  builtin printf '%s' \"${{2:-}}\"; \
-                 __grok_user_cmd=\"$1\"; builtin declare +x __grok_user_cmd 2>/dev/null; builtin set --; \
-                 builtin eval \"$__grok_user_cmd\" 2>&1; }}; \
-                 COMMAND_EXIT_CODE=$?; builtin unset __grok_user_cmd 2>/dev/null; {dump_fn} >&4; builtin exit $COMMAND_EXIT_CODE"
+                 __supercharge_user_cmd=\"$1\"; builtin declare +x __supercharge_user_cmd 2>/dev/null; builtin set --; \
+                 builtin eval \"$__supercharge_user_cmd\" 2>&1; }}; \
+                 COMMAND_EXIT_CODE=$?; builtin unset __supercharge_user_cmd 2>/dev/null; {dump_fn} >&4; builtin exit $COMMAND_EXIT_CODE"
             ),
             // After snapshot restore: force nonomatch so login dumps cannot re-arm NOMATCH for
             // model globs. See the bash wrapper comment for why positional parameters are cleared
@@ -418,9 +418,9 @@ impl ShellState {
                  builtin export PWD=\"$(builtin pwd)\"; \
                  builtin setopt aliases 2>/dev/null; {sudo_inject}{search_inject}\
                  builtin printf '%s' \"${{2:-}}\"; \
-                 __grok_user_cmd=\"$1\"; builtin typeset +x __grok_user_cmd 2>/dev/null; builtin set --; \
-                 builtin eval \"$__grok_user_cmd\" 2>&1; }}; \
-                 COMMAND_EXIT_CODE=$?; builtin unset __grok_user_cmd 2>/dev/null; {dump_fn} >&4; builtin exit $COMMAND_EXIT_CODE"
+                 __supercharge_user_cmd=\"$1\"; builtin typeset +x __supercharge_user_cmd 2>/dev/null; builtin set --; \
+                 builtin eval \"$__supercharge_user_cmd\" 2>&1; }}; \
+                 COMMAND_EXIT_CODE=$?; builtin unset __supercharge_user_cmd 2>/dev/null; {dump_fn} >&4; builtin exit $COMMAND_EXIT_CODE"
             ),
         };
 
@@ -582,7 +582,7 @@ fn parse_after_marker<'a>(output: &'a str, marker: &str) -> &'a str {
 /// (zsh) block, decoded and read back. A name exported without a value is left out, and so is
 /// every command this does not read in full: nothing is guessed.
 pub fn snapshot_exports(snapshot: &str) -> Vec<(OsString, OsString)> {
-    let header = "grok_snap_ENV_VARS_B64=$(command base64 -d <<'SUPERCHARGE_SNAP_EOF_ENV_VARS_B64'";
+    let header = "supercharge_snap_ENV_VARS_B64=$(command base64 -d <<'SUPERCHARGE_SNAP_EOF_ENV_VARS_B64'";
     let Some(payload) = snapshot.lines().skip_while(|line| *line != header).nth(1) else {
         return Vec::new();
     };
@@ -1007,8 +1007,8 @@ mod tests {
     fn snapshot_with_exports(script: &str) -> String {
         let payload = base64::engine::general_purpose::STANDARD.encode(script);
         format!(
-            "\ngrok_snap_ENV_VARS_B64=$(command base64 -d <<'SUPERCHARGE_SNAP_EOF_ENV_VARS_B64'\n\
-             {payload}\nSUPERCHARGE_SNAP_EOF_ENV_VARS_B64\n)\neval \"$grok_snap_ENV_VARS_B64\"\n"
+            "\nsupercharge_snap_ENV_VARS_B64=$(command base64 -d <<'SUPERCHARGE_SNAP_EOF_ENV_VARS_B64'\n\
+             {payload}\nSUPERCHARGE_SNAP_EOF_ENV_VARS_B64\n)\neval \"$supercharge_snap_ENV_VARS_B64\"\n"
         )
     }
 
@@ -1098,7 +1098,7 @@ mod tests {
         assert!(state.cwd.is_absolute());
         // The snapshot should contain at least some env var exports
         assert!(
-            state.snapshot.contains("grok_snap_") || state.snapshot.is_empty(),
+            state.snapshot.contains("supercharge_snap_") || state.snapshot.is_empty(),
             "snapshot should contain encoded blocks or be empty: {:?}",
             state
                 .snapshot
@@ -1408,7 +1408,7 @@ mod tests {
     }
 
     /// Regression test: with `allexport` active (restored from the snapshot after the model runs
-    /// `set -a`), the wrapper's `__grok_user_cmd` temp variable must not leak into child-process
+    /// `set -a`), the wrapper's `__supercharge_user_cmd` temp variable must not leak into child-process
     /// environments or persist into subsequent commands via the state dump.
     #[tokio::test]
     async fn test_user_cmd_var_not_exported_under_allexport_bash() {
@@ -1425,12 +1425,12 @@ mod tests {
         let (code, _) = run_command(&mut state, "set -a").await;
         assert_eq!(code, 0);
 
-        // This command's wrapper assigns __grok_user_cmd under allexport. printenv only sees
+        // This command's wrapper assigns __supercharge_user_cmd under allexport. printenv only sees
         // exported vars — it must not see the temp var (neither from this command's own assignment
         // nor re-exported from a previous command's state dump).
         let (code, stdout) = run_command(
             &mut state,
-            "printenv __grok_user_cmd >/dev/null 2>&1 && echo LEAKED_TO_ENV || echo ENV_CLEAN",
+            "printenv __supercharge_user_cmd >/dev/null 2>&1 && echo LEAKED_TO_ENV || echo ENV_CLEAN",
         )
         .await;
         assert_eq!(code, 0);

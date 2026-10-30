@@ -100,7 +100,7 @@ fn a_running_child_whose_view_holds_only_the_echoed_prompt_is_not_replayed() {
         r#"{{"method":"session/update","params":{{"sessionId":"{child_sid}","update":{{"sessionUpdate":"user_message_chunk","content":{{"type":"text","text":"scan src/"}}}}}}}}"#
     );
     std::fs::write(session_dir.join("updates.jsonl"), echo + "\n").unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut parent = make_min_child_view();
     let mut child = make_min_child_view();
     child.session.tracker.handle_update(
@@ -128,7 +128,7 @@ fn a_running_child_whose_view_holds_only_the_echoed_prompt_is_not_replayed() {
         1,
         "the prompt is painted exactly once"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn a_disk_backed_child_is_not_replayed_again() {
@@ -182,7 +182,7 @@ fn empty_read_of_a_running_child_is_cached_until_it_finishes() {
     info.child_session_id = child_sid.into();
     parent.subagent_sessions.insert(child_sid.to_string(), info);
     let home = tempfile::tempdir().unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let before = test_support::transcript_reads();
     assert_eq!(
         ensure_subagent_child_replayed(&mut parent, child_sid),
@@ -218,13 +218,13 @@ fn empty_read_of_a_running_child_is_cached_until_it_finishes() {
         Some(&ChildTranscript::NeedsReplay),
         "the finish must allow one more read for a late persistence flush"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn an_empty_read_of_a_running_resumed_child_stays_needs_replay_and_retries() {
     let home = tempfile::tempdir().unwrap();
     let child_sid = "child-resumed-empty";
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut parent = make_min_child_view();
     parent.insert_test_child(child_sid.to_string(), Box::new(make_min_child_view()));
     let mut info = make_info();
@@ -279,7 +279,7 @@ fn an_empty_read_of_a_running_resumed_child_stays_needs_replay_and_retries() {
         tools, 1,
         "the inherited tool call must appear after the retry"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn a_child_replay_releases_retained_memory_only_once() {
@@ -298,7 +298,7 @@ fn a_child_replay_releases_retained_memory_only_once() {
         r#"{{"method":"session/update","params":{{"sessionId":"{child_sid}","update":{{"sessionUpdate":"tool_call","toolCallId":"tc1","title":"Read foo","kind":"read","locations":[{{"path":"/tmp/foo"}}]}}}}}}"#
     );
     std::fs::write(session_dir.join("updates.jsonl"), tool_line + "\n").unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut parent = make_min_child_view();
     parent.insert_test_child(child_sid.to_string(), Box::new(make_min_child_view()));
     let mut info = make_info();
@@ -365,7 +365,7 @@ fn a_child_replay_releases_retained_memory_only_once() {
         before,
         "an empty replay (zero updates parsed) must not purge"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn rebuilt_child_transcript_keeps_persisted_timestamps_not_the_rebuild_time() {
@@ -392,7 +392,7 @@ fn rebuilt_child_transcript_keeps_persisted_timestamps_not_the_rebuild_time() {
         format!("{echo}\n{msg}\n"),
     )
     .unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut parent = make_min_child_view();
     parent.insert_test_child(child_sid.to_string(), Box::new(make_min_child_view()));
     let mut info = make_info();
@@ -438,7 +438,7 @@ fn rebuilt_child_transcript_keeps_persisted_timestamps_not_the_rebuild_time() {
         "the persisted echo is the one writer of the task prompt"
     );
     assert!(msg_seen, "fixture must produce an agent message entry");
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn a_replayed_transcript_collapses_a_tool_call_and_its_updates() {
@@ -471,7 +471,7 @@ fn a_replayed_transcript_collapses_a_tool_call_and_its_updates() {
         format!("{user}\n{tool}\n{ip}\n{done}\n{agent_msg}\n"),
     )
     .unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut view = make_min_child_view();
     assert!(matches!(
         replay_inherited_updates(
@@ -500,7 +500,7 @@ fn a_replayed_transcript_collapses_a_tool_call_and_its_updates() {
         })
         .count();
     assert_eq!(tools, 1, "ToolCall+updates must collapse to one block");
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn a_read_error_reports_read_failed_and_closes_the_scrollback_batch() {
@@ -514,7 +514,7 @@ fn a_read_error_reports_read_failed_and_closes_the_scrollback_batch() {
     std::fs::create_dir_all(&session_dir).unwrap();
     std::fs::write(session_dir.join("summary.json"), "{}").unwrap();
     std::fs::create_dir(session_dir.join("updates.jsonl")).unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut view = make_min_child_view();
     assert!(
         replay_inherited_updates(
@@ -540,7 +540,7 @@ fn a_read_error_reports_read_failed_and_closes_the_scrollback_batch() {
         ChildReplayOutcome::ReadFailed,
         "a broken transcript surfaces as ReadFailed so the next open retries"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn a_replay_locates_the_transcript_via_the_child_cwd_hint() {
@@ -558,7 +558,7 @@ fn a_replay_locates_the_transcript_via_the_child_cwd_hint() {
         r#"{{"method":"session/update","params":{{"sessionId":"{child_sid}","update":{{"sessionUpdate":"user_message_chunk","content":{{"type":"text","text":"from-wt"}}}}}}}}"#
     );
     std::fs::write(session_dir.join("updates.jsonl"), format!("{user}\n")).unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut view = make_min_child_view();
     assert!(matches!(
         replay_inherited_updates(
@@ -575,7 +575,7 @@ fn a_replay_locates_the_transcript_via_the_child_cwd_hint() {
         0,
         "child_cwd hint must locate the worktree transcript"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn child_view_for_live_update_hydrates_a_resumed_child_before_returning_it() {
@@ -592,7 +592,7 @@ fn child_view_for_live_update_hydrates_a_resumed_child_before_returning_it() {
         r#"{{"method":"session/update","params":{{"sessionId":"{child_sid}","update":{{"sessionUpdate":"tool_call","toolCallId":"tc1","title":"Read foo","kind":"read","locations":[{{"path":"/tmp/foo"}}]}}}}}}"#
     );
     std::fs::write(session_dir.join("updates.jsonl"), tool_line + "\n").unwrap();
-    set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut parent = make_min_child_view();
     parent.insert_test_child(child_sid.to_string(), Box::new(make_min_child_view()));
     let mut info = make_info();
@@ -621,7 +621,7 @@ fn child_view_for_live_update_hydrates_a_resumed_child_before_returning_it() {
         Some(&ChildTranscript::DiskBacked),
         "the hydrate records the proven disk copy"
     );
-    set_replay_grok_home_for_tests(None);
+    set_replay_supercharge_home_for_tests(None);
 }
 #[test]
 fn accepted_attempt_invalidates_prior_disk_proof() {

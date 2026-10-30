@@ -169,8 +169,8 @@ impl LeaderFixture {
         sandbox: &TestSandbox,
         readiness_timeout: Duration,
     ) -> io::Result<Self> {
-        let socket = sandbox.grok_home().join("leader.sock");
-        let lock = sandbox.grok_home().join("leader.lock");
+        let socket = sandbox.supercharge_home().join("leader.sock");
+        let lock = sandbox.supercharge_home().join("leader.lock");
         let mut cmd = std::process::Command::new(binary);
         cmd.args([
             "agent",
@@ -195,7 +195,7 @@ impl LeaderFixture {
                 "RUST_LOG",
                 "supercharge_shell=debug,supercharge_login=debug",
             );
-        let log_path = sandbox.grok_home().join("leader.log");
+        let log_path = sandbox.supercharge_home().join("leader.log");
         match std::fs::File::create(&log_path) {
             Ok(log) => {
                 cmd.stderr(log);

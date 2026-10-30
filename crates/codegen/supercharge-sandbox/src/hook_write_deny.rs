@@ -15,7 +15,7 @@ use supercharge_config::validated_hook_json_files_for_sources;
 #[cfg(target_os = "linux")]
 use supercharge_config::{ensure_grok_hook_slots, unique_ancestors_rootward};
 
-use crate::paths::grok_home;
+use crate::paths::supercharge_home;
 use crate::profiles::ProfileName;
 
 pub fn profile_enforces_hook_write_deny(profile: &ProfileName) -> bool {
@@ -184,7 +184,7 @@ pub enum HookWriteDenyPrepare {
 }
 
 pub fn resolve_hook_write_deny_snapshot() -> Result<Vec<GlobalHookSource>, HookWriteDenyError> {
-    let grok = grok_home();
+    let grok = supercharge_home();
     let resolved =
         resolve_global_hook_sources(Some(grok.as_path()), /* reject_symlinks */ true)?;
     if let Some(e) = resolved.configured_error {
@@ -217,7 +217,7 @@ pub fn prepare_hook_write_deny(
     if !profile_enforces_hook_write_deny(profile) {
         return Ok(HookWriteDenyPrepare::NotRequired);
     }
-    let grok = grok_home();
+    let grok = supercharge_home();
     ensure_grok_hook_slots(grok.as_path())?;
     let sources = resolve_hook_write_deny_snapshot()?;
     let plan = build_bwrap_plan(&sources)?;

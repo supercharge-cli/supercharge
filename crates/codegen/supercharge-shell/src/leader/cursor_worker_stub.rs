@@ -34,7 +34,7 @@ impl CursorWorkerControl {
     pub(crate) fn new(
         config: CursorWorkerConfig,
         _leader_hub_url: Option<String>,
-        _grok_home: PathBuf,
+        _supercharge_home: PathBuf,
         _roster: ExternalRoster,
     ) -> Self {
         Self {

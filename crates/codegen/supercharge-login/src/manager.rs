@@ -268,15 +268,15 @@ impl AuthManager {
     /// configured proxy and pass it via [`Self::new_with_proxy_base_url`], so this boundary never
     /// silently sends enrichment to the public host.
     #[cfg(any(test, feature = "test-support"))]
-    pub fn new(grok_home: &Path, grok_com_config: GrokComConfig) -> Self {
+    pub fn new(supercharge_home: &Path, grok_com_config: GrokComConfig) -> Self {
         Self::new_with_proxy_base_url(
-            grok_home,
+            supercharge_home,
             grok_com_config,
             Self::DEFAULT_PROXY_BASE_URL.to_string(),
         )
     }
     pub fn new_with_proxy_base_url(
-        grok_home: &Path,
+        supercharge_home: &Path,
         grok_com_config: GrokComConfig,
         proxy_base_url: String,
     ) -> Self {
@@ -286,14 +286,14 @@ impl AuthManager {
             None,
             Some(serde_json::json!({
                 "scope": &scope,
-                "grok_home": grok_home.display().to_string(),
+                "supercharge_home": supercharge_home.display().to_string(),
                 "HOME": std::env::var("HOME").unwrap_or_else(|_| "(unset)".into()),
                 "SUPERCHARGE_HOME": std::env::var("SUPERCHARGE_HOME").unwrap_or_else(|_| "(unset)".into()),
                 "SUPERCHARGE_AUTH_PATH": std::env::var("SUPERCHARGE_AUTH_PATH").unwrap_or_else(|_| "(unset)".into()),
                 "SUPERCHARGE_AUTH": std::env::var("SUPERCHARGE_AUTH").map(|_| "(set)".to_string()).unwrap_or_else(|_| "(unset)".into()),
             })),
         );
-        let path = auth_json_path(grok_home);
+        let path = auth_json_path(supercharge_home);
         if let Ok(inline_json) = std::env::var("SUPERCHARGE_AUTH") {
             if let Ok(auth) = serde_json::from_str::<GrokAuth>(&inline_json) {
                 return Self::assemble(
@@ -898,7 +898,7 @@ impl AuthManager {
         enrichment::enrich_inline(self, auth).await;
     }
     /// Path to the `auth.json` this manager reads/writes (respects `SUPERCHARGE_AUTH_PATH` / constructor home).
-    /// Prefer this over `grok_home()/auth.json` so temp-home tests and custom stores stay isolated.
+    /// Prefer this over `supercharge_home()/auth.json` so temp-home tests and custom stores stay isolated.
     pub fn auth_json_path(&self) -> &Path {
         &self.path
     }

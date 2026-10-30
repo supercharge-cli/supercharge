@@ -7,7 +7,7 @@ use anyhow::Result;
 
 use crate::CleanupReport;
 use crate::api::gc::{GcOptions, GcReport, age_path_enabled, gc_worktrees};
-use crate::db::{ListFilter, WorktreeDb, WorktreeKind, now_epoch_secs, resolve_grok_home};
+use crate::db::{ListFilter, WorktreeDb, WorktreeKind, now_epoch_secs, resolve_supercharge_home};
 use crate::discovery::{RebuildReport, rebuild_worktree_db};
 
 pub(crate) const META_LAST_AUTO_GC_AT: &str = "last_auto_gc_at";
@@ -576,7 +576,7 @@ fn maybe_run_rebuild(
         RebuildMetaClass::Throttled | RebuildMetaClass::SkipFailed => return (None, false),
     }
 
-    let home = match resolve_grok_home() {
+    let home = match resolve_supercharge_home() {
         Ok(h) => h,
         Err(e) => {
             tracing::warn!(error = %e, "auto worktree rebuild skipped: grok home unresolved");
@@ -622,14 +622,14 @@ fn collect_source_repos_for_prune(db: &WorktreeDb) -> BTreeSet<PathBuf> {
 /// ownership. A blanket `git worktree prune` is unsafe; see
 /// [`crate::git::remove_stale_worktree_registrations_under`].
 fn prune_stale_git_worktree_registrations(repos: &BTreeSet<PathBuf>) -> u64 {
-    let Ok(grok_home) = resolve_grok_home() else {
+    let Ok(supercharge_home) = resolve_supercharge_home() else {
         tracing::warn!("auto worktree registration scrub skipped: grok home unresolved");
         return 0;
     };
     let cleaned: u64 = repos
         .iter()
         .filter(|repo| repo.is_dir())
-        .map(|repo| crate::git::remove_stale_worktree_registrations_under(repo, &grok_home))
+        .map(|repo| crate::git::remove_stale_worktree_registrations_under(repo, &supercharge_home))
         .fold(0u64, u64::saturating_add);
     if cleaned > 0 {
         tracing::info!(
@@ -1383,7 +1383,7 @@ mod tests {
     }
 
     #[test]
-    fn include_rebuild_true_registers_untracked_under_grok_home() {
+    fn include_rebuild_true_registers_untracked_under_supercharge_home() {
         let _g = env_guard();
         clear_auto_gc_env();
         let fx = crate::db::GrokHomeFixture::new();
@@ -1407,7 +1407,7 @@ mod tests {
         );
         assert!(
             db.get(&wt.to_string_lossy()).unwrap().is_some(),
-            "untracked dir under grok_home/worktrees must be registered"
+            "untracked dir under supercharge_home/worktrees must be registered"
         );
     }
 

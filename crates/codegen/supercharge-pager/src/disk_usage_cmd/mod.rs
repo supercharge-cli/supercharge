@@ -13,7 +13,7 @@ use serde::Serialize;
 use supercharge_fast_worktree::{
     ListFilter, RegistryOpen, SqliteFailureKind, WORKTREE_POOL_DIR, WORKTREES_DIR, WorktreeDb,
     WorktreeKind, WorktreeRecord, WorktreeStatus, classify_sqlite_error, discover_worktrees,
-    managed_worktree_roots, path_under_worktree_roots, resolve_grok_home,
+    managed_worktree_roots, path_under_worktree_roots, resolve_supercharge_home,
 };
 
 use crate::fs_size::{
@@ -39,22 +39,22 @@ pub struct DiskUsageArgs {
 }
 
 pub fn run(args: DiskUsageArgs) -> Result<()> {
-    // resolve_grok_home resolves the home the way the registry does, unlike supercharge_config::grok_home()
-    let grok_home = resolve_grok_home()?;
+    // resolve_supercharge_home resolves the home the way the registry does, unlike supercharge_config::supercharge_home()
+    let supercharge_home = resolve_supercharge_home()?;
     let mut out = std::io::stdout().lock();
-    let present = grok_home
+    let present = supercharge_home
         .try_exists()
-        .with_context(|| format!("cannot stat {}", grok_home.display()))?;
+        .with_context(|| format!("cannot stat {}", supercharge_home.display()))?;
     if !present {
         if args.json {
-            return write_report(&empty_report(&grok_home), args.json, &mut out);
+            return write_report(&empty_report(&supercharge_home), args.json, &mut out);
         }
-        let written = display::print_missing_home(&grok_home.to_string_lossy(), &mut out);
+        let written = display::print_missing_home(&supercharge_home.to_string_lossy(), &mut out);
         return Ok(crate::util::ignore_broken_pipe(written)?);
     }
     // Rows store canonical paths, so the home must match to strip-prefix.
-    let grok_home = dunce::canonicalize(&grok_home).unwrap_or(grok_home);
-    write_report(&collect_report(&grok_home)?, args.json, &mut out)
+    let supercharge_home = dunce::canonicalize(&supercharge_home).unwrap_or(supercharge_home);
+    write_report(&collect_report(&supercharge_home)?, args.json, &mut out)
 }
 
 fn write_report(report: &DiskUsageReport, json: bool, out: &mut impl Write) -> Result<()> {
@@ -70,9 +70,9 @@ fn write_report(report: &DiskUsageReport, json: bool, out: &mut impl Write) -> R
     Ok(crate::util::ignore_broken_pipe(written)?)
 }
 
-fn empty_report(grok_home: &Path) -> DiskUsageReport {
+fn empty_report(supercharge_home: &Path) -> DiskUsageReport {
     DiskUsageReport {
-        grok_home: grok_home.to_string_lossy().into_owned(),
+        supercharge_home: supercharge_home.to_string_lossy().into_owned(),
         ..DiskUsageReport::default()
     }
 }
@@ -110,7 +110,7 @@ pub(crate) enum RegistryState {
 #[derive(Debug, Serialize)]
 pub(crate) struct DiskUsageReport {
     schema_version: u32,
-    grok_home: String,
+    supercharge_home: String,
     total_bytes: u64,
     /// Capacity less available is at least the used bytes (`f_bavail` withholds the root reserve).
     /// A larger `total_bytes` therefore proves blocks were counted more than once.
@@ -134,7 +134,7 @@ impl Default for DiskUsageReport {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            grok_home: String::new(),
+            supercharge_home: String::new(),
             total_bytes: 0,
             volume_capacity_bytes: None,
             volume_available_bytes: None,
@@ -295,20 +295,20 @@ impl WorktreeUsage {
     }
 }
 
-fn collect_report(grok_home: &Path) -> Result<DiskUsageReport> {
+fn collect_report(supercharge_home: &Path) -> Result<DiskUsageReport> {
     let mut top_level_dirs = Vec::new();
     let mut root_files_bytes = 0u64;
     let mut issues = WalkIssues::default();
     let mut unfollowed_dir_symlinks = 0u64;
-    let volume = Volume::of(grok_home);
+    let volume = Volume::of(supercharge_home);
     let mut worktree_sizes: HashMap<PathBuf, Measure> = HashMap::new();
-    let children = std::fs::read_dir(grok_home)
-        .with_context(|| format!("cannot read {}", grok_home.display()))?;
+    let children = std::fs::read_dir(supercharge_home)
+        .with_context(|| format!("cannot read {}", supercharge_home.display()))?;
     for child in children {
         let child = match child {
             Ok(child) => child,
             Err(e) => {
-                tracing::debug!(path = %grok_home.display(), error = %e, "du: home entry could not be read");
+                tracing::debug!(path = %supercharge_home.display(), error = %e, "du: home entry could not be read");
                 issues.unreadable_dirs += 1;
                 continue;
             }
@@ -359,13 +359,13 @@ fn collect_report(grok_home: &Path) -> Result<DiskUsageReport> {
         .fold(root_files_bytes, u64::saturating_add);
 
     // Sizing first keeps this open's journal sidecar out of the total.
-    let (registry, records, registry_path) = load_registry(grok_home);
-    let rows = collect_worktrees(grok_home, records, &worktree_sizes, volume);
+    let (registry, records, registry_path) = load_registry(supercharge_home);
+    let rows = collect_worktrees(supercharge_home, records, &worktree_sizes, volume);
     issues.merge(rows.issues);
-    let (volume_capacity_bytes, volume_available_bytes) = volume_bytes(grok_home).unzip();
+    let (volume_capacity_bytes, volume_available_bytes) = volume_bytes(supercharge_home).unzip();
     Ok(DiskUsageReport {
         schema_version: SCHEMA_VERSION,
-        grok_home: grok_home.to_string_lossy().into_owned(),
+        supercharge_home: supercharge_home.to_string_lossy().into_owned(),
         total_bytes,
         volume_capacity_bytes,
         volume_available_bytes,
@@ -380,8 +380,8 @@ fn collect_report(grok_home: &Path) -> Result<DiskUsageReport> {
     })
 }
 
-fn load_registry(grok_home: &Path) -> (RegistryState, Vec<WorktreeRecord>, PathBuf) {
-    classify(WorktreeDb::open_read_only(grok_home))
+fn load_registry(supercharge_home: &Path) -> (RegistryState, Vec<WorktreeRecord>, PathBuf) {
+    classify(WorktreeDb::open_read_only(supercharge_home))
 }
 
 /// The arm an open failed on decides nothing: a busy writer, an IO blip, and file damage all fail the same call.
@@ -433,14 +433,14 @@ struct WorktreeRows {
 }
 
 fn collect_worktrees(
-    grok_home: &Path,
+    supercharge_home: &Path,
     registered: Vec<WorktreeRecord>,
     sizes: &HashMap<PathBuf, Measure>,
     volume: Volume,
 ) -> WorktreeRows {
     let mut out = WorktreeRows::default();
     let mut known: HashSet<PathBuf> = HashSet::new();
-    let roots = managed_worktree_roots(grok_home);
+    let roots = managed_worktree_roots(supercharge_home);
     for rec in registered {
         let path = match dunce::canonicalize(&rec.path) {
             Ok(path) => path,
@@ -466,7 +466,7 @@ fn collect_worktrees(
         }
     }
 
-    for found in discover_worktrees(grok_home).found {
+    for found in discover_worktrees(supercharge_home).found {
         let path = dunce::canonicalize(&found.path).unwrap_or(found.path);
         if !known.insert(path.clone()) {
             continue;

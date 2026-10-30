@@ -147,8 +147,8 @@ fn discover_servers(cwd: &Path) -> (Vec<ConfigSourceStatus>, Vec<DiscoveredServe
         &supercharge_tools::types::compat::CompatConfig::default(),
     );
 
-    let grok_home = supercharge_tools::util::grok_home::grok_home();
-    let user_config = grok_home.join("config.toml");
+    let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
+    let user_config = supercharge_home.join("config.toml");
     let project_config_paths = crate::config::find_project_configs(cwd);
     let project_layers: Vec<(std::path::PathBuf, toml::Value)> = project_config_paths
         .iter()
@@ -987,7 +987,7 @@ mod tests {
     #[serial_test::serial]
     fn policy_subjects_judge_each_definition_once() {
         // A real `[claude_compat] imported` marker would cut off `.mcp.json`, so pin the cache to
-        // "not imported"; the TOML seed is project-scoped since grok_home() is a OnceLock.
+        // "not imported"; the TOML seed is project-scoped since supercharge_home() is a OnceLock.
         let _reset = MarkerCacheReset;
         crate::claude_import::refresh_marker_cache(false);
         let repo = tempfile::tempdir().unwrap();

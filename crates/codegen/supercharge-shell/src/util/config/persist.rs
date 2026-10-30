@@ -105,8 +105,8 @@ pub(crate) struct ConfigWriteGuard {
 /// fails closed — callers must not fall back to an unguarded write.
 pub(crate) async fn lock_config_writes() -> std::io::Result<ConfigWriteGuard> {
     let save = SAVE_LOCK.lock().await;
-    let grok_home = crate::util::grok_home::grok_home();
-    let flock = tokio::task::spawn_blocking(move || acquire_init_lock(&grok_home))
+    let supercharge_home = crate::util::supercharge_home::supercharge_home();
+    let flock = tokio::task::spawn_blocking(move || acquire_init_lock(&supercharge_home))
         .await
         .map_err(|e| std::io::Error::other(format!("config lock task failed: {e}")))??;
     Ok(ConfigWriteGuard {
@@ -114,12 +114,12 @@ pub(crate) async fn lock_config_writes() -> std::io::Result<ConfigWriteGuard> {
         _flock: flock,
     })
 }
-/// Exclusive advisory `flock` on `<grok_home>/.config-init.lock`, retried briefly, serializing
+/// Exclusive advisory `flock` on `<supercharge_home>/.config-init.lock`, retried briefly, serializing
 /// `config.toml` read-modify-writes; only `WouldBlock` retries, and the file is never removed.
-pub fn acquire_init_lock(grok_home: &std::path::Path) -> std::io::Result<std::fs::File> {
+pub fn acquire_init_lock(supercharge_home: &std::path::Path) -> std::io::Result<std::fs::File> {
     use fs2::FileExt;
-    let _ = std::fs::create_dir_all(grok_home);
-    let lock_path = grok_home.join(".config-init.lock");
+    let _ = std::fs::create_dir_all(supercharge_home);
+    let lock_path = supercharge_home.join(".config-init.lock");
     let file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)

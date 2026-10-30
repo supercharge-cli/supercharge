@@ -31,7 +31,7 @@ use supercharge_workspace_types::rpc::workspace::{
 static WORKSPACE_RPC_CALLER_MISMATCH_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rpc_caller_mismatch_total",
+            "supercharge_workspace_rpc_caller_mismatch_total",
             "Mutation RPCs whose caller_session_id param was not backed by a matching \
              server-bound envelope session, by method and kind",
             &["method", "kind"]
@@ -42,7 +42,7 @@ static WORKSPACE_RPC_CALLER_MISMATCH_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_RPC_MUTATION_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rpc_mutation_total",
+            "supercharge_workspace_rpc_mutation_total",
             "Session-mutating workspace RPC calls, by method and outcome",
             &["method", "outcome"]
         )
@@ -53,7 +53,7 @@ static WORKSPACE_RPC_MUTATION_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_RPC_REQUESTS_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rpc_requests_total",
+            "supercharge_workspace_rpc_requests_total",
             "Workspace RPC dispatches, by method and result. Donated per-sandbox \
              series inflate absolute volume — SLOs must use ratios \
              (error/total), not increase() counts.",
@@ -65,7 +65,7 @@ static WORKSPACE_RPC_REQUESTS_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_RPC_ERRORS_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rpc_errors_total",
+            "supercharge_workspace_rpc_errors_total",
             "Failed workspace RPC dispatches, by method and error kind. \
              Donated per-sandbox series inflate absolute volume — compare \
              error_kind shares or error/total ratios, not raw counts.",
@@ -77,7 +77,7 @@ static WORKSPACE_RPC_ERRORS_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_RPC_DURATION_SECONDS: std::sync::LazyLock<HistogramVec> =
     std::sync::LazyLock::new(|| {
         register_histogram_vec!(
-            "grok_workspace_rpc_duration_seconds",
+            "supercharge_workspace_rpc_duration_seconds",
             "Workspace RPC dispatch duration",
             &["method"],
             vec![

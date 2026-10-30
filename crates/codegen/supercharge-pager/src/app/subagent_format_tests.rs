@@ -8,11 +8,11 @@ fn write_meta_json(dir: &std::path::Path, subagent_id: &str, json: &str) {
 }
 
 fn setup_enrichment_dir(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     cwd: &std::path::Path,
     session_id: &str,
 ) -> std::path::PathBuf {
-    let sessions_dir = grok_home
+    let sessions_dir = supercharge_home
         .join("sessions")
         .join(urlencoding::encode(&cwd.to_string_lossy()).as_ref())
         .join(session_id);

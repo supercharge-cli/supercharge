@@ -12,7 +12,7 @@ use serde_json::json;
 #[test]
 fn gateway_toggle_propagates_failed_enable_persist() {
     acp_harness::run_agent_test(|cwd, _server| async move {
-        let grok_home = std::path::PathBuf::from(
+        let supercharge_home = std::path::PathBuf::from(
             std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"),
         );
 
@@ -21,7 +21,7 @@ fn gateway_toggle_propagates_failed_enable_persist() {
 
         // Unparseable config.toml: the enable write refuses to clobber it and
         // errors, so the disabled entry cannot be cleared.
-        std::fs::write(grok_home.join("config.toml"), "not toml [[[").unwrap();
+        std::fs::write(supercharge_home.join("config.toml"), "not toml [[[").unwrap();
 
         let params = serde_json::value::RawValue::from_string(
             json!({

@@ -97,7 +97,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                     .map_err(|error| acp::Error::internal_error().data(error.to_string()))?,
             );
             let decision = agent.search_index();
-            let root_dir = crate::util::grok_home::grok_home();
+            let root_dir = crate::util::supercharge_home::supercharge_home();
             let fetch = |index_offset: usize, batch: usize| {
                 let query = query.clone();
                 let cwd = cwd.clone();

@@ -2483,7 +2483,7 @@ pub fn derive_source_label(source_dir: &str) -> (String, bool) {
 
 /// Classify a hooks `source_dir` into a display label and stable kind rank.
 fn classify_hook_source(source_dir: &str) -> HookSourceMeta {
-    let grok = supercharge_config::grok_home();
+    let grok = supercharge_config::supercharge_home();
     let source_path = std::path::Path::new(source_dir);
     // Plugin / installed-plugin dirs, under the user grok home (SUPERCHARGE_HOME-aware) or a project-scoped `{cwd}/.supercharge/<subdir>/`
     // Returns the first path component after the subdir (the plugin's install directory name)
@@ -2545,7 +2545,7 @@ fn classify_hook_source(source_dir: &str) -> HookSourceMeta {
     // Custom directory (removable)
     let display = {
         if let Ok(rest) = source_path.strip_prefix(&grok) {
-            let prefix = crate::util::display_grok_home_prefix();
+            let prefix = crate::util::display_supercharge_home_prefix();
             let rest_str = rest.to_string_lossy();
             let rest_trimmed = rest_str.strip_prefix('/').unwrap_or(&rest_str);
             format!("Custom: {prefix}/{rest_trimmed}")
@@ -2657,7 +2657,7 @@ fn skill_source_str(skill: &SkillInfo) -> String {
     if let Some(ref cs) = skill.config_source {
         match cs {
             supercharge_tools::types::config_source::ConfigSource::User { path } => {
-                if crate::util::is_under_user_grok_home(path) {
+                if crate::util::is_under_user_supercharge_home(path) {
                     crate::util::display_user_grok_path("skills")
                 } else if path.display().to_string().contains("/.claude/") {
                     "~/.claude/skills".into()

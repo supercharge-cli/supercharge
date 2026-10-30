@@ -3319,7 +3319,7 @@ fn apply_child_env(
     layer_request_env(cmd, request_env, active_policy);
     cmd.envs(crate::util::pager_env());
     layer_login_path(cmd, login_env, active_policy);
-    crate::util::apply_grok_agent_marker(cmd);
+    crate::util::apply_agent_marker(cmd);
 }
 
 /// The sandbox side of one shell spawn: the hook that may wrap the command (`None` runs it as
@@ -3391,7 +3391,7 @@ fn spawn_shell_command(
         cmd.envs(inv.env);
         layer_request_env(&mut cmd, env, active_policy);
         cmd.envs(crate::util::pager_env());
-        crate::util::apply_grok_agent_marker(&mut cmd);
+        crate::util::apply_agent_marker(&mut cmd);
         // After the env layers so a policy PATH is prepended, not replaced. A
         // policy base env replaced the inherited one; supercharge's own PATH must not
         // come back through the prepend (`inherit = none`, an excluded PATH).

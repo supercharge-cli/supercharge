@@ -4,12 +4,12 @@
 #[test]
 fn cli_remove_of_json_store_official_source_sets_sticky_flag() {
     // One #[test] per binary: the env is process-global.
-    let grok_home = tempfile::tempdir().expect("grok home");
+    let supercharge_home = tempfile::tempdir().expect("grok home");
     // SAFETY: no other threads are running yet.
-    unsafe { std::env::set_var("SUPERCHARGE_HOME", grok_home.path()) };
+    unsafe { std::env::set_var("SUPERCHARGE_HOME", supercharge_home.path()) };
 
     // Official source known ONLY via the JSON store; the sticky flag is unset.
-    let plugins_dir = grok_home.path().join("plugins");
+    let plugins_dir = supercharge_home.path().join("plugins");
     std::fs::create_dir_all(&plugins_dir).unwrap();
     let known_path = plugins_dir.join("known_marketplaces.json");
     std::fs::write(
@@ -43,7 +43,7 @@ fn cli_remove_of_json_store_official_source_sets_sticky_flag() {
     );
 
     let config: toml::Value =
-        toml::from_str(&std::fs::read_to_string(grok_home.path().join("config.toml")).unwrap())
+        toml::from_str(&std::fs::read_to_string(supercharge_home.path().join("config.toml")).unwrap())
             .expect("config.toml written");
     assert_eq!(
         config

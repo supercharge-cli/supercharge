@@ -1396,10 +1396,10 @@ pub(crate) fn set_official_marketplace_auto_installed(config_path: &Path) -> std
 /// Try removing a source from `settings.json` / `known_marketplaces.json` under
 /// `~/.supercharge/` and `~/.claude/`. Returns `true` if removed from at least one file.
 pub fn try_remove_source_from_json_files(source_url_or_path: &str) -> bool {
-    // Resolve user grok via user_grok_home() (None when no home resolves) and home separately
+    // Resolve user grok via user_supercharge_home() (None when no home resolves) and home separately
     // Removal then still runs from $SUPERCHARGE_HOME when no home dir exists, and never touches a cwd-relative .supercharge
     let home = supercharge_dirs::home_dir();
-    let grok = supercharge_config::user_grok_home();
+    let grok = supercharge_config::user_supercharge_home();
 
     let mut settings_candidates: Vec<std::path::PathBuf> = Vec::new();
     if let Some(ref grok) = grok {

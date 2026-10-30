@@ -97,7 +97,7 @@ struct BundleFile<'a> {
 }
 
 pub fn bundled_root() -> PathBuf {
-    supercharge_config::grok_home().join(BUNDLED_DIR_NAME)
+    supercharge_config::supercharge_home().join(BUNDLED_DIR_NAME)
 }
 
 pub fn read_cached_manifest(root: &Path) -> Result<Option<BundleManifest>> {

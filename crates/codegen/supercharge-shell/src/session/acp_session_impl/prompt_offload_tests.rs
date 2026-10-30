@@ -687,7 +687,7 @@ fn build_truncated_never_panics_on_degenerate_inputs() {
         }
     }
 }
-/// `grok_home()` is a process-wide `OnceLock`, so the real async method is only exercised for the no-offload gate.
+/// `supercharge_home()` is a process-wide `OnceLock`, so the real async method is only exercised for the no-offload gate.
 /// Threshold gate: a prompt exactly at `LARGE_PROMPT_THRESHOLD` is returned unchanged and no file is written.
 #[tokio::test(flavor = "current_thread")]
 async fn maybe_truncate_at_threshold_returns_unchanged_no_file() {

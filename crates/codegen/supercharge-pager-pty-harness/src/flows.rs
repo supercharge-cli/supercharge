@@ -107,10 +107,10 @@ fn seed_fake_oauth_raw(
     opted_out: bool,
     team_fields: &str,
 ) {
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create temp .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create temp .supercharge");
     std::fs::write(
-        grok_home.join("auth.json"),
+        supercharge_home.join("auth.json"),
         format!(
             r#"{{
   "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828": {{

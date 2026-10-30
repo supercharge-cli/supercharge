@@ -77,7 +77,7 @@ pub struct LoadedPlugin {
 impl LoadedPlugin {
     /// Data directory for this plugin: `~/.supercharge/plugin-data/<plugin_id>/`.
     pub fn data_dir(&self) -> PathBuf {
-        supercharge_config::grok_home()
+        supercharge_config::supercharge_home()
             .join("plugin-data")
             .join(&self.id.0)
     }

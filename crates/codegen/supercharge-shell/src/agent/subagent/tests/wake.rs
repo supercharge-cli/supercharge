@@ -159,7 +159,7 @@ async fn assert_wake_setup_failure_preserves_prior_durable_state(
         cwd: "/tmp".to_owned(),
     };
     let storage = crate::session::storage::jsonl::JsonlStorageAdapter::with_root(
-        crate::util::grok_home::grok_home(),
+        crate::util::supercharge_home::supercharge_home(),
     );
     storage
         .init_session(&child_info, acp::ModelId::new("test"))
@@ -342,7 +342,7 @@ async fn unpublished_wake_completion_preserves_prior_durable_state_and_worktree(
                 cwd: worktree.to_string_lossy().into_owned(),
             };
             let storage = crate::session::storage::jsonl::JsonlStorageAdapter::with_root(
-                crate::util::grok_home::grok_home(),
+                crate::util::supercharge_home::supercharge_home(),
             );
             storage
                 .init_session(&child_info, acp::ModelId::new("test-model"))

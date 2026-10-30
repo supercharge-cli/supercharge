@@ -61,7 +61,7 @@ pub(crate) struct ConfigReloader {
     /// Per-cwd content hash of the project MCP config files.
     /// It drops redundant `ProjectMcpServersChanged` dispatches on mtime-only touches (see `hash_project_mcp_config`).
     last_project_mcp_hashes: HashMap<PathBuf, u64>,
-    grok_home: PathBuf,
+    supercharge_home: PathBuf,
     auth_scope: String,
     remote_settings: Option<crate::util::config::RemoteSettings>,
     config_update_tx: mpsc::UnboundedSender<ConfigUpdate>,
@@ -70,7 +70,7 @@ pub(crate) struct ConfigReloader {
 
 impl ConfigReloader {
     pub(crate) fn new(
-        grok_home: PathBuf,
+        supercharge_home: PathBuf,
         initial_auth_key_hash: u64,
         initial_config: toml::Value,
         auth_scope: String,
@@ -85,7 +85,7 @@ impl ConfigReloader {
             last_global_config: initial_config,
             last_effective_config,
             last_project_mcp_hashes: HashMap::new(),
-            grok_home,
+            supercharge_home,
             auth_scope,
             remote_settings,
             config_update_tx,
@@ -147,7 +147,7 @@ impl ConfigReloader {
                         error!(error = %e, "auth hot-reload failed, keeping previous credentials");
                         // Whole-file deletion (NotFound) and corrupt JSON land here
                         // The resulting memory/disk divergence must be visible in unified.jsonl
-                        let path = self.grok_home.join("auth.json");
+                        let path = self.supercharge_home.join("auth.json");
                         supercharge_telemetry::unified_log::error(
                             "auth reload: auth.json unreadable, keeping previous credentials",
                             None,
@@ -225,7 +225,7 @@ impl ConfigReloader {
     }
 
     pub(crate) fn reload_auth(&mut self) -> anyhow::Result<()> {
-        let auth_path = self.grok_home.join("auth.json");
+        let auth_path = self.supercharge_home.join("auth.json");
         let store = read_auth_json(&auth_path)?;
 
         match supercharge_login::lookup_auth(&store, &self.auth_scope) {

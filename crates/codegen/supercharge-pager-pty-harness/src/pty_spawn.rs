@@ -336,7 +336,7 @@ mod tests {
         );
         assert_eq!(
             cmd.get_env("SUPERCHARGE_HOME").and_then(|v| v.to_str()),
-            sandbox.grok_home().to_str()
+            sandbox.supercharge_home().to_str()
         );
     }
 
@@ -355,7 +355,7 @@ mod tests {
         );
         assert_eq!(
             cmd.get_env("SUPERCHARGE_HOME").and_then(|v| v.to_str()),
-            sandbox.grok_home().to_str()
+            sandbox.supercharge_home().to_str()
         );
         assert_eq!(cmd.get_env("SUPERCHARGE_LEADER_SOCKET"), None);
     }

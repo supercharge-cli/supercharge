@@ -106,7 +106,7 @@ pub(super) fn eligible_team_principal(auth: GrokAuth) -> Option<GrokAuth> {
 
 /// Single-team: managed config is a grok.com feature with one grok.com auth.
 fn read_team_principal() -> std::io::Result<Option<GrokAuth>> {
-    let home = crate::util::grok_home::grok_home();
+    let home = crate::util::supercharge_home::supercharge_home();
     let store = supercharge_login::read_auth_json(&supercharge_login::auth_json_path(&home))?;
     Ok(store.into_values().find(|a| a.is_team_principal()))
 }
@@ -140,7 +140,7 @@ pub fn clear_orphan() {
             return;
         }
     }
-    let home = crate::util::grok_home::grok_home();
+    let home = crate::util::supercharge_home::supercharge_home();
     let Some(_lock) = try_lock_managed_config(&home) else {
         return; // another process is syncing; retry next call
     };
@@ -224,7 +224,7 @@ fn open_managed_config_lock(home: &std::path::Path) -> std::io::Result<std::fs::
 const GATE_LOCK_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Purge, floor tick, and reads under the caller-held gate lock — one consistent state.
-/// `home` must be the process `grok_home()`: the identity reads resolve it internally.
+/// `home` must be the process `supercharge_home()`: the identity reads resolve it internally.
 pub(super) fn gate_snapshot_locked(home: &std::path::Path) -> GateSnapshot {
     // Purge first so an offline team switch isn't misread as a substituted cache.
     purge_prior_tenant_locked(home);
@@ -261,7 +261,7 @@ pub(super) fn bump_managed_rollback_floor() {
     if !supercharge_config::signed_policy::verification_active() {
         return;
     }
-    let home = crate::util::grok_home::grok_home();
+    let home = crate::util::supercharge_home::supercharge_home();
     match try_lock_managed_config(&home) {
         Some(_lock) => {
             supercharge_config::bump_rollback_floor(&home);
@@ -345,7 +345,7 @@ pub(super) fn apply_fetched(
     let signed_deployment_id = verified
         .as_ref()
         .and_then(|v| v.payload.deployment_id.clone());
-    let home = crate::util::grok_home::grok_home();
+    let home = crate::util::supercharge_home::supercharge_home();
     let Some(_lock) = try_lock_managed_config(&home) else {
         tracing::debug!("managed config locked by another process; skipping apply");
         return Ok(ApplyOutcome::Skipped);
@@ -470,7 +470,7 @@ fn stage_refresh(
 
 /// Bounded local I/O, re-verified through [`apply_fetched`]; an unverifying build deletes it unread.
 pub(super) fn apply_staged_managed_config() {
-    let home = crate::util::grok_home::grok_home();
+    let home = crate::util::supercharge_home::supercharge_home();
     let path = staged_refresh_path(&home);
     let Ok(json) = std::fs::read_to_string(&path) else {
         return;

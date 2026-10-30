@@ -5,7 +5,7 @@ pub mod env;
 pub mod file_reader;
 pub mod fs;
 pub mod git_detect;
-pub mod grok_home;
+pub mod supercharge_home;
 pub mod hash;
 pub mod image_compress;
 pub use supercharge_image as image_validate;
@@ -30,10 +30,10 @@ pub use command_display::strip_redundant_session_cd;
 pub use env::detach_from_tty;
 pub use env::substitute_plugin_tokens;
 pub use env::{
-    SUPERCHARGE_AGENT_ENV, SUPERCHARGE_AGENT_ENV_VALUE, apply_grok_agent_marker, pager_env,
+    SUPERCHARGE_AGENT_ENV, SUPERCHARGE_AGENT_ENV_VALUE, apply_agent_marker, pager_env,
 };
 pub use fs::{UnicodePathMatch, canonicalize_with_timeout, try_resolve_unicode_filename};
-pub use grok_home::{grok_application, grok_home};
+pub use supercharge_home::{grok_application, supercharge_home};
 pub use path_suggestions::format_not_found_error;
 pub use remap::{remap_json_keys, remap_schema_properties, reverse_map};
 pub use shell_env_policy::{

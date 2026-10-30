@@ -27,7 +27,7 @@ use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use tracing_subscriber::layer::Layer;
 use tracing_subscriber::registry::LookupSpan;
 
-use supercharge_config::grok_home;
+use supercharge_config::supercharge_home;
 
 const ENV_HOOKS_LOG: &str = "SUPERCHARGE_HOOKS_LOG";
 
@@ -104,7 +104,7 @@ where
 }
 
 fn resolve_log_path() -> Option<PathBuf> {
-    let default_path = || grok_home().join("logs").join("hooks.log");
+    let default_path = || supercharge_home().join("logs").join("hooks.log");
     let raw = match std::env::var(ENV_HOOKS_LOG) {
         Ok(val) => val,
         Err(_) => return None, // opt-in only

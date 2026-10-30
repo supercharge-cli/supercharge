@@ -81,7 +81,7 @@ struct AuthEntry {
 }
 
 pub fn default_auth_path() -> anyhow::Result<PathBuf> {
-    let grok = supercharge_config::user_grok_home().ok_or_else(|| {
+    let grok = supercharge_config::user_supercharge_home().ok_or_else(|| {
         anyhow::anyhow!("no user Supercharge home (set $SUPERCHARGE_HOME or $HOME)")
     })?;
     Ok(grok.join("auth.json"))

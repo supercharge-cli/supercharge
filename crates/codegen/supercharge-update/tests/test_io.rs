@@ -26,7 +26,7 @@ fn reset() {
 
 #[tokio::test]
 #[serial]
-async fn write_version_cache_creates_file_at_grok_home() {
+async fn write_version_cache_creates_file_at_supercharge_home() {
     let _ = test_home();
     reset();
 

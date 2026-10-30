@@ -523,7 +523,7 @@ async fn discover_leaders_in(root: &Path) -> Vec<LeaderDescriptor> {
     entries
 }
 pub async fn discover_leaders() -> Vec<LeaderDescriptor> {
-    discover_leaders_in(&crate::util::grok_home::grok_home()).await
+    discover_leaders_in(&crate::util::supercharge_home::supercharge_home()).await
 }
 /// (pid, leader_binary_version) of socket-verified (Reachable) leaders; a
 /// stale-lock-only descriptor is skipped (its `pid_from_lock` may be recycled).
@@ -1561,14 +1561,14 @@ pub async fn connect_or_spawn(
         }
     }
 }
-/// For a **managed install** — the running binary lives under `grok_home` (e.g. `~/.supercharge/...`) — prefer the managed `~/.supercharge/bin/grok` symlink. After an auto-update or `grok update` atomically swaps that symlink, `current_exe()` still resolves (via `/proc/self/exe` on Linux) to the *old* versioned target, so spawning it would relaunch the stale binary.
+/// For a **managed install** — the running binary lives under `supercharge_home` (e.g. `~/.supercharge/...`) — prefer the managed `~/.supercharge/bin/grok` symlink. After an auto-update or `grok update` atomically swaps that symlink, `current_exe()` still resolves (via `/proc/self/exe` on Linux) to the *old* versioned target, so spawning it would relaunch the stale binary.
 /// The symlink always points to the freshly-installed version.
-/// For a **dev / out-of-tree binary** (`cargo run`, integration tests, installs not under `grok_home`), keep `current_exe()` so the spawned leader matches the calling binary. Falls back to `~/.supercharge/bin/grok` only when `current_exe()` is unavailable.
+/// For a **dev / out-of-tree binary** (`cargo run`, integration tests, installs not under `supercharge_home`), keep `current_exe()` so the spawned leader matches the calling binary. Falls back to `~/.supercharge/bin/grok` only when `current_exe()` is unavailable.
 fn resolve_exe_for_spawn() -> Result<std::path::PathBuf, ConnectionError> {
-    resolve_binary_with_home(&crate::util::grok_home::grok_home())
+    resolve_binary_with_home(&crate::util::supercharge_home::supercharge_home())
 }
-fn resolve_binary_with_home(grok_home: &Path) -> Result<std::path::PathBuf, ConnectionError> {
-    resolve_binary_impl(grok_home, std::env::current_exe().ok())
+fn resolve_binary_with_home(supercharge_home: &Path) -> Result<std::path::PathBuf, ConnectionError> {
+    resolve_binary_impl(supercharge_home, std::env::current_exe().ok())
 }
 /// Binary file name for the managed Supercharge AI install (`Supercharge AI` / `Supercharge AI.exe`).
 fn managed_grok_bin_name() -> &'static str {
@@ -1580,12 +1580,12 @@ fn managed_grok_bin_name() -> &'static str {
 }
 /// Core leader-binary resolution with the current-exe path injected, for testability.
 fn resolve_binary_impl(
-    grok_home: &Path,
+    supercharge_home: &Path,
     current_exe: Option<std::path::PathBuf>,
 ) -> Result<std::path::PathBuf, ConnectionError> {
-    let managed_bin = grok_home.join("bin").join(managed_grok_bin_name());
+    let managed_bin = supercharge_home.join("bin").join(managed_grok_bin_name());
     if let Some(ref exe) = current_exe
-        && path_is_under(exe, grok_home)
+        && path_is_under(exe, supercharge_home)
         && managed_bin.exists()
     {
         return Ok(managed_bin);
@@ -1633,7 +1633,7 @@ fn spawn_leader_subprocess(env_urls: &LeaderEnvUrls) -> Result<u32, ConnectionEr
     }
     cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null());
-    let log_path = crate::util::grok_home::grok_home().join("leader.log");
+    let log_path = crate::util::supercharge_home::supercharge_home().join("leader.log");
     match std::fs::File::create(&log_path) {
         Ok(log_file) => {
             info!("Leader stderr → log file");

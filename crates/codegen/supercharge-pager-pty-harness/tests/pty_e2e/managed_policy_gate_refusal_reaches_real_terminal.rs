@@ -8,7 +8,7 @@ use super::common::*;
 #[ignore = "PTY e2e; run the owning pty_e2e_* Cargo test with --ignored (see Cargo.toml)"]
 async fn managed_policy_gate_refusal_reaches_real_terminal() {
     let sandbox = supercharge_test_support::TestSandbox::new();
-    let home_path = sandbox.grok_home();
+    let home_path = sandbox.supercharge_home();
     std::fs::write(
         home_path.join("config.toml"),
         // A dead local port makes any incidental fetch fail fast offline (the gate is synchronous anyway)

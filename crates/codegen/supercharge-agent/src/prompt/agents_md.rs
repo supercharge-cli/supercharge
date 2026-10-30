@@ -200,7 +200,7 @@ async fn read_agents_config_with_options(
         workspace_user_dir,
         compat,
         paths,
-        supercharge_tools::util::grok_home::grok_home(),
+        supercharge_tools::util::supercharge_home::supercharge_home(),
         supercharge_dirs::home_dir(),
         project_trusted,
     )
@@ -227,7 +227,7 @@ async fn read_agents_config_with_roots(
     workspace_user_dir: Option<&Path>,
     compat: CompatConfig,
     paths: &PathsConfig,
-    grok_home: PathBuf,
+    supercharge_home: PathBuf,
     home_dir: Option<PathBuf>,
     project_trusted: bool,
 ) -> Vec<AgentConfigFile> {
@@ -242,7 +242,7 @@ async fn read_agents_config_with_roots(
     let project_rules_dirs = compat.rules_dirs();
 
     let mut home_roots = Vec::new();
-    add_discovery_root(&mut home_roots, grok_home, true, HOME_RULES_DIRS);
+    add_discovery_root(&mut home_roots, supercharge_home, true, HOME_RULES_DIRS);
     if let Some(home) = &home_dir {
         if compat.claude.agents || compat.claude.rules {
             add_discovery_root(
@@ -698,10 +698,10 @@ mod tests {
     #[tokio::test]
     async fn home_and_project_rules_have_stable_order_without_doubled_paths() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("custom-grok-home");
+        let supercharge_home = tmp.path().join("custom-grok-home");
         let home = tmp.path().join("home");
         let repo = tmp.path().join("repo");
-        fs::create_dir_all(grok_home.join("rules")).unwrap();
+        fs::create_dir_all(supercharge_home.join("rules")).unwrap();
         fs::create_dir_all(home.join(".claude/rules")).unwrap();
         fs::create_dir_all(home.join(".cursor/rules")).unwrap();
         fs::create_dir_all(repo.join(".supercharge/rules")).unwrap();
@@ -710,8 +710,8 @@ mod tests {
         init_git_repo(&repo);
 
         for (path, content) in [
-            (grok_home.join("rules/b.md"), "grok-b"),
-            (grok_home.join("rules/a.md"), "grok-a"),
+            (supercharge_home.join("rules/b.md"), "grok-b"),
+            (supercharge_home.join("rules/a.md"), "grok-a"),
             (home.join(".claude/rules/a.md"), "claude-a"),
             (home.join(".cursor/rules/a.md"), "cursor-a"),
             (repo.join("AGENTS.md"), "repo-named"),
@@ -722,7 +722,7 @@ mod tests {
             fs::write(path, content).unwrap();
         }
         for path in [
-            grok_home.join(".supercharge/rules/doubled.md"),
+            supercharge_home.join(".supercharge/rules/doubled.md"),
             home.join(".claude/.claude/rules/doubled.md"),
             home.join(".cursor/.cursor/rules/doubled.md"),
         ] {
@@ -735,7 +735,7 @@ mod tests {
             None,
             CompatConfig::default(),
             &PathsConfig::default(),
-            grok_home,
+            supercharge_home,
             Some(home),
             /*project_trusted*/ true,
         )
@@ -767,10 +767,10 @@ mod tests {
     #[tokio::test]
     async fn vendor_home_agents_and_rules_cells_are_independent() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("grok-home");
+        let supercharge_home = tmp.path().join("grok-home");
         let home = tmp.path().join("home");
         let cwd = tmp.path().join("project");
-        fs::create_dir_all(&grok_home).unwrap();
+        fs::create_dir_all(&supercharge_home).unwrap();
         fs::create_dir_all(&cwd).unwrap();
         for vendor in [".claude", ".cursor"] {
             let vendor_home = home.join(vendor);
@@ -787,7 +787,7 @@ mod tests {
             None,
             rules_only,
             &PathsConfig::default(),
-            grok_home.clone(),
+            supercharge_home.clone(),
             Some(home.clone()),
             /*project_trusted*/ true,
         )
@@ -813,7 +813,7 @@ mod tests {
             None,
             agents_only,
             &PathsConfig::default(),
-            grok_home,
+            supercharge_home,
             Some(home),
             /*project_trusted*/ true,
         )
@@ -833,7 +833,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn nested_grok_home_keeps_project_role_in_repo_order() {
+    async fn nested_supercharge_home_keeps_project_role_in_repo_order() {
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");
         let nested = repo.join("nested");
@@ -874,7 +874,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn overlapping_grok_home_and_project_root_merges_roles() {
+    async fn overlapping_supercharge_home_and_project_root_merges_roles() {
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");
         fs::create_dir_all(repo.join("rules")).unwrap();
@@ -921,10 +921,10 @@ mod tests {
     #[tokio::test]
     async fn vendor_home_repo_overlap_keeps_project_named_role() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("grok-home");
+        let supercharge_home = tmp.path().join("grok-home");
         let home = tmp.path().join("home");
         let repo = home.join(".claude");
-        fs::create_dir_all(&grok_home).unwrap();
+        fs::create_dir_all(&supercharge_home).unwrap();
         fs::create_dir_all(repo.join("rules")).unwrap();
         fs::create_dir_all(repo.join(".claude/rules")).unwrap();
         init_git_repo(&repo);
@@ -939,7 +939,7 @@ mod tests {
             None,
             compat,
             &PathsConfig::default(),
-            grok_home,
+            supercharge_home,
             Some(home),
             /*project_trusted*/ true,
         )
@@ -992,17 +992,17 @@ mod tests {
     #[tokio::test]
     async fn extra_rule_dirs_load_as_home_rules_after_builtin_roots() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("grok-home");
+        let supercharge_home = tmp.path().join("grok-home");
         let home = tmp.path().join("home");
         let extra = home.join("team-rules");
         let repo = tmp.path().join("repo");
-        fs::create_dir_all(grok_home.join("rules")).unwrap();
+        fs::create_dir_all(supercharge_home.join("rules")).unwrap();
         fs::create_dir_all(home.join(".claude/rules")).unwrap();
         fs::create_dir_all(extra.join("nested")).unwrap();
         fs::create_dir_all(repo.join(".supercharge/rules")).unwrap();
         init_git_repo(&repo);
         for (path, content) in [
-            (grok_home.join("rules/a.md"), "grok-home-rule"),
+            (supercharge_home.join("rules/a.md"), "grok-home-rule"),
             (home.join(".claude/rules/v.md"), "claude-home-rule"),
             (extra.join("b.md"), "extra-b"),
             (extra.join("a.md"), "---\nname: x\n---\nextra-a"),
@@ -1033,7 +1033,7 @@ mod tests {
             None,
             CompatConfig::default(),
             &paths,
-            grok_home,
+            supercharge_home,
             Some(home),
             /*project_trusted*/ true,
         )
@@ -1060,10 +1060,10 @@ mod tests {
     #[tokio::test]
     async fn extra_rule_dir_inside_untrusted_repo_still_loads_and_ignores_gitignore() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("grok-home");
+        let supercharge_home = tmp.path().join("grok-home");
         let repo = tmp.path().join("repo");
         let extra = repo.join("vendor-rules");
-        fs::create_dir_all(&grok_home).unwrap();
+        fs::create_dir_all(&supercharge_home).unwrap();
         fs::create_dir_all(repo.join(".supercharge/rules")).unwrap();
         fs::create_dir_all(&extra).unwrap();
         init_git_repo(&repo);
@@ -1078,7 +1078,7 @@ mod tests {
             None,
             CompatConfig::default(),
             &paths_config([&extra]),
-            grok_home,
+            supercharge_home,
             None,
             /*project_trusted*/ false,
         )
@@ -1093,10 +1093,10 @@ mod tests {
     #[tokio::test]
     async fn extra_rule_dir_that_is_also_a_project_rules_dir_stays_configured() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("grok-home");
+        let supercharge_home = tmp.path().join("grok-home");
         let repo = tmp.path().join("repo");
         let shared = repo.join(".claude/rules");
-        fs::create_dir_all(&grok_home).unwrap();
+        fs::create_dir_all(&supercharge_home).unwrap();
         fs::create_dir_all(&shared).unwrap();
         fs::create_dir_all(repo.join(".supercharge/rules")).unwrap();
         init_git_repo(&repo);
@@ -1109,7 +1109,7 @@ mod tests {
             None,
             CompatConfig::default(),
             &paths_config([&shared]),
-            grok_home.clone(),
+            supercharge_home.clone(),
             None,
             /*project_trusted*/ true,
         )
@@ -1127,10 +1127,10 @@ mod tests {
     #[tokio::test]
     async fn listed_vendor_rules_dir_is_configured_with_compat_on_or_off() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("grok-home");
+        let supercharge_home = tmp.path().join("grok-home");
         let home = tmp.path().join("home");
         let cwd = tmp.path().join("project");
-        fs::create_dir_all(&grok_home).unwrap();
+        fs::create_dir_all(&supercharge_home).unwrap();
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(home.join(".claude/rules")).unwrap();
         fs::write(home.join(".claude/rules/r.md"), "claude-rule").unwrap();
@@ -1142,7 +1142,7 @@ mod tests {
             None,
             CompatConfig::default(),
             &paths_config([&home.join(".claude/rules")]),
-            grok_home.clone(),
+            supercharge_home.clone(),
             Some(home.clone()),
             /*project_trusted*/ true,
         )
@@ -1160,7 +1160,7 @@ mod tests {
             None,
             compat,
             &paths_config([&home.join(".claude/rules")]),
-            grok_home,
+            supercharge_home,
             Some(home),
             /*project_trusted*/ true,
         )
@@ -1174,10 +1174,10 @@ mod tests {
     #[tokio::test]
     async fn rule_frontmatter_is_stripped_but_named_frontmatter_is_preserved() {
         let tmp = tempfile::tempdir().unwrap();
-        let grok_home = tmp.path().join("custom-grok-home");
+        let supercharge_home = tmp.path().join("custom-grok-home");
         let home = tmp.path().join("home");
         let repo = tmp.path().join("repo");
-        fs::create_dir_all(grok_home.join("rules")).unwrap();
+        fs::create_dir_all(supercharge_home.join("rules")).unwrap();
         fs::create_dir_all(home.join(".claude/rules")).unwrap();
         fs::create_dir_all(home.join(".cursor/rules")).unwrap();
         fs::create_dir_all(repo.join(".supercharge/rules")).unwrap();
@@ -1187,7 +1187,7 @@ mod tests {
 
         let frontmatter = |body: &str| format!("---\nglobs: ['*.rs']\n---\n{body}");
         for (path, body) in [
-            (grok_home.join("rules/global.md"), "custom-home-body"),
+            (supercharge_home.join("rules/global.md"), "custom-home-body"),
             (home.join(".claude/rules/global.md"), "claude-body"),
             (home.join(".cursor/rules/global.md"), "cursor-body"),
             (
@@ -1206,7 +1206,7 @@ mod tests {
             None,
             CompatConfig::default(),
             &PathsConfig::default(),
-            grok_home,
+            supercharge_home,
             Some(home),
             /*project_trusted*/ true,
         )

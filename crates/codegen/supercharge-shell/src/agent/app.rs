@@ -4,7 +4,7 @@ use crate::agent::mvp_agent::MvpAgent;
 use crate::agent::remote_config::{ModelFetchAuth, prefetch_models_blocking};
 use crate::leader::CursorWorkerStartArgs;
 use crate::leader::protocol::InternalMethod;
-use crate::util::grok_home;
+use crate::util::supercharge_home;
 use agent_client_protocol as acp;
 use parking_lot::Mutex;
 use std::pin::Pin;
@@ -230,7 +230,7 @@ pub async fn run_stdio_agent(
     // Before any skill discovery, so built-in skills are listed from the first session.
     crate::util::rea::ensure_builtin_skills();
     supercharge_file_utils::queue::cleanup_orphaned_uploads(
-        &grok_home::grok_home(),
+        &supercharge_home::supercharge_home(),
         supercharge_file_utils::queue::DEFAULT_MAX_AGE,
     );
     if let Ok(version) = std::env::var("SUPERCHARGE_CLIENT_VERSION") {
@@ -318,7 +318,7 @@ pub async fn run_headless(
     const HEADLESS_NO_SESSION: &str = "Headless mode requires a supercharge.ai session. \
         Run `supercharge login` to sign in, or use `Supercharge AI agent stdio` for API-key access.";
     supercharge_file_utils::queue::cleanup_orphaned_uploads(
-        &grok_home::grok_home(),
+        &supercharge_home::supercharge_home(),
         supercharge_file_utils::queue::DEFAULT_MAX_AGE,
     );
     let mut agent_config = agent_config.clone();
@@ -326,7 +326,7 @@ pub async fn run_headless(
     let ctx = &agent_config.grok_com_config;
     let (mut auth, did_browser_flow) = if reauthenticate {
         let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-            &grok_home::grok_home(),
+            &supercharge_home::supercharge_home(),
             ctx.clone(),
             crate::agent::config::EndpointsConfig::from_effective_config().proxy_url(),
         ));
@@ -343,7 +343,7 @@ pub async fn run_headless(
         .await?
     } else {
         let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-            &grok_home::grok_home(),
+            &supercharge_home::supercharge_home(),
             ctx.clone(),
             crate::agent::config::EndpointsConfig::from_effective_config().proxy_url(),
         ));
@@ -687,7 +687,7 @@ pub async fn run_leader(
     supercharge_telemetry::unified_log::set_version(supercharge_version::VERSION);
     tokio::task::spawn_blocking(|| {
         supercharge_file_utils::queue::cleanup_orphaned_uploads(
-            &grok_home::grok_home(),
+            &supercharge_home::supercharge_home(),
             supercharge_file_utils::queue::DEFAULT_MAX_AGE,
         );
     });
@@ -766,7 +766,7 @@ pub async fn run_leader(
     .with_cursor_worker(
         agent_config.cursor_worker.clone(),
         agent_config.hub.url.clone(),
-        grok_home::grok_home(),
+        supercharge_home::supercharge_home(),
         external_roster.clone(),
     );
     let workspace_control = control_state.workspace.clone();
@@ -1088,7 +1088,7 @@ pub async fn run_leader(
                 watch_paths.push(home.join(".claude.json"));
             }
             let auth_scope = agent_config.grok_com_config.auth_scope();
-            let initial_auth_key_hash = supercharge_config::user_grok_home()
+            let initial_auth_key_hash = supercharge_config::user_supercharge_home()
                 .map(|g| g.join("auth.json"))
                 .and_then(|auth_path| supercharge_login::read_auth_json(&auth_path).ok())
                 .and_then(|store| {
@@ -1102,7 +1102,7 @@ pub async fn run_leader(
             let watcher_cwd = recursive_config_watch_enabled
                 .then_some(cwd_for_watcher.as_path());
             let _config_watcher = if let Some((watcher, events_rx)) = crate::config::watcher::ConfigFileWatcher::start(
-                &grok_home::grok_home(),
+                &supercharge_home::supercharge_home(),
                 &watch_paths,
                 watcher_cwd,
                 None,
@@ -1127,7 +1127,7 @@ pub async fn run_leader(
                 let initial_config = crate::config::load_from_disk()
                     .unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()));
                 let reloader = crate::config::reloader::ConfigReloader::new(
-                    grok_home::grok_home(),
+                    supercharge_home::supercharge_home(),
                     initial_auth_key_hash,
                     initial_config,
                     auth_scope,

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use supercharge_http::TransportFailureKind;
-use supercharge_shell_base::util::grok_home;
+use supercharge_shell_base::util::supercharge_home;
 use supercharge_telemetry::events::{LoginFailed, LoginFailureKind};
 use tokio::io::AsyncBufReadExt as _;
 use tokio::sync::{mpsc, oneshot};
@@ -626,7 +626,7 @@ fn build_startup_auth_manager(
     proxy_base_url: String,
 ) -> Arc<AuthManager> {
     let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home::grok_home(),
+        &supercharge_home::supercharge_home(),
         grok_com_config.clone(),
         proxy_base_url,
     ));
@@ -754,9 +754,9 @@ pub async fn ensure_authenticated_with_override(
     message_prefix: Option<&str>,
     login_override: LoginTransportOverride,
 ) -> anyhow::Result<GrokAuth> {
-    let grok_home = grok_home::grok_home();
+    let supercharge_home = supercharge_home::supercharge_home();
     let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home,
+        &supercharge_home,
         grok_com_config.clone(),
         proxy_base_url,
     ));
@@ -824,7 +824,7 @@ pub async fn run_cli_login(
 ) -> anyhow::Result<GrokAuth> {
     let _ = devbox;
     let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home::grok_home(),
+        &supercharge_home::supercharge_home(),
         grok_com_config.clone(),
         proxy_base_url,
     ));

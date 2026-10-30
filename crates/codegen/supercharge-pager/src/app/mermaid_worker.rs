@@ -831,7 +831,7 @@ fn take_pending_for(
 #[cfg(test)]
 thread_local! {
     /// Per-test override for the session `mermaid/` cache dir. View-side tests set this to a private tempdir so [`AgentView::mermaid_out_path`] resolves a hermetic, writable cache dir *without* mutating the process-global
-    /// `SUPERCHARGE_HOME` (whose `grok_home()` value is cached first-write-wins, an isolation hazard under the full parallel suite; PNGs could land in the real `~/.supercharge`). Thread-local, so each parallel test is independent; the `TempDir` guard lives here so the dir outlives the view. Mirrors the `subagent::REPLAY_GROK_HOME` test override. Production never sets this.
+    /// `SUPERCHARGE_HOME` (whose `supercharge_home()` value is cached first-write-wins, an isolation hazard under the full parallel suite; PNGs could land in the real `~/.supercharge`). Thread-local, so each parallel test is independent; the `TempDir` guard lives here so the dir outlives the view. Mirrors the `subagent::REPLAY_GROK_HOME` test override. Production never sets this.
     static TEST_MERMAID_DIR: std::cell::RefCell<Option<tempfile::TempDir>> =
         const { std::cell::RefCell::new(None) };
 }
@@ -1923,7 +1923,7 @@ mod tests {
 
     /// Point this test's session `mermaid/` cache dir at a private tempdir: hermetic, with no process-global `SUPERCHARGE_HOME` mutation.
     /// The `TempDir` lives in the [`TEST_MERMAID_DIR`] thread-local for the test thread's lifetime (so the dir outlives the view).
-    /// Each parallel test gets its own dir, so there is no cross-test contamination and no `grok_home()` cache race.
+    /// Each parallel test gets its own dir, so there is no cross-test contamination and no `supercharge_home()` cache race.
     fn use_test_mermaid_dir() {
         let tmp = tempfile::tempdir().expect("tempdir creation");
         TEST_MERMAID_DIR.with(|d| *d.borrow_mut() = Some(tmp));

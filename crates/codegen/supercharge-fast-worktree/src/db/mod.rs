@@ -192,9 +192,9 @@ pub fn classify_sqlite_error(error: &anyhow::Error) -> SqliteFailureKind {
 }
 
 impl WorktreeDb {
-    /// Open (or create) the DB at `grok_home/worktrees.db`.
-    pub fn open(grok_home: &Path) -> Result<Self> {
-        Self::open_at(&grok_home.join(WORKTREES_DB_FILE))
+    /// Open (or create) the DB at `supercharge_home/worktrees.db`.
+    pub fn open(supercharge_home: &Path) -> Result<Self> {
+        Self::open_at(&supercharge_home.join(WORKTREES_DB_FILE))
     }
 
     /// Open with an explicit path.
@@ -225,31 +225,31 @@ impl WorktreeDb {
             .with_context(|| format!("failed to set journal mode {}", mode.as_ref()))
     }
 
-    /// Open `~/.supercharge/worktrees.db` via `resolve_grok_home` (`$SUPERCHARGE_HOME`, else
+    /// Open `~/.supercharge/worktrees.db` via `resolve_supercharge_home` (`$SUPERCHARGE_HOME`, else
     /// `<home>/.supercharge`). Resolved fresh each call for test overrides. Each call
     /// opens its own connection — hot paths should cache the instance.
     pub fn open_default() -> Result<Self> {
-        Self::open(&resolve_grok_home()?)
+        Self::open(&resolve_supercharge_home()?)
     }
 
-    fn journal_mode_and_base_path(grok_home: &Path) -> (JournalMode, PathBuf) {
-        let base_path = grok_home.join(WORKTREES_DB_FILE);
+    fn journal_mode_and_base_path(supercharge_home: &Path) -> (JournalMode, PathBuf) {
+        let base_path = supercharge_home.join(WORKTREES_DB_FILE);
         let mode = JournalMode::for_db_path(&base_path);
         (mode, base_path)
     }
 
     /// The path a read-write open would use (per-host on network mounts).
     /// Runs statfs and a hostname lookup, so resolve once and carry it.
-    pub fn resolve_db_path(grok_home: &Path) -> PathBuf {
-        let (mode, base_path) = Self::journal_mode_and_base_path(grok_home);
+    pub fn resolve_db_path(supercharge_home: &Path) -> PathBuf {
+        let (mode, base_path) = Self::journal_mode_and_base_path(supercharge_home);
         mode.effective_db_path(&base_path)
     }
 
     /// Read-only open: creates no directory, database file, or schema. Not
     /// side-effect free, though: reading a WAL database leaves `-shm` and
     /// `-wal` sidecars, and a network-mount open still converts the journal.
-    pub fn open_read_only(grok_home: &Path) -> RegistryOpen {
-        let (mode, base_path) = Self::journal_mode_and_base_path(grok_home);
+    pub fn open_read_only(supercharge_home: &Path) -> RegistryOpen {
+        let (mode, base_path) = Self::journal_mode_and_base_path(supercharge_home);
         let path = mode.effective_db_path(&base_path);
         match Self::open_read_only_at(mode, &path) {
             Ok(Some(db)) => RegistryOpen::Opened { path, db },
@@ -447,8 +447,8 @@ pub fn now_epoch_secs() -> i64 {
 
 /// Resolve the Supercharge home: `$SUPERCHARGE_HOME`, then the legacy variable,
 /// else `<home>/.supercharge`.
-pub fn resolve_grok_home() -> Result<PathBuf> {
-    supercharge_dirs::resolve_grok_home()
+pub fn resolve_supercharge_home() -> Result<PathBuf> {
+    supercharge_dirs::resolve_supercharge_home()
         .context("neither $SUPERCHARGE_HOME nor a home directory could be resolved")
 }
 

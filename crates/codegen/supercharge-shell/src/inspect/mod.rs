@@ -523,13 +523,13 @@ fn has_rules_directory(file_path: &str, config_dir: &str) -> bool {
 
 fn instruction_scope(
     file_path: &str,
-    grok_home: &Path,
+    supercharge_home: &Path,
     vendor_homes: &[(PathBuf, bool)],
     workspace_root: &Path,
 ) -> Scope {
     if crate::util::is_user_instruction_path(
         Path::new(file_path),
-        grok_home,
+        supercharge_home,
         vendor_homes,
         &[workspace_root],
     ) {
@@ -539,11 +539,11 @@ fn instruction_scope(
     }
 }
 
-fn instruction_file_type(file_path: &str, grok_home: &Path, claude_imported: bool) -> &'static str {
+fn instruction_file_type(file_path: &str, supercharge_home: &Path, claude_imported: bool) -> &'static str {
     let path = Path::new(file_path);
     if path
         .parent()
-        .is_some_and(|parent| parent == grok_home.join("rules"))
+        .is_some_and(|parent| parent == supercharge_home.join("rules"))
         || has_rules_directory(file_path, ".supercharge")
         || has_rules_directory(file_path, ".cursor")
         || (!claude_imported && has_rules_directory(file_path, ".claude"))
@@ -569,7 +569,7 @@ async fn list_instructions(
     )
     .await;
 
-    let grok_home = crate::util::grok_home::grok_home();
+    let supercharge_home = crate::util::supercharge_home::supercharge_home();
     let vendor_homes = supercharge_dirs::home_dir()
         .map(|home_dir| {
             vec![
@@ -596,8 +596,8 @@ async fn list_instructions(
                 (Scope::Global, "rules", None)
             } else {
                 (
-                    instruction_scope(&c.file_path, &grok_home, &vendor_homes, &workspace_root),
-                    instruction_file_type(&c.file_path, &grok_home, imported),
+                    instruction_scope(&c.file_path, &supercharge_home, &vendor_homes, &workspace_root),
+                    instruction_file_type(&c.file_path, &supercharge_home, imported),
                     derive_vendor(&c.file_path).map(String::from),
                 )
             };
@@ -1198,7 +1198,7 @@ fn list_config_sources(cwd: &Path) -> ConfigSources {
     }
 
     // User managed
-    if let Some(home) = crate::config::user_grok_home() {
+    if let Some(home) = crate::config::user_supercharge_home() {
         let p = home.join("managed_config.toml");
         if let Some((path_s, note)) = describe_config_file(&p) {
             layers.push(ConfigLayer {
@@ -1210,7 +1210,7 @@ fn list_config_sources(cwd: &Path) -> ConfigSources {
     }
 
     // User config.toml (primary user layer; shown as (none) when absent)
-    if let Some(home) = crate::config::user_grok_home() {
+    if let Some(home) = crate::config::user_supercharge_home() {
         let p = home.join("config.toml");
         if let Some((path_s, note)) = describe_config_file(&p) {
             layers.push(ConfigLayer {
@@ -1246,7 +1246,7 @@ fn list_config_sources(cwd: &Path) -> ConfigSources {
     }
 
     // Requirements: user then system (order they appear in requirements_layers)
-    if let Some(home) = crate::config::user_grok_home() {
+    if let Some(home) = crate::config::user_supercharge_home() {
         let p = home.join("requirements.toml");
         if let Some((path_s, note)) = describe_requirements_file(&p) {
             layers.push(ConfigLayer {
@@ -2058,12 +2058,12 @@ mod tests {
     }
 
     #[test]
-    fn grok_home_nested_in_workspace_keeps_direct_surfaces_global() {
-        let grok_home = Path::new("/repo/config");
+    fn supercharge_home_nested_in_workspace_keeps_direct_surfaces_global() {
+        let supercharge_home = Path::new("/repo/config");
         let workspace = Path::new("/repo");
         for path in ["/repo/config/AGENTS.md", "/repo/config/rules/global.md"] {
             assert!(matches!(
-                instruction_scope(path, grok_home, &[], workspace),
+                instruction_scope(path, supercharge_home, &[], workspace),
                 Scope::Global
             ));
         }
@@ -2072,7 +2072,7 @@ mod tests {
             "/repo/config/src/AGENTS.md",
         ] {
             assert!(matches!(
-                instruction_scope(path, grok_home, &[], workspace),
+                instruction_scope(path, supercharge_home, &[], workspace),
                 Scope::Project
             ));
         }
@@ -2110,22 +2110,22 @@ mod tests {
     }
 
     #[test]
-    fn workspace_scope_wins_inside_grok_home() {
-        let grok_home = Path::new("/custom/Supercharge AI");
+    fn workspace_scope_wins_inside_supercharge_home() {
+        let supercharge_home = Path::new("/custom/Supercharge AI");
         let workspace = Path::new("/custom/Supercharge AI/worktrees/repo");
         for path in [
             "/custom/Supercharge AI/worktrees/repo/.cursor/rules/project.md",
             "/custom/Supercharge AI/worktrees/repo/src/AGENTS.md",
         ] {
             assert!(matches!(
-                instruction_scope(path, grok_home, &[], workspace),
+                instruction_scope(path, supercharge_home, &[], workspace),
                 Scope::Project
             ));
         }
         assert!(matches!(
             instruction_scope(
                 "/custom/Supercharge AI/rules/global.md",
-                grok_home,
+                supercharge_home,
                 &[],
                 workspace,
             ),
@@ -2134,7 +2134,7 @@ mod tests {
     }
 
     #[test]
-    fn custom_grok_home_rules_are_classified_as_rules() {
+    fn custom_supercharge_home_rules_are_classified_as_rules() {
         assert_eq!(
             instruction_file_type(
                 "/custom/config/rules/team.md",

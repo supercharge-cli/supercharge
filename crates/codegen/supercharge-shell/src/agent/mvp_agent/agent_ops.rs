@@ -1592,7 +1592,7 @@ impl MvpAgent {
             let task = tokio_util::task::AbortOnDropHandle::new(
                 tokio::task::spawn_blocking(|| {
                     crate::extensions::marketplace::ensure_official_marketplace_source(
-                        &crate::util::grok_home::grok_home(),
+                        &crate::util::supercharge_home::supercharge_home(),
                     );
                 }),
             );
@@ -3268,7 +3268,7 @@ impl MvpAgent {
         use crate::upload::turn::TraceUploadReason;
         if self.is_data_collection_disabled() {
             crate::upload::trace::spawn_startup_spill_reconcile(
-                crate::util::grok_home::grok_home(),
+                crate::util::supercharge_home::supercharge_home(),
                 None,
             );
             return (None, TraceUploadReason::ZdrTeam);
@@ -3983,15 +3983,15 @@ impl MvpAgent {
         let queue = session_handle
             .upload_queue
             .get_or_init(|| {
-                let grok_home = crate::util::grok_home::grok_home();
+                let supercharge_home = crate::util::supercharge_home::supercharge_home();
                 let queue = crate::upload::trace::spawn_upload_queue(
-                    &grok_home,
+                    &supercharge_home,
                     &gcs_config,
                     Some(supercharge_version::VERSION),
                     self.auth_manager.clone(),
                 );
                 crate::upload::trace::spawn_startup_spill_reconcile(
-                    grok_home,
+                    supercharge_home,
                     Some(queue.clone()),
                 );
                 session_handle
@@ -4718,7 +4718,7 @@ impl MvpAgent {
             );
             tool_ctx.lsp_server_names = servers.keys().cloned().collect();
             if servers.is_empty() {
-                let user_path = supercharge_tools::util::grok_home::grok_home()
+                let user_path = supercharge_tools::util::supercharge_home::supercharge_home()
                     .join("lsp.json");
                 let project_path = tool_ctx.cwd.as_path().join(".supercharge").join("lsp.json");
                 tracing::debug!(

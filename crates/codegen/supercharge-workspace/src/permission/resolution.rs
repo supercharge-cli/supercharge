@@ -212,8 +212,8 @@ fn load_config_toml_permissions(cwd: &Path, project_trusted: bool) -> Vec<Source
     let mut rules = Vec::new();
 
     // Global `~/.supercharge/config.toml` first (lowest priority within this layer).
-    // Gated on user_grok_home() so a project's .supercharge/config.toml is never read as global permissions when neither SUPERCHARGE_HOME nor a home dir resolves
-    if let Some(global_path) = supercharge_config::user_grok_home().map(|g| g.join("config.toml"))
+    // Gated on user_supercharge_home() so a project's .supercharge/config.toml is never read as global permissions when neither SUPERCHARGE_HOME nor a home dir resolves
+    if let Some(global_path) = supercharge_config::user_supercharge_home().map(|g| g.join("config.toml"))
         && global_path.is_file()
     {
         match supercharge_config::load_config_file(&global_path) {

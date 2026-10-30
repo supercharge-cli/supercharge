@@ -95,14 +95,14 @@ impl ConfigFileWatcher {
     /// `cwd`, when `Some`, adds two non-recursive watches: `<cwd>/` and `<cwd>/.supercharge/`.
     /// Use [`Self::watch_path`] later to register additional project cwds for sessions that open in previously-unwatched directories.
     pub fn start(
-        grok_home: &Path,
+        supercharge_home: &Path,
         extra_paths: &[PathBuf],
         cwd: Option<&Path>,
         debounce: Option<Duration>,
     ) -> Option<(Self, mpsc::UnboundedReceiver<ConfigChangeEvent>)> {
         let debounce = debounce.unwrap_or(DEFAULT_DEBOUNCE);
         let (tx, rx) = mpsc::unbounded_channel();
-        let grok_home_buf = grok_home.to_path_buf();
+        let supercharge_home_buf = supercharge_home.to_path_buf();
         // `~/.claude.json` is consumed by **every** session (see `load_claude_json_mcp_servers_as_configs`)
         // A write to it must broadcast through the unit `McpServersChanged` arm, NOT the per-cwd `ProjectMcpServersChanged { cwd: $HOME }` arm `cwd_matches` would silently filter the per-cwd arm for sessions outside `$HOME`
         // We snapshot `$HOME` here so the closure can tell `<home>/.claude.json` apart from a project-level `<cwd>/.claude.json` purely by path Canonicalize `$HOME` ONCE up front. `notify` backends may deliver canonicalized event paths. macOS FSEvents resolves symlinks, returning `/private/var/...` where `supercharge_dirs::home_dir()` returned `/var/...`
@@ -119,13 +119,13 @@ impl ConfigFileWatcher {
                 let parent = path.parent();
 
                 let change = match name {
-                    Some("auth.json") if parent == Some(grok_home_buf.as_path()) => {
+                    Some("auth.json") if parent == Some(supercharge_home_buf.as_path()) => {
                         Some(ConfigChangeEvent::AuthChanged)
                     }
-                    Some("config.toml") if parent == Some(grok_home_buf.as_path()) => {
+                    Some("config.toml") if parent == Some(supercharge_home_buf.as_path()) => {
                         Some(ConfigChangeEvent::GlobalConfigChanged)
                     }
-                    Some("models_cache.json") if parent == Some(grok_home_buf.as_path()) => {
+                    Some("models_cache.json") if parent == Some(supercharge_home_buf.as_path()) => {
                         Some(ConfigChangeEvent::ModelsCacheChanged)
                     }
                     Some("config.toml") => {
@@ -161,10 +161,10 @@ impl ConfigFileWatcher {
 
         debouncer
             .watcher()
-            .watch(grok_home, RecursiveMode::NonRecursive)
+            .watch(supercharge_home, RecursiveMode::NonRecursive)
             .map_err(|e| {
                 tracing::warn!(
-                    path = %grok_home.display(),
+                    path = %supercharge_home.display(),
                     error = %e,
                     "failed to watch supercharge_value home directory"
                 )
@@ -189,7 +189,7 @@ impl ConfigFileWatcher {
         }
 
         tracing::info!(
-            grok_home = %grok_home.display(),
+            supercharge_home = %supercharge_home.display(),
             extra_paths = extra_paths.len(),
             cwd = ?cwd,
             debounce_ms = debounce.as_millis(),
@@ -324,9 +324,9 @@ const VENDOR_CONFIG_ROOT_NAMES: &[&str] = &[".supercharge", ".agents", ".claude"
 /// `bundled` is the synced bundle root in grok home, so its appearance means skills changed.
 const SKILL_DISCOVERY_BASENAMES: &[&str] = &["skills", "commands", "SKILL.md", "bundled"];
 
-/// Vendor roots (by name or `grok_home`) must use scoped watches; they can contain large non-skill trees (`worktrees/`, etc.).
-fn is_vendor_config_root(dir: &Path, grok_home: &Path) -> bool {
-    if paths_equal(dir, grok_home) {
+/// Vendor roots (by name or `supercharge_home`) must use scoped watches; they can contain large non-skill trees (`worktrees/`, etc.).
+fn is_vendor_config_root(dir: &Path, supercharge_home: &Path) -> bool {
+    if paths_equal(dir, supercharge_home) {
         return true;
     }
     dir.file_name()
@@ -428,7 +428,7 @@ struct SkillsWatchPlan {
 /// Pure function: classifies discovery roots and seeds mid-session refresh targets.
 fn plan_skills_watch_targets(
     dirs_to_watch: &[PathBuf],
-    grok_home: &Path,
+    supercharge_home: &Path,
     project_root: Option<&Path>,
 ) -> SkillsWatchPlan {
     let mut vendor_roots = Vec::new();
@@ -436,7 +436,7 @@ fn plan_skills_watch_targets(
     let mut refresh_dirs = Vec::new();
 
     for dir in dirs_to_watch {
-        if is_vendor_config_root(dir, grok_home) {
+        if is_vendor_config_root(dir, supercharge_home) {
             vendor_roots.push(dir.clone());
             refresh_dirs.extend(vendor_skill_refresh_dirs(dir));
         } else {
@@ -480,12 +480,12 @@ pub(crate) struct ProjectDiscoveryWatcher {
 impl ProjectDiscoveryWatcher {
     pub(crate) fn start(
         cwd: &Path,
-        grok_home: &Path,
+        supercharge_home: &Path,
     ) -> Option<(Self, mpsc::UnboundedReceiver<DiscoveryChange>)> {
         let project_root = crate::session::workflow::registry::project_root(cwd);
         let project_grok = project_root.join(".supercharge");
         // Grok home's root sees constant unrelated writes from every grok process
-        if paths_equal(&project_grok, grok_home) {
+        if paths_equal(&project_grok, supercharge_home) {
             tracing::debug!(
                 project_grok = %project_grok.display(),
                 "project .supercharge is grok home; skills watcher owns it"
@@ -573,19 +573,19 @@ impl SkillsFileWatcher {
         monorepo_user_dir: Option<&Path>,
         config_paths: &[String],
     ) -> Option<(Self, mpsc::UnboundedReceiver<DiscoveryChange>)> {
-        let grok_home = supercharge_tools::util::grok_home::grok_home();
+        let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
         // Watch the full superset of vendor dirs (all-on compat) This watcher is shared by the whole leader; per-session compat isn't resolved here, and the discovery gating happens downstream
         // Watching a currently-disabled vendor dir is harmless: a change just re-runs the gated discovery It also avoids ever missing a watch if a toggle flips
         let dirs_to_watch = supercharge_agent::prompt::skills::collect_skill_config_dirs(
             cwd,
             monorepo_user_dir,
-            &grok_home,
+            &supercharge_home,
             config_paths,
             supercharge_tools::types::compat::CompatConfig::default(),
         );
         let project_root = cwd.map(crate::session::workflow::registry::project_root);
         let (mut watcher, rx) =
-            Self::start_with_dirs(&dirs_to_watch, &grok_home, project_root.as_deref())?;
+            Self::start_with_dirs(&dirs_to_watch, &supercharge_home, project_root.as_deref())?;
         // In-process bundle sync re-advertises itself; this catches a sync by another grok process
         // The `bundled` basename rule sees the root appear; the root watch sees its subdirs appear
         let bundled_root = crate::bundle::bundled_root();
@@ -604,7 +604,7 @@ impl SkillsFileWatcher {
     /// After a [`DiscoveryChange`], call [`Self::refresh_new_discovery_dirs`].
     pub fn start_with_dirs(
         dirs_to_watch: &[PathBuf],
-        grok_home: &Path,
+        supercharge_home: &Path,
         project_root: Option<&Path>,
     ) -> Option<(Self, mpsc::UnboundedReceiver<DiscoveryChange>)> {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -630,7 +630,7 @@ impl SkillsFileWatcher {
             .map_err(|e| tracing::warn!(error = %e, "failed to create skills file watcher"))
             .ok()?;
 
-        let plan = plan_skills_watch_targets(dirs_to_watch, grok_home, project_root);
+        let plan = plan_skills_watch_targets(dirs_to_watch, supercharge_home, project_root);
 
         let mut watched = 0;
         let mut refreshed_dirs = HashSet::new();
@@ -707,26 +707,26 @@ mod tests {
     fn is_vendor_config_root_matches_known_names_at_any_tier() {
         let home = TempDir::new().unwrap();
         let home = home.path();
-        let grok_home = home.join(".supercharge");
+        let supercharge_home = home.join(".supercharge");
 
-        assert!(is_vendor_config_root(&grok_home, &grok_home));
-        assert!(is_vendor_config_root(&home.join(".claude"), &grok_home));
-        assert!(is_vendor_config_root(&home.join(".cursor"), &grok_home));
-        assert!(is_vendor_config_root(&home.join(".agents"), &grok_home));
+        assert!(is_vendor_config_root(&supercharge_home, &supercharge_home));
+        assert!(is_vendor_config_root(&home.join(".claude"), &supercharge_home));
+        assert!(is_vendor_config_root(&home.join(".cursor"), &supercharge_home));
+        assert!(is_vendor_config_root(&home.join(".agents"), &supercharge_home));
         assert!(is_vendor_config_root(
             &home.join("repo").join(".supercharge"),
-            &grok_home
+            &supercharge_home
         ));
         assert!(is_vendor_config_root(
             &home.join("repo").join(".claude"),
-            &grok_home
+            &supercharge_home
         ));
 
-        assert!(!is_vendor_config_root(&home.join("my-skills"), &grok_home));
-        assert!(!is_vendor_config_root(&home.join(".config"), &grok_home));
+        assert!(!is_vendor_config_root(&home.join("my-skills"), &supercharge_home));
+        assert!(!is_vendor_config_root(&home.join(".config"), &supercharge_home));
         assert!(!is_vendor_config_root(
             &home.join("repo").join("my-skills"),
-            &grok_home
+            &supercharge_home
         ));
 
         let custom_home = home.join("custom-supercharge_value-home");
@@ -874,15 +874,15 @@ mod tests {
     fn start_with_dirs_keeps_parent_only_watch() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-supercharge_value");
-        fs::create_dir_all(&grok_home).unwrap();
+        let supercharge_home = project.join("home-supercharge_value");
+        fs::create_dir_all(&supercharge_home).unwrap();
 
-        let plan = plan_skills_watch_targets(&[], &grok_home, Some(project));
+        let plan = plan_skills_watch_targets(&[], &supercharge_home, Some(project));
         assert!(plan.vendor_roots.is_empty());
         assert!(plan.recursive_roots.is_empty());
         assert_eq!(plan.project_parent_watch.as_deref(), Some(project));
 
-        let (watcher, _rx) = SkillsFileWatcher::start_with_dirs(&[], &grok_home, Some(project))
+        let (watcher, _rx) = SkillsFileWatcher::start_with_dirs(&[], &supercharge_home, Some(project))
             .expect("parent-only watch must start when no discovery roots exist yet");
         assert!(
             path_set_contains(&watcher.refreshed_dirs, project),
@@ -898,7 +898,7 @@ mod tests {
     fn plan_skills_watch_targets_scopes_vendors_and_seeds_refresh() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-supercharge_value");
+        let supercharge_home = project.join("home-supercharge_value");
         let project_claude = project.join(".claude");
         let project_grok = project.join(".supercharge");
         let custom = project.join("my-skills");
@@ -907,7 +907,7 @@ mod tests {
         fs::create_dir_all(&custom).unwrap();
 
         let dirs = vec![project_claude.clone(), project_grok.clone(), custom.clone()];
-        let plan = plan_skills_watch_targets(&dirs, &grok_home, Some(project));
+        let plan = plan_skills_watch_targets(&dirs, &supercharge_home, Some(project));
 
         assert_eq!(
             plan.vendor_roots,
@@ -931,10 +931,10 @@ mod tests {
 
     #[test]
     fn plan_skills_watch_targets_multi_vendor_refresh_fanout() {
-        let grok_home = PathBuf::from("/home/u/.supercharge");
+        let supercharge_home = PathBuf::from("/home/u/.supercharge");
         let a = PathBuf::from("/repo/.claude");
         let b = PathBuf::from("/repo/.agents");
-        let plan = plan_skills_watch_targets(&[a.clone(), b.clone()], &grok_home, None);
+        let plan = plan_skills_watch_targets(&[a.clone(), b.clone()], &supercharge_home, None);
 
         assert_eq!(plan.vendor_roots, vec![a.clone(), b.clone()]);
         assert!(plan.recursive_roots.is_empty());
@@ -960,8 +960,8 @@ mod tests {
     fn plan_skills_watch_targets_seeds_all_missing_project_vendor_roots() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("elsewhere").join(".supercharge");
-        let plan = plan_skills_watch_targets(&[], &grok_home, Some(project));
+        let supercharge_home = project.join("elsewhere").join(".supercharge");
+        let plan = plan_skills_watch_targets(&[], &supercharge_home, Some(project));
 
         assert_eq!(plan.project_parent_watch.as_deref(), Some(project));
         assert!(plan.vendor_roots.is_empty());
@@ -990,7 +990,7 @@ mod tests {
     fn plan_skills_watch_targets_does_not_double_seed_present_vendor_roots() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-supercharge_value");
+        let supercharge_home = project.join("home-supercharge_value");
         let present: Vec<PathBuf> = VENDOR_CONFIG_ROOT_NAMES
             .iter()
             .map(|name| project.join(name))
@@ -999,7 +999,7 @@ mod tests {
             fs::create_dir_all(root).unwrap();
         }
 
-        let plan = plan_skills_watch_targets(&present, &grok_home, Some(project));
+        let plan = plan_skills_watch_targets(&present, &supercharge_home, Some(project));
 
         assert_eq!(plan.vendor_roots, present);
         assert!(plan.project_parent_watch.is_none());
@@ -1031,13 +1031,13 @@ mod tests {
     fn plan_skills_watch_targets_partial_vendors_seed_only_missing() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-supercharge_value");
+        let supercharge_home = project.join("home-supercharge_value");
         let project_claude = project.join(".claude");
         fs::create_dir_all(&project_claude).unwrap();
 
         let plan = plan_skills_watch_targets(
             std::slice::from_ref(&project_claude),
-            &grok_home,
+            &supercharge_home,
             Some(project),
         );
 
@@ -1062,13 +1062,13 @@ mod tests {
     fn plan_skills_watch_targets_parent_watches_project_when_grok_present_siblings_missing() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
-        let grok_home = project.join("home-supercharge_value");
+        let supercharge_home = project.join("home-supercharge_value");
         let project_grok = project.join(".supercharge");
         fs::create_dir_all(&project_grok).unwrap();
 
         let plan = plan_skills_watch_targets(
             std::slice::from_ref(&project_grok),
-            &grok_home,
+            &supercharge_home,
             Some(project),
         );
 
@@ -1247,7 +1247,7 @@ mod tests {
     }
 
     #[test]
-    fn project_discovery_watcher_skips_project_grok_equal_to_grok_home() {
+    fn project_discovery_watcher_skips_project_grok_equal_to_supercharge_home() {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path();
         git2::Repository::init(project).unwrap();
@@ -1494,10 +1494,10 @@ mod tests {
     /// Bookkeeping-only (no OS event delivery, so deterministic on every platform): `watch_path` records the cwd in `watched_cwds` and is idempotent; `unwatch_path` removes it and is a no-op for an unknown cwd. Guards the set that backs `unwatch_path` and the `watch_path` de-dup.
     #[test]
     fn watch_and_unwatch_path_bookkeeping() {
-        let grok_home = TempDir::new().unwrap();
+        let supercharge_home = TempDir::new().unwrap();
         let cwd = TempDir::new().unwrap();
         let Some((mut watcher, _rx)) = ConfigFileWatcher::start(
-            grok_home.path(),
+            supercharge_home.path(),
             &[],
             None,
             Some(Duration::from_millis(100)),

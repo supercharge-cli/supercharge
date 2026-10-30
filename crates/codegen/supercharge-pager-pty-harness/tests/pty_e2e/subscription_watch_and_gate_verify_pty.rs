@@ -133,10 +133,10 @@ fn pump_until(
 /// The qualifying-tier JWT refresh then hits `localhost:22255`: instant connection-refused instead
 /// of a real network call to auth.x.ai.
 fn seed_fake_oauth_local_issuer(content: &ContentController, user: &str) {
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create temp .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create temp .supercharge");
     std::fs::write(
-        grok_home.join("auth.json"),
+        supercharge_home.join("auth.json"),
         format!(
             r#"{{
   "http://localhost:22255::b1a00492-073a-47ea-816f-4c329264a828": {{

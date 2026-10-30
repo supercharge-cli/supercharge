@@ -200,7 +200,7 @@ impl SessionUsageFile {
     pub fn load_for_session(session_id: &str) -> std::io::Result<UsageLoad> {
         load_for_session_in_root(
             session_id,
-            &crate::util::grok_home::grok_home().join("sessions"),
+            &crate::util::supercharge_home::supercharge_home().join("sessions"),
         )
     }
 

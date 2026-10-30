@@ -289,7 +289,7 @@ pub fn campaigns_state_path(home: &std::path::Path) -> std::path::PathBuf {
 
 /// Fail-open dismissed ids from `$SUPERCHARGE_HOME/campaigns_state.json`.
 pub fn load_dismissed_ids_from_home() -> std::collections::HashSet<String> {
-    let Some(home) = crate::user_grok_home() else {
+    let Some(home) = crate::user_supercharge_home() else {
         return std::collections::HashSet::new();
     };
     let Ok(contents) = std::fs::read_to_string(campaigns_state_path(&home)) else {

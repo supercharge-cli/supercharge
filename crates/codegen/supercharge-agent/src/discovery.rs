@@ -63,7 +63,7 @@ pub enum SubagentSource {
 /// Build the complete list of enabled subagents: built-ins, then discovered user agents, minus toggles.
 /// Project-level agents shadow built-ins. User-level and bundled agents with built-in names are skipped, keeping `visible == callable`.
 pub fn all_subagents(cwd: &Path, toggle: &HashMap<String, bool>) -> Vec<SubagentEntry> {
-    let grok = supercharge_config::user_grok_home();
+    let grok = supercharge_config::user_supercharge_home();
     all_subagents_with_home(
         cwd,
         toggle,
@@ -76,9 +76,9 @@ fn all_subagents_with_home(
     cwd: &Path,
     toggle: &HashMap<String, bool>,
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Vec<SubagentEntry> {
-    let discovered = discover_with_home(cwd, home, grok_home);
+    let discovered = discover_with_home(cwd, home, supercharge_home);
     merge_subagents(discovered, toggle)
 }
 
@@ -172,19 +172,19 @@ fn merge_subagents(
 
 /// Discover agent definitions from the filesystem. Deduplicates by name; higher priority wins.
 /// Order: project `.supercharge/agents/` (cwd up to repo root), user `~/.supercharge`, compat `~/.claude`, then bundled.
-/// `.supercharge` dirs resolve from `grok_home` plus legacy `~/.supercharge` when `SUPERCHARGE_HOME` points elsewhere.
+/// `.supercharge` dirs resolve from `supercharge_home` plus legacy `~/.supercharge` when `SUPERCHARGE_HOME` points elsewhere.
 pub(crate) fn user_agent_dirs(
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Vec<(std::path::PathBuf, AgentScope)> {
     // Legacy literal ~/.supercharge, included only when it differs from the resolved
     // Supercharge home so agents left in the old location remain discoverable.
     let legacy_grok = home
         .map(|h| h.join(".supercharge"))
-        .filter(|legacy| grok_home != Some(legacy.as_path()));
+        .filter(|legacy| supercharge_home != Some(legacy.as_path()));
 
     let mut dirs = Vec::new();
-    if let Some(g) = grok_home {
+    if let Some(g) = supercharge_home {
         dirs.push((g.join("agents"), AgentScope::User));
     }
     if let Some(l) = &legacy_grok {
@@ -193,7 +193,7 @@ pub(crate) fn user_agent_dirs(
     if let Some(h) = home {
         dirs.push((h.join(".claude").join("agents"), AgentScope::User));
     }
-    if let Some(g) = grok_home {
+    if let Some(g) = supercharge_home {
         dirs.push((g.join("bundled").join("agents"), AgentScope::Bundled));
     }
     if let Some(l) = &legacy_grok {
@@ -203,7 +203,7 @@ pub(crate) fn user_agent_dirs(
 }
 
 pub fn discover(cwd: &Path) -> Vec<AgentDefinition> {
-    let supercharge = supercharge_config::user_grok_home();
+    let supercharge = supercharge_config::user_supercharge_home();
     discover_with_home(
         cwd,
         supercharge_dirs::home_dir().as_deref(),
@@ -214,14 +214,14 @@ pub fn discover(cwd: &Path) -> Vec<AgentDefinition> {
 fn discover_with_home(
     cwd: &Path,
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Vec<AgentDefinition> {
     let mut definitions = Vec::new();
     let mut seen_names = std::collections::HashSet::new();
 
     load_project_definitions(cwd, &mut definitions, &mut seen_names);
 
-    for (dir, scope) in user_agent_dirs(home, grok_home) {
+    for (dir, scope) in user_agent_dirs(home, supercharge_home) {
         if dir.is_dir() {
             load_definitions_from_dir(&dir, scope, &mut definitions, &mut seen_names);
         }
@@ -232,7 +232,7 @@ fn discover_with_home(
 
 /// Checks built-ins first, then user-level dirs, then bundled.
 pub fn by_name(name: &str) -> Option<AgentDefinition> {
-    let supercharge = supercharge_config::user_grok_home();
+    let supercharge = supercharge_config::user_supercharge_home();
     by_name_with_home(
         name,
         supercharge_dirs::home_dir().as_deref(),
@@ -243,14 +243,14 @@ pub fn by_name(name: &str) -> Option<AgentDefinition> {
 fn by_name_with_home(
     name: &str,
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Option<AgentDefinition> {
     if let Ok(builtin) = BuiltinAgentName::from_str(name) {
         return Some(builtin.definition());
     }
 
     {
-        let home_dirs = user_agent_dirs(home, grok_home);
+        let home_dirs = user_agent_dirs(home, supercharge_home);
         for (agents_dir, scope) in home_dirs {
             if let Some(def) = load_definition_by_name(
                 &agents_dir,
@@ -268,7 +268,7 @@ fn by_name_with_home(
 
 /// Project-level `.supercharge/agents/` has highest priority, then falls back to built-ins, user-level, and finally bundled definitions.
 pub fn by_name_in_cwd(name: &str, cwd: &Path) -> Option<AgentDefinition> {
-    let grok = supercharge_config::user_grok_home();
+    let grok = supercharge_config::user_supercharge_home();
     by_name_in_cwd_with_home(
         name,
         cwd,
@@ -281,13 +281,13 @@ fn by_name_in_cwd_with_home(
     name: &str,
     cwd: &Path,
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Option<AgentDefinition> {
     if let Some(def) = load_project_definition_by_name(name, cwd) {
         return Some(def);
     }
 
-    by_name_with_home(name, home, grok_home)
+    by_name_with_home(name, home, supercharge_home)
 }
 
 /// These are the pre-defined agent profiles (`general-purpose`, `explore`, `plan`) that the Task tool can launch.
@@ -382,7 +382,7 @@ pub fn all_subagents_with_plugins(
     toggle: &HashMap<String, bool>,
     plugins: Option<&crate::plugins::PluginRegistry>,
 ) -> Vec<SubagentEntry> {
-    let grok = supercharge_config::user_grok_home();
+    let grok = supercharge_config::user_supercharge_home();
     all_subagents_with_plugins_and_home(
         cwd,
         toggle,
@@ -397,9 +397,9 @@ fn all_subagents_with_plugins_and_home(
     toggle: &HashMap<String, bool>,
     plugins: Option<&crate::plugins::PluginRegistry>,
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Vec<SubagentEntry> {
-    let discovered = discover_with_home(cwd, home, grok_home);
+    let discovered = discover_with_home(cwd, home, supercharge_home);
     let mut entries = merge_subagents(discovered, toggle);
 
     // Append plugin agents under qualified names
@@ -439,7 +439,7 @@ pub fn by_name_in_cwd_with_plugins(
     cwd: &Path,
     plugins: Option<&crate::plugins::PluginRegistry>,
 ) -> Option<AgentDefinition> {
-    let grok = supercharge_config::user_grok_home();
+    let grok = supercharge_config::user_supercharge_home();
     by_name_in_cwd_with_plugins_and_home(
         name,
         cwd,
@@ -454,10 +454,10 @@ fn by_name_in_cwd_with_plugins_and_home(
     cwd: &Path,
     plugins: Option<&crate::plugins::PluginRegistry>,
     home: Option<&Path>,
-    grok_home: Option<&Path>,
+    supercharge_home: Option<&Path>,
 ) -> Option<AgentDefinition> {
     // First try native resolution (project > built-in > user > bundled)
-    if let Some(def) = by_name_in_cwd_with_home(name, cwd, home, grok_home) {
+    if let Some(def) = by_name_in_cwd_with_home(name, cwd, home, supercharge_home) {
         return Some(def);
     }
 
@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[test]
-    fn user_agent_dirs_includes_legacy_grok_when_grok_home_differs() {
+    fn user_agent_dirs_includes_legacy_grok_when_supercharge_home_differs() {
         let home = Path::new("/home/u");
         let grok = Path::new("/custom/grokhome");
         let paths: Vec<_> = user_agent_dirs(Some(home), Some(grok))
@@ -767,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn user_agent_dirs_dedups_legacy_when_grok_home_is_dot_grok() {
+    fn user_agent_dirs_dedups_legacy_when_supercharge_home_is_dot_grok() {
         let home = Path::new("/home/u");
         let grok = home.join(".supercharge");
         let count = user_agent_dirs(Some(home), Some(&grok))
@@ -776,7 +776,7 @@ mod tests {
             .count();
         assert_eq!(
             count, 1,
-            "no duplicate ~/.supercharge/agents when grok_home == ~/.supercharge"
+            "no duplicate ~/.supercharge/agents when supercharge_home == ~/.supercharge"
         );
     }
 

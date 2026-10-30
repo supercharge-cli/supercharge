@@ -3883,7 +3883,7 @@ fn validate_hooks_path_rejects_relative_path() {
         );
 }
 #[test]
-fn validate_hooks_path_rejects_outside_grok_home() {
+fn validate_hooks_path_rejects_outside_supercharge_home() {
     let result = validate_hooks_path("/tmp/evil-hooks");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
@@ -3894,8 +3894,8 @@ fn validate_hooks_path_rejects_outside_grok_home() {
 }
 #[test]
 fn validate_hooks_path_rejects_traversal_attack() {
-    let grok_home = crate::util::grok_home::grok_home();
-    let traversal = format!("{}/../evil", grok_home.display());
+    let supercharge_home = crate::util::supercharge_home::supercharge_home();
+    let traversal = format!("{}/../evil", supercharge_home.display());
     let result = validate_hooks_path(&traversal);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
@@ -3906,8 +3906,8 @@ fn validate_hooks_path_rejects_traversal_attack() {
 }
 #[test]
 fn validate_hooks_path_accepts_grok_hooks_subdir() {
-    let grok_home = crate::util::grok_home::grok_home();
-    let valid_path = grok_home.join("hooks").join("my-hooks");
+    let supercharge_home = crate::util::supercharge_home::supercharge_home();
+    let valid_path = supercharge_home.join("hooks").join("my-hooks");
     let _ = std::fs::create_dir_all(&valid_path);
     let result = validate_hooks_path(valid_path.to_str().unwrap());
     assert!(result.is_ok(), "path under ~/.supercharge/ should be accepted");

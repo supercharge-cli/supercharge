@@ -4350,7 +4350,7 @@ fn dashboard_attach_subagent_lazily_replays_deferred_transcript() {
         r#"{{"method":"session/update","params":{{"sessionId":"{child_sid}","update":{{"sessionUpdate":"tool_call","toolCallId":"tc1","title":"Read foo","kind":"read","locations":[{{"path":"/tmp/foo"}}]}}}}}}"#
     );
     std::fs::write(session_dir.join("updates.jsonl"), tool_line + "\n").unwrap();
-    crate::app::subagent::set_replay_grok_home_for_tests(Some(home.path().to_path_buf()));
+    crate::app::subagent::set_replay_supercharge_home_for_tests(Some(home.path().to_path_buf()));
     let mut app = test_app_with_agent();
     open_dashboard(&mut app);
     let parent = AgentId(0);
@@ -4393,7 +4393,7 @@ fn dashboard_attach_subagent_lazily_replays_deferred_transcript() {
             .is_some_and(|i| !i.transcript.needs_replay()),
         "dashboard attach must record the child transcript state"
     );
-    crate::app::subagent::set_replay_grok_home_for_tests(None);
+    crate::app::subagent::set_replay_supercharge_home_for_tests(None);
 }
 /// `/dashboard` opens the dashboard only: no auto-attached popup.
 /// Enter on a row reaches an agent's view. Opening from an agent lands in

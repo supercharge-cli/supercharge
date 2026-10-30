@@ -17,9 +17,9 @@ fn wait_for(deadline: Instant, mut check: impl FnMut() -> bool) -> bool {
 fn install_releases_registry_lock_before_post_install_config_write() {
     // One #[test] per binary: the env is process-global (same rule as
     // acp_harness::run_agent_test).
-    let grok_home = tempfile::tempdir().expect("grok home");
+    let supercharge_home = tempfile::tempdir().expect("grok home");
     // SAFETY: no other threads are running yet.
-    unsafe { std::env::set_var("SUPERCHARGE_HOME", grok_home.path()) };
+    unsafe { std::env::set_var("SUPERCHARGE_HOME", supercharge_home.path()) };
 
     let src = tempfile::tempdir().expect("plugin source");
     std::fs::write(
@@ -30,7 +30,7 @@ fn install_releases_registry_lock_before_post_install_config_write() {
 
     // Hold the config-init flock, as a concurrent marketplace remove does.
     let init_flock =
-        supercharge_shell::util::config::acquire_init_lock(grok_home.path()).expect("init flock");
+        supercharge_shell::util::config::acquire_init_lock(supercharge_home.path()).expect("init flock");
 
     let source = src.path().display().to_string();
     let cwd = std::env::current_dir().unwrap();
@@ -38,7 +38,7 @@ fn install_releases_registry_lock_before_post_install_config_write() {
         std::thread::spawn(move || supercharge_shell::plugin::install_plugin(&source, &cwd));
 
     // The registry save lands before the post-install config write starts.
-    let install_dir = grok_home.path().join("installed-plugins");
+    let install_dir = supercharge_home.path().join("installed-plugins");
     let registry_json = install_dir.join("registry.json");
     assert!(
         wait_for(Instant::now() + Duration::from_secs(10), || registry_json

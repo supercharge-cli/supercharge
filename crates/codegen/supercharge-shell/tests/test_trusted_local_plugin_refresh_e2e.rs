@@ -103,9 +103,9 @@ fn trusted_local_refresh_surfaces_new_agent_via_discovery() {
     // Canonicalize so auto-trust for installs under the home dir holds when the temp root is a symlink (on macOS `/var` links to `/private/var`)
     let home_tmp = TempDir::new().unwrap();
     let home = dunce::canonicalize(home_tmp.path()).unwrap();
-    let grok_home = home.join(".supercharge");
+    let supercharge_home = home.join(".supercharge");
     let _home_guard = EnvVarGuard::set("HOME", &home);
-    let _grok_guard = EnvVarGuard::set("SUPERCHARGE_HOME", &grok_home);
+    let _grok_guard = EnvVarGuard::set("SUPERCHARGE_HOME", &supercharge_home);
 
     // Live source: a user-home local plugin (mirrors a `~/.claude` local tree).
     let source = home
@@ -116,7 +116,7 @@ fn trusted_local_refresh_surfaces_new_agent_via_discovery() {
     write_agent(&source, "old", "old-agent", "exists at install");
 
     // The install copies a full snapshot into installed-plugins, not a live symlink
-    let mut registry = InstallRegistry::empty(grok_home.join("installed-plugins"));
+    let mut registry = InstallRegistry::empty(supercharge_home.join("installed-plugins"));
     let installed = register_local_install(&mut registry, &source);
     registry.save().expect("save registry");
 
@@ -157,7 +157,7 @@ fn trusted_local_refresh_surfaces_new_agent_via_discovery() {
     );
 
     // Session `_meta.pluginDirs` load
-    // This runs in the same test because grok_home() caches the first SUPERCHARGE_HOME per process
+    // This runs in the same test because supercharge_home() caches the first SUPERCHARGE_HOME per process
     // A separate test could seed the cache first and break the assertions above
     let plugin_dir = home.join("session-plugin");
     write_minimal_plugin(&plugin_dir, "session-plugin");
@@ -202,8 +202,8 @@ async fn headless_session_refreshes_trusted_local_plugin_and_writes_session_json
     // Canonicalize so auto-trust for installs under the home dir holds when the temp root is a symlink (on macOS `/var` links to `/private/var`)
     let home_tmp = TempDir::new().unwrap();
     let home = dunce::canonicalize(home_tmp.path()).unwrap();
-    let grok_home = home.join(".supercharge");
-    std::fs::create_dir_all(&grok_home).unwrap();
+    let supercharge_home = home.join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).unwrap();
 
     let source = home
         .join(".claude")
@@ -213,12 +213,12 @@ async fn headless_session_refreshes_trusted_local_plugin_and_writes_session_json
     write_agent(&source, "old", "old-agent", "exists at install");
 
     // The spawned binary gets HOME and SUPERCHARGE_HOME via `cmd.env` below
-    // This global env only serves the discovery assertion run in-process after the binary exits; it resolves the registry via grok_home()
+    // This global env only serves the discovery assertion run in-process after the binary exits; it resolves the registry via supercharge_home()
     // `#[serial]` keeps it from racing other tests
     let _home_guard = EnvVarGuard::set("HOME", &home);
-    let _grok_guard = EnvVarGuard::set("SUPERCHARGE_HOME", &grok_home);
+    let _grok_guard = EnvVarGuard::set("SUPERCHARGE_HOME", &supercharge_home);
 
-    let mut registry = InstallRegistry::empty(grok_home.join("installed-plugins"));
+    let mut registry = InstallRegistry::empty(supercharge_home.join("installed-plugins"));
     let installed = register_local_install(&mut registry, &source);
     registry.save().expect("save registry");
 
@@ -245,7 +245,7 @@ async fn headless_session_refreshes_trusted_local_plugin_and_writes_session_json
     sandbox
         .set_env("HOME", &home)
         .set_env("USERPROFILE", &home)
-        .set_env("SUPERCHARGE_HOME", &grok_home);
+        .set_env("SUPERCHARGE_HOME", &supercharge_home);
 
     let result = run_headless_in_sandbox(cmd, sandbox).await;
     assert_headless_success(
@@ -283,7 +283,7 @@ async fn headless_session_refreshes_trusted_local_plugin_and_writes_session_json
     );
 
     // Session storage under SUPERCHARGE_HOME/sessions must hold JSON files that parse
-    let sessions_root = grok_home.join("sessions");
+    let sessions_root = supercharge_home.join("sessions");
     assert!(
         sessions_root.is_dir(),
         "expected sessions dir at {}",

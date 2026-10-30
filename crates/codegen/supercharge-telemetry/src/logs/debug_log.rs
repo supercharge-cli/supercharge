@@ -22,7 +22,7 @@ use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 
 use crate::session_ctx::SESSION_ID_FIELD;
-use supercharge_config::grok_home;
+use supercharge_config::supercharge_home;
 
 /// Which env var requested a single-file debug log (drives filter and diagnostics).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -387,7 +387,7 @@ pub(crate) fn resolve_debug_target() -> Option<DebugTarget> {
     resolve_debug_target_inner(
         grok_log_file.as_deref(),
         grok_debug_log.as_deref(),
-        &grok_home().join("debug"),
+        &supercharge_home().join("debug"),
     )
 }
 
@@ -442,7 +442,7 @@ const LOG_RETENTION: std::time::Duration = std::time::Duration::from_secs(7 * 24
 /// `~/.supercharge/debug` older than [`LOG_RETENTION`] so the dir doesn't grow
 /// unbounded. Age-based (not count-based) so a still-open log from a concurrent process is never unlinked mid-write; best-effort, ignore errors.
 pub(crate) fn sweep_old_logs() {
-    prune_old_logs(&grok_home().join("debug"), LOG_RETENTION);
+    prune_old_logs(&supercharge_home().join("debug"), LOG_RETENTION);
 }
 
 // Pure prune core: remove `*.txt` files and orphaned `latest.txt` swap temps in `dir` older than `max_age`. Age-based so

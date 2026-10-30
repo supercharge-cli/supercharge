@@ -34,7 +34,7 @@ const SOURCE: ImportSource<'static> = ImportSource {
 };
 
 fn user_config_path() -> PathBuf {
-    crate::util::grok_home::grok_home().join(supercharge_agent_import::CONFIG_FILE_NAME)
+    crate::util::supercharge_home::supercharge_home().join(supercharge_agent_import::CONFIG_FILE_NAME)
 }
 
 /// Scan the compat source for everything importable into Supercharge config.
@@ -127,7 +127,7 @@ fn import_permission(rule: &PermissionRule) -> Option<ImportPermission> {
 /// Apply a plan: user items to the Supercharge home, project items to `<repo>/.supercharge/`.
 /// Additive only; existing entries always win. The caller writes the import marker.
 pub fn apply_import(plan: &ImportPlan, cwd: &Path) -> anyhow::Result<ImportResult> {
-    let user_dir = crate::util::grok_home::grok_home();
+    let user_dir = crate::util::supercharge_home::supercharge_home();
     Ok(supercharge_agent_import::apply_import(
         &SOURCE, plan, cwd, &user_dir,
     )?)
@@ -569,7 +569,7 @@ mod tests {
         .unwrap();
 
         // Note: `resolve_permissions_with_provenance` ALSO reads requirements, managed settings, and the developer's real `~/.supercharge/config.toml`.
-        // We can't isolate `grok_home()` because it's `OnceLock`-cached.
+        // We can't isolate `supercharge_home()` because it's `OnceLock`-cached.
         // Instead, assert on rule *provenance*: no rule should originate from our tempdir's `.claude/settings.json`. The dev's real ~/.supercharge config rules (if any) are out of scope for this test.
         let resolved =
             supercharge_workspace::permission::resolution::resolve_permissions_with_provenance(
@@ -615,7 +615,7 @@ mod tests {
     #[serial]
     fn gate_marker_cache_unset_means_uses_disk() {
         // Sanity test: with the cache reset, `is_claude_import_marked()` must (a) not panic and (b) populate the cache for subsequent reads
-        // We intentionally **do not** assert a specific cached value: the dev's real `~/.supercharge/config.toml` may legitimately have the marker set during local testing, and we can't override `grok_home()`
+        // We intentionally **do not** assert a specific cached value: the dev's real `~/.supercharge/config.toml` may legitimately have the marker set during local testing, and we can't override `supercharge_home()`
         // It's `OnceLock`-cached, so any prior test that calls it locks the value in for the entire process The `MarkerGuard` resets the cache after this test, so subsequent gate tests start clean
         let _g = MarkerGuard;
         reset_marker_cache_for_test();

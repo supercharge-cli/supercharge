@@ -196,7 +196,7 @@ impl DiscoveryConfig {
 
 /// User plugin directories in priority order: `$SUPERCHARGE_HOME/plugins` then `~/.claude/plugins`.
 /// Plugins are intentionally not discovered from legacy `~/.supercharge/plugins`.
-/// Trust, persisted data, and install paths all resolve under `grok_home()`, so a legacy scan would be half-initialized.
+/// Trust, persisted data, and install paths all resolve under `supercharge_home()`, so a legacy scan would be half-initialized.
 fn user_plugin_dirs(home: Option<&Path>, grok: Option<&Path>) -> Vec<(PathBuf, PluginOrigin)> {
     let mut dirs = Vec::new();
     if let Some(g) = grok {
@@ -315,8 +315,8 @@ pub fn discover_plugins(
     }
 
     // 4-5. User plugins: $SUPERCHARGE_HOME/plugins, legacy ~/.supercharge/plugins, ~/.claude/plugins.
-    // Gate the grok plugins dir on user_grok_home() so a project's .supercharge/plugins is never scanned as user-global when no home resolves
-    let grok = supercharge_config::user_grok_home();
+    // Gate the grok plugins dir on user_supercharge_home() so a project's .supercharge/plugins is never scanned as user-global when no home resolves
+    let grok = supercharge_config::user_supercharge_home();
     let plugin_dirs = user_plugin_dirs(supercharge_dirs::home_dir().as_deref(), grok.as_deref());
     for (plugins_dir, origin) in plugin_dirs {
         if plugins_dir.is_dir() {

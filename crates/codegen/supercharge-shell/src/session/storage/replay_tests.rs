@@ -37,12 +37,12 @@ fn acp_envelope_with_meta(session_update_json: &str, meta_json: &str) -> String 
 /// A session with no `updates.jsonl` streams nothing, so the emission gate reports `Empty` and forwards no updates.
 #[test]
 fn stream_replay_updates_at_missing_session_is_empty() {
-    let grok_home = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(grok_home.path().join("sessions")).unwrap();
+    let supercharge_home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(supercharge_home.path().join("sessions")).unwrap();
 
     let mut count = 0usize;
     let emission =
-        stream_replay_updates_at("does-not-exist", grok_home.path(), |_| count += 1).unwrap();
+        stream_replay_updates_at("does-not-exist", supercharge_home.path(), |_| count += 1).unwrap();
 
     assert_eq!(emission, ReplayEmission::Empty);
     assert_eq!(count, 0);
@@ -53,13 +53,13 @@ fn stream_replay_updates_at_missing_session_is_empty() {
 /// (The path is a directory, which `read_to_string` rejects.)
 #[test]
 fn stream_replay_updates_at_surfaces_read_errors() {
-    let grok_home = tempfile::tempdir().unwrap();
-    let session_dir = grok_home.path().join("sessions").join("cwd").join("sess");
+    let supercharge_home = tempfile::tempdir().unwrap();
+    let session_dir = supercharge_home.path().join("sessions").join("cwd").join("sess");
     std::fs::create_dir_all(&session_dir).unwrap();
     std::fs::write(session_dir.join(SUMMARY_FILE), "{}").unwrap();
     std::fs::create_dir(session_dir.join(UPDATES_FILE)).unwrap();
 
-    let result = stream_replay_updates_at("sess", grok_home.path(), |_| {});
+    let result = stream_replay_updates_at("sess", supercharge_home.path(), |_| {});
     assert!(
         result.is_err(),
         "read fault must surface, not fold to Empty: {result:?}"

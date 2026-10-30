@@ -189,11 +189,11 @@ mod tests {
         supercharge_test_support::EnvGuard,
     ) {
         let home = tempfile::tempdir().unwrap();
-        let grok_home = home.path().join(".supercharge");
-        std::fs::create_dir_all(&grok_home).unwrap();
-        std::fs::write(grok_home.join("config.toml"), "").unwrap();
+        let supercharge_home = home.path().join(".supercharge");
+        std::fs::create_dir_all(&supercharge_home).unwrap();
+        std::fs::write(supercharge_home.join("config.toml"), "").unwrap();
         let home_guard = supercharge_test_support::EnvGuard::set("HOME", home.path());
-        let grok_guard = supercharge_test_support::EnvGuard::set("SUPERCHARGE_HOME", &grok_home);
+        let grok_guard = supercharge_test_support::EnvGuard::set("SUPERCHARGE_HOME", &supercharge_home);
         (home, home_guard, grok_guard)
     }
 

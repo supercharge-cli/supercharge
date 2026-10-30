@@ -15,7 +15,7 @@ fs2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-# `grok_home()` supplies the directory the registry file lives in.
+# `supercharge_home()` supplies the directory the registry file lives in.
 supercharge-config = { workspace = true }
 
 # `kill(pid, 0)` liveness probe for the crash scan.

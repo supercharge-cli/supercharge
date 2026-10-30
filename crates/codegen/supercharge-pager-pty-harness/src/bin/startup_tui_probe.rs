@@ -97,14 +97,14 @@ async fn run(args: &Args) -> Result<Observation> {
     let mut resume_updates_bytes = 0;
     if args.mode == BootMode::Resume {
         seed_session(args, &content, timeout).context("seed the session to resume")?;
-        resume_updates_bytes = largest_updates_log(content.sandbox().grok_home());
+        resume_updates_bytes = largest_updates_log(content.sandbox().supercharge_home());
     }
 
     let measured = measure_boot(args, &content, timeout, resume_updates_bytes)?;
 
     let log = content
         .sandbox()
-        .grok_home()
+        .supercharge_home()
         // `supercharge_telemetry::unified_log::LOG_DIR` is unreachable without a telemetry dependency.
         .join("logs")
         .join("unified.jsonl");
@@ -262,9 +262,9 @@ fn seed_response(turn: usize, words: usize) -> String {
     text
 }
 
-fn largest_updates_log(grok_home: &Path) -> u64 {
+fn largest_updates_log(supercharge_home: &Path) -> u64 {
     let mut largest = 0;
-    let mut pending = vec![grok_home.join("sessions")];
+    let mut pending = vec![supercharge_home.join("sessions")];
     while let Some(dir) = pending.pop() {
         let entries = match std::fs::read_dir(&dir) {
             Ok(entries) => entries,

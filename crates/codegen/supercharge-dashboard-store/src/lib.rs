@@ -52,6 +52,6 @@ pub use types::{
 /// The canonical store path under a grok home.
 /// The caller resolves the grok home (nothing in this crate reads `SUPERCHARGE_HOME`); tests pass a temp dir.
 /// [`WorkspaceStore::open`] creates the dedicated subdirectory 0700, and every sibling file the store ever creates lives inside it.
-pub fn default_db_path(grok_home: &Path) -> PathBuf {
-    grok_home.join("dashboard").join("workspace.db")
+pub fn default_db_path(supercharge_home: &Path) -> PathBuf {
+    supercharge_home.join("dashboard").join("workspace.db")
 }

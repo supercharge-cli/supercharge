@@ -12,7 +12,7 @@ fn returns_true_when_session_exists_under_matching_cwd() {
     let cwd = "/project/alpha";
     let session_id = "my-session";
 
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(session_id);
     fs::create_dir_all(&dir).unwrap();
     fs::write(dir.join("summary.json"), b"{}").unwrap();
@@ -43,7 +43,7 @@ fn session_under_different_cwd_is_not_considered_present() {
     let session_id = "cross-cwd-session";
 
     // Create the session only under cwd-A (a real session has a summary.json).
-    let encoded_a = crate::util::grok_home::encode_cwd_dirname("/project/alpha");
+    let encoded_a = crate::util::supercharge_home::encode_cwd_dirname("/project/alpha");
     let dir_a = root.join(&encoded_a).join(session_id);
     fs::create_dir_all(&dir_a).unwrap();
     fs::write(dir_a.join("summary.json"), b"{}").unwrap();
@@ -72,7 +72,7 @@ fn images_only_stub_is_not_a_session() {
     let cwd = "/project/alpha";
     let session_id = "stub-session";
 
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let images = root.join(&encoded).join(session_id).join("images");
     fs::create_dir_all(&images).unwrap();
     fs::write(images.join("image-1.png"), b"png").unwrap();
@@ -91,14 +91,14 @@ fn resolve_local_session_any_cwd_skips_stub_and_finds_real() {
 
     // Real session under cwd-A.
     let cwd_a = "/project/alpha";
-    let encoded_a = crate::util::grok_home::encode_cwd_dirname(cwd_a);
+    let encoded_a = crate::util::supercharge_home::encode_cwd_dirname(cwd_a);
     let dir_a = root.join(&encoded_a).join(session_id);
     fs::create_dir_all(&dir_a).unwrap();
     fs::write(dir_a.join("summary.json"), b"{}").unwrap();
 
     // Images-only stub for the SAME id under cwd-B.
     let cwd_b = "/project/beta";
-    let encoded_b = crate::util::grok_home::encode_cwd_dirname(cwd_b);
+    let encoded_b = crate::util::supercharge_home::encode_cwd_dirname(cwd_b);
     let images_b = root.join(&encoded_b).join(session_id).join("images");
     fs::create_dir_all(&images_b).unwrap();
     fs::write(images_b.join("image-1.png"), b"png").unwrap();
@@ -116,7 +116,7 @@ fn resolve_local_session_any_cwd_skips_stub_and_finds_real() {
 fn batch_resolver_loads_one_view_and_keeps_only_persisted_sessions() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().join("sessions");
-    let encoded = crate::util::grok_home::encode_cwd_dirname("/project/alpha");
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname("/project/alpha");
     let persisted = root.join(&encoded).join("persisted");
     fs::create_dir_all(&persisted).unwrap();
     fs::write(persisted.join("summary.json"), b"{}").unwrap();
@@ -142,7 +142,7 @@ fn find_summary_by_session_id_reads_cross_cwd_uuid() {
     let root = tmp.path().join("sessions");
     let session_id = "019f870d-6976-7d73-a12a-52e9d4aebcd4";
     let cwd = "/project/elsewhere";
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(session_id);
     fs::create_dir_all(&dir).unwrap();
     fs::write(

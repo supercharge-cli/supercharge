@@ -3,7 +3,7 @@
 //! Wires together a wiremock-mocked GCS bucket and an isolated `SUPERCHARGE_HOME` tempdir to verify the full install pipeline:
 //! fetch version, download the supercharge binary, chmod, atomic symlink, cleanup_old_downloads, persist installer config.
 //!
-//! The function reads `grok_home()` (a process-wide `OnceLock`).
+//! The function reads `supercharge_home()` (a process-wide `OnceLock`).
 //! All tests in this binary therefore share one `SUPERCHARGE_HOME` and run serially via `#[serial]`.
 
 #![cfg(unix)]
@@ -494,7 +494,7 @@ async fn install_internal_idempotent_for_same_version() {
 
 #[tokio::test]
 #[serial]
-async fn install_internal_creates_grok_home_subdirs_if_missing() {
+async fn install_internal_creates_supercharge_home_subdirs_if_missing() {
     let _ = test_home();
     reset_home();
     // Delete bin/ and downloads/ so the install must create them

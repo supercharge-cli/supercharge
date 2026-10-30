@@ -1,4 +1,4 @@
-//! Isolated binary so `grok_home()`'s process-wide OnceLock initializes from
+//! Isolated binary so `supercharge_home()`'s process-wide OnceLock initializes from
 //! our `SUPERCHARGE_HOME`. A lib-test EnvGuard is a no-op if another test already
 //! resolved it, and then doctor reads the real ~/.supercharge.
 
@@ -12,7 +12,7 @@ fn isolate_home() -> &'static PathBuf {
         let grok = dir.join(".supercharge");
         std::fs::create_dir_all(&grok).unwrap();
         std::fs::write(grok.join("config.toml"), "").unwrap();
-        // SAFETY: this binary's only test; set before any grok_home() call.
+        // SAFETY: this binary's only test; set before any supercharge_home() call.
         unsafe {
             std::env::set_var("HOME", &dir);
             std::env::set_var("USERPROFILE", &dir);

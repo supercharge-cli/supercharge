@@ -1406,8 +1406,8 @@ pub(crate) async fn run(
             remote_tips,
         );
         if !app.tips.is_empty() {
-            let grok_home = supercharge_tools::util::grok_home::grok_home();
-            app.tip = supercharge_shell::util::tips::pick_and_advance(&app.tips, &grok_home);
+            let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
+            app.tip = supercharge_shell::util::tips::pick_and_advance(&app.tips, &supercharge_home);
         }
         let remote_slash_tags = remote_settings
             .as_ref()

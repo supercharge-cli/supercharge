@@ -377,7 +377,7 @@ impl WorkspaceMembership {
                     } => (db_path.clone(), *access),
                     _ => (
                         supercharge_dashboard_store::default_db_path(
-                            &supercharge_config::grok_home(),
+                            &supercharge_config::supercharge_home(),
                         ),
                         None,
                     ),
@@ -485,7 +485,7 @@ impl WorkspaceMembership {
                 Some(*access),
             ),
             WorkspaceIo::Unopened => (
-                supercharge_dashboard_store::default_db_path(&supercharge_config::grok_home()),
+                supercharge_dashboard_store::default_db_path(&supercharge_config::supercharge_home()),
                 OpenAttempt::Retried,
                 None,
             ),

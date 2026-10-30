@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn success_response_projects_grok_workspace_fields() {
+    fn success_response_projects_supercharge_workspace_fields() {
         let page = ListWorkspacesPage {
             workspaces: vec![Workspace {
                 workspace_id: "ws_1".into(),

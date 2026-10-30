@@ -8,7 +8,7 @@ use supercharge_pager_pty_harness::pager_binary;
 struct ToggleEnv {
     _temp: tempfile::TempDir,
     home: std::path::PathBuf,
-    grok_home: std::path::PathBuf,
+    supercharge_home: std::path::PathBuf,
     cwd: std::path::PathBuf,
     config: std::path::PathBuf,
     extra_env: Vec<(&'static str, &'static str)>,
@@ -19,18 +19,18 @@ fn toggle_env(user_config: &str) -> ToggleEnv {
     // Canonical so paths under $HOME compare equal to their canonicalized form (plugin auto-trust).
     let root = dunce::canonicalize(temp.path()).expect("canonicalize tempdir");
     let home = root.join("home");
-    let grok_home = root.join("grok-home");
+    let supercharge_home = root.join("grok-home");
     let cwd = root.join("project");
     std::fs::create_dir_all(&home).expect("create HOME");
-    std::fs::create_dir_all(&grok_home).expect("create SUPERCHARGE_HOME");
+    std::fs::create_dir_all(&supercharge_home).expect("create SUPERCHARGE_HOME");
     std::fs::create_dir_all(&cwd).expect("create cwd");
     // Bound the project-config walk to the temp dir.
     git2::Repository::init(&cwd).expect("git init");
-    let config = grok_home.join("config.toml");
+    let config = supercharge_home.join("config.toml");
     std::fs::write(&config, user_config).expect("write config.toml");
     ToggleEnv {
         home,
-        grok_home,
+        supercharge_home,
         cwd,
         config,
         extra_env: Vec::new(),
@@ -44,7 +44,7 @@ const BLOCKED_URL: &str = "https://blocked.example.test/sse";
 fn blocked_env(user_config: &str) -> ToggleEnv {
     let env = toggle_env(user_config);
     std::fs::write(
-        env.grok_home.join("managed_config.toml"),
+        env.supercharge_home.join("managed_config.toml"),
         format!(r#"denied_mcp_servers = [{{ server_url = "{BLOCKED_URL}" }}]"#),
     )
     .expect("write managed_config.toml");
@@ -57,7 +57,7 @@ fn run_mcp(env: &ToggleEnv, args: &[&str]) -> std::process::Output {
     command
         .env_clear()
         .env("HOME", &env.home)
-        .env("SUPERCHARGE_HOME", &env.grok_home)
+        .env("SUPERCHARGE_HOME", &env.supercharge_home)
         .env("SHELL", "/bin/sh")
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("TERM", "xterm-256color")
@@ -90,7 +90,7 @@ fn assert_refused_without_write(
         "stderr: {stderr}"
     );
     assert!(
-        !stderr.contains(&*env.grok_home.to_string_lossy()),
+        !stderr.contains(&*env.supercharge_home.to_string_lossy()),
         "the refusal must name the policy file, not its absolute path: {stderr}"
     );
     assert!(
@@ -388,7 +388,7 @@ fn list_reports_policy_block_in_text_and_json() {
 fn add_refuses_denied_server_before_any_write() {
     let env = toggle_env("");
     std::fs::write(
-        env.grok_home.join("managed_config.toml"),
+        env.supercharge_home.join("managed_config.toml"),
         format!(
             "denied_mcp_servers = [{{ server_url = \"{BLOCKED_URL}\" }}]\nenable_all_project_mcp_servers = false\n"
         ),

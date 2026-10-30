@@ -922,10 +922,10 @@ fn marketplace_add(url: &str, force: bool) -> Result<()> {
 
     // Shared locked add core (same as the shell modal): init flock across the
     // read-modify-write, idempotent normalized dedup, atomic replace.
-    let grok_home = supercharge_config::grok_home();
-    let _flock = supercharge_shell::util::config::acquire_init_lock(&grok_home)?;
+    let supercharge_home = supercharge_config::supercharge_home();
+    let _flock = supercharge_shell::util::config::acquire_init_lock(&supercharge_home)?;
     plugin::add_marketplace_source(
-        &grok_home.join(supercharge_config::USER_CONFIG_FILENAME),
+        &supercharge_home.join(supercharge_config::USER_CONFIG_FILENAME),
         &name,
         &input,
         is_official,
@@ -1009,15 +1009,15 @@ fn marketplace_remove(
 
     // Uninstall + config rewrite under the init flock with atomic replace, mirroring the shell
     // modal twin (`remove_source_locked`); an unlocked remove is the lost-update race.
-    let grok_home = supercharge_config::grok_home();
-    let _flock = supercharge_shell::util::config::acquire_init_lock(&grok_home)?;
+    let supercharge_home = supercharge_config::supercharge_home();
+    let _flock = supercharge_shell::util::config::acquire_init_lock(&supercharge_home)?;
 
     let uninstalled = plugin::uninstall_marketplace_source_plugins(&identity)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // Shared remove-write core (same as the shell modal): config.toml with the
     // official flag folded in, JSON stores as fallback.
-    let config_path = grok_home.join(supercharge_config::USER_CONFIG_FILENAME);
+    let config_path = supercharge_home.join(supercharge_config::USER_CONFIG_FILENAME);
     if plugin::remove_marketplace_source_from_stores(&config_path, &identity)?
         == plugin::MarketplaceSourceRemoval::NotFound
     {

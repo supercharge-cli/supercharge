@@ -57,7 +57,7 @@ fn load_or_compute_agent_id() -> String {
         }
     }
 
-    let cache_path = supercharge_config::grok_home().join("agent_id");
+    let cache_path = supercharge_config::supercharge_home().join("agent_id");
     if let Ok(cached) = std::fs::read_to_string(&cache_path) {
         let cached = cached.trim();
         if !cached.is_empty() {

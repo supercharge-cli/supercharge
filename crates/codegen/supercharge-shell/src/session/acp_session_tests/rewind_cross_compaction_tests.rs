@@ -433,7 +433,7 @@ async fn run_forked_rewind_scenario() {
     actor.session_info.id = acp::SessionId::new(fork_id.clone());
 
     // fork_session reads the source summary, so init a real session first.
-    JsonlStorageAdapter::with_root(crate::util::grok_home::grok_home())
+    JsonlStorageAdapter::with_root(crate::util::supercharge_home::supercharge_home())
         .init_session(
             &source_info,
             crate::session::persistence::default_model_id(),

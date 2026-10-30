@@ -486,9 +486,9 @@ pub fn install_bootstrap_otel_provider(
     let grok_com_config = crate::GrokComConfig::default();
     let token_header_value = grok_com_config.token_header.clone();
 
-    let grok_home = supercharge_shell_base::util::grok_home::grok_home();
+    let supercharge_home = supercharge_shell_base::util::supercharge_home::supercharge_home();
     let bootstrap = Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home,
+        &supercharge_home,
         grok_com_config,
         proxy_base_url,
     ));

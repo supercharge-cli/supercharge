@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use fs2::FileExt;
 use supercharge_workspace::util::is_lock_contended;
 
-use crate::util::grok_home::grok_home;
+use crate::util::supercharge_home::supercharge_home;
 
 /// Compute a short hash suffix from a WS URL for differentiating leader instances.
 /// Returns empty string for the default/production URL.
@@ -70,7 +70,7 @@ pub fn lock_path_for_ws_url_in(root: &Path, ws_url: &str) -> PathBuf {
 }
 
 pub fn lock_path_for_ws_url(ws_url: &str) -> PathBuf {
-    resolve_lock_path(leader_socket_override(), &grok_home(), ws_url)
+    resolve_lock_path(leader_socket_override(), &supercharge_home(), ws_url)
 }
 
 pub fn socket_path_for_ws_url_in(root: &Path, ws_url: &str) -> PathBuf {
@@ -79,7 +79,7 @@ pub fn socket_path_for_ws_url_in(root: &Path, ws_url: &str) -> PathBuf {
 }
 
 pub fn socket_path_for_ws_url(ws_url: &str) -> PathBuf {
-    resolve_socket_path(leader_socket_override(), &grok_home(), ws_url)
+    resolve_socket_path(leader_socket_override(), &supercharge_home(), ws_url)
 }
 
 pub fn ws_url_suffix_from_paths(lock_path: &Path, socket_path: &Path) -> Option<String> {

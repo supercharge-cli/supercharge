@@ -477,7 +477,7 @@ pub fn default_copy_fallback_path() -> Option<std::path::PathBuf> {
             ));
         }
     }
-    supercharge_config::user_grok_home().map(|grok_home| grok_home.join("last-copy.txt"))
+    supercharge_config::user_supercharge_home().map(|supercharge_home| supercharge_home.join("last-copy.txt"))
 }
 
 /// Abbreviate via [`crate::util::abbreviate_path`] so toasts stay short (`~/.supercharge` or `~`).
@@ -2400,13 +2400,13 @@ mod tests {
     /// (grok home) — short and toast-friendly, unlike macOS's temp dir.
     #[test]
     #[serial_test::serial(grok_copy_file)]
-    fn default_copy_fallback_path_is_grok_home() {
+    fn default_copy_fallback_path_is_supercharge_home() {
         unsafe {
             std::env::remove_var(SUPERCHARGE_COPY_FILE_ENV);
         }
         let path = default_copy_fallback_path();
         // Test envs always resolve a home (or set SUPERCHARGE_HOME).
-        let expected = supercharge_config::user_grok_home()
+        let expected = supercharge_config::user_supercharge_home()
             .expect("home resolves in tests")
             .join("last-copy.txt");
         assert_eq!(path, Some(expected));

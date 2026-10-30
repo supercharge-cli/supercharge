@@ -116,13 +116,13 @@ impl acp::Agent for MvpAgent {
                 "auto worktree gc and session search deferred until remote_settings arrive"
             );
         }
-        let grok_home = supercharge_fast_worktree::resolve_grok_home();
+        let supercharge_home = supercharge_fast_worktree::resolve_supercharge_home();
         tokio::task::spawn_blocking(move || {
             crate::session::worktree_pool::cleanup_stale_pool_worktrees(None);
             if !remote_settled {
                 return;
             }
-            Self::reclaim_worktrees(grok_home, auto_gc_policy);
+            Self::reclaim_worktrees(supercharge_home, auto_gc_policy);
         });
         if remote_settled {
             self.start_search_index_once();
@@ -470,7 +470,7 @@ impl acp::Agent for MvpAgent {
             None,
             Some(
                 serde_json::json!({
-                "grok_home": crate::util::grok_home::grok_home().display().to_string(),
+                "supercharge_home": crate::util::supercharge_home::supercharge_home().display().to_string(),
                 "HOME": std::env::var("HOME").unwrap_or_else(|_| "(unset)".into()),
                 "has_external_api_key": has_external_api_key,
                 "first_party_env_api_key_ok": first_party_env_ok,

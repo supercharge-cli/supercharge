@@ -595,7 +595,7 @@ mod tests {
     fn compute_cwd_git_info_nested_repo_does_not_inherit_db_record() {
         let home = tempfile::tempdir().unwrap();
         // serial(SUPERCHARGE_HOME) orders peers; EnvVarGuard restores on drop so later `open_default()` callers do not see a deleted temp home
-        let _grok_home = crate::test_util::EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
+        let _supercharge_home = crate::test_util::EnvVarGuard::set("SUPERCHARGE_HOME", home.path());
         let _ = supercharge_fast_worktree::db::WorktreeDb::open(home.path());
 
         let wt = crate::test_util::TempGitRepo::init("wt-branch");

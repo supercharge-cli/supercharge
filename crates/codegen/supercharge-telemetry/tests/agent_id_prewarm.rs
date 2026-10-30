@@ -3,7 +3,7 @@
 #[test]
 fn prefetched_agent_id_resolves_and_persists() {
     let home = tempfile::tempdir().expect("tempdir");
-    // SAFETY: single-threaded here; set before anything caches `grok_home()`.
+    // SAFETY: single-threaded here; set before anything caches `supercharge_home()`.
     unsafe {
         std::env::remove_var("SUPERCHARGE_AGENT_ID");
         std::env::set_var("SUPERCHARGE_HOME", home.path());

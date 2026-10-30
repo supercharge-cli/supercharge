@@ -180,7 +180,7 @@ pub fn notify_session_updated(index: Option<&SearchIndexManager>, session_id: &s
     let Some(index) = index else {
         return;
     };
-    let root = crate::util::grok_home::grok_home();
+    let root = crate::util::supercharge_home::supercharge_home();
     index.enqueue(root, session_id.to_string(), cwd.to_string());
 }
 

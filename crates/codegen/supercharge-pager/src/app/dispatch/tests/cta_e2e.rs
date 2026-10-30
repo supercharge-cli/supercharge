@@ -1665,7 +1665,7 @@ mod cta_e2e {
         })
     }
 
-    fn isolate_grok_home() {
+    fn isolate_supercharge_home() {
         use std::sync::OnceLock;
         static HOME: OnceLock<tempfile::TempDir> = OnceLock::new();
         HOME.get_or_init(|| {
@@ -1678,7 +1678,7 @@ mod cta_e2e {
     }
 
     fn app_matched() -> AppView {
-        isolate_grok_home();
+        isolate_supercharge_home();
         let mut app = test_app_with_agent();
         let id = AgentId(0);
         app.plugin_cta_enabled = true;

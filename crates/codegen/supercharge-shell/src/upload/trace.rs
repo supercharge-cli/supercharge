@@ -1113,7 +1113,7 @@ fn claim_spill_reconcile(state: &std::sync::atomic::AtomicU8, collection_enabled
 /// Re-enqueue them when uploads are enabled (`queue` present); purge them when data collection is disabled (`None`).
 /// This runs detached so session setup never waits on disk or cloud I/O.
 pub(crate) fn spawn_startup_spill_reconcile(
-    grok_home: std::path::PathBuf,
+    supercharge_home: std::path::PathBuf,
     queue: Option<UploadQueue>,
 ) {
     if !claim_spill_reconcile(&SPILL_RECONCILE_STATE, queue.is_some()) {
@@ -1123,13 +1123,13 @@ pub(crate) fn spawn_startup_spill_reconcile(
         match queue {
             Some(queue) => {
                 let report =
-                    supercharge_workspace::recovery::run_startup_recovery(&grok_home, &queue).await;
+                    supercharge_workspace::recovery::run_startup_recovery(&supercharge_home, &queue).await;
                 tracing::info!(?report, "startup spill recovery complete");
                 queue.cleanup_orphans(supercharge_file_utils::queue::DEFAULT_MAX_AGE);
             }
             None => {
                 let purged = tokio::task::spawn_blocking(move || {
-                    supercharge_workspace::recovery::purge_spilled_items(&grok_home)
+                    supercharge_workspace::recovery::purge_spilled_items(&supercharge_home)
                 })
                 .await;
                 match purged {
@@ -1221,7 +1221,7 @@ pub(crate) fn spawn_purge_stale_upload_scratch() {
         if PURGE_STARTED.swap(true, Ordering::Relaxed) {
             return;
         }
-        let dir = crate::util::grok_home::grok_home()
+        let dir = crate::util::supercharge_home::supercharge_home()
             .join("upload_queue")
             .join("scratch");
         let run = move || match purge_stale_upload_scratch_dir(&dir) {
@@ -1251,7 +1251,7 @@ pub(crate) fn spawn_purge_stale_upload_scratch() {
 /// Credentials are re-read on each upload attempt via [`DynamicResolver`].
 /// Session/trace artifacts use this queue for durable spill in every build.
 pub(crate) fn spawn_upload_queue(
-    grok_home: &Path,
+    supercharge_home: &Path,
     gcs_config: &TraceExportConfig,
     client_version: Option<&str>,
     auth_manager: Arc<supercharge_login::AuthManager>,
@@ -1260,7 +1260,7 @@ pub(crate) fn spawn_upload_queue(
         auth_manager,
         base_config: gcs_config.clone(),
     });
-    let queue = UploadQueue::spawn(grok_home, resolver, UploadRetryPolicy::default());
+    let queue = UploadQueue::spawn(supercharge_home, resolver, UploadRetryPolicy::default());
     if let Some(ver) = client_version {
         queue.with_client_version(ver)
     } else {

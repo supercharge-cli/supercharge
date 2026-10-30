@@ -226,7 +226,7 @@ async fn list_skills_reporting(
 /// The folders skill discovery looks in on its own, whether or not they exist.
 fn auto_skill_dirs(cwd: &str) -> Vec<std::path::PathBuf> {
     let cwd_path = std::path::PathBuf::from(cwd);
-    let home_dir = supercharge_tools::util::grok_home::grok_home();
+    let home_dir = supercharge_tools::util::supercharge_home::supercharge_home();
     let git_root = git2::Repository::discover(&cwd_path)
         .ok()
         .and_then(|repo| repo.workdir().map(|p| p.to_path_buf()));
@@ -340,7 +340,7 @@ fn resolve_skill_path(raw: &str, cwd: &str) -> String {
 /// Collect auto-discovered skill source directories and their counts.
 fn discover_auto_sources(cwd: &str, skills: &[SkillInfo]) -> Vec<(String, usize)> {
     let cwd_path = std::path::PathBuf::from(cwd);
-    let grok_home = supercharge_tools::util::grok_home::grok_home();
+    let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
     let git_root = git2::Repository::discover(&cwd_path)
         .ok()
         .and_then(|repo| repo.workdir().map(|p| p.to_path_buf()));
@@ -384,7 +384,7 @@ fn discover_auto_sources(cwd: &str, skills: &[SkillInfo]) -> Vec<(String, usize)
     }
 
     for subdir in &subdirs {
-        try_add_source(grok_home.join(subdir), None);
+        try_add_source(supercharge_home.join(subdir), None);
     }
 
     if let Some(home_path) = supercharge_dirs::home_dir() {

@@ -441,14 +441,14 @@ fn init_process(cfg: &AgentConfig, auth_manager: &AuthManager) {
         supercharge_telemetry::unified_log::set_version(supercharge_version::VERSION);
         let limits = crate::util::limits::ProcessLimits::read();
         limits.log();
-        let grok_home = crate::util::grok_home::grok_home();
-        crate::builtin::extract_builtin_files(&grok_home);
+        let supercharge_home = crate::util::supercharge_home::supercharge_home();
+        crate::builtin::extract_builtin_files(&supercharge_home);
         if !cfg!(test) {
-            crate::builtin::purge_stale_extracted_skills(&grok_home);
+            crate::builtin::purge_stale_extracted_skills(&supercharge_home);
         }
-        crate::extensions::marketplace::purge_default_skills_installs(&grok_home);
+        crate::extensions::marketplace::purge_default_skills_installs(&supercharge_home);
         if cfg.resolve_official_marketplace_auto_register().value {
-            crate::extensions::marketplace::ensure_official_marketplace_source(&grok_home);
+            crate::extensions::marketplace::ensure_official_marketplace_source(&supercharge_home);
         }
         let telemetry_mode = cfg.resolve_telemetry_mode();
         let trace_upload = cfg.resolve_trace_upload();
@@ -557,9 +557,9 @@ pub async fn apply_post_login_config(
 /// `grok logout` CLI subcommand: clear the cached session and, when one was cleared, drop any orphaned synced files.
 /// The orphan cleanup runs here in shell so auth stays out of managed config.
 pub fn run_cli_logout(grok_com_config: &supercharge_login::GrokComConfig) -> anyhow::Result<()> {
-    let grok_home = supercharge_shell_base::util::grok_home::grok_home();
+    let supercharge_home = supercharge_shell_base::util::supercharge_home::supercharge_home();
     let auth_manager = supercharge_login::AuthManager::new_with_proxy_base_url(
-        &grok_home,
+        &supercharge_home,
         grok_com_config.clone(),
         crate::agent::config::EndpointsConfig::from_effective_config().proxy_url(),
     );

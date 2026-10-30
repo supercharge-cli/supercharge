@@ -28,14 +28,14 @@ async fn campaign_leader_mode_remote_dismiss_on_model_pick() {
 
     // Seed config.toml with the user's own default model
     // Pin the leader socket under the shared SUPERCHARGE_HOME so every spawn elects or attaches to the same leader (mirrors `LeaderCluster`)
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create SUPERCHARGE_HOME");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create SUPERCHARGE_HOME");
     std::fs::write(
-        grok_home.join("config.toml"),
+        supercharge_home.join("config.toml"),
         format!("[models]\ndefault = \"{CONFIG_MODEL}\"\n"),
     )
     .expect("write config.toml");
-    let socket = grok_home.join("leader-e2e.sock");
+    let socket = supercharge_home.join("leader-e2e.sock");
     let socket = socket.to_str().expect("socket path is utf-8").to_owned();
 
     // Use session (OAuth) auth instead of the harness's default SUPERCHARGE_API_KEY
@@ -54,7 +54,7 @@ async fn campaign_leader_mode_remote_dismiss_on_model_pick() {
         )
         .expect("spawn leader-mode pager")
     };
-    let state_path = grok_home.join("campaigns_state.json");
+    let state_path = supercharge_home.join("campaigns_state.json");
     let dismissed = |state_path: &std::path::Path| {
         std::fs::read_to_string(state_path)
             .map(|s| s.contains(CAMPAIGN_ID))
@@ -108,7 +108,7 @@ async fn campaign_leader_mode_remote_dismiss_on_model_pick() {
     // ── Phase 3: the dismissal is durable and the pick is persisted. The user's choice must be in config.toml, and
     // the campaign value must never be written there. A fresh client on the same leader socket is deliberately not
     // asserted on-screen here.
-    let config = std::fs::read_to_string(grok_home.join("config.toml")).expect("read config.toml");
+    let config = std::fs::read_to_string(supercharge_home.join("config.toml")).expect("read config.toml");
     assert!(
         config.contains(&format!("default = \"{CONFIG_MODEL}\"")),
         "the user's pick must be persisted to config.toml:\n{config}"

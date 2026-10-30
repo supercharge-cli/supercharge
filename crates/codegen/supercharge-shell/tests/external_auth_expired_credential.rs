@@ -115,7 +115,7 @@ impl acp::Client for QuietClient {
 }
 
 /// Written under the legacy scope key, which `lookup_auth` falls back to for any configured scope.
-fn seed_credential(grok_home: &Path, expires_at: chrono::DateTime<chrono::Utc>) {
+fn seed_credential(supercharge_home: &Path, expires_at: chrono::DateTime<chrono::Utc>) {
     let auth = json!({
         "https://accounts.x.ai/sign-in": {
             "key": STALE_TOKEN,
@@ -126,9 +126,9 @@ fn seed_credential(grok_home: &Path, expires_at: chrono::DateTime<chrono::Utc>) 
             "expires_at": expires_at.to_rfc3339(),
         }
     });
-    std::fs::create_dir_all(grok_home).expect("create grok home");
+    std::fs::create_dir_all(supercharge_home).expect("create grok home");
     std::fs::write(
-        grok_home.join("auth.json"),
+        supercharge_home.join("auth.json"),
         serde_json::to_string_pretty(&auth).expect("serialize auth.json"),
     )
     .expect("write auth.json");
@@ -136,10 +136,10 @@ fn seed_credential(grok_home: &Path, expires_at: chrono::DateTime<chrono::Utc>) 
 
 /// A provider that can only sign the user in interactively.
 /// It prints its SSO link to stderr and exits non-zero, like a real device-code helper with no human at the keyboard.
-fn write_interactive_only_provider(grok_home: &Path) -> String {
+fn write_interactive_only_provider(supercharge_home: &Path) -> String {
     use std::os::unix::fs::PermissionsExt;
 
-    let script = grok_home.join("acme-auth.sh");
+    let script = supercharge_home.join("acme-auth.sh");
     std::fs::write(
         &script,
         "#!/bin/sh\n\
@@ -221,8 +221,8 @@ async fn connect(
     (client_conn, init)
 }
 
-fn provider_runs(grok_home: &Path) -> usize {
-    std::fs::read_to_string(grok_home.join("provider-runs"))
+fn provider_runs(supercharge_home: &Path) -> usize {
+    std::fs::read_to_string(supercharge_home.join("provider-runs"))
         .map(|s| s.lines().count())
         .unwrap_or(0)
 }
@@ -269,18 +269,18 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
         ))
         .expect("mock server");
 
-    let grok_home = TempDir::new().expect("grok home");
+    let supercharge_home = TempDir::new().expect("grok home");
     let workdir = TempDir::new().expect("workdir");
     seed_credential(
-        grok_home.path(),
+        supercharge_home.path(),
         chrono::Utc::now() - chrono::Duration::hours(1),
     );
-    let provider = write_interactive_only_provider(grok_home.path());
+    let provider = write_interactive_only_provider(supercharge_home.path());
 
     // SAFETY: the only other live threads are the mock runtime's HTTP workers,
     // which never read the process environment.
     unsafe {
-        std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
+        std::env::set_var("SUPERCHARGE_HOME", supercharge_home.path());
         std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url());
         std::env::set_var("SUPERCHARGE_API_BASE_URL", server.url());
         std::env::set_var("SUPERCHARGE_MODELS_BASE_URL", server.url());
@@ -327,7 +327,7 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
             "the dead bearer must not be offered at all; got {methods:?}"
         );
         // Startup makes several `auth()` calls in quick succession (the silent refresh, the login-method advertisement). Only the first runs the binary: a non-timeout failure is transient and the refresher's strike ladder puts every call inside the following cooldown on a no-run transient, so the budget is spent on the clock, not on the call rate.
-        let startup_runs = provider_runs(grok_home.path());
+        let startup_runs = provider_runs(supercharge_home.path());
         assert_eq!(
             startup_runs, 1,
             "startup owes the provider exactly one headless attempt; the calls that \
@@ -335,7 +335,7 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
         );
 
         // Phase 2: parity with a launch that has no credential at all
-        std::fs::remove_file(grok_home.path().join("auth.json")).expect("remove auth.json");
+        std::fs::remove_file(supercharge_home.path().join("auth.json")).expect("remove auth.json");
         let (_conn, init) = connect("external-auth-cold", Capture::default()).await;
         assert_eq!(
             advertised(&init),
@@ -343,7 +343,7 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
             "an expired credential must be treated exactly like no credential"
         );
         assert_eq!(
-            provider_runs(grok_home.path()),
+            provider_runs(supercharge_home.path()),
             startup_runs,
             "with nothing to refresh there is no headless attempt to make; the \
              binary runs when the client starts the login flow"
@@ -351,7 +351,7 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
 
         // Phase 3: mid-session, a credential that has not locally expired but that the backend rejects
         seed_credential(
-            grok_home.path(),
+            supercharge_home.path(),
             chrono::Utc::now() + chrono::Duration::hours(1),
         );
         let capture = Capture::default();

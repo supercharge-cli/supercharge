@@ -48,10 +48,10 @@ async fn run_reasoning_turn(collapse_thinking: bool) -> Turn {
     )
     .expect("write config");
     if collapse_thinking {
-        let grok_home = content.sandbox().grok_home().to_path_buf();
-        std::fs::create_dir_all(&grok_home).expect("mk grok home");
+        let supercharge_home = content.sandbox().supercharge_home().to_path_buf();
+        std::fs::create_dir_all(&supercharge_home).expect("mk grok home");
         std::fs::write(
-            grok_home.join("pager.toml"),
+            supercharge_home.join("pager.toml"),
             "[terminal]\nminimal_collapse_thinking = true\n",
         )
         .expect("write pager.toml");

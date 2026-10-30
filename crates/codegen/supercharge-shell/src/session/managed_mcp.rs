@@ -409,7 +409,7 @@ pub(crate) fn merge_managed_mcp_servers_sourced(
     let toml_claimed_names = crate::util::config::all_toml_mcp_server_names(cwd);
 
     let config_source = ConfigSource::ConfigToml {
-        path: supercharge_tools::util::grok_home::grok_home().join("config.toml"),
+        path: supercharge_tools::util::supercharge_home::supercharge_home().join("config.toml"),
     };
 
     // Use the TOML-only loader so that entries from imported editor configs and .mcp.json are not pre-loaded with ConfigSource::ConfigToml
@@ -1036,12 +1036,12 @@ url = "https://denied.corp.com/mcp"
     }
 
     /// A repo-declared definition is discoverable while the folder is trusted and gone once it is not; user-tier and plugin-tier definitions survive either way.
-    /// Runs in a re-exec of this binary: discovery reads `$SUPERCHARGE_HOME/config.toml` through the process-wide `grok_home()` `OnceLock`, so only a fresh process can isolate it.
+    /// Runs in a re-exec of this binary: discovery reads `$SUPERCHARGE_HOME/config.toml` through the process-wide `supercharge_home()` `OnceLock`, so only a fresh process can isolate it.
     #[test]
     fn discovery_drops_project_definitions_for_untrusted_folder() {
-        let grok_home = tempfile::tempdir().unwrap();
+        let supercharge_home = tempfile::tempdir().unwrap();
         std::fs::write(
-            grok_home.path().join("config.toml"),
+            supercharge_home.path().join("config.toml"),
             format!("[mcp_servers.usersrv]\nurl = \"{USER_MCP_URL}\"\n"),
         )
         .unwrap();
@@ -1052,7 +1052,7 @@ url = "https://denied.corp.com/mcp"
             .unwrap_or_default();
         let exe = std::env::current_exe().expect("current_exe");
         let mut cmd = std::process::Command::new(exe);
-        cmd.env("SUPERCHARGE_HOME", grok_home.path())
+        cmd.env("SUPERCHARGE_HOME", supercharge_home.path())
             .env_remove("SUPERCHARGE_CONFIG")
             .env_remove("SUPERCHARGE_CONFIG_PATH")
             .env(UNTRUSTED_DISCOVERY_CHILD, "1")

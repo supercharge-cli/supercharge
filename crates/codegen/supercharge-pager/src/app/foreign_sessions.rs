@@ -305,15 +305,15 @@ impl ForeignPickerSource {
         format!("/{} {native_id}", self.skill_name())
     }
 
-    fn skill_paths(self, grok_home: &Path) -> [PathBuf; 2] {
+    fn skill_paths(self, supercharge_home: &Path) -> [PathBuf; 2] {
         let skill = self.skill_name();
         [
-            grok_home
+            supercharge_home
                 .join("bundled")
                 .join("skills")
                 .join(skill)
                 .join("SKILL.md"),
-            grok_home.join("skills").join(skill).join("SKILL.md"),
+            supercharge_home.join("skills").join(skill).join("SKILL.md"),
         ]
     }
 }
@@ -338,7 +338,7 @@ pub(crate) fn foreign_tool_display_label(tool: ForeignSessionTool) -> &'static s
 
 pub(crate) async fn gated_sources_async_with<F, Fut>(
     compat: EnabledForeignSessionSources,
-    grok_home: &Path,
+    supercharge_home: &Path,
     mut metadata_exists: F,
 ) -> EnabledForeignSessionSources
 where
@@ -351,7 +351,7 @@ where
             continue;
         }
         let mut available = false;
-        for path in source.skill_paths(grok_home) {
+        for path in source.skill_paths(supercharge_home) {
             if metadata_exists(path).await {
                 available = true;
                 break;
@@ -366,9 +366,9 @@ where
 
 pub(crate) async fn gated_sources_async(
     compat: EnabledForeignSessionSources,
-    grok_home: &Path,
+    supercharge_home: &Path,
 ) -> EnabledForeignSessionSources {
-    gated_sources_async_with(compat, grok_home, |path| async move {
+    gated_sources_async_with(compat, supercharge_home, |path| async move {
         tokio::fs::metadata(path).await.is_ok()
     })
     .await
@@ -376,7 +376,7 @@ pub(crate) async fn gated_sources_async(
 
 pub(crate) async fn with_gated_sources_async_with<F, Fut, W, WorkFut, T>(
     compat: EnabledForeignSessionSources,
-    grok_home: &Path,
+    supercharge_home: &Path,
     metadata_exists: F,
     work: W,
 ) -> Option<T>
@@ -386,7 +386,7 @@ where
     W: FnOnce(EnabledForeignSessionSources) -> WorkFut,
     WorkFut: Future<Output = T>,
 {
-    let enabled = gated_sources_async_with(compat, grok_home, metadata_exists).await;
+    let enabled = gated_sources_async_with(compat, supercharge_home, metadata_exists).await;
     if !(enabled.claude || enabled.codex || enabled.cursor) {
         return None;
     }
@@ -395,7 +395,7 @@ where
 
 pub(crate) async fn with_gated_sources_async<W, WorkFut, T>(
     compat: EnabledForeignSessionSources,
-    grok_home: &Path,
+    supercharge_home: &Path,
     work: W,
 ) -> Option<T>
 where
@@ -404,7 +404,7 @@ where
 {
     with_gated_sources_async_with(
         compat,
-        grok_home,
+        supercharge_home,
         |path| async move { tokio::fs::metadata(path).await.is_ok() },
         work,
     )
@@ -414,7 +414,7 @@ where
 pub(crate) fn scan_effect(
     cwd: &Path,
     compat: EnabledForeignSessionSources,
-    grok_home: &Path,
+    supercharge_home: &Path,
     coordinator: ForeignScanCoordinator,
     seq: u64,
 ) -> Option<Effect> {
@@ -422,7 +422,7 @@ pub(crate) fn scan_effect(
     (compat.claude || compat.codex || compat.cursor).then(|| Effect::ScanForeignSessions {
         cwd: cwd.to_path_buf(),
         compat,
-        grok_home: grok_home.to_path_buf(),
+        supercharge_home: supercharge_home.to_path_buf(),
         coordinator,
         seq,
     })

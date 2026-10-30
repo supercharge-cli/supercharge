@@ -91,7 +91,7 @@ async fn handle_session_repair(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtR
 
     // The session is not resident, so repair `chat_history.jsonl` in place on disk
     repair_on_disk(
-        &crate::util::grok_home::grok_home(),
+        &crate::util::supercharge_home::supercharge_home(),
         &req.session_id,
         req.dry_run,
     )

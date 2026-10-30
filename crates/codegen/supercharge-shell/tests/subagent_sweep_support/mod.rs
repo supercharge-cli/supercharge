@@ -475,7 +475,7 @@ pub fn run_burst(
 pub struct SweepEnv {
     pub mock_rt: tokio::runtime::Runtime,
     pub deadline: Duration,
-    _grok_home: TempDir,
+    _supercharge_home: TempDir,
 }
 
 /// SAFETY: call before any agent threads exist; mock workers never read env.
@@ -493,9 +493,9 @@ pub fn sweep_env_init() -> SweepEnv {
         .enable_all()
         .build()
         .expect("mock runtime");
-    let grok_home = TempDir::new().expect("grok home");
+    let supercharge_home = TempDir::new().expect("grok home");
     unsafe {
-        std::env::set_var("SUPERCHARGE_HOME", grok_home.path());
+        std::env::set_var("SUPERCHARGE_HOME", supercharge_home.path());
         std::env::set_var("XAI_API_KEY", "test-key-for-ci");
         std::env::set_var("SUPERCHARGE_TELEMETRY_ENABLED", "false");
         std::env::set_var("SUPERCHARGE_FEEDBACK_ENABLED", "false");
@@ -504,7 +504,7 @@ pub fn sweep_env_init() -> SweepEnv {
     SweepEnv {
         mock_rt,
         deadline: Duration::from_secs(env_usize("SUPERCHARGE_SWEEP_DEADLINE_S", 240) as u64),
-        _grok_home: grok_home,
+        _supercharge_home: supercharge_home,
     }
 }
 

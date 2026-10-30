@@ -92,11 +92,11 @@ pub(in crate::app::dispatch) fn dispatch_fetch_session_list(app: &mut AppView) -
         app.foreign_scan_coordinator.begin_request(foreign_seq);
         None
     } else {
-        let grok_home = supercharge_tools::util::grok_home::grok_home();
+        let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
         crate::app::foreign_sessions::scan_effect(
             &app.cwd,
             app.foreign_session_compat,
-            &grok_home,
+            &supercharge_home,
             app.foreign_scan_coordinator.clone(),
             foreign_seq,
         )

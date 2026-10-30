@@ -43,15 +43,15 @@ impl AuthFileLock {
 /// Shared by the auth manager and the managed-config identity reads: a reader that bypasses it
 /// splits "who is signed in" between the two.
 // Empty override (e.g. an unexpanded `$VAR`) is treated as unset; non-UTF-8 preserved.
-fn resolve_auth_json_path(grok_auth_path: Option<OsString>, grok_home: &Path) -> PathBuf {
+fn resolve_auth_json_path(grok_auth_path: Option<OsString>, supercharge_home: &Path) -> PathBuf {
     match grok_auth_path {
         Some(p) if !p.is_empty() => PathBuf::from(p),
-        _ => grok_home.join("auth.json"),
+        _ => supercharge_home.join("auth.json"),
     }
 }
 
-pub fn auth_json_path(grok_home: &Path) -> PathBuf {
-    resolve_auth_json_path(std::env::var_os("SUPERCHARGE_AUTH_PATH"), grok_home)
+pub fn auth_json_path(supercharge_home: &Path) -> PathBuf {
+    resolve_auth_json_path(std::env::var_os("SUPERCHARGE_AUTH_PATH"), supercharge_home)
 }
 
 pub fn read_auth_json(auth_file: &Path) -> std::io::Result<AuthStore> {
@@ -345,8 +345,8 @@ fn restore_prior_bytes(auth_file: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// Read the API key from the `xai::api_key` scope in auth.json.
-pub fn read_api_key(grok_home: &Path) -> Option<String> {
-    let path = auth_json_path(grok_home);
+pub fn read_api_key(supercharge_home: &Path) -> Option<String> {
+    let path = auth_json_path(supercharge_home);
     let map = read_auth_json(&path).ok()?;
     map.get(API_KEY_SCOPE).map(|a| a.key.clone())
 }
@@ -354,8 +354,8 @@ pub fn read_api_key(grok_home: &Path) -> Option<String> {
 /// Store a plain API key in auth.json under the `xai::api_key` scope.
 ///
 /// Uses the corrupt-recovery reader so a malformed auth.json (e.g. from a previous crash) can be healed when the user sets an API key.
-pub fn store_api_key(grok_home: &Path, api_key: &str) -> std::io::Result<()> {
-    let path = auth_json_path(grok_home);
+pub fn store_api_key(supercharge_home: &Path, api_key: &str) -> std::io::Result<()> {
+    let path = auth_json_path(supercharge_home);
     let mut map = read_auth_json_or_empty_recovering_corrupt(&path)?;
     map.insert(
         API_KEY_SCOPE.to_owned(),
@@ -369,8 +369,8 @@ pub fn store_api_key(grok_home: &Path, api_key: &str) -> std::io::Result<()> {
 }
 
 /// Remove the `xai::api_key` scope from auth.json.
-pub fn clear_api_key(grok_home: &Path) -> std::io::Result<()> {
-    let path = auth_json_path(grok_home);
+pub fn clear_api_key(supercharge_home: &Path) -> std::io::Result<()> {
+    let path = auth_json_path(supercharge_home);
     if let Ok(mut map) = read_auth_json(&path) {
         map.remove(API_KEY_SCOPE);
         if map.is_empty() {

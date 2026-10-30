@@ -2,17 +2,17 @@ use super::{find_local_child_for_remote_in_root, session_exists_for_cwd_in_root}
 use std::fs;
 use tempfile::TempDir;
 
-// resolve_local_session reads grok_home(), so these tests exercise the _in_root helpers it delegates to
+// resolve_local_session reads supercharge_home(), so these tests exercise the _in_root helpers it delegates to
 
 fn setup_session(root: &std::path::Path, cwd: &str, session_id: &str) {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(session_id);
     fs::create_dir_all(&dir).unwrap();
     fs::write(dir.join("summary.json"), b"{}").unwrap();
 }
 
 fn setup_child_session(root: &std::path::Path, cwd: &str, child_id: &str, parent_id: &str) {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(child_id);
     fs::create_dir_all(&dir).unwrap();
     let summary = serde_json::json!({ "parent_session_id": parent_id });
@@ -29,7 +29,7 @@ fn exact_match_returns_original_id() {
     setup_session(&root, cwd, sid);
 
     assert!(session_exists_for_cwd_in_root(sid, cwd, &root));
-    // We can't call resolve_local_session directly because it uses grok_home(), so the assert below mirrors its logic
+    // We can't call resolve_local_session directly because it uses supercharge_home(), so the assert below mirrors its logic
     assert_eq!(
         Some(sid.to_string()),
         if session_exists_for_cwd_in_root(sid, cwd, &root) {
@@ -62,7 +62,7 @@ fn no_match_returns_none() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().join("sessions");
     let cwd = "/project/gamma";
-    fs::create_dir_all(root.join(crate::util::grok_home::encode_cwd_dirname(cwd))).unwrap();
+    fs::create_dir_all(root.join(crate::util::supercharge_home::encode_cwd_dirname(cwd))).unwrap();
 
     assert!(!session_exists_for_cwd_in_root("missing", cwd, &root));
     assert_eq!(

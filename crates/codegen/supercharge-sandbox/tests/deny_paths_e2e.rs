@@ -17,18 +17,18 @@ const POSTLAUNCH_ENV: &str = "SANDBOX_E2E_POSTLAUNCH";
 const DATA_STAGED_ENV: &str = "SANDBOX_E2E_DATA_STAGED";
 const MARKER: &str = "deny-paths-e2e-marker-9f3c1a";
 const REQUIRE_ENV: &str = "SANDBOX_E2E_REQUIRE_ENFORCEMENT";
-fn apply_fixture_env(cmd: &mut Command, home: &Path, grok_home: &Path, workspace: &Path) {
+fn apply_fixture_env(cmd: &mut Command, home: &Path, supercharge_home: &Path, workspace: &Path) {
     cmd.env(WORKSPACE_ENV, workspace.as_os_str())
         .env(HOME_ENV, home.as_os_str())
-        .env(SUPERCHARGE_HOME_ENV, grok_home.as_os_str())
+        .env(SUPERCHARGE_HOME_ENV, supercharge_home.as_os_str())
         .env("HOME", home.as_os_str())
-        .env("SUPERCHARGE_HOME", grok_home.as_os_str());
+        .env("SUPERCHARGE_HOME", supercharge_home.as_os_str());
 }
 /// Re-invoke this test binary as a subprocess driving `profile` over `targets` (denied) and `controls` (must stay readable).
 /// `postlaunch` paths are created AFTER apply to exercise the macOS runtime-regex (post-launch) coverage.
 fn run_scenario(
     home: &Path,
-    grok_home: &Path,
+    supercharge_home: &Path,
     workspace: &Path,
     profile: &str,
     targets: &[&str],
@@ -37,7 +37,7 @@ fn run_scenario(
 ) -> (std::process::ExitStatus, String) {
     let exe = std::env::current_exe().expect("current_exe");
     let mut cmd = Command::new(exe);
-    apply_fixture_env(&mut cmd, home, grok_home, workspace);
+    apply_fixture_env(&mut cmd, home, supercharge_home, workspace);
     let output = cmd
         .env(SCENARIO_ENV, "block_deny")
         .env(PROFILE_ENV, profile)
@@ -58,13 +58,13 @@ fn run_scenario(
 /// Re-invoke as a subprocess for the direct-hook write-deny scenarios.
 fn run_hook_write_deny_scenario(
     home: &Path,
-    grok_home: &Path,
+    supercharge_home: &Path,
     workspace: &Path,
     scenario: &str,
 ) -> (std::process::ExitStatus, String) {
     let exe = std::env::current_exe().expect("current_exe");
     let mut cmd = Command::new(exe);
-    apply_fixture_env(&mut cmd, home, grok_home, workspace);
+    apply_fixture_env(&mut cmd, home, supercharge_home, workspace);
     let output = cmd
         .env(SCENARIO_ENV, scenario)
         .arg("--ignored")
@@ -226,16 +226,16 @@ fn subprocess_entry() {
     let workspace = dunce::canonicalize(&workspace).expect("canonicalize workspace");
     let workspace = workspace.as_path();
     let home = PathBuf::from(std::env::var(HOME_ENV).expect(HOME_ENV));
-    let grok_home = PathBuf::from(std::env::var(SUPERCHARGE_HOME_ENV).expect(SUPERCHARGE_HOME_ENV));
+    let supercharge_home = PathBuf::from(std::env::var(SUPERCHARGE_HOME_ENV).expect(SUPERCHARGE_HOME_ENV));
     unsafe {
         std::env::set_var("HOME", &home);
-        std::env::set_var("SUPERCHARGE_HOME", &grok_home);
+        std::env::set_var("SUPERCHARGE_HOME", &supercharge_home);
     }
     match scenario.as_str() {
         "block_deny" => subprocess_block_deny(workspace),
         "hook_write_deny" => subprocess_hook_write_deny(workspace, false),
         "hook_write_deny_first_run" => subprocess_hook_write_deny(workspace, true),
-        "hook_write_deny_marker_spoof" => subprocess_hook_write_deny_marker_spoof(&grok_home),
+        "hook_write_deny_marker_spoof" => subprocess_hook_write_deny_marker_spoof(&supercharge_home),
         "read_deny_marker_spoof" => subprocess_read_deny_marker_spoof(workspace),
         "read_deny_forged_mounts" => subprocess_read_deny_forged_mounts(workspace),
         "read_deny_empty_set" => subprocess_read_deny_empty_set(workspace),
@@ -434,7 +434,7 @@ fn assert_write_ok(label: &str, path: &Path) {
 }
 /// Marker spoof: claim to be inside bwrap without real RO mounts; verify must fail.
 /// Linux-only (verify is a no-op on macOS). Isolated subprocess; no shared env mutation.
-fn subprocess_hook_write_deny_marker_spoof(_grok_home: &Path) {
+fn subprocess_hook_write_deny_marker_spoof(_supercharge_home: &Path) {
     #[cfg(not(target_os = "linux"))]
     {
         eprintln!("OK: marker spoof N/A on non-linux");

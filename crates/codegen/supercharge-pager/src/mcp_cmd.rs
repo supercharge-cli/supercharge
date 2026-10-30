@@ -1323,7 +1323,7 @@ mod tests {
 
     #[test]
     fn grok_com_known_only_with_toml_definition() {
-        // Unique name: `grok_home()` is process-wide OnceLock, so SUPERCHARGE_HOME. `grok_com_*` in the real ~/.supercharge disabled
+        // Unique name: `supercharge_home()` is process-wide OnceLock, so SUPERCHARGE_HOME. `grok_com_*` in the real ~/.supercharge disabled
         // list would fail an orphan assertion on a well-known name.
         let name = format!("grok_com_orphan_{}", uuid::Uuid::new_v4().as_simple());
 

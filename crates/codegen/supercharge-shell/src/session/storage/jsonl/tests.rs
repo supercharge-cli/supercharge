@@ -1296,7 +1296,7 @@ fn write_test_summary(
         head_commit: None,
         head_branch: None,
         request_id: None,
-        grok_home: None,
+        supercharge_home: None,
         last_active_at,
         generated_title: None,
         title_is_manual: false,
@@ -1328,7 +1328,7 @@ fn scan_session_dirs_returns_empty_when_no_sessions_dir() {
 fn scan_session_dirs_finds_all_sessions() {
     let tmp = TempDir::new().unwrap();
     let now = chrono::Utc::now();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/home/user/project");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/home/user/project");
     write_test_summary(tmp.path(), &cwd, "s1", now, None, None, None);
     write_test_summary(tmp.path(), &cwd, "s2", now, None, None, None);
     let adapter = JsonlStorageAdapter::with_root(tmp.path().to_path_buf());
@@ -1339,8 +1339,8 @@ fn scan_session_dirs_finds_all_sessions() {
 fn scan_session_dirs_filters_by_cwd() {
     let tmp = TempDir::new().unwrap();
     let now = chrono::Utc::now();
-    let cwd_a = crate::util::grok_home::encode_cwd_dirname("/home/user/project-a");
-    let cwd_b = crate::util::grok_home::encode_cwd_dirname("/home/user/project-b");
+    let cwd_a = crate::util::supercharge_home::encode_cwd_dirname("/home/user/project-a");
+    let cwd_b = crate::util::supercharge_home::encode_cwd_dirname("/home/user/project-b");
     write_test_summary(tmp.path(), &cwd_a, "s1", now, None, None, None);
     write_test_summary(tmp.path(), &cwd_b, "s2", now, None, None, None);
     let adapter = JsonlStorageAdapter::with_root(tmp.path().to_path_buf());
@@ -1353,7 +1353,7 @@ fn scan_session_dirs_filters_by_cwd() {
 #[test]
 fn scan_session_dirs_skips_non_directory_entries() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/project");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/project");
     let cwd_dir = tmp.path().join("sessions").join(&cwd);
     std::fs::create_dir_all(&cwd_dir).unwrap();
     std::fs::write(cwd_dir.join("stray-file.txt"), b"oops").unwrap();
@@ -1368,7 +1368,7 @@ fn scan_session_dirs_skips_non_directory_entries() {
 fn scan_session_dirs_continues_when_a_cwd_bucket_is_gone() {
     let tmp = TempDir::new().unwrap();
     let now = chrono::Utc::now();
-    let keep = crate::util::grok_home::encode_cwd_dirname("/keep");
+    let keep = crate::util::supercharge_home::encode_cwd_dirname("/keep");
     write_test_summary(tmp.path(), &keep, "s1", now, None, None, None);
     let gone = tmp.path().join("sessions").join("gone-bucket");
     std::fs::create_dir_all(&gone).unwrap();
@@ -1381,7 +1381,7 @@ fn scan_session_dirs_continues_when_a_cwd_bucket_is_gone() {
 #[tokio::test]
 async fn list_sessions_recent_returns_most_recent_by_mtime() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/workspace");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/workspace");
     let t1 = chrono::Utc::now() - chrono::Duration::hours(3);
     let t2 = chrono::Utc::now() - chrono::Duration::hours(2);
     let t3 = chrono::Utc::now() - chrono::Duration::hours(1);
@@ -1400,7 +1400,7 @@ async fn list_sessions_recent_returns_most_recent_by_mtime() {
 #[tokio::test]
 async fn list_sessions_recent_excludes_hidden_sessions() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/workspace");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/workspace");
     let now = chrono::Utc::now();
     write_test_summary(tmp.path(), &cwd, "visible", now, None, None, None);
     write_test_summary(tmp.path(), &cwd, "hidden-explicit", now, None, Some(true), None);
@@ -1421,7 +1421,7 @@ async fn list_sessions_recent_excludes_hidden_sessions() {
 #[tokio::test]
 async fn list_sessions_recent_excludes_unused_optimistic_husks() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/workspace");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/workspace");
     let now = chrono::Utc::now();
     write_test_summary(tmp.path(), &cwd, "real", now, None, None, None);
     let husk_dir = write_test_summary(tmp.path(), &cwd, "husk", now, None, None, None);
@@ -1440,7 +1440,7 @@ async fn list_sessions_recent_excludes_unused_optimistic_husks() {
 #[tokio::test]
 async fn list_sessions_recent_skips_headless_without_shorting_the_page() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/workspace");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/workspace");
     let now = chrono::Utc::now();
     let times: Vec<_> = (0..4).map(|i| now - chrono::Duration::hours(i)).collect();
     for (i, (id, kind)) in [
@@ -1470,7 +1470,7 @@ async fn list_sessions_recent_skips_headless_without_shorting_the_page() {
 #[tokio::test]
 async fn list_sessions_recent_bounds_reads_on_headless_dominated_store() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/workspace");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/workspace");
     let now = chrono::Utc::now();
     let newest_interactive = 40;
     for i in 0..50 {
@@ -1498,7 +1498,7 @@ async fn list_sessions_recent_empty_dir() {
 async fn list_sessions_sorts_by_last_active_at_over_updated_at() {
     let tmp = TempDir::new().unwrap();
     let cwd_path = "/ws/resume-sort";
-    let cwd = crate::util::grok_home::encode_cwd_dirname(cwd_path);
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname(cwd_path);
     let now = chrono::Utc::now();
     write_test_summary(
         tmp.path(),
@@ -1527,7 +1527,7 @@ async fn list_sessions_sorts_by_last_active_at_over_updated_at() {
 #[tokio::test]
 async fn list_sessions_recent_sorts_by_updated_at() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/ws");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/ws");
     let now = chrono::Utc::now();
     let t_old = now - chrono::Duration::hours(10);
     let t_new = now;
@@ -1542,8 +1542,8 @@ async fn list_sessions_recent_sorts_by_updated_at() {
 #[tokio::test]
 async fn list_sessions_recent_spans_multiple_workspaces() {
     let tmp = TempDir::new().unwrap();
-    let cwd_a = crate::util::grok_home::encode_cwd_dirname("/project-a");
-    let cwd_b = crate::util::grok_home::encode_cwd_dirname("/project-b");
+    let cwd_a = crate::util::supercharge_home::encode_cwd_dirname("/project-a");
+    let cwd_b = crate::util::supercharge_home::encode_cwd_dirname("/project-b");
     let now = chrono::Utc::now();
     write_test_summary(
         tmp.path(),
@@ -1564,7 +1564,7 @@ async fn list_sessions_recent_spans_multiple_workspaces() {
 #[tokio::test]
 async fn list_sessions_recent_skips_corrupt_summary() {
     let tmp = TempDir::new().unwrap();
-    let cwd = crate::util::grok_home::encode_cwd_dirname("/ws");
+    let cwd = crate::util::supercharge_home::encode_cwd_dirname("/ws");
     let now = chrono::Utc::now();
     write_test_summary(tmp.path(), &cwd, "good", now, None, None, None);
     let bad_dir = tmp.path().join("sessions").join(&cwd).join("bad");
@@ -2572,7 +2572,7 @@ async fn init_session_creates_owner_only_session_and_parent_dirs() {
     let session_dir = temp_dir
         .path()
         .join("sessions")
-        .join(crate::util::grok_home::encode_cwd_dirname(&info.cwd))
+        .join(crate::util::supercharge_home::encode_cwd_dirname(&info.cwd))
         .join(info.id.to_string());
     assert_eq!(unix_mode(&session_dir), 0o700, "session dir must be 0700");
     assert_eq!(
@@ -2597,7 +2597,7 @@ async fn init_session_retightens_loosened_existing_dirs() {
     let session_dir = temp_dir
         .path()
         .join("sessions")
-        .join(crate::util::grok_home::encode_cwd_dirname(&info.cwd))
+        .join(crate::util::supercharge_home::encode_cwd_dirname(&info.cwd))
         .join(info.id.to_string());
     set_unix_mode(&session_dir, 0o755);
     set_unix_mode(session_dir.parent().unwrap(), 0o755);
@@ -2623,7 +2623,7 @@ async fn copy_session_data_creates_owner_only_target_dir() {
     let target_dir = temp_dir
         .path()
         .join("sessions")
-        .join(crate::util::grok_home::encode_cwd_dirname(&target.cwd))
+        .join(crate::util::supercharge_home::encode_cwd_dirname(&target.cwd))
         .join(target.id.to_string());
     assert_eq!(unix_mode(&target_dir), 0o700);
 }

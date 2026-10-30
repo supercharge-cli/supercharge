@@ -90,7 +90,7 @@ async fn a_provider_that_declines_the_headless_run_can_still_sign_the_user_in() 
     let dead = dead_endpoint();
 
     // SAFETY: single-threaded test entry, before any thread that reads the
-    // environment is spawned. `grok_home()` memoizes, so this must stay the
+    // environment is spawned. `supercharge_home()` memoizes, so this must stay the
     // only test in the binary.
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", home.path());

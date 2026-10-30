@@ -11,12 +11,12 @@ use std::sync::{Arc, Weak};
 
 use supercharge_codebase_graph::{IndexManager, IndexManagerConfig, IndexManagerHandle};
 
-use supercharge_tools::util::grok_home::grok_home;
+use supercharge_tools::util::supercharge_home::supercharge_home;
 
 /// Cache is stored in: `~/.supercharge/indexes/{url_encoded_cwd}/goto_index.bin`
 pub fn get_index_cache_path(cwd: &Path) -> PathBuf {
     let encoded = urlencoding::encode(&cwd.to_string_lossy()).into_owned();
-    grok_home()
+    supercharge_home()
         .join("indexes")
         .join(encoded)
         .join("goto_index.bin")

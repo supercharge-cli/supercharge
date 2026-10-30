@@ -54,18 +54,18 @@ impl Default for ChangelogManager {
 
 impl ChangelogManager {
     pub fn new() -> Self {
-        // Prefer the live `$SUPERCHARGE_HOME` over the `grok_home()` OnceLock
+        // Prefer the live `$SUPERCHARGE_HOME` over the `supercharge_home()` OnceLock
         // A home injected by the PTY e2e harness must beat a path some earlier init cached in the same process
         Self::from_env_home()
     }
 
-    /// Resolve cache paths from the live process environment (not the `grok_home()` OnceLock).
+    /// Resolve cache paths from the live process environment (not the `supercharge_home()` OnceLock).
     /// A seeded `$SUPERCHARGE_HOME` set on the pager process is always honoured even if some earlier init path cached a different home.
     fn from_env_home() -> Self {
         let home = std::env::var_os("SUPERCHARGE_HOME")
             .map(std::path::PathBuf::from)
             .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or_else(crate::util::grok_home::grok_home);
+            .unwrap_or_else(crate::util::supercharge_home::supercharge_home);
         Self {
             md_cache: home.join("CHANGELOG.md"),
             json_cache: home.join("CHANGELOG.json"),

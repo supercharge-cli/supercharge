@@ -15,7 +15,7 @@ fn action_outcome(response: &serde_json::Value) -> supercharge_hooks_plugins_typ
 #[test]
 fn plugins_action_uninstall_removes_plugin_data_dir() {
     acp_harness::run_agent_test(|cwd, _server| async move {
-        let grok_home = std::path::PathBuf::from(
+        let supercharge_home = std::path::PathBuf::from(
             std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"),
         );
 
@@ -54,7 +54,7 @@ fn plugins_action_uninstall_removes_plugin_data_dir() {
             _ => PluginScope::ConfigPath,
         };
         let id = PluginId::new(scope, &repo.path, "data-demo");
-        let data_dir = grok_home.join("plugin-data").join(&id.0);
+        let data_dir = supercharge_home.join("plugin-data").join(&id.0);
         std::fs::create_dir_all(&data_dir).unwrap();
         std::fs::write(data_dir.join("state.json"), "{}").unwrap();
         let repo_path = repo.path.clone();

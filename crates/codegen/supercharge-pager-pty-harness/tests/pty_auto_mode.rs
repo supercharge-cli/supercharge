@@ -51,7 +51,7 @@ fn prepare_sandbox(sandbox: &mut TestSandbox, gate_on: bool) -> Vec<(String, Str
     sandbox.remove_env("SUPERCHARGE_API_KEY");
 
     let home = sandbox.home();
-    let grok = sandbox.grok_home();
+    let grok = sandbox.supercharge_home();
     let _ = std::fs::create_dir_all(grok);
     if let Some(src) = auth_json_source() {
         let dest = grok.join("auth.json");

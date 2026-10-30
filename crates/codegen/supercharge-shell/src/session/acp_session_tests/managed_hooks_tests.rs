@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 const MANAGED_HOOK: &str = "requirements/system:pre_tool_use[0].hooks[0]";
 
 /// Snapshots and restores the disabled-hooks file wherever the process actually resolves it.
-/// A temp `SUPERCHARGE_HOME` alone cannot redirect it: `grok_home()` is `OnceLock`-cached and another test in this binary may have resolved it first.
+/// A temp `SUPERCHARGE_HOME` alone cannot redirect it: `supercharge_home()` is `OnceLock`-cached and another test in this binary may have resolved it first.
 /// The guard lets the test assert nothing was written, and if the no-disable rule ever regresses it restores the developer's or CI's real file.
 struct DisabledHooksGuard {
     path: Option<std::path::PathBuf>,
@@ -22,7 +22,7 @@ struct DisabledHooksGuard {
 
 impl DisabledHooksGuard {
     fn capture() -> Self {
-        let path = supercharge_config::user_grok_home().map(|home| home.join("disabled-hooks"));
+        let path = supercharge_config::user_supercharge_home().map(|home| home.join("disabled-hooks"));
         let before = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok());
         Self { path, before }
     }

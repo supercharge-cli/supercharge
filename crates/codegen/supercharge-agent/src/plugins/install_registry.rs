@@ -245,7 +245,7 @@ impl InstallRegistry {
             return dir;
         }
 
-        supercharge_config::grok_home().join(DEFAULT_INSTALL_DIR_NAME)
+        supercharge_config::supercharge_home().join(DEFAULT_INSTALL_DIR_NAME)
     }
 
     /// Read `[plugins].install_dir` from the effective config (managed_config.toml merged under config.toml; user wins).

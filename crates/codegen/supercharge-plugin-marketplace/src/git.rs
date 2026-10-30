@@ -135,7 +135,7 @@ fn is_cache_fresh(cache_dir: &Path) -> bool {
 }
 
 pub fn default_cache_root() -> PathBuf {
-    supercharge_config::grok_home().join("marketplace-cache")
+    supercharge_config::supercharge_home().join("marketplace-cache")
 }
 
 /// Deterministic hash for a URL (used as cache directory name).

@@ -1512,7 +1512,7 @@ impl MvpAgent {
         if let crate::session::storage::search::IndexDecision::On(index) = self
             .search_index()
         {
-            index.bootstrap_once(crate::util::grok_home::grok_home());
+            index.bootstrap_once(crate::util::supercharge_home::supercharge_home());
         }
     }
     pub(crate) fn search_index(
@@ -1541,19 +1541,19 @@ impl MvpAgent {
         }
         #[cfg(test)] self.auto_gc_spawn_count.set(self.auto_gc_spawn_count.get() + 1);
         let auto_gc_policy = self.cfg.borrow().resolve_worktree_auto_gc();
-        let grok_home = supercharge_fast_worktree::resolve_grok_home();
+        let supercharge_home = supercharge_fast_worktree::resolve_supercharge_home();
         tokio::task::spawn_blocking(move || Self::reclaim_worktrees(
-            grok_home,
+            supercharge_home,
             auto_gc_policy,
         ));
     }
     /// The caller resolves the home: read here, $SUPERCHARGE_HOME would be read when the blocking thread starts.
     /// This deletes worktrees under what it finds.
     pub(super) fn reclaim_worktrees(
-        grok_home: anyhow::Result<std::path::PathBuf>,
+        supercharge_home: anyhow::Result<std::path::PathBuf>,
         policy: supercharge_fast_worktree::ResolvedWorktreeAutoGc,
     ) {
-        if let Err(e) = grok_home
+        if let Err(e) = supercharge_home
             .and_then(|home| supercharge_fast_worktree::WorktreeDb::open(&home))
             .and_then(|db| supercharge_fast_worktree::maybe_auto_gc(&db, &policy))
         {

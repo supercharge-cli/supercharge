@@ -13,14 +13,14 @@ use supercharge_file_utils::{TraceExportConfig, UploadMethod};
 /// `…_pending_bytes` is the series the mandatory queue-memory alert fires on.
 static UPLOAD_QUEUE_PENDING_BYTES: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!(
-        "grok_workspace_upload_queue_pending_bytes",
+        "supercharge_workspace_upload_queue_pending_bytes",
         "Bytes spilled to the upload queue and not yet uploaded"
     )
     .unwrap()
 });
 static UPLOAD_QUEUE_PENDING: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!(
-        "grok_workspace_upload_queue_pending",
+        "supercharge_workspace_upload_queue_pending",
         "Items in the upload queue not yet uploaded"
     )
     .unwrap()
@@ -28,7 +28,7 @@ static UPLOAD_QUEUE_PENDING: LazyLock<IntGauge> = LazyLock::new(|| {
 /// Per-phase terminal upload outcome: `succeeded` (bytes accepted, not GCS-confirmed) / `failed` / `skipped`.
 static UPLOAD_OUTCOME_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_upload_outcome_total",
+        "supercharge_workspace_upload_outcome_total",
         "Workspace upload terminal outcomes, by phase and outcome",
         &["phase", "outcome"]
     )
@@ -37,7 +37,7 @@ static UPLOAD_OUTCOME_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
 /// Per-phase upload failures, by error category (`archive_failed` / `enqueue_failed` / `upload_failed`).
 static UPLOAD_FAILED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_upload_failed_total",
+        "supercharge_workspace_upload_failed_total",
         "Workspace upload failures, by phase and error category",
         &["phase", "error_category"]
     )
@@ -47,7 +47,7 @@ static UPLOAD_FAILED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
 /// Failure declines are counted as failures, not here.
 static UPLOAD_SKIPPED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_upload_skipped_total",
+        "supercharge_workspace_upload_skipped_total",
         "Workspace uploads deliberately skipped, by phase and skip reason",
         &["phase", "skip_reason"]
     )

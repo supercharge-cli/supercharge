@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 // Project-hook trust is no longer stored here: the shell's folder-trust store
 // (`~/.supercharge/trusted_folders.toml`) is the single authority for whether a repo's project hooks run (the same gate as repo-local MCP/LSP). The helpers below exist only to migrate prior grants out of the legacy file.
 
-/// Path to the legacy project-hook trust file (`<user_grok_home>/trusted-hook-projects`), or `None` when no user grok home resolves.
+/// Path to the legacy project-hook trust file (`<user_supercharge_home>/trusted-hook-projects`), or `None` when no user grok home resolves.
 /// It is retained only for the one-time migration into folder-trust.
 pub fn legacy_trust_file_path() -> Option<PathBuf> {
     Some(
-        supercharge_config::user_grok_home()?
+        supercharge_config::user_supercharge_home()?
             .join(supercharge_config::TRUSTED_HOOK_PROJECTS_FILENAME),
     )
 }
@@ -162,7 +162,7 @@ fn enable_hook_with_file(hook_name: &str, file: &Path) -> Result<bool, String> {
 
 /// Returns the path to `$SUPERCHARGE_HOME/disabled-hooks`, or `None` when no user grok home resolves.
 fn disabled_hooks_file_path() -> Option<PathBuf> {
-    Some(supercharge_config::user_grok_home()?.join("disabled-hooks"))
+    Some(supercharge_config::user_supercharge_home()?.join("disabled-hooks"))
 }
 
 #[cfg(test)]

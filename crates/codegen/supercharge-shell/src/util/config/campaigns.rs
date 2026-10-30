@@ -13,7 +13,7 @@ use supercharge_config::campaigns::{
 use supercharge_config::config_override::{PatchPath, patch_touches_any};
 use supercharge_config::{
     CampaignsState, ConfigLayers, campaigns_state_path, load_dismissed_ids_from_home,
-    user_grok_home,
+    user_supercharge_home,
 };
 use supercharge_config_types::{CampaignOverride, RemoteSettings};
 
@@ -55,7 +55,7 @@ pub(crate) fn load_dismissed_ids() -> HashSet<String> {
 }
 
 pub(crate) fn dismiss_campaign_ids(ids: impl IntoIterator<Item = String>) {
-    let Some(home) = user_grok_home() else {
+    let Some(home) = user_supercharge_home() else {
         return;
     };
     if let Err(e) = dismiss_campaign_ids_at(&home, ids) {

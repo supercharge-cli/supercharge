@@ -20,14 +20,14 @@ fn action_outcome(response: &serde_json::Value) -> supercharge_hooks_plugins_typ
 #[test]
 fn plugins_action_install_and_update_respect_marketplace_lockdown() {
     run_agent_test(|cwd, _server| async move {
-        let grok_home = std::path::PathBuf::from(
+        let supercharge_home = std::path::PathBuf::from(
             std::env::var("SUPERCHARGE_HOME").expect("harness sets SUPERCHARGE_HOME"),
         );
-        std::fs::create_dir_all(&grok_home).unwrap();
+        std::fs::create_dir_all(&supercharge_home).unwrap();
         // Binding lockdown: one allowed marketplace (installs/updates of
         // anything else refuse) and project MCP pinned off.
         std::fs::write(
-            grok_home.join("requirements.toml"),
+            supercharge_home.join("requirements.toml"),
             "enable_all_project_mcp_servers = false\n\n\
              [[strict_known_marketplaces]]\n\
              source = \"git\"\n\
@@ -64,7 +64,7 @@ fn plugins_action_install_and_update_respect_marketplace_lockdown() {
         use supercharge_agent::plugins::install_registry::{
             InstallKind, InstallRegistry, InstalledRepo, RepoPlugin,
         };
-        let blocked_repo_dir = grok_home.join("plugins").join("blocked-repo");
+        let blocked_repo_dir = supercharge_home.join("plugins").join("blocked-repo");
         std::fs::create_dir_all(&blocked_repo_dir).unwrap();
         let now = chrono::Utc::now().to_rfc3339();
         let mut registry = InstallRegistry::load();

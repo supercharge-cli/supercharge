@@ -86,7 +86,7 @@ pub fn managed_policy_gate_with_lock_wait(
     if !store::managed_principal_present() {
         return Ok(());
     }
-    let snapshot = locked_gate_snapshot(&crate::util::grok_home::grok_home(), lock_wait)?;
+    let snapshot = locked_gate_snapshot(&crate::util::supercharge_home::supercharge_home(), lock_wait)?;
     policy::managed_policy_gate_decision(snapshot)
 }
 

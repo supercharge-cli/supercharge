@@ -33,7 +33,7 @@ use crate::session::storage::relocation::{RelocationError, RelocationView};
 use crate::session::storage::{JsonlStorageAdapter, StorageAdapter};
 use crate::session::visibility::ClassifiedSessionKind;
 use crate::tools::todo::TodoState;
-use crate::util::grok_home::grok_home;
+use crate::util::supercharge_home::supercharge_home;
 use agent_client_protocol as acp;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_sampling_types::ReasoningEffort;
@@ -372,7 +372,7 @@ fn storage_view(sessions_root: &Path) -> RelocationResult<RelocationView> {
 /// A session is only "already local" if it lives under the same cwd as the current invocation.
 /// A session stored under a different cwd does NOT satisfy this check; the caller must still run the remote restore into the requested cwd.
 pub fn session_exists_for_cwd(session_id: &str, cwd: &str) -> bool {
-    let sessions_root = crate::util::grok_home::grok_home().join("sessions");
+    let sessions_root = crate::util::supercharge_home::supercharge_home().join("sessions");
     session_exists_for_cwd_in_root(session_id, cwd, &sessions_root)
 }
 
@@ -385,7 +385,7 @@ fn is_persisted_session_dir(session_path: &Path) -> bool {
 /// Inner implementation of `session_exists_for_cwd` with an injectable root.
 /// Separated for deterministic tempdir-based tests.
 fn session_exists_for_cwd_in_root(session_id: &str, cwd: &str, sessions_root: &Path) -> bool {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let session_path = sessions_root.join(&encoded).join(session_id);
     is_persisted_session_dir(&session_path)
 }
@@ -394,7 +394,7 @@ fn session_exists_for_cwd_in_root(session_id: &str, cwd: &str, sessions_root: &P
 /// When a remote session is restored, a new local child is created with `summary.parent_session_id == remote_session_id`.
 /// On a second `grok -r <remote_id>` in the same cwd, this function returns the already-restored child so no duplicate restore is performed.
 pub fn find_local_child_for_remote(remote_session_id: &str, cwd: &str) -> Option<String> {
-    let sessions_root = crate::util::grok_home::grok_home().join("sessions");
+    let sessions_root = crate::util::supercharge_home::supercharge_home().join("sessions");
     find_local_child_for_remote_in_root(remote_session_id, cwd, &sessions_root)
 }
 
@@ -434,7 +434,7 @@ pub(crate) fn resolve_local_session_for_repo(
     session_id: &str,
     candidate_cwds: &[&str],
 ) -> Option<ResolvedLocalSession> {
-    let sessions_root = crate::util::grok_home::grok_home().join("sessions");
+    let sessions_root = crate::util::supercharge_home::supercharge_home().join("sessions");
     resolve_local_session_for_repo_in_root(session_id, candidate_cwds, &sessions_root)
 }
 
@@ -478,7 +478,7 @@ fn find_local_child_for_remote_in_root(
     cwd: &str,
     sessions_root: &Path,
 ) -> Option<String> {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let cwd_dir = sessions_root.join(&encoded);
     if !cwd_dir.exists() {
         return None;
@@ -542,7 +542,7 @@ pub fn resolve_local_session_any_cwd(session_id: &str) -> Option<String> {
 pub fn resolve_local_session_ids_any_cwd<S: AsRef<str>>(
     session_ids: &[S],
 ) -> io::Result<std::collections::HashSet<String>> {
-    resolve_local_session_ids_any_cwd_in_root(session_ids, &grok_home().join("sessions"))
+    resolve_local_session_ids_any_cwd_in_root(session_ids, &supercharge_home().join("sessions"))
         .map_err(io::Error::other)
 }
 
@@ -563,7 +563,7 @@ fn resolve_local_session_ids_any_cwd_in_root<S: AsRef<str>>(
 }
 
 pub(crate) fn resolve_local_session_any_cwd_result(session_id: &str) -> io::Result<Option<String>> {
-    resolve_local_session_any_cwd_in_root(session_id, &grok_home().join("sessions"))
+    resolve_local_session_any_cwd_in_root(session_id, &supercharge_home().join("sessions"))
         .map_err(io::Error::other)
 }
 
@@ -577,7 +577,7 @@ fn resolve_local_session_any_cwd_in_root(
     };
     Ok(session_path
         .parent()
-        .and_then(crate::util::grok_home::decode_cwd_from_dirname))
+        .and_then(crate::util::supercharge_home::decode_cwd_from_dirname))
 }
 
 /// Scan all CWD directories for a session and return its directory path.
@@ -588,7 +588,7 @@ pub fn find_session_dir_by_id(session_id: &str) -> Option<PathBuf> {
 pub(crate) fn find_persisted_session_dir_by_id_result(
     session_id: &str,
 ) -> io::Result<Option<PathBuf>> {
-    find_persisted_session_dir_by_id_in_root_result(session_id, &grok_home().join("sessions"))
+    find_persisted_session_dir_by_id_in_root_result(session_id, &supercharge_home().join("sessions"))
 }
 
 pub(crate) fn find_persisted_session_dir_by_id_in_root_result(
@@ -601,7 +601,7 @@ pub(crate) fn find_persisted_session_dir_by_id_in_root_result(
 }
 
 pub(crate) fn find_any_session_dir_by_id_result(session_id: &str) -> io::Result<Option<PathBuf>> {
-    storage_view(&grok_home().join("sessions"))
+    storage_view(&supercharge_home().join("sessions"))
         .and_then(|view| view.find_any_session_dir(session_id))
         .map_err(io::Error::other)
 }
@@ -645,7 +645,7 @@ pub(crate) fn find_summary_by_session_id(session_id: &str) -> Option<Summary> {
         !FIND_SUMMARY_BY_SESSION_ID_FORBIDDEN.get(),
         "sessions-index walk invoked from a forbidden path"
     );
-    find_summary_by_session_id_in_root(session_id, &grok_home().join("sessions"))
+    find_summary_by_session_id_in_root(session_id, &supercharge_home().join("sessions"))
 }
 
 /// Inner implementation with injectable root for testing.
@@ -721,7 +721,7 @@ pub(crate) struct SessionKindIndex {
 
 impl SessionKindIndex {
     pub(crate) fn load() -> io::Result<Self> {
-        Self::load_in_root(&grok_home().join("sessions"))
+        Self::load_in_root(&supercharge_home().join("sessions"))
     }
 
     pub(crate) fn load_in_root(sessions_root: &Path) -> io::Result<Self> {
@@ -818,7 +818,7 @@ pub fn local_summaries_for_cwd_sync(
     cwd: &str,
     selection: RecentSessionSelection,
 ) -> io::Result<Vec<Summary>> {
-    local_summaries_for_cwd_sync_in_root(cwd, selection, &grok_home().join("sessions"))
+    local_summaries_for_cwd_sync_in_root(cwd, selection, &supercharge_home().join("sessions"))
 }
 
 fn local_summaries_for_cwd_sync_in_root(
@@ -842,7 +842,7 @@ pub fn resumed_session_sandbox_profile(
     session_id: Option<&str>,
     cwd: Option<&str>,
 ) -> Option<String> {
-    resumed_session_sandbox_profile_in_root(session_id, cwd, &grok_home().join("sessions"))
+    resumed_session_sandbox_profile_in_root(session_id, cwd, &supercharge_home().join("sessions"))
 }
 
 /// Resolve the saved profile for the same typed most-recent view used at startup.
@@ -852,7 +852,7 @@ pub fn resolve_recent_session_sandbox_profile(
 ) -> Option<String> {
     most_recent_local_summary_for_cwd_in_view(
         cwd?,
-        &storage_view(&grok_home().join("sessions")).ok()?,
+        &storage_view(&supercharge_home().join("sessions")).ok()?,
         read_summary_from_dir,
         selection,
     )
@@ -891,13 +891,13 @@ fn resumed_session_sandbox_profile_in_root(
 /// Owner-only and durable session dir for writers that bypass `init_session` (chat-kind, pre-init fork stamp).
 /// A later occupied `init_session` will not re-sync the encoded-cwd direntry.
 pub(crate) fn ensure_owner_only_session_dir(info: &Info) -> std::io::Result<PathBuf> {
-    ensure_owner_only_session_dir_in(&grok_home(), info)
+    ensure_owner_only_session_dir_in(&supercharge_home(), info)
 }
 
 /// Inner implementation with an injectable Supercharge AI home for tests.
-fn ensure_owner_only_session_dir_in(grok_home: &Path, info: &Info) -> std::io::Result<PathBuf> {
+fn ensure_owner_only_session_dir_in(supercharge_home: &Path, info: &Info) -> std::io::Result<PathBuf> {
     ensure_owner_only_session_dir_in_with(
-        grok_home,
+        supercharge_home,
         info,
         crate::session::storage::sync_dir_durable,
         crate::session::storage::sync_file_durable,
@@ -905,23 +905,23 @@ fn ensure_owner_only_session_dir_in(grok_home: &Path, info: &Info) -> std::io::R
 }
 
 fn ensure_owner_only_session_dir_in_with(
-    grok_home: &Path,
+    supercharge_home: &Path,
     info: &Info,
     sync_dir: impl Fn(&Path) -> std::io::Result<()>,
     sync_file: impl Fn(&std::fs::File) -> std::io::Result<()>,
 ) -> std::io::Result<PathBuf> {
-    let dir = session_dir_in(grok_home, info);
+    let dir = session_dir_in(supercharge_home, info);
     crate::session::storage::create_dir_all_durable_with(
         &dir,
         |dir| {
             // Keep swallowing ensure errors: other failures must not block session-dir create
             // But fsync `.cwd` on Ok so a later parent-dir sync cannot freeze a torn marker
             if let Ok(cwd_dir) =
-                crate::util::grok_home::ensure_sessions_cwd_dir_in(grok_home, &info.cwd)
+                crate::util::supercharge_home::ensure_sessions_cwd_dir_in(supercharge_home, &info.cwd)
             {
                 crate::session::storage::sync_cwd_marker_if_present_with(&cwd_dir, &sync_file)?;
             }
-            crate::util::grok_home::create_dir_all_owner_only(dir)
+            crate::util::supercharge_home::create_dir_all_owner_only(dir)
         },
         sync_dir,
     )?;
@@ -929,23 +929,23 @@ fn ensure_owner_only_session_dir_in_with(
 }
 
 /// `session_dir` with an injectable Supercharge AI home (pure path computation).
-fn session_dir_in(grok_home: &Path, info: &Info) -> PathBuf {
-    crate::util::grok_home::sessions_cwd_dir_in(grok_home, &info.cwd).join(info.id.to_string())
+fn session_dir_in(supercharge_home: &Path, info: &Info) -> PathBuf {
+    crate::util::supercharge_home::sessions_cwd_dir_in(supercharge_home, &info.cwd).join(info.id.to_string())
 }
 
 /// Get file path for storing a large prompt.
 /// Creates the prompts subdirectory if it doesn't exist.
 /// Path format: `{session_dir}/prompts/prompt_{prompt_index}.txt`
 pub(crate) fn get_prompt_file_path(info: &Info, prompt_index: usize) -> PathBuf {
-    get_prompt_file_path_in(&grok_home(), info, prompt_index)
+    get_prompt_file_path_in(&supercharge_home(), info, prompt_index)
 }
 
 /// Inner implementation with an injectable Supercharge AI home for tests.
-fn get_prompt_file_path_in(grok_home: &Path, info: &Info, prompt_index: usize) -> PathBuf {
+fn get_prompt_file_path_in(supercharge_home: &Path, info: &Info, prompt_index: usize) -> PathBuf {
     // Best-effort; failures surface on the prompt-file write itself.
-    let _ = ensure_owner_only_session_dir_in(grok_home, info);
-    let prompts_dir = session_dir_in(grok_home, info).join("prompts");
-    let _ = crate::util::grok_home::create_dir_all_owner_only(&prompts_dir);
+    let _ = ensure_owner_only_session_dir_in(supercharge_home, info);
+    let prompts_dir = session_dir_in(supercharge_home, info).join("prompts");
+    let _ = crate::util::supercharge_home::create_dir_all_owner_only(&prompts_dir);
     prompts_dir.join(format!("prompt_{}.txt", prompt_index))
 }
 
@@ -1116,7 +1116,7 @@ pub struct Summary {
     pub request_id: Option<String>,
     /// Absolute path to the `.supercharge` directory, used by reconstruction.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub grok_home: Option<String>,
+    pub supercharge_home: Option<String>,
     /// When the session last had content added (user or model messages).
     /// Only advanced locally by `append_update` / `append_chat_message`; never touched by remote registry operations or metadata-only writes.
     /// `None` for sessions created before this field was added.
@@ -1166,9 +1166,9 @@ pub struct Summary {
 /// `source_workspace_dir` is only ever set alongside this kind.
 pub(crate) const WORKTREE_SESSION_KIND: &str = "worktree";
 
-/// Current `grok_home` as a UTF-8 string, or `None` if the path isn't valid UTF-8.
-pub(crate) fn grok_home_string() -> Option<String> {
-    crate::util::grok_home::grok_home()
+/// Current `supercharge_home` as a UTF-8 string, or `None` if the path isn't valid UTF-8.
+pub(crate) fn supercharge_home_string() -> Option<String> {
+    crate::util::supercharge_home::supercharge_home()
         .to_str()
         .map(String::from)
 }
@@ -1214,7 +1214,7 @@ impl Summary {
             head_commit: git_metadata.head_commit,
             head_branch: git_metadata.head_branch,
             request_id: None,
-            grok_home: grok_home_string(),
+            supercharge_home: supercharge_home_string(),
             last_active_at: None,
             generated_title: None,
             title_is_manual: false,
@@ -2486,7 +2486,7 @@ impl SessionPersistence {
 
 /// Collect MCP server stderr logs from `~/.supercharge/logs/mcp/` for inclusion in the session archive.
 fn collect_mcp_stderr_logs(files: &mut Vec<CopiedSessionFile>) {
-    let mcp_log_dir = supercharge_config::grok_home().join("logs").join("mcp");
+    let mcp_log_dir = supercharge_config::supercharge_home().join("logs").join("mcp");
     let Ok(entries) = std::fs::read_dir(&mcp_log_dir) else {
         return;
     };
@@ -2764,7 +2764,7 @@ pub(crate) async fn new(
         search_index,
         session_kind,
     } = deps;
-    let root_dir = grok_home();
+    let root_dir = supercharge_home();
     let storage = JsonlStorageAdapter::with_root(root_dir);
 
     let mut summary = storage.init_session(info, model_id.clone()).await?;
@@ -2992,7 +2992,7 @@ pub(crate) async fn load_light(
         search_index,
         session_kind: _,
     } = deps;
-    let root_dir = grok_home();
+    let root_dir = supercharge_home();
     let storage = JsonlStorageAdapter::with_root(root_dir.clone());
 
     let (mut persisted, loaded_info) = match storage.load_session_without_updates(info).await {
@@ -3081,7 +3081,7 @@ pub(crate) async fn load_light(
 /// List session summaries, optionally filtered by cwd (absolute path string).
 /// Returns summaries sorted by `last_active_at` (else `updated_at`) descending.
 pub async fn list_summaries(cwd: Option<&str>) -> io::Result<Vec<Summary>> {
-    let root_dir = crate::util::grok_home::grok_home();
+    let root_dir = crate::util::supercharge_home::supercharge_home();
     let storage: Box<dyn StorageAdapter> = Box::new(JsonlStorageAdapter::with_root(root_dir));
     storage.list_sessions(cwd).await
 }
@@ -3170,7 +3170,7 @@ pub async fn delete_session_history(
     // Also evict when no workspace was named: that row outlives the directory and nothing else prunes it
     if local_removed || cwd.is_none() {
         crate::session::storage::search::evict_session(
-            &crate::util::grok_home::grok_home(),
+            &crate::util::supercharge_home::supercharge_home(),
             session_id,
         )
         .await;
@@ -3220,7 +3220,7 @@ mod worktree_stamp_tests;
 /// List the `limit` most recently modified session summaries across all workspaces.
 /// Uses stat-based mtime sorting to avoid reading every summary file on disk; final order uses `last_active_at` else `updated_at`.
 pub async fn list_recent_summaries(limit: usize) -> io::Result<Vec<Summary>> {
-    let root_dir = crate::util::grok_home::grok_home();
+    let root_dir = crate::util::supercharge_home::supercharge_home();
     let storage = JsonlStorageAdapter::with_root(root_dir);
     storage.list_sessions_recent(limit).await
 }
@@ -3247,7 +3247,7 @@ pub(crate) fn cleanup_stale_sessions(live_session_dir: &Path) {
             );
             return;
         };
-        let sessions_root = grok_home().join("sessions");
+        let sessions_root = supercharge_home().join("sessions");
 
         tracing::info!(
             target: "supercharge_shell::session::persistence",

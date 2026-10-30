@@ -1142,7 +1142,7 @@ fn untrusted_project_claude_permissions_are_not_honored() {
 }
 
 /// Untrusted clone must not contribute project `.supercharge/config.toml` `[permission]`.
-/// Sync `block_on` so `ENV_LOCK` is not held across `.await`. Global counts are not exact: `grok_home()` is a process-wide `OnceLock`.
+/// Sync `block_on` so `ENV_LOCK` is not held across `.await`. Global counts are not exact: `supercharge_home()` is a process-wide `OnceLock`.
 #[test]
 fn untrusted_project_config_toml_permissions_are_not_honored() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -1208,7 +1208,7 @@ allow = ["Bash(evil *)"]
     );
 
     // Global survival is checked only when this process's OnceLock points at our temp home
-    let global_live = supercharge_config::user_grok_home()
+    let global_live = supercharge_config::user_supercharge_home()
         .is_some_and(|g| g == home.path() || g.starts_with(home.path()));
     if global_live {
         let untrusted = untrusted.expect("global rules present when SUPERCHARGE_HOME is live");
@@ -2821,7 +2821,7 @@ fn explicit_default_mode_blocks_permission_mode_hint() {
         std::fs::create_dir_all(&claude_dir).unwrap();
         std::fs::write(claude_dir.join("settings.json"), settings).unwrap();
         let _home = EnvVarGuard::set("HOME", tmp.path());
-        let _grok_home = EnvVarGuard::set("SUPERCHARGE_HOME", &tmp.path().join(".supercharge"));
+        let _supercharge_home = EnvVarGuard::set("SUPERCHARGE_HOME", &tmp.path().join(".supercharge"));
         let _marker = EnvVarGuard::unset("_GROK_CLAUDE_MARKER_OVERRIDE");
 
         let resolved = rt

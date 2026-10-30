@@ -733,7 +733,7 @@ fn spawn_fake_acp_agent(
     counter
 }
 /// Redirect `SUPERCHARGE_HOME` to a tempdir for test isolation.
-fn setup_grok_home_in_tempdir() -> tempfile::TempDir {
+fn setup_supercharge_home_in_tempdir() -> tempfile::TempDir {
     let tmp = tempfile::tempdir().expect("tempdir creation");
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", tmp.path());
@@ -818,7 +818,7 @@ fn unregister_best_effort_swallows_io_error() {
 #[tokio::test]
 async fn persist_permission_mode_acp_notification_fires_once_on_best_effort() {
     use agent_client_protocol as acp;
-    let _guard = setup_grok_home_in_tempdir();
+    let _guard = setup_supercharge_home_in_tempdir();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let counter = spawn_fake_acp_agent(rx);
     let session_id = Some(acp::SessionId::new(Arc::from("test-session")));
@@ -851,7 +851,7 @@ async fn persist_permission_mode_acp_notification_fires_once_on_best_effort() {
 #[tokio::test]
 async fn persist_permission_mode_acp_notification_gated_on_disk_for_with_rollback() {
     use agent_client_protocol as acp;
-    let _guard = setup_grok_home_in_tempdir();
+    let _guard = setup_supercharge_home_in_tempdir();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let counter = spawn_fake_acp_agent(rx);
     let session_id = Some(acp::SessionId::new(Arc::from("test-session")));
@@ -887,7 +887,7 @@ async fn persist_permission_mode_acp_notification_gated_on_disk_for_with_rollbac
 /// `session_id: None` suppresses ACP notification unconditionally.
 #[tokio::test]
 async fn persist_permission_mode_no_session_id_suppresses_acp() {
-    let _guard = setup_grok_home_in_tempdir();
+    let _guard = setup_supercharge_home_in_tempdir();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let counter = spawn_fake_acp_agent(rx);
     let _result = persist_permission_mode_and_notify(
@@ -909,7 +909,7 @@ async fn persist_permission_mode_no_session_id_suppresses_acp() {
 /// BestEffort with a disk failure must not return `SettingPersisted`.
 #[tokio::test]
 async fn persist_permission_mode_best_effort_failure_returns_dedicated_variant() {
-    let _guard = setup_grok_home_in_tempdir();
+    let _guard = setup_supercharge_home_in_tempdir();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let _counter = spawn_fake_acp_agent(rx);
     let result = persist_permission_mode_and_notify(
@@ -1286,7 +1286,7 @@ async fn foreign_scan_task_echoes_sequence_without_enabled_sources() {
         Effect::ScanForeignSessions {
             cwd: PathBuf::from("/path/that/must/not/be-read"),
             compat: supercharge_foreign_sessions::EnabledForeignSessionSources::default(),
-            grok_home: PathBuf::from("/path/that/must/not/be-read"),
+            supercharge_home: PathBuf::from("/path/that/must/not/be-read"),
             coordinator: app_coordinator.clone(),
             seq: 41,
         },
@@ -1339,7 +1339,7 @@ async fn foreign_resume_detection_runs_as_task_result() {
         Effect::DetectForeignResumeHint {
             canonical_cwd: canonical_cwd.clone(),
             compat: supercharge_foreign_sessions::EnabledForeignSessionSources::default(),
-            grok_home: PathBuf::from("/path/that/must/not-be-read"),
+            supercharge_home: PathBuf::from("/path/that/must/not-be-read"),
             launch_token: 8,
         },
         &mut tasks,
@@ -2448,7 +2448,7 @@ async fn lookup_session_title_loads_single_summary_by_cwd() {
     let dir = root
         .path()
         .join("sessions")
-        .join(supercharge_shell::util::grok_home::encode_cwd_dirname(cwd))
+        .join(supercharge_shell::util::supercharge_home::encode_cwd_dirname(cwd))
         .join("sess-1");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(

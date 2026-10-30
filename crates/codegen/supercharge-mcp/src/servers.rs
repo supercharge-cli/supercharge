@@ -4520,7 +4520,7 @@ fn sanitize_mcp_log_filename(name: &str) -> String {
 /// Copy an MCP server's stderr to `~/.supercharge/logs/mcp/<server>.stderr.log`
 /// in a background task. Truncated per spawn.
 fn drain_mcp_stderr_to_log(server_name: &str, mut stderr: tokio::process::ChildStderr) {
-    let log_dir = supercharge_config::grok_home().join("logs").join("mcp");
+    let log_dir = supercharge_config::supercharge_home().join("logs").join("mcp");
     if let Err(e) = std::fs::create_dir_all(&log_dir) {
         tracing::warn!("MCP stderr drain: failed to create log dir: {e}");
         return;

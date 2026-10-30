@@ -1181,7 +1181,7 @@ mod tests {
     #[test]
     fn release_build_keeps_gate_when_enabled() {
         // A release-stamped build honors the remote enable. Isolate config so on-disk or ambient flags cannot override it
-        // Empty `SUPERCHARGE_HOME` and unset `SUPERCHARGE_FOLDER_TRUST`; nextest's process-per-test lets `grok_home()` pick up the temp dir
+        // Empty `SUPERCHARGE_HOME` and unset `SUPERCHARGE_FOLDER_TRUST`; nextest's process-per-test lets `supercharge_home()` pick up the temp dir
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let _home = EnvVarGuard::set("SUPERCHARGE_HOME", home.path());

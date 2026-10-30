@@ -60,8 +60,8 @@ pub(crate) struct RelocationView {
 }
 
 impl RelocationView {
-    pub(crate) fn load(grok_home: &Path) -> Result<Self> {
-        Self::load_for_sessions_root(&grok_home.join("sessions"))
+    pub(crate) fn load(supercharge_home: &Path) -> Result<Self> {
+        Self::load_for_sessions_root(&supercharge_home.join("sessions"))
     }
 
     pub(crate) fn load_for_sessions_root(sessions_root: &Path) -> Result<Self> {

@@ -141,8 +141,8 @@ impl StaticShellSnapshot {
                  builtin eval -- \"$snap\"; \
                  builtin export SUPERCHARGE_AGENT=1; \
                  builtin export PWD=\"$(builtin pwd)\"; {sudo_inject}{search_inject}\
-                 __grok_user_cmd=\"$1\"; builtin declare +x __grok_user_cmd 2>/dev/null; builtin set --; \
-                 builtin eval \"$__grok_user_cmd\" 2>&1"
+                 __supercharge_user_cmd=\"$1\"; builtin declare +x __supercharge_user_cmd 2>/dev/null; builtin set --; \
+                 builtin eval \"$__supercharge_user_cmd\" 2>&1"
             ),
             UnixShellKind::Zsh => format!(
                 "snap=$(command cat <&3); \
@@ -151,8 +151,8 @@ impl StaticShellSnapshot {
                  builtin export SUPERCHARGE_AGENT=1; \
                  builtin export PWD=\"$(builtin pwd)\"; \
                  builtin setopt aliases 2>/dev/null; {sudo_inject}{search_inject}\
-                 __grok_user_cmd=\"$1\"; builtin typeset +x __grok_user_cmd 2>/dev/null; builtin set --; \
-                 builtin eval \"$__grok_user_cmd\" 2>&1"
+                 __supercharge_user_cmd=\"$1\"; builtin typeset +x __supercharge_user_cmd 2>/dev/null; builtin set --; \
+                 builtin eval \"$__supercharge_user_cmd\" 2>&1"
             ),
         };
 

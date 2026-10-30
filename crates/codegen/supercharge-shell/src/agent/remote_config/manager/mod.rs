@@ -132,9 +132,9 @@ impl Drop for FetchAttemptGuard {
 
 impl Default for ModelsManager {
     fn default() -> Self {
-        let grok_home = crate::util::grok_home::grok_home();
+        let supercharge_home = crate::util::supercharge_home::supercharge_home();
         let auth_manager = Arc::new(AuthManager::new_with_proxy_base_url(
-            &grok_home,
+            &supercharge_home,
             // Provider-first default: a catalog handle must never be the reason an
             // inherited first-party account token becomes the process credential.
             GrokComConfig::provider_only_default(),

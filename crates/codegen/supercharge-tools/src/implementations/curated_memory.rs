@@ -150,11 +150,11 @@ impl supercharge_tool_runtime::Tool for CuratedMemoryTool {
 
 /// System-prompt block. Empty stores still name the tool so the model knows it can save.
 pub fn prompt_block() -> String {
-    prompt_block_at(&supercharge_dirs::grok_home())
+    prompt_block_at(&supercharge_dirs::supercharge_home())
 }
 
 pub fn memories_dir() -> PathBuf {
-    supercharge_dirs::grok_home().join("memories")
+    supercharge_dirs::supercharge_home().join("memories")
 }
 
 /// Bot notes live in this process home. User facts live one level above `bots/<id>` when this

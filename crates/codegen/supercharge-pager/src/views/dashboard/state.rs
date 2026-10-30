@@ -4491,7 +4491,7 @@ fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 fn config_path() -> Option<PathBuf> {
-    let home = supercharge_shell::util::grok_home::grok_home();
+    let home = supercharge_shell::util::supercharge_home::supercharge_home();
     Some(home.join(supercharge_config::USER_CONFIG_FILENAME))
 }
 

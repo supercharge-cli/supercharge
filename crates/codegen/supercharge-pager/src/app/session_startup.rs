@@ -117,8 +117,8 @@ pub fn fork_session_params(
 /// Mirrors in-session `/fork` reading `agent.session.is_worktree`.
 pub fn parent_session_is_worktree(session_id: &str, cwd: &Path) -> bool {
     let cwd_str = cwd.to_string_lossy();
-    let sessions_root = supercharge_shell::util::grok_home::grok_home().join("sessions");
-    let encoded = supercharge_shell::util::grok_home::encode_cwd_dirname(&cwd_str);
+    let sessions_root = supercharge_shell::util::supercharge_home::supercharge_home().join("sessions");
+    let encoded = supercharge_shell::util::supercharge_home::encode_cwd_dirname(&cwd_str);
     let summary_path = sessions_root
         .join(encoded)
         .join(session_id)
@@ -640,7 +640,7 @@ pub fn probe_advertised_tool_ids() -> Option<Vec<String>> {
 }
 #[cfg(feature = "local-workspace")]
 fn local_workspace_ack_path() -> Option<std::path::PathBuf> {
-    Some(supercharge_dirs::resolve_grok_home()?.join("local_workspace_ack"))
+    Some(supercharge_dirs::resolve_supercharge_home()?.join("local_workspace_ack"))
 }
 /// Conservative shape check for a chat-mode `--resume <id>` passthrough.
 /// The id skips disk and GCS resolution and flows to the gateway, but the local cwd-collision check also path-joins it.
@@ -816,7 +816,7 @@ pub(crate) fn pre_acp_auth_manager(
     agent_config: &supercharge_shell::agent::config::Config,
 ) -> std::sync::Arc<supercharge_login::AuthManager> {
     let auth = std::sync::Arc::new(supercharge_login::AuthManager::new_with_proxy_base_url(
-        &supercharge_shell::util::grok_home::grok_home(),
+        &supercharge_shell::util::supercharge_home::supercharge_home(),
         agent_config.grok_com_config.clone(),
         agent_config.endpoints.proxy_url(),
     ));
@@ -1161,7 +1161,7 @@ async fn restore_session_from_remote(
     use supercharge_login::{AuthManager, ensure_authenticated_or_noninteractive};
     use supercharge_shell::agent::session_registry_client::SessionRegistryClient;
     use supercharge_shell::session::restore::{RestoreSessionOpts, restore_session_with_storage};
-    use supercharge_shell::util::grok_home::grok_home;
+    use supercharge_shell::util::supercharge_home::supercharge_home;
     let deployment_key = agent_config.endpoints.deployment_key.clone();
     ensure_authenticated_or_noninteractive(
         &agent_config.grok_com_config,
@@ -1173,7 +1173,7 @@ async fn restore_session_from_remote(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to authenticate for session restore: {}", e))?;
     let auth_manager = std::sync::Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home(),
+        &supercharge_home(),
         agent_config.grok_com_config.clone(),
         agent_config.endpoints.proxy_url(),
     ));
@@ -2276,8 +2276,8 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd tempdir");
         let cwd_str = cwd.path().to_string_lossy().to_string();
         let id = "aaaaaaaa-1111-2222-3333-444444444444";
-        let encoded = supercharge_shell::util::grok_home::encode_cwd_dirname(&cwd_str);
-        let sessions_cwd_dir = supercharge_shell::util::grok_home::grok_home()
+        let encoded = supercharge_shell::util::supercharge_home::encode_cwd_dirname(&cwd_str);
+        let sessions_cwd_dir = supercharge_shell::util::supercharge_home::supercharge_home()
             .join("sessions")
             .join(&encoded);
         struct RmDirOnDrop(std::path::PathBuf);

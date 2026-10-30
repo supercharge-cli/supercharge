@@ -378,7 +378,7 @@ impl SubagentsConfig {
     /// Config file `[subagents]` section Default (enabled) `enabled` is deliberately not remotely gated. Only explicit local intent (CLI flag, `SUPERCHARGE_SUBAGENTS`, `[subagents] enabled`) changes the default.
     /// Project files are excluded from this trust-independent base; Task boundaries overlay them using the parent cwd's authoritative trust verdict.
     pub fn resolve(cli_flag: bool, config: &toml::Value) -> Self {
-        let user_grok_root = supercharge_config::user_grok_home();
+        let user_grok_root = supercharge_config::user_supercharge_home();
         Self::resolve_base_with_sources(
             cli_flag,
             config,
@@ -920,7 +920,7 @@ pub use supercharge_config::{
     load_toml_file, managed_config_identity_changed_at, managed_deployment_id,
     managed_policy_compromised_for, mark_managed_config_synced, mark_managed_config_synced_at,
     normalize_identity, requirements_layers, resolved_env_overlay, system_config_dir,
-    user_grok_home,
+    user_supercharge_home,
 };
 /// Map of "dotted.path" to which config file the value came from.
 pub(crate) fn config_origins(
@@ -1692,11 +1692,11 @@ pub use supercharge_config::{deep_merge_toml, expand_env_vars_in_string, expand_
 /// Locked read-modify-write of `~/.supercharge/config.toml`: the whole window runs under the config-init
 /// flock and lands via atomic replace; unchanged configs skip the write.
 fn update_config_toml_locked(
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     mutate: impl FnOnce(&mut toml::value::Table) -> Result<bool, Box<dyn std::error::Error>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let config_path = grok_home.join("config.toml");
-    let _flock = crate::util::config::acquire_init_lock(grok_home)?;
+    let config_path = supercharge_home.join("config.toml");
+    let _flock = crate::util::config::acquire_init_lock(supercharge_home)?;
     let content = crate::util::config::read_to_string_or_empty(&config_path)?;
     let mut config: toml::Value = if content.is_empty() {
         toml::Value::Table(toml::map::Map::new())
@@ -1793,7 +1793,7 @@ pub(crate) async fn run_set_plugin_enabled(plugin_id: String, enabled: bool) -> 
 /// Add a plugin path to `[plugins].paths` in `~/.supercharge/config.toml`.
 /// Deduplicates: if the path is already present, this is a no-op.
 pub(crate) fn add_plugin_path(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::grok_home::grok_home(), |table| {
+    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
         plugins_list_add(table, "paths", path)
     })
 }
@@ -1801,14 +1801,14 @@ pub(crate) fn add_plugin_path(path: &str) -> Result<(), Box<dyn std::error::Erro
 ///
 /// If the path is not found, this is a no-op (returns Ok).
 pub(crate) fn remove_plugin_path(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::grok_home::grok_home(), |table| {
+    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
         Ok(plugins_list_remove(table, "paths", path))
     })
 }
 /// Add a plugin to `[plugins].disabled` in `~/.supercharge/config.toml`.
 /// Deduplicates: if already present, this is a no-op.
 pub fn add_disabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::grok_home::grok_home(), |table| {
+    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
         plugins_list_add(table, "disabled", plugin_id)
     })
 }
@@ -1816,7 +1816,7 @@ pub fn add_disabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Er
 ///
 /// If the plugin is not in the disabled list, this is a no-op.
 pub fn remove_disabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::grok_home::grok_home(), |table| {
+    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
         Ok(plugins_list_remove(table, "disabled", plugin_id))
     })
 }
@@ -1829,7 +1829,7 @@ pub async fn run_add_dismissed_plugin_cta(plugin_id: String) -> Result<(), Strin
 /// Creates the `[plugin_cta]` section and `dismissed` array if they don't exist.
 /// Deduplicates: if already present, this is a no-op.
 pub fn add_dismissed_plugin_cta(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let config_path = crate::util::grok_home::grok_home().join("config.toml");
+    let config_path = crate::util::supercharge_home::supercharge_home().join("config.toml");
     add_dismissed_plugin_cta_to_file(plugin_id, &config_path)
 }
 /// Add a dismissed plugin CTA to a specific config file (path-parameterized for tests); runs
@@ -1839,10 +1839,10 @@ pub fn add_dismissed_plugin_cta_to_file(
     plugin_id: &str,
     config_path: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let grok_home = config_path
+    let supercharge_home = config_path
         .parent()
         .ok_or("config.toml path has no parent directory")?;
-    update_config_toml_locked(grok_home, |table| {
+    update_config_toml_locked(supercharge_home, |table| {
         let plugin_cta = table
             .entry("plugin_cta".to_string())
             .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
@@ -1867,7 +1867,7 @@ pub fn add_dismissed_plugin_cta_to_file(
 ///
 /// Read once (e.g. on catalog load) and cached so the matched-debounce recompute doesn't parse the config from disk on the UI thread.
 pub fn dismissed_plugin_ctas() -> std::collections::HashSet<String> {
-    let config_path = crate::util::grok_home::grok_home().join("config.toml");
+    let config_path = crate::util::supercharge_home::supercharge_home().join("config.toml");
     dismissed_plugin_ctas_in_file(&config_path)
 }
 /// Read the dismissed plugin CTA set from a specific config file (for tests).
@@ -1902,7 +1902,7 @@ pub(crate) fn validate_hooks_path(path: &str) -> Result<(), Box<dyn std::error::
     if !candidate.is_absolute() {
         return Err("Hook path must be absolute.".into());
     }
-    let grok_home = crate::util::grok_home::grok_home();
+    let supercharge_home = crate::util::supercharge_home::supercharge_home();
     let canonical = dunce::canonicalize(candidate)
         .or_else(|_| {
             let mut base = candidate.to_path_buf();
@@ -1922,7 +1922,7 @@ pub(crate) fn validate_hooks_path(path: &str) -> Result<(), Box<dyn std::error::
             Ok(resolved)
         })
         .map_err(|e: std::io::Error| format!("Cannot resolve hook path: {e}"))?;
-    let canonical_home = dunce::canonicalize(&grok_home).unwrap_or_else(|_| grok_home.clone());
+    let canonical_home = dunce::canonicalize(&supercharge_home).unwrap_or_else(|_| supercharge_home.clone());
     if !canonical.starts_with(&canonical_home) {
         return Err(format!(
             "Hook path must be under ~/.supercharge/ ({}). Got: {}",
@@ -1963,13 +1963,13 @@ pub(crate) fn auto_enable_plugins(names: &[String]) -> Vec<String> {
 /// Used for project-scope plugins that are disabled by default.
 /// Deduplicates: if already present, this is a no-op.
 pub fn add_enabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::grok_home::grok_home(), |table| {
+    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
         plugins_list_add(table, "enabled", plugin_id)
     })
 }
 /// Remove a plugin from `[plugins].enabled` in `~/.supercharge/config.toml`.
 pub fn remove_enabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::grok_home::grok_home(), |table| {
+    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
         Ok(plugins_list_remove(table, "enabled", plugin_id))
     })
 }
@@ -1980,7 +1980,7 @@ pub(crate) fn add_hooks_path(path: &str) -> Result<(), Box<dyn std::error::Error
     validate_hooks_path(path)?;
     add_hooks_path_to_file(
         path,
-        &crate::util::grok_home::grok_home().join("hooks-paths"),
+        &crate::util::supercharge_home::supercharge_home().join("hooks-paths"),
     )
 }
 /// Add a hook path to a specific file (for tests).
@@ -2006,7 +2006,7 @@ pub(crate) fn add_hooks_path_to_file(
 /// The user-registered hook directories (`~/.supercharge/hooks-paths` lines) —
 /// exactly what `remove_hooks_path` can remove (same exact-string match).
 pub(crate) fn registered_hook_paths() -> std::collections::HashSet<String> {
-    let path = crate::util::grok_home::grok_home().join("hooks-paths");
+    let path = crate::util::supercharge_home::supercharge_home().join("hooks-paths");
     match std::fs::read_to_string(&path) {
         Ok(content) => content
             .lines()
@@ -2023,7 +2023,7 @@ pub(crate) fn registered_hook_paths() -> std::collections::HashSet<String> {
 pub(crate) fn remove_hooks_path(path: &str) -> Result<bool, Box<dyn std::error::Error>> {
     remove_hooks_path_from_file(
         path,
-        &crate::util::grok_home::grok_home().join("hooks-paths"),
+        &crate::util::supercharge_home::supercharge_home().join("hooks-paths"),
     )
 }
 /// Remove a hook path from a specific file (for tests).

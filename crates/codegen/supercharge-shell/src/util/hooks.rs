@@ -59,7 +59,7 @@ pub(crate) fn discover_hook_source_paths(
     git_root: Option<&Path>,
     compat: &supercharge_tools::types::compat::CompatConfig,
 ) -> HookSourcePaths {
-    let grok = supercharge_config::user_grok_home();
+    let grok = supercharge_config::user_supercharge_home();
     let home = supercharge_dirs::home_dir();
     let include_claude = include_claude_hooks(compat);
     let include_cursor = include_cursor_hooks(compat);

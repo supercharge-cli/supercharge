@@ -341,10 +341,10 @@ impl Drop for RestoreProcessGlobals {
     }
 }
 
-fn set_test_env(grok_home: &std::path::Path, server_url: &str) {
+fn set_test_env(supercharge_home: &std::path::Path, server_url: &str) {
     // SAFETY: the only live threads are the mock's HTTP workers, which never read env.
     unsafe {
-        std::env::set_var("SUPERCHARGE_HOME", grok_home);
+        std::env::set_var("SUPERCHARGE_HOME", supercharge_home);
         std::env::set_var("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server_url);
         std::env::set_var("SUPERCHARGE_API_BASE_URL", server_url);
         std::env::set_var("SUPERCHARGE_API_KEY", "test-key-for-ci");
@@ -401,9 +401,9 @@ pub fn run_agent_test_with_models<F, Fut>(
             .block_on(supercharge_test_support::MockInferenceServer::start_with_models(models))
             .expect("mock server"),
     );
-    let grok_home = tempfile::TempDir::new().expect("grok home");
+    let supercharge_home = tempfile::TempDir::new().expect("grok home");
     let workdir = tempfile::TempDir::new().expect("workdir");
-    set_test_env(grok_home.path(), &server.url());
+    set_test_env(supercharge_home.path(), &server.url());
     // After SUPERCHARGE_HOME is the temp dir, so teardown cannot OnceLock ~/.supercharge.
     let _globals = RestoreProcessGlobals::enter();
 

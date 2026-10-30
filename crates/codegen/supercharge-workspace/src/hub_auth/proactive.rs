@@ -47,26 +47,26 @@ const OUTCOME_SKIPPED_DISABLED: &str = "skipped_disabled";
 
 static REFRESH_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_oidc_proactive_refresh_total",
+        "supercharge_workspace_oidc_proactive_refresh_total",
         "Background OIDC refresh outcomes: ok, failed_retry, failed_exhausted, \
          failed_terminal, skipped_disabled",
         &["outcome"]
     )
-    .expect("register grok_workspace_oidc_proactive_refresh_total")
+    .expect("register supercharge_workspace_oidc_proactive_refresh_total")
 });
 
 static REFRESH_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
-        "grok_workspace_oidc_proactive_refresh_duration_seconds",
+        "supercharge_workspace_oidc_proactive_refresh_duration_seconds",
         "Wall-clock time of a background OIDC refresh (discovery + token exchange)",
         exponential_buckets(0.01, 2.0, 14).expect("valid bucket params")
     )
-    .expect("register grok_workspace_oidc_proactive_refresh_duration_seconds")
+    .expect("register supercharge_workspace_oidc_proactive_refresh_duration_seconds")
 });
 
 static REFRESH_LEAD: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
-        "grok_workspace_oidc_refresh_lead_seconds",
+        "supercharge_workspace_oidc_refresh_lead_seconds",
         "Remaining lifetime of the token being replaced (old expires_at − now) \
          at a successful background refresh; negative means the refresh landed \
          after expiry",
@@ -76,12 +76,12 @@ static REFRESH_LEAD: LazyLock<Histogram> = LazyLock::new(|| {
             600.0, 900.0, 1200.0, 1800.0, 2400.0, 3600.0, 7200.0,
         ]
     )
-    .expect("register grok_workspace_oidc_refresh_lead_seconds")
+    .expect("register supercharge_workspace_oidc_refresh_lead_seconds")
 });
 
 static REFRESH_JITTER: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
-        "grok_workspace_oidc_refresh_jitter_seconds",
+        "supercharge_workspace_oidc_refresh_jitter_seconds",
         "Signed displacement of the success-path target from its unclamped \
          nominal, after safety-margin and min-interval floors",
         vec![
@@ -89,7 +89,7 @@ static REFRESH_JITTER: LazyLock<Histogram> = LazyLock::new(|| {
             1440.0,
         ]
     )
-    .expect("register grok_workspace_oidc_refresh_jitter_seconds")
+    .expect("register supercharge_workspace_oidc_refresh_jitter_seconds")
 });
 
 /// Zero-init this module's metric families. See [`crate::init_metrics`].

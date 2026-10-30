@@ -185,7 +185,7 @@ impl SandboxManager {
             return Ok(());
         }
         if requires_hook_write_deny(&self.profile, workspace) {
-            supercharge_config::ensure_grok_hook_slots(paths::grok_home().as_path())
+            supercharge_config::ensure_grok_hook_slots(paths::supercharge_home().as_path())
                 .map_err(|e| anyhow::anyhow!("hook write-deny ensure failed: {e}"))?;
         }
         hook_write_deny::maybe_install_namespace_lockdown_inside_bwrap(&self.profile, workspace)
@@ -390,13 +390,13 @@ fn chmod_000(path: &Path) -> Option<()> {
     std::fs::set_permissions(path, perms).ok()?;
     Some(())
 }
-/// Zero-permission placeholder (file or dir) under `grok_home` used by bwrap bind-over. The placeholder name is suffixed
+/// Zero-permission placeholder (file or dir) under `supercharge_home` used by bwrap bind-over. The placeholder name is suffixed
 /// with the current PID so concurrent grok processes don't race each other's create/remove/chmod on a shared path. A lost
 /// race could yield `None`, silently dropping the bind and failing open.
 #[cfg(all(feature = "enforce", target_os = "linux"))]
 fn bwrap_blocked_placeholder(name: &str, want_dir: bool) -> Option<PathBuf> {
     use std::fs::OpenOptions;
-    let path = paths::grok_home().join(format!("{name}.{}", std::process::id()));
+    let path = paths::supercharge_home().join(format!("{name}.{}", std::process::id()));
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).ok()?;
     }
@@ -1076,7 +1076,7 @@ mod tests {
             .get_args()
             .map(|a| a.to_string_lossy().to_string())
             .collect();
-        let blocked_dir = paths::grok_home()
+        let blocked_dir = paths::supercharge_home()
             .join(format!("sandbox-blocked-dir.{}", std::process::id()))
             .to_string_lossy()
             .to_string();

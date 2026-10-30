@@ -4,7 +4,7 @@ use std::fs;
 use tempfile::TempDir;
 
 fn make_session_with_parent(root: &std::path::Path, cwd: &str, session_id: &str, parent_id: &str) {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(session_id);
     fs::create_dir_all(&dir).unwrap();
     let summary = serde_json::json!({ "parent_session_id": parent_id });
@@ -25,7 +25,7 @@ fn returns_child_id_when_parent_matches() {
 fn returns_none_when_no_child_exists() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().join("sessions");
-    let encoded = crate::util::grok_home::encode_cwd_dirname("/work");
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname("/work");
     fs::create_dir_all(root.join(&encoded)).unwrap();
 
     let found = find_local_child_for_remote_in_root("remote-abc", "/work", &root);
@@ -61,7 +61,7 @@ fn duplicate_children_returns_newest_by_updated_at() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().join("sessions");
     let cwd = "/project";
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
 
     // Older child, earlier timestamp
     let old_dir = root.join(&encoded).join("old-child");
@@ -96,7 +96,7 @@ fn duplicate_children_equal_timestamps_stable_tiebreak() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().join("sessions");
     let cwd = "/project-tie";
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let same_ts = "2026-03-15T12:00:00Z";
 
     let mut dirs = Vec::new();

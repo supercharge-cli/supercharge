@@ -39,11 +39,11 @@ pub const PREVIEW_PROXY_RESTART_BACKOFF_BASE_SECS: u64 = 1;
 /// The restart backoff caps here so a crash-loop pins at this interval rather than growing unbounded.
 pub const PREVIEW_PROXY_RESTART_BACKOFF_CAP_SECS: u64 = 30;
 
-/// `grok_workspace_preview_proxy_restart_total{reason}` counts the (re)start events the in-sandbox supervisor emits, by reason.
+/// `supercharge_workspace_preview_proxy_restart_total{reason}` counts the (re)start events the in-sandbox supervisor emits, by reason.
 /// It shows how often the preview-proxy is being restarted.
 static PREVIEW_PROXY_RESTART_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_preview_proxy_restart_total",
+        "supercharge_workspace_preview_proxy_restart_total",
         "preview-proxy (re)start events emitted by the in-sandbox supervisor, by reason",
         &["reason"]
     )

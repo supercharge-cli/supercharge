@@ -351,7 +351,7 @@ pub(crate) fn all_toml_mcp_server_names(
 }
 
 pub(crate) fn mcp_preferences_path() -> PathBuf {
-    supercharge_config::grok_home().join("mcp_preferences.json")
+    supercharge_config::supercharge_home().join("mcp_preferences.json")
 }
 
 /// Corrupt files are readable as empty for resolution but must not be overwritten (would clobber other servers).
@@ -1696,7 +1696,7 @@ pub fn load_cli_plugin_registry(
 }
 
 fn config_path() -> PathBuf {
-    crate::util::grok_home::grok_home().join("config.toml")
+    crate::util::supercharge_home::supercharge_home().join("config.toml")
 }
 
 /// Path to the user-level config file (`~/.supercharge/config.toml`).
@@ -2778,7 +2778,7 @@ enabled = false
     #[tokio::test]
     async fn restore_mcp_server_enabled_after_enable_scopes_tiers() {
         // Hermetic: only touch a temp project path
-        // Do not call save_mcp_server_enabled_in (that reads ambient config_path / grok_home)
+        // Do not call save_mcp_server_enabled_in (that reads ambient config_path / supercharge_home)
         let project = tempfile::tempdir().unwrap();
         let project_cfg = project.path().join("config.toml");
         std::fs::write(

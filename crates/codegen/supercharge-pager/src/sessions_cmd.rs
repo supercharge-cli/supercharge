@@ -3,7 +3,7 @@ use clap::Subcommand;
 use supercharge_login::{AuthManager, try_ensure_fresh_auth};
 use supercharge_shell::agent::config::Config as AgentConfig;
 use supercharge_shell::session::merge::MergedSession;
-use supercharge_shell::util::grok_home::grok_home;
+use supercharge_shell::util::supercharge_home::supercharge_home;
 #[derive(Debug, clap::Args, Clone)]
 pub struct SessionsArgs {
     #[command(subcommand)]
@@ -44,7 +44,7 @@ pub async fn run(args: SessionsArgs, agent_config: &AgentConfig) -> Result<()> {
     .await;
 
     let auth_manager = std::sync::Arc::new(AuthManager::new_with_proxy_base_url(
-        &grok_home(),
+        &supercharge_home(),
         agent_config.grok_com_config.clone(),
         agent_config.endpoints.proxy_url(),
     ));
@@ -91,7 +91,7 @@ pub async fn run(args: SessionsArgs, agent_config: &AgentConfig) -> Result<()> {
                 offset: 0,
                 include_content: true,
             };
-            let root = grok_home();
+            let root = supercharge_home();
 
             let remote_limit = (limit * 3).max(100) as i64;
             let (local_resp, remote_results) = tokio::join!(

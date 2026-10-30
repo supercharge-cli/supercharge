@@ -528,14 +528,14 @@ fn protected_grok_config_file(path: &Path, components: &[&str]) -> Option<Protec
     protected_grok_config_file_with_home(
         path,
         components,
-        supercharge_config::user_grok_home().as_deref(),
+        supercharge_config::user_supercharge_home().as_deref(),
     )
 }
 
 fn protected_grok_config_file_with_home(
     path: &Path,
     components: &[&str],
-    user_grok_home: Option<&Path>,
+    user_supercharge_home: Option<&Path>,
 ) -> Option<ProtectedEditReason> {
     let file = components.last().copied()?;
     // Session grant store: `{home}/sessions/<scope>/permission.toml` (or permission_*.toml).
@@ -545,12 +545,12 @@ fn protected_grok_config_file_with_home(
     {
         let n = components.len();
         let in_dot_grok = n >= 4 && components.get(n - 4) == Some(&".supercharge");
-        let in_grok_home = grok_home_matches(user_grok_home, |home| {
+        let in_supercharge_home = supercharge_home_matches(user_supercharge_home, |home| {
             path.parent()
                 .and_then(Path::parent)
                 .is_some_and(|sessions| sessions == home.join("sessions"))
         });
-        return (in_dot_grok || in_grok_home).then_some(ProtectedEditReason::GrokConfig);
+        return (in_dot_grok || in_supercharge_home).then_some(ProtectedEditReason::GrokConfig);
     }
     let reason = match file {
         supercharge_config::USER_CONFIG_FILENAME
@@ -563,14 +563,14 @@ fn protected_grok_config_file_with_home(
     };
     let in_dot_grok =
         components.len() >= 2 && components.get(components.len() - 2) == Some(&".supercharge");
-    let in_grok_home = || grok_home_matches(user_grok_home, |home| path.parent() == Some(home));
-    (in_dot_grok || in_grok_home()).then_some(reason)
+    let in_supercharge_home = || supercharge_home_matches(user_supercharge_home, |home| path.parent() == Some(home));
+    (in_dot_grok || in_supercharge_home()).then_some(reason)
 }
 
 /// True when `pred` holds for the user grok home in either its lexical or physically-resolved form.
 /// Both forms are checked because callers hold a lexical and a resolved candidate path, and the home itself may sit behind a symlink.
 /// The comparison is byte-exact (no case folding), like every other resolved-path check in this module.
-fn grok_home_matches(home: Option<&Path>, pred: impl Fn(&Path) -> bool) -> bool {
+fn supercharge_home_matches(home: Option<&Path>, pred: impl Fn(&Path) -> bool) -> bool {
     home.is_some_and(|home| {
         let lexical = supercharge_paths::normalize_lexically(home);
         pred(&lexical)
@@ -578,8 +578,8 @@ fn grok_home_matches(home: Option<&Path>, pred: impl Fn(&Path) -> bool) -> bool 
     })
 }
 
-fn path_is_under_user_grok_hook_root(path: &Path, grok_home: &Path) -> bool {
-    path.starts_with(grok_home.join("hooks")) || path == grok_home.join("hooks-paths")
+fn path_is_under_user_grok_hook_root(path: &Path, supercharge_home: &Path) -> bool {
+    path.starts_with(supercharge_home.join("hooks")) || path == supercharge_home.join("hooks-paths")
 }
 
 fn protected_grok_hook_root(path: &Path, components: &[&str]) -> bool {
@@ -587,7 +587,7 @@ fn protected_grok_hook_root(path: &Path, components: &[&str]) -> bool {
         .windows(2)
         .any(|pair| pair == [".supercharge", "hooks"])
         || components.ends_with(&[".supercharge", "hooks-paths"])
-        || grok_home_matches(supercharge_config::user_grok_home().as_deref(), |home| {
+        || supercharge_home_matches(supercharge_config::user_supercharge_home().as_deref(), |home| {
             path_is_under_user_grok_hook_root(path, home)
         })
 }
@@ -1667,7 +1667,7 @@ mod tests {
 
     /// A custom `$SUPERCHARGE_HOME` has no `.supercharge` path component, so the live `config.toml` / `sandbox.toml` must be caught by the home-prefix branch.
     #[test]
-    fn grok_config_files_under_custom_grok_home_are_protected() {
+    fn grok_config_files_under_custom_supercharge_home_are_protected() {
         let home = tempfile::tempdir().unwrap();
         let home_path = home.path();
         for (file, reason) in [
@@ -1735,7 +1735,7 @@ mod tests {
     /// `$SUPERCHARGE_HOME` points at a symlink while the edit targets the physical home directory, so the lexical parent-equality arm cannot fire.
     #[test]
     #[cfg(unix)]
-    fn grok_config_under_symlinked_grok_home_is_protected() {
+    fn grok_config_under_symlinked_supercharge_home_is_protected() {
         use std::os::unix::fs::symlink;
         let tmp = tempfile::tempdir().unwrap();
         let real_home = tmp.path().join("real-home");

@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-pub use supercharge_config::grok_home;
+pub use supercharge_config::supercharge_home;
 pub use supercharge_tools::util::format_bytes;
 
 /// A closed stdout (`grok du | head`) is a clean stop, not a failure.
@@ -17,17 +17,17 @@ pub fn ignore_broken_pipe(result: std::io::Result<()>) -> std::io::Result<()> {
 
 /// Path to `$SUPERCHARGE_HOME/pager.toml`.
 pub fn pager_toml_path() -> PathBuf {
-    grok_home().join("pager.toml")
+    supercharge_home().join("pager.toml")
 }
 
 /// `~/.supercharge` or `$SUPERCHARGE_HOME`, decided by the resolved home rather than by
 /// whether `SUPERCHARGE_HOME` is set in the environment.
-pub fn display_grok_home_prefix() -> String {
-    display_grok_home_prefix_for(&grok_home())
+pub fn display_supercharge_home_prefix() -> String {
+    display_supercharge_home_prefix_for(&supercharge_home())
 }
 
-pub fn display_grok_home_prefix_for(home: &Path) -> String {
-    let default = supercharge_config::default_grok_home();
+pub fn display_supercharge_home_prefix_for(home: &Path) -> String {
+    let default = supercharge_config::default_supercharge_home();
     if home == default || home == dunce::canonicalize(&default).unwrap_or(default) {
         "~/.supercharge".to_string()
     } else {
@@ -35,26 +35,26 @@ pub fn display_grok_home_prefix_for(home: &Path) -> String {
     }
 }
 
-/// User-facing path under [`grok_home()`], e.g. ``~/.supercharge/config.toml``.
+/// User-facing path under [`supercharge_home()`], e.g. ``~/.supercharge/config.toml``.
 pub fn display_user_grok_path(relative: impl AsRef<Path>) -> String {
-    display_user_grok_path_for(&grok_home(), relative)
+    display_user_grok_path_for(&supercharge_home(), relative)
 }
 
 fn display_user_grok_path_for(home: &Path, relative: impl AsRef<Path>) -> String {
     let rel = relative.as_ref();
-    let prefix = display_grok_home_prefix_for(home);
+    let prefix = display_supercharge_home_prefix_for(home);
     if rel.as_os_str().is_empty() {
         return prefix;
     }
     format!("{prefix}/{}", rel.display())
 }
 
-/// Abbreviate an absolute path for display: prefer [`grok_home()`], then `$HOME`.
+/// Abbreviate an absolute path for display: prefer [`supercharge_home()`], then `$HOME`.
 pub fn abbreviate_path(path: &str) -> Cow<'_, str> {
     let path_buf = Path::new(path);
-    let grok = grok_home();
+    let grok = supercharge_home();
     if let Ok(rest) = path_buf.strip_prefix(&grok) {
-        let prefix = display_grok_home_prefix();
+        let prefix = display_supercharge_home_prefix();
         if rest.as_os_str().is_empty() {
             return Cow::Owned(prefix);
         }
@@ -81,9 +81,9 @@ pub fn display_location_path(path: impl AsRef<Path>) -> String {
     crate::location_path::shorten_location_path(&abbreviate_path(&lossy)).into_owned()
 }
 
-/// True when `path` is under user [`grok_home()`] (not project `{cwd}/.supercharge`).
-pub fn is_under_user_grok_home(path: &Path) -> bool {
-    path.starts_with(grok_home())
+/// True when `path` is under user [`supercharge_home()`] (not project `{cwd}/.supercharge`).
+pub fn is_under_user_supercharge_home(path: &Path) -> bool {
+    path.starts_with(supercharge_home())
 }
 
 /// Compact duration: `5.2s`, `32s`, `2m5s`, `1h2m`.
@@ -396,11 +396,11 @@ mod tests {
     }
 
     #[test]
-    fn display_grok_home_prefix_default_install() {
+    fn display_supercharge_home_prefix_default_install() {
         if std::env::var("SUPERCHARGE_HOME").is_ok() {
             return;
         }
-        assert_eq!(display_grok_home_prefix(), "~/.supercharge");
+        assert_eq!(display_supercharge_home_prefix(), "~/.supercharge");
     }
 
     #[test]
@@ -451,7 +451,7 @@ mod tests {
         if home.as_os_str().is_empty() {
             return;
         }
-        // Stay outside grok_home so this hits the $HOME branch, not ~/.supercharge.
+        // Stay outside supercharge_home so this hits the $HOME branch, not ~/.supercharge.
         let full = home.join("not-grok-home").join("file.txt");
         let full_str = full.to_string_lossy();
         let abbreviated = abbreviate_path(&full_str);

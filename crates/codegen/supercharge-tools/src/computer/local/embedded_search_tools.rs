@@ -171,7 +171,7 @@ fn resolve_tool(
     resolve_tool_from(
         std::env::var_os(env_override).map(PathBuf::from),
         bundled,
-        crate::util::grok_home().join("vendor").join(bin_name),
+        crate::util::supercharge_home().join("vendor").join(bin_name),
         bin_name,
     )
 }
@@ -479,7 +479,7 @@ mod tests {
     #[cfg(all(bundle_bfs, bundle_ugrep))]
     #[test]
     fn bundled_binaries_extract_and_run() {
-        let vendor = crate::util::grok_home().join("vendor");
+        let vendor = crate::util::supercharge_home().join("vendor");
         let bfs = bundled_bfs()
             .expect("bfs resolves")
             .expect("bfs should be bundled");

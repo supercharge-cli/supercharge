@@ -140,7 +140,7 @@ fn load_config(path: Option<&std::path::Path>) -> VoiceConfig {
     {
         return VoiceConfig::from_config_table(&table, env_base.as_deref());
     }
-    if let Some(home) = supercharge_dirs::resolve_grok_home()
+    if let Some(home) = supercharge_dirs::resolve_supercharge_home()
         && let Ok(raw) = std::fs::read_to_string(home.join("config.toml"))
         && let Ok(table) = toml::from_str::<toml::Table>(&raw)
     {

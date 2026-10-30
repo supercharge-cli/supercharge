@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use supercharge_shell::agent::config::Config as AgentConfig;
 use supercharge_shell::session::repo_changes::UploadMethod;
-use supercharge_shell::util::grok_home::grok_home;
+use supercharge_shell::util::supercharge_home::supercharge_home;
 
 #[derive(Debug, clap::Args, Clone)]
 pub struct TraceArgs {
@@ -347,7 +347,7 @@ pub(crate) fn find_session_dir(session_id: &str) -> Result<PathBuf> {
 }
 
 pub fn trace_exports_dir() -> PathBuf {
-    grok_home().join("trace-exports")
+    supercharge_home().join("trace-exports")
 }
 
 /// Creates parent directory if needed.

@@ -10,7 +10,7 @@ const T2: &str = "CLUSTER_SENTINEL_T2";
 /// The driver and viewer roles flip for the next turn.
 /// This is an in-process port of the `leader_two_clients_shared_session` PTY case.
 #[test]
-#[ignore = "leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
+#[ignore = "leader-cluster: needs single-process isolation (process-global env + supercharge_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
 #[serial_test::serial(SUPERCHARGE_HOME)]
 fn two_clients_share_session_and_stream_both_ways() {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -72,7 +72,7 @@ fn two_clients_share_session_and_stream_both_ways() {
 /// Live turns broadcast to every subscriber exactly once.
 /// Each viewer's attach replay is unicast; it never duplicates into the already-attached clients.
 #[test]
-#[ignore = "leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
+#[ignore = "leader-cluster: needs single-process isolation (process-global env + supercharge_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
 #[serial_test::serial(SUPERCHARGE_HOME)]
 fn n_client_fan_out_without_replay_duplication() {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -151,7 +151,7 @@ fn n_client_fan_out_without_replay_duplication() {
 /// The fresh client replays it exactly once, lands Idle, and no inference request is re-driven.
 /// This is an in-process port of `leader_reattach_completion_roundtrips_durable_log`.
 #[test]
-#[ignore = "leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
+#[ignore = "leader-cluster: needs single-process isolation (process-global env + supercharge_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
 #[serial_test::serial(SUPERCHARGE_HOME)]
 fn reattach_completion_roundtrips_durable_log() {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -226,7 +226,7 @@ fn reattach_completion_roundtrips_durable_log() {
 /// Then reload by hand (`begin_session_reload`, `session/load`, `finish_session_reload`): history renders exactly once and new turns work.
 /// Its `plan_reconnect_load` is event_loop-private, so the cwd and meta derivation is replicated inline.
 #[test]
-#[ignore = "leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
+#[ignore = "leader-cluster: needs single-process isolation (process-global env + supercharge_home OnceLock in the shared lib test binary); run: cargo test -p supercharge-pager --lib -- app::leader_cluster --ignored --test-threads=1"]
 #[serial_test::serial(SUPERCHARGE_HOME)]
 fn leader_kill_reconnect_reloads_without_duplicating_history() {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -366,10 +366,10 @@ fn leader_kill_reconnect_reloads_without_duplicating_history() {
     });
 }
 
-/// Locate `<grok_home>/sessions/<enc-cwd>/<sid>/updates.jsonl` without the (internal) cwd encoder.
+/// Locate `<supercharge_home>/sessions/<enc-cwd>/<sid>/updates.jsonl` without the (internal) cwd encoder.
 /// Scan one level of cwd dirs, the same approach as session_load_perf's `locate_session_dir`.
 fn find_session_updates_file(sid: &str) -> Option<PathBuf> {
-    let sessions = effective_grok_home().join("sessions");
+    let sessions = effective_supercharge_home().join("sessions");
     for entry in std::fs::read_dir(&sessions).ok()?.flatten() {
         let candidate = entry.path().join(sid).join("updates.jsonl");
         if candidate.is_file() {

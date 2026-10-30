@@ -13,20 +13,20 @@ use crate::permission::types::{AccessKind, HookAsk};
 
 static PERMISSION_REPLY_DURATION: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec!(
-        "grok_workspace_permission_reply_seconds",
+        "supercharge_workspace_permission_reply_seconds",
         "Wall-clock time awaiting chat's reply to a permission_request hook",
         &["outcome"],
         vec![0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0]
     )
-    .expect("grok_workspace_permission_reply_seconds must register once")
+    .expect("supercharge_workspace_permission_reply_seconds must register once")
 });
 
 static PERMISSION_TIMEOUT_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     register_int_counter!(
-        "grok_workspace_permission_timeout_total",
+        "supercharge_workspace_permission_timeout_total",
         "permission_request hooks whose reply timed out (backstop deadline fired)"
     )
-    .expect("grok_workspace_permission_timeout_total must register once")
+    .expect("supercharge_workspace_permission_timeout_total must register once")
 });
 
 pub(crate) fn init_metrics() {

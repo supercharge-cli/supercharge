@@ -16,7 +16,7 @@ use crate::version::{
     is_version_cache_fresh, try_fetch_stable_pointer, write_version_cache,
 };
 use supercharge_shell::util::config;
-use supercharge_shell::util::grok_home::{grok_application, grok_home};
+use supercharge_shell::util::supercharge_home::{grok_application, supercharge_home};
 pub use supercharge_telemetry::events::CliUpdateTrigger;
 use supercharge_telemetry::events::{
     CliUpdate, CliUpdateChannel, CliUpdateErrorKind, CliUpdateInstaller, CliUpdateOutcome,
@@ -1245,7 +1245,7 @@ pub async fn download_silent(url: &str, dest: &std::path::Path) -> Result<()> {
 /// Delete `~/.supercharge/models_cache.json` after a successful update. The cache embeds the binary version, so the new binary
 /// would treat it as a miss anyway. Removing it eagerly avoids a wasted disk read and deserialize on first launch.
 async fn remove_stale_models_cache() {
-    let cache = grok_home().join("models_cache.json");
+    let cache = supercharge_home().join("models_cache.json");
     match tokio::fs::remove_file(&cache).await {
         Ok(()) => tracing::debug!("removed stale models_cache.json after update"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -1620,8 +1620,8 @@ async fn download_verified_from_base(
         }
     };
 
-    let grok_home = grok_home();
-    let download_dir = grok_home.join("downloads");
+    let supercharge_home = supercharge_home();
+    let download_dir = supercharge_home.join("downloads");
     tokio::fs::create_dir_all(&download_dir).await?;
 
     let binary_name = format!("{}-{}-{}", crate::version::BIN_PREFIX, version, platform);
@@ -1671,16 +1671,16 @@ async fn activate_verified_download(download: &VerifiedDownload) -> Result<()> {
         elapsed_ms = tracing::field::Empty,
     ));
     let activate_started = Instant::now();
-    let grok_home = grok_home();
-    let download_dir = grok_home.join("downloads");
-    let bin_dir = grok_home.join("bin");
+    let supercharge_home = supercharge_home();
+    let download_dir = supercharge_home.join("downloads");
+    let bin_dir = supercharge_home.join("bin");
     tokio::fs::create_dir_all(&bin_dir).await?;
 
     // Atomic swap of ~/.supercharge/bin/{supercharge,agent} -> downloaded binary.
     let link_path = swap_managed_bin_links(&download.binary_path, &bin_dir).await?;
 
     remove_stale_pager(&bin_dir).await;
-    migrate_legacy_layout(&download.binary_path, &bin_dir, &grok_home).await;
+    migrate_legacy_layout(&download.binary_path, &bin_dir, &supercharge_home).await;
 
     // Hook exes beside supercharge.exe and the bundled MinGit; supercharge is already live, so a failure here is only logged.
     #[cfg(windows)]
@@ -1697,7 +1697,7 @@ async fn activate_verified_download(download: &VerifiedDownload) -> Result<()> {
     })
     .await;
 
-    regenerate_completions(&link_path, &grok_home).await;
+    regenerate_completions(&link_path, &supercharge_home).await;
 
     activate_span
         .span()
@@ -1708,13 +1708,13 @@ async fn activate_verified_download(download: &VerifiedDownload) -> Result<()> {
 /// Regenerate shell completions after a binary update (best-effort). Spawns the newly-installed binary with `completions
 /// <shell>` for each supported shell and writes the output to the standard completion paths. Failures are silently
 /// ignored: completions are a nice-to-have, not a requirement for a successful update.
-async fn regenerate_completions(binary: &std::path::Path, grok_home: &std::path::Path) {
-    // Derive $HOME independently: grok_home may be overridden via SUPERCHARGE_HOME env var, so grok_home.parent() isn't necessarily the user's home dir
+async fn regenerate_completions(binary: &std::path::Path, supercharge_home: &std::path::Path) {
+    // Derive $HOME independently: supercharge_home may be overridden via SUPERCHARGE_HOME env var, so supercharge_home.parent() isn't necessarily the user's home dir
     let user_home = supercharge_dirs::home_dir().unwrap_or_default();
 
     let completions: &[(&str, std::path::PathBuf)] = &[
-        ("bash", grok_home.join("completions/bash/supercharge.bash")),
-        ("zsh", grok_home.join("completions/zsh/_supercharge")),
+        ("bash", supercharge_home.join("completions/bash/supercharge.bash")),
+        ("zsh", supercharge_home.join("completions/zsh/_supercharge")),
         ("fish", user_home.join(".config/fish/completions/supercharge.fish")),
     ];
 
@@ -2148,7 +2148,7 @@ async fn heal_managed_install(installer: &str) {
 
     #[cfg(any(unix, windows))]
     {
-        let bin_dir = grok_home().join("bin");
+        let bin_dir = supercharge_home().join("bin");
 
         #[cfg(unix)]
         reconcile_agent_to_grok(&bin_dir).await;
@@ -2316,9 +2316,9 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
         None => crate::version::fetch_gh_release_version("stable").await?,
     };
 
-    let grok_home = grok_home();
-    let download_dir = grok_home.join("downloads");
-    let bin_dir = grok_home.join("bin");
+    let supercharge_home = supercharge_home();
+    let download_dir = supercharge_home.join("downloads");
+    let bin_dir = supercharge_home.join("bin");
     tokio::fs::create_dir_all(&download_dir).await?;
     tokio::fs::create_dir_all(&bin_dir).await?;
 
@@ -2350,7 +2350,7 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
     // Atomic swap of ~/.supercharge/bin/{supercharge,agent} -> downloaded binary.
     swap_managed_bin_links(&binary_path, &bin_dir).await?;
     remove_stale_pager(&bin_dir).await;
-    migrate_legacy_layout(&binary_path, &bin_dir, &grok_home).await;
+    migrate_legacy_layout(&binary_path, &bin_dir, &supercharge_home).await;
 
     // Update supercharge-latest -> versioned binary so any existing symlinks that route
     // through it (e.g. /usr/local/bin/supercharge -> ~/.supercharge/downloads/supercharge-latest)

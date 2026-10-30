@@ -1,7 +1,7 @@
 pub mod changelog;
 pub mod dual_clock;
 pub mod event_id;
-pub mod grok_home;
+pub mod supercharge_home;
 pub mod secure_file;
 pub mod subprocess;
 pub mod tips;

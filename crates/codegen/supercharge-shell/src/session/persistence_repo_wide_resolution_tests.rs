@@ -2,14 +2,14 @@ use super::*;
 use std::fs;
 
 fn setup_session(root: &Path, cwd: &str, session_id: &str) {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(session_id);
     fs::create_dir_all(&dir).unwrap();
     fs::write(dir.join("summary.json"), b"{}").unwrap();
 }
 
 fn setup_child_session(root: &Path, cwd: &str, child_id: &str, parent_id: &str) {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(child_id);
     fs::create_dir_all(&dir).unwrap();
     let summary = format!(
@@ -44,7 +44,7 @@ fn skips_images_only_stub_and_resolves_real_sibling() {
     let exact_cwd = "/repo/main";
     let sibling_cwd = "/repo/worktree-1";
 
-    let encoded = crate::util::grok_home::encode_cwd_dirname(exact_cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(exact_cwd);
     let images = root.join(&encoded).join("sess-A").join("images");
     fs::create_dir_all(&images).unwrap();
     fs::write(images.join("image-1.png"), b"png").unwrap();

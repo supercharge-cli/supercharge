@@ -16,9 +16,9 @@ use supercharge_login::{AuthMode, GrokAuth, GrokComConfig, try_ensure_fresh_auth
 
 const SEED_TOKEN: &str = "stale-token-that-must-be-replaced";
 
-/// `grok_home()` memoizes into a `OnceLock`, so every phase below shares this one directory.
+/// `supercharge_home()` memoizes into a `OnceLock`, so every phase below shares this one directory.
 /// That is why the phases live in a single test rather than racing each other as separate ones.
-fn use_temp_grok_home(dir: &Path) {
+fn use_temp_supercharge_home(dir: &Path) {
     // SAFETY: single-threaded test entry, before any thread that reads the
     // environment is spawned.
     unsafe {
@@ -73,7 +73,7 @@ async fn mint_with_provider(home: &Path, command: &str) -> String {
 #[tokio::test]
 async fn auth_provider_command_mints_the_session_credential() {
     let home = tempfile::tempdir().expect("tempdir");
-    use_temp_grok_home(home.path());
+    use_temp_supercharge_home(home.path());
 
     // `echo <token>` is valid in both `sh -c` and `cmd /C`, so this phase needs no external binary and runs identically on every platform
     let token = mint_with_provider(home.path(), "echo grok-ext-token").await;

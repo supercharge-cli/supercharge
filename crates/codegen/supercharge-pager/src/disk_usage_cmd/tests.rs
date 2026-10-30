@@ -50,7 +50,7 @@ fn record(id: &str, created_at: i64) -> TrackedRow {
 
 fn worktrees_report(worktrees: Vec<WorktreeUsage>, total_bytes: u64) -> DiskUsageReport {
     DiskUsageReport {
-        grok_home: "/wt-home".into(),
+        supercharge_home: "/wt-home".into(),
         total_bytes,
         top_level_dirs: vec![DirUsage {
             name: WORKTREES_DIR.to_owned(),
@@ -531,7 +531,7 @@ fn worktrees_dominate_at_half_of_total() {
     ];
     for case in cases {
         let report = DiskUsageReport {
-            grok_home: "/home/user/.supercharge".into(),
+            supercharge_home: "/home/user/.supercharge".into(),
             total_bytes: case.total_bytes,
             top_level_dirs: vec![DirUsage {
                 name: WORKTREES_DIR.to_owned(),
@@ -549,7 +549,7 @@ fn worktrees_dominate_at_half_of_total() {
 fn json_shape_is_frozen() {
     let report = DiskUsageReport {
         schema_version: SCHEMA_VERSION,
-        grok_home: "/home/user/.supercharge".into(),
+        supercharge_home: "/home/user/.supercharge".into(),
         total_bytes: 100,
         volume_capacity_bytes: Some(1_000),
         volume_available_bytes: Some(600),
@@ -590,7 +590,7 @@ fn json_shape_is_frozen() {
         serde_json::to_value(&report).unwrap(),
         serde_json::json!({
             "schema_version": 1,
-            "grok_home": "/home/user/.supercharge",
+            "supercharge_home": "/home/user/.supercharge",
             "total_bytes": 100,
             "volume_capacity_bytes": 1_000,
             "volume_available_bytes": 600,
@@ -686,7 +686,7 @@ fn missing_home_json_is_valid_and_empty() {
 fn print_report_truncates_long_labels_and_keeps_columns_aligned() {
     let long_label = "a".repeat(30);
     let report = DiskUsageReport {
-        grok_home: "/wt-home".into(),
+        supercharge_home: "/wt-home".into(),
         total_bytes: 300,
         top_level_dirs: vec![DirUsage {
             name: WORKTREES_DIR.to_owned(),
@@ -1025,7 +1025,7 @@ fn symlinked_default_home_keeps_home_label() {
     let canonical = dunce::canonicalize(&resolved).unwrap();
     assert_ne!(canonical, resolved, "the symlink must actually resolve");
     assert_eq!(
-        crate::util::display_grok_home_prefix_for(&canonical),
+        crate::util::display_supercharge_home_prefix_for(&canonical),
         "~/.supercharge"
     );
 }

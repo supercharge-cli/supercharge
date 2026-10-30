@@ -13,7 +13,7 @@ struct IsolatedHome {
     _env: EnvGuard,
 }
 
-fn isolate_grok_home() -> IsolatedHome {
+fn isolate_supercharge_home() -> IsolatedHome {
     let dir = tempfile::tempdir().unwrap();
     let env = EnvGuard::set("SUPERCHARGE_HOME", dir.path());
     IsolatedHome {
@@ -54,7 +54,7 @@ async fn seed_session(info: &Info) {
 #[tokio::test]
 #[serial_test::serial]
 async fn rename_enqueues_manual_title_on_resident_persistence_tx() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-resident";
     let sid = acp::SessionId::new("rename-resident-sid");
     let info = Info {
@@ -103,7 +103,7 @@ async fn rename_enqueues_manual_title_on_resident_persistence_tx() {
 #[tokio::test]
 #[serial_test::serial]
 async fn rename_non_resident_updates_summary_without_panic() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-dormant";
     let sid = acp::SessionId::new("rename-dormant-sid");
     let info = Info {
@@ -134,7 +134,7 @@ async fn rename_non_resident_updates_summary_without_panic() {
 #[tokio::test]
 #[serial_test::serial]
 async fn rename_strips_ascii_controls_before_persist_and_enqueue() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-sanitize";
     let sid = acp::SessionId::new("rename-sanitize-sid");
     let info = Info {
@@ -182,7 +182,7 @@ async fn rename_strips_ascii_controls_before_persist_and_enqueue() {
 async fn rename_rejects_title_over_max_scalars() {
     use crate::session::persistence::MAX_TITLE_SCALARS;
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-too-long";
     let sid = acp::SessionId::new("rename-too-long-sid");
     let info = Info {
@@ -244,7 +244,7 @@ async fn rename_rejects_title_over_max_scalars() {
 async fn rename_counts_scalars_after_control_strip() {
     use crate::session::persistence::MAX_TITLE_SCALARS;
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-strip-len";
     let sid = acp::SessionId::new("rename-strip-len-sid");
     let info = Info {
@@ -283,7 +283,7 @@ async fn rename_counts_scalars_after_control_strip() {
 async fn rename_rejects_overlong_after_control_strip() {
     use crate::session::persistence::MAX_TITLE_SCALARS;
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-strip-reject";
     let sid = acp::SessionId::new("rename-strip-reject-sid");
     let info = Info {
@@ -319,7 +319,7 @@ async fn rename_rejects_overlong_after_control_strip() {
 async fn rename_rejects_title_over_max_bytes_before_strip() {
     use crate::session::persistence::{MAX_TITLE_BYTES, MAX_TITLE_SCALARS};
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-max-bytes";
     let sid = acp::SessionId::new("rename-max-bytes-sid");
     let info = Info {
@@ -384,7 +384,7 @@ async fn rename_fanout_stamps_title_is_manual_meta() {
     use supercharge_acp_lib::{AcpAgentGatewaySender as GatewaySender, AcpClientMessage};
     use supercharge_login::{AuthManager, GrokComConfig};
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/rename-fanout-meta";
     let sid = acp::SessionId::new("rename-fanout-meta-sid");
     let info = Info {
@@ -471,7 +471,7 @@ async fn drive_reset(
 #[tokio::test]
 #[serial_test::serial]
 async fn reset_enqueues_reset_title_to_auto_on_resident_persistence_tx() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/reset-resident";
     let sid = acp::SessionId::new("reset-resident-sid");
     let info = Info {
@@ -524,7 +524,7 @@ async fn reset_enqueues_reset_title_to_auto_on_resident_persistence_tx() {
 #[tokio::test]
 #[serial_test::serial]
 async fn reset_non_resident_updates_summary_without_panic() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/reset-dormant";
     let sid = acp::SessionId::new("reset-dormant-sid");
     let info = Info {
@@ -559,7 +559,7 @@ async fn reset_non_resident_updates_summary_without_panic() {
 #[tokio::test]
 #[serial_test::serial]
 async fn reset_rejects_nonempty_title() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/reset-nonempty";
     let sid = acp::SessionId::new("reset-nonempty-sid");
     let info = Info {
@@ -612,7 +612,7 @@ async fn reset_rejects_nonempty_title() {
 #[tokio::test]
 #[serial_test::serial]
 async fn reset_rejects_chat_kind() {
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/reset-chat";
     let sid = acp::SessionId::new("reset-chat-sid");
     let info = Info {
@@ -662,7 +662,7 @@ async fn reset_fanout_stamps_title_is_manual_false() {
     use supercharge_acp_lib::{AcpAgentGatewaySender as GatewaySender, AcpClientMessage};
     use supercharge_login::{AuthManager, GrokComConfig};
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/reset-fanout";
     let sid = acp::SessionId::new("reset-fanout-sid");
     let info = Info {
@@ -773,7 +773,7 @@ async fn reset_already_auto_is_idempotent_and_skips_persistence_msg() {
     use supercharge_acp_lib::{AcpAgentGatewaySender as GatewaySender, AcpClientMessage};
     use supercharge_login::{AuthManager, GrokComConfig};
 
-    let _home = isolate_grok_home();
+    let _home = isolate_supercharge_home();
     let cwd = "/tmp/reset-idempotent";
     let sid = acp::SessionId::new("reset-idempotent-sid");
     let info = Info {

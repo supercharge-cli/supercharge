@@ -1426,7 +1426,7 @@ pub(super) fn persist_hint(
 /// is best-effort, so skip on contention.
 pub(super) fn unregister_active_session_best_effort(session_id: &acp::SessionId) {
     unregister_active_session_best_effort_in(
-        &supercharge_shell::util::grok_home::grok_home(),
+        &supercharge_shell::util::supercharge_home::supercharge_home(),
         session_id,
     );
 }

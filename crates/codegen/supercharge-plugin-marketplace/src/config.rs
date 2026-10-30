@@ -176,7 +176,7 @@ fn extract_marketplace_entries(
 /// Settings roots grok itself owns (`~/.supercharge`); sources found here are
 /// grok-native for policy scoping.
 pub fn native_settings_roots() -> Vec<PathBuf> {
-    supercharge_config::user_grok_home().into_iter().collect()
+    supercharge_config::user_supercharge_home().into_iter().collect()
 }
 
 /// Settings roots owned by other tools (`~/.claude`); sources found here are

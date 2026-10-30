@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use crate::paths::user_grok_home;
+use crate::paths::user_supercharge_home;
 
 /// Sync marker; staleness keys on this, not mtimes.
 /// Public so removal code can name it apart from the policy artifacts (removed last).
@@ -53,7 +53,7 @@ pub enum ServingIdentity {
 /// Whether to refetch for `identity`: no marker, past the timer, different identity, or a served artifact now missing.
 /// Best-effort: callers continue without managed config on failure.
 pub fn is_managed_config_stale_for(identity: &ServingIdentity) -> bool {
-    managed_config_stale_at(user_grok_home().as_deref(), identity)
+    managed_config_stale_at(user_supercharge_home().as_deref(), identity)
 }
 
 /// Fields a successful sync records.
@@ -69,7 +69,7 @@ pub struct SyncMarker<'a> {
 
 /// Record a successful sync (best-effort; called even for a config-less principal so it doesn't refetch every tick).
 pub fn mark_managed_config_synced(marker: SyncMarker<'_>) {
-    if let Some(home) = user_grok_home() {
+    if let Some(home) = user_supercharge_home() {
         mark_managed_config_synced_at(&home, marker);
     }
 }
@@ -78,7 +78,7 @@ pub fn mark_managed_config_synced(marker: SyncMarker<'_>) {
 /// A rotated or removed key therefore never reports the previous deployment's id.
 /// Team-path syncs store a team id and no fingerprint, so they never match.
 pub fn managed_deployment_id(key_fingerprint: &str) -> Option<String> {
-    managed_deployment_id_at(user_grok_home()?.as_path(), key_fingerprint)
+    managed_deployment_id_at(user_supercharge_home()?.as_path(), key_fingerprint)
 }
 
 fn managed_deployment_id_at(home: &Path, key_fingerprint: &str) -> Option<String> {
@@ -249,7 +249,7 @@ fn confirmed_switch<'a>(recorded: Option<&'a str>, current: Option<&str>) -> Opt
 /// Offline tenant-purge detector: a confirmed team switch vs the marker returns the evicted principal.
 /// Key-scoped markers never confirm (key owns the machine's policy, not the team).
 pub fn confirmed_team_switch(new_team_id: &str) -> Option<String> {
-    user_grok_home().and_then(|home| confirmed_team_switch_at(&home, new_team_id))
+    user_supercharge_home().and_then(|home| confirmed_team_switch_at(&home, new_team_id))
 }
 
 /// [`confirmed_team_switch`] for an explicit `home` (purge-lock holder: same dir as delete).
@@ -341,7 +341,7 @@ impl TamperSignals {
 /// Cache unusable now: different identity, a served artifact missing, or no marker.
 /// The session-start refresh blocks (bounded) on this but not timer-staleness, so a present same-identity cache never delays startup offline.
 pub fn is_managed_config_hard_stale_for(identity: &ServingIdentity) -> bool {
-    match user_grok_home() {
+    match user_supercharge_home() {
         Some(home) => is_managed_config_hard_stale_for_at(&home, identity),
         None => false,
     }
@@ -403,7 +403,7 @@ fn is_managed_config_hard_stale_for_at(home: &Path, identity: &ServingIdentity) 
 /// With a key compiled in, the SIGNED verdict leads: the opt-in is non-forgeable and catches edits the marker can't.
 /// A fail-closed marker then REQUIRES an authentic sidecar.
 pub fn managed_policy_compromised_for(identity: &ServingIdentity) -> bool {
-    user_grok_home().is_some_and(|home| managed_policy_compromised_for_at(&home, identity))
+    user_supercharge_home().is_some_and(|home| managed_policy_compromised_for_at(&home, identity))
 }
 
 // No retry: the gate reads this under the flock the apply holds across its write sequence.

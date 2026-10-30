@@ -38,7 +38,7 @@ pub const SUPERCHARGE_AGENT_ENV_VALUE: &str = "1";
 
 /// Force `SUPERCHARGE_AGENT=1` on an agent terminal child so request/login env cannot
 /// clear the agent marker.
-pub fn apply_grok_agent_marker(cmd: &mut tokio::process::Command) {
+pub fn apply_agent_marker(cmd: &mut tokio::process::Command) {
     cmd.env(SUPERCHARGE_AGENT_ENV, SUPERCHARGE_AGENT_ENV_VALUE);
 }
 

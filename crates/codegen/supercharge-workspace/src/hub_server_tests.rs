@@ -1340,7 +1340,7 @@ async fn handle_call_records_rpc_metrics_and_collapses_unknown_method() {
     );
     let has_bogus_series = prometheus::gather()
         .iter()
-        .filter(|mf| mf.name() == "grok_workspace_rpc_requests_total")
+        .filter(|mf| mf.name() == "supercharge_workspace_rpc_requests_total")
         .flat_map(|mf| mf.get_metric())
         .any(|m| {
             m.get_label()

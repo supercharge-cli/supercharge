@@ -1160,7 +1160,7 @@ async fn bootstrap_initial_context(
             cwd: source.child_cwd.clone(),
         };
         let storage = crate::session::storage::jsonl::JsonlStorageAdapter::with_root(
-            crate::util::grok_home::grok_home(),
+            crate::util::supercharge_home::supercharge_home(),
         );
         let copy_options = crate::session::storage::CopySessionOptions {
             parent_session_id: Some(source.child_session_id.clone()),
@@ -1304,7 +1304,7 @@ async fn bootstrap_initial_context(
     }
     if let Some(ref parent_info) = ctx.parent_session_info {
         let storage = crate::session::storage::jsonl::JsonlStorageAdapter::with_root(
-            crate::util::grok_home::grok_home(),
+            crate::util::supercharge_home::supercharge_home(),
         );
         let copy_options = crate::session::storage::CopySessionOptions {
             parent_session_id: Some(ctx.parent_session_id.clone()),

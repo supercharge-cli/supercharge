@@ -135,7 +135,7 @@ async fn get_or_refresh_cross_cwd_cache() -> Arc<CrossCwdCache> {
 }
 
 fn scan_cross_cwd_prompts() -> Vec<String> {
-    let sessions_dir = crate::util::grok_home::grok_home().join("sessions");
+    let sessions_dir = crate::util::supercharge_home::supercharge_home().join("sessions");
     let entries = match std::fs::read_dir(&sessions_dir) {
         Ok(e) => e,
         Err(_) => return Vec::new(),
@@ -158,7 +158,7 @@ fn scan_cross_cwd_prompts() -> Vec<String> {
             break;
         }
 
-        let cwd = match crate::util::grok_home::decode_cwd_from_dirname(dir) {
+        let cwd = match crate::util::supercharge_home::decode_cwd_from_dirname(dir) {
             Some(decoded) => decoded,
             None => continue,
         };

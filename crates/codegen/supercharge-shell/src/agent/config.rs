@@ -1919,7 +1919,7 @@ impl Config {
     /// Build an `AuthManager` with the configured proxy URL applied.
     pub fn create_auth_manager(&self) -> AuthManager {
         AuthManager::new_with_proxy_base_url(
-            &crate::util::grok_home::grok_home(),
+            &crate::util::supercharge_home::supercharge_home(),
             self.grok_com_config.clone(),
             self.endpoints.proxy_url(),
         )
@@ -3219,7 +3219,7 @@ fn grok_telemetry_env_enabled() -> Option<bool> {
 /// env vars.
 /// The merged config layer can't express that: last-merge-wins loses provenance.
 pub(crate) fn read_requirements_toml() -> Option<toml::Value> {
-    let path = crate::util::grok_home::grok_home().join("requirements.toml");
+    let path = crate::util::supercharge_home::supercharge_home().join("requirements.toml");
     let content = std::fs::read_to_string(&path).ok()?;
     toml::from_str(&content).ok()
 }

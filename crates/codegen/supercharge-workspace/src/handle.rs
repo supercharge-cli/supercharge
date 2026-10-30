@@ -18,7 +18,7 @@ const DEFAULT_TERMINATION_GRACE_MS: u64 = 45_000;
 const DEFAULT_DRAINING_FILE: &str = "/tmp/workspace-server.draining";
 static DRAIN_STARTED_TOTAL: std::sync::LazyLock<IntCounterVec> = std::sync::LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_drain_started_total",
+        "supercharge_workspace_drain_started_total",
         "Graceful drains started, by trigger reason",
         &["reason"]
     )
@@ -26,7 +26,7 @@ static DRAIN_STARTED_TOTAL: std::sync::LazyLock<IntCounterVec> = std::sync::Lazy
 });
 static DRAIN_COMPLETED_TOTAL: std::sync::LazyLock<IntCounterVec> = std::sync::LazyLock::new(|| {
     register_int_counter_vec!(
-        "grok_workspace_drain_completed_total",
+        "supercharge_workspace_drain_completed_total",
         "Graceful drains completed, by outcome",
         &["outcome"]
     )
@@ -34,7 +34,7 @@ static DRAIN_COMPLETED_TOTAL: std::sync::LazyLock<IntCounterVec> = std::sync::La
 });
 static DRAIN_DURATION: std::sync::LazyLock<Histogram> = std::sync::LazyLock::new(|| {
     register_histogram!(
-        "grok_workspace_drain_duration_seconds",
+        "supercharge_workspace_drain_duration_seconds",
         "Wall-clock duration of a graceful two-phase drain",
         vec![0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0]
     )
@@ -42,7 +42,7 @@ static DRAIN_DURATION: std::sync::LazyLock<Histogram> = std::sync::LazyLock::new
 });
 static DRAIN_LOST_ITEMS_TOTAL: std::sync::LazyLock<IntCounter> = std::sync::LazyLock::new(|| {
     register_int_counter!(
-        "grok_workspace_drain_lost_items_total",
+        "supercharge_workspace_drain_lost_items_total",
         "Upload-queue items still pending when a drain deadline was exceeded (expected 0)"
     )
     .unwrap()
@@ -50,7 +50,7 @@ static DRAIN_LOST_ITEMS_TOTAL: std::sync::LazyLock<IntCounter> = std::sync::Lazy
 static PRODUCER_SPAWNED_AFTER_DRAIN_TOTAL: std::sync::LazyLock<IntCounter> =
     std::sync::LazyLock::new(|| {
         register_int_counter!(
-            "grok_workspace_producer_spawned_after_drain_total",
+            "supercharge_workspace_producer_spawned_after_drain_total",
             "Artifact producers spawned after a drain started — still tracked, but \
              their artifacts may miss the drain's queue flush (expected 0)"
         )
@@ -60,7 +60,7 @@ static PRODUCER_SPAWNED_AFTER_DRAIN_TOTAL: std::sync::LazyLock<IntCounter> =
 static STARTUP_STAGE_DURATION_SECONDS: std::sync::LazyLock<HistogramVec> =
     std::sync::LazyLock::new(|| {
         register_histogram_vec!(
-            "grok_workspace_startup_stage_duration_seconds",
+            "supercharge_workspace_startup_stage_duration_seconds",
             "Workspace-server startup stage wall time by stage and outcome \
              (ok/error; fat-tail failures are recorded, not only success): \
              startup_recovery, tool_catalog, hub_ws_connect \
@@ -111,7 +111,7 @@ fn observe_connect_hub_catalog_result(
 static WORKSPACE_BIND_ZERO_TOOLS_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_bind_zero_tools_total",
+            "supercharge_workspace_bind_zero_tools_total",
             "session.bind resolutions advertising zero model-facing tools, by reason",
             &["reason"]
         )
@@ -122,7 +122,7 @@ static WORKSPACE_BIND_ZERO_TOOLS_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_BIND_MCP_DEGRADED_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_bind_mcp_degraded_total",
+            "supercharge_workspace_bind_mcp_degraded_total",
             "session.bind resolutions that succeeded with MCP degraded, by reason",
             &["reason"]
         )
@@ -131,7 +131,7 @@ static WORKSPACE_BIND_MCP_DEGRADED_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_BIND_FAILED_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_bind_failed_total",
+            "supercharge_workspace_bind_failed_total",
             "session.bind resolutions that failed the bind, by reason",
             &["reason"]
         )
@@ -141,7 +141,7 @@ static WORKSPACE_BIND_FAILED_TOTAL: std::sync::LazyLock<IntCounterVec> =
 static WORKSPACE_BIND_UNSERVED_TOOLS_TOTAL: std::sync::LazyLock<IntCounter> =
     std::sync::LazyLock::new(|| {
         register_int_counter!(
-            "grok_workspace_bind_unserved_tools_total",
+            "supercharge_workspace_bind_unserved_tools_total",
             "Pinned tool ids unknown to this binary at session.bind (reported, not served)"
         )
         .unwrap()
@@ -151,7 +151,7 @@ static WORKSPACE_BIND_UNSERVED_TOOLS_TOTAL: std::sync::LazyLock<IntCounter> =
 static WORKSPACE_BIND_ADVERTISED_TOOLS: std::sync::LazyLock<Histogram> =
     std::sync::LazyLock::new(|| {
         register_histogram!(
-            "grok_workspace_bind_advertised_tools",
+            "supercharge_workspace_bind_advertised_tools",
             "Model-facing tools advertised per successful session.bind",
             vec![
                 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 16.0, 20.0, 30.0
@@ -163,7 +163,7 @@ static WORKSPACE_BIND_ADVERTISED_TOOLS: std::sync::LazyLock<Histogram> =
 pub(crate) static WORKSPACE_TERMINAL_BACKEND_ORPHANED_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_terminal_backend_orphaned_total",
+            "supercharge_workspace_terminal_backend_orphaned_total",
             "Terminal backends detected orphaned from their session, by detection path \
              (tripwire, expected 0)",
             &["path"]
@@ -174,7 +174,7 @@ pub(crate) static WORKSPACE_TERMINAL_BACKEND_ORPHANED_TOTAL: std::sync::LazyLock
 /// A non-zero rate means `WorkspaceEnvironment::capture` is faulting for real sessions and dropping the artifact.
 static ENV_CAPTURE_PANIC_TOTAL: std::sync::LazyLock<IntCounter> = std::sync::LazyLock::new(|| {
     register_int_counter!(
-        "grok_workspace_env_capture_panic_total",
+        "supercharge_workspace_env_capture_panic_total",
         "Environment-capture blocking task panics (tripwire, expected 0)"
     )
     .unwrap()
@@ -203,7 +203,7 @@ use supercharge_tool_protocol::turn_hook::{AfterTurnAckPayload, AfterTurnAckStat
 pub(crate) static REWIND_CHECKPOINT_CAPTURE_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rewind_checkpoint_capture_total",
+            "supercharge_workspace_rewind_checkpoint_capture_total",
             "Total rewind-checkpoint domain captures",
             &["domain", "outcome"]
         )
@@ -213,7 +213,7 @@ pub(crate) static REWIND_CHECKPOINT_CAPTURE_TOTAL: std::sync::LazyLock<IntCounte
 pub(crate) static REWIND_CHECKPOINT_FINALIZE_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rewind_checkpoint_finalize_total",
+            "supercharge_workspace_rewind_checkpoint_finalize_total",
             "Total rewind-checkpoint finalizes",
             &["outcome"]
         )
@@ -223,7 +223,7 @@ pub(crate) static REWIND_CHECKPOINT_FINALIZE_TOTAL: std::sync::LazyLock<IntCount
 pub(crate) static REWIND_RESTORE_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rewind_restore_total",
+            "supercharge_workspace_rewind_restore_total",
             "Total rewind-checkpoint domain restores",
             &["domain", "result"]
         )
@@ -233,7 +233,7 @@ pub(crate) static REWIND_RESTORE_TOTAL: std::sync::LazyLock<IntCounterVec> =
 pub(crate) static REWIND_CHECKPOINT_DURATION: std::sync::LazyLock<HistogramVec> =
     std::sync::LazyLock::new(|| {
         register_histogram_vec!(
-            "grok_workspace_rewind_checkpoint_duration_seconds",
+            "supercharge_workspace_rewind_checkpoint_duration_seconds",
             "Duration of rewind-checkpoint per-domain capture operations",
             &["domain"],
             vec![0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
@@ -245,7 +245,7 @@ pub(crate) static REWIND_CHECKPOINT_DURATION: std::sync::LazyLock<HistogramVec> 
 pub(crate) static REWIND_NON_COMPLETED_FINALIZE_TOTAL: std::sync::LazyLock<IntCounterVec> =
     std::sync::LazyLock::new(|| {
         register_int_counter_vec!(
-            "grok_workspace_rewind_non_completed_finalize_total",
+            "supercharge_workspace_rewind_non_completed_finalize_total",
             "Non-Completed after_turn boundaries that produced a rewind finalize",
             &["outcome"]
         )
@@ -4432,14 +4432,14 @@ pub(crate) async fn build_local_workspace(
     .map_err(|e| WorkspaceError::HubError(format!("failed to create workspace: {e}")))?;
     Ok(ws_handle)
 }
-/// Resolve `$SUPERCHARGE_WORKSPACE_HOME`, the workspace-owned on-disk state root. `<grok_home>/workspace`, where `<grok_home>` honours `$SUPERCHARGE_HOME` and otherwise falls back to `~/.supercharge` (see [`supercharge_config::grok_home`]).
+/// Resolve `$SUPERCHARGE_WORKSPACE_HOME`, the workspace-owned on-disk state root. `<supercharge_home>/workspace`, where `<supercharge_home>` honours `$SUPERCHARGE_HOME` and otherwise falls back to `~/.supercharge` (see [`supercharge_config::supercharge_home`]).
 pub fn resolve_workspace_home() -> std::path::PathBuf {
     if let Ok(p) = std::env::var("SUPERCHARGE_WORKSPACE_HOME")
         && !p.trim().is_empty()
     {
         return std::path::PathBuf::from(p);
     }
-    supercharge_config::grok_home().join("workspace")
+    supercharge_config::supercharge_home().join("workspace")
 }
 /// Skill `ignore` entries for the allow-list: subdirs of `dir` not in the comma-separated list (`bundled__` prefix optional).
 /// Unreadable `dir` fails closed (ignore `dir` itself).

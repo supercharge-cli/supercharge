@@ -183,7 +183,7 @@ impl LeaderServerControlState {
             cursor_worker: Arc::new(CursorWorkerControl::new(
                 CursorWorkerConfig::default(),
                 None,
-                crate::util::grok_home::grok_home(),
+                crate::util::supercharge_home::supercharge_home(),
                 ExternalRoster::new(),
             )),
         }
@@ -193,19 +193,19 @@ impl LeaderServerControlState {
         self
     }
     /// The worker door reads `[cursor_worker]`, falls back to `hub.url` for the hub
-    /// origin, keeps its worktrees under `grok_home`, and publishes its claims into `roster`
+    /// origin, keeps its worktrees under `supercharge_home`, and publishes its claims into `roster`
     /// (owned by `run_leader`).
     pub(crate) fn with_cursor_worker(
         mut self,
         config: CursorWorkerConfig,
         leader_hub_url: Option<String>,
-        grok_home: std::path::PathBuf,
+        supercharge_home: std::path::PathBuf,
         roster: ExternalRoster,
     ) -> Self {
         self.cursor_worker = Arc::new(CursorWorkerControl::new(
             config,
             leader_hub_url,
-            grok_home,
+            supercharge_home,
             roster,
         ));
         self

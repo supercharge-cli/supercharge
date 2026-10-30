@@ -34,7 +34,7 @@ use std::sync::OnceLock;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Returns a process-wide test `SUPERCHARGE_HOME`, initialized exactly once per test binary. Once initialized,
-/// `supercharge_config::grok_home()` will resolve to this directory for the lifetime of the process. Also clears env vars
+/// `supercharge_config::supercharge_home()` will resolve to this directory for the lifetime of the process. Also clears env vars
 /// that the auto-update code consults so a parent shell's values can't pollute the baseline.
 pub fn test_home() -> &'static PathBuf {
     static HOME: OnceLock<PathBuf> = OnceLock::new();

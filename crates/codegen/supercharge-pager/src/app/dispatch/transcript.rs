@@ -639,8 +639,8 @@ pub(super) fn dispatch_dump_input_log(app: &mut AppView) -> Vec<Effect> {
         }
     };
 
-    let grok_home = supercharge_tools::util::grok_home::grok_home();
-    let logs_dir = grok_home.join("logs");
+    let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
+    let logs_dir = supercharge_home.join("logs");
     let _ = std::fs::create_dir_all(&logs_dir);
     let ts = now.format("%Y%m%d-%H%M%S");
     let path = logs_dir.join(format!("input-debug-{ts}.json"));

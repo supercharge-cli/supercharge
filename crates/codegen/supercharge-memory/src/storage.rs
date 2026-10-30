@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use supercharge_config_types::MemoryMode;
-use supercharge_tools::util::grok_home::grok_home;
+use supercharge_tools::util::supercharge_home::supercharge_home;
 
 /// Write-operation scope. Distinct from `supercharge_agent::config::MemoryScope` (agent memory dir).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +63,7 @@ impl MemoryStorage {
             MemoryMode::V2 => {
                 let root = root_override
                     .map(Path::to_path_buf)
-                    .unwrap_or_else(|| grok_home().join("memory-v2"));
+                    .unwrap_or_else(|| supercharge_home().join("memory-v2"));
                 Self {
                     mode,
                     global_dir: root.join("global"),
@@ -84,7 +84,7 @@ impl MemoryStorage {
     fn new_inner(cwd: &Path, root_override: Option<&Path>, use_workspace_hash: bool) -> Self {
         let global_dir = root_override
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| grok_home().join("memory"));
+            .unwrap_or_else(|| supercharge_home().join("memory"));
         let workspace_dir = if use_workspace_hash {
             let workspace_hash = compute_workspace_hash(cwd);
             global_dir.join(&workspace_hash)

@@ -171,15 +171,15 @@ mod init_metrics_tests {
                 })
         };
         assert!(has(
-            "grok_workspace_upload_outcome_total",
+            "supercharge_workspace_upload_outcome_total",
             &[("phase", "tool_state"), ("outcome", "succeeded")]
         ));
         assert!(has(
-            "grok_workspace_rpc_requests_total",
+            "supercharge_workspace_rpc_requests_total",
             &[("method", "unknown"), ("result", "error")]
         ));
         assert!(has(
-            "grok_workspace_rpc_errors_total",
+            "supercharge_workspace_rpc_errors_total",
             &[("method", "unknown"), ("error_kind", "unknown_method")]
         ));
         for stage in [
@@ -192,7 +192,7 @@ mod init_metrics_tests {
             for outcome in ["ok", "error"] {
                 assert!(
                     has(
-                        "grok_workspace_startup_stage_duration_seconds",
+                        "supercharge_workspace_startup_stage_duration_seconds",
                         &[("stage", stage), ("outcome", outcome)]
                     ),
                     "missing baseline stage={stage} outcome={outcome}"
@@ -200,11 +200,11 @@ mod init_metrics_tests {
             }
         }
         assert!(has(
-            "grok_workspace_drain_started_total",
+            "supercharge_workspace_drain_started_total",
             &[("reason", "sigterm")]
         ));
         assert!(has(
-            "grok_workspace_toolset_swap_rejected_total",
+            "supercharge_workspace_toolset_swap_rejected_total",
             &[("reason", "turn_active"), ("trigger", "update_tool_config")]
         ));
         for outcome in [
@@ -216,25 +216,25 @@ mod init_metrics_tests {
         ] {
             assert!(
                 has(
-                    "grok_workspace_oidc_proactive_refresh_total",
+                    "supercharge_workspace_oidc_proactive_refresh_total",
                     &[("outcome", outcome)]
                 ),
                 "missing oidc refresh baseline outcome={outcome}"
             );
         }
         assert!(has(
-            "grok_workspace_orphan_lost_total",
+            "supercharge_workspace_orphan_lost_total",
             &[("reason", "sha_mismatch")]
         ));
         assert!(
             families
                 .iter()
-                .any(|mf| mf.name() == "grok_workspace_env_capture_panic_total")
+                .any(|mf| mf.name() == "supercharge_workspace_env_capture_panic_total")
         );
         assert!(
             families
                 .iter()
-                .any(|mf| mf.name() == "grok_workspace_permission_timeout_total")
+                .any(|mf| mf.name() == "supercharge_workspace_permission_timeout_total")
         );
     }
 }

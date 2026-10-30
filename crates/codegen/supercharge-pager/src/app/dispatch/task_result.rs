@@ -626,7 +626,7 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                 vec![Effect::DetectForeignResumeHint {
                     canonical_cwd,
                     compat: app.foreign_session_compat,
-                    grok_home: supercharge_tools::util::grok_home::grok_home(),
+                    supercharge_home: supercharge_tools::util::supercharge_home::supercharge_home(),
                     launch_token,
                 }]
             } else {

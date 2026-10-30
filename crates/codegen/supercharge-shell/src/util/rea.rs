@@ -9,7 +9,7 @@ pub fn ensure_builtin_skills() -> Option<PathBuf> {
     static SKILL_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     SKILL_DIR
         .get_or_init(|| {
-            let home = supercharge_tools::util::grok_home::grok_home();
+            let home = supercharge_tools::util::supercharge_home::supercharge_home();
             match supercharge_shared::rea::materialize(&home) {
                 Ok(dir) => Some(dir),
                 Err(error) => {

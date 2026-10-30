@@ -1122,7 +1122,7 @@ impl MemoryScope {
     pub fn resolve_dir(self, agent_name: &str, project_cwd: &std::path::Path) -> ResolvedMemoryDir {
         match self {
             Self::User => ResolvedMemoryDir {
-                path: supercharge_config::grok_home()
+                path: supercharge_config::supercharge_home()
                     .join("agent-memory")
                     .join(agent_name),
                 is_project_scoped: false,
@@ -1340,7 +1340,7 @@ impl AgentDefinition {
     }
     fn scope_from_path(path: &Path) -> AgentScope {
         let path_str = path.to_string_lossy();
-        let grok = supercharge_config::user_grok_home();
+        let grok = supercharge_config::user_supercharge_home();
         let home = supercharge_dirs::home_dir();
         for (dir, scope) in crate::discovery::user_agent_dirs(home.as_deref(), grok.as_deref()) {
             if path.starts_with(&dir) {

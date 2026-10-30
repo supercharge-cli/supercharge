@@ -510,11 +510,11 @@ impl ScriptedScenarioRunner {
             .collect();
 
         if let Some(config_toml) = &scenario.environment.config_toml {
-            let grok_home = content.home().join(".supercharge");
-            fs::create_dir_all(&grok_home).with_context(|| {
-                format!("create scenario SUPERCHARGE_HOME {}", grok_home.display())
+            let supercharge_home = content.home().join(".supercharge");
+            fs::create_dir_all(&supercharge_home).with_context(|| {
+                format!("create scenario SUPERCHARGE_HOME {}", supercharge_home.display())
             })?;
-            fs::write(grok_home.join("config.toml"), config_toml)
+            fs::write(supercharge_home.join("config.toml"), config_toml)
                 .context("write scenario config.toml")?;
         }
 

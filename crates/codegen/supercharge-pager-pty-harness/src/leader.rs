@@ -29,9 +29,9 @@ impl LeaderCluster {
             .await
             .context("start content controller")?;
         // One shared SUPERCHARGE_HOME means one leader; the socket lives beneath it so every client (sharing the same env) elects/attaches to the same one
-        let grok_home = content.home().join(".supercharge");
-        std::fs::create_dir_all(&grok_home).context("create grok home")?;
-        let socket = grok_home.join("leader-e2e.sock");
+        let supercharge_home = content.home().join(".supercharge");
+        std::fs::create_dir_all(&supercharge_home).context("create grok home")?;
+        let socket = supercharge_home.join("leader-e2e.sock");
         let binary = pager_binary().context("resolve pager binary")?;
         Ok(Self {
             content,

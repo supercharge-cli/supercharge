@@ -347,7 +347,7 @@ pub(super) fn test_summary(
         head_commit: None,
         head_branch: None,
         request_id: None,
-        grok_home: None,
+        supercharge_home: None,
         last_active_at: None,
         generated_title: None,
         title_is_manual: false,

@@ -22,7 +22,7 @@ pub(crate) fn resolve(
     compressed: &[u8],
     expected_sha256: &str,
 ) -> Result<Option<PathBuf>, InstallError> {
-    let dir = crate::util::grok_home().join("vendor");
+    let dir = crate::util::supercharge_home().join("vendor");
     match install(&dir, versioned_name, compressed, expected_sha256) {
         Ok(path) => Ok(Some(path)),
         Err(InstallError::Io(err)) => {

@@ -91,9 +91,9 @@ pub(in crate::agent::remote_config) fn evaluate_models_commit(
 pub(in crate::agent::remote_config) fn resolve_disk_auth(
     grok_com_config: Option<GrokComConfig>,
 ) -> Option<GrokAuth> {
-    let grok_home = crate::util::grok_home::grok_home();
+    let supercharge_home = crate::util::supercharge_home::supercharge_home();
     AuthManager::new_with_proxy_base_url(
-        &grok_home,
+        &supercharge_home,
         grok_com_config.unwrap_or_default(),
         crate::agent::config::EndpointsConfig::from_effective_config().proxy_url(),
     )

@@ -4,9 +4,9 @@ const BUILTIN_FILES: &[(&str, &str)] = &[("README.md", include_str!("../README-s
 
 /// Extract built-in metadata files to `~/.supercharge/` on startup.
 /// User skills under `~/.supercharge/skills/` are never managed here. Platform skills are delivered separately through the bundled skill cache.
-pub fn extract_builtin_files(grok_home: &std::path::Path) {
+pub fn extract_builtin_files(supercharge_home: &std::path::Path) {
     let version = supercharge_version::VERSION;
-    let marker = grok_home.join(".metadata_version");
+    let marker = supercharge_home.join(".metadata_version");
 
     if let Ok(existing) = std::fs::read_to_string(&marker)
         && existing.trim() == version
@@ -14,15 +14,15 @@ pub fn extract_builtin_files(grok_home: &std::path::Path) {
         return;
     }
 
-    let _ = std::fs::create_dir_all(grok_home);
+    let _ = std::fs::create_dir_all(supercharge_home);
 
     // Clean up cached changelog files from previous version so /release-notes fetches fresh content for the new version
     for stale in &["CHANGELOG.json", "CHANGELOG.md"] {
-        let _ = std::fs::remove_file(grok_home.join(stale));
+        let _ = std::fs::remove_file(supercharge_home.join(stale));
     }
 
     for &(filename, content) in BUILTIN_FILES {
-        if let Err(e) = std::fs::write(grok_home.join(filename), content) {
+        if let Err(e) = std::fs::write(supercharge_home.join(filename), content) {
             tracing::debug!(error = %e, filename, "Failed to extract built-in file");
         }
     }
@@ -126,19 +126,19 @@ const FORMER_PLATFORM_SKILL_HASHES: &[(&str, &str)] = &[
 /// Remove platform-skill leftovers extracted into `$SUPERCHARGE_HOME/skills/` by pre-bundle binaries, where they shadow `bundled/skills/`.
 /// Only dirs whose `SKILL.md` byte-matches a known shipped body are removed; user skills and edits are kept.
 /// Runs every startup so restored backups get re-cleaned.
-pub fn purge_stale_extracted_skills(grok_home: &std::path::Path) {
-    purge_skill_dirs_matching(grok_home, FORMER_PLATFORM_SKILL_HASHES);
+pub fn purge_stale_extracted_skills(supercharge_home: &std::path::Path) {
+    purge_skill_dirs_matching(supercharge_home, FORMER_PLATFORM_SKILL_HASHES);
 }
 
-fn purge_skill_dirs_matching(grok_home: &std::path::Path, known: &[(&str, &str)]) {
+fn purge_skill_dirs_matching(supercharge_home: &std::path::Path, known: &[(&str, &str)]) {
     // For reversing the extract-time `~/.supercharge/` -> home rewrite (help only).
-    let home_prefix = format!("{}/", grok_home.to_string_lossy());
+    let home_prefix = format!("{}/", supercharge_home.to_string_lossy());
 
     let mut names: Vec<&str> = known.iter().map(|&(name, _)| name).collect();
     names.dedup();
 
     for name in names {
-        let dir = grok_home.join("skills").join(name);
+        let dir = supercharge_home.join("skills").join(name);
         // Absent or unreadable: nothing provably ours.
         let Ok(content) = std::fs::read_to_string(dir.join("SKILL.md")) else {
             continue;

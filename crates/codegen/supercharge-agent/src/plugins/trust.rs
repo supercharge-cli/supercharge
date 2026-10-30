@@ -31,9 +31,9 @@ impl TrustStore {
     /// If `~/.supercharge/trusted-plugins` does not exist, returns an empty store.
     /// If the file cannot be read, logs a warning and returns an empty store.
     pub fn load() -> Self {
-        // Gate on user_grok_home() so a project's `.supercharge/trusted-plugins` is never read as the user trust store
+        // Gate on user_supercharge_home() so a project's `.supercharge/trusted-plugins` is never read as the user trust store
         // That happens when neither SUPERCHARGE_HOME nor a home dir resolves
-        let Some(grok) = supercharge_config::user_grok_home() else {
+        let Some(grok) = supercharge_config::user_supercharge_home() else {
             return Self {
                 trusted: HashSet::new(),
                 file_path: PathBuf::new(),

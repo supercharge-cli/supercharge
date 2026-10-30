@@ -108,7 +108,7 @@ impl Fixture {
             } else {
                 benchmark_unrelated_cwd(workspace_index - SAME_REPO_CANDIDATE_COUNT)
             };
-            let encoded = supercharge_shell::util::grok_home::encode_cwd_dirname(&cwd);
+            let encoded = supercharge_shell::util::supercharge_home::encode_cwd_dirname(&cwd);
             let cwd_dir = sessions_root.join(encoded);
             fs::create_dir(&cwd_dir).expect("create encoded cwd directory");
             let session_count = if same_repo {
@@ -513,13 +513,14 @@ fn write_summary(
         fork_parent_prompt_id: None,
         inherited_prefix_len: None,
         hidden: None,
+        permission_mode: None,
         source_workspace_dir: None,
         git_root_dir: Some(cwd.to_owned()),
         git_remotes: vec!["git@github.com:xai-org/benchmark.git".to_owned()],
         head_commit: Some(format!("{ordinal:040x}")),
         head_branch: Some("main".to_owned()),
         request_id: None,
-        grok_home: None,
+        supercharge_home: None,
         last_active_at: Some(active_at),
         generated_title: Some(format!("Benchmark session {ordinal}")),
         title_is_manual: false,
@@ -568,7 +569,7 @@ fn bench_session_list(c: &mut Criterion) {
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", home.path());
     }
-    assert_eq!(supercharge_shell::util::grok_home::grok_home(), home.path());
+    assert_eq!(supercharge_shell::util::supercharge_home::supercharge_home(), home.path());
     let fixture = Fixture::new(home);
 
     let runtime = tokio::runtime::Builder::new_current_thread()

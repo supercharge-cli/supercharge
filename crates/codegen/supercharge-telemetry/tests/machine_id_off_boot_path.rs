@@ -3,7 +3,7 @@
 #[test]
 fn env_override_pins_the_agent_id_without_persisting_it() {
     let home = tempfile::tempdir().expect("tempdir");
-    // SAFETY: single-threaded here; set before anything caches `grok_home()`.
+    // SAFETY: single-threaded here; set before anything caches `supercharge_home()`.
     unsafe {
         std::env::set_var("SUPERCHARGE_HOME", home.path());
         std::env::set_var("SUPERCHARGE_AGENT_ID", "pinned-agent-id");

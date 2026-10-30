@@ -17,7 +17,7 @@ fn write_session(
     sandbox_profile: Option<&str>,
     hidden: bool,
 ) {
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join(session_id);
     fs::create_dir_all(&dir).unwrap();
     let mut summary = serde_json::json!({
@@ -95,7 +95,7 @@ fn explicit_remote_id_resolves_local_child_profile() {
     let root = tmp.path().join("sessions");
     let cwd = "/work/remote";
     // A remote session restored into a local child: the child has a fresh id and records the remote id as `parent_session_id`
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join("local-child");
     fs::create_dir_all(&dir).unwrap();
     let summary = serde_json::json!({
@@ -190,7 +190,7 @@ fn most_recent_cwd_skips_corrupt_summary() {
         false,
     );
     let corrupt_dir = root
-        .join(crate::util::grok_home::encode_cwd_dirname(cwd))
+        .join(crate::util::supercharge_home::encode_cwd_dirname(cwd))
         .join("corrupt");
     fs::create_dir_all(&corrupt_dir).unwrap();
     fs::write(corrupt_dir.join("summary.json"), b"not-json").unwrap();
@@ -380,7 +380,7 @@ fn most_recent_cwd_skips_headless_session() {
         Some("workspace"),
         false,
     );
-    let encoded = crate::util::grok_home::encode_cwd_dirname(cwd);
+    let encoded = crate::util::supercharge_home::encode_cwd_dirname(cwd);
     let dir = root.join(&encoded).join("headless-newer");
     fs::create_dir_all(&dir).unwrap();
     let summary = serde_json::json!({

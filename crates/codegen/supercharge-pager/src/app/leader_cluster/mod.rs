@@ -7,11 +7,11 @@
 //! Effects run through the real `effects::execute` (the same loop `event_loop::run` performs, minus the terminal).
 //!
 //! Env sandboxing follows this crate's `serial(SUPERCHARGE_HOME)` idiom.
-//! `grok_home()` is process-cached (OnceLock), so disk assertions always go through [`effective_grok_home`] rather than assuming the temp dir won.
+//! `supercharge_home()` is process-cached (OnceLock), so disk assertions always go through [`effective_supercharge_home`] rather than assuming the temp dir won.
 //!
 //! The scenarios are `#[ignore]`d in the shared lib test binary.
 //! The harness mutates process-global env (proxy URLs, `XAI_API_KEY`, `SUPERCHARGE_LEADER_SOCKET`, `SUPERCHARGE_HOME`) for a real agent's whole lifetime.
-//! In a several-thousand-test process that mutation poisons concurrently-running tests; `grok_home()`'s OnceLock is usually already pinned too.
+//! In a several-thousand-test process that mutation poisons concurrently-running tests; `supercharge_home()`'s OnceLock is usually already pinned too.
 //! Run on demand:
 //!
 //! ```bash
@@ -59,9 +59,9 @@ async fn bounded<T>(what: &str, fut: impl std::future::Future<Output = T>) -> T 
         .unwrap_or_else(|_| panic!("leader-cluster bring-up timed out: {what}"))
 }
 
-/// The grok home the agent actually persisted under: `grok_home()` is process-cached, so an earlier test in this binary may have pinned it.
-fn effective_grok_home() -> PathBuf {
-    supercharge_config::grok_home()
+/// The grok home the agent actually persisted under: `supercharge_home()` is process-cached, so an earlier test in this binary may have pinned it.
+fn effective_supercharge_home() -> PathBuf {
+    supercharge_config::supercharge_home()
 }
 
 /// Concatenated agent-message text across a view's scrollback (copy of the acp_handler tests' helper; that one is test-mod private).
@@ -263,7 +263,7 @@ struct PagerLeaderCluster {
     /// Field order matters: `_flock` drops first, removing its lock/sock files while the env still points at the sandbox.
     /// Then the guards restore the env, then the temp home is deleted.
     _env: Vec<crate::test_util::EnvVarGuard>,
-    _grok_home: TempDir,
+    _supercharge_home: TempDir,
 }
 
 impl PagerLeaderCluster {
@@ -273,12 +273,12 @@ impl PagerLeaderCluster {
         supercharge_extra_ca::ensure_default_crypto_provider();
 
         let server = MockInferenceServer::start().await.expect("mock server");
-        let grok_home = TempDir::new().unwrap();
+        let supercharge_home = TempDir::new().unwrap();
         let workdir = TempDir::new().unwrap();
-        let sock_path = grok_home.path().join("leader-cluster.sock");
+        let sock_path = supercharge_home.path().join("leader-cluster.sock");
 
         let env = vec![
-            crate::test_util::EnvVarGuard::set("SUPERCHARGE_HOME", grok_home.path()),
+            crate::test_util::EnvVarGuard::set("SUPERCHARGE_HOME", supercharge_home.path()),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_CLI_CHAT_PROXY_BASE_URL", server.url()),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_API_BASE_URL", server.url()),
             crate::test_util::EnvVarGuard::set("SUPERCHARGE_API_KEY", "test-key-for-ci"),
@@ -308,7 +308,7 @@ impl PagerLeaderCluster {
             authenticated: false,
             _flock: flock,
             _env: env,
-            _grok_home: grok_home,
+            _supercharge_home: supercharge_home,
         };
         cluster.spawn_leader_generation().await;
         cluster

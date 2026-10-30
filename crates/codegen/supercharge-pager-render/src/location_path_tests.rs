@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn shorten_location_path_kerem_grok_home() {
+fn shorten_location_path_kerem_supercharge_home() {
     assert_eq!(
         shorten_location_path("~/.supercharge/worktrees/code-xai/dashboard-design").as_ref(),
         "~/.g/w/code-xai/dashboard-design"
@@ -156,7 +156,7 @@ fn shorten_location_path_unix_backslash_stays_in_component() {
 }
 
 #[test]
-fn shorten_location_path_does_not_eat_grok_home_lookalike() {
+fn shorten_location_path_does_not_eat_supercharge_home_lookalike() {
     assert_eq!(
         shorten_location_path("$SUPERCHARGE_HOME_BACKUP/a/b/c").as_ref(),
         "$/a/b/c"

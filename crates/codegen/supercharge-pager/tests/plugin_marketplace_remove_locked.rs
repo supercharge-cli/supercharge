@@ -4,11 +4,11 @@
 #[test]
 fn cli_marketplace_remove_fails_closed_when_init_flock_held() {
     // One #[test] per binary: the env is process-global.
-    let grok_home = tempfile::tempdir().expect("grok home");
+    let supercharge_home = tempfile::tempdir().expect("grok home");
     // SAFETY: no other threads are running yet.
-    unsafe { std::env::set_var("SUPERCHARGE_HOME", grok_home.path()) };
+    unsafe { std::env::set_var("SUPERCHARGE_HOME", supercharge_home.path()) };
 
-    let config_path = grok_home.path().join("config.toml");
+    let config_path = supercharge_home.path().join("config.toml");
     std::fs::write(
         &config_path,
         "[[marketplace.sources]]\nname = \"a\"\ngit = \"https://example.com/a.git\"\n",
@@ -16,7 +16,7 @@ fn cli_marketplace_remove_fails_closed_when_init_flock_held() {
     .unwrap();
 
     let _flock =
-        supercharge_shell::util::config::acquire_init_lock(grok_home.path()).expect("init flock");
+        supercharge_shell::util::config::acquire_init_lock(supercharge_home.path()).expect("init flock");
 
     let result = tokio::runtime::Builder::new_current_thread()
         .enable_all()

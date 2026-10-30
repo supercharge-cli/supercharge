@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use supercharge_tty_utils::git_command;
 
-use crate::util::grok_home::grok_home;
+use crate::util::supercharge_home::supercharge_home;
 
 const WORKTREE_POOL_LOG: &str = "xai_worktree_pool";
 
@@ -149,7 +149,7 @@ fn cleanup_stale_pool_worktrees_inner() {
 
 /// The base pool directory under `~/.supercharge/`.
 fn pool_base_directory() -> PathBuf {
-    grok_home().join("worktree_pool")
+    supercharge_home().join("worktree_pool")
 }
 
 #[cfg(test)]

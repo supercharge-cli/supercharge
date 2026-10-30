@@ -61,7 +61,7 @@ pub(crate) struct SettingsCacheManager {
 impl SettingsCacheManager {
     pub(crate) fn new() -> Self {
         Self {
-            path: crate::util::grok_home::grok_home().join(SETTINGS_CACHE_FILE),
+            path: crate::util::supercharge_home::supercharge_home().join(SETTINGS_CACHE_FILE),
             ttl: SETTINGS_CACHE_TTL,
         }
     }

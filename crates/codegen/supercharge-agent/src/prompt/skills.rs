@@ -91,7 +91,7 @@ pub async fn list_skills_with_plugins(
 ) -> Vec<SkillInfo> {
     let _skill_discovery_timer = crate::timing::timer("skill_discovery");
     let workspace_user_dir = crate::prompt::workspace_user::optional_workspace_user_dir();
-    let grok_home = supercharge_tools::util::grok_home::grok_home();
+    let supercharge_home = supercharge_tools::util::supercharge_home::supercharge_home();
 
     let (discovery_cwd, discovery_user_dir) = if project_trusted {
         (working_directory, workspace_user_dir.as_deref())
@@ -99,7 +99,7 @@ pub async fn list_skills_with_plugins(
         (None, None)
     };
     let mut skills =
-        list_skills_with_options(discovery_cwd, discovery_user_dir, &grok_home, compat).await;
+        list_skills_with_options(discovery_cwd, discovery_user_dir, &supercharge_home, compat).await;
 
     let git_root = working_directory
         .map(Path::new)
@@ -115,7 +115,7 @@ pub async fn list_skills_with_plugins(
         SkillScope::Bundled,
     ));
     // Skills shipped inside the binary are written under the app home at startup.
-    let builtin_root = grok_home.join(BUILTIN_SKILLS_DIR);
+    let builtin_root = supercharge_home.join(BUILTIN_SKILLS_DIR);
     if builtin_root.is_dir() {
         skills.extend(collect_injected_skills(
             &[builtin_root.to_string_lossy().into_owned()],
@@ -172,7 +172,7 @@ fn collect_skill_config_dirs_from_sources(
     config_paths: &[String],
     compat: CompatConfig,
 ) -> Vec<PathBuf> {
-    let grok_home = global_dir.to_path_buf();
+    let supercharge_home = global_dir.to_path_buf();
     let mut dirs = Vec::new();
     let mut seen = HashSet::new();
 
@@ -199,9 +199,9 @@ fn collect_skill_config_dirs_from_sources(
         }
     }
 
-    // Priority 3: Global user dirs. `.supercharge` comes from `grok_home` (which may be overridden), so it's handled separately.
+    // Priority 3: Global user dirs. `.supercharge` comes from `supercharge_home` (which may be overridden), so it's handled separately.
     // `.agents` is always added, while `.claude`/`.cursor` are gated by the skills compat cells
-    try_add(grok_home);
+    try_add(supercharge_home);
     if let Some(home) = supercharge_dirs::home_dir() {
         try_add(home.join(".agents"));
         if compat.claude.skills {
@@ -2720,7 +2720,7 @@ mod tests {
     #[tokio::test]
     async fn copied_skill_dir_with_stale_frontmatter_name_surfaces_both() {
         // Name-dedup runs in `list_skills` (via `merge_skills_with_plugins`), not in `list_skills_with_options`
-        // Names are prefixed to be collision-proof against real user-scope skills (`list_skills` scans grok_home)
+        // Names are prefixed to be collision-proof against real user-scope skills (`list_skills` scans supercharge_home)
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = tmp.path().join("repo");
         fs::create_dir_all(&repo_root).unwrap();

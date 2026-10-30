@@ -25,7 +25,7 @@ pub(super) fn pick_user_image_url(image: &agent_client_protocol::ImageContent) -
 /// A `Configured` file is a user rule wherever its dir sits; everything else is scoped by path.
 fn partition_rules_by_scope(
     files: Vec<supercharge_agent::prompt::agents_md::AgentConfigFile>,
-    grok_home: &std::path::Path,
+    supercharge_home: &std::path::Path,
     vendor_homes: &[(std::path::PathBuf, bool)],
     workspace_roots: &[&std::path::Path],
 ) -> (
@@ -39,7 +39,7 @@ fn partition_rules_by_scope(
             == supercharge_agent::prompt::agents_md::InstructionSource::Configured
             || crate::util::is_user_instruction_path(
                 std::path::Path::new(&file.file_path),
-                grok_home,
+                supercharge_home,
                 vendor_homes,
                 workspace_roots,
             );
@@ -130,7 +130,7 @@ mod partition_rules_by_scope_tests {
         );
     }
     #[test]
-    fn grok_home_nested_in_workspace_keeps_direct_surfaces_user_scoped() {
+    fn supercharge_home_nested_in_workspace_keeps_direct_surfaces_user_scoped() {
         let files = vec![
             file("/repo/config/AGENTS.md"),
             file("/repo/config/rules/global.md"),
@@ -179,7 +179,7 @@ mod partition_rules_by_scope_tests {
         );
     }
     #[test]
-    fn nested_grok_home_workspace_files_stay_workspace_scoped() {
+    fn nested_supercharge_home_workspace_files_stay_workspace_scoped() {
         let files = vec![
             file("/custom/grok/rules/global.md"),
             file("/custom/grok/worktrees/repo/.cursor/rules/project.md"),
@@ -498,7 +498,7 @@ impl SessionActor {
         Vec<supercharge_agent::prompt::user_message::RuleEntry>,
     ) {
         let files = self.agent.borrow().prompt_context().agents_md_files.clone();
-        let grok_home = supercharge_config::grok_home();
+        let supercharge_home = supercharge_config::supercharge_home();
         let vendor_homes = supercharge_dirs::home_dir()
             .map(|home_dir| {
                 vec![
@@ -527,7 +527,7 @@ impl SessionActor {
             .into_iter()
             .chain(std::iter::once(on_disk_root.as_path()))
             .collect();
-        partition_rules_by_scope(files, &grok_home, &vendor_homes, &workspace_roots)
+        partition_rules_by_scope(files, &supercharge_home, &vendor_homes, &workspace_roots)
     }
     /// Build the custom-templated first user message.
     /// Gathers session-scoped inputs: today's date, VCS status, AGENTS.md rules, skill registry, and MCP servers.

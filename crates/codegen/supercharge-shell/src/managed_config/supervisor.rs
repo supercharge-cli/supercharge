@@ -108,7 +108,7 @@ async fn fetch_managed_config_once(
         .timeout(std::time::Duration::from_secs(15));
     // Replay-probe echo (telemetry only); fail-open so a corrupt sidecar never bricks the fetch.
     if let Some(nonce) = supercharge_config::signed_policy::stored_envelope_nonce(
-        &crate::util::grok_home::grok_home(),
+        &crate::util::supercharge_home::supercharge_home(),
         echo_principal,
     ) && let Ok(value) = reqwest::header::HeaderValue::from_str(&nonce)
     {

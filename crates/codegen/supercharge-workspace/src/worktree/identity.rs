@@ -16,7 +16,7 @@ pub struct WorktreeIdentity {
 
 /// [`worktree_identity_in`] against the default `<grok home>/worktrees`.
 pub fn worktree_identity_for_cwd(cwd: &str) -> Option<WorktreeIdentity> {
-    worktree_identity_in(&super::grok_home().join("worktrees"), cwd)
+    worktree_identity_in(&super::supercharge_home().join("worktrees"), cwd)
 }
 
 /// Derive the identity of the worktree containing `cwd`, where worktrees live at `<worktrees_dir>/<slug>/<label>`.

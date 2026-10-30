@@ -501,12 +501,12 @@ pub mod tests {
         );
     }
 
-    fn auth_manager_with_grok_home(
-        grok_home: &std::path::Path,
+    fn auth_manager_with_supercharge_home(
+        supercharge_home: &std::path::Path,
         proxy_base_url: &str,
     ) -> Arc<AuthManager> {
         Arc::new(
-            AuthManager::new(grok_home, GrokComConfig::default())
+            AuthManager::new(supercharge_home, GrokComConfig::default())
                 .with_proxy_base_url(proxy_base_url),
         )
     }
@@ -514,9 +514,9 @@ pub mod tests {
     #[test]
     fn build_auth_persists_credentials_without_proxy_fetch() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let grok_home = temp_dir.path().join(".supercharge");
-        std::fs::create_dir_all(&grok_home).unwrap();
-        let auth_manager = auth_manager_with_grok_home(&grok_home, "http://127.0.0.1:9");
+        let supercharge_home = temp_dir.path().join(".supercharge");
+        std::fs::create_dir_all(&supercharge_home).unwrap();
+        let auth_manager = auth_manager_with_supercharge_home(&supercharge_home, "http://127.0.0.1:9");
         let tokens = super::TokenOk {
             access_token: "access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),
@@ -556,9 +556,9 @@ pub mod tests {
     fn build_auth_seeds_team_metadata_from_access_token() {
         ensure_crypto_provider();
         let temp_dir = tempfile::tempdir().unwrap();
-        let grok_home = temp_dir.path().join(".supercharge");
-        std::fs::create_dir_all(&grok_home).unwrap();
-        let auth_manager = auth_manager_with_grok_home(&grok_home, "http://127.0.0.1:9");
+        let supercharge_home = temp_dir.path().join(".supercharge");
+        std::fs::create_dir_all(&supercharge_home).unwrap();
+        let auth_manager = auth_manager_with_supercharge_home(&supercharge_home, "http://127.0.0.1:9");
         let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256);
         let claims = serde_json::json!({
             "sub": "user-42",
@@ -630,10 +630,10 @@ pub mod tests {
     fn assert_build_auth_rejected(cfg: GrokComConfig, token_principal: &str, expected_err: &str) {
         ensure_crypto_provider();
         let temp_dir = tempfile::tempdir().unwrap();
-        let grok_home = temp_dir.path().join(".supercharge");
-        std::fs::create_dir_all(&grok_home).unwrap();
+        let supercharge_home = temp_dir.path().join(".supercharge");
+        std::fs::create_dir_all(&supercharge_home).unwrap();
         let auth_manager =
-            Arc::new(AuthManager::new(&grok_home, cfg).with_proxy_base_url("http://127.0.0.1:9"));
+            Arc::new(AuthManager::new(&supercharge_home, cfg).with_proxy_base_url("http://127.0.0.1:9"));
 
         let err = tokio::runtime::Runtime::new()
             .unwrap()
@@ -651,7 +651,7 @@ pub mod tests {
             "rejected login must not persist credentials",
         );
         assert!(
-            !grok_home.join("auth.json").exists(),
+            !supercharge_home.join("auth.json").exists(),
             "rejected login must not write auth.json",
         );
     }
@@ -673,10 +673,10 @@ pub mod tests {
             ..GrokComConfig::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
-        let grok_home = temp_dir.path().join(".supercharge");
-        std::fs::create_dir_all(&grok_home).unwrap();
+        let supercharge_home = temp_dir.path().join(".supercharge");
+        std::fs::create_dir_all(&supercharge_home).unwrap();
         let auth_manager =
-            Arc::new(AuthManager::new(&grok_home, cfg).with_proxy_base_url("http://127.0.0.1:9"));
+            Arc::new(AuthManager::new(&supercharge_home, cfg).with_proxy_base_url("http://127.0.0.1:9"));
 
         let auth = tokio::runtime::Runtime::new()
             .unwrap()
@@ -766,7 +766,7 @@ pub mod tests {
     ) -> anyhow::Result<(super::GrokAuth, bool)> {
         let (issuer, server) = spawn_token_server(responses).await;
         let temp_dir = tempfile::tempdir().unwrap();
-        let auth_manager = auth_manager_with_grok_home(temp_dir.path(), "http://127.0.0.1:9");
+        let auth_manager = auth_manager_with_supercharge_home(temp_dir.path(), "http://127.0.0.1:9");
         let device_code = device_code_for_test(1, 900);
         let result = super::complete_device_code_login(
             &issuer,

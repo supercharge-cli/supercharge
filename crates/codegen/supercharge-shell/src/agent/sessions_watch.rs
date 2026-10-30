@@ -98,7 +98,7 @@ pub fn diff(before: &HashMap<String, Seen>, after: &HashMap<String, Seen>) -> Ve
 
 /// Default sessions directory under the Supercharge home.
 pub fn default_sessions_root() -> PathBuf {
-    supercharge_dirs::grok_home().join("sessions")
+    supercharge_dirs::supercharge_home().join("sessions")
 }
 
 #[cfg(test)]

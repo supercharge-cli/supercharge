@@ -4388,7 +4388,7 @@ fn probe_ctx<'a>(
     event_writer: &'a supercharge_session_events::EventWriter,
     mode: OauthInteractivity,
 ) -> McpSpawnCtx<'a> {
-    crate::isolate_grok_home_for_tests();
+    crate::isolate_supercharge_home_for_tests();
     McpSpawnCtx {
         session_id: None,
         event_writer,
@@ -4429,7 +4429,7 @@ async fn bearer_token_file_meta_validates_path_and_overrides_static_authorizatio
 }
 
 fn session_test_ctx(event_writer: &supercharge_session_events::EventWriter) -> McpSpawnCtx<'_> {
-    crate::isolate_grok_home_for_tests();
+    crate::isolate_supercharge_home_for_tests();
     McpSpawnCtx::for_session(
         "sess",
         event_writer,

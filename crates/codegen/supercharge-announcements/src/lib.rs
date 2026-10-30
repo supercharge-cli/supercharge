@@ -141,7 +141,7 @@ pub async fn write_hidden_announcement_ids(ids: &BTreeSet<String>) {
 }
 
 fn announcements_state_path() -> PathBuf {
-    supercharge_tools::util::grok_home::grok_home().join("announcements.json")
+    supercharge_tools::util::supercharge_home::supercharge_home().join("announcements.json")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ const FORK_LOG: &str = "xai_fork";
 use crate::session::export::ExportedMetadata;
 use crate::session::info::Info;
 use crate::session::storage::{CopySessionOptions, JsonlStorageAdapter};
-use crate::util::grok_home::grok_home;
+use crate::util::supercharge_home::supercharge_home;
 use agent_client_protocol as acp;
 use std::io;
 
@@ -59,7 +59,7 @@ pub async fn fork_session(
 ) -> io::Result<ForkSessionResponse> {
     let t0 = std::time::Instant::now();
 
-    let root_dir = grok_home();
+    let root_dir = supercharge_home();
     let storage = JsonlStorageAdapter::with_root(root_dir.clone());
 
     // Build source and target Info

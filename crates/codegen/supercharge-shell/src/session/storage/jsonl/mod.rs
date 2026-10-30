@@ -78,7 +78,7 @@ impl Default for JsonlStorageAdapter {
 impl JsonlStorageAdapter {
     pub fn new() -> Self {
         Self {
-            dir_mode: SessionDirMode::FromRoot(crate::util::grok_home::grok_home()),
+            dir_mode: SessionDirMode::FromRoot(crate::util::supercharge_home::supercharge_home()),
             #[cfg(test)]
             update_append_probe: None,
             #[cfg(test)]
@@ -185,7 +185,7 @@ impl JsonlStorageAdapter {
     fn session_dir(&self, info: &Info) -> PathBuf {
         match &self.dir_mode {
             SessionDirMode::FromRoot(root) => {
-                crate::util::grok_home::sessions_cwd_dir_in(root, &info.cwd)
+                crate::util::supercharge_home::sessions_cwd_dir_in(root, &info.cwd)
                     .join(info.id.to_string())
             }
             SessionDirMode::Explicit(dir) => dir.clone(),
@@ -198,13 +198,13 @@ impl JsonlStorageAdapter {
         super::create_dir_all_durable(&dir, |dir| match &self.dir_mode {
             SessionDirMode::FromRoot(root) => {
                 if let Ok(cwd_dir) =
-                    crate::util::grok_home::ensure_sessions_cwd_dir_in(root, &info.cwd)
+                    crate::util::supercharge_home::ensure_sessions_cwd_dir_in(root, &info.cwd)
                 {
                     super::sync_cwd_marker_if_present(&cwd_dir)?;
                 }
-                crate::util::grok_home::create_dir_all_owner_only(dir)
+                crate::util::supercharge_home::create_dir_all_owner_only(dir)
             }
-            SessionDirMode::Explicit(_) => crate::util::grok_home::create_dir_all_owner_only(dir),
+            SessionDirMode::Explicit(_) => crate::util::supercharge_home::create_dir_all_owner_only(dir),
         })?;
         Ok(dir)
     }

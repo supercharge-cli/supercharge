@@ -2420,7 +2420,7 @@ async fn pop_checkout_auto_stash(
 /// Decide whether a `--restore-code` HEAD checkout is safe to run against `supplied_cwd`. `--depth=1` is only added when the repo is already shallow.
 /// That is only acceptable in two situations: 1.
 pub fn restore_code_checkout_allowed(supplied_cwd: &Path, persisted_cwd: Option<&str>) -> bool {
-    let worktrees_dir = supercharge_tools::util::grok_home::grok_home().join("worktrees");
+    let worktrees_dir = supercharge_tools::util::supercharge_home::supercharge_home().join("worktrees");
     restore_code_checkout_allowed_in(supplied_cwd, persisted_cwd, &worktrees_dir)
 }
 /// Pure core of [`restore_code_checkout_allowed`] with the worktrees root

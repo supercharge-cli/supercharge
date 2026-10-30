@@ -211,7 +211,7 @@ impl McpCredentialStore {
 
     /// Default path: `$SUPERCHARGE_HOME/mcp_credentials.json`.
     fn default_path() -> Option<PathBuf> {
-        Some(supercharge_config::user_grok_home()?.join(CREDENTIALS_FILENAME))
+        Some(supercharge_config::user_supercharge_home()?.join(CREDENTIALS_FILENAME))
     }
 }
 

@@ -44,7 +44,7 @@ pub(crate) const MOCK_RESPONSE_SENTINEL: &str = "MOCKRESPONSE";
 pub(crate) fn unified_log_path(content: &ContentController) -> PathBuf {
     content
         .sandbox()
-        .grok_home()
+        .supercharge_home()
         .join("logs")
         .join("unified.jsonl")
 }
@@ -290,12 +290,12 @@ pub(crate) fn seed_mcp_server_config(content: &ContentController) {
     #[cfg(windows)]
     let command = "cmd.exe";
 
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create fake SUPERCHARGE_HOME");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create fake SUPERCHARGE_HOME");
     let config = format!(
         "[mcp_servers.{MCP_TEST_SERVER}]\ncommand = \"{command}\"\nargs = []\nstartup_timeout_sec = 2\n"
     );
-    std::fs::write(grok_home.join("config.toml"), config).expect("write config.toml");
+    std::fs::write(supercharge_home.join("config.toml"), config).expect("write config.toml");
 }
 
 /// Write one hooks spec file under the sandbox's `~/.supercharge/hooks/` (`spec` is the file's JSON body).
@@ -437,15 +437,15 @@ pub(crate) const MOUSE_OFF_HINT_PROMPT: &str =
 /// Seed `~/.supercharge/config.toml` with a `[ui]` section body (e.g. `"vim_mode = true"`).
 /// Same `{SUPERCHARGE_HOME|HOME}/.supercharge/config.toml` location `seed_mouse_reporting_toggle_config` uses; call before spawning the pager.
 pub(crate) fn seed_ui_config(content: &ContentController, ui_body: &str) {
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create .supercharge");
     let config = format!("[ui]\n{ui_body}\n");
-    std::fs::write(grok_home.join("config.toml"), config).expect("write config.toml");
+    std::fs::write(supercharge_home.join("config.toml"), config).expect("write config.toml");
 }
 
 pub(crate) fn seed_mouse_reporting_toggle_config(content: &ContentController, enabled: bool) {
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create .supercharge");
     // Minimal opt-in only; matches load_config's `{SUPERCHARGE_HOME|HOME}/.supercharge/config.toml`
     let config = if enabled {
         "[ui]\nmouse_reporting_toggle = true\n"
@@ -453,15 +453,15 @@ pub(crate) fn seed_mouse_reporting_toggle_config(content: &ContentController, en
         // Minimal config so HOME layout matches the enabled case; toggle stays off.
         "[ui]\n"
     };
-    std::fs::write(grok_home.join("config.toml"), config).expect("write config.toml");
+    std::fs::write(supercharge_home.join("config.toml"), config).expect("write config.toml");
 }
 
 /// Seed `[ui] keep_text_selection = "hold"` under the content controller's home.
 pub(crate) fn seed_keep_text_selection_config(content: &ContentController) {
-    let grok_home = content.home().join(".supercharge");
-    std::fs::create_dir_all(&grok_home).expect("create .supercharge");
+    let supercharge_home = content.home().join(".supercharge");
+    std::fs::create_dir_all(&supercharge_home).expect("create .supercharge");
     std::fs::write(
-        grok_home.join("config.toml"),
+        supercharge_home.join("config.toml"),
         "[ui]\nkeep_text_selection = \"hold\"\n",
     )
     .expect("write config.toml");
@@ -975,7 +975,7 @@ pub(crate) fn enter_session(harness: &mut PtyHarness, content: &ContentControlle
         .expect("session response rendered");
 }
 
-/// Locate `<grok_home>/sessions/<encoded cwd>/<session id>/`, where the shell keeps the session's `plan.md`.
+/// Locate `<supercharge_home>/sessions/<encoded cwd>/<session id>/`, where the shell keeps the session's `plan.md`.
 /// Polls: the first turn creates it asynchronously.
 pub(crate) fn session_dir(content: &ContentController, harness: &mut PtyHarness) -> PathBuf {
     let sessions = content.home().join(".supercharge").join("sessions");

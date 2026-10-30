@@ -509,7 +509,7 @@ async fn background_refresh_updates_snapshot_against_mock_idp() {
 fn lead_cumulative_le(bound: f64) -> u64 {
     prometheus::gather()
         .iter()
-        .find(|mf| mf.name() == "grok_workspace_oidc_refresh_lead_seconds")
+        .find(|mf| mf.name() == "supercharge_workspace_oidc_refresh_lead_seconds")
         .into_iter()
         .flat_map(|mf| mf.get_metric())
         .flat_map(|m| m.get_histogram().get_bucket())

@@ -56,7 +56,7 @@ struct PathStatus {
 /// The re-exec must not proceed without it: the inner verification requires the read-only sentinel mount unconditionally.
 #[cfg(target_os = "linux")]
 pub(crate) fn ensure_bwrap_sentinel_dir() -> Result<PathBuf, String> {
-    let parent = crate::paths::grok_home();
+    let parent = crate::paths::supercharge_home();
     std::fs::create_dir_all(&parent)
         .map_err(|e| format!("could not create {}: {e}", parent.display()))?;
     ensure_sentinel_dir_under(&parent)
@@ -104,7 +104,7 @@ fn ensure_sentinel_dir_under(parent: &Path) -> Result<PathBuf, String> {
 /// symlink, so this opens the writable parent and the child relative to it with `O_NOFOLLOW`.
 #[cfg(all(feature = "enforce", target_os = "linux"))]
 pub(crate) fn verify_bwrap_sentinel() -> Result<(), String> {
-    verify_sentinel_under(&crate::paths::grok_home())
+    verify_sentinel_under(&crate::paths::supercharge_home())
 }
 
 #[cfg(all(feature = "enforce", target_os = "linux"))]

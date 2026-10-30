@@ -26,13 +26,13 @@
 pub use rmcp;
 
 #[doc(hidden)]
-pub fn isolate_grok_home_for_tests() {
+pub fn isolate_supercharge_home_for_tests() {
     static HOME: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     HOME.get_or_init(|| {
         let dir = tempfile::TempDir::new().expect("test grok home").keep();
         // SAFETY: OnceLock-guarded single set; the concurrent env-read race is accepted in tests.
         unsafe { std::env::set_var("SUPERCHARGE_HOME", &dir) };
-        let memo = supercharge_config::grok_home();
+        let memo = supercharge_config::supercharge_home();
         assert!(
             memo.starts_with(&dir),
             "grok-home memo was warmed before test isolation: {}",

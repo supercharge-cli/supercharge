@@ -65,12 +65,12 @@ pub(crate) fn project_root(session_cwd: &Path) -> PathBuf {
 }
 
 pub(crate) fn user_workflow_dir() -> PathBuf {
-    crate::util::grok_home::grok_home().join("workflows")
+    crate::util::supercharge_home::supercharge_home().join("workflows")
 }
 
 /// Runtime-updated builtins from the GCS subagent bundle (`~/.supercharge/bundled/workflows`).
 pub(crate) fn bundled_workflow_dir() -> PathBuf {
-    crate::util::grok_home::grok_home()
+    crate::util::supercharge_home::supercharge_home()
         .join("bundled")
         .join("workflows")
 }

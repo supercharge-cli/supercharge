@@ -119,7 +119,7 @@ impl RelaySyncState {
     /// Writes to a temporary file then renames to avoid corruption on crash.
     /// Creates the session directory if it doesn't exist.
     pub fn save(&self, session_dir: &std::path::Path) -> std::io::Result<()> {
-        crate::util::grok_home::create_dir_all_owner_only(session_dir)?;
+        crate::util::supercharge_home::create_dir_all_owner_only(session_dir)?;
 
         let path = Self::state_path(session_dir);
         let tmp_path = path.with_extension("json.tmp");

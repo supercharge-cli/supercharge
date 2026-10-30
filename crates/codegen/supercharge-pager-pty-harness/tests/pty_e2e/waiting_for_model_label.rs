@@ -7,7 +7,7 @@ async fn assert_waiting_alignment(rows: u16) {
         .server()
         .set_settings(json!({ "allow_access": true, "dock_enabled": true }));
     std::fs::write(
-        content.sandbox().grok_home().join("requirements.toml"),
+        content.sandbox().supercharge_home().join("requirements.toml"),
         "[features]\ndock = true\n",
     )
     .expect("pin dock in test requirements");
