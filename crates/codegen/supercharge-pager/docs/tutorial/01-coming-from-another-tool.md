@@ -18,7 +18,7 @@ reads the same project conventions other agents use, and imports the rest.
 
 ## One-step import
 
-**`/import-claude`** scans your `~/.claude` settings — permissions, env
+**`/import-settings`** scans your `~/.claude` settings — permissions, env
 vars, MCP servers, hooks — and shows a checkbox preview; confirming
 writes the items you selected into your `.supercharge` config. Re-run it anytime.
 

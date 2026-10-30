@@ -2,7 +2,7 @@
 //! It also routes common input: Esc to close, tab switching, shortcut clicks.
 //! Each popup modal in the pager becomes an instance of `ModalWindow` with different features enabled via [`ModalWindowConfig`].
 //!
-//! The visual style follows the import-claude modal's design.
+//! The visual style follows the settings import modal's design.
 //! It draws an accent-colored square border, a bold title on the top border, generous inner padding, and a `Clear` background.
 //! Footer shortcuts render inline and centered, with hover highlights.
 

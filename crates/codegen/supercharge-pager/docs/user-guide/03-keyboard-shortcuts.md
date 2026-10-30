@@ -360,7 +360,7 @@ Bindings that only fire on the welcome screen (before any agent session is open)
 |-----|--------|
 | `Ctrl+R` | Resume session (open the session picker) |
 | `Ctrl+W` | Open the New Worktree dialog (only inside a git repository) |
-| `Ctrl+I` | Import Claude settings (when available) |
+| `Ctrl+I` | Import external settings (when available) |
 | `Ctrl+Shift+I` | Dismiss the Claude import row (when available) |
 
 `Ctrl+W`, `Ctrl+I`, and `Ctrl+Shift+I` are only active on the welcome screen. `Ctrl+R` opens the session picker on both the welcome screen and inside an agent session (where it opens as a modal overlay, same as the `/resume` command). With `ui.mouse_reporting_toggle` enabled, `Ctrl+R` toggles mouse capture while the scrollback pane is focused; the picker is still on `Ctrl+R` from the prompt. `Ctrl+S` is the prompt stash inside a session (it does nothing on the welcome screen, which has no draft to set aside). `Ctrl+Q` is the same global Quit binding documented above, not a welcome-specific handler.

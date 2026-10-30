@@ -1181,7 +1181,7 @@ pub(crate) fn load_mcp_json_servers_as_configs(
 }
 
 /// Like [`load_mcp_json_servers_as_configs`] but bypasses the import-marker gate.
-/// Used by the `/import-claude` scanner so users can re-import items they previously skipped, even after the runtime cutoff is active.
+/// Used by the `/import-settings` scanner so users can re-import items they previously skipped, even after the runtime cutoff is active.
 pub(crate) fn load_mcp_json_servers_as_configs_unfiltered(
     cwd: &std::path::Path,
 ) -> IndexMap<String, McpServerConfig> {
@@ -1312,7 +1312,7 @@ pub(crate) fn load_claude_json_mcp_servers_as_configs(
 }
 
 /// Like [`load_claude_json_mcp_servers_as_configs`] but bypasses the import-marker gate.
-/// Used by the `/import-claude` scanner so users can re-import items they previously skipped, even after the runtime cutoff is active.
+/// Used by the `/import-settings` scanner so users can re-import items they previously skipped, even after the runtime cutoff is active.
 pub(crate) fn load_claude_json_mcp_servers_as_configs_unfiltered(
     cwd: &std::path::Path,
 ) -> IndexMap<String, McpServerConfig> {

@@ -531,6 +531,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "imodels",
     "isetup",
     "import-claude",
+    "import-settings",
     "jump",
     "login",
     "logout",

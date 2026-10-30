@@ -136,7 +136,7 @@ pub struct WelcomeRenderResult {
     pub menu_rects: Vec<Rect>,
     /// Hit-test rect for the prompt input area (for click to start session).
     pub prompt_rect: Option<Rect>,
-    /// Hit-test rect for the import-claude banner (for click to open import modal).
+    /// Hit-test rect for the settings import banner (for click to open import modal).
     pub import_banner_rect: Option<Rect>,
     /// Hit areas from the session picker (for mouse hit-testing).
     pub session_picker_hit_areas: Option<crate::views::picker::PickerHitAreas>,
@@ -169,6 +169,14 @@ pub struct WelcomeRenderResult {
 }
 
 use hero_box::HERO_BOX_MIN_WIDTH;
+/// Welcome-menu row and modal title for the settings import flow.
+pub const IMPORT_SETTINGS_LABEL: &str = "Import external settings";
+/// Wording older builds used for the same startup warning; still matched so stale warnings clear.
+const LEGACY_IMPORT_WARNING_TEXT: &str = "Claude settings";
+/// True for the startup warning that advertises the settings import flow.
+pub(crate) fn is_import_settings_warning(message: &str) -> bool {
+    message.starts_with(IMPORT_SETTINGS_LABEL) || message.contains(LEGACY_IMPORT_WARNING_TEXT)
+}
 
 /// Prompt input height for a one-line draft (shared across hero and stacked layout paths).
 const PROMPT_HEIGHT: u16 = 3;
@@ -1738,7 +1746,7 @@ fn render_welcome_done(
             // The trailing "[x]" is a clickable dismiss control
             // The welcome screen mouse handler treats clicks on the rightmost 3 cells of this row as dismiss instead of open. Keyboard: ctrl-shift-i.
             // The key string is right-aligned by render_menu, so [x] sits at the very end of the row
-            items.push((key_i_with_x, "Import Claude settings"));
+            items.push((key_i_with_x, IMPORT_SETTINGS_LABEL));
         }
         items.push((key_w, "New worktree"));
         items.push((key_resume, "Resume session"));
@@ -2462,12 +2470,10 @@ fn render_startup_warnings(
 ) -> Option<Rect> {
     let w = crate::startup::banner_warning(warnings)?;
 
-    // Skip the import-claude startup warning entirely
+    // Skip the settings import startup warning entirely
     // The import row in the menu carries the call-to-action with the same visual weight as every other welcome menu item
     // Showing the warning text in addition to the menu row would be redundant
-    if w.message.starts_with("Import Claude settings")
-        || w.message.starts_with("Claude settings detected")
-    {
+    if is_import_settings_warning(&w.message) {
         return None;
     }
     let color = match w.severity {

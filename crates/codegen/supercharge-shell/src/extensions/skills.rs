@@ -346,7 +346,7 @@ fn discover_auto_sources(cwd: &str, skills: &[SkillInfo]) -> Vec<(String, usize)
         .and_then(|repo| repo.workdir().map(|p| p.to_path_buf()));
 
     // Once the user has imported, stop scanning hardcoded .claude/skills/ paths
-    // Equivalent locations should be opted in via [paths] extra_skill_dirs in config.toml (written by /import-claude)
+    // Equivalent locations should be opted in via [paths] extra_skill_dirs in config.toml (written by /import-settings)
     let imported = crate::claude_import::is_claude_import_marked();
     let local_dir_names: &[&str] = if imported {
         &[".supercharge", ".agents"]
@@ -399,7 +399,7 @@ fn discover_auto_sources(cwd: &str, skills: &[SkillInfo]) -> Vec<(String, usize)
     }
 
     // [paths] extra_skill_dirs from config.toml supplement the built-in scan locations
-    // They are used standalone and as the migration target after /import-claude disables the runtime .claude/skills/ scan
+    // They are used standalone and as the migration target after /import-settings disables the runtime .claude/skills/ scan
     for dir in extra_skill_dirs_from_config() {
         let path = crate::util::expand_home(&dir);
         if path.is_dir()

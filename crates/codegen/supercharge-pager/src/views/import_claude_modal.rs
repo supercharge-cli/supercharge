@@ -1,6 +1,6 @@
 //! Interactive modal for selectively importing Claude settings.
 //!
-//! Shown when the user runs `/import-claude` (in-session) or presses `i` on the welcome screen with new Claude settings detected.
+//! Shown when the user runs `/import-settings` (in-session) or presses `i` on the welcome screen with new Claude settings detected.
 //! Users review each discovered item, toggle which to import, and confirm. Only checked items are written to `.supercharge/config.toml`.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -22,13 +22,13 @@ use crate::views::modal_window::{
 /// Sentinel ID for non-clickable hint shortcuts. Not routable because only `clickable: true` shortcuts generate hit-test areas.
 const SHORTCUT_ID_HINT: usize = usize::MAX;
 
-/// Shortcut IDs for the import-claude modal footer.
+/// Shortcut IDs for the settings import modal footer.
 const SHORTCUT_ID_SELECT_ALL: usize = 0;
 const SHORTCUT_ID_SELECT_NONE: usize = 1;
 const SHORTCUT_ID_CONFIRM: usize = 2;
 const SHORTCUT_ID_CANCEL: usize = 3;
 
-/// State for the import-claude modal.
+/// State for the settings import modal.
 pub struct ImportClaudeModalState {
     /// The full plan as scanned from `.claude/` sources.
     pub plan: ImportPlan,
@@ -616,7 +616,7 @@ pub fn render_import_claude_modal(
         },
     ];
     let config = ModalWindowConfig {
-        title: "Import Claude settings",
+        title: crate::views::welcome::IMPORT_SETTINGS_LABEL,
         tabs: None,
         shortcuts: &shortcuts,
         sizing: ModalSizing::default().with_compact(compact),

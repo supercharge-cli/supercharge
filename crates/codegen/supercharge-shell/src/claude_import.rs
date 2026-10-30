@@ -185,7 +185,7 @@ pub(crate) fn is_claude_import_marked_at(config_path: &Path) -> bool {
 }
 
 /// Public entry point for the slash command: write the marker, log success, and seed the in-process cache so gate checks reflect it without restart.
-/// Called from `/import-claude` even when nothing was imported: the marker is the user's opt-in choice, not a side effect of having imported items.
+/// Called from `/import-settings` even when nothing was imported: the marker is the user's opt-in choice, not a side effect of having imported items.
 /// Re-entering a workspace with `.claude/` content must not re-engage the runtime fallbacks.
 pub fn mark_claude_imported() -> anyhow::Result<()> {
     supercharge_agent_import::write_import_marker(&SOURCE, &user_config_path())?;

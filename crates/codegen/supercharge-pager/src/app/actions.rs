@@ -104,13 +104,13 @@ pub enum Action {
     },
     /// Open the "New Worktree" popup dialog on the welcome screen.
     OpenNewWorktreeDialog,
-    /// Open the interactive import-claude modal on the welcome screen.
+    /// Open the interactive settings import modal on the welcome screen.
     ImportClaudeSettings,
     /// User confirmed the import modal: apply selected items.
     ImportClaudeConfirm,
     /// User cancelled the import modal: close without applying.
     ImportClaudeCancel,
-    /// Hide the import-claude menu row by recording the current `.claude/` content hash as "seen".
+    /// Hide the settings import menu row by recording the current `.claude/` content hash as "seen".
     /// Doesn't import anything, doesn't change runtime fallback behavior.
     /// The menu reappears only if `.claude/` content changes.
     DismissClaudeImport,

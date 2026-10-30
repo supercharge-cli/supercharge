@@ -12,14 +12,14 @@ pub(super) fn dispatch_import_claude(app: &mut AppView) -> Vec<Effect> {
         supercharge_shell::claude_import_state::mark_dismissed(&cwd);
         // Always write the [claude_compat] imported = true marker so the user's opt-in is recorded even on an empty plan
         if let Err(e) = supercharge_shell::claude_import::mark_claude_imported() {
-            tracing::warn!(error = %e, "Failed to write Claude import marker");
+            tracing::warn!(error = %e, "Failed to write settings import marker");
         }
         app.has_claude_import = false;
         app.startup_warnings
-            .retain(|w| !w.message.contains("Claude settings"));
+            .retain(|w| !crate::views::welcome::is_import_settings_warning(&w.message));
         app.startup_warnings.push(crate::startup::StartupWarning {
             severity: crate::startup::WarningSeverity::Info,
-            message: "No Claude settings found to import.".into(),
+            message: "No settings found to import.".into(),
             action: None,
         });
         return vec![];
@@ -61,7 +61,7 @@ pub(super) fn dispatch_import_claude_confirm(app: &mut AppView) -> Vec<Effect> {
             Err(e) => {
                 app.startup_warnings.push(crate::startup::StartupWarning {
                     severity: crate::startup::WarningSeverity::Warning,
-                    message: format!("Failed to import Claude settings: {}", e),
+                    message: format!("Failed to import settings: {}", e),
                     action: None,
                 });
                 return vec![];
@@ -73,11 +73,11 @@ pub(super) fn dispatch_import_claude_confirm(app: &mut AppView) -> Vec<Effect> {
     // Skipped items remain importable via re-running the slash command
     supercharge_shell::claude_import_state::mark_imported(&cwd);
     if let Err(e) = supercharge_shell::claude_import::mark_claude_imported() {
-        tracing::warn!(error = %e, "Failed to write Claude import marker");
+        tracing::warn!(error = %e, "Failed to write settings import marker");
     }
     app.has_claude_import = false;
     app.startup_warnings
-        .retain(|w| !w.message.contains("Claude settings"));
+        .retain(|w| !crate::views::welcome::is_import_settings_warning(&w.message));
     app.startup_warnings.push(crate::startup::StartupWarning {
         severity: crate::startup::WarningSeverity::Info,
         message: summary,
@@ -99,13 +99,13 @@ pub(super) fn dispatch_dismiss_claude_import(app: &mut AppView) -> Vec<Effect> {
     // The imported = true marker also stops the runtime fallbacks (perms, env, MCP servers, hooks, plugins) reading .claude/ and ~/.claude.json
     // Dismiss means "I've decided I want nothing from .claude/", so don't keep silently reading it at runtime
     if let Err(e) = supercharge_shell::claude_import::mark_claude_imported() {
-        tracing::warn!(error = %e, "Failed to write Claude import marker on dismiss");
+        tracing::warn!(error = %e, "Failed to write settings import marker on dismiss");
     }
     app.has_claude_import = false;
     // Reset the welcome menu selection: removing a row shifts indices
     // A stale selection (e.g. `Worktree mode` highlighted at index 1) would now point to a different row.
     app.welcome_menu_index = None;
     app.startup_warnings
-        .retain(|w| !w.message.contains("Claude settings"));
+        .retain(|w| !crate::views::welcome::is_import_settings_warning(&w.message));
     vec![]
 }

@@ -1152,7 +1152,7 @@ mod tests {
             sources(&configs)
         );
 
-        // The post-`/import-claude` shape: listed, compat scan off.
+        // The post-`/import-settings` shape: listed, compat scan off.
         let mut compat = CompatConfig::default();
         compat.claude.rules = false;
         let configs = read_agents_config_with_roots(

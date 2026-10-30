@@ -663,7 +663,7 @@ pub struct AppView {
     /// Whether the welcome menu currently includes a "Changelog" row (above Quit).
     /// Set during render; the input handler uses it to size the menu and map the extra row to the release-notes action.
     pub welcome_show_changelog_action: bool,
-    /// Hit-test rect for the import-claude banner on the welcome screen.
+    /// Hit-test rect for the settings import banner on the welcome screen.
     pub welcome_import_banner_rect: Option<ratatui::layout::Rect>,
     /// Last known mouse position (column, row), updated on every Mouse event.
     /// Used by the welcome screen to render fine-grained hover effects.

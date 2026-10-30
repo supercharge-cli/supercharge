@@ -1,7 +1,7 @@
 //! `[paths]` configuration: extra directories to scan for skills and rules.
 //!
 //! These supplement the built-in scan locations (`.supercharge/skills/`, `.agents/skills/`,
-//! `~/.supercharge/skills/`, `~/.supercharge/rules/`, ...). `/import-claude` writes the previously
+//! `~/.supercharge/skills/`, `~/.supercharge/rules/`, ...). `/import-settings` writes the previously
 //! discovered Claude directories here so they survive the runtime `.claude/` cutoff.
 
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct PathsConfig {
     /// Additional directories to scan for skills (each contains `<skill>/SKILL.md`).
-    /// Parsed and written by `/import-claude`, but not yet consulted by skill discovery.
+    /// Parsed and written by `/import-settings`, but not yet consulted by skill discovery.
     pub extra_skill_dirs: Vec<String>,
     /// Additional directories to scan for rules (each contains `*.md`).
     pub extra_rule_dirs: Vec<String>,

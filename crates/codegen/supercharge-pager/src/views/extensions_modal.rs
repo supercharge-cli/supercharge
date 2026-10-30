@@ -373,7 +373,7 @@ pub fn plugin_group(plugin: &supercharge_hooks_plugins_types::PluginInfo) -> Plu
         Some(PluginOrigin::UserGrok) => PluginGroup::new(2, "origin:user", "User"),
         Some(PluginOrigin::UserClaude)
         | Some(PluginOrigin::ClaudeInstalled { marketplace: None }) => {
-            PluginGroup::new(3, "origin:user-claude", "User (Claude)")
+            PluginGroup::new(3, "origin:user-claude", "User (imported)")
         }
         Some(PluginOrigin::ClaudeMarketplace { marketplace })
         | Some(PluginOrigin::ClaudeInstalled {
@@ -2531,7 +2531,7 @@ fn classify_hook_source(source_dir: &str) -> HookSourceMeta {
     // Settings under .claude/
     if source_dir.contains("/.claude/") {
         return HookSourceMeta {
-            label: "Claude settings".into(),
+            label: "Imported settings".into(),
             kind: HookSourceKind::Claude,
         };
     }
@@ -7108,13 +7108,13 @@ mod tests {
                 PluginOrigin::UserClaude,
                 3,
                 "origin:user-claude",
-                "User (Claude)",
+                "User (imported)",
             ),
             (
                 PluginOrigin::ClaudeInstalled { marketplace: None },
                 3,
                 "origin:user-claude",
-                "User (Claude)",
+                "User (imported)",
             ),
             (
                 PluginOrigin::ClaudeMarketplace {
@@ -7226,7 +7226,7 @@ mod tests {
         let buf = render_plugins_into_buffer(&mut state, 100, 40);
 
         assert_eq!(buffer_count(&buf, "User (1 plugin)"), 1);
-        assert_eq!(buffer_count(&buf, "User (Claude) (1 plugin)"), 1);
+        assert_eq!(buffer_count(&buf, "User (imported) (1 plugin)"), 1);
         assert_eq!(buffer_count(&buf, "claude-market (1 plugin)"), 1);
         assert_eq!(buffer_count(&buf, "user-tool"), 1);
         assert_eq!(buffer_count(&buf, "claude-tool"), 1);
@@ -7400,7 +7400,7 @@ mod tests {
             0,
             "group with no matching plugins must be omitted"
         );
-        assert_eq!(buffer_count(&buf, "User (Claude) (1 plugin)"), 1);
+        assert_eq!(buffer_count(&buf, "User (imported) (1 plugin)"), 1);
         assert_eq!(buffer_count(&buf, "off-tool"), 1);
         assert_eq!(buffer_count(&buf, "[disabled]"), 1);
     }

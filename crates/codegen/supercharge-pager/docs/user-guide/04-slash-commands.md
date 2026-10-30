@@ -402,7 +402,7 @@ Open the onboarding tutorial: a short list of topics (your first prompt, attachi
 
 Aliases: `/tour`, `/onboarding`
 
-### `/import-claude`
+### `/import-settings`
 
 Open the Claude import modal to bring over `~/.claude` settings: permissions, environment variables, MCP servers, hooks, and paths.
 

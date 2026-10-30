@@ -1,4 +1,4 @@
-//! `/import-claude` opens the interactive Claude settings import modal.
+//! `/import-settings` (legacy alias kept) opens the interactive settings import modal.
 //!
 //! This is the in-session entry point: the slash command dispatches the shared `Action::ImportClaudeSettings` action.
 //! The dispatch handler scans `.claude/settings*.json`, `~/.claude.json`, and `.mcp.json` and populates the modal state.
@@ -7,20 +7,21 @@
 use crate::app::actions::Action;
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand, slash_meta};
 
-/// Open the interactive Claude settings import modal in the active session.
+/// Open the interactive settings import modal in the active session.
 pub struct ImportClaudeCommand;
 
 impl SlashCommand for ImportClaudeCommand {
     slash_meta! {
-        name: "import-claude",
-        description: "Open the Claude settings import modal",
-        usage: "/import-claude",
+        name: "import-settings",
+        aliases: ["import-claude"],
+        description: "Open the settings import modal",
+        usage: "/import-settings",
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, args: &str) -> CommandResult {
         let trimmed = args.trim();
         if !trimmed.is_empty() {
-            tracing::warn!("/import-claude does not accept arguments; ignoring");
+            tracing::warn!("/import-settings does not accept arguments; ignoring");
         }
         CommandResult::Action(Action::ImportClaudeSettings)
     }
