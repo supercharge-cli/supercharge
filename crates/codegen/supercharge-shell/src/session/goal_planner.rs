@@ -9,10 +9,10 @@ use crate::session::goal_role_tools::RoleToolNames;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use supercharge_session_events::EventWriter;
-use supercharge_tools::implementations::grok_build::task::backend::{
+use supercharge_tools::implementations::supercharge_build::task::backend::{
     ChannelBackend, SubagentBackend,
 };
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentOwner, SubagentRequest, SubagentRuntimeOverrides,
 };
 
@@ -207,10 +207,10 @@ pub(crate) fn parse_terminal_response(text: &str) -> bool {
 
 pub(crate) struct ChannelSpawner {
     pub(crate) event_tx: tokio::sync::mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >,
     pub(crate) foreground_wait:
-        Option<supercharge_tools::implementations::grok_build::task::types::SubagentForegroundWait>,
+        Option<supercharge_tools::implementations::supercharge_build::task::types::SubagentForegroundWait>,
     pub(crate) parent_session_id: String,
     pub(crate) parent_prompt_id: Option<String>,
     pub(crate) cwd: Option<String>,
@@ -544,7 +544,7 @@ mod tests {
 
     #[tokio::test]
     async fn channel_spawner_request_is_harness_internal() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -991,7 +991,7 @@ mod tests {
 
     #[tokio::test]
     async fn channel_spawner_threads_harness_override_to_request() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1304,7 +1304,7 @@ mod tests {
 
     #[tokio::test]
     async fn planner_retries_to_inherit_instead_of_failing_closed() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
         let plan_file = tmp_plan_file("retry-failopen");
@@ -1372,7 +1372,7 @@ mod tests {
     #[tokio::test]
     async fn planner_cancellation_pauses_as_aborted_without_retry() {
         use std::sync::atomic::{AtomicUsize, Ordering};
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
         let plan_file = tmp_plan_file("cancel-aborted");

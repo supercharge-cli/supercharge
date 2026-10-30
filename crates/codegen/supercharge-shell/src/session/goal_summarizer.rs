@@ -16,8 +16,8 @@ use std::path::Path;
 use std::sync::Arc;
 use supercharge_session_events::EventWriter;
 use supercharge_tool_types::SubagentCapabilityMode;
-use supercharge_tools::implementations::grok_build::task::backend::ChannelBackend;
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend;
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentOwner, SubagentRequest, SubagentRuntimeOverrides,
 };
 
@@ -74,10 +74,10 @@ pub(crate) trait GoalSummarizerSpawner: Send + Sync {
 
 pub(crate) struct ChannelSpawner {
     pub(crate) event_tx: tokio::sync::mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >,
     pub(crate) foreground_wait:
-        Option<supercharge_tools::implementations::grok_build::task::types::SubagentForegroundWait>,
+        Option<supercharge_tools::implementations::supercharge_build::task::types::SubagentForegroundWait>,
     pub(crate) parent_session_id: String,
     pub(crate) parent_prompt_id: Option<String>,
     pub(crate) cwd: Option<String>,
@@ -344,7 +344,7 @@ mod tests {
             .replace("{DETAILS_FILE}", &details_str)
             .replace("{SESSION_TRACES_DIR}", &traces_dir_str);
         let rendered = RoleToolNames::inherit_defaults().apply(&with_paths);
-        // Tool placeholders resolve to the default grok-build names
+        // Tool placeholders resolve to the default supercharge-core names
         assert!(rendered.contains("read_file"));
         assert!(rendered.contains("grep"));
         assert!(rendered.contains("list_dir"));
@@ -605,7 +605,7 @@ mod tests {
     #[tokio::test]
     async fn channel_spawner_request_is_harness_internal_and_read_only() {
         use supercharge_tool_types::SubagentCapabilityMode;
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 

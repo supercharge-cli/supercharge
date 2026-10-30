@@ -17,8 +17,8 @@ use supercharge_tool_runtime::{
 use supercharge_tool_types::ToolDescription;
 use supercharge_tools::computer::types::KillOutcome;
 use supercharge_tools::computer::types::TaskKind;
-use supercharge_tools::implementations::grok_build::scheduler::interval::interval_to_human;
-use supercharge_tools::implementations::grok_build::scheduler::types::{
+use supercharge_tools::implementations::supercharge_build::scheduler::interval::interval_to_human;
+use supercharge_tools::implementations::supercharge_build::scheduler::types::{
     SchedulerCommand, SchedulerHandle,
 };
 use supercharge_tools::registry::types::FinalizedToolset;
@@ -354,7 +354,7 @@ async fn tasks_snapshot(toolset: &FinalizedToolset) -> TasksSnapshotResponse {
 async fn list_session_todos(
     toolset: &supercharge_tools::registry::types::FinalizedToolset,
 ) -> Vec<supercharge_workspace_types::rpc::workspace::TodoSummaryWire> {
-    use supercharge_tools::implementations::grok_build::todo::{TodoState, TodoStatus};
+    use supercharge_tools::implementations::supercharge_build::todo::{TodoState, TodoStatus};
     use supercharge_tools::types::resources::State;
     use supercharge_workspace_types::rpc::workspace::TodoSummaryWire;
     let res = toolset.resources.lock().await;

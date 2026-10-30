@@ -579,7 +579,7 @@ async fn upload_harness_trace_turns_build_per_turn_manifest() {
 #[test]
 #[serial_test::serial]
 #[ignore = "fails after the provider-only catalog and login removal; needs a rewrite"]
-fn resolve_agent_definition_defaults_to_grok_build() {
+fn resolve_agent_definition_defaults_to_supercharge_build() {
     let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
         std::env::remove_var("SUPERCHARGE_AGENT");
@@ -597,7 +597,7 @@ fn resolve_agent_definition_defaults_to_grok_build() {
         unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
-/// When model_agent_type = Some("codex"), the codex agent is selected even though the default chain would return grok-build.
+/// When model_agent_type = Some("codex"), the codex agent is selected even though the default chain would return supercharge-core.
 #[test]
 #[serial_test::serial]
 fn resolve_agent_definition_model_agent_type_overrides_default() {
@@ -671,12 +671,12 @@ fn resolve_agent_definition_acp_profile_wins_when_model_agent_type_is_default() 
         unsafe { std::env::set_var("SUPERCHARGE_AGENT", v) }
     }
 }
-/// Regression: `DEFAULT_AGENT_TYPE` flipped to `grok-build-plan`.
-/// Models in the catalog that still declare `agent_type = "grok-build"` explicitly must NOT preempt an ACP profile.
-/// Any value in the `grok-build*` family is the stock harness with no strict requirement.
+/// Regression: `DEFAULT_AGENT_TYPE` flipped to `supercharge-core-plan`.
+/// Models in the catalog that still declare `agent_type = "supercharge-core"` explicitly must NOT preempt an ACP profile.
+/// Any value in the `supercharge-core*` family is the stock harness with no strict requirement.
 #[test]
 #[serial_test::serial]
-fn resolve_agent_definition_acp_profile_wins_for_explicit_grok_build_family() {
+fn resolve_agent_definition_acp_profile_wins_for_explicit_supercharge_build_family() {
     let prev = std::env::var("SUPERCHARGE_AGENT").ok();
     unsafe {
         std::env::remove_var("SUPERCHARGE_AGENT");
@@ -940,7 +940,7 @@ fn enqueue_replace_system_prompt_override_noop_when_absent_or_empty() {
     );
 }
 /// Regression for the web-client flow where `_meta.agentProfile` drives `set_session_model`.
-/// A zero-turn switch from `grok-build` (a client profile name) to `grok-build-plan` (the default model agent_type) must be treated as compatible.
+/// A zero-turn switch from `supercharge-core` (a client profile name) to `supercharge-core-plan` (the default model agent_type) must be treated as compatible.
 /// Compatible means the harness rebuild is skipped and the custom prompt body preserved.
 #[test]
 fn harnesses_are_compatible_for_stock_family_pairs() {
@@ -969,14 +969,14 @@ fn explicit_agent_type_wins_over_session_default() {
     );
 }
 #[test]
-fn null_agent_type_falls_back_to_session_default_grok_build_plan() {
+fn null_agent_type_falls_back_to_session_default_supercharge_build_plan() {
     assert_eq!(
         resolve_required_agent_type(None, "supercharge-core-plan"),
         "supercharge-core-plan"
     );
 }
 #[test]
-fn null_agent_type_falls_back_to_session_default_grok_build() {
+fn null_agent_type_falls_back_to_session_default_supercharge_build() {
     assert_eq!(
         resolve_required_agent_type(None, "supercharge-core"),
         "supercharge-core"
@@ -1040,9 +1040,9 @@ async fn file_toolset_override_e2e_to_finalized_toolset() {
         web_search_config: supercharge_tools::implementations::web_search::WebSearchConfig::default(),
         web_fetch_config: Default::default(),
         lsp: None,
-        image_gen_config: supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig::default(),
-        video_gen_config: supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig::default(),
-        app_builder_deployer_config: supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig::default(),
+        image_gen_config: supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig::default(),
+        video_gen_config: supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig::default(),
+        app_builder_deployer_config: supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig::default(),
         api_key_provider: None,
         auth_provider: None,
         attribution_callback: None,
@@ -3791,7 +3791,7 @@ async fn provider_only_deployment_refuses_session_auth_methods() {
 /// Verifies the 4-state matrix of `(disable_zdr_incompatible_tools, zdr_video_output_s3)`: | ZDR flag | S3 config | Result | |----------|-----------|---------------------------------------------| | false | None | Enabled, no S3 (normal non-ZDR mode) | | true | None | Disabled (ZDR with no escape hatch) | | false | Some | Enabled, S3 **not** threaded (non-ZDR) | | true | Some | Enabled, S3 threaded (ZDR with upload path) |
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_video_gen_config_disabled_when_zdr_flag_set() {
-    use supercharge_tools::implementations::grok_build::video_gen::{
+    use supercharge_tools::implementations::supercharge_build::video_gen::{
         S3AccessCredentials, VideoGenConfig, ZdrVideoOutputS3Config,
     };
     fn zdr_s3() -> ZdrVideoOutputS3Config {
@@ -3849,7 +3849,7 @@ async fn prepare_video_gen_config_disabled_when_zdr_flag_set() {
 }
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_video_gen_config_respects_feature_flag() {
-    use supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig;
+    use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
     assert!(matches!(
@@ -3866,7 +3866,7 @@ async fn prepare_video_gen_config_respects_feature_flag() {
 /// credentials must not silently activate first-party image generation.
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_image_gen_config_requires_explicit_image_provider() {
-    use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
+    use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("chat-key".to_string());
     assert!(matches!(agent.prepare_image_gen_config(), ImageGenConfig::Disabled));
@@ -3876,7 +3876,7 @@ async fn prepare_image_gen_config_requires_explicit_image_provider() {
 /// If this header is dropped, opted-out users' imagine prompts are logged/retained server-side.
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_image_gen_config_sends_client_identifier_header() {
-    use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
+    use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.cfg.borrow_mut().image_provider = crate::agent::config::ImageProviderConfig {
         base_url: Some("https://api.x.ai/v1".to_string()),
@@ -3897,7 +3897,7 @@ async fn prepare_image_gen_config_sends_client_identifier_header() {
 }
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_image_gen_config_keeps_custom_provider_credentials_and_headers_isolated() {
-    use supercharge_tools::implementations::grok_build::image_gen::{ImageGenConfig, ImageProviderFormat};
+    use supercharge_tools::implementations::supercharge_build::image_gen::{ImageGenConfig, ImageProviderFormat};
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("chat-key".to_string());
     agent.cfg.borrow_mut().image_provider = crate::agent::config::ImageProviderConfig {
@@ -3919,7 +3919,7 @@ async fn prepare_image_gen_config_keeps_custom_provider_credentials_and_headers_
 /// Same contract for video generation (also a direct API call).
 #[tokio::test(flavor = "current_thread")]
 async fn prepare_video_gen_config_sends_client_identifier_header() {
-    use supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig;
+    use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
     let VideoGenConfig::Enabled { extra_headers, .. } = agent.prepare_video_gen_config() else {

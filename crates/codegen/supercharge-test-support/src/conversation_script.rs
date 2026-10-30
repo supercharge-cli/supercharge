@@ -59,7 +59,7 @@ impl TextCheck {
     }
 }
 
-/// Arguments are written in GrokBuild's shape; the next request's result for the call is checked.
+/// Arguments are written in SuperchargeBuild's shape; the next request's result for the call is checked.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct MockToolCall {

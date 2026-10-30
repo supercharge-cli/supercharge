@@ -251,7 +251,7 @@ pub struct AgentsModalState {
     pub cwd: PathBuf,
     /// Snapshot of bundle catalog used to merge persona lists.
     bundle: BundleState,
-    /// Resolved startup agent name (same chain as the shell: `[agent]`, `SUPERCHARGE_AGENT`, model `agentType`, then `grok-build`).
+    /// Resolved startup agent name (same chain as the shell: `[agent]`, `SUPERCHARGE_AGENT`, model `agentType`, then `supercharge-core`).
     pub default_agent: String,
     /// Agent running in the current session (`session/info` `agentName`).
     pub active_agent: Option<String>,
@@ -267,10 +267,10 @@ pub struct AgentsModalState {
 }
 /// Built-in agent names that should be shown to the user.
 /// Skips the internal variants:
-/// GrokBuildConcise, GrokBuildPlan, GrokBuildPlanNoSubagents, GrokBuildAskUser, Codex, Opencode, CursorExtended, GrokBuildOrchestrator.
+/// SuperchargeBuildConcise, SuperchargeBuildPlan, SuperchargeBuildPlanNoSubagents, SuperchargeBuildAskUser, Codex, Opencode, CursorExtended, SuperchargeBuildOrchestrator.
 fn user_visible_builtins() -> &'static [BuiltinAgentName] {
     &[
-        BuiltinAgentName::GrokBuild,
+        BuiltinAgentName::SuperchargeBuild,
         BuiltinAgentName::GeneralPurpose,
         BuiltinAgentName::Explore,
         BuiltinAgentName::Plan,

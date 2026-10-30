@@ -101,7 +101,7 @@ impl SandboxPath {
 fn shell_output_is_decodable(namespace: ToolNamespace) -> bool {
     matches!(
         namespace,
-        ToolNamespace::GrokBuild | ToolNamespace::GrokBuildConcise | ToolNamespace::OpenCode
+        ToolNamespace::SuperchargeBuild | ToolNamespace::SuperchargeBuildConcise | ToolNamespace::OpenCode
     )
 }
 /// Whether the call asks for the background up front, as its tool exposes the request: the

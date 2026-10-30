@@ -348,7 +348,7 @@ impl SessionActor {
             }
             bridge
                 .update_resource(
-                    supercharge_tools::implementations::grok_build::workflow::WorkflowLaunchHandle(
+                    supercharge_tools::implementations::supercharge_build::workflow::WorkflowLaunchHandle(
                         self.workflow_launch_tx.clone(),
                     ),
                 )
@@ -356,7 +356,7 @@ impl SessionActor {
             if !self.goal_runs_on_workflow_engine() {
                 bridge
                     .update_resource(
-                        supercharge_tools::implementations::grok_build::update_goal::GoalUpdateHandle(
+                        supercharge_tools::implementations::supercharge_build::update_goal::GoalUpdateHandle(
                             self.goal_update_tx.clone(),
                         ),
                     )

@@ -15,26 +15,26 @@ use crate::implementations::codex::apply_patch::tool::ApplyPatchInput;
 use crate::implementations::codex::grep_files::tool::CodexGrepFilesInput;
 use crate::implementations::codex::list_dir::tool::CodexListDirInput;
 use crate::implementations::codex::read_file::tool::CodexReadFileInput;
-use crate::implementations::grok_build::ask_user_question::AskUserQuestionInput;
-use crate::implementations::grok_build::e2b_browser::{
+use crate::implementations::supercharge_build::ask_user_question::AskUserQuestionInput;
+use crate::implementations::supercharge_build::e2b_browser::{
     BrowserClickInput, BrowserFillInput, BrowserHandoffInput, BrowserNavigateInput,
     BrowserPressInput, BrowserScreenshotInput, BrowserSnapshotInput,
 };
-use crate::implementations::grok_build::enter_plan_mode::EnterPlanModeInput;
-use crate::implementations::grok_build::exit_plan_mode::ExitPlanModeInput;
-use crate::implementations::grok_build::grep::GrepSearchInput;
-use crate::implementations::grok_build::image_edit::ImageEditInput;
-use crate::implementations::grok_build::image_gen::ImageGenInput;
-use crate::implementations::grok_build::list_dir::ListDirInput;
-use crate::implementations::grok_build::read_file::ReadFileInput;
-use crate::implementations::grok_build::search_replace::SearchReplaceInput;
-use crate::implementations::grok_build::send_feedback::SendFeedbackInput;
-use crate::implementations::grok_build::send_subagent_message::SendSubagentMessageInput;
-use crate::implementations::grok_build::todo::TodoWriteInput;
-use crate::implementations::grok_build::update_goal::UpdateGoalInput;
-use crate::implementations::grok_build::video_gen::{ImageToVideoInput, ReferenceToVideoInput};
-use crate::implementations::grok_build::web_fetch::WebFetchInput;
-use crate::implementations::grok_build::web_search::WebSearchInput;
+use crate::implementations::supercharge_build::enter_plan_mode::EnterPlanModeInput;
+use crate::implementations::supercharge_build::exit_plan_mode::ExitPlanModeInput;
+use crate::implementations::supercharge_build::grep::GrepSearchInput;
+use crate::implementations::supercharge_build::image_edit::ImageEditInput;
+use crate::implementations::supercharge_build::image_gen::ImageGenInput;
+use crate::implementations::supercharge_build::list_dir::ListDirInput;
+use crate::implementations::supercharge_build::read_file::ReadFileInput;
+use crate::implementations::supercharge_build::search_replace::SearchReplaceInput;
+use crate::implementations::supercharge_build::send_feedback::SendFeedbackInput;
+use crate::implementations::supercharge_build::send_subagent_message::SendSubagentMessageInput;
+use crate::implementations::supercharge_build::todo::TodoWriteInput;
+use crate::implementations::supercharge_build::update_goal::UpdateGoalInput;
+use crate::implementations::supercharge_build::video_gen::{ImageToVideoInput, ReferenceToVideoInput};
+use crate::implementations::supercharge_build::web_fetch::WebFetchInput;
+use crate::implementations::supercharge_build::web_search::WebSearchInput;
 use crate::implementations::lsp::LspToolInput;
 use crate::implementations::memory::types::{MemoryGetInput, MemorySearchInput};
 use crate::implementations::opencode::write::WriteInput;
@@ -83,12 +83,12 @@ pub enum ToolInput {
     BrowserPress(BrowserPressInput),
     BrowserScreenshot(BrowserScreenshotInput),
     BrowserHandoff(BrowserHandoffInput),
-    DesktopObserve(crate::implementations::grok_build::e2b_desktop::DesktopObserveInput),
-    DesktopAction(crate::implementations::grok_build::e2b_desktop::DesktopActionInput),
-    VectraBot(crate::implementations::grok_build::e2b_bot::BotInput),
+    DesktopObserve(crate::implementations::supercharge_build::e2b_desktop::DesktopObserveInput),
+    DesktopAction(crate::implementations::supercharge_build::e2b_desktop::DesktopActionInput),
+    VectraBot(crate::implementations::supercharge_build::e2b_bot::BotInput),
     Write(WriteInput),
     ApplyPatch(ApplyPatchInput),
-    HashlineEdit(crate::implementations::grok_build_hashline::edit::types::HashlineEditInput),
+    HashlineEdit(crate::implementations::supercharge_build_hashline::edit::types::HashlineEditInput),
     CodexListDir(CodexListDirInput),
     CodexGrepFiles(CodexGrepFilesInput),
     CodexReadFile(CodexReadFileInput),
@@ -103,12 +103,12 @@ pub enum ToolInput {
     SendSubagentMessage(SendSubagentMessageInput),
     SendFeedback(SendFeedbackInput),
     Lsp(LspToolInput),
-    Monitor(crate::implementations::grok_build::monitor::types::MonitorInput),
-    SchedulerCreate(crate::implementations::grok_build::scheduler::create::SchedulerCreateInput),
-    SchedulerDelete(crate::implementations::grok_build::scheduler::delete::SchedulerDeleteInput),
-    SchedulerList(crate::implementations::grok_build::scheduler::list::SchedulerListInput),
+    Monitor(crate::implementations::supercharge_build::monitor::types::MonitorInput),
+    SchedulerCreate(crate::implementations::supercharge_build::scheduler::create::SchedulerCreateInput),
+    SchedulerDelete(crate::implementations::supercharge_build::scheduler::delete::SchedulerDeleteInput),
+    SchedulerList(crate::implementations::supercharge_build::scheduler::list::SchedulerListInput),
     UpdateGoal(UpdateGoalInput),
-    Workflow(crate::implementations::grok_build::workflow::WorkflowToolInput),
+    Workflow(crate::implementations::supercharge_build::workflow::WorkflowToolInput),
     /// Dynamic input for runtime-registered tools (MCP, etc.)
     Dynamic(serde_json::Value),
 }

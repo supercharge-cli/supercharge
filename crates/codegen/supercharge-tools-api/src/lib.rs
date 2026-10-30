@@ -100,7 +100,7 @@ pub use pb::{
 };
 
 /// Default client-facing tool name derived from a namespaced tool id. Tool ids are colon-separated `Namespace:tool`
-/// (e.g. `GrokBuild:grep`); the default name is the segment after the FIRST colon, so an id with embedded colons
+/// (e.g. `SuperchargeBuild:grep`); the default name is the segment after the FIRST colon, so an id with embedded colons
 /// (`ns:a:b`) resolves to `a`. Ids without a colon are returned as-is.
 pub fn default_client_name(id: &str) -> &str {
     id.split(':').nth(1).unwrap_or(id)
@@ -130,7 +130,7 @@ mod default_client_name_tests {
 
     #[test]
     fn pins_first_colon_derivation() {
-        assert_eq!(default_client_name("GrokBuild:grep"), "grep");
+        assert_eq!(default_client_name("SuperchargeBuild:grep"), "grep");
         assert_eq!(default_client_name("ns:a:b"), "a");
         assert_eq!(default_client_name("bare"), "bare");
         assert_eq!(default_client_name(""), "");

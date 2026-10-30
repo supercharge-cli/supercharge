@@ -69,8 +69,8 @@ pub(in crate::app::dispatch) fn apply_persist_worktree_mode(
 }
 /// Build the two persistence options shared by the fork and new-session worktree question modals ("Always worktree" / "Never worktree").
 pub(super) fn worktree_persist_options()
--> [supercharge_tools::implementations::grok_build::ask_user_question::QuestionOption; 2] {
-    use supercharge_tools::implementations::grok_build::ask_user_question::QuestionOption;
+-> [supercharge_tools::implementations::supercharge_build::ask_user_question::QuestionOption; 2] {
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::QuestionOption;
     [
         QuestionOption {
             label: "Always worktree".into(),
@@ -90,7 +90,7 @@ pub(super) fn worktree_persist_options()
 /// Refuses with a toast if a question (ACP or local) is already on screen, so two questions never collide.
 fn open_fork_question(app: &mut AppView, directive: Option<String>) -> Vec<Effect> {
     use crate::views::question_view::{LocalQuestionKind, QuestionViewState};
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
     let ActiveView::Agent(id) = app.active_view else {

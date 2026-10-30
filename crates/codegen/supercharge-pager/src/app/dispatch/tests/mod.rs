@@ -687,13 +687,13 @@ fn make_ask_user_question_args(
     supercharge_acp_lib::AcpArgs<acp::ExtRequest>,
     tokio::sync::oneshot::Receiver<supercharge_acp_lib::AcpResult<acp::ExtResponse>>,
 ) {
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         AskUserQuestionExtRequest, Question, QuestionOption,
     };
     let req = AskUserQuestionExtRequest {
         session_id: "test-session".into(),
         tool_call_id: tool_call_id.into(),
-        mode: supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionMode::Default,
+        mode: supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionMode::Default,
         questions: vec![Question {
                 question: "ACP-driven question".into(),
                 options: vec![QuestionOption {

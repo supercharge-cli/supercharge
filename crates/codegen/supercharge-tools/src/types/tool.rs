@@ -10,9 +10,25 @@
 use crate::types::output::ToolOutput;
 use crate::types::requirements::{Expr, ToolRequirement};
 use crate::types::resources::SharedResources;
-/// The toolset a tool belongs to. Serializes to snake_case (`grok_build`, `mcp`, …) for the canonical tool `_meta` wire contract. PascalCase
+/// Pre-rename spellings of the built-in namespace prefix, oldest first. Persisted configs and
+/// client-sent tool lists may still carry them; [`normalize_legacy_tool_id`] maps them forward.
+const LEGACY_TOOL_ID_PREFIXES: &[(&str, &str)] = &[
+    ("GrokBuild", "SuperchargeBuild"),
+    ("grok_build", "supercharge_build"),
+];
+/// Rewrite a tool id or resource id that uses a pre-rename namespace prefix (`"GrokBuild:read_file"`,
+/// `"grok_build.ReadFile"`) to the current spelling. Any other id is returned unchanged.
+pub fn normalize_legacy_tool_id(id: &str) -> std::borrow::Cow<'_, str> {
+    for (old, new) in LEGACY_TOOL_ID_PREFIXES {
+        if let Some(rest) = id.strip_prefix(old) {
+            return std::borrow::Cow::Owned(format!("{new}{rest}"));
+        }
+    }
+    std::borrow::Cow::Borrowed(id)
+}
+/// The toolset a tool belongs to. Serializes to snake_case (`supercharge_build`, `mcp`, …) for the canonical tool `_meta` wire contract. PascalCase
 /// aliases are accepted on deserialize so legacy persisted/manifest values still parse. The `Display` impl remains PascalCase for existing
-/// qualified id strings (e.g. `"GrokBuild:read_file"`); only the serde form goes on the wire.
+/// qualified id strings (e.g. `"SuperchargeBuild:read_file"`); only the serde form goes on the wire.
 #[derive(
     Debug,
     Clone,
@@ -27,12 +43,12 @@ use crate::types::resources::SharedResources;
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ToolNamespace {
-    #[serde(alias = "GrokBuild")]
-    GrokBuild,
-    #[serde(alias = "GrokBuildConcise")]
-    GrokBuildConcise,
-    #[serde(alias = "GrokBuildHashline")]
-    GrokBuildHashline,
+    #[serde(alias = "SuperchargeBuild", alias = "GrokBuild", alias = "grok_build")]
+    SuperchargeBuild,
+    #[serde(alias = "SuperchargeBuildConcise", alias = "GrokBuildConcise", alias = "grok_build_concise")]
+    SuperchargeBuildConcise,
+    #[serde(alias = "SuperchargeBuildHashline", alias = "GrokBuildHashline", alias = "grok_build_hashline")]
+    SuperchargeBuildHashline,
     #[serde(alias = "Codex")]
     Codex,
     #[serde(rename = "opencode", alias = "OpenCode", alias = "open_code")]

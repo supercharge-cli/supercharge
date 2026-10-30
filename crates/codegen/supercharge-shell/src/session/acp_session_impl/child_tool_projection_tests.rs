@@ -1,5 +1,5 @@
 use super::*;
-use supercharge_tools::implementations::grok_build::SEND_SUBAGENT_MESSAGE_TOOL_NAME;
+use supercharge_tools::implementations::supercharge_build::SEND_SUBAGENT_MESSAGE_TOOL_NAME;
 
 fn tool(name: &str, description: Option<&str>, parameters: serde_json::Value) -> ToolSpec {
     ToolSpec {

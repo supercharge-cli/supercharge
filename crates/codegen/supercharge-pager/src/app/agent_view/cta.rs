@@ -574,7 +574,7 @@ mod prompt_suggestion_gate_tests {
     fn an_open_question_card_closes_the_suggestion_gate() {
         use crate::views::prompt_widget::StashedPrompt;
         use crate::views::question_view::QuestionViewState;
-        use supercharge_tools::implementations::grok_build::ask_user_question::Question;
+        use supercharge_tools::implementations::supercharge_build::ask_user_question::Question;
 
         let mut agent = make_agent();
         agent.refresh_prompt_suggestion_gate();

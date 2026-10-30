@@ -18,7 +18,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use supercharge_acp_lib::AcpResult;
 use supercharge_markdown::StreamingMarkdownRenderer;
-pub use supercharge_tools::implementations::grok_build::ask_user_question::{
+pub use supercharge_tools::implementations::supercharge_build::ask_user_question::{
     AskUserQuestionMode, Question, QuestionOption,
 };
 
@@ -789,11 +789,11 @@ impl QuestionViewState {
     /// included for single-select only, verbatim from the option.
     pub fn build_accepted_response(
         &self,
-    ) -> supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionExtResponse
+    ) -> supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionExtResponse
     {
         use indexmap::IndexMap;
         use std::collections::HashMap;
-        use supercharge_tools::implementations::grok_build::ask_user_question::{
+        use supercharge_tools::implementations::supercharge_build::ask_user_question::{
             AskUserQuestionExtResponse, QuestionAnnotation,
         };
 
@@ -871,7 +871,7 @@ impl QuestionViewState {
     /// After sending, `response_tx` is consumed (set to `None`) to prevent double-send.
     pub fn send_ext_response(
         &mut self,
-        response: supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionExtResponse,
+        response: supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionExtResponse,
     ) -> bool {
         let Some(tx) = self.response_tx.take() else {
             return false;

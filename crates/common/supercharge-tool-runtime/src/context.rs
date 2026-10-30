@@ -320,7 +320,7 @@ mod bind_metadata_tests {
             preset: Some("explore".to_owned()),
             capability_mode: Some("read_only".to_owned()),
             tools: vec![supercharge_tools_api::ToolConfigEntry {
-                id: "GrokBuild:grep".to_owned(),
+                id: "SuperchargeBuild:grep".to_owned(),
                 ..Default::default()
             }],
             viewer_ctx: Some(super::WorkspaceViewerContext {

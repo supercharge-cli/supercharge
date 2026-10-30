@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use supercharge_acp_lib::AcpResult;
 
-pub use supercharge_tools::implementations::grok_build::exit_plan_mode::{
+pub use supercharge_tools::implementations::supercharge_build::exit_plan_mode::{
     ExitPlanModeExtRequest, ExitPlanModeExtResponse,
 };
 

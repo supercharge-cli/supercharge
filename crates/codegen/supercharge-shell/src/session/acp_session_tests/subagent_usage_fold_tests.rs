@@ -136,7 +136,7 @@ async fn queued_fold_then_not_applied_mark_applies_once_and_stains() {
 #[test]
 fn usage_drain_outcome_policy_matches_freeze_and_cancel() {
     use super::turn::UsageDrainOutcome;
-    use supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply;
 
     let none = UsageDrainOutcome::from_outstanding_reply(None);
     assert!(none.fail_closed);
@@ -392,12 +392,12 @@ async fn snapshot_ors_ledger_incomplete_even_when_reply_complete() {
 
 fn scripted_outstanding_responder(
     replies: Vec<
-        supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply,
     >,
 ) -> tokio::sync::mpsc::UnboundedSender<
-    supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+    supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
 > {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentEvent;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SubagentEvent>();
     tokio::task::spawn_local(async move {
         let mut queue = replies.into_iter();
@@ -436,7 +436,7 @@ fn scripted_outstanding_responder(
 /// A drain timeout (a wedged foreground child) fails closed: the report and both ledgers are marked incomplete.
 #[tokio::test(flavor = "current_thread")]
 async fn freeze_timeout_marks_report_and_both_ledgers() {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply;
     tokio::task::LocalSet::new()
         .run_until(async {
             let mut actor = make_actor().await;
@@ -474,7 +474,7 @@ async fn freeze_timeout_marks_report_and_both_ledgers() {
 /// A live background child flags only the report: no ledger is marked, because its fold still lands on the session ledger at completion.
 #[tokio::test(flavor = "current_thread")]
 async fn freeze_background_only_flags_report_not_ledgers() {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply;
     tokio::task::LocalSet::new()
         .run_until(async {
             let mut actor = make_actor().await;
@@ -516,7 +516,7 @@ async fn freeze_background_only_flags_report_not_ledgers() {
 #[tokio::test(flavor = "current_thread")]
 async fn finalize_background_only_flags_report_not_ledgers() {
     use super::turn::UsageDrainOutcome;
-    use supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply;
 
     tokio::task::LocalSet::new()
         .run_until(async {
@@ -656,7 +656,7 @@ async fn apply_miss_matching_pin_stains_prompt_and_session() {
 /// A sticky (session-only) reply is report-only on freeze: the session ledger stays complete.
 #[tokio::test(flavor = "current_thread")]
 async fn freeze_sticky_only_flags_report_not_ledgers() {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply;
     tokio::task::LocalSet::new()
         .run_until(async {
             let mut actor = make_actor().await;
@@ -711,7 +711,7 @@ async fn freeze_sticky_only_flags_report_not_ledgers() {
 /// A fold landing mid-drain completes cleanly: neither the report nor the ledgers are marked incomplete.
 #[tokio::test(flavor = "current_thread")]
 async fn freeze_completes_when_fold_lands_mid_drain() {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply;
     tokio::task::LocalSet::new()
         .run_until(async {
             let mut actor = make_actor().await;
@@ -756,11 +756,11 @@ async fn freeze_completes_when_fold_lands_mid_drain() {
 
 fn immediate_drain_responder() -> (
     tokio::sync::mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >,
     std::rc::Rc<std::cell::Cell<usize>>,
 ) {
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentOutstandingReply,
     };
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SubagentEvent>();
@@ -808,7 +808,7 @@ async fn empty_live_set_drains_in_one_query() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn drain_timeout_forfeits_background_and_sticky() {
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentOutstandingReply,
     };
     tokio::task::LocalSet::new()

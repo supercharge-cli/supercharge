@@ -4,8 +4,8 @@ use supercharge_message_delivery_core::{
     AgentSource, DeliveryEnvelope, DeliveryIdentity, HumanSource, Operation, OperationSet,
     authorize_operation,
 };
-use supercharge_tools::implementations::grok_build::task::coordinator::ActiveMessageAdmission;
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageDelivery;
+use supercharge_tools::implementations::supercharge_build::task::coordinator::ActiveMessageAdmission;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageDelivery;
 use tokio::sync::{mpsc, oneshot};
 
 use super::SessionCommand;
@@ -189,7 +189,7 @@ pub(crate) struct CoordinatorAgentDeliveryGrant {
     target_session_id: String,
     target_agent_id: supercharge_message_delivery_core::AgentId,
     target_generation:
-        supercharge_tools::implementations::grok_build::task::root_control::AgentMessageGeneration,
+        supercharge_tools::implementations::supercharge_build::task::root_control::AgentMessageGeneration,
     delivery: ActiveAgentMessageDelivery,
 }
 
@@ -197,7 +197,7 @@ impl CoordinatorAgentDeliveryGrant {
     pub(crate) fn new(
         target_session_id: String,
         target_agent_id: supercharge_message_delivery_core::AgentId,
-        target_generation: supercharge_tools::implementations::grok_build::task::root_control::AgentMessageGeneration,
+        target_generation: supercharge_tools::implementations::supercharge_build::task::root_control::AgentMessageGeneration,
         delivery: ActiveAgentMessageDelivery,
     ) -> Self {
         CoordinatorAgentDeliveryGrant {

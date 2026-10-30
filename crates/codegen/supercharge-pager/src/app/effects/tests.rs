@@ -1989,7 +1989,7 @@ fn plan_with_ask_user_uses_plan_profile() {
 }
 /// --no-plan --no-subagents --no-ask-user picks the default profile.
 /// It must still emit `askUserQuestion: false` so the shell can strip the tool at the builder.
-/// Mirrors the runtime: the `subagents` toggle alone does not need an `agentProfile` (default `grok-build` already has it).
+/// Mirrors the runtime: the `subagents` toggle alone does not need an `agentProfile` (default `supercharge-core` already has it).
 #[test]
 fn subagents_alone_emits_only_ask_user_question_disable() {
     let flags = SessionFlags {
@@ -2002,7 +2002,7 @@ fn subagents_alone_emits_only_ask_user_question_disable() {
     assert!(meta.get("agentProfile").is_none());
     assert_eq!(j(&meta, "askUserQuestion"), false);
 }
-/// All three flags on at the runtime default produce grok-build-plan and no `askUserQuestion` field.
+/// All three flags on at the runtime default produce supercharge-core-plan and no `askUserQuestion` field.
 #[serial_test::serial(SUPERCHARGE_AGENT)]
 #[test]
 fn all_flags_meta() {

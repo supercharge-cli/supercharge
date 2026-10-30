@@ -1,7 +1,7 @@
 use super::super::parent_message::tests::delivery_message;
 use super::super::turn_report_slot::TurnReportSlot;
 use super::{ParentInterjectSignal, order_for_delivery};
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOperation;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOperation;
 
 #[test]
 fn interjects_precede_steers_and_each_lane_keeps_admission_order() {

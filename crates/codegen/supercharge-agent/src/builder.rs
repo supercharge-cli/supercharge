@@ -34,7 +34,7 @@ pub struct AgentBuilder {
     notification_handle: ToolNotificationHandle,
     owner_session_id: Option<String>,
     parent_scheduler_handle:
-        Option<supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle>,
+        Option<supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle>,
     definition: Option<AgentDefinition>,
     /// Pre-rendered persona IO summaries for the task tool description.
     persona_summaries: Vec<String>,
@@ -69,12 +69,12 @@ pub struct AgentBuilder {
     web_search_config: supercharge_tools::implementations::web_search::WebSearchConfig,
     /// When true, web search and X search go to the agentic sampler as native server-side tools instead of registering as local Function tools.
     backend_search: bool,
-    web_fetch_config: supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig,
+    web_fetch_config: supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig,
     lsp: Option<std::sync::Arc<dyn supercharge_tools::implementations::lsp::LspBackend>>,
-    image_gen_config: supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig,
-    video_gen_config: supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig,
+    image_gen_config: supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig,
+    video_gen_config: supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig,
     app_builder_deployer_config:
-        supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
+        supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig,
     write_file_enabled: bool,
     active_agent_messages_enabled: bool,
     subagents_enabled: bool,
@@ -109,27 +109,27 @@ pub struct AgentBuilder {
     project_trusted: bool,
 }
 fn ensure_plan_mode_tools(tool_config: &mut supercharge_tools::registry::types::ToolServerConfig) {
-    use supercharge_tools::implementations::grok_build;
+    use supercharge_tools::implementations::supercharge_build;
     let existing: std::collections::HashSet<&str> =
         tool_config.tools.iter().map(|tc| tc.id.as_str()).collect();
-    let missing_enter = !existing.contains("GrokBuild:enter_plan_mode");
-    let missing_exit = !existing.contains("GrokBuild:exit_plan_mode");
-    let missing_ask = !existing.contains("GrokBuild:ask_user_question");
+    let missing_enter = !existing.contains("SuperchargeBuild:enter_plan_mode");
+    let missing_exit = !existing.contains("SuperchargeBuild:exit_plan_mode");
+    let missing_ask = !existing.contains("SuperchargeBuild:ask_user_question");
     drop(existing);
     if missing_enter {
         tool_config
             .tools
-            .push((&grok_build::EnterPlanModeTool).into());
+            .push((&supercharge_build::EnterPlanModeTool).into());
     }
     if missing_exit {
         tool_config
             .tools
-            .push((&grok_build::ExitPlanModeTool).into());
+            .push((&supercharge_build::ExitPlanModeTool).into());
     }
     if missing_ask {
         tool_config
             .tools
-            .push((&grok_build::AskUserQuestionTool).into());
+            .push((&supercharge_build::AskUserQuestionTool).into());
     }
 }
 /// Single copy of the params-merge loop the per-tool param injections share.
@@ -411,7 +411,7 @@ impl AgentBuilder {
     /// Share the parent's scheduler handle so scheduled tasks survive subagent exit.
     pub fn with_parent_scheduler_handle(
         mut self,
-        handle: supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle,
+        handle: supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle,
     ) -> Self {
         self.parent_scheduler_handle = Some(handle);
         self
@@ -432,7 +432,7 @@ impl AgentBuilder {
     /// `Disabled` (default) does not register the tool; flagged via remote `web_fetch_enabled` and the `SUPERCHARGE_WEB_FETCH` env.
     pub fn with_web_fetch_config(
         mut self,
-        config: supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig,
+        config: supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig,
     ) -> Self {
         self.web_fetch_config = config;
         self
@@ -446,21 +446,21 @@ impl AgentBuilder {
     }
     pub fn with_image_gen_config(
         mut self,
-        config: supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig,
+        config: supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig,
     ) -> Self {
         self.image_gen_config = config;
         self
     }
     pub fn with_video_gen_config(
         mut self,
-        config: supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig,
+        config: supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig,
     ) -> Self {
         self.video_gen_config = config;
         self
     }
     pub fn with_app_builder_deployer_config(
         mut self,
-        config: supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
+        config: supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig,
     ) -> Self {
         self.app_builder_deployer_config = config;
         self
@@ -508,7 +508,7 @@ impl AgentBuilder {
         self.background_workflows_enabled = enabled;
         self
     }
-    /// Advertised in the GrokBuild Task description.
+    /// Advertised in the SuperchargeBuild Task description.
     pub fn with_task_model_slugs(mut self, slugs: Vec<String>) -> Self {
         self.task_model_slugs = slugs;
         self
@@ -573,7 +573,7 @@ impl AgentBuilder {
         if let Some(ref def) = self.definition {
             return def.clone();
         }
-        let mut def = AgentDefinition::default_grok_build();
+        let mut def = AgentDefinition::default_supercharge_build();
         if let Some(ref name) = self.name {
             def.name = name.clone();
         }
@@ -626,7 +626,7 @@ impl AgentBuilder {
         &self,
         child: BuiltinAgentName,
     ) -> Result<ChildToolPreview, AgentBuildError> {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentCapabilityModeExt, prune_orphaned_background_task_tools,
         };
         debug_assert!(self.prompt_audience == PromptAudience::Primary);
@@ -723,17 +723,17 @@ impl AgentBuilder {
                 definition.name
             )));
         }
-        let is_parent_grok_build = matches!(
+        let is_parent_supercharge_build = matches!(
             definition.builtin_name,
             Some(
-                BuiltinAgentName::GrokBuild
-                    | BuiltinAgentName::GrokBuildPlan
-                    | BuiltinAgentName::GrokBuildPlanNoSubagents
-                    | BuiltinAgentName::GrokBuildAskUser
+                BuiltinAgentName::SuperchargeBuild
+                    | BuiltinAgentName::SuperchargeBuildPlan
+                    | BuiltinAgentName::SuperchargeBuildPlanNoSubagents
+                    | BuiltinAgentName::SuperchargeBuildAskUser
             )
         );
         if self.prompt_audience == PromptAudience::Primary
-            && is_parent_grok_build
+            && is_parent_supercharge_build
             && !tool_config
                 .tools
                 .iter()
@@ -741,7 +741,7 @@ impl AgentBuilder {
         {
             tool_config
                 .tools
-                .push((&supercharge_tools::implementations::grok_build::SendFeedbackTool).into());
+                .push((&supercharge_tools::implementations::supercharge_build::SendFeedbackTool).into());
         }
         if definition.inject_default_tools {
             if self.memory_backend.is_some() {
@@ -754,34 +754,34 @@ impl AgentBuilder {
                     .push((&memory::get_tool::MemoryGetImpl).into());
             }
             if self.web_search_config.is_enabled() {
-                use supercharge_tools::implementations::grok_build;
-                tool_config.tools.push((&grok_build::WebSearchTool).into());
+                use supercharge_tools::implementations::supercharge_build;
+                tool_config.tools.push((&supercharge_build::WebSearchTool).into());
             }
             if self.web_fetch_config.is_enabled() {
-                use supercharge_tools::implementations::grok_build;
-                tool_config.tools.push((&grok_build::WebFetchTool).into());
+                use supercharge_tools::implementations::supercharge_build;
+                tool_config.tools.push((&supercharge_build::WebFetchTool).into());
             }
             if self.lsp.is_some() {
                 tool_config
                     .tools
-                    .push((&supercharge_tools::implementations::grok_build::LspTool).into());
+                    .push((&supercharge_tools::implementations::supercharge_build::LspTool).into());
             }
             if self.image_gen_config.image_gen_enabled() {
                 tool_config
                     .tools
-                    .push((&supercharge_tools::implementations::grok_build::ImageGenTool).into());
+                    .push((&supercharge_tools::implementations::supercharge_build::ImageGenTool).into());
             }
             if self.image_gen_config.image_edit_enabled() {
                 tool_config
                     .tools
-                    .push((&supercharge_tools::implementations::grok_build::ImageEditTool).into());
+                    .push((&supercharge_tools::implementations::supercharge_build::ImageEditTool).into());
             }
             if self.video_gen_config.is_enabled() {
                 tool_config.tools.push(
-                    (&supercharge_tools::implementations::grok_build::ImageToVideoTool).into(),
+                    (&supercharge_tools::implementations::supercharge_build::ImageToVideoTool).into(),
                 );
                 tool_config.tools.push(
-                    (&supercharge_tools::implementations::grok_build::ReferenceToVideoTool).into(),
+                    (&supercharge_tools::implementations::supercharge_build::ReferenceToVideoTool).into(),
                 );
             }
             let has_write_tool = tool_config
@@ -802,12 +802,12 @@ impl AgentBuilder {
             }
         }
         let active_agent_message = supercharge_tools::registry::types::ToolConfig::for_tool::<
-            supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
+            supercharge_tools::implementations::supercharge_build::SendSubagentMessageTool,
         >();
         let is_active_agent_message = |tool: &supercharge_tools::registry::types::ToolConfig| {
             tool.kind == Some(ToolKind::ActiveAgentMessage) || tool.id == active_agent_message.id
         };
-        use supercharge_tools::implementations::grok_build::task::types::SubagentCapabilityModeExt;
+        use supercharge_tools::implementations::supercharge_build::task::types::SubagentCapabilityModeExt;
         let within_capability_ceiling = self.prompt_audience == PromptAudience::Primary
             || definition
                 .capability_mode
@@ -825,14 +825,14 @@ impl AgentBuilder {
                 .retain(|tool| !is_active_agent_message(tool));
         }
         if self.memory_backend.is_none() {
-            let grok_build_ns =
-                supercharge_tools::types::tool::ToolNamespace::GrokBuild.to_string();
+            let supercharge_build_ns =
+                supercharge_tools::types::tool::ToolNamespace::SuperchargeBuild.to_string();
             let mem_search_id = format!(
-                "{grok_build_ns}:{}",
+                "{supercharge_build_ns}:{}",
                 supercharge_tools::implementations::memory::MEMORY_SEARCH_TOOL_NAME
             );
             let mem_get_id = format!(
-                "{grok_build_ns}:{}",
+                "{supercharge_build_ns}:{}",
                 supercharge_tools::implementations::memory::MEMORY_GET_TOOL_NAME
             );
             tool_config
@@ -841,11 +841,11 @@ impl AgentBuilder {
         }
         if self.prompt_audience == crate::prompt::context::PromptAudience::Subagent {
             let feedback_id = supercharge_tools::registry::types::ToolConfig::for_tool::<
-                supercharge_tools::implementations::grok_build::SendFeedbackTool,
+                supercharge_tools::implementations::supercharge_build::SendFeedbackTool,
             >()
             .id;
             let feedback_name =
-                supercharge_tools::implementations::grok_build::SEND_FEEDBACK_TOOL_NAME;
+                supercharge_tools::implementations::supercharge_build::SEND_FEEDBACK_TOOL_NAME;
             tool_config.tools.retain(|tool| {
                 !matches!(
                     tool.kind,
@@ -860,14 +860,14 @@ impl AgentBuilder {
         } else if !self.ask_user_question_enabled {
             let ask_user_id = format!(
                 "{}:ask_user_question",
-                supercharge_tools::types::tool::ToolNamespace::GrokBuild,
+                supercharge_tools::types::tool::ToolNamespace::SuperchargeBuild,
             );
             tool_config.tools.retain(|tool| tool.id != ask_user_id);
         }
         apply_workflow_tool_gates(&mut tool_config, self.background_workflows_enabled);
         let task_tool_id = format!(
             "{}:{}",
-            supercharge_tools::types::tool::ToolNamespace::GrokBuild,
+            supercharge_tools::types::tool::ToolNamespace::SuperchargeBuild,
             "task"
         );
         let mut task_stripped = false;
@@ -927,8 +927,8 @@ impl AgentBuilder {
                                 .unwrap_or(true))
                 })
             };
-            if !has_satisfier(ToolNamespace::GrokBuild, "run_terminal_cmd", true)
-                && !has_satisfier(ToolNamespace::GrokBuildConcise, "run_terminal_cmd", true)
+            if !has_satisfier(ToolNamespace::SuperchargeBuild, "run_terminal_cmd", true)
+                && !has_satisfier(ToolNamespace::SuperchargeBuildConcise, "run_terminal_cmd", true)
                 && !has_satisfier(ToolNamespace::OpenCode, "bash", false)
             {
                 let lifecycle = [
@@ -944,20 +944,20 @@ impl AgentBuilder {
                     .retain(|tc| !lifecycle.contains(&short_tool_name(&tc.id)));
             }
         }
-        if let supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig::Enabled {
+        if let supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig::Enabled {
             ref params,
         } = self.web_fetch_config
             && let Ok(params_value) = serde_json::to_value(params)
             && let Some(obj) = params_value.as_object()
         {
-            merge_tool_params(&mut tool_config, &["GrokBuild:web_fetch"], obj);
+            merge_tool_params(&mut tool_config, &["SuperchargeBuild:web_fetch"], obj);
         }
         if let Some(ref bash_params) = self.bash_params_json {
             merge_tool_params(
                 &mut tool_config,
                 &[
-                    "GrokBuild:run_terminal_cmd",
-                    "GrokBuildConcise:run_terminal_cmd",
+                    "SuperchargeBuild:run_terminal_cmd",
+                    "SuperchargeBuildConcise:run_terminal_cmd",
                 ],
                 bash_params,
             );
@@ -965,14 +965,14 @@ impl AgentBuilder {
         if let Some(ref ask_params) = self.ask_user_question_params_json {
             merge_tool_params(
                 &mut tool_config,
-                &["GrokBuild:ask_user_question"],
+                &["SuperchargeBuild:ask_user_question"],
                 ask_params,
             );
         }
         if self.is_non_interactive {
             let mut ni = serde_json::Map::new();
             ni.insert("non_interactive".into(), serde_json::Value::Bool(true));
-            merge_tool_params(&mut tool_config, &["GrokBuild:ask_user_question"], &ni);
+            merge_tool_params(&mut tool_config, &["SuperchargeBuild:ask_user_question"], &ni);
         }
         if !definition.disallowed_tools.is_empty() {
             let before: std::collections::HashSet<String> =
@@ -1133,7 +1133,7 @@ impl AgentBuilder {
         }
         if self.prompt_audience == crate::prompt::context::PromptAudience::Subagent {
             tool_config.tools.retain(|tool| {
-                !supercharge_tools::implementations::grok_build::is_workflow_tool(
+                !supercharge_tools::implementations::supercharge_build::is_workflow_tool(
                     tool.kind, &tool.id,
                 )
             });
@@ -1591,8 +1591,8 @@ mod tests {
         audience: PromptAudience,
     ) -> usize {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        use supercharge_tools::implementations::grok_build::task::types::SubagentCapabilityModeExt;
-        let mut definition = crate::config::AgentDefinition::default_grok_build();
+        use supercharge_tools::implementations::supercharge_build::task::types::SubagentCapabilityModeExt;
+        let mut definition = crate::config::AgentDefinition::default_supercharge_build();
         definition.capability_mode = ceiling;
         if let (Some(mode), PromptAudience::Subagent) = (ceiling, audience) {
             mode.filter_tool_config(&mut definition.tool_config);
@@ -1600,7 +1600,7 @@ mod tests {
         if predeclared {
             definition.tool_config.tools.push(
                 supercharge_tools::registry::types::ToolConfig::for_tool::<
-                    supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
+                    supercharge_tools::implementations::supercharge_build::SendSubagentMessageTool,
                 >(),
             );
         }
@@ -1668,10 +1668,10 @@ mod tests {
     #[tokio::test]
     async fn active_agent_messages_are_present_in_enabled_child_toolsets() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        let mut definition = crate::config::AgentDefinition::default_grok_build();
+        let mut definition = crate::config::AgentDefinition::default_supercharge_build();
         definition.tool_config.tools.push(
             supercharge_tools::registry::types::ToolConfig::for_tool::<
-                supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
+                supercharge_tools::implementations::supercharge_build::SendSubagentMessageTool,
             >(),
         );
         let definitions = AgentBuilder::new(
@@ -1698,11 +1698,11 @@ mod tests {
     #[tokio::test]
     async fn active_agent_messages_never_inject_into_curated_toolsets() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        let mut definition = crate::config::AgentDefinition::default_grok_build();
+        let mut definition = crate::config::AgentDefinition::default_supercharge_build();
         definition.inject_default_tools = false;
         definition.tool_config.tools =
             vec![supercharge_tools::registry::types::ToolConfig::for_tool::<
-                supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
+                supercharge_tools::implementations::supercharge_build::SendSubagentMessageTool,
             >()];
         let build = |enabled| {
             AgentBuilder::new(
@@ -1988,7 +1988,7 @@ mod tests {
             "snapshot-gated-skill",
             "---\nname: snapshot-gated-skill\ndescription: gated\npaths: \"src/**\"\n---\nbody\n",
         );
-        let mut definition = crate::config::AgentDefinition::default_grok_build();
+        let mut definition = crate::config::AgentDefinition::default_supercharge_build();
         definition.skills = vec!["snapshot-plain-skill".to_string()];
         let agent = AgentBuilder::new(
             tmp.path().to_path_buf(),
@@ -2056,61 +2056,61 @@ mod tests {
         let cases: &[PagerFlagCase] = &[
             PagerFlagCase {
                 label: "supercharge-core / subagents+ask_user",
-                profile: AgentDefinition::default_grok_build,
+                profile: AgentDefinition::default_supercharge_build,
                 subagents: true,
                 ask_user: true,
             },
             PagerFlagCase {
                 label: "supercharge-core / subagents / no-ask-user",
-                profile: AgentDefinition::default_grok_build,
+                profile: AgentDefinition::default_supercharge_build,
                 subagents: true,
                 ask_user: false,
             },
             PagerFlagCase {
                 label: "supercharge-core / no-subagents / ask_user",
-                profile: AgentDefinition::default_grok_build,
+                profile: AgentDefinition::default_supercharge_build,
                 subagents: false,
                 ask_user: true,
             },
             PagerFlagCase {
                 label: "supercharge-core / no-subagents / no-ask-user",
-                profile: AgentDefinition::default_grok_build,
+                profile: AgentDefinition::default_supercharge_build,
                 subagents: false,
                 ask_user: false,
             },
             PagerFlagCase {
                 label: "supercharge-core-ask-user / subagents",
-                profile: AgentDefinition::grok_build_ask_user,
+                profile: AgentDefinition::supercharge_build_ask_user,
                 subagents: true,
                 ask_user: true,
             },
             PagerFlagCase {
                 label: "supercharge-core-ask-user / no-subagents",
-                profile: AgentDefinition::grok_build_ask_user,
+                profile: AgentDefinition::supercharge_build_ask_user,
                 subagents: false,
                 ask_user: true,
             },
             PagerFlagCase {
                 label: "supercharge-core-plan",
-                profile: AgentDefinition::grok_build_plan,
+                profile: AgentDefinition::supercharge_build_plan,
                 subagents: true,
                 ask_user: true,
             },
             PagerFlagCase {
                 label: "supercharge-core-plan / no-ask-user",
-                profile: AgentDefinition::grok_build_plan,
+                profile: AgentDefinition::supercharge_build_plan,
                 subagents: true,
                 ask_user: false,
             },
             PagerFlagCase {
                 label: "supercharge-core-plan-no-subagents",
-                profile: AgentDefinition::grok_build_plan_no_subagents,
+                profile: AgentDefinition::supercharge_build_plan_no_subagents,
                 subagents: false,
                 ask_user: true,
             },
             PagerFlagCase {
                 label: "supercharge-core-plan-no-subagents / no-ask-user",
-                profile: AgentDefinition::grok_build_plan_no_subagents,
+                profile: AgentDefinition::supercharge_build_plan_no_subagents,
                 subagents: false,
                 ask_user: false,
             },
@@ -2209,7 +2209,7 @@ mod tests {
             Arc::new(LocalTerminalBackend::new()),
             ToolNotificationHandle::noop(),
         )
-        .from_definition(crate::config::AgentDefinition::default_grok_build())
+        .from_definition(crate::config::AgentDefinition::default_supercharge_build())
         .with_prompt_audience(PromptAudience::Subagent)
         .with_subagents_enabled(true)
         .build()
@@ -2243,7 +2243,7 @@ mod tests {
             .unwrap_or_else(|| panic!("no {subagent_type} line in task description: {task}"))
             .to_owned()
     }
-    /// Tool definitions of a default grok-build primary with subagents on, so its `spawn_subagent` description carries
+    /// Tool definitions of a default supercharge-core primary with subagents on, so its `spawn_subagent` description carries
     /// the previewed child lists; `configure` adds the session knobs under test.
     async fn previewing_primary(
         configure: impl FnOnce(AgentBuilder) -> AgentBuilder,
@@ -2255,7 +2255,7 @@ mod tests {
                 Arc::new(LocalTerminalBackend::new()),
                 ToolNotificationHandle::noop(),
             )
-            .from_definition(crate::config::AgentDefinition::default_grok_build())
+            .from_definition(crate::config::AgentDefinition::default_supercharge_build())
             .with_subagents_enabled(true),
         )
         .build()
@@ -2325,7 +2325,7 @@ mod tests {
     /// "Read-only" follows the read-only capability allowlist, so a child handed a generating tool loses the prefix.
     #[tokio::test]
     async fn explore_fragment_drops_read_only_prefix_when_image_generation_is_enabled() {
-        use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
+        use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig;
         let image_gen = ImageGenConfig::Enabled {
             api_key: "test-key".into(),
             base_url: "https://api.x.ai/v1".into(),
@@ -2334,7 +2334,7 @@ mod tests {
             image_edit_enabled: false,
             model_override: None,
             edit_model_override: None,
-            format: supercharge_tools::implementations::grok_build::image_gen::ImageProviderFormat::OpenaiImages,
+            format: supercharge_tools::implementations::supercharge_build::image_gen::ImageProviderFormat::OpenaiImages,
         };
         let defs = previewing_primary(|builder| builder.with_image_gen_config(image_gen)).await;
         let explore = task_type_line(&defs, "explore");
@@ -2402,21 +2402,21 @@ mod tests {
         use supercharge_tools::notification::ToolNotificationHandle;
         use supercharge_tools::registry::types::ToolConfig;
         let feedback_id = ToolConfig::for_tool::<
-            supercharge_tools::implementations::grok_build::SendFeedbackTool,
+            supercharge_tools::implementations::supercharge_build::SendFeedbackTool,
         >()
         .id;
-        let mut kindless_feedback_id = crate::config::AgentDefinition::default_grok_build();
+        let mut kindless_feedback_id = crate::config::AgentDefinition::default_supercharge_build();
         kindless_feedback_id.tool_config.tools = vec![ToolConfig::from_id(&feedback_id)];
         kindless_feedback_id.inject_default_tools = false;
-        let mut kindless_feedback_name = crate::config::AgentDefinition::default_grok_build();
+        let mut kindless_feedback_name = crate::config::AgentDefinition::default_supercharge_build();
         kindless_feedback_name.tool_config.tools =
             vec![ToolConfig::from_id("custom:tool").with_name(
-                supercharge_tools::implementations::grok_build::SEND_FEEDBACK_TOOL_NAME,
+                supercharge_tools::implementations::supercharge_build::SEND_FEEDBACK_TOOL_NAME,
             )];
         kindless_feedback_name.inject_default_tools = false;
         for definition in [
-            crate::config::AgentDefinition::default_grok_build(),
-            crate::config::AgentDefinition::grok_build_ask_user(),
+            crate::config::AgentDefinition::default_supercharge_build(),
+            crate::config::AgentDefinition::supercharge_build_ask_user(),
             kindless_feedback_id,
             kindless_feedback_name,
         ] {
@@ -2472,7 +2472,7 @@ mod tests {
     async fn top_level_session_still_receives_workflow() {
         let names = workflow_tool_names(
             crate::prompt::context::PromptAudience::Primary,
-            crate::config::AgentDefinition::default_grok_build(),
+            crate::config::AgentDefinition::default_supercharge_build(),
         )
         .await;
         assert!(
@@ -2496,7 +2496,7 @@ mod tests {
     async fn workflow_spawned_agent_does_not_receive_workflow() {
         let names = workflow_tool_names(
             crate::prompt::context::PromptAudience::Subagent,
-            crate::config::AgentDefinition::default_grok_build(),
+            crate::config::AgentDefinition::default_supercharge_build(),
         )
         .await;
         assert!(
@@ -2506,13 +2506,13 @@ mod tests {
     }
     #[tokio::test]
     async fn custom_child_toolset_cannot_reintroduce_workflow() {
-        use supercharge_tools::implementations::grok_build::{ReadFileTool, WorkflowTool};
+        use supercharge_tools::implementations::supercharge_build::{ReadFileTool, WorkflowTool};
         let mut definition = crate::config::AgentDefinition::general_purpose();
         definition.inject_default_tools = false;
         definition.tool_config.tools = vec![
             (&ReadFileTool).into(),
             (&WorkflowTool).into(),
-            supercharge_tools::registry::types::ToolConfig::from_id("GrokBuild:workflow"),
+            supercharge_tools::registry::types::ToolConfig::from_id("SuperchargeBuild:workflow"),
         ];
         let names =
             workflow_tool_names(crate::prompt::context::PromptAudience::Subagent, definition).await;
@@ -2529,12 +2529,12 @@ mod tests {
     async fn child_workflow_strip_leaves_unrelated_tools() {
         let primary = workflow_tool_names(
             crate::prompt::context::PromptAudience::Primary,
-            crate::config::AgentDefinition::default_grok_build(),
+            crate::config::AgentDefinition::default_supercharge_build(),
         )
         .await;
         let child = workflow_tool_names(
             crate::prompt::context::PromptAudience::Subagent,
-            crate::config::AgentDefinition::default_grok_build(),
+            crate::config::AgentDefinition::default_supercharge_build(),
         )
         .await;
         assert!(
@@ -2573,7 +2573,7 @@ mod tests {
     async fn curated_empty_toolset_fails_agent_build() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
         use supercharge_tools::notification::ToolNotificationHandle;
-        let mut profile = crate::config::AgentDefinition::default_grok_build();
+        let mut profile = crate::config::AgentDefinition::default_supercharge_build();
         profile.tool_config = Default::default();
         profile.inject_default_tools = false;
         let result = AgentBuilder::new(
@@ -2597,16 +2597,16 @@ mod tests {
     #[tokio::test]
     async fn plan_mode_injected_ask_user_question_receives_params() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionParams;
+        use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionParams;
         use supercharge_tools::notification::ToolNotificationHandle;
         use supercharge_tools::types::resources::Params;
-        let profile = crate::config::AgentDefinition::default_grok_build();
+        let profile = crate::config::AgentDefinition::default_supercharge_build();
         assert!(
             !profile
                 .tool_config
                 .tools
                 .iter()
-                .any(|tc| tc.id == "GrokBuild:ask_user_question"),
+                .any(|tc| tc.id == "SuperchargeBuild:ask_user_question"),
             "test premise: the profile must not pre-declare ask_user_question"
         );
         let mut params = serde_json::Map::new();
@@ -2634,7 +2634,7 @@ mod tests {
     #[tokio::test]
     async fn non_interactive_build_stamps_ask_user_question_params() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionParams;
+        use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionParams;
         use supercharge_tools::notification::ToolNotificationHandle;
         use supercharge_tools::types::resources::Params;
         let agent = AgentBuilder::new(
@@ -2642,7 +2642,7 @@ mod tests {
             Arc::new(LocalTerminalBackend::new()),
             ToolNotificationHandle::noop(),
         )
-        .from_definition(crate::config::AgentDefinition::default_grok_build())
+        .from_definition(crate::config::AgentDefinition::default_supercharge_build())
         .with_is_non_interactive(true)
         .build()
         .await
@@ -2657,7 +2657,7 @@ mod tests {
     async fn build_with_tools(tools: Vec<String>, disallowed: Vec<String>) -> crate::agent::Agent {
         use supercharge_tools::computer::local::LocalTerminalBackend;
         use supercharge_tools::notification::ToolNotificationHandle;
-        let mut def = crate::config::AgentDefinition::default_grok_build();
+        let mut def = crate::config::AgentDefinition::default_supercharge_build();
         def.tools = tools;
         def.disallowed_tools = disallowed;
         AgentBuilder::new(
@@ -2676,7 +2676,7 @@ mod tests {
     ) -> Vec<String> {
         use supercharge_tools::computer::local::LocalTerminalBackend;
         use supercharge_tools::notification::ToolNotificationHandle;
-        let mut def = crate::config::AgentDefinition::default_grok_build();
+        let mut def = crate::config::AgentDefinition::default_supercharge_build();
         def.tools = own_tools;
         def.session_tools_allowlist = Some(session_allow);
         let agent = AgentBuilder::new(
@@ -2748,7 +2748,7 @@ mod tests {
         let mut def = crate::config::AgentDefinition::general_purpose();
         assert!(def.session_tools_allowed("read_file"));
         def.session_tools_allowlist = Some(vec!["read_file".into()]);
-        assert!(def.session_tools_allowed("GrokBuild:read_file"));
+        assert!(def.session_tools_allowed("SuperchargeBuild:read_file"));
         assert!(!def.session_tools_allowed("grep"));
         def.session_tools_denylist = Some(vec!["read_file".into()]);
         assert!(!def.session_tools_allowed("read_file"));
@@ -2805,7 +2805,7 @@ mod tests {
         assert_eq!(agent.definition().allowed_subagent_types, None);
         use supercharge_tools::computer::local::LocalTerminalBackend;
         use supercharge_tools::notification::ToolNotificationHandle;
-        let mut def = crate::config::AgentDefinition::default_grok_build();
+        let mut def = crate::config::AgentDefinition::default_supercharge_build();
         def.disallowed_tools = vec!["Agent".into()];
         let agent = AgentBuilder::new(
             std::env::temp_dir(),
@@ -2821,10 +2821,10 @@ mod tests {
     #[tokio::test]
     async fn spawning_blocked_disables_all_background_bash_modes() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        use supercharge_tools::implementations::grok_build::bash::BashParams;
+        use supercharge_tools::implementations::supercharge_build::bash::BashParams;
         use supercharge_tools::notification::ToolNotificationHandle;
         use supercharge_tools::types::resources::Params;
-        let mut definition = crate::config::AgentDefinition::default_grok_build();
+        let mut definition = crate::config::AgentDefinition::default_supercharge_build();
         definition.tools = vec!["run_terminal_cmd".into()];
         let bash_params = serde_json::json!({
             "max_timeout_secs": 36_000.0,
@@ -3042,10 +3042,10 @@ mod tests {
     #[tokio::test]
     async fn requested_enabled_web_tools_survive_allowlist() {
         use supercharge_tools::computer::local::LocalTerminalBackend;
-        use supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig;
+        use supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig;
         use supercharge_tools::implementations::web_search::WebSearchConfig;
         use supercharge_tools::notification::ToolNotificationHandle;
-        let mut definition = crate::config::AgentDefinition::default_grok_build();
+        let mut definition = crate::config::AgentDefinition::default_supercharge_build();
         definition.tools = vec![
             "read_file".into(),
             "grep".into(),
@@ -3189,7 +3189,7 @@ mod tests {
         } else {
             WebSearchConfig::Disabled
         };
-        let mut def = crate::config::AgentDefinition::default_grok_build();
+        let mut def = crate::config::AgentDefinition::default_supercharge_build();
         def.disallowed_tools = disallowed_tools.iter().map(|s| s.to_string()).collect();
         def.tool_overrides = tool_overrides;
         AgentBuilder::new(

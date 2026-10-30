@@ -3,7 +3,7 @@
 use super::support::*;
 use super::*;
 use agent_client_protocol as acp;
-use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeExtRequest;
+use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeExtRequest;
 
 const SEED_PLAN: &str = "# OLD mixed-batch plan seed unique-c91e04";
 const NEW_PLAN: &str = "# NEW mixed-batch plan body unique-a7f3c2";
@@ -44,8 +44,8 @@ async fn seeded_active_plan_actor_with_edit_tools() -> (
     tempfile::TempDir,
     std::path::PathBuf,
 ) {
-    use supercharge_tools::implementations::grok_build::enter_plan_mode::EnterPlanModeTool;
-    use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeTool;
+    use supercharge_tools::implementations::supercharge_build::enter_plan_mode::EnterPlanModeTool;
+    use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeTool;
     use supercharge_tools::registry::types::ToolConfig;
 
     let (gateway_tx, gateway_rx) =
@@ -54,9 +54,9 @@ async fn seeded_active_plan_actor_with_edit_tools() -> (
         tokio::sync::mpsc::unbounded_channel::<PersistenceMsg>();
     let actor = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
     *actor.agent.borrow_mut() = test_agent_with_tools(vec![
-        ToolConfig::from_id("GrokBuild:read_file"),
+        ToolConfig::from_id("SuperchargeBuild:read_file"),
         ToolConfig {
-            id: "GrokBuild:search_replace".into(),
+            id: "SuperchargeBuild:search_replace".into(),
             params: Some(
                 serde_json::from_value(serde_json::json!({
                     "skip_read_before_edit": true
@@ -199,8 +199,8 @@ async fn mixed_permission_cancel_skips_exit_reverse_request() {
     local
         .run_until(async {
             use supercharge_paths::AbsPathBuf;
-            use supercharge_tools::implementations::grok_build::enter_plan_mode::EnterPlanModeTool;
-            use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeTool;
+            use supercharge_tools::implementations::supercharge_build::enter_plan_mode::EnterPlanModeTool;
+            use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeTool;
             use supercharge_tools::registry::types::ToolConfig;
             use supercharge_workspace::permission::{ClientType, spawn_permission_manager};
 
@@ -213,7 +213,7 @@ async fn mixed_permission_cancel_skips_exit_reverse_request() {
             // Disable background bash so finalize does not require the get_task_output / kill_task companion tools
             *actor.agent.borrow_mut() = test_agent_with_tools(vec![
                 ToolConfig {
-                    id: "GrokBuild:run_terminal_cmd".into(),
+                    id: "SuperchargeBuild:run_terminal_cmd".into(),
                     params: Some(
                         serde_json::from_value(serde_json::json!({
                             "enabled_background": false

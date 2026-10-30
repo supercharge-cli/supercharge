@@ -234,7 +234,7 @@ Agent definitions are discovered from multiple locations with priority:
 2. **User-level**: `~/.supercharge/agents/*.md`
 3. **Compat paths** (lowest priority): additional vendor agent
    directories under the user home (when enabled)
-4. **Built-in**: `default_grok_build()`, `browser_use()`
+4. **Built-in**: `default_supercharge_build()`, `browser_use()`
 
 Name-based dedup ensures the highest-priority definition wins. For
 example, a project `.supercharge/agents/code-reviewer.md` shadows a

@@ -11,7 +11,7 @@ use agent_client_protocol::{self as acp, Client as _};
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_mcp::servers::parse_mcp_qualified_name;
 use supercharge_session_events::{Event, EventWriter, PermissionDecision};
-use supercharge_tools::implementations::grok_build::web_fetch::domain_from_url;
+use supercharge_tools::implementations::supercharge_build::web_fetch::domain_from_url;
 
 const REJECT_ONCE_LABEL: &str = "No, and tell Supercharge what to do differently";
 
@@ -872,7 +872,7 @@ pub fn tool_name_for_access(access: &AccessKind) -> String {
         AccessKind::WebFetch(_) => "web_fetch".to_owned(),
         AccessKind::WebSearch(_) => "web_search".to_owned(),
         AccessKind::AgentMessage { .. } => {
-            supercharge_tools::implementations::grok_build::SEND_SUBAGENT_MESSAGE_TOOL_NAME
+            supercharge_tools::implementations::supercharge_build::SEND_SUBAGENT_MESSAGE_TOOL_NAME
                 .to_owned()
         }
         AccessKind::Tool(name) => name.clone(),

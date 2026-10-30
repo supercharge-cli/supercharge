@@ -123,7 +123,7 @@ impl MvpAgent {
         if resident {
             self.remove_session_terminal(id, SessionLiveState::Completed);
         }
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
             self.subagent_event_tx.event_sender().0,
         )
         .teardown_session_and_drain(&id.0, stage_budget(deadline, DRAIN_SUBAGENTS_WAIT))
@@ -212,7 +212,7 @@ impl MvpAgent {
         self.retire_root_session(id);
         let _ = self
             .subagent_event_tx
-            .send(supercharge_tools::implementations::grok_build::task::types::SubagentEvent::TeardownSession {
+            .send(supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent::TeardownSession {
                 parent_session_id: id.0.to_string(),
                 respond_to: None,
             });
@@ -621,7 +621,7 @@ impl MvpAgent {
     /// Counts for `x.ai/debug/agent`, including maps outside the registry.
     pub(crate) async fn registry_snapshot(&self) -> RegistrySnapshot {
         let subagents =
-            supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+            supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                 self.subagent_event_tx.event_sender().0,
             )
             .registry_counts()

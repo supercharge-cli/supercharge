@@ -130,7 +130,7 @@ macro_rules! rea_tool {
                 ToolKind::Other
             }
             fn tool_namespace(&self) -> ToolNamespace {
-                ToolNamespace::GrokBuild
+                ToolNamespace::SuperchargeBuild
             }
             fn description_template(&self) -> &str {
                 $desc

@@ -202,14 +202,14 @@ impl Fixture {
                 None,
                 Some(ToolServerConfig {
                     tools: vec![
-                        tc("GrokBuild:run_terminal_cmd", Some(ToolKind::Execute)),
+                        tc("SuperchargeBuild:run_terminal_cmd", Some(ToolKind::Execute)),
                         tc(
-                            "GrokBuild:get_task_output",
+                            "SuperchargeBuild:get_task_output",
                             Some(ToolKind::BackgroundTaskAction),
                         ),
-                        tc("GrokBuild:kill_task", Some(ToolKind::KillTaskAction)),
-                        tc("GrokBuild:read_file", Some(ToolKind::Read)),
-                        tc("GrokBuild:search_replace", Some(ToolKind::Edit)),
+                        tc("SuperchargeBuild:kill_task", Some(ToolKind::KillTaskAction)),
+                        tc("SuperchargeBuild:read_file", Some(ToolKind::Read)),
+                        tc("SuperchargeBuild:search_replace", Some(ToolKind::Edit)),
                         tc("OpenCode:write", Some(ToolKind::Write)),
                         tc("Codex:apply_patch", Some(ToolKind::Edit)),
                     ],

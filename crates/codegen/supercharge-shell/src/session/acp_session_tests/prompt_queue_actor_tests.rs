@@ -3207,7 +3207,7 @@ async fn agent_rebuild_republishes_the_configured_cutoff() {
                 }),
                 web_search: None,
             };
-            let mut seeded = supercharge_agent::AgentDefinition::default_grok_build();
+            let mut seeded = supercharge_agent::AgentDefinition::default_supercharge_build();
             seeded.tool_overrides = Some(seed.clone());
             actor
                 .handle_rebuild_agent_for_definition(
@@ -3228,7 +3228,7 @@ async fn agent_rebuild_republishes_the_configured_cutoff() {
             // Rebuilding to a seedless definition must clear the cell; a stale bound is a divergence.
             actor
                 .handle_rebuild_agent_for_definition(
-                    supercharge_agent::AgentDefinition::default_grok_build(),
+                    supercharge_agent::AgentDefinition::default_supercharge_build(),
                     supercharge_agent::DEFAULT_SYSTEM_PROMPT_LABEL.to_owned(),
                 )
                 .await

@@ -10,14 +10,14 @@ mod registry;
 pub use registry::{FIRST_PARTY_CREDENTIAL_ENV_VARS, env_bool, env_string};
 /// The endpoint set for one backend environment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GrokBuildEndpoints {
+pub struct SuperchargeBuildEndpoints {
     pub cli_chat_proxy_base_url: &'static str,
     pub asset_server_url: &'static str,
     pub relay_ws_url: &'static str,
     pub gateway_ws_url: &'static str,
     pub ws_origin: &'static str,
 }
-const PRODUCTION_ENDPOINTS: GrokBuildEndpoints = GrokBuildEndpoints {
+const PRODUCTION_ENDPOINTS: SuperchargeBuildEndpoints = SuperchargeBuildEndpoints {
     cli_chat_proxy_base_url: "https://cli-chat-proxy.grok.com/v1",
     asset_server_url: "https://assets.grok.com",
     relay_ws_url: "wss://code.grok.com/ws/code-agent",
@@ -30,32 +30,32 @@ pub const PROD_RELAY_WS_URL: &str = PRODUCTION_ENDPOINTS.relay_ws_url;
 pub const PROD_GATEWAY_WS_URL: &str = PRODUCTION_ENDPOINTS.gateway_ws_url;
 pub const PROD_WS_ORIGIN: &str = PRODUCTION_ENDPOINTS.ws_origin;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum GrokBuildEnvironment {
+pub enum SuperchargeBuildEnvironment {
     #[default]
     Production,
 }
-impl GrokBuildEnvironment {
+impl SuperchargeBuildEnvironment {
     pub fn from_flags(_dev: bool, _staging: bool) -> Self {
-        GrokBuildEnvironment::Production
+        SuperchargeBuildEnvironment::Production
     }
     /// Indicator string for display; `None` for Production.
     pub fn indicator(&self) -> Option<&'static str> {
         match self {
-            GrokBuildEnvironment::Production => None,
+            SuperchargeBuildEnvironment::Production => None,
         }
     }
     pub fn is_production(&self) -> bool {
-        matches!(self, GrokBuildEnvironment::Production)
+        matches!(self, SuperchargeBuildEnvironment::Production)
     }
     fn env_prefix(&self) -> &'static str {
         match self {
-            GrokBuildEnvironment::Production => "SUPERCHARGE_PRODUCTION",
+            SuperchargeBuildEnvironment::Production => "SUPERCHARGE_PRODUCTION",
         }
     }
     /// Compiled endpoint set for this environment (production by default).
-    pub fn endpoints(&self) -> GrokBuildEndpoints {
+    pub fn endpoints(&self) -> SuperchargeBuildEndpoints {
         match self {
-            GrokBuildEnvironment::Production => PRODUCTION_ENDPOINTS,
+            SuperchargeBuildEnvironment::Production => PRODUCTION_ENDPOINTS,
         }
     }
     /// Env-var override when set, else the compiled endpoint.
@@ -86,10 +86,10 @@ impl GrokBuildEnvironment {
         self.resolve("_GATEWAY_WS_URL", self.endpoints().gateway_ws_url)
     }
 }
-impl std::fmt::Display for GrokBuildEnvironment {
+impl std::fmt::Display for SuperchargeBuildEnvironment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GrokBuildEnvironment::Production => write!(f, "production"),
+            SuperchargeBuildEnvironment::Production => write!(f, "production"),
         }
     }
 }
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn test_env_prefix() {
         assert_eq!(
-            GrokBuildEnvironment::Production.env_prefix(),
+            SuperchargeBuildEnvironment::Production.env_prefix(),
             "SUPERCHARGE_PRODUCTION"
         );
     }
@@ -236,15 +236,15 @@ mod tests {
     #[test]
     fn relay_and_gateway_urls_are_distinct() {
         assert_ne!(
-            GrokBuildEnvironment::Production.relay_ws_url(),
-            GrokBuildEnvironment::Production.gateway_ws_url(),
+            SuperchargeBuildEnvironment::Production.relay_ws_url(),
+            SuperchargeBuildEnvironment::Production.gateway_ws_url(),
         );
     }
     #[test]
     fn test_from_flags() {
         assert_eq!(
-            GrokBuildEnvironment::from_flags(false, false),
-            GrokBuildEnvironment::Production
+            SuperchargeBuildEnvironment::from_flags(false, false),
+            SuperchargeBuildEnvironment::Production
         );
     }
 }

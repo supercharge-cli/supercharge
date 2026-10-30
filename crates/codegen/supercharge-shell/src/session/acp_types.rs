@@ -479,7 +479,7 @@ pub struct ContextInfo {
     pub usage_pct: u8,
     /// The resolved auto-compact threshold percent (0-100) for the active model at the time this snapshot was captured.
     /// Comes from the 6-tier resolution (env > user per-model > user global > GB per-model > GB global > 85).
-    /// Used by the TUI `/context` view so the displayed “Auto-compact at X%” matches the actual trigger (e.g. 65 for grok-build in remote settings).
+    /// Used by the TUI `/context` view so the displayed “Auto-compact at X%” matches the actual trigger (e.g. 65 for supercharge-core in remote settings).
     #[serde(default = "default_auto_compact_threshold")]
     pub auto_compact_threshold_percent: u8,
     /// Itemized usage rows (skills, workflows, MCP servers, AGENTS.md).

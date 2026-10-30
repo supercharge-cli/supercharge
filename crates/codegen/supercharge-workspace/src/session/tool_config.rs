@@ -391,9 +391,9 @@ impl SessionContextFactory for WorkspaceSessionContextFactory {
         session_env: Arc<HashMap<String, String>>,
         backend: Arc<dyn supercharge_tools::computer::types::TerminalBackend>,
     ) -> supercharge_tools::registry::types::SessionContext {
-        use supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig;
-        use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
-        use supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig;
+        use supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig;
+        use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig;
+        use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig;
         use supercharge_tools::implementations::web_search::WebSearchConfig;
         let fs = Arc::new(supercharge_tools::computer::local::LocalFs)
             as Arc<dyn supercharge_tools::computer::types::AsyncFileSystem>;
@@ -511,8 +511,8 @@ fn build_proxy_headers(base_url: &str) -> indexmap::IndexMap<String, String> {
 }
 /// Enabled with default params unless `SUPERCHARGE_DISABLE_WEB_FETCH=1` is set.
 fn build_web_fetch_config()
--> supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig {
-    use supercharge_tools::implementations::grok_build::web_fetch::{
+-> supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig {
+    use supercharge_tools::implementations::supercharge_build::web_fetch::{
         WebFetchConfig, WebFetchParams,
     };
     if std::env::var("SUPERCHARGE_DISABLE_WEB_FETCH").is_ok_and(|v| v == "1" || v == "true") {
@@ -651,10 +651,10 @@ pub mod test_support {
     pub fn baseline_config() -> ToolServerConfig {
         ToolServerConfig {
             tools: vec![
-                tc("GrokBuild:read_file", Some(ToolKind::Read)),
-                tc("GrokBuild:search_replace", Some(ToolKind::Edit)),
-                tc("GrokBuild:grep", Some(ToolKind::Search)),
-                tc("GrokBuild:list_dir", Some(ToolKind::ListDir)),
+                tc("SuperchargeBuild:read_file", Some(ToolKind::Read)),
+                tc("SuperchargeBuild:search_replace", Some(ToolKind::Edit)),
+                tc("SuperchargeBuild:grep", Some(ToolKind::Search)),
+                tc("SuperchargeBuild:list_dir", Some(ToolKind::ListDir)),
             ],
             behavior_preset: None,
         }
@@ -709,12 +709,12 @@ mod tests {
         let factory = factory_for_test();
         let baseline = ToolServerConfig {
             tools: vec![test_support::tc(
-                "GrokBuild:read_file",
+                "SuperchargeBuild:read_file",
                 Some(ToolKind::Read),
             )],
             behavior_preset: None,
         };
-        let mut mcp_dup = test_support::tc("GrokBuild:read_file", Some(ToolKind::Read));
+        let mut mcp_dup = test_support::tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
         mcp_dup.name_override = Some("mcp_read".into());
         let snapshot = vec![mcp_dup];
         let (_eff, ts, _backend) = resolve_session_toolset(
@@ -746,15 +746,15 @@ mod tests {
     #[test]
     fn backfill_tool_kinds_fills_known_kindless_ids_only() {
         let kinds = HashMap::from([
-            ("GrokBuild:search_replace".to_owned(), ToolKind::Edit),
-            ("GrokBuild:read_file".to_owned(), ToolKind::Read),
+            ("SuperchargeBuild:search_replace".to_owned(), ToolKind::Edit),
+            ("SuperchargeBuild:read_file".to_owned(), ToolKind::Read),
         ]);
         let config = ToolServerConfig {
             tools: vec![
-                test_support::tc("GrokBuild:search_replace", None),
+                test_support::tc("SuperchargeBuild:search_replace", None),
                 test_support::tc("adhoc.opaque", None),
                 // Pre-set kinds must never be overwritten by the registry.
-                test_support::tc("GrokBuild:read_file", Some(ToolKind::Search)),
+                test_support::tc("SuperchargeBuild:read_file", Some(ToolKind::Search)),
             ],
             behavior_preset: Some("current".to_owned()),
         };
@@ -767,14 +767,14 @@ mod tests {
                 .expect("tool present")
                 .kind
         };
-        assert_eq!(kind_of("GrokBuild:search_replace"), Some(ToolKind::Edit));
+        assert_eq!(kind_of("SuperchargeBuild:search_replace"), Some(ToolKind::Edit));
         assert_eq!(
             kind_of("adhoc.opaque"),
             None,
             "ids unknown to the registry stay kind-less"
         );
         assert_eq!(
-            kind_of("GrokBuild:read_file"),
+            kind_of("SuperchargeBuild:read_file"),
             Some(ToolKind::Search),
             "an explicit kind wins over the registry's"
         );
@@ -788,11 +788,11 @@ mod tests {
         let factory = factory_for_test();
         let baseline = ToolServerConfig {
             tools: vec![
-                test_support::tc("GrokBuild:read_file", None),
-                test_support::tc("GrokBuild:grep", None),
-                test_support::tc("GrokBuild:list_dir", None),
-                test_support::tc("GrokBuild:search_replace", None),
-                test_support::tc("GrokBuild:run_terminal_cmd", None),
+                test_support::tc("SuperchargeBuild:read_file", None),
+                test_support::tc("SuperchargeBuild:grep", None),
+                test_support::tc("SuperchargeBuild:list_dir", None),
+                test_support::tc("SuperchargeBuild:search_replace", None),
+                test_support::tc("SuperchargeBuild:run_terminal_cmd", None),
             ],
             behavior_preset: None,
         };
@@ -834,7 +834,7 @@ mod tests {
     fn resolve_session_toolset_mcp_edit_dropped_under_readonly() {
         let baseline = ToolServerConfig {
             tools: vec![test_support::tc(
-                "GrokBuild:read_file",
+                "SuperchargeBuild:read_file",
                 Some(ToolKind::Read),
             )],
             behavior_preset: None,
@@ -854,7 +854,7 @@ mod tests {
         let factory = factory_for_test();
         let baseline = ToolServerConfig {
             tools: vec![
-                test_support::tc("GrokBuild:read_file", Some(ToolKind::Read)),
+                test_support::tc("SuperchargeBuild:read_file", Some(ToolKind::Read)),
                 test_support::tc("baseline.opaque", None),
             ],
             behavior_preset: None,
@@ -877,7 +877,7 @@ mod tests {
             "MCP kind: None MUST be dropped under ReadOnly: {kept_ids:?}"
         );
         assert!(
-            kept_ids.contains(&"GrokBuild:read_file"),
+            kept_ids.contains(&"SuperchargeBuild:read_file"),
             "baseline Read kind must survive ReadOnly: {kept_ids:?}"
         );
         let _ = factory;
@@ -939,7 +939,7 @@ mod tests {
     fn hub_tool_dropped_under_readonly_because_kind_none() {
         let baseline = ToolServerConfig {
             tools: vec![test_support::tc(
-                "GrokBuild:read_file",
+                "SuperchargeBuild:read_file",
                 Some(ToolKind::Read),
             )],
             behavior_preset: None,
@@ -993,7 +993,7 @@ mod tests {
     fn hub_tool_name_collision_with_baseline_skipped() {
         let baseline = ToolServerConfig {
             tools: vec![test_support::tc(
-                "GrokBuild:read_file",
+                "SuperchargeBuild:read_file",
                 Some(ToolKind::Read),
             )],
             behavior_preset: None,

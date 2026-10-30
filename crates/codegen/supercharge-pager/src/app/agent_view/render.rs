@@ -4924,7 +4924,7 @@ mod status_line_draw_tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use ratatui::style::Color;
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
     fn draw_script(output: &str, rows: u16) -> Buffer {

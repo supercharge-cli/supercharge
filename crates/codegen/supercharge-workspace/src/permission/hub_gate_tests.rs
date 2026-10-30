@@ -160,7 +160,7 @@ async fn daemon_session_at(
         .create_session_with_config(
             session_id,
             cwd,
-            Some(supercharge_agent::workspace_grok_build_toolset()),
+            Some(supercharge_agent::workspace_supercharge_build_toolset()),
             CapabilityMode::All,
             None,
             false,
@@ -505,7 +505,7 @@ async fn a_run_requested_in_the_background_keeps_the_pre_run_prompt_under_the_en
     let handle = make_handle();
     let session = daemon_session(&handle).await;
     let gated = SandboxPath::for_tool(
-        Some((ToolKind::Execute, ToolNamespace::GrokBuild)),
+        Some((ToolKind::Execute, ToolNamespace::SuperchargeBuild)),
         Some(SandboxMode::Enforce),
     );
     assert_eq!(SandboxPath::Gated, gated);

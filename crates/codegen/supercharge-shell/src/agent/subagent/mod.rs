@@ -35,8 +35,8 @@ use supercharge_hunk_tracker::HunkTrackerHandle;
 use supercharge_sampling_types::conversation::ConversationItem;
 use supercharge_session_events::types::CancellationCategory;
 use supercharge_subagent_resolution::ResumeSourceData;
-use supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer;
-use supercharge_tools::implementations::grok_build::task::types::*;
+use supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer;
+use supercharge_tools::implementations::supercharge_build::task::types::*;
 use supercharge_tools::types::tool::ToolKind;
 use supercharge_workspace::file_system::AsyncFileSystem;
 use tokio::sync::{mpsc, oneshot};
@@ -48,7 +48,7 @@ pub(crate) use spawn::{
     emit_subagent_notification, spawn_subagent_coordinator, subagent_coordinator_channel,
     worker_runtime,
 };
-pub(crate) use supercharge_tools::implementations::grok_build::task::coordinator::{
+pub(crate) use supercharge_tools::implementations::supercharge_build::task::coordinator::{
     ChildRunOutput, StartedChild,
 };
 mod attempt_store;
@@ -241,7 +241,7 @@ pub(crate) struct SubagentSpawnContext {
     /// Parent's scheduler handle.
     /// When `Some`, the subagent reuses the parent's scheduler actor so scheduled tasks survive subagent exit.
     pub parent_scheduler_handle:
-        Option<supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle>,
+        Option<supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle>,
     /// Parent's session environment variables (.envrc and color settings), shared so the child inherits the same env without re-loading.
     pub session_env: Arc<HashMap<String, String>>,
     /// Parent's memory config, shared so the child can access the same cross-session memory store.
@@ -249,11 +249,11 @@ pub(crate) struct SubagentSpawnContext {
     /// Parent's selected memory implementation, retained even when memory is disabled.
     pub memory_mode: crate::config::MemoryMode,
     pub web_search_sampling_config: Option<supercharge_sampler::SamplerConfig>,
-    pub web_fetch_config: supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig,
-    pub image_gen_config: supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig,
-    pub video_gen_config: supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig,
+    pub web_fetch_config: supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig,
+    pub image_gen_config: supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig,
+    pub video_gen_config: supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig,
     pub app_builder_deployer_config:
-        supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
+        supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig,
     pub write_file_enabled: bool,
     pub active_agent_messages_enabled: bool,
     /// `[subagents] inherit_model`: drop a model-facing `Task.model` so children run on the parent model.
@@ -1618,8 +1618,8 @@ pub(crate) fn subagent_harness_flavor_is_representable(agent_type: &str) -> bool
     supercharge_subagent_resolution::subagent_harness_flavor_is_representable(agent_type)
 }
 /// Apply the harness-dependent toolset/prompt re-selection to a resolved agent definition.
-/// The harness flavor (alternate vs grok-build) normally follows the PARENT: `GrokBuildOrchestrator` parents give children the alternate harness.
-/// The orchestrator keeps children lean, and other parents inherit the file-tool override (hashline vs standard). A `/goal` role may pass `harness_agent_type` to OVERRIDE that flavor regardless of the parent. So a grok-build session can run an alternate-harness verifier and vice-versa. Extracted so both [`run_shell_child`] (real spawn) and [`describe_subagent_type`] (read-only probe) build the SAME `tool_config`.
+/// The harness flavor (alternate vs supercharge-core) normally follows the PARENT: `SuperchargeBuildOrchestrator` parents give children the alternate harness.
+/// The orchestrator keeps children lean, and other parents inherit the file-tool override (hashline vs standard). A `/goal` role may pass `harness_agent_type` to OVERRIDE that flavor regardless of the parent. So a supercharge-core session can run an alternate-harness verifier and vice-versa. Extracted so both [`run_shell_child`] (real spawn) and [`describe_subagent_type`] (read-only probe) build the SAME `tool_config`.
 fn resolve_subagent_toolset(
     subagent_type: &str,
     harness_agent_type: Option<&str>,
@@ -2525,7 +2525,7 @@ fn completed_finish_from_inspection(
 #[tracing::instrument(skip_all)]
 pub(crate) async fn reconcile_orphaned_subagents_with_backend(
     unfinished: &[crate::session::storage::UnfinishedSubagent],
-    backend: &supercharge_tools::implementations::grok_build::task::backend::ChannelBackend,
+    backend: &supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend,
     session_dir: &Path,
     parent_session_id: &str,
     gateway: &GatewaySender,
@@ -2658,7 +2658,7 @@ pub(crate) async fn reconcile_orphaned_subagents_with_backend(
 /// Persist-first plus the per-parent lock make a second tick, sequential or overlapping, a no-op.
 #[tracing::instrument(level = "debug", skip_all)]
 pub(crate) async fn reconcile_live_orphaned_subagents(
-    backend: &supercharge_tools::implementations::grok_build::task::backend::ChannelBackend,
+    backend: &supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend,
     session_dir: &Path,
     parent_session_id: &str,
     gateway: &GatewaySender,

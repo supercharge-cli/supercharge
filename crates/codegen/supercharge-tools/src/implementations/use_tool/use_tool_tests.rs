@@ -650,7 +650,7 @@ fn schema_allows_arbitrary_properties_for_tool_input() {
     let manifest = crate::registry::types::ToolRegistryBuilder::new().get_tools_config_raw();
     assert!(
         !manifest
-            .pointer("/GrokBuild:use_tool/input_schema")
+            .pointer("/SuperchargeBuild:use_tool/input_schema")
             .unwrap()
             .to_string()
             .contains("file")

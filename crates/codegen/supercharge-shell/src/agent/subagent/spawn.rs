@@ -17,8 +17,8 @@ use crate::session::SessionCommand;
 use agent_client_protocol as acp;
 use supercharge_acp_lib::AcpAgentGatewaySender as GatewaySender;
 use supercharge_telemetry::region::Region;
-use supercharge_tools::implementations::grok_build::task::coordinator::{self, ChildCompletion};
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::coordinator::{self, ChildCompletion};
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentRequest, SubagentResult, SubagentSnapshot,
 };
 use tokio::sync::mpsc;
@@ -73,7 +73,7 @@ pub(crate) fn spawn_pipeline_parent(
         .or_else(|| tracing::Span::current().id())
 }
 pub(crate) fn subagent_coordinator_channel() -> (
-    supercharge_tools::implementations::grok_build::task::backend::SubagentCoordinatorSender,
+    supercharge_tools::implementations::supercharge_build::task::backend::SubagentCoordinatorSender,
     coordinator::SubagentCoordinatorReceiver,
 ) {
     coordinator::SubagentCoordinator::<ShellChildRunner>::channel()
@@ -90,14 +90,14 @@ pub(crate) async fn join_worker_task<T>(task: tokio::task::JoinHandle<T>, panic_
 impl coordinator::ChildRunner for ShellChildRunner {
     type Control = crate::agent::subagent::ShellChildRuntime;
     type RootControl =
-        supercharge_tools::implementations::grok_build::task::root_control::NoRootControl;
+        supercharge_tools::implementations::supercharge_build::task::root_control::NoRootControl;
     type CompletionData = crate::agent::subagent::ShellCompletionData;
     type RunFuture = coordinator::LocalBoxFuture<coordinator::ChildRunOutput<Self::CompletionData>>;
     type ValidateFuture = coordinator::LocalBoxFuture<
-        supercharge_tools::implementations::grok_build::task::types::SubagentValidateTypeOutcome,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentValidateTypeOutcome,
     >;
     type DescribeFuture = coordinator::LocalBoxFuture<
-        supercharge_tools::implementations::grok_build::task::types::SubagentDescribeOutcome,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentDescribeOutcome,
     >;
     fn run(&self, mut run: coordinator::ChildRunRequest<Self::Control>) -> Self::RunFuture {
         let agent_ref = self.agent_ref.clone();
@@ -260,7 +260,7 @@ impl coordinator::ChildRunner for ShellChildRunner {
                         subagent_type,
                         "DescribeType for unknown/evicted parent session, replying Unavailable",
                     );
-                    supercharge_tools::implementations::grok_build::task::types::SubagentDescribeOutcome::Unavailable
+                    supercharge_tools::implementations::supercharge_build::task::types::SubagentDescribeOutcome::Unavailable
                 }
             }
         })
@@ -351,7 +351,7 @@ fn log_limit_notice(notice: coordinator::SubagentLimitNotice) {
 pub(crate) fn spawn_subagent_coordinator(
     agent_ref: LocalRef<MvpAgent>,
     rx: coordinator::SubagentCoordinatorReceiver,
-    limits: supercharge_tools::implementations::grok_build::task::admission::SubagentLimits,
+    limits: supercharge_tools::implementations::supercharge_build::task::admission::SubagentLimits,
 ) {
     let runner = ShellChildRunner {
         agent_ref,
@@ -360,7 +360,7 @@ pub(crate) fn spawn_subagent_coordinator(
     let limit_sink: coordinator::SubagentLimitSink = std::sync::Arc::new(log_limit_notice);
     let config = coordinator::CoordinatorConfig {
         foreground_budget:
-            supercharge_tools::implementations::grok_build::task::backend::env_duration_or(
+            supercharge_tools::implementations::supercharge_build::task::backend::env_duration_or(
                 "SUPERCHARGE_SUBAGENT_AWAIT_BUDGET_MS",
                 std::time::Duration::from_secs(600),
             ),
@@ -502,7 +502,7 @@ pub(crate) fn inject_subagent_completed_prompt(params: InjectParams) {
     let Some(cmd_tx) = parent_cmd_tx else {
         return;
     };
-    let summary = supercharge_tools::implementations::grok_build::task::completion_summary(
+    let summary = supercharge_tools::implementations::supercharge_build::task::completion_summary(
         request, result, snapshot,
     );
     let message = supercharge_tools::reminders::task_completion::format_subagent_completion(

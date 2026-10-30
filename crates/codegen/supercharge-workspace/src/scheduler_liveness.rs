@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use supercharge_tools::implementations::grok_build::scheduler::types::{
+use supercharge_tools::implementations::supercharge_build::scheduler::types::{
     ScheduledTask, SchedulerCommand, SchedulerHandle,
 };
 

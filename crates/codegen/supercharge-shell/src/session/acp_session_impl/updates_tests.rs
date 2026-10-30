@@ -4,7 +4,7 @@ use super::support::{
 use super::*;
 use crate::session::storage::prepare_replay_lines;
 use crate::test_support::lsp_runtime::test_gateway;
-use supercharge_tools::implementations::grok_build::task::{
+use supercharge_tools::implementations::supercharge_build::task::{
     backend::ChannelBackend, types::SubagentEvent,
 };
 

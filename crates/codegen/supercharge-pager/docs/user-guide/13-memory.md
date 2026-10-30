@@ -227,7 +227,7 @@ You can also toggle from inside the `/memory` modal by pressing `t`.
    implementations, unless the same TOML also sets `[memory_v2] enabled = true`.
    A remote v2 gate alone cannot override a local opt-out.
 3. `memory_v2.enabled` resolves from effective TOML, then the dedicated
-   `grok_build_memory_v2_enabled` managed setting. If true, v2 is selected
+   `supercharge_build_memory_v2_enabled` managed setting. If true, v2 is selected
    regardless of legacy `memory_enabled`.
 4. Otherwise the legacy pipeline is used only with `[memory] mode = "legacy"`;
    its enablement resolves through the CLI, `SUPERCHARGE_MEMORY`, effective
@@ -236,8 +236,8 @@ You can also toggle from inside the `/memory` modal by pressing `t`.
    a legacy enablement tier is true, and off when `memory_v2.enabled` is false.
 
 All managed v2 behavior comes from the dedicated
-`grok_build_memory_v2_settings` object. Memory v2 does not consume fields from
-the legacy `grok_build_settings` object.
+`supercharge_build_memory_v2_settings` object. Memory v2 does not consume fields from
+the legacy `supercharge_build_settings` object.
 
 ---
 

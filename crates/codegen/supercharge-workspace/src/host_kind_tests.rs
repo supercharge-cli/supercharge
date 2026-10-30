@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use supercharge_computer_hub_sdk::{AuthCredential, SharedAuthProvider};
 use supercharge_tool_protocol::SessionId;
-use supercharge_tools::implementations::grok_build::image_gen::ImageGenClient;
-use supercharge_tools::implementations::grok_build::video_gen::VideoGenClient;
+use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenClient;
+use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenClient;
 use supercharge_tools::implementations::web_search::WebSearchConfig;
 use supercharge_tools::implementations::web_search::client::WebSearchClient;
 use supercharge_tools::registry::types::{FinalizedToolset, ToolServerConfig};
@@ -57,7 +57,7 @@ fn only_a_daemon_streams_fs_changes() {
 /// same catalog with exactly those tools cut, in the same order.
 #[test]
 fn daemon_catalog_is_the_sandbox_catalog_minus_the_api_backed_tools() {
-    let full = supercharge_agent::workspace_grok_build_toolset();
+    let full = supercharge_agent::workspace_supercharge_build_toolset();
     let sandbox = WorkspaceHostKind::Sandbox.default_toolset();
     let daemon = WorkspaceHostKind::Daemon.default_toolset();
     let full_ids = unqualified_ids(&full);
@@ -188,9 +188,9 @@ fn a_daemon_host_serves_pinned_toolsets_only_and_can_neither_upload_nor_deploy()
         let served = resolver(
             SessionId::new("daemon-pinned").unwrap(),
             Some(pinned(&[
-                "GrokBuild:read_file",
-                "GrokBuild:web_search",
-                "GrokBuild:image_gen",
+                "SuperchargeBuild:read_file",
+                "SuperchargeBuild:web_search",
+                "SuperchargeBuild:image_gen",
             ])),
         )
         .await
@@ -203,8 +203,8 @@ fn a_daemon_host_serves_pinned_toolsets_only_and_can_neither_upload_nor_deploy()
         );
         assert_eq!(
             vec![
-                "GrokBuild:image_gen".to_owned(),
-                "GrokBuild:web_search".to_owned()
+                "SuperchargeBuild:image_gen".to_owned(),
+                "SuperchargeBuild:web_search".to_owned()
             ],
             served.unserved_tool_ids
         );
@@ -236,7 +236,7 @@ fn a_sandbox_host_keeps_uploads_the_credential_and_lax_binds() {
         let resolver = bind_resolver_fixture(&handle);
         let served = resolver(
             SessionId::new("sandbox-pinned").unwrap(),
-            Some(pinned(&["GrokBuild:read_file", "GrokBuild:web_search"])),
+            Some(pinned(&["SuperchargeBuild:read_file", "SuperchargeBuild:web_search"])),
         )
         .await
         .expect("bind");

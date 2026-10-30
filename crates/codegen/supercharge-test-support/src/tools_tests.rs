@@ -9,7 +9,7 @@ fn offered(names: &[&str]) -> OfferedTools {
     offered_tools(&json!({ "tools": tools }))
 }
 #[test]
-fn pick_uses_grok_build_name_else_none_when_unoffered() {
+fn pick_uses_supercharge_build_name_else_none_when_unoffered() {
     let cases: [(Tool, &[&str], Option<&str>); 4] = [
         (Tool::Read, &["Read", "read_file"], Some("read_file")),
         (Tool::Read, &["read_file"], Some("read_file")),
@@ -26,7 +26,7 @@ fn pick_uses_grok_build_name_else_none_when_unoffered() {
     }
 }
 #[test]
-fn every_kind_with_a_grok_build_name_resolves_under_it() {
+fn every_kind_with_a_supercharge_build_name_resolves_under_it() {
     let cases: [(Tool, &str); 25] = [
         (Tool::Shell, "run_terminal_command"),
         (Tool::Read, "read_file"),
@@ -64,7 +64,7 @@ fn every_kind_with_a_grok_build_name_resolves_under_it() {
     }
 }
 #[test]
-fn required_fields_the_case_omits_are_filled_on_grok_build() {
+fn required_fields_the_case_omits_are_filled_on_supercharge_build() {
     let cases: [(Tool, &str, Value, Value); 7] = [
         (
             Tool::Shell,
@@ -109,8 +109,8 @@ fn required_fields_the_case_omits_are_filled_on_grok_build() {
             json!({ "schedule": "0 9 * * 1-5", "prompt": "check the build", "interval": CRON_DEFAULT_INTERVAL }),
         ),
     ];
-    for (tool, grok_build_name, arguments, expected) in cases {
-        let picked = tool.pick(&offered(&[grok_build_name]), &arguments).unwrap();
+    for (tool, supercharge_build_name, arguments, expected) in cases {
+        let picked = tool.pick(&offered(&[supercharge_build_name]), &arguments).unwrap();
         assert_eq!(expected, picked.arguments, "{tool:?}");
     }
 }
@@ -133,8 +133,8 @@ fn field_the_case_wrote_is_kept_over_its_fill() {
             json!({ "interval": "5m", "prompt": "check" }),
         ),
     ];
-    for (tool, grok_build_name, arguments) in cases {
-        let picked = tool.pick(&offered(&[grok_build_name]), &arguments).unwrap();
+    for (tool, supercharge_build_name, arguments) in cases {
+        let picked = tool.pick(&offered(&[supercharge_build_name]), &arguments).unwrap();
         assert_eq!(arguments, picked.arguments, "{tool:?}");
     }
 }
@@ -161,7 +161,7 @@ fn task_call_keeps_the_id_it_names() {
     );
 }
 #[test]
-fn arguments_that_are_not_a_table_pass_through_on_grok_build() {
+fn arguments_that_are_not_a_table_pass_through_on_supercharge_build() {
     let arguments = json!("raw");
     let picked = Tool::Shell
         .pick(&offered(&["run_terminal_command"]), &arguments)

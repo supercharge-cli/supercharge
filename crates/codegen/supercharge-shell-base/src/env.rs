@@ -1,4 +1,4 @@
-//! GrokBuildEnvironment configuration for the shell crate family.
+//! SuperchargeBuildEnvironment configuration for the shell crate family.
 //!
 //! The environment presets (per-environment endpoint URLs, the staging trust check, `EnvVarGuard`) live in the [`supercharge_env`] leaf crate.
 //! Sibling crates (telemetry, tools, workspace) share them without depending on this crate.
@@ -7,9 +7,9 @@
 //! # Gateway-bridge mode (env-only)
 //! - `SUPERCHARGE_GATEWAY_URL` — when set to a valid URL, `MvpAgent` spawns a
 //!   per-session gateway bridge actor and routes prompts through it.
-//!   When unset, sessions created in gateway mode fall back to [`GrokBuildEnvironment::gateway_ws_url`] and everything else stays in local mode.
+//!   When unset, sessions created in gateway mode fall back to [`SuperchargeBuildEnvironment::gateway_ws_url`] and everything else stays in local mode.
 pub use supercharge_env::{
-    GrokBuildEnvironment, PROD_ASSET_SERVER_URL, PROD_CLI_CHAT_PROXY_BASE_URL, PROD_GATEWAY_WS_URL,
+    SuperchargeBuildEnvironment, PROD_ASSET_SERVER_URL, PROD_CLI_CHAT_PROXY_BASE_URL, PROD_GATEWAY_WS_URL,
     PROD_RELAY_WS_URL, PROD_WS_ORIGIN,
 };
 /// Public Computer Hub WebSocket URL used by the local-workspace supervisor (`workspace_server --hub-url`) when `agent_config.hub.url` is unset.

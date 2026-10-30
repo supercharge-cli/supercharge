@@ -850,7 +850,7 @@ mod tests {
             .create_session_with_config(
                 "gate",
                 None,
-                Some(supercharge_agent::workspace_grok_build_toolset()),
+                Some(supercharge_agent::workspace_supercharge_build_toolset()),
                 crate::capability::CapabilityMode::All,
                 None,
                 false,
@@ -1097,13 +1097,13 @@ mod tests {
     fn bg_config() -> ToolServerConfig {
         ToolServerConfig {
             tools: vec![
-                tc("GrokBuild:run_terminal_cmd", Some(ToolKind::Execute)),
+                tc("SuperchargeBuild:run_terminal_cmd", Some(ToolKind::Execute)),
                 tc(
-                    "GrokBuild:get_task_output",
+                    "SuperchargeBuild:get_task_output",
                     Some(ToolKind::BackgroundTaskAction),
                 ),
-                tc("GrokBuild:kill_task", Some(ToolKind::KillTaskAction)),
-                tc("GrokBuild:monitor", Some(ToolKind::Monitor)),
+                tc("SuperchargeBuild:kill_task", Some(ToolKind::KillTaskAction)),
+                tc("SuperchargeBuild:monitor", Some(ToolKind::Monitor)),
             ],
             behavior_preset: None,
         }

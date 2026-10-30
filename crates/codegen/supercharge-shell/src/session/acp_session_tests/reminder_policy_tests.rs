@@ -122,7 +122,7 @@ fn remote_settings_preserves_false_and_zero_todo_gate_fields() {
     assert_eq!(settings.todo_gate_max_fires_per_prompt, Some(0));
 }
 fn def_with_template(tpl: TemplateOverride) -> AgentDefinition {
-    let mut def = AgentDefinition::default_grok_build();
+    let mut def = AgentDefinition::default_supercharge_build();
     def.system_prompt = tpl;
     def
 }

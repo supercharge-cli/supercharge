@@ -1,4 +1,4 @@
-use crate::implementations::grok_build::send_subagent_message::SendSubagentMessageOutput;
+use crate::implementations::supercharge_build::send_subagent_message::SendSubagentMessageOutput;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use strip_ansi_escapes::strip_str;
@@ -124,7 +124,7 @@ impl MediaGenOutput {
         .to_string()
     }
 }
-use crate::implementations::grok_build::todo::{TodoItem, TodoState};
+use crate::implementations::supercharge_build::todo::{TodoItem, TodoState};
 use crate::implementations::skills::skill::SkillOutput;
 use crate::util::truncate::{DEFAULT_SOFT_WRAP_WIDTH, soft_wrap_lines};
 /// Result of running a tool through the ToolRunner pipeline. This is the **single return type**
@@ -425,8 +425,8 @@ pub struct BashOutput {
     /// buffer (reset signal). When `None`, the consumer should use `output` as the full buffer.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub output_delta: Option<Vec<u8>>,
-    /// Set by the grok_build `run_terminal_cmd` implementation when the command was detected as a bare `echo "<msg>"` (or close variant: echo -n,
-    /// echo -e, simple printf for literal output, etc.). Telemetry / statistics on this pattern for the grok_build backend. Potential doom-loop /
+    /// Set by the supercharge_build `run_terminal_cmd` implementation when the command was detected as a bare `echo "<msg>"` (or close variant: echo -n,
+    /// echo -e, simple printf for literal output, etc.). Telemetry / statistics on this pattern for the supercharge_build backend. Potential doom-loop /
     /// stagnation signals (repeated trivial echoes are a common "no progress" signal). Model hints (see BareEchoHintState in the bash tool).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub was_bare_echo: bool,
@@ -509,7 +509,7 @@ pub struct WebFetchContent {
     pub status_code: u16,
     /// Size of the content in bytes (before truncation).
     pub bytes: usize,
-    /// Internal path to the complete converted body when GrokBuild persisted overflow.
+    /// Internal path to the complete converted body when SuperchargeBuild persisted overflow.
     #[serde(skip)]
     #[schemars(skip)]
     pub source_artifact: Option<WebFetchSourceArtifact>,
@@ -630,12 +630,12 @@ pub enum ToolOutput {
     AskUserQuestion(AskUserQuestionOutput),
     #[serde(alias = "SendAgentMessage")]
     SendSubagentMessage(SendSubagentMessageOutput),
-    Monitor(crate::implementations::grok_build::monitor::types::MonitorOutput),
-    SchedulerCreate(crate::implementations::grok_build::scheduler::create::SchedulerCreateOutput),
-    SchedulerDelete(crate::implementations::grok_build::scheduler::delete::SchedulerDeleteOutput),
-    SchedulerList(crate::implementations::grok_build::scheduler::list::SchedulerListOutput),
-    UpdateGoal(crate::implementations::grok_build::update_goal::UpdateGoalOutput),
-    Workflow(crate::implementations::grok_build::workflow::WorkflowToolOutput),
+    Monitor(crate::implementations::supercharge_build::monitor::types::MonitorOutput),
+    SchedulerCreate(crate::implementations::supercharge_build::scheduler::create::SchedulerCreateOutput),
+    SchedulerDelete(crate::implementations::supercharge_build::scheduler::delete::SchedulerDeleteOutput),
+    SchedulerList(crate::implementations::supercharge_build::scheduler::list::SchedulerListOutput),
+    UpdateGoal(crate::implementations::supercharge_build::update_goal::UpdateGoalOutput),
+    Workflow(crate::implementations::supercharge_build::workflow::WorkflowToolOutput),
     /// Dynamic output for runtime-registered tools (MCP, test tools, etc.)
     Dynamic(DynamicOutput),
     /// Generic text output for tools that produce simple formatted text
@@ -680,7 +680,7 @@ impl ToolOutput {
             ToolOutput::SendSubagentMessage(output) => {
                 matches!(
                 output.disposition(),
-                crate::implementations::grok_build::send_subagent_message::SendSubagentMessageDisposition::Rejected
+                crate::implementations::supercharge_build::send_subagent_message::SendSubagentMessageDisposition::Rejected
             )
             }
             ToolOutput::Todo(
@@ -1337,13 +1337,13 @@ impl supercharge_tool_runtime::ToolOutput for MCPOutput {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::implementations::grok_build::todo::{TodoPriority, TodoStatus};
+    use crate::implementations::supercharge_build::todo::{TodoPriority, TodoStatus};
     use serde_json::json;
     use supercharge_tool_types::KillTaskResult;
     use supercharge_tool_types::TaskOutputResult;
     #[test]
     fn send_subagent_message_error_classification_is_closed() {
-        use crate::implementations::grok_build::send_subagent_message::SendSubagentMessageOutput::*;
+        use crate::implementations::supercharge_build::send_subagent_message::SendSubagentMessageOutput::*;
         for (output, is_error) in [
             (
                 Accepted {
@@ -1356,7 +1356,7 @@ mod tests {
             (Saturated { max_in_flight: 8 }, true),
             (
                 QuotaExceeded {
-                    kind: crate::implementations::grok_build::task::types::ActiveAgentMessageQuotaKind::AttemptOutbound,
+                    kind: crate::implementations::supercharge_build::task::types::ActiveAgentMessageQuotaKind::AttemptOutbound,
                     limit: 32,
                 },
                 true,

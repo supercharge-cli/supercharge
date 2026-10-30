@@ -1,4 +1,4 @@
-//! The name GrokBuild offers for every tool a script can call, and the GrokBuild shape of its
+//! The name SuperchargeBuild offers for every tool a script can call, and the SuperchargeBuild shape of its
 //! arguments. A case writes arguments once, and [`Tool::pick`] fills required fields a case omits,
 //! reshapes a call written in another tool's vocabulary, and resolves it against the names offered.
 use crate::inference_request::{HistoryToolCall, OfferedTools};
@@ -44,7 +44,7 @@ pub enum Tool {
     CronCreate,
     McpListResources,
     McpReadResource,
-    /// GrokBuild offers `server__tool` taking the arguments directly.
+    /// SuperchargeBuild offers `server__tool` taking the arguments directly.
     Mcp {
         server: String,
         tool: String,
@@ -97,23 +97,23 @@ struct FieldFill {
 }
 /// A reshaping of a call's arguments a table of renames cannot express.
 type Shape = fn(Map<String, Value>) -> Map<String, Value>;
-struct GrokBuildRow {
+struct SuperchargeBuildRow {
     /// `None` for the MCP resource kinds, and for an MCP call, whose name is built from
     /// the server and tool.
     name: Option<&'static str>,
     fills: &'static [FieldFill],
     shape: Option<Shape>,
 }
-impl GrokBuildRow {
+impl SuperchargeBuildRow {
     const fn new(name: &'static str) -> Self {
-        GrokBuildRow {
+        SuperchargeBuildRow {
             name: Some(name),
             fills: &[],
             shape: None,
         }
     }
-    const fn without_grok_build_name() -> Self {
-        GrokBuildRow {
+    const fn without_supercharge_build_name() -> Self {
+        SuperchargeBuildRow {
             name: None,
             fills: &[],
             shape: None,
@@ -135,58 +135,58 @@ impl Tool {
             tool: tool.into(),
         }
     }
-    fn row(&self) -> GrokBuildRow {
+    fn row(&self) -> SuperchargeBuildRow {
         match self {
-            Tool::Shell => GrokBuildRow::new("run_terminal_command").with_fills(&[FieldFill {
+            Tool::Shell => SuperchargeBuildRow::new("run_terminal_command").with_fills(&[FieldFill {
                 field: "description",
                 source: "command",
             }]),
-            Tool::Read => GrokBuildRow::new("read_file"),
-            Tool::Edit => GrokBuildRow::new("search_replace"),
-            Tool::Write => GrokBuildRow::new("write"),
-            Tool::Grep => GrokBuildRow::new("grep"),
-            Tool::Glob => GrokBuildRow::new("glob"),
-            Tool::List => GrokBuildRow::new("list_dir"),
-            Tool::Task => GrokBuildRow::new("spawn_subagent").with_fills(&[FieldFill {
+            Tool::Read => SuperchargeBuildRow::new("read_file"),
+            Tool::Edit => SuperchargeBuildRow::new("search_replace"),
+            Tool::Write => SuperchargeBuildRow::new("write"),
+            Tool::Grep => SuperchargeBuildRow::new("grep"),
+            Tool::Glob => SuperchargeBuildRow::new("glob"),
+            Tool::List => SuperchargeBuildRow::new("list_dir"),
+            Tool::Task => SuperchargeBuildRow::new("spawn_subagent").with_fills(&[FieldFill {
                 field: "description",
                 source: "prompt",
             }]),
-            Tool::Skill => GrokBuildRow::new("skill"),
-            Tool::SendMessage => GrokBuildRow::new("send_subagent_message"),
-            Tool::EnterPlanMode => GrokBuildRow::new("enter_plan_mode"),
-            Tool::ExitPlanMode => GrokBuildRow::new("exit_plan_mode"),
-            Tool::WebFetch => GrokBuildRow::new("web_fetch"),
-            Tool::WebSearch => GrokBuildRow::new("web_search"),
-            Tool::Question => GrokBuildRow::new("ask_user_question").with_shape(describe_options),
-            Tool::Todo => GrokBuildRow::new("todo_write").with_shape(default_todos_to_pending),
-            Tool::SearchTool => GrokBuildRow::new("search_tool"),
-            Tool::KillTask => GrokBuildRow::new("kill_command_or_subagent"),
-            Tool::SchedulerCreate => GrokBuildRow::new("scheduler_create"),
-            Tool::SchedulerList => GrokBuildRow::new("scheduler_list"),
-            Tool::SchedulerDelete => GrokBuildRow::new("scheduler_delete"),
-            Tool::Workflow => GrokBuildRow::new("workflow"),
+            Tool::Skill => SuperchargeBuildRow::new("skill"),
+            Tool::SendMessage => SuperchargeBuildRow::new("send_subagent_message"),
+            Tool::EnterPlanMode => SuperchargeBuildRow::new("enter_plan_mode"),
+            Tool::ExitPlanMode => SuperchargeBuildRow::new("exit_plan_mode"),
+            Tool::WebFetch => SuperchargeBuildRow::new("web_fetch"),
+            Tool::WebSearch => SuperchargeBuildRow::new("web_search"),
+            Tool::Question => SuperchargeBuildRow::new("ask_user_question").with_shape(describe_options),
+            Tool::Todo => SuperchargeBuildRow::new("todo_write").with_shape(default_todos_to_pending),
+            Tool::SearchTool => SuperchargeBuildRow::new("search_tool"),
+            Tool::KillTask => SuperchargeBuildRow::new("kill_command_or_subagent"),
+            Tool::SchedulerCreate => SuperchargeBuildRow::new("scheduler_create"),
+            Tool::SchedulerList => SuperchargeBuildRow::new("scheduler_list"),
+            Tool::SchedulerDelete => SuperchargeBuildRow::new("scheduler_delete"),
+            Tool::Workflow => SuperchargeBuildRow::new("workflow"),
             Tool::TaskCreate => {
-                GrokBuildRow::new("todo_write").with_shape(todo_write_from_created_task)
+                SuperchargeBuildRow::new("todo_write").with_shape(todo_write_from_created_task)
             }
-            Tool::TaskUpdate => GrokBuildRow::new("todo_write").with_shape(todo_write_from_task),
+            Tool::TaskUpdate => SuperchargeBuildRow::new("todo_write").with_shape(todo_write_from_task),
             Tool::CronCreate => {
-                GrokBuildRow::new("scheduler_create").with_shape(fill_cron_interval)
+                SuperchargeBuildRow::new("scheduler_create").with_shape(fill_cron_interval)
             }
             Tool::McpListResources | Tool::McpReadResource | Tool::Mcp { .. } => {
-                GrokBuildRow::without_grok_build_name()
+                SuperchargeBuildRow::without_supercharge_build_name()
             }
         }
     }
-    /// An MCP tool is `server__tool`; the MCP resource kinds have no GrokBuild name.
-    fn grok_build_name(&self) -> Option<String> {
+    /// An MCP tool is `server__tool`; the MCP resource kinds have no SuperchargeBuild name.
+    fn supercharge_build_name(&self) -> Option<String> {
         if let Tool::Mcp { server, tool } = self {
             return Some(format!("{server}{MCP_NAME_SEPARATOR}{tool}"));
         }
         self.row().name.map(str::to_owned)
     }
-    /// The case's arguments in GrokBuild's shape: the fields a case may leave out are filled, and
+    /// The case's arguments in SuperchargeBuild's shape: the fields a case may leave out are filled, and
     /// the row's shape applies. Arguments that are not a table pass through unchanged.
-    fn grok_build_arguments(&self, arguments: &Value) -> Value {
+    fn supercharge_build_arguments(&self, arguments: &Value) -> Value {
         let Some(fields) = arguments.as_object() else {
             return arguments.clone();
         };
@@ -202,15 +202,15 @@ impl Tool {
             None => shaped,
         })
     }
-    /// The call for GrokBuild's name when the request offers it.
+    /// The call for SuperchargeBuild's name when the request offers it.
     pub(crate) fn pick(&self, offered: &OfferedTools, arguments: &Value) -> Option<PickedToolCall> {
-        let arguments = self.grok_build_arguments(arguments);
-        if let Some(name) = self.grok_build_name().filter(|name| offered.has_tool(name)) {
+        let arguments = self.supercharge_build_arguments(arguments);
+        if let Some(name) = self.supercharge_build_name().filter(|name| offered.has_tool(name)) {
             return Some(PickedToolCall { name, arguments });
         }
         if let Tool::Mcp { .. } = self
             && offered.has_tool(USE_TOOL_NAME)
-            && let Some(name) = self.grok_build_name()
+            && let Some(name) = self.supercharge_build_name()
         {
             return Some(PickedToolCall {
                 name: USE_TOOL_NAME.to_owned(),
@@ -222,15 +222,15 @@ impl Tool {
         }
         None
     }
-    /// Whether a call the agent carried back in its history is this tool's under GrokBuild's name.
+    /// Whether a call the agent carried back in its history is this tool's under SuperchargeBuild's name.
     pub(crate) fn is_called_by(&self, call: &HistoryToolCall) -> bool {
-        if self.grok_build_name().is_some_and(|name| call.name == name) {
+        if self.supercharge_build_name().is_some_and(|name| call.name == name) {
             return true;
         }
         if let Tool::Mcp { .. } = self
             && call.name == USE_TOOL_NAME
             && call.arguments.get("tool_name").and_then(Value::as_str)
-                == self.grok_build_name().as_deref()
+                == self.supercharge_build_name().as_deref()
         {
             return true;
         }

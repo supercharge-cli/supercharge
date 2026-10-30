@@ -329,7 +329,7 @@ async fn build_session_routed_handlers_covers_finalized_toolset() {
 async fn build_session_routed_handlers_preserves_renamed_active_message_kind() {
     let handle = make_handle();
     let mut renamed = supercharge_tools::registry::types::ToolConfig::for_tool::<
-        supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
+        supercharge_tools::implementations::supercharge_build::SendSubagentMessageTool,
     >();
     renamed.name_override = Some("relay_to_subagent".to_owned());
     let session = handle
@@ -359,14 +359,14 @@ async fn build_session_routed_handlers_preserves_renamed_active_message_kind() {
 #[tokio::test]
 async fn build_session_routed_handlers_skips_invalid_client_name_without_panic() {
     let handle = make_handle();
-    let mut renamed = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mut renamed = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     renamed.name_override = Some("bad name!".to_owned());
     let session = handle
         .create_session_with_config(
             "sess-invalid-name",
             None,
             Some(ToolServerConfig {
-                tools: vec![renamed, tc("GrokBuild:grep", Some(ToolKind::Read))],
+                tools: vec![renamed, tc("SuperchargeBuild:grep", Some(ToolKind::Read))],
                 behavior_preset: None,
             }),
             CapabilityMode::All,
@@ -389,7 +389,7 @@ async fn build_session_routed_handlers_skips_invalid_client_name_without_panic()
     );
 }
 /// Regression for the deleted catalog intersection. Reproduces the `session.bind` resolver tail: `build_session_routed_handlers` for the session toolset, plus the one RPC handler from the catalog.
-/// It proves a session tool whose client name is ABSENT from that (grok-build) catalog is still advertised.
+/// It proves a session tool whose client name is ABSENT from that (supercharge-core) catalog is still advertised.
 #[tokio::test]
 async fn resolver_advertises_tool_absent_from_connect_catalog() {
     let handle = make_handle();
@@ -406,7 +406,7 @@ async fn resolver_advertises_tool_absent_from_connect_catalog() {
         .iter()
         .map(|h| h.tool_id().as_str().to_owned())
         .collect();
-    let mut renamed = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mut renamed = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     renamed.name_override = Some("non_catalog_tool".to_owned());
     let session = handle
         .create_session_with_config(
@@ -481,7 +481,7 @@ async fn rebind_with_changed_explicit_toolset_reresolves_and_swaps() {
             .all(|n| n != "renamed_read"),
         "precondition: the default toolset must not carry the override name"
     );
-    let mut renamed = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mut renamed = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     renamed.name_override = Some("renamed_read".to_owned());
     let cfg = ToolServerConfig {
         tools: vec![renamed],
@@ -509,7 +509,7 @@ async fn rebind_with_changed_explicit_toolset_reresolves_and_swaps() {
 #[tokio::test]
 async fn rebind_without_explicit_toolset_reuses_existing() {
     let handle = make_handle();
-    let mut renamed = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mut renamed = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     renamed.name_override = Some("renamed_read".to_owned());
     let cfg = ToolServerConfig {
         tools: vec![renamed],
@@ -545,7 +545,7 @@ async fn create_fingerprint_write_does_not_clobber_concurrent_rebind() {
     let session = handle
         .create_session_with_config("racy", None, None, CapabilityMode::All, None, false)
         .expect("create session");
-    let mut renamed = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mut renamed = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     renamed.name_override = Some("renamed_read".to_owned());
     let cfg_b = ToolServerConfig {
         tools: vec![renamed],
@@ -558,7 +558,7 @@ async fn create_fingerprint_write_does_not_clobber_concurrent_rebind() {
         .expect("session exists");
     assert_eq!(outcome, RebindOutcome::Reresolved);
     let fp_a = serde_json::to_value(&ToolServerConfig {
-        tools: vec![tc("GrokBuild:list_dir", Some(ToolKind::ListDir))],
+        tools: vec![tc("SuperchargeBuild:list_dir", Some(ToolKind::ListDir))],
         behavior_preset: None,
     })
     .ok();
@@ -920,7 +920,7 @@ fn orphaned_swap_count() -> u64 {
         .get()
 }
 fn explicit_cfg(name_override: &str) -> ToolServerConfig {
-    let mut renamed = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mut renamed = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     renamed.name_override = Some(name_override.to_owned());
     ToolServerConfig {
         tools: vec![renamed],
@@ -931,13 +931,13 @@ fn explicit_cfg(name_override: &str) -> ToolServerConfig {
 pub(crate) fn background_capable_cfg() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
-            tc("GrokBuild:read_file", Some(ToolKind::Read)),
-            tc("GrokBuild:run_terminal_cmd", Some(ToolKind::Execute)),
+            tc("SuperchargeBuild:read_file", Some(ToolKind::Read)),
+            tc("SuperchargeBuild:run_terminal_cmd", Some(ToolKind::Execute)),
             tc(
-                "GrokBuild:get_task_output",
+                "SuperchargeBuild:get_task_output",
                 Some(ToolKind::BackgroundTaskAction),
             ),
-            tc("GrokBuild:kill_task", Some(ToolKind::KillTaskAction)),
+            tc("SuperchargeBuild:kill_task", Some(ToolKind::KillTaskAction)),
         ],
         behavior_preset: None,
     }
@@ -1037,7 +1037,7 @@ async fn re_resolve_all_sessions_preserves_session_terminal_backend() {
     let out_dir = tempfile::tempdir().expect("temp dir");
     let bg = start_background_sleep(&session, out_dir.path(), "snapshot-bg").await;
     handle.shared.mcp_tools_snapshot.store(Arc::new(vec![tc(
-        "GrokBuild:read_file",
+        "SuperchargeBuild:read_file",
         Some(ToolKind::Read),
     )]));
     let rebuilt = handle
@@ -1104,7 +1104,7 @@ async fn local_bound_session_skips_snapshot_rebuild() {
         "precondition: the installed toolset's Terminal must be external"
     );
     handle.shared.mcp_tools_snapshot.store(Arc::new(vec![tc(
-        "GrokBuild:read_file",
+        "SuperchargeBuild:read_file",
         Some(ToolKind::Read),
     )]));
     handle
@@ -2589,7 +2589,7 @@ async fn fork_session_inherits_parent_tool_config_when_none() {
     let child_ids: Vec<String> = child_baseline.tools.iter().map(|t| t.id.clone()).collect();
     assert_eq!(child_ids, parent_ids);
     let new_parent_baseline = ToolServerConfig {
-        tools: vec![tc("GrokBuild:read_file", Some(ToolKind::Read))],
+        tools: vec![tc("SuperchargeBuild:read_file", Some(ToolKind::Read))],
         behavior_preset: None,
     };
     let factory = handle.shared.session_factory.clone();
@@ -2627,8 +2627,8 @@ async fn fork_session_uses_explicit_tool_config_when_provided() {
     let handle = make_handle();
     let custom = ToolServerConfig {
         tools: vec![
-            tc("GrokBuild:read_file", Some(ToolKind::Read)),
-            tc("GrokBuild:list_dir", Some(ToolKind::ListDir)),
+            tc("SuperchargeBuild:read_file", Some(ToolKind::Read)),
+            tc("SuperchargeBuild:list_dir", Some(ToolKind::ListDir)),
         ],
         behavior_preset: None,
     };
@@ -2654,7 +2654,7 @@ async fn fork_session_uses_explicit_tool_config_when_provided() {
 async fn fork_session_uses_main_session_when_parent_session_id_is_none() {
     let handle = make_handle();
     let marker_config = ToolServerConfig {
-        tools: vec![tc("GrokBuild:read_file", Some(ToolKind::Read))],
+        tools: vec![tc("SuperchargeBuild:read_file", Some(ToolKind::Read))],
         behavior_preset: None,
     };
     let main = handle.session("main").expect("main present");
@@ -2692,19 +2692,19 @@ async fn fork_session_uses_main_session_when_parent_session_id_is_none() {
         .iter()
         .map(|t| t.id.clone())
         .collect();
-    assert_eq!(baseline_ids, vec!["GrokBuild:read_file".to_string()]);
+    assert_eq!(baseline_ids, vec!["SuperchargeBuild:read_file".to_string()]);
 }
 #[tokio::test]
 async fn fork_session_all_child_drops_root_only_tools() {
     let handle = make_handle();
-    let mut custom = tc("GrokBuild:grep", None);
+    let mut custom = tc("SuperchargeBuild:grep", None);
     custom.name_override = Some("custom_kindless".to_owned());
     let config = ToolServerConfig {
         tools: vec![
-            tc("GrokBuild:read_file", Some(ToolKind::Read)),
+            tc("SuperchargeBuild:read_file", Some(ToolKind::Read)),
             custom,
-            tc("GrokBuild:list_dir", Some(ToolKind::ActiveAgentMessage)),
-            tc("GrokBuild:send_subagent_message", None),
+            tc("SuperchargeBuild:list_dir", Some(ToolKind::ActiveAgentMessage)),
+            tc("SuperchargeBuild:send_subagent_message", None),
         ],
         behavior_preset: None,
     };
@@ -2723,7 +2723,7 @@ async fn fork_session_all_child_drops_root_only_tools() {
         .iter()
         .map(|tool| tool.id.as_str())
         .collect();
-    assert_eq!(ids, ["GrokBuild:read_file", "GrokBuild:grep"]);
+    assert_eq!(ids, ["SuperchargeBuild:read_file", "SuperchargeBuild:grep"]);
     let Some(tool1) = effective_config.tools.get(1) else {
         panic!("expected second tool: {:?}", effective_config.tools);
     };
@@ -2736,7 +2736,7 @@ async fn fork_session_all_child_drops_root_only_tools() {
 async fn fork_session_uses_named_parent_when_parent_session_id_is_set() {
     let handle = make_handle();
     let custom = ToolServerConfig {
-        tools: vec![tc("GrokBuild:read_file", Some(ToolKind::Read))],
+        tools: vec![tc("SuperchargeBuild:read_file", Some(ToolKind::Read))],
         behavior_preset: None,
     };
     handle
@@ -3054,7 +3054,7 @@ async fn on_mcp_snapshot_changed_emits_per_session_events_and_rebuilds() {
         .await
         .expect("subB ok");
     let mut rx = handle.shared.events.subscribe();
-    let mcp_tool = tc("GrokBuild:read_file", Some(ToolKind::Read));
+    let mcp_tool = tc("SuperchargeBuild:read_file", Some(ToolKind::Read));
     let rebuilt = handle.on_mcp_snapshot_changed(vec![mcp_tool]);
     assert_eq!(rebuilt, 3, "main + 2 subagents");
     let mut got: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -6741,7 +6741,7 @@ async fn strict_bind_with_explicit_toolset_serves_it_end_to_end() {
     let resolved = resolver(
         supercharge_tool_protocol::SessionId::new("bind-e2e-tools").unwrap(),
         Some(serde_json::json!({
-            "metadata": {"tools": [{"id": "GrokBuild:read_file"}]},
+            "metadata": {"tools": [{"id": "SuperchargeBuild:read_file"}]},
         })),
     )
     .await
@@ -6782,7 +6782,7 @@ async fn rejected_rebind_config_keeps_resolve_error_end_to_end() {
     let first = resolver(
         sid.clone(),
         Some(serde_json::json!({
-            "metadata": {"tools": [{"id": "GrokBuild:read_file"}]},
+            "metadata": {"tools": [{"id": "SuperchargeBuild:read_file"}]},
         })),
     )
     .await
@@ -6791,7 +6791,7 @@ async fn rejected_rebind_config_keeps_resolve_error_end_to_end() {
     let second = resolver(
         sid,
         Some(serde_json::json!({
-            "metadata": {"tools": [{"id": "GrokBuild:read_file", "params_json": "{not json"}]},
+            "metadata": {"tools": [{"id": "SuperchargeBuild:read_file", "params_json": "{not json"}]},
         })),
     )
     .await
@@ -6814,7 +6814,7 @@ async fn explicit_empty_toolset_rebind_never_swaps_session_tools() {
     let first = resolver(
         sid.clone(),
         Some(serde_json::json!({
-            "metadata": {"tools": [{"id": "GrokBuild:read_file"}]},
+            "metadata": {"tools": [{"id": "SuperchargeBuild:read_file"}]},
         })),
     )
     .await
@@ -6851,7 +6851,7 @@ async fn strict_rebind_with_corrected_toolset_heals_end_to_end() {
     let second = resolver(
         sid,
         Some(serde_json::json!({
-            "metadata": {"tools": [{"id": "GrokBuild:read_file"}]},
+            "metadata": {"tools": [{"id": "SuperchargeBuild:read_file"}]},
         })),
     )
     .await
@@ -6872,10 +6872,10 @@ fn owner_full_bind_metadata() -> serde_json::Value {
         "metadata": {
             "capability_mode": "all",
             "tools": [
-                {"id": "GrokBuild:read_file"},
-                {"id": "GrokBuild:search_replace"},
-                {"id": "GrokBuild:grep"},
-                {"id": "GrokBuild:list_dir"},
+                {"id": "SuperchargeBuild:read_file"},
+                {"id": "SuperchargeBuild:search_replace"},
+                {"id": "SuperchargeBuild:grep"},
+                {"id": "SuperchargeBuild:list_dir"},
             ],
         },
     })
@@ -7033,10 +7033,10 @@ async fn bind_flow_rebinds_keep_backend_and_task_alive_end_to_end() {
     let sid = supercharge_tool_protocol::SessionId::new("bind-e2e-bg").unwrap();
     let bg_metadata = serde_json::json!({
         "metadata": {"tools": [
-            {"id": "GrokBuild:read_file"},
-            {"id": "GrokBuild:run_terminal_cmd"},
-            {"id": "GrokBuild:get_task_output"},
-            {"id": "GrokBuild:kill_task"},
+            {"id": "SuperchargeBuild:read_file"},
+            {"id": "SuperchargeBuild:run_terminal_cmd"},
+            {"id": "SuperchargeBuild:get_task_output"},
+            {"id": "SuperchargeBuild:kill_task"},
         ]},
     });
     let first = resolver(sid.clone(), Some(bg_metadata.clone()))
@@ -7077,7 +7077,7 @@ async fn bind_flow_rebinds_keep_backend_and_task_alive_end_to_end() {
     let swapped = resolver(
         sid,
         Some(serde_json::json!({
-            "metadata": {"tools": [{"id": "GrokBuild:read_file"}]},
+            "metadata": {"tools": [{"id": "SuperchargeBuild:read_file"}]},
         })),
     )
     .await

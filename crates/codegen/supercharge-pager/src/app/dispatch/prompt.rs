@@ -132,7 +132,7 @@ pub(super) fn open_doctor_fix_question(
     plan: Box<crate::diagnostics::FixPlan>,
 ) {
     use crate::views::question_view::{LocalQuestionKind, QuestionViewState};
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
 

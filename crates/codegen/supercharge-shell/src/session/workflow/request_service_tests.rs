@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use supercharge_tools::implementations::grok_build::workflow::{
+use supercharge_tools::implementations::supercharge_build::workflow::{
     WorkflowControl, WorkflowLaunchAck, WorkflowLaunchRequest, WorkflowSource, WorkflowToolInput,
 };
 use tokio::sync::{mpsc, oneshot};
@@ -11,7 +11,7 @@ use crate::session::workflow::tracker::WorkflowRunStatus;
 
 async fn request(
     tx: &mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::workflow::WorkflowLaunchEnvelope,
+        supercharge_tools::implementations::supercharge_build::workflow::WorkflowLaunchEnvelope,
     >,
     source: WorkflowSource,
 ) -> WorkflowLaunchAck {

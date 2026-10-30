@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use super::*;
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentCompletionSummary, SubagentSnapshot, SubagentSnapshotStatus,
 };
 pub(crate) fn at<T>(xs: &[T], i: usize) -> &T {
@@ -74,20 +74,20 @@ pub(crate) async fn test_agent_backend_search(
 }
 #[cfg(test)]
 pub(crate) async fn test_agent_with_goal_tool() -> supercharge_agent::Agent {
-    use supercharge_tools::implementations::grok_build::update_goal::UpdateGoalTool;
+    use supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalTool;
     use supercharge_tools::registry::types::ToolConfig;
     test_agent_with_tools(vec![ToolConfig::for_tool::<UpdateGoalTool>()]).await
 }
 #[cfg(test)]
-pub(crate) async fn test_grok_build_agent_with_todo() -> supercharge_agent::Agent {
-    use supercharge_tools::implementations::grok_build::todo::TodoWriteTool;
+pub(crate) async fn test_supercharge_build_agent_with_todo() -> supercharge_agent::Agent {
+    use supercharge_tools::implementations::supercharge_build::todo::TodoWriteTool;
     use supercharge_tools::registry::types::ToolConfig;
     test_agent_with_tools(vec![ToolConfig::for_tool::<TodoWriteTool>()]).await
 }
 #[cfg(test)]
 pub(crate) async fn test_agent_with_active_message_tool() -> supercharge_agent::Agent {
-    use supercharge_tools::implementations::grok_build::send_subagent_message::SendSubagentMessageTool;
-    use supercharge_tools::implementations::grok_build::todo::TodoWriteTool;
+    use supercharge_tools::implementations::supercharge_build::send_subagent_message::SendSubagentMessageTool;
+    use supercharge_tools::implementations::supercharge_build::todo::TodoWriteTool;
     use supercharge_tools::registry::types::ToolConfig;
     test_agent_with_tools(vec![
         ToolConfig::for_tool::<SendSubagentMessageTool>(),
@@ -97,8 +97,8 @@ pub(crate) async fn test_agent_with_active_message_tool() -> supercharge_agent::
 }
 #[cfg(test)]
 pub(crate) async fn test_agent_with_plan_tools() -> supercharge_agent::Agent {
-    use supercharge_tools::implementations::grok_build::enter_plan_mode::EnterPlanModeTool;
-    use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeTool;
+    use supercharge_tools::implementations::supercharge_build::enter_plan_mode::EnterPlanModeTool;
+    use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeTool;
     use supercharge_tools::registry::types::ToolConfig;
     test_agent_with_tools(vec![
         ToolConfig::for_tool::<EnterPlanModeTool>(),
@@ -115,7 +115,7 @@ pub(crate) async fn test_agent_with_tools(
             tools,
             behavior_preset: None,
         },
-        supercharge_agent::AgentDefinition::default_grok_build(),
+        supercharge_agent::AgentDefinition::default_supercharge_build(),
         std::sync::Arc::new(supercharge_tools::computer::local::LocalTerminalBackend::new()),
     )
     .await
@@ -124,7 +124,7 @@ pub(crate) async fn test_agent_with_tools(
 pub(crate) async fn test_agent_with_user_message_template(
     template: supercharge_agent::prompt::user_message::UserMessageTemplate,
 ) -> supercharge_agent::Agent {
-    let mut definition = supercharge_agent::AgentDefinition::default_grok_build();
+    let mut definition = supercharge_agent::AgentDefinition::default_supercharge_build();
     definition.user_message_template = template;
     test_agent_from_config(
         supercharge_tools::registry::types::ToolServerConfig {
@@ -804,9 +804,9 @@ pub(crate) fn search_replace_call_at(id: &str, path: &str) -> ToolCallResponse {
 pub(crate) fn read_and_edit_toolset() -> Vec<supercharge_tools::registry::types::ToolConfig> {
     use supercharge_tools::registry::types::ToolConfig;
     vec![
-        ToolConfig::from_id("GrokBuild:read_file"),
+        ToolConfig::from_id("SuperchargeBuild:read_file"),
         ToolConfig {
-            id: "GrokBuild:search_replace".into(),
+            id: "SuperchargeBuild:search_replace".into(),
             params: Some(
                 serde_json::from_value(serde_json::json!({
                     "skip_read_before_edit": true
@@ -1062,7 +1062,7 @@ pub(crate) fn spawn_fake_coordinator(
     actor: &mut SessionActor,
     buffer: Vec<SubagentCompletionSummary>,
 ) -> FakeCoordinator {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentEvent;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent;
     let fake = FakeCoordinator {
         suppress_seen: Arc::default(),
         returned: Arc::default(),

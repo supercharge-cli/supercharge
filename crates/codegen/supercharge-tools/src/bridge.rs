@@ -90,7 +90,7 @@ impl ToolBridge {
 
     /// Returns the client-facing name of the tool registered with the given `ToolKind`, if any. Useful for "does this agent
     /// have a way to do X?" checks where the X is identified by kind rather than by namespaced id.
-    /// `Some("get_task_output")` for the grok_build agent and `None` for agents that do not register a tool of that kind.
+    /// `Some("get_task_output")` for the supercharge_build agent and `None` for agents that do not register a tool of that kind.
     pub async fn tool_for_kind(&self, kind: ToolKind) -> Option<String> {
         self.registry
             .resources
@@ -561,8 +561,8 @@ impl ToolBridge {
     /// registered or the actor has stopped.
     pub async fn list_scheduled_tasks(
         &self,
-    ) -> Vec<crate::implementations::grok_build::scheduler::types::ScheduledTask> {
-        use crate::implementations::grok_build::scheduler::types::{
+    ) -> Vec<crate::implementations::supercharge_build::scheduler::types::ScheduledTask> {
+        use crate::implementations::supercharge_build::scheduler::types::{
             SchedulerCommand, SchedulerHandle,
         };
         let sender = {
@@ -589,7 +589,7 @@ impl ToolBridge {
         &self,
         task_id: &str,
     ) -> Result<bool, supercharge_tool_runtime::ToolError> {
-        use crate::implementations::grok_build::scheduler::types::{
+        use crate::implementations::supercharge_build::scheduler::types::{
             SchedulerCommand, SchedulerHandle,
         };
         let sender = {
@@ -624,7 +624,7 @@ impl ToolBridge {
                     "Scheduler actor dropped reply",
                 )
             })?
-            .map_err(crate::implementations::grok_build::scheduler::types::scheduler_tool_error)
+            .map_err(crate::implementations::supercharge_build::scheduler::types::scheduler_tool_error)
     }
 
     /// Move a foreground command to background by tool_call_id.
@@ -764,7 +764,7 @@ mod tests {
         let bridge = ToolBridge::for_test();
         let toolset = bridge.toolset();
 
-        // PascalCase + grok_build's snake_case in one registry
+        // PascalCase + supercharge_build's snake_case in one registry
         // to exercise the lookup on the literal name strings each
         // namespace ships.
         register_fixture(&toolset, "Write", ToolKind::Write, "fixture_write");

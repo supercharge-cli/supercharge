@@ -1,6 +1,6 @@
 use super::super::support::{create_test_actor, test_agent_with_tools};
 use super::*;
-use supercharge_tools::implementations::grok_build::read_file::MAX_LINES_READ;
+use supercharge_tools::implementations::supercharge_build::read_file::MAX_LINES_READ;
 use supercharge_tools::registry::types::ToolConfig;
 use supercharge_tools::types::context::TruncationConfig;
 use supercharge_tools::types::resources::TruncationCfg;
@@ -9,8 +9,8 @@ const TAIL_TOKEN: &str = "TAILEND_TOKEN_zzz";
 fn fake_prompt_path() -> std::path::PathBuf {
     std::path::PathBuf::from("/tmp/grok-test-home/sessions/cwd/sid/prompts/prompt_0.txt")
 }
-/// What the real grok_build toolset resolves to.
-fn grok_build_info() -> ReadToolInfo {
+/// What the real supercharge_build toolset resolves to.
+fn supercharge_build_info() -> ReadToolInfo {
     ReadToolInfo {
         tool: Some("read_file".to_owned()),
         offset: Some("offset".to_owned()),
@@ -18,7 +18,7 @@ fn grok_build_info() -> ReadToolInfo {
         max_lines: MAX_LINES_READ,
     }
 }
-/// The bounded message for the grok_build read tool info, over the parts' own assembly.
+/// The bounded message for the supercharge_build read tool info, over the parts' own assembly.
 fn bounded_message(
     context: &str,
     query: &str,
@@ -36,7 +36,7 @@ fn bounded_message(
         file_path,
         &full,
         &layout,
-        &grok_build_info(),
+        &supercharge_build_info(),
     )
     .message
 }
@@ -378,7 +378,7 @@ fn build_truncated_oversized_query_alone_uses_full_budget() {
     let query = "Q".repeat(LARGE_PROMPT_THRESHOLD * 3);
     let message = bounded_message("", &query, "", false, &path);
     assert!(message.len() <= LARGE_PROMPT_THRESHOLD);
-    let min_len = LARGE_PROMPT_THRESHOLD - notice_reserve(&path, &grok_build_info());
+    let min_len = LARGE_PROMPT_THRESHOLD - notice_reserve(&path, &supercharge_build_info());
     assert!(
         message.len() >= min_len,
         "query must use the whole budget, got {}",
@@ -404,7 +404,7 @@ fn build_truncated_skill_and_context_oversized_keeps_context_floor() {
         "context keeps a head of at least the floor"
     );
     assert!(message.len() <= LARGE_PROMPT_THRESHOLD);
-    let min_len = LARGE_PROMPT_THRESHOLD - notice_reserve(&path, &grok_build_info());
+    let min_len = LARGE_PROMPT_THRESHOLD - notice_reserve(&path, &supercharge_build_info());
     assert!(
         message.len() >= min_len,
         "skill must take the leftover, got {}",
@@ -435,7 +435,7 @@ fn build_truncated_small_context_does_not_trigger_80_20() {
 #[test]
 fn build_offload_notice_names_only_what_the_toolset_exposes() {
     let path = fake_prompt_path();
-    let all = grok_build_info();
+    let all = supercharge_build_info();
     let notice = build_offload_notice(123_456, 1, &path, &all, &[]);
     assert!(notice.trim_start().starts_with(OFFLOAD_NOTICE_MARKER));
     assert!(notice.contains("123456 bytes"));
@@ -553,7 +553,7 @@ fn read_windows_multibyte_range_end() {
 #[test]
 fn notice_lists_ranges_and_windows() {
     let path = fake_prompt_path();
-    let info = grok_build_info();
+    let info = supercharge_build_info();
     let range = |label, first_line, last_line, windows: &[(usize, usize)]| ElidedRange {
         label,
         first_line,
@@ -625,7 +625,7 @@ fn notice_fits_reserve_with_long_names() {
             windows: vec![window; 2 + usize::from(i == 0)],
         })
         .collect();
-    let grok = grok_build_info();
+    let grok = supercharge_build_info();
     for (file_path, info) in [(&path, &grok), (&long_path, &long_names)] {
         let notice = build_offload_notice(usize::MAX, usize::MAX, file_path, info, &fullest);
         let offset = info.offset.as_deref().expect("window param present");
@@ -735,7 +735,7 @@ async fn resolve_read_tool_info_reads_finalized_toolset() {
                 ("offset".to_owned(), "start_line".to_owned()),
                 ("limit".to_owned(), "line_count".to_owned()),
             ]);
-            let mut renamed = ToolConfig::from_id("GrokBuild:read_file").with_name("open_file");
+            let mut renamed = ToolConfig::from_id("SuperchargeBuild:read_file").with_name("open_file");
             renamed.params_name_overrides = Some(overrides);
             *actor.agent.borrow_mut() = test_agent_with_tools(vec![renamed]).await;
             let cfg = TruncationConfig {

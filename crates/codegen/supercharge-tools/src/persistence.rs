@@ -494,7 +494,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(
             parsed
-                .pointer("/state/grok_build.WebCitation")
+                .pointer("/state/supercharge_build.WebCitation")
                 .is_some_and(|v| v.is_object())
         );
     }
@@ -520,10 +520,10 @@ mod tests {
         assert!(state_path.exists());
         let content = std::fs::read_to_string(&state_path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        // Should have "state" category with "grok_build.WebCitation" key
+        // Should have "state" category with "supercharge_build.WebCitation" key
         assert!(
             parsed
-                .pointer("/state/grok_build.WebCitation")
+                .pointer("/state/supercharge_build.WebCitation")
                 .is_some_and(|v| v.is_object())
         );
     }
@@ -554,7 +554,7 @@ mod tests {
         let content = std::fs::read_to_string(state_path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(
-            parsed.pointer("/state/grok_build.WebCitation/counter"),
+            parsed.pointer("/state/supercharge_build.WebCitation/counter"),
             Some(&serde_json::json!(2))
         );
     }
@@ -581,7 +581,7 @@ mod tests {
         let content = std::fs::read_to_string(state_path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(
-            parsed.pointer("/state/grok_build.WebCitation/counter"),
+            parsed.pointer("/state/supercharge_build.WebCitation/counter"),
             Some(&serde_json::json!(7))
         );
     }
@@ -615,7 +615,7 @@ mod tests {
         let content = std::fs::read_to_string(state_path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(
-            parsed.pointer("/state/grok_build.WebCitation/counter"),
+            parsed.pointer("/state/supercharge_build.WebCitation/counter"),
             Some(&serde_json::json!(2))
         );
     }

@@ -949,7 +949,7 @@ pub struct AppView {
         String,
         supercharge_telemetry::events::AnnouncementCtaSurface,
     )>,
-    /// Access gate from `grok_build_access_gate`. `Some` means blocked.
+    /// Access gate from `supercharge_build_access_gate`. `Some` means blocked.
     pub gate: Option<supercharge_login::GateInfo>,
     /// User-friendly subscription tier name (e.g. "SuperGrok", "Free").
     pub subscription_tier: Option<String>,

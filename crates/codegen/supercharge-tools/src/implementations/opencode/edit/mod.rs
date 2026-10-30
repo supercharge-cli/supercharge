@@ -19,8 +19,8 @@
 use std::sync::Arc;
 
 use crate::computer::types::AsyncFileSystem;
-use crate::implementations::grok_build::search_replace::CONTEXT_LINES;
-use crate::implementations::grok_build::search_replace::helpers::{
+use crate::implementations::supercharge_build::search_replace::CONTEXT_LINES;
+use crate::implementations::supercharge_build::search_replace::helpers::{
     build_edit_details, render_snippet, replace_using_positions,
 };
 use crate::notification::types::FileWritten;
@@ -43,7 +43,7 @@ use crate::types::tool::{ToolKind, ToolNamespace};
 // ───────────────────────────────────────────────────────────────────────────
 
 // NOTE: OpenCode's `EditInput` serializes camelCase (`oldString`, `newString`, `replaceAll`), so param refs must use
-// the camelCase schema property names — the snake_case `params.edit.old_string` keys of the grok_build twin resolve to
+// the camelCase schema property names — the snake_case `params.edit.old_string` keys of the supercharge_build twin resolve to
 // "" here (the kind-params map is keyed by schema property names).
 const DESCRIPTION: &str = r#"Performs exact string replacements in files.
 
@@ -107,7 +107,7 @@ impl TryFrom<crate::types::tool_io::ToolInput> for EditInput {
 // Prefer SearchReplace over Dynamic so AccessKind maps to Edit(path).
 impl From<EditInput> for crate::types::tool_io::ToolInput {
     fn from(value: EditInput) -> Self {
-        crate::implementations::grok_build::search_replace::SearchReplaceInput {
+        crate::implementations::supercharge_build::search_replace::SearchReplaceInput {
             file_path: value.file_path,
             old_string: value.old_string,
             new_string: value.new_string,
@@ -506,8 +506,8 @@ async fn handle_replacement(
 }
 
 // Note: `replace_at_positions`, `render_snippet`, and `build_edit_details`
-// are imported from `grok_build::search_replace::helpers` — shared across
-// both the grok_build and opencode edit tools.
+// are imported from `supercharge_build::search_replace::helpers` — shared across
+// both the supercharge_build and opencode edit tools.
 
 // ───────────────────────────────────────────────────────────────────────────
 // Tests

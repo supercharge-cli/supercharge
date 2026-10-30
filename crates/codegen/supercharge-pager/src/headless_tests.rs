@@ -773,7 +773,7 @@ fn parse_json_schema_rejects_non_objects_and_invalid_json() {
 #[test]
 fn handler_answers_ext_method_instead_of_dropping() {
     use agent_client_protocol as acp;
-    use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionExtResponse;
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionExtResponse;
     let raw = serde_json::value::to_raw_value(&serde_json::json!({})).unwrap();
     let (tx, mut rx) = tokio::sync::oneshot::channel();
     let msg = supercharge_acp_lib::AcpClientMessage::ExtMethod(supercharge_acp_lib::AcpArgs {

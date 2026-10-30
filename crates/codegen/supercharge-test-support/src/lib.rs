@@ -5,7 +5,7 @@
     unreachable_code,
     dead_code
 )]
-//! Shared test utilities for grok-build crates.
+//! Shared test utilities for supercharge-core crates.
 //!
 //! Provides:
 //! - [`GrokStdioClient`]: ACP client that drives `grok agent stdio` as a subprocess, with a scripted [`ClientPolicy`] (set through [`SpawnOptions`]) and a typed transcript ([`TranscriptEntry`])

@@ -113,7 +113,7 @@ mod tests {
         }
     }
 
-    /// Build a TemplateRenderer with the standard grok-build tool kinds.
+    /// Build a TemplateRenderer with the standard supercharge-core tool kinds.
     fn default_renderer() -> TemplateRenderer {
         let tools: HashMap<ToolKind, String> = [
             (ToolKind::Read, "read_file"),

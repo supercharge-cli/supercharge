@@ -21,10 +21,10 @@ use super::handle_request::{
 };
 use crate::test_support::lsp_runtime::{ctx_with_toggle, test_gateway_with_receiver};
 use supercharge_subagent_resolution::resolve_effective_overrides;
-use supercharge_tools::implementations::grok_build::task::coordinator::{
+use supercharge_tools::implementations::supercharge_build::task::coordinator::{
     ChildCompletion, CompletionDisposition,
 };
-use supercharge_tools::implementations::grok_build::task::terminal_snapshot;
+use supercharge_tools::implementations::supercharge_build::task::terminal_snapshot;
 use supercharge_tools::reminders::task_completion::INLINE_SUBAGENT_OUTPUT_BYTES;
 fn test_snapshot(
     request: &SubagentRequest,
@@ -2053,7 +2053,7 @@ fn validate_subagent_type_recognizes_cli_agent_by_name() {
 fn summarize_tool_config_uses_name_override_and_strips_namespace() {
     use supercharge_tools::registry::types::{ToolConfig, ToolServerConfig};
     use supercharge_tools::types::tool::ToolKind;
-    let mut read = ToolConfig::from_id("GrokBuild:read_file");
+    let mut read = ToolConfig::from_id("SuperchargeBuild:read_file");
     read.kind = Some(ToolKind::Read);
     let mut read_dup = ToolConfig::from_id("Codex:read_file");
     read_dup.kind = Some(ToolKind::Read);
@@ -2091,7 +2091,7 @@ fn describe_subagent_type_unknown_returns_sorted_available() {
         other => panic!("expected Unknown, got {other:?}"),
     }
 }
-/// Regression guard for the DEFAULT grok-build host, the primary `/goal` host. There the only `general-purpose` tool that edits files is `search_replace` (`ToolKind::Edit`).
+/// Regression guard for the DEFAULT supercharge-core host, the primary `/goal` host. There the only `general-purpose` tool that edits files is `search_replace` (`ToolKind::Edit`).
 /// The `write` tool (`ToolKind::Write`) is only injected later, so the pre-injection describe probe never lists it. The planner gate must therefore key on the Edit capability.
 #[test]
 fn describe_default_host_general_purpose_has_edit_not_write() {
@@ -2139,7 +2139,7 @@ fn subagent_keeps_default_flavor_when_parent_model_is_non_strict() {
     let mut ctx = ctx_with_toggle(HashMap::new());
     ctx.parent_agent_name = Some("ai-oncall-bot".to_string());
     ctx.parent_model_agent_type = Some(
-        BuiltinAgentName::GrokBuildPlan.as_ref().to_string(),
+        BuiltinAgentName::SuperchargeBuildPlan.as_ref().to_string(),
     );
     let mut def = resolve_agent_definition("general-purpose", &ctx).expect("resolves");
     resolve_subagent_toolset("general-purpose", None, &ctx, &mut def);

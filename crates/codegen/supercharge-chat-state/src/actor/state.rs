@@ -103,7 +103,7 @@ pub fn estimate_conversation_tokens(items: &[ConversationItem]) -> u64 {
     items.iter().map(estimate_item_tokens).sum()
 }
 
-/// grok-build's token counter for the shared compaction engine.
+/// supercharge-core's token counter for the shared compaction engine.
 /// Exposes the same bytes/4 estimate the triggers already use, so budgeting stays consistent.
 /// Other hosts may plug a real BPE tokenizer into the same seam.
 pub struct EstimatedItemTokenCounter;

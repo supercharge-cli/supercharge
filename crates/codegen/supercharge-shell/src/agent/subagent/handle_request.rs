@@ -17,9 +17,9 @@ use supercharge_sampling_types::ReasoningEffort;
 use supercharge_telemetry::region;
 use supercharge_telemetry::region::Parent;
 use supercharge_telemetry::subagent_spawn::{SubagentSpawnPhase, phase_region};
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageSource;
-use supercharge_tools::implementations::grok_build::task::types::SubagentCapabilityModeExt;
-use supercharge_tools::implementations::{grok_build, opencode};
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageSource;
+use supercharge_tools::implementations::supercharge_build::task::types::SubagentCapabilityModeExt;
+use supercharge_tools::implementations::{supercharge_build, opencode};
 use supercharge_tools::types::tool::ToolKind;
 static SUBAGENTS_ACTIVE: supercharge_telemetry::activity::ActivityGauge =
     supercharge_telemetry::activity::ActivityGauge::work(
@@ -336,7 +336,7 @@ pub(super) fn drop_model_facing_override(
     )
 )]
 pub(crate) async fn run_shell_child(
-    run: grok_build::task::coordinator::ChildRunRequest<ShellChildRuntime>,
+    run: supercharge_build::task::coordinator::ChildRunRequest<ShellChildRuntime>,
     mut ctx: SubagentSpawnContext,
     mut completion_data: ShellCompletionData,
     gateway: GatewaySender,
@@ -345,7 +345,7 @@ pub(crate) async fn run_shell_child(
     if let Some(tp) = run.request.spawn_root.traceparent() {
         supercharge_otel::link_current_span_to_meta(&serde_json::json!({ "traceparent": tp }));
     }
-    let grok_build::task::coordinator::ChildRunRequest {
+    let supercharge_build::task::coordinator::ChildRunRequest {
         mut request,
         cancellation: cancel_token,
         reporter,
@@ -1258,8 +1258,8 @@ pub(crate) async fn run_shell_child(
     }
     if let Some(scope) = agent_memory_scope {
         let memory_tools: Vec<supercharge_tools::registry::types::ToolConfig> = vec![
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::SearchReplaceTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::SearchReplaceTool).into(),
             (&opencode::OpenCodeWriteTool).into(),
         ];
         for tc in memory_tools {

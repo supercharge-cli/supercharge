@@ -26,10 +26,10 @@ fn bare_name_derives_to_tool_id_without_namespace() {
 
 #[test]
 fn namespaced_name_derives_to_namespaced_tool_id() {
-    let derived = entry("read_file", Some("GrokBuild"))
+    let derived = entry("read_file", Some("SuperchargeBuild"))
         .derive_tool_id()
         .unwrap();
-    assert_eq!(derived, ToolId::new("GrokBuild:read_file").unwrap());
+    assert_eq!(derived, ToolId::new("SuperchargeBuild:read_file").unwrap());
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn empty_name_yields_empty_id_error() {
 
 #[test]
 fn derivation_does_not_collide_across_namespaces() {
-    let a = entry("read_file", Some("GrokBuild"))
+    let a = entry("read_file", Some("SuperchargeBuild"))
         .derive_tool_id()
         .unwrap();
     let b = entry("read_file", Some("github")).derive_tool_id().unwrap();

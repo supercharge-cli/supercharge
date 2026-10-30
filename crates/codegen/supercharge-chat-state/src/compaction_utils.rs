@@ -892,10 +892,10 @@ pub struct CompactedHistoryInput<'a> {
     /// ordering).
     pub summary_before_recent: bool,
     /// Pre-built transcript hint appended to the summary. `None` to omit.
-    /// Appended to BOTH the carrier and the grok-build summary.
+    /// Appended to BOTH the carrier and the supercharge-core summary.
     pub transcript_hint: Option<String>,
     /// Number of summaries so far for this user query, including the one being built.
-    /// Rendered verbatim into the carrier footer. Ignored by the grok-build path.
+    /// Rendered verbatim into the carrier footer. Ignored by the supercharge-core path.
     /// Callers that don't track a counter pass `1`.
     pub summary_count: u64,
 }

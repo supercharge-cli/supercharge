@@ -8,7 +8,7 @@ use crate::permission::types::{
     AccessKind, Decision, PatternMode, PermissionConfig, PermissionRule, RuleAction, ToolFilter,
 };
 use supercharge_paths::normalize_lexically;
-use supercharge_tools::implementations::grok_build::web_fetch::domain::normalize_domain;
+use supercharge_tools::implementations::supercharge_build::web_fetch::domain::normalize_domain;
 
 /// A security-gate escalation with `Ask` provenance.
 /// The bash-command and shell-file gates only escalate (rule `Allow` is dropped), so these three arms cover every gate outcome.

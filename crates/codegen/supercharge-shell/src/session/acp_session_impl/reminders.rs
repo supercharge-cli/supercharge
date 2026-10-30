@@ -675,7 +675,7 @@ impl SessionActor {
         let Some(tx) = &self.tool_context.subagent_event_tx else {
             return;
         };
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentCompletionsRequest, SubagentEvent,
         };
         let (respond_to, rx) = tokio::sync::oneshot::channel();
@@ -727,7 +727,7 @@ impl SessionActor {
     }
     /// Reads the coordinator buffer without draining it, so nothing is lost if the turn never commits.
     pub(super) async fn build_wake_turn_message(&self, subagent_id: &str) -> WakeTurnMessage {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentCompletionsRequest, SubagentEvent,
         };
         let mut completions = Vec::new();

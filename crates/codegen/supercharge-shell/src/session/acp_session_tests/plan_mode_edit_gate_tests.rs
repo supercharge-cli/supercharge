@@ -1,8 +1,8 @@
 use super::support::*;
 use super::*;
 async fn build_gate_actor() -> SessionActor {
-    use supercharge_tools::implementations::grok_build::enter_plan_mode::EnterPlanModeTool;
-    use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeTool;
+    use supercharge_tools::implementations::supercharge_build::enter_plan_mode::EnterPlanModeTool;
+    use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeTool;
     use supercharge_tools::registry::types::ToolConfig;
     let (gateway_tx, mut gateway_rx) =
         tokio::sync::mpsc::unbounded_channel::<supercharge_acp_lib::AcpClientMessage>();
@@ -10,8 +10,8 @@ async fn build_gate_actor() -> SessionActor {
         tokio::sync::mpsc::unbounded_channel::<PersistenceMsg>();
     let actor = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
     *actor.agent.borrow_mut() = test_agent_with_tools(vec![
-        ToolConfig::from_id("GrokBuild:read_file"),
-        ToolConfig::from_id("GrokBuild:search_replace"),
+        ToolConfig::from_id("SuperchargeBuild:read_file"),
+        ToolConfig::from_id("SuperchargeBuild:search_replace"),
         ToolConfig::for_tool::<EnterPlanModeTool>(),
         ToolConfig::for_tool::<ExitPlanModeTool>(),
     ])

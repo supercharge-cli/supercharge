@@ -153,7 +153,7 @@ pub struct SessionHandle {
         Option<supercharge_tools::notification::types::ToolNotificationHandle>,
     /// Subagents inherit the parent's handle so scheduled tasks survive the subagent's exit.
     pub scheduler_handle:
-        Option<supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle>,
+        Option<supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle>,
     pub registry_write_order: RegistryWriteOrder,
 }
 #[derive(Clone, Default)]

@@ -2070,7 +2070,7 @@ async fn monitor_event_for_idle_session_is_not_parked_while_another_session_runs
             let agent_wide_turn_active = std::sync::Arc::new(
                 std::sync::atomic::AtomicBool::new(true),
             );
-            let shared_buffer = supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer::new();
+            let shared_buffer = supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer::new();
             actor.tool_context.is_turn_active = Some(agent_wide_turn_active);
             actor.tool_context.monitor_event_buffer = Some(shared_buffer.clone());
             actor.state.lock().await.notifications_suppressed = true;
@@ -2153,7 +2153,7 @@ async fn monitor_event_during_own_turn_is_buffered_for_the_turn_loop() {
                     persistence_tx,
                 )
                 .await;
-            let shared_buffer = supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer::new();
+            let shared_buffer = supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer::new();
             actor.tool_context.monitor_event_buffer = Some(shared_buffer.clone());
             actor.session_turn_active.store(true, std::sync::atomic::Ordering::SeqCst);
             let actor = std::sync::Arc::new(actor);

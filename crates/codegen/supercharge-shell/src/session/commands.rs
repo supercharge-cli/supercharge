@@ -391,12 +391,12 @@ pub enum SessionCommand {
     /// Admit an owning parent's message as an ordinary protected turn or running-turn Steer.
     ParentAgentMessage {
         delivery:
-            supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageDelivery,
+            supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageDelivery,
         #[allow(private_interfaces)]
         receipt_sink: tokio::sync::mpsc::Sender<crate::agent::subagent::PromptTurnReceipt>,
         parent_telemetry_ctx: supercharge_telemetry::TelemetryCtx,
         respond_to: oneshot::Sender<
-            supercharge_tools::implementations::grok_build::task::coordinator::ActiveMessageAdmission,
+            supercharge_tools::implementations::supercharge_build::task::coordinator::ActiveMessageAdmission,
         >,
     },
     SessionMode {

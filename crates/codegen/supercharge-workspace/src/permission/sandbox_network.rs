@@ -21,7 +21,7 @@ use supercharge_sandbox::command::{
     Blocked, Clock, CommandTag, Disposition, Grant, GrantDecision, GrantSubject, HostPattern,
     InformationalReason, Replay, SandboxMode, Violation,
 };
-use supercharge_tools::implementations::grok_build::web_fetch::domain::normalize_domain;
+use supercharge_tools::implementations::supercharge_build::web_fetch::domain::normalize_domain;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 

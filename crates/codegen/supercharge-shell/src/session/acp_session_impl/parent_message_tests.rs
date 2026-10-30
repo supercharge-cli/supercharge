@@ -1,6 +1,6 @@
 use super::*;
 use std::sync::Arc;
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessage;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessage;
 
 #[expect(
     clippy::unwrap_used,
@@ -14,7 +14,7 @@ fn admission_response(
 
 const TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOperation;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOperation;
 
 fn message(id: &str) -> ActiveAgentMessage {
     message_with_text(id, "parent update")

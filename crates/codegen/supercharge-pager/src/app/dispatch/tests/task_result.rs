@@ -1675,7 +1675,7 @@ fn same_agent_type_switch_no_modal() {
     let model_a = acp::ModelId::new(std::sync::Arc::from("supercharge-core-a"));
     let model_b = acp::ModelId::new(std::sync::Arc::from("supercharge-core-b"));
 
-    // Add both models to the catalog (no agentType, so both use grok-build)
+    // Add both models to the catalog (no agentType, so both use supercharge-core)
     let agent = app.agents.get_mut(&id).unwrap();
     agent.session.models.available.insert(
         model_a.clone(),

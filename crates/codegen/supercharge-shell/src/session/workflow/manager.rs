@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use supercharge_sampling_types::ReasoningEffort;
-use supercharge_tools::implementations::grok_build::workflow::WorkflowControl;
+use supercharge_tools::implementations::supercharge_build::workflow::WorkflowControl;
 use supercharge_workflow::{Journal, WorkflowOutcome, WorkflowRunParams};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -84,7 +84,7 @@ pub(crate) struct WorkflowManager {
     store: WorkflowRunStore,
     notify: WorkflowNotifySender,
     subagent_event_tx: mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >,
     telemetry: TelemetryHook,
     session_cmd_tx: mpsc::UnboundedSender<crate::session::commands::SessionCommand>,
@@ -105,7 +105,7 @@ impl WorkflowManager {
         store: WorkflowRunStore,
         notify: WorkflowNotifySender,
         subagent_event_tx: mpsc::UnboundedSender<
-            supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+            supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
         >,
         telemetry: TelemetryHook,
         session_cmd_tx: mpsc::UnboundedSender<crate::session::commands::SessionCommand>,
@@ -579,10 +579,10 @@ impl WorkflowManager {
         let (respond_to, _response) = oneshot::channel();
         self.subagent_event_tx
             .send(
-                supercharge_tools::implementations::grok_build::task::types::SubagentEvent::Cancel(
-                    supercharge_tools::implementations::grok_build::task::types::SubagentCancelRequest {
+                supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent::Cancel(
+                    supercharge_tools::implementations::supercharge_build::task::types::SubagentCancelRequest {
                         parent_session_id: Some(self.session_id.clone()),
-                        target: supercharge_tools::implementations::grok_build::task::types::SubagentCancelTarget::WorkflowRunId(
+                        target: supercharge_tools::implementations::supercharge_build::task::types::SubagentCancelTarget::WorkflowRunId(
                             run_id.to_owned(),
                         ),
                         respond_to,
@@ -888,11 +888,11 @@ mod tests {
     use crate::session::workflow::registry::resolve_inline;
 
     type SubagentEventRx = mpsc::UnboundedReceiver<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >;
     type CancelLog = Arc<
         parking_lot::Mutex<
-            Vec<supercharge_tools::implementations::grok_build::task::types::SubagentCancelTarget>,
+            Vec<supercharge_tools::implementations::supercharge_build::task::types::SubagentCancelTarget>,
         >,
     >;
 
@@ -904,7 +904,7 @@ mod tests {
     fn test_manager_with_cancels(
         session_dir: Option<PathBuf>,
     ) -> (WorkflowManager, SubagentEventRx, CancelLog) {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentCancelOutcome, SubagentEvent,
         };
 
@@ -988,8 +988,8 @@ mod tests {
 
     async fn recv_spawn(
         rx: &mut SubagentEventRx,
-    ) -> supercharge_tools::implementations::grok_build::task::types::SubagentSpawnRequest {
-        use supercharge_tools::implementations::grok_build::task::types::SubagentEvent;
+    ) -> supercharge_tools::implementations::supercharge_build::task::types::SubagentSpawnRequest {
+        use supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent;
         match tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv()).await {
             Ok(Some(SubagentEvent::Spawn(req))) => req,
             Ok(Some(_)) => panic!("expected spawn, got a non-spawn event"),
@@ -999,9 +999,9 @@ mod tests {
     }
 
     fn complete_spawn(
-        req: supercharge_tools::implementations::grok_build::task::types::SubagentSpawnRequest,
+        req: supercharge_tools::implementations::supercharge_build::task::types::SubagentSpawnRequest,
     ) {
-        use supercharge_tools::implementations::grok_build::task::types::SubagentResult;
+        use supercharge_tools::implementations::supercharge_build::task::types::SubagentResult;
         let id = req.id.clone();
         let _ = req.result_tx.send(SubagentResult {
             success: true,
@@ -1119,7 +1119,7 @@ mod tests {
 
     #[tokio::test]
     async fn resume_reuses_immutable_launch_effort() {
-        use supercharge_tools::implementations::grok_build::task::types::SubagentEvent;
+        use supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent;
 
         let dir = tempfile::tempdir().unwrap();
         let (mut manager, mut subagent_rx) = test_manager(Some(dir.path().to_path_buf()));
@@ -1206,7 +1206,7 @@ mod tests {
 
     #[tokio::test]
     async fn resume_reconciles_agents_used_from_journal_no_double_charge() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -1338,7 +1338,7 @@ mod tests {
 
     #[tokio::test]
     async fn completed_and_interrupted_runs_are_not_resumable() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -1445,7 +1445,7 @@ mod tests {
 
     #[tokio::test]
     async fn workflow_spawns_await_to_completion() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -1474,7 +1474,7 @@ mod tests {
         );
         assert_eq!(
             req.runtime_overrides.model_override_provenance,
-            supercharge_tools::implementations::grok_build::task::types::ModelOverrideProvenance::Tool,
+            supercharge_tools::implementations::supercharge_build::task::types::ModelOverrideProvenance::Tool,
             "script model overrides are untrusted tool provenance"
         );
         assert_eq!(req.runtime_overrides.reasoning_effort, None);
@@ -1491,7 +1491,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_effort_applies_to_children_and_child_override_wins() {
-        use supercharge_tools::implementations::grok_build::task::types::SubagentEvent;
+        use supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent;
 
         let dir = tempfile::tempdir().unwrap();
         let (mut manager, mut subagent_rx) = test_manager(Some(dir.path().to_path_buf()));
@@ -1679,7 +1679,7 @@ mod tests {
 
     #[tokio::test]
     async fn output_schema_stays_host_side_with_one_corrective_retry() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -1761,7 +1761,7 @@ mod tests {
 
     #[tokio::test]
     async fn explicit_max_output_tokens_is_ignored_and_run_charges_totals() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -1808,7 +1808,7 @@ mod tests {
 
     #[tokio::test]
     async fn children_spawn_without_output_clamp() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 
@@ -1916,7 +1916,7 @@ mod tests {
 
     #[tokio::test]
     async fn backgrounded_stub_fails_loudly() {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentResult,
         };
 

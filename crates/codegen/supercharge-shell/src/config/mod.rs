@@ -314,7 +314,7 @@ impl SubagentsConfig {
             env,
             config,
             remote,
-            supercharge_tools::implementations::grok_build::task::admission::DEFAULT_MAX_CONCURRENT,
+            supercharge_tools::implementations::supercharge_build::task::admission::DEFAULT_MAX_CONCURRENT,
         )
     }
     /// Resolve the subagent turn-sampling limit, clamped to [`crate::agent::subagent::MAX_SUBAGENT_SAMPLING_LIMIT`].
@@ -356,8 +356,8 @@ impl SubagentsConfig {
         env: Option<&str>,
         config: Option<&str>,
         remote: Option<&str>,
-    ) -> supercharge_tools::implementations::grok_build::task::admission::LimitBehavior {
-        use supercharge_tools::implementations::grok_build::task::admission::LimitBehavior;
+    ) -> supercharge_tools::implementations::supercharge_build::task::admission::LimitBehavior {
+        use supercharge_tools::implementations::supercharge_build::task::admission::LimitBehavior;
         for (source, value) in [("env", env), ("config", config), ("remote", remote)] {
             let Some(value) = value else { continue };
             if value.eq_ignore_ascii_case("fail") {
@@ -693,7 +693,7 @@ pub struct ToolsConfig {
     /// Optional S3 bucket config for ZDR video output. When present (and valid), video tools presign an upload URL and pass it to the API.
     /// The generated video then lands in a team-owned bucket instead of being downloaded locally. Only effective when `disable_zdr_incompatible_tools` is `true`. Populated from `[tools.zdr_video_output_s3]` in config.
     pub zdr_video_output_s3:
-        Option<supercharge_tools::implementations::grok_build::video_gen::ZdrVideoOutputS3Config>,
+        Option<supercharge_tools::implementations::supercharge_build::video_gen::ZdrVideoOutputS3Config>,
     pub media_gen: MediaGenToolsConfig,
 }
 impl ToolsConfig {
@@ -719,7 +719,7 @@ impl ToolsConfig {
                 .and_then(|s3_val| match s3_val
                     .clone()
                     .try_into::<
-                        supercharge_tools::implementations::grok_build::video_gen::ZdrVideoOutputS3Config,
+                        supercharge_tools::implementations::supercharge_build::video_gen::ZdrVideoOutputS3Config,
                     >()
                 {
                     Ok(cfg) if cfg.is_valid() => Some(cfg),

@@ -2233,7 +2233,7 @@
         use crate::acp::meta::NotificationMeta;
         use crate::scrollback::block::RenderBlock;
         use crate::scrollback::blocks::tool::ToolCallBlock;
-        use supercharge_tools::implementations::grok_build::send_subagent_message::{
+        use supercharge_tools::implementations::supercharge_build::send_subagent_message::{
             SEND_SUBAGENT_MESSAGE_TOOL_NAME, SendSubagentMessageOutput,
         };
         use supercharge_tools::types::output::ToolOutput;

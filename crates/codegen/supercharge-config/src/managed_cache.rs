@@ -74,7 +74,7 @@ pub fn mark_managed_config_synced(marker: SyncMarker<'_>) {
     }
 }
 
-/// Server-side GrokBuildDeployment UUID from the last deploy-key managed-config sync, bound to the key that synced it.
+/// Server-side SuperchargeBuildDeployment UUID from the last deploy-key managed-config sync, bound to the key that synced it.
 /// A rotated or removed key therefore never reports the previous deployment's id.
 /// Team-path syncs store a team id and no fingerprint, so they never match.
 pub fn managed_deployment_id(key_fingerprint: &str) -> Option<String> {

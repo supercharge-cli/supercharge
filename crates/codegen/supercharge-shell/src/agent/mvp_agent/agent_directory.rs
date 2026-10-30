@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use agent_client_protocol as acp;
-use supercharge_tools::implementations::grok_build::task::root_control::AgentMessageGeneration;
+use supercharge_tools::implementations::supercharge_build::task::root_control::AgentMessageGeneration;
 use supercharge_message_delivery_core::{AgentId, AttemptId};
 
 use crate::agent::roster::RosterOrigin;

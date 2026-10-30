@@ -3,7 +3,7 @@
 //! Skills are user-defined prompts stored as Markdown files that can be invoked
 //! by the user via slash commands (e.g., /commit) or by the model via this tool.
 
-use crate::implementations::grok_build::read_file::{
+use crate::implementations::supercharge_build::read_file::{
     READ_FILE_MAX_BYTES, READ_FILE_MAX_TOKENS, exceeds_read_cap,
 };
 use crate::implementations::skills::types::SkillInfo;

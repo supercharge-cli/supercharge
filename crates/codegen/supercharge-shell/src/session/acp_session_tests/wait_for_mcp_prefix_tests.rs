@@ -228,7 +228,7 @@ async fn progressive_body() {
 
     // A zero-turn rebuild rebuilds the prefix through the same policy, so a delivery-tools session still holds the wait.
     let (_, rebuild_wait) = timed(wedged.handle_rebuild_agent_for_definition(
-        supercharge_agent::AgentDefinition::default_grok_build(),
+        supercharge_agent::AgentDefinition::default_supercharge_build(),
         supercharge_agent::DEFAULT_SYSTEM_PROMPT_LABEL.to_owned(),
     ))
     .await;

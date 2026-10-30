@@ -2282,7 +2282,7 @@ fn dispatch_new_worktree_session_repoints_dashboard_attached_agent() {
 #[test]
 fn translate_local_submit_always_returns_persist_always_for_new_session() {
     use crate::views::question_view::{LocalQuestionKind, QuestionViewState};
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
     let q = Question {
@@ -2327,7 +2327,7 @@ fn translate_local_submit_always_returns_persist_always_for_new_session() {
 #[test]
 fn translate_local_submit_never_returns_persist_never_for_new_session() {
     use crate::views::question_view::{LocalQuestionKind, QuestionViewState};
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
     let q = Question {

@@ -1143,7 +1143,7 @@ mod tests {
         );
     }
 
-    // ─── Description template shell-awareness parity tests ─── Same shape as grok_build/bash: the
+    // ─── Description template shell-awareness parity tests ─── Same shape as supercharge_build/bash: the
     // opencode tool inherits the same Unix-utility guidance and must branch on PowerShell/cmd.
 
     mod description_shell_branches {

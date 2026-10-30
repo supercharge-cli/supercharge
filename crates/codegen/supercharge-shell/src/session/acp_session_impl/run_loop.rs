@@ -1118,7 +1118,7 @@ pub(super) async fn run_session(
                                     // Cap to prevent unbounded growth during long tool calls.
                                     const MAX_BUFFER_EVENTS: usize = 50;
                                     buffer.push_capped(
-                                        supercharge_tools::implementations::grok_build::monitor::types::MonitorEventNotification {
+                                        supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventNotification {
                                             task_id: task_id.clone(),
                                             event_text,
                                             // Tag with this session's id so the shared (leader-mode) buffer drains show it only here

@@ -14,10 +14,10 @@ use supercharge_telemetry::events::{
     ActiveAgentMessageSafePointTrigger as SafePointTrigger, ActiveAgentMessageSettled as Settled,
     ActiveAgentMessageSettlementDisposition as SettlementDisposition,
 };
-use supercharge_tools::implementations::grok_build::send_subagent_message::{
+use supercharge_tools::implementations::supercharge_build::send_subagent_message::{
     SendSubagentMessageInput, SendSubagentMessageOutput,
 };
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOperation;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOperation;
 use supercharge_tools::types::output::ToolOutput;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -176,8 +176,8 @@ fn emit_immediate_events<S: ActiveAgentMessageEventSink + ?Sized>(
         SendSubagentMessageOutput::Saturated { .. } => (Outcome::Saturated, None),
         SendSubagentMessageOutput::QuotaExceeded { kind, limit } => {
             let kind = match kind {
-                supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageQuotaKind::SenderTargetInFlight => QuotaKind::SenderTargetInFlight,
-                supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageQuotaKind::AttemptOutbound => QuotaKind::AttemptOutbound,
+                supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageQuotaKind::SenderTargetInFlight => QuotaKind::SenderTargetInFlight,
+                supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageQuotaKind::AttemptOutbound => QuotaKind::AttemptOutbound,
                 _ => return,
             };
             quota_hit = Some(QuotaHit {

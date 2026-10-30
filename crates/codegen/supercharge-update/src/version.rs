@@ -6,7 +6,7 @@ use serde_json::Value;
 use tokio::fs;
 use tokio::process::Command;
 
-use supercharge_shell::env::GrokBuildEnvironment;
+use supercharge_shell::env::SuperchargeBuildEnvironment;
 use supercharge_shell::util::supercharge_home::supercharge_home;
 
 const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
@@ -106,9 +106,9 @@ fn is_loopback_base(base: &str) -> bool {
     }
 }
 
-/// Minimal configuration the update system needs from the environment. Constructed once from `GrokBuildEnvironment` at
+/// Minimal configuration the update system needs from the environment. Constructed once from `SuperchargeBuildEnvironment` at
 /// startup and threaded through the update call chain. `auto_update` and `version` never need to know about the
-/// `GrokBuildEnvironment` enum directly.
+/// `SuperchargeBuildEnvironment` enum directly.
 #[derive(Debug, Clone)]
 pub struct UpdateConfig {
     /// Chat API proxy base URL (versioned `https://cli-chat-proxy.supercharge.com/v1` endpoint).
@@ -129,7 +129,7 @@ pub struct UpdateConfig {
 }
 
 impl UpdateConfig {
-    pub fn from_environment(env: &GrokBuildEnvironment) -> Self {
+    pub fn from_environment(env: &SuperchargeBuildEnvironment) -> Self {
         Self {
             proxy_base_url: env.cli_chat_proxy_base_url(),
             auth_scope: supercharge_login::GrokComConfig::default().auth_scope(),

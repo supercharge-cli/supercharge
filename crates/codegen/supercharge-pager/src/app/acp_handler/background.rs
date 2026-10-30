@@ -430,7 +430,7 @@ fn expired_task_notice(info: &crate::app::agent::ScheduledTaskInfo) -> String {
     format!(
         "Scheduled task expired: \"{head}\" ({}). Recurring tasks auto-expire after {} days; re-create it if still needed.",
         info.human_schedule,
-        supercharge_tools::implementations::grok_build::scheduler::types::RECURRING_TASK_TTL_DAYS,
+        supercharge_tools::implementations::supercharge_build::scheduler::types::RECURRING_TASK_TTL_DAYS,
     )
 }
 /// Derive the effective CWD and worktree flag for a child session.

@@ -5,7 +5,7 @@ use super::support::*;
 use super::*;
 use std::sync::Arc as StdArc;
 use std::sync::atomic::{AtomicUsize, Ordering as SeqOrd};
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentCancelTarget, SubagentEvent, SubagentResult, SubagentSpawnRequest,
 };
 use tempfile::TempDir;

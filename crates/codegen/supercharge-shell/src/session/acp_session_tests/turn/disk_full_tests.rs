@@ -109,7 +109,7 @@ pub(super) async fn actor_with_mock_sampler_configured(
     let mut actor = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
     actor.sampler_handle = sampler_handle;
     actor.max_turns = max_turns;
-    *actor.agent.borrow_mut() = test_grok_build_agent_with_todo().await;
+    *actor.agent.borrow_mut() = test_supercharge_build_agent_with_todo().await;
     configure(&mut actor);
 
     let mut cfg = actor

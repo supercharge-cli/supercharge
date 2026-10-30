@@ -114,7 +114,7 @@ async fn zero_turn_rebuild_renders_switch_target_label() {
 
             actor
                 .handle_rebuild_agent_for_definition(
-                    supercharge_agent::AgentDefinition::default_grok_build(),
+                    supercharge_agent::AgentDefinition::default_supercharge_build(),
                     SWITCH_TARGET_LABEL.to_owned(),
                 )
                 .await

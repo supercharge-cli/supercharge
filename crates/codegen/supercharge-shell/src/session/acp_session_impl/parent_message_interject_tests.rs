@@ -6,7 +6,7 @@ use crate::session::telemetry::{
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOperation;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOperation;
 
 const STEER_TEXT: &str = "steer text";
 const INTERJECT_TEXT: &str = "interject text";

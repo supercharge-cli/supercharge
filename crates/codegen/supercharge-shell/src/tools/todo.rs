@@ -1,11 +1,11 @@
 //! Types are canonical in `supercharge-tools`.
 //! This module adds conversions between ACP plan entries and `TodoItem` since `supercharge-tools` is protocol-agnostic.
 
-pub use supercharge_tools::implementations::grok_build::todo::TodoId;
-pub use supercharge_tools::implementations::grok_build::todo::TodoItem;
-pub use supercharge_tools::implementations::grok_build::todo::TodoPriority;
-pub use supercharge_tools::implementations::grok_build::todo::TodoState;
-pub use supercharge_tools::implementations::grok_build::todo::TodoStatus;
+pub use supercharge_tools::implementations::supercharge_build::todo::TodoId;
+pub use supercharge_tools::implementations::supercharge_build::todo::TodoItem;
+pub use supercharge_tools::implementations::supercharge_build::todo::TodoPriority;
+pub use supercharge_tools::implementations::supercharge_build::todo::TodoState;
+pub use supercharge_tools::implementations::supercharge_build::todo::TodoStatus;
 
 use agent_client_protocol as acp;
 

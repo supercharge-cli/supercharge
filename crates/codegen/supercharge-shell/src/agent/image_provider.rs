@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use super::provider_setup::{ProviderSetup, ProviderSetupError, normalize_provider_base_url};
-use supercharge_tools::implementations::grok_build::image_gen::ImageProviderFormat;
+use supercharge_tools::implementations::supercharge_build::image_gen::ImageProviderFormat;
 
 const MAX_API_KEY_LEN: usize = 8192;
 const MAX_MODEL_ID_LEN: usize = 200;

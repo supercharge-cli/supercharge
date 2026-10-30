@@ -1,8 +1,8 @@
 use supercharge_message_delivery_core::DeliveryEnvelope;
-use supercharge_tools::implementations::grok_build::task::coordinator::{
+use supercharge_tools::implementations::supercharge_build::task::coordinator::{
     ActiveMessageAdmission, ChildControl, LocalBoxFuture, SendBoxFuture, SubagentProgress,
 };
-use supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageDelivery;
+use supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageDelivery;
 use tokio::sync::mpsc;
 
 use super::prompt_turn_receipt::{PromptTurnReceipt, cancel_shell_child_turn};
@@ -15,7 +15,7 @@ pub(crate) struct ShellChildRuntime {
     pub(crate) active_message_target_session_id: String,
     pub(crate) active_message_target_agent_id: supercharge_message_delivery_core::AgentId,
     pub(crate) active_message_target_generation:
-        supercharge_tools::implementations::grok_build::task::root_control::AgentMessageGeneration,
+        supercharge_tools::implementations::supercharge_build::task::root_control::AgentMessageGeneration,
     pub(crate) child_signals: crate::session::signals::SessionSignalsHandle,
     /// Held by the worker until promotion succeeds.
     /// `None` means the caller still owns the join handle, so a cancel during promotion can wait for the actor to exit.

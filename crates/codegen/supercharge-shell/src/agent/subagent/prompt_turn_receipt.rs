@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::session::{
     CancelOptions, CancelTrigger, SessionCommand, ShutdownKind, commands::PromptTurnResult,
 };
-use supercharge_tools::implementations::grok_build::task::types::SubagentResult;
+use supercharge_tools::implementations::supercharge_build::task::types::SubagentResult;
 
 pub(super) const ACTIVE_MESSAGE_RECEIPT_CAPACITY: usize = 64;
 const CANCELLED_RECEIPT_SETTLEMENT_GRACE: std::time::Duration = std::time::Duration::from_secs(5);

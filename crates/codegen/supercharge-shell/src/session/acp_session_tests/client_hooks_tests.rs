@@ -365,7 +365,7 @@ async fn post_tool_use_and_failure_never_double_fire() {
     local
         .run_until(async {
             let (actor, mut gateway_rx, _persistence_rx) = test_actor().await;
-            *actor.agent.borrow_mut() = test_grok_build_agent_with_todo().await;
+            *actor.agent.borrow_mut() = test_supercharge_build_agent_with_todo().await;
 
             let mut client_hooks = crate::extensions::hooks::ClientHooks::new();
             for event in [
@@ -538,7 +538,7 @@ async fn mcp_error_result_fires_only_failure_and_delivers_original_output() {
     local
         .run_until(async {
             let (actor, mut gateway_rx, _persistence_rx) = test_actor().await;
-            *actor.agent.borrow_mut() = test_grok_build_agent_with_todo().await;
+            *actor.agent.borrow_mut() = test_supercharge_build_agent_with_todo().await;
             let bridge = actor.agent.borrow().tool_bridge().clone();
             bridge
                 .register_mcp_tools(
@@ -651,7 +651,7 @@ async fn post_tool_use_failure_additional_context_reaches_model() {
     local
         .run_until(async {
             let (mut actor, _gateway_rx, _persistence_rx) = test_actor().await;
-            *actor.agent.borrow_mut() = test_grok_build_agent_with_todo().await;
+            *actor.agent.borrow_mut() = test_supercharge_build_agent_with_todo().await;
 
             // A file PostToolUseFailure hook feeds additionalContext (context-only).
             install_pre_tool_use_hooks(
@@ -704,7 +704,7 @@ async fn pre_tool_use_deny_feeds_reason_back_and_continues_turn() {
     local
         .run_until(async {
             let (actor, gateway_rx, _persistence_rx) = test_actor().await;
-            *actor.agent.borrow_mut() = test_grok_build_agent_with_todo().await;
+            *actor.agent.borrow_mut() = test_supercharge_build_agent_with_todo().await;
 
             install_client_hook(
                 &actor,

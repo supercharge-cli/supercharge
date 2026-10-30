@@ -30,7 +30,7 @@ use crate::permission::types::{
     PermissionRequest, PermissionResolution, PromptPolicy,
 };
 use supercharge_paths::AbsPathBuf;
-use supercharge_tools::implementations::grok_build::web_fetch::{
+use supercharge_tools::implementations::supercharge_build::web_fetch::{
     DomainMatcher, config::DEFAULT_ALLOWED_DOMAINS, domain::normalize_domain,
 };
 

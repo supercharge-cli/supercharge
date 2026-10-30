@@ -2,8 +2,8 @@
 
 use agent_client_protocol as acp;
 use serde::{Deserialize, Serialize};
-use supercharge_tools::implementations::grok_build::send_subagent_message::resolve_delivery;
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::send_subagent_message::resolve_delivery;
+use supercharge_tools::implementations::supercharge_build::task::types::{
     ActiveAgentMessageOutcome, MAX_ACTIVE_AGENT_MESSAGE_BYTES,
 };
 

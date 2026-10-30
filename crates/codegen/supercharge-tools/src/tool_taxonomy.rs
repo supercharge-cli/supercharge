@@ -241,7 +241,7 @@ mod tests {
     fn identity(kind: ToolKind) -> ToolIdentity {
         ToolIdentity {
             tool_kind: kind,
-            namespace: ToolNamespace::GrokBuild,
+            namespace: ToolNamespace::SuperchargeBuild,
             presentation_name: kind.presentation_name(),
             read_only: kind.is_read_only(),
         }
@@ -260,21 +260,21 @@ mod tests {
                 tool.id()
             );
         }
-        covered(crate::implementations::grok_build::SearchReplaceTool);
-        covered(crate::implementations::grok_build::BashTool);
-        covered(crate::implementations::grok_build::TodoWriteTool);
-        covered(crate::implementations::grok_build::WorkflowTool);
-        covered(crate::implementations::grok_build::ImageGenTool);
-        covered(crate::implementations::grok_build::ImageEditTool);
-        covered(crate::implementations::grok_build::ImageToVideoTool);
-        covered(crate::implementations::grok_build::ReferenceToVideoTool);
-        covered(crate::implementations::grok_build::AskUserQuestionTool);
+        covered(crate::implementations::supercharge_build::SearchReplaceTool);
+        covered(crate::implementations::supercharge_build::BashTool);
+        covered(crate::implementations::supercharge_build::TodoWriteTool);
+        covered(crate::implementations::supercharge_build::WorkflowTool);
+        covered(crate::implementations::supercharge_build::ImageGenTool);
+        covered(crate::implementations::supercharge_build::ImageEditTool);
+        covered(crate::implementations::supercharge_build::ImageToVideoTool);
+        covered(crate::implementations::supercharge_build::ReferenceToVideoTool);
+        covered(crate::implementations::supercharge_build::AskUserQuestionTool);
         covered(crate::implementations::opencode::OpenCodeWriteTool);
         covered(crate::implementations::opencode::OpenCodeEditTool);
         covered(crate::implementations::opencode::OpenCodeBashTool);
         covered(crate::implementations::opencode::OpenCodeTodoWriteTool);
         covered(crate::implementations::codex::ApplyPatchTool);
-        covered(crate::implementations::grok_build_hashline::HashlineEditTool);
+        covered(crate::implementations::supercharge_build_hashline::HashlineEditTool);
     }
     /// Spellings with no instantiable definition site in this crate
     /// (client-facing renames) and the deliberate absences.
@@ -304,9 +304,9 @@ mod tests {
         use strum::IntoEnumIterator;
         fn wire_and_pascal(ns: ToolNamespace) -> (&'static str, &'static str) {
             match ns {
-                ToolNamespace::GrokBuild => ("grok_build", "GrokBuild"),
-                ToolNamespace::GrokBuildConcise => ("grok_build_concise", "GrokBuildConcise"),
-                ToolNamespace::GrokBuildHashline => ("grok_build_hashline", "GrokBuildHashline"),
+                ToolNamespace::SuperchargeBuild => ("supercharge_build", "SuperchargeBuild"),
+                ToolNamespace::SuperchargeBuildConcise => ("supercharge_build_concise", "SuperchargeBuildConcise"),
+                ToolNamespace::SuperchargeBuildHashline => ("supercharge_build_hashline", "SuperchargeBuildHashline"),
                 ToolNamespace::Codex => ("codex", "Codex"),
                 ToolNamespace::OpenCode => ("opencode", "OpenCode"),
                 ToolNamespace::MCP => ("mcp", "MCP"),
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(t.get("kind").and_then(|v| v.as_str()), Some("read"));
         assert_eq!(
             t.get("namespace").and_then(|v| v.as_str()),
-            Some("grok_build")
+            Some("supercharge_build")
         );
         assert_eq!(t.get("label").and_then(|v| v.as_str()), Some("Read"));
         assert_eq!(t.get("read_only"), Some(&serde_json::json!(true)));

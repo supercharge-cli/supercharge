@@ -2,7 +2,7 @@
 use super::*;
 use crate::session::{InputAuthority, SlashAuthority};
 use crate::util::dual_clock::DualClock;
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentEvent, SubagentMarkUsageNotAppliedRequest, SubagentWaitPromptDrainedRequest,
 };
 use supercharge_tools::types::tool::ToolKind;
@@ -219,7 +219,7 @@ impl UsageDrainOutcome {
     /// Same policy as freeze's terminal outcome: a live foreground child is fail-closed; sticky and background are report-only.
     pub(super) fn from_outstanding_reply(
         reply: Option<
-            &supercharge_tools::implementations::grok_build::task::types::SubagentOutstandingReply,
+            &supercharge_tools::implementations::supercharge_build::task::types::SubagentOutstandingReply,
         >,
     ) -> Self {
         match reply {
@@ -1912,7 +1912,7 @@ impl SessionActor {
         let Some(buffer) = &self.tool_context.monitor_event_buffer else {
             return;
         };
-        let mine = supercharge_tools::implementations::grok_build::monitor::types::drain_owned(
+        let mine = supercharge_tools::implementations::supercharge_build::monitor::types::drain_owned(
             buffer,
             Some(self.session_info.id.0.as_ref()),
         );
@@ -2951,7 +2951,7 @@ impl SessionActor {
             let bridge = self.agent.borrow().tool_bridge().clone();
             let messaging_grant = if bridge
                 .read_resource::<
-                    supercharge_tools::implementations::grok_build::task::types::AgentMessageSenderResource,
+                    supercharge_tools::implementations::supercharge_build::task::types::AgentMessageSenderResource,
                 >()
                 .await
                 .is_some()

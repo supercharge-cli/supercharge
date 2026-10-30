@@ -1865,7 +1865,7 @@ fn load_lines(lines: &[&str]) -> Vec<ConversationItem> {
     adapter.read_chat_history_sync(chat_path, CHAT_FORMAT_VERSION).unwrap()
 }
 /// Real-shape legacy fixture from a web-search session.
-/// The assistant carries `reasoning: { text, encrypted, id }` inline, the legacy grok-build / Opus / chat-completions shape.
+/// The assistant carries `reasoning: { text, encrypted, id }` inline, the legacy supercharge-core / Opus / chat-completions shape.
 /// BackendToolCall sits as its own sibling line (it was already a sibling variant in the legacy shape).
 #[test]
 fn read_chat_history_upgrades_legacy_singular_reasoning_to_sibling() {

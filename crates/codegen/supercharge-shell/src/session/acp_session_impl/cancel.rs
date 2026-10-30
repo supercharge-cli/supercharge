@@ -65,7 +65,7 @@ impl SessionActor {
     /// Uses the session-bound backend API so the cancel cannot touch other sessions.
     pub(super) fn cancel_all_session_subagents(&self) {
         if let Some(event_tx) = self.tool_context.subagent_event_tx.clone() {
-            use supercharge_tools::implementations::grok_build::task::backend::ChannelBackend;
+            use supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend;
             let backend = ChannelBackend::for_session(event_tx, self.session_id_string());
             let _ = backend.request_cancel_parent_session(tokio::sync::oneshot::channel().0);
         }
@@ -74,7 +74,7 @@ impl SessionActor {
     /// Re-open Task spawns for this session after a prior user Stop.
     pub(super) fn open_subagent_spawn_admission(&self) {
         if let Some(event_tx) = self.tool_context.subagent_event_tx.clone() {
-            use supercharge_tools::implementations::grok_build::task::backend::ChannelBackend;
+            use supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend;
             let backend = ChannelBackend::for_session(event_tx, self.session_id_string());
             let _ = backend.open_spawn_admission();
         }
@@ -82,7 +82,7 @@ impl SessionActor {
 
     fn cancel_subagents_for_prompt_id(&self, parent_prompt_id: &str) {
         if let Some(event_tx) = self.tool_context.subagent_event_tx.clone() {
-            use supercharge_tools::implementations::grok_build::task::types::{
+            use supercharge_tools::implementations::supercharge_build::task::types::{
                 SubagentCancelRequest, SubagentCancelTarget, SubagentEvent,
             };
             let _ = event_tx.send(SubagentEvent::Cancel(SubagentCancelRequest {

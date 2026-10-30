@@ -47,7 +47,7 @@ fn role_prompt(p: &str) -> RoleRenderedPrompt {
 
 #[tokio::test]
 async fn channel_spawner_request_is_harness_internal() {
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentResult,
     };
 
@@ -99,7 +99,7 @@ async fn channel_spawner_request_is_harness_internal() {
 /// Skeptic 0 keeps `pool[0]` on the cold fallback.
 #[tokio::test]
 async fn channel_spawner_applies_per_index_model_to_request() {
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentResult,
     };
 
@@ -167,7 +167,7 @@ async fn channel_spawner_applies_per_index_model_to_request() {
 /// An inherit index (no configured pair) leaves `runtime_overrides.model` `None`, the historic default-spawn behavior.
 #[tokio::test]
 async fn channel_spawner_inherit_index_leaves_model_none() {
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentResult,
     };
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1278,7 +1278,7 @@ fn build_pause_summary_omits_empty_groups() {
 /// Both explicit renders leave no tool placeholder unresolved.
 #[test]
 fn verifier_template_renders_per_agent_type_and_falls_back() {
-    use supercharge_tools::implementations::grok_build::task::types::SubagentTypeSummary;
+    use supercharge_tools::implementations::supercharge_build::task::types::SubagentTypeSummary;
     let mut tool_names = std::collections::HashMap::new();
     tool_names.insert(
         supercharge_tools::types::tool::ToolKind::Read,
@@ -2952,7 +2952,7 @@ async fn verification_stage_resume_spawn_failure_falls_back_to_cold() {
 #[tokio::test]
 async fn cold_fallback_after_resume_failure_carries_pool0_model_on_request() {
     use std::sync::Mutex as StdMutex;
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentResult,
     };
 
@@ -3338,7 +3338,7 @@ fn prod_default_classifier_max_runs_is_ten() {
 
 #[tokio::test]
 async fn channel_spawner_blocks_until_subagent_result() {
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentResult,
     };
 

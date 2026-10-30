@@ -8,7 +8,7 @@
 use super::support::*;
 use super::*;
 use agent_client_protocol as acp;
-use supercharge_tools::implementations::grok_build::image_gen::ImageGenTool;
+use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenTool;
 use supercharge_tools::media_gen_limits::DEFAULT_MAX_PARALLEL_IMAGE_GEN;
 use supercharge_tools::registry::types::ToolConfig;
 
@@ -96,7 +96,7 @@ async fn first_k_tail_rejects_get_pending_then_failed() {
                 .max_image = 0;
             *actor.agent.borrow_mut() = test_agent_with_tools(vec![
                 ToolConfig::for_tool::<ImageGenTool>(),
-                ToolConfig::from_id("GrokBuild:read_file"),
+                ToolConfig::from_id("SuperchargeBuild:read_file"),
             ])
             .await;
 
@@ -168,7 +168,7 @@ async fn over_cap_report_classifies_modest_vs_egregious() {
             let actor = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
             *actor.agent.borrow_mut() = test_agent_with_tools(vec![
                 ToolConfig::for_tool::<ImageGenTool>(),
-                ToolConfig::from_id("GrokBuild:read_file"),
+                ToolConfig::from_id("SuperchargeBuild:read_file"),
             ])
             .await;
 

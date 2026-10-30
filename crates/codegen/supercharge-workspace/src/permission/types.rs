@@ -702,7 +702,7 @@ mod tests {
     }
     #[test]
     fn hashline_edit_maps_to_edit_access() {
-        use supercharge_tools::implementations::grok_build_hashline::edit::types::HashlineEditInput;
+        use supercharge_tools::implementations::supercharge_build_hashline::edit::types::HashlineEditInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::HashlineEdit(HashlineEditInput {
             file_path: "src/main.rs".into(),
@@ -716,7 +716,7 @@ mod tests {
     }
     #[test]
     fn bash_maps_to_bash_access() {
-        use supercharge_tools::implementations::grok_build::bash::BashToolInput;
+        use supercharge_tools::implementations::supercharge_build::bash::BashToolInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::Bash(BashToolInput {
             command: "cargo test".into(),
@@ -732,7 +732,7 @@ mod tests {
     }
     #[test]
     fn active_agent_message_maps_to_dedicated_access_without_text() {
-        use supercharge_tools::implementations::grok_build::send_subagent_message::SendSubagentMessageInput;
+        use supercharge_tools::implementations::supercharge_build::send_subagent_message::SendSubagentMessageInput;
         use supercharge_tools::types::ToolInput;
         let text = "private follow-up";
         let access = AccessKind::from(&ToolInput::SendSubagentMessage(SendSubagentMessageInput {
@@ -793,7 +793,7 @@ mod tests {
     }
     #[test]
     fn monitor_maps_to_bash_access() {
-        use supercharge_tools::implementations::grok_build::monitor::types::MonitorInput;
+        use supercharge_tools::implementations::supercharge_build::monitor::types::MonitorInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::Monitor(MonitorInput {
             command: "tail -f /var/log/syslog".into(),
@@ -809,7 +809,7 @@ mod tests {
     }
     #[test]
     fn search_replace_maps_to_edit_access() {
-        use supercharge_tools::implementations::grok_build::search_replace::SearchReplaceInput;
+        use supercharge_tools::implementations::supercharge_build::search_replace::SearchReplaceInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::SearchReplace(SearchReplaceInput {
             file_path: "lib.rs".into(),
@@ -825,7 +825,7 @@ mod tests {
     }
     #[test]
     fn web_fetch_maps_to_web_fetch_access() {
-        use supercharge_tools::implementations::grok_build::web_fetch::WebFetchInput;
+        use supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::WebFetch(WebFetchInput {
             url: "https://custom.example.com/api".into(),
@@ -838,7 +838,7 @@ mod tests {
     }
     #[test]
     fn web_search_maps_to_web_search_access() {
-        use supercharge_tools::implementations::grok_build::web_search::WebSearchInput;
+        use supercharge_tools::implementations::supercharge_build::web_search::WebSearchInput;
         use supercharge_tools::types::ToolInput;
         let input = ToolInput::WebSearch(WebSearchInput {
             query: "rust lang".into(),

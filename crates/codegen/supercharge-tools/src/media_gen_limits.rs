@@ -463,7 +463,7 @@ mod tests {
     #[test]
     fn image_edit_kind_is_image_gen_for_cap() {
         // Cap wiring depends on image_edit reporting ToolKind::ImageGen.
-        use crate::implementations::grok_build::image_edit::ImageEditTool;
+        use crate::implementations::supercharge_build::image_edit::ImageEditTool;
         use crate::types::tool_metadata::ToolMetadata;
         assert_eq!(ToolMetadata::kind(&ImageEditTool), ToolKind::ImageGen);
     }

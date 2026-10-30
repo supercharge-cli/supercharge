@@ -6,7 +6,7 @@ use super::*;
 use crate::sampling::EffortTarget;
 use supercharge_login::PreferredAuthMethod;
 use crate::upload::trace::PromptMetadataParams;
-use supercharge_tools::implementations::grok_build::task::backend::SubagentBackend;
+use supercharge_tools::implementations::supercharge_build::task::backend::SubagentBackend;
 use supercharge_tty_utils::ProcessScope;
 struct SessionConfigInputs {
     model_id: acp::ModelId,
@@ -2232,8 +2232,8 @@ impl MvpAgent {
     /// So IC authenticates and meters Imagine usage per-user.
     pub(super) fn prepare_image_gen_config(
         &self,
-    ) -> supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig {
-        use supercharge_tools::implementations::grok_build::image_gen::{
+    ) -> supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig {
+        use supercharge_tools::implementations::supercharge_build::image_gen::{
             ImageGenConfig, ImageProviderFormat,
         };
         let cfg = self.cfg.borrow();
@@ -2286,15 +2286,15 @@ impl MvpAgent {
     /// The tool talks directly to the deployer service.
     pub(super) fn prepare_app_builder_deployer_config(
         &self,
-    ) -> supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig {
-        use supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig;
+    ) -> supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig {
+        use supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig;
         AppBuilderDeployerConfig::Disabled
     }
     /// Video tools call the xAI API directly.
     pub(super) fn prepare_video_gen_config(
         &self,
-    ) -> supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig {
-        use supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig;
+    ) -> supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig {
+        use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig;
         let cfg = self.cfg.borrow();
         if !cfg.resolve_video_gen().value {
             return VideoGenConfig::Disabled;
@@ -2380,8 +2380,8 @@ impl MvpAgent {
     /// Params resolution (TOML > env > remote settings > default): `proxy_endpoint`: `[toolset.web_fetch] proxy_endpoint` > `SUPERCHARGE_WEB_FETCH_PROXY` > remote settings > None `allowed_domains`: `[toolset.web_fetch] allowed_domains` > remote settings > built-in defaults `allow_local`: `[toolset.web_fetch] allow_local` > `SUPERCHARGE_WEB_FETCH_ALLOW_LOCAL` > false
     pub(super) fn prepare_web_fetch_config(
         &self,
-    ) -> supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig {
-        use supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig;
+    ) -> supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig {
+        use supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig;
         let cfg = self.cfg.borrow();
         if cfg.disable_web_search {
             return WebFetchConfig::Disabled;
@@ -2541,7 +2541,7 @@ impl MvpAgent {
             subagent_sampling_semaphore: Arc::new(
                 tokio::sync::Semaphore::new(cfg.subagents_sampling_limit),
             ),
-            monitor_event_buffer: supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer::default(),
+            monitor_event_buffer: supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer::default(),
             bundle_sync_in_flight: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             workspace_ops: RefCell::new(None),
             #[cfg(all(feature = "local-workspace", unix))]
@@ -2925,8 +2925,8 @@ impl MvpAgent {
     pub(crate) async fn cancel_subagent(
         &self,
         subagent_id: &str,
-    ) -> supercharge_tools::implementations::grok_build::task::types::SubagentCancelOutcome {
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+    ) -> supercharge_tools::implementations::supercharge_build::task::types::SubagentCancelOutcome {
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                 self.subagent_event_tx.event_sender().0,
             )
             .cancel(subagent_id)
@@ -2936,9 +2936,9 @@ impl MvpAgent {
         &self,
         parent_session_id: &str,
     ) -> Vec<
-        supercharge_tools::implementations::grok_build::task::types::SubagentInspection,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentInspection,
     > {
-        let backend = supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+        let backend = supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
             self.subagent_event_tx.event_sender().0,
         );
         let sid = acp::SessionId::new(parent_session_id);
@@ -2960,9 +2960,9 @@ impl MvpAgent {
         &self,
         subagent_id: &str,
     ) -> Option<
-        supercharge_tools::implementations::grok_build::task::types::SubagentInspection,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentInspection,
     > {
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                 self.subagent_event_tx.event_sender().0,
             )
             .inspect(subagent_id)
@@ -2974,9 +2974,9 @@ impl MvpAgent {
         block: bool,
         timeout_ms: Option<u64>,
     ) -> Option<
-        supercharge_tools::implementations::grok_build::task::types::SubagentSnapshot,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentSnapshot,
     > {
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                 self.subagent_event_tx.event_sender().0,
             )
             .query(subagent_id, block, timeout_ms)
@@ -2987,7 +2987,7 @@ impl MvpAgent {
         parent_session_id: &str,
         prompt_id: &str,
     ) -> Vec<crate::upload::trace::SubagentSpawnedRef> {
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                 self.subagent_event_tx.event_sender().0,
             )
             .spawned_refs_for_prompt(parent_session_id, prompt_id)
@@ -4106,8 +4106,8 @@ impl MvpAgent {
         let agent_name = std::env::var("SUPERCHARGE_AGENT").ok();
         let resolved = match agent_name.as_deref() {
             Some("browser-use") | Some("browser_use") => AgentDefinition::browser_use(),
-            Some("supercharge-core-concise") | Some("grok_build_concise") => {
-                AgentDefinition::grok_build_concise()
+            Some("supercharge-core-concise") | Some("supercharge_build_concise") => {
+                AgentDefinition::supercharge_build_concise()
             }
             Some(path) if std::path::Path::new(path).is_absolute() => {
                 match AgentDefinition::from_file(path) {
@@ -4118,15 +4118,15 @@ impl MvpAgent {
                             error = %e,
                             "Failed to load agent definition from file, falling back to default"
                         );
-                        AgentDefinition::grok_build_plan()
+                        AgentDefinition::supercharge_build_plan()
                     }
                 }
             }
             Some(name) => {
                 supercharge_agent::discovery::by_name_in_cwd(name, cwd)
-                    .unwrap_or_else(AgentDefinition::grok_build_plan)
+                    .unwrap_or_else(AgentDefinition::supercharge_build_plan)
             }
-            None => AgentDefinition::grok_build_plan(),
+            None => AgentDefinition::supercharge_build_plan(),
         };
         if !grok_agent_env_set && !config_agent_explicitly_set
             && model_requires_strict_harness && let Some(required) = model_agent_type

@@ -294,7 +294,7 @@ impl SessionActor {
             .borrow()
             .tool_bridge()
             .update_resources_with(move |resources| {
-                use supercharge_tools::implementations::grok_build::task::types::CurrentPromptIdResource;
+                use supercharge_tools::implementations::supercharge_build::task::types::CurrentPromptIdResource;
                 if resources
                     .get::<CurrentPromptIdResource>()
                     .is_some_and(|current| current.0 == prompt_id)
@@ -323,7 +323,7 @@ impl SessionActor {
             .borrow()
             .tool_bridge()
             .update_resources_with(move |resources| {
-                use supercharge_tools::implementations::grok_build::task::types::{
+                use supercharge_tools::implementations::supercharge_build::task::types::{
                     CurrentPromptIdResource, GoalLoopActive,
                 };
                 if resources

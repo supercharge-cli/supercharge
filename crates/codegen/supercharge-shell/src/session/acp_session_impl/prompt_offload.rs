@@ -7,7 +7,7 @@ use crate::session::prompt_parser::{ParsedPrompt, PromptLayout};
 use std::ops::Range;
 use supercharge_telemetry::region;
 use supercharge_telemetry::region::Parent;
-use supercharge_tools::implementations::grok_build::read_file::{
+use supercharge_tools::implementations::supercharge_build::read_file::{
     MAX_LINES_READ, READ_FILE_MAX_TOKENS, exceeds_read_cap,
 };
 use supercharge_tools::types::resources::TruncationCfg;

@@ -35,7 +35,7 @@ pub(super) struct StartArtifactPublication {
     durable_publication: bool,
     prepared: PreparedStartArtifacts,
     gateway: GatewaySender,
-    reporter: supercharge_tools::implementations::grok_build::task::coordinator::ChildReporter<
+    reporter: supercharge_tools::implementations::supercharge_build::task::coordinator::ChildReporter<
         ShellChildRuntime,
     >,
     parent_session_id: String,
@@ -55,7 +55,7 @@ impl StartArtifactPublication {
         metadata_parent: Option<tracing::Span>,
         prepared: PreparedStartArtifacts,
         gateway: GatewaySender,
-        reporter: supercharge_tools::implementations::grok_build::task::coordinator::ChildReporter<
+        reporter: supercharge_tools::implementations::supercharge_build::task::coordinator::ChildReporter<
             ShellChildRuntime,
         >,
         ctx: &SubagentSpawnContext,

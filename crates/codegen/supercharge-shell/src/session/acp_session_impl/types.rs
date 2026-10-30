@@ -230,8 +230,8 @@ pub(crate) enum DrainPurpose {
 /// Origin of a drain entry.
 /// `Pending` entries had their acks resolved at defer time; `Channel` entries still carry a live oneshot.
 pub(crate) enum DrainSource {
-    Pending(supercharge_tools::implementations::grok_build::update_goal::UpdateGoalInput),
-    Channel(supercharge_tools::implementations::grok_build::update_goal::UpdateGoalEnvelope),
+    Pending(supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalInput),
+    Channel(supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalEnvelope),
 }
 
 /// Reason a NotAchieved verdict was synthesized without invoking the sampler.

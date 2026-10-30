@@ -1,7 +1,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 use supercharge_sampler::SamplerConfig;
-use supercharge_tools::implementations::grok_build;
+use supercharge_tools::implementations::supercharge_build;
 use supercharge_tools::registry::types::ToolConfig;
 
 /// The tool-server binary defaults to a 5-minute foreground ceiling (`DEFAULT_MAX_TIMEOUT_MS`).
@@ -55,7 +55,7 @@ impl BashToolConfig {
         if let Some(t) = self.timeout_secs {
             map.insert("timeout_secs".into(), t.into());
         }
-        // Production grok-build opts up to 10h by sending it explicitly (overridable via config.toml)
+        // Production supercharge-core opts up to 10h by sending it explicitly (overridable via config.toml)
         let max_timeout_secs = self.max_timeout_secs.unwrap_or(PRODUCTION_MAX_TIMEOUT_SECS);
         map.insert("max_timeout_secs".into(), max_timeout_secs.into());
         if let Some(limit) = self.output_byte_limit {
@@ -119,7 +119,7 @@ impl WebFetchToolConfig {
         remote_proxy: Option<&str>,
         remote_domains: Option<&[String]>,
         context_window_tokens: Option<u64>,
-    ) -> supercharge_tools::implementations::grok_build::web_fetch::WebFetchParams {
+    ) -> supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchParams {
         use crate::agent::config::env_string;
 
         let proxy_endpoint = self
@@ -139,7 +139,7 @@ impl WebFetchToolConfig {
             .allow_local
             .or_else(|| supercharge_config::env_bool("SUPERCHARGE_WEB_FETCH_ALLOW_LOCAL"));
 
-        supercharge_tools::implementations::grok_build::web_fetch::WebFetchParams {
+        supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchParams {
             proxy_endpoint,
             allowed_domains,
             context_window_tokens,
@@ -333,9 +333,9 @@ impl FileToolset {
     ) -> Result<Vec<ToolConfig>, String> {
         match self {
             Self::Standard => Ok(vec![
-                ToolConfig::for_tool::<grok_build::ReadFileTool>(),
-                ToolConfig::for_tool::<grok_build::SearchReplaceTool>(),
-                ToolConfig::for_tool::<grok_build::GrepTool>(),
+                ToolConfig::for_tool::<supercharge_build::ReadFileTool>(),
+                ToolConfig::for_tool::<supercharge_build::SearchReplaceTool>(),
+                ToolConfig::for_tool::<supercharge_build::GrepTool>(),
             ]),
             Self::Hashline => {
                 hashline_config.validate()?;
@@ -350,7 +350,7 @@ impl FileToolset {
                 };
                 Ok(vec![
                     ToolConfig {
-                        id: "GrokBuildHashline:hashline_read".to_owned(),
+                        id: "SuperchargeBuildHashline:hashline_read".to_owned(),
                         params: params_map.clone(),
                         name_override: None,
                         params_name_overrides: None,
@@ -359,7 +359,7 @@ impl FileToolset {
                         kind: None,
                     },
                     ToolConfig {
-                        id: "GrokBuildHashline:hashline_edit".to_owned(),
+                        id: "SuperchargeBuildHashline:hashline_edit".to_owned(),
                         params: params_map.clone(),
                         name_override: None,
                         params_name_overrides: None,
@@ -368,7 +368,7 @@ impl FileToolset {
                         kind: None,
                     },
                     ToolConfig {
-                        id: "GrokBuildHashline:hashline_grep".to_owned(),
+                        id: "SuperchargeBuildHashline:hashline_grep".to_owned(),
                         params: params_map,
                         name_override: None,
                         params_name_overrides: None,
@@ -398,9 +398,9 @@ mod tests {
             .unwrap();
         assert_eq!(configs.len(), 3);
         let ids: Vec<&str> = configs.iter().map(|c| c.id.as_str()).collect();
-        assert!(ids.contains(&"GrokBuild:read_file"));
-        assert!(ids.contains(&"GrokBuild:search_replace"));
-        assert!(ids.contains(&"GrokBuild:grep"));
+        assert!(ids.contains(&"SuperchargeBuild:read_file"));
+        assert!(ids.contains(&"SuperchargeBuild:search_replace"));
+        assert!(ids.contains(&"SuperchargeBuild:grep"));
     }
 
     #[test]
@@ -410,9 +410,9 @@ mod tests {
             .unwrap();
         assert_eq!(configs.len(), 3);
         let ids: Vec<&str> = configs.iter().map(|c| c.id.as_str()).collect();
-        assert!(ids.contains(&"GrokBuildHashline:hashline_read"));
-        assert!(ids.contains(&"GrokBuildHashline:hashline_edit"));
-        assert!(ids.contains(&"GrokBuildHashline:hashline_grep"));
+        assert!(ids.contains(&"SuperchargeBuildHashline:hashline_read"));
+        assert!(ids.contains(&"SuperchargeBuildHashline:hashline_edit"));
+        assert!(ids.contains(&"SuperchargeBuildHashline:hashline_grep"));
     }
 
     /// Plan/explore omit `search_replace` by contract ("no Write/Edit/MultiEdit"); the hashline override must not hand it back as `hashline_edit`.
@@ -431,7 +431,7 @@ mod tests {
                 !def.tool_config
                     .tools
                     .iter()
-                    .any(|t| t.id == "GrokBuild:search_replace"),
+                    .any(|t| t.id == "SuperchargeBuild:search_replace"),
                 "{name}: fixture must be read-only before the override"
             );
             def.override_file_tools(file_tools.clone());
@@ -443,13 +443,13 @@ mod tests {
                 .collect();
             // The swap engages (read moves to hashline)...
             assert!(
-                ids.contains(&"GrokBuildHashline:hashline_read"),
+                ids.contains(&"SuperchargeBuildHashline:hashline_read"),
                 "{name}: {ids:?}"
             );
-            assert!(!ids.contains(&"GrokBuild:read_file"), "{name}: {ids:?}");
+            assert!(!ids.contains(&"SuperchargeBuild:read_file"), "{name}: {ids:?}");
             // ...but never grants the edit slot.
             assert!(
-                !ids.contains(&"GrokBuildHashline:hashline_edit"),
+                !ids.contains(&"SuperchargeBuildHashline:hashline_edit"),
                 "{name}: override granted an edit tool to a no-edit toolset: {ids:?}"
             );
         }

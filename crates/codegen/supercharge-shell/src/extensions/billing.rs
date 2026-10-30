@@ -47,8 +47,8 @@ pub struct BillingPeriodUsage {
 }
 
 /// Current billing configuration for Supercharge AI coding credits. Carries the newer credits-config fields (`credit_usage_percent`, `current_period`).
-/// It also carries the deprecated `GrokBuildBillingConfig` fields (`monthly_limit`, `used`, `billing_period_*`). Consumers should prefer the new fields and fall back to the deprecated ones.
-/// The same struct then works against both the new `GetGrokCreditsConfig` and the legacy `GetGrokBuildBillingConfig` responses.
+/// It also carries the deprecated `SuperchargeBuildBillingConfig` fields (`monthly_limit`, `used`, `billing_period_*`). Consumers should prefer the new fields and fall back to the deprecated ones.
+/// The same struct then works against both the new `GetGrokCreditsConfig` and the legacy `GetSuperchargeBuildBillingConfig` responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BillingConfig {
@@ -76,7 +76,7 @@ pub struct BillingConfig {
     pub prepaid_balance: Option<Cent>,
     /// Whether this user is on unified usage billing (a shared weekly/monthly pool).
     /// It comes from `GrokCreditsConfig.is_unified_billing_user`, which billing sets from the remote setting `unified_consumer_billing_enabled`.
-    /// `None` when absent (legacy `GetGrokBuildBillingConfig` shape or older servers).
+    /// `None` when absent (legacy `GetSuperchargeBuildBillingConfig` shape or older servers).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_unified_billing_user: Option<bool>,
     /// Deprecated: use `current_period.start`.

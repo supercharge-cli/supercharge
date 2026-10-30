@@ -1,7 +1,7 @@
 use crate::{
     computer::types::{AsyncFileSystem, TerminalBackend},
     implementations::{
-        codex, grok_build, grok_build_concise, grok_build_hashline, opencode,
+        codex, supercharge_build, supercharge_build_concise, supercharge_build_hashline, opencode,
         skills::types::SkillInfo,
     },
     notification::ToolNotificationHandle,
@@ -40,6 +40,8 @@ pub fn register_tool_pack(pack: ToolPack) {
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ToolConfig {
+    /// Fully qualified tool id. Pre-rename namespace prefixes are rewritten on deserialize.
+    #[serde(deserialize_with = "deserialize_tool_id")]
     pub id: String,
     /// tool params, keyed by fully qualified name.
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
@@ -65,6 +67,14 @@ pub struct ToolConfig {
         deserialize_with = "deserialize_config_kind"
     )]
     pub kind: Option<ToolKind>,
+}
+fn deserialize_tool_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize as _;
+    let raw = String::deserialize(deserializer)?;
+    Ok(crate::types::tool::normalize_legacy_tool_id(&raw).into_owned())
 }
 /// Deserialize `ToolConfig::kind`, warning when an unknown string sinks into
 /// `ToolKind::Other` via `#[serde(other)]` — otherwise a config typo silently
@@ -97,8 +107,9 @@ impl ToolConfig {
     /// tools or anywhere the id is only known at runtime. `kind` is left as `None`; capability-mode
     /// filtering then preserves the tool unconditionally.
     pub fn from_id(id: impl Into<String>) -> Self {
+        let id: String = id.into();
         Self {
-            id: id.into(),
+            id: crate::types::tool::normalize_legacy_tool_id(&id).into_owned(),
             params: None,
             name_override: None,
             params_name_overrides: None,
@@ -176,12 +187,12 @@ pub struct ToolServerConfig {
 }
 #[derive(Clone)]
 pub struct SubagentSessionResources {
-    pub backend: crate::implementations::grok_build::task::backend::SubagentBackendResource,
+    pub backend: crate::implementations::supercharge_build::task::backend::SubagentBackendResource,
     /// Same channel as [`Self::backend`]; required so `TaskCompletionReminder`
     /// can drain completions onto the next tool result (shell parity).
-    pub event_sender: crate::implementations::grok_build::task::types::SubagentEventSender,
-    pub depth: crate::implementations::grok_build::task::types::SubagentDepthCounter,
-    pub session_id: crate::implementations::grok_build::task::types::SessionIdResource,
+    pub event_sender: crate::implementations::supercharge_build::task::types::SubagentEventSender,
+    pub depth: crate::implementations::supercharge_build::task::types::SubagentDepthCounter,
+    pub session_id: crate::implementations::supercharge_build::task::types::SessionIdResource,
 }
 /// Everything a session provides at finalization time. This is the **public API boundary** —
 /// callers pass concrete, strongly-typed values. The builder converts these into type-erased
@@ -208,7 +219,7 @@ pub struct SessionContext {
     /// scheduler actor instead of spawning its own, so scheduled tasks survive
     /// subagent exit.
     pub parent_scheduler_handle:
-        Option<crate::implementations::grok_build::scheduler::types::SchedulerHandle>,
+        Option<crate::implementations::supercharge_build::scheduler::types::SchedulerHandle>,
     /// Available skills for the Skill tool and description templates.
     pub skills: Vec<SkillInfo>,
     /// File path for persisting Resources state across restarts. The toolset loads existing state on construction and
@@ -226,7 +237,7 @@ pub struct SessionContext {
     /// Optional web fetch configuration. When `Enabled`, a `WebFetchClient`
     /// is created and injected into `Resources` so the `web_fetch` tool can
     /// fetch URLs. When `Disabled` (default), the tool is not registered.
-    pub web_fetch_config: crate::implementations::grok_build::web_fetch::WebFetchConfig,
+    pub web_fetch_config: crate::implementations::supercharge_build::web_fetch::WebFetchConfig,
     /// Optional shared LSP handle — created once by the caller (shell),
     /// passed to every session. Same pattern as `fs` and `backend`.
     /// When `Some`, inserted into `Resources` so `LspTool` can use it.
@@ -234,16 +245,16 @@ pub struct SessionContext {
     /// Optional image generation configuration. When `Enabled`, an `ImageGenClient` is created and
     /// injected into `Resources` so the `image_gen` tool can call the xAI Imagine API. When
     /// `Disabled` (default), the tool is not registered and image generation is unavailable.
-    pub image_gen_config: crate::implementations::grok_build::image_gen::ImageGenConfig,
+    pub image_gen_config: crate::implementations::supercharge_build::image_gen::ImageGenConfig,
     /// Optional video generation configuration. When `Enabled`, a `VideoGenClient` is created and
     /// injected into `Resources` so the `video_gen` tool can call the xAI Video Generation API.
     /// When `Disabled` (default), the tool is not registered and video generation is unavailable.
-    pub video_gen_config: crate::implementations::grok_build::video_gen::VideoGenConfig,
+    pub video_gen_config: crate::implementations::supercharge_build::video_gen::VideoGenConfig,
     /// Optional deploy service configuration. When enabled, the
     /// `deploy_app` tool connects to the service at call time using the shared
     /// API key provider.
     pub app_builder_deployer_config:
-        crate::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
+        crate::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig,
     /// Dynamic API key provider for tool HTTP clients. When set, clients resolve the API key
     /// per-request from this provider instead of using the key baked into their config at
     /// construction time. Prevents 401 failures when a session outlives the initial token lifetime.
@@ -588,14 +599,14 @@ impl ToolRegistryBuilder {
         );
     }
     /// Whether this registry knows the fully-qualified tool id
-    /// (`"GrokBuild:read_file"`).
+    /// (`"SuperchargeBuild:read_file"`).
     pub fn has_tool_id(&self, id: &str) -> bool {
         self.tools.contains_key(id)
     }
     pub fn known_tool_ids(&self) -> std::collections::HashSet<String> {
         self.tools.keys().cloned().collect()
     }
-    /// Fully-qualified tool id (`"GrokBuild:read_file"`) → declared [`ToolKind`], for every
+    /// Fully-qualified tool id (`"SuperchargeBuild:read_file"`) → declared [`ToolKind`], for every
     /// registered tool. Lets consumers that receive kind-less tool configs (e.g. hub `session.bind`
     /// wire entries) backfill the kind from the binary's own registry before capability filtering.
     pub fn known_tool_kinds(&self) -> HashMap<String, ToolKind> {
@@ -626,53 +637,53 @@ impl ToolRegistryBuilder {
             mcp_file_input_preparation: false,
             sandbox_launch: None,
         };
-        b.register_with_params::<grok_build::BashTool, grok_build::bash::BashParams>();
-        b.register_with_params::<grok_build::ReadFileTool, grok_build::read_file::ReadFileParams>();
+        b.register_with_params::<supercharge_build::BashTool, supercharge_build::bash::BashParams>();
+        b.register_with_params::<supercharge_build::ReadFileTool, supercharge_build::read_file::ReadFileParams>();
         b.register_with_params::<
-                grok_build::SearchReplaceTool,
-                grok_build::search_replace::SearchReplaceParams,
+                supercharge_build::SearchReplaceTool,
+                supercharge_build::search_replace::SearchReplaceParams,
             >();
-        b.register_with_params::<grok_build::ListDirTool, grok_build::list_dir::ListDirParams>();
-        b.register_with_params::<grok_build::GrepTool, grok_build::grep::GrepParams>();
-        b.register::<grok_build::KillTaskTool>();
-        b.register::<grok_build::KillTerminalCommandTool>();
-        b.register::<grok_build::TodoWriteTool>();
-        b.register::<grok_build::UpdateGoalTool>();
-        b.register::<grok_build::WorkflowTool>();
-        b.register::<grok_build::TaskOutputTool>();
-        b.register::<grok_build::GetTerminalCommandOutputTool>();
-        b.register::<grok_build::WaitTasksTool>();
-        b.register::<grok_build::TaskTool>();
-        b.register::<grok_build::SendSubagentMessageTool>();
-        b.register::<grok_build::SendFeedbackTool>();
-        b.register::<grok_build::WebSearchTool>();
-        b.register_with_params::<grok_build::WebFetchTool, grok_build::web_fetch::WebFetchParams>();
-        b.register::<grok_build::BrowserNavigateTool>();
-        b.register::<grok_build::BrowserSnapshotTool>();
-        b.register::<grok_build::BrowserClickTool>();
-        b.register::<grok_build::BrowserFillTool>();
-        b.register::<grok_build::BrowserPressTool>();
-        b.register::<grok_build::BrowserScreenshotTool>();
-        b.register::<grok_build::BrowserHandoffTool>();
-        b.register::<grok_build::e2b_desktop::DesktopObserveTool>();
-        b.register::<grok_build::e2b_desktop::DesktopActionTool>();
-        b.register::<grok_build::VectraBotTool>();
+        b.register_with_params::<supercharge_build::ListDirTool, supercharge_build::list_dir::ListDirParams>();
+        b.register_with_params::<supercharge_build::GrepTool, supercharge_build::grep::GrepParams>();
+        b.register::<supercharge_build::KillTaskTool>();
+        b.register::<supercharge_build::KillTerminalCommandTool>();
+        b.register::<supercharge_build::TodoWriteTool>();
+        b.register::<supercharge_build::UpdateGoalTool>();
+        b.register::<supercharge_build::WorkflowTool>();
+        b.register::<supercharge_build::TaskOutputTool>();
+        b.register::<supercharge_build::GetTerminalCommandOutputTool>();
+        b.register::<supercharge_build::WaitTasksTool>();
+        b.register::<supercharge_build::TaskTool>();
+        b.register::<supercharge_build::SendSubagentMessageTool>();
+        b.register::<supercharge_build::SendFeedbackTool>();
+        b.register::<supercharge_build::WebSearchTool>();
+        b.register_with_params::<supercharge_build::WebFetchTool, supercharge_build::web_fetch::WebFetchParams>();
+        b.register::<supercharge_build::BrowserNavigateTool>();
+        b.register::<supercharge_build::BrowserSnapshotTool>();
+        b.register::<supercharge_build::BrowserClickTool>();
+        b.register::<supercharge_build::BrowserFillTool>();
+        b.register::<supercharge_build::BrowserPressTool>();
+        b.register::<supercharge_build::BrowserScreenshotTool>();
+        b.register::<supercharge_build::BrowserHandoffTool>();
+        b.register::<supercharge_build::e2b_desktop::DesktopObserveTool>();
+        b.register::<supercharge_build::e2b_desktop::DesktopActionTool>();
+        b.register::<supercharge_build::VectraBotTool>();
         b.register::<crate::implementations::curated_memory::CuratedMemoryTool>();
-        b.register::<grok_build::LspTool>();
-        b.register::<grok_build::ImageGenTool>();
-        b.register::<grok_build::ImageEditTool>();
-        b.register::<grok_build::ImageToVideoTool>();
-        b.register::<grok_build::ReferenceToVideoTool>();
-        b.register::<grok_build::EnterPlanModeTool>();
-        b.register::<grok_build::ExitPlanModeTool>();
+        b.register::<supercharge_build::LspTool>();
+        b.register::<supercharge_build::ImageGenTool>();
+        b.register::<supercharge_build::ImageEditTool>();
+        b.register::<supercharge_build::ImageToVideoTool>();
+        b.register::<supercharge_build::ReferenceToVideoTool>();
+        b.register::<supercharge_build::EnterPlanModeTool>();
+        b.register::<supercharge_build::ExitPlanModeTool>();
         b.register_with_params::<
-                grok_build::AskUserQuestionTool,
-                grok_build::ask_user_question::AskUserQuestionParams,
+                supercharge_build::AskUserQuestionTool,
+                supercharge_build::ask_user_question::AskUserQuestionParams,
             >();
-        b.register::<grok_build::MonitorTool>();
-        b.register::<grok_build::SchedulerCreateTool>();
-        b.register::<grok_build::SchedulerDeleteTool>();
-        b.register::<grok_build::SchedulerListTool>();
+        b.register::<supercharge_build::MonitorTool>();
+        b.register::<supercharge_build::SchedulerCreateTool>();
+        b.register::<supercharge_build::SchedulerDeleteTool>();
+        b.register::<supercharge_build::SchedulerListTool>();
         b.register::<codex::apply_patch::ApplyPatchTool>();
         b.register::<codex::list_dir::CodexListDirTool>();
         b.register::<codex::grep_files::CodexGrepFilesTool>();
@@ -693,28 +704,28 @@ impl ToolRegistryBuilder {
                 crate::implementations::use_tool::UseToolParams,
             >();
         b.register_with_params::<
-                grok_build_concise::ReadFileConciseTool,
-                grok_build::read_file::ReadFileParams,
+                supercharge_build_concise::ReadFileConciseTool,
+                supercharge_build::read_file::ReadFileParams,
             >();
         b.register_with_params::<
-                grok_build_concise::SearchReplaceConciseTool,
-                grok_build::search_replace::SearchReplaceParams,
+                supercharge_build_concise::SearchReplaceConciseTool,
+                supercharge_build::search_replace::SearchReplaceParams,
             >();
         b.register_with_params::<
-                grok_build_concise::BashConciseTool,
-                grok_build::bash::BashParams,
+                supercharge_build_concise::BashConciseTool,
+                supercharge_build::bash::BashParams,
             >();
         b.register_with_params::<
-                grok_build_hashline::HashlineReadTool,
-                grok_build_hashline::config::HashlineSchemeParams,
+                supercharge_build_hashline::HashlineReadTool,
+                supercharge_build_hashline::config::HashlineSchemeParams,
             >();
         b.register_with_params::<
-                grok_build_hashline::HashlineEditTool,
-                grok_build_hashline::config::HashlineSchemeParams,
+                supercharge_build_hashline::HashlineEditTool,
+                supercharge_build_hashline::config::HashlineSchemeParams,
             >();
         b.register_with_params::<
-                grok_build_hashline::HashlineGrepTool,
-                grok_build_hashline::config::HashlineSchemeParams,
+                supercharge_build_hashline::HashlineGrepTool,
+                supercharge_build_hashline::config::HashlineSchemeParams,
             >();
         b.register_reminder(crate::reminders::LspDiagnosticsReminder);
         b.register_reminder(crate::reminders::TaskCompletionReminder);
@@ -875,14 +886,14 @@ impl ToolRegistryBuilder {
         }
         {
             let standard_file_ids: &[&str] = &[
-                "GrokBuild:read_file",
-                "GrokBuild:search_replace",
-                "GrokBuild:grep",
+                "SuperchargeBuild:read_file",
+                "SuperchargeBuild:search_replace",
+                "SuperchargeBuild:grep",
             ];
             let hashline_file_ids: &[&str] = &[
-                "GrokBuildHashline:hashline_read",
-                "GrokBuildHashline:hashline_edit",
-                "GrokBuildHashline:hashline_grep",
+                "SuperchargeBuildHashline:hashline_read",
+                "SuperchargeBuildHashline:hashline_edit",
+                "SuperchargeBuildHashline:hashline_grep",
             ];
             let has_standard = config
                 .tools
@@ -998,7 +1009,7 @@ impl ToolRegistryBuilder {
         }
         let session_folder = crate::types::resources::SessionFolder(ctx.session_folder.clone());
         let feedback_drafts_path =
-            crate::implementations::grok_build::send_feedback::drafts_file_path(&session_folder.0);
+            crate::implementations::supercharge_build::send_feedback::drafts_file_path(&session_folder.0);
         let renderer = TemplateRenderer::new(kind_to_name.clone(), kind_params.clone())
             .with_system_reminders_enabled(self.system_reminders_enabled)
             .with_feedback_drafts_path(feedback_drafts_path);
@@ -1058,7 +1069,7 @@ impl ToolRegistryBuilder {
         let image_gen_config = ctx.image_gen_config;
         let video_gen_config = ctx.video_gen_config;
         if image_gen_config.has_credentials() {
-            match crate::implementations::grok_build::image_gen::ImageGenClient::new(
+            match crate::implementations::supercharge_build::image_gen::ImageGenClient::new(
                 &image_gen_config,
                 ctx.api_key_provider.clone(),
             ) {
@@ -1076,7 +1087,7 @@ impl ToolRegistryBuilder {
             }
         }
         if video_gen_config.is_enabled() {
-            match crate::implementations::grok_build::video_gen::VideoGenClient::new(
+            match crate::implementations::supercharge_build::video_gen::VideoGenClient::new(
                 &video_gen_config,
                 ctx.api_key_provider.clone(),
             ) {
@@ -1093,10 +1104,10 @@ impl ToolRegistryBuilder {
                 }
             }
         }
-        if let crate::implementations::grok_build::web_fetch::WebFetchConfig::Enabled { params } =
+        if let crate::implementations::supercharge_build::web_fetch::WebFetchConfig::Enabled { params } =
             &ctx.web_fetch_config
         {
-            match crate::implementations::grok_build::web_fetch::WebFetchClient::new(params) {
+            match crate::implementations::supercharge_build::web_fetch::WebFetchClient::new(params) {
                 Ok(client) => {
                     resources.insert(client);
                 }
@@ -1105,7 +1116,7 @@ impl ToolRegistryBuilder {
                 }
             }
         }
-        let concise_ns = crate::types::tool::ToolNamespace::GrokBuildConcise.to_string();
+        let concise_ns = crate::types::tool::ToolNamespace::SuperchargeBuildConcise.to_string();
         let has_concise_tools = config.tools.iter().any(|tc| {
             self.tools
                 .get(&tc.id)
@@ -1115,14 +1126,14 @@ impl ToolRegistryBuilder {
             resources.insert(crate::types::resources::SystemRemindersEnabled(false));
         }
         resources.register_state::<crate::reminders::task_completion::ReportedTaskCompletions>();
-        resources.register_state::<crate::implementations::grok_build::todo::TodoState>();
+        resources.register_state::<crate::implementations::supercharge_build::todo::TodoState>();
         resources.register_state::<crate::types::resources::WebCitationCounter>();
         resources
             .register_state::<
                 crate::implementations::cursor_rules_on_read::CursorRulesOnReadTracker,
             >();
         resources
-            .register_state::<crate::implementations::grok_build::scheduler::types::SchedulerState>(
+            .register_state::<crate::implementations::supercharge_build::scheduler::types::SchedulerState>(
             );
         for entry in self.tools.values() {
             (entry.register_params)(&mut resources);
@@ -1269,7 +1280,7 @@ impl ToolRegistryBuilder {
                 let (scheduler_cmd_tx, scheduler_cmd_rx) = tokio::sync::mpsc::unbounded_channel();
                 let cancel_token = tokio_util::sync::CancellationToken::new();
                 resources.insert(
-                    crate::implementations::grok_build::scheduler::types::SchedulerHandle(
+                    crate::implementations::supercharge_build::scheduler::types::SchedulerHandle(
                         scheduler_cmd_tx,
                     ),
                 );
@@ -1277,7 +1288,7 @@ impl ToolRegistryBuilder {
             };
         let shared_resources = resources.into_shared();
         if let (Some(cmd_rx), Some(cancel_token)) = (scheduler_cmd_rx, &scheduler_cancel_token) {
-            let actor = crate::implementations::grok_build::scheduler::actor::SchedulerActor {
+            let actor = crate::implementations::supercharge_build::scheduler::actor::SchedulerActor {
                 resources: shared_resources.clone(),
                 resources_persistence: persistence.clone(),
                 notification_handle: scheduler_notification_handle,
@@ -2065,16 +2076,16 @@ fn explain_requirement_failure(
 ) -> RequirementError {
     let fq_tool_id = format!("{}:{}", entry.namespace, entry.id);
     match fq_tool_id.as_str() {
-        "GrokBuild:run_terminal_cmd" if params
+        "SuperchargeBuild:run_terminal_cmd" if params
             .get("enabled_background")
             .and_then(|value| value.as_bool())
             .unwrap_or(true) => {
             let mut missing = vec![];
             if !has_tool_kind(proposed, ToolKind::BackgroundTaskAction) {
-                missing.push("GrokBuild:get_task_output");
+                missing.push("SuperchargeBuild:get_task_output");
             }
             if !has_tool_kind(proposed, ToolKind::KillTaskAction) {
-                missing.push("GrokBuild:kill_task");
+                missing.push("SuperchargeBuild:kill_task");
             }
             let message = if missing.is_empty() {
                 "unsatisfied requirements".to_string()
@@ -2092,13 +2103,13 @@ fn explain_requirement_failure(
                 .with_bad_value(serde_json::Value::Bool(true))
                 .with_category("requirements")
         }
-        "GrokBuild:task" => {
+        "SuperchargeBuild:task" => {
             let mut missing = vec![];
             if !has_tool_kind(proposed, ToolKind::BackgroundTaskAction) {
-                missing.push("GrokBuild:get_task_output");
+                missing.push("SuperchargeBuild:get_task_output");
             }
             if !has_tool_kind(proposed, ToolKind::KillTaskAction) {
-                missing.push("GrokBuild:kill_task");
+                missing.push("SuperchargeBuild:kill_task");
             }
             RequirementError::new(
                     fq_tool_id,
@@ -2111,43 +2122,43 @@ fn explain_requirement_failure(
                 .with_expected("include get_task_output and kill_task")
                 .with_category("requirements")
         }
-        "GrokBuild:get_task_output" => {
-            let has_grok_build_bash = has_tool_with_bool_param(
+        "SuperchargeBuild:get_task_output" => {
+            let has_supercharge_build_bash = has_tool_with_bool_param(
                 proposed,
-                "GrokBuild",
+                "SuperchargeBuild",
                 "run_terminal_cmd",
                 "enabled_background",
                 true,
             );
-            let has_grok_build_concise_bash = has_tool_with_bool_param(
+            let has_supercharge_build_concise_bash = has_tool_with_bool_param(
                 proposed,
-                "GrokBuildConcise",
+                "SuperchargeBuildConcise",
                 "run_terminal_cmd",
                 "enabled_background",
                 true,
             );
             let has_opencode_bash = has_tool(proposed, "OpenCode", "bash");
-            let has_task = has_tool(proposed, "GrokBuild", "task");
+            let has_task = has_tool(proposed, "SuperchargeBuild", "task");
             let mut notes = vec![];
-            if has_tool(proposed, "GrokBuild", "run_terminal_cmd")
-                && !has_grok_build_bash
+            if has_tool(proposed, "SuperchargeBuild", "run_terminal_cmd")
+                && !has_supercharge_build_bash
             {
                 notes
                     .push(
-                        "GrokBuild:run_terminal_cmd is present but enabled_background=false",
+                        "SuperchargeBuild:run_terminal_cmd is present but enabled_background=false",
                     );
             }
-            if has_tool(proposed, "GrokBuildConcise", "run_terminal_cmd")
-                && !has_grok_build_concise_bash
+            if has_tool(proposed, "SuperchargeBuildConcise", "run_terminal_cmd")
+                && !has_supercharge_build_concise_bash
             {
                 notes
                     .push(
-                        "GrokBuildConcise:run_terminal_cmd is present but enabled_background=false",
+                        "SuperchargeBuildConcise:run_terminal_cmd is present but enabled_background=false",
                     );
             }
-            let mut message = "get_task_output requires a background-capable bash tool (GrokBuild:run_terminal_cmd or GrokBuildConcise:run_terminal_cmd with enabled_background=true), OpenCode:bash, or GrokBuild:task"
+            let mut message = "get_task_output requires a background-capable bash tool (SuperchargeBuild:run_terminal_cmd or SuperchargeBuildConcise:run_terminal_cmd with enabled_background=true), OpenCode:bash, or SuperchargeBuild:task"
                 .to_string();
-            let has_provider = has_grok_build_bash || has_grok_build_concise_bash
+            let has_provider = has_supercharge_build_bash || has_supercharge_build_concise_bash
                 || has_opencode_bash || has_task;
             if !has_provider && !notes.is_empty() {
                 message.push_str(&format!("; {}", notes.join("; ")));
@@ -2155,11 +2166,11 @@ fn explain_requirement_failure(
             RequirementError::new(fq_tool_id, message)
                 .with_field_path("tools")
                 .with_expected(
-                    "include a background-capable bash tool, OpenCode:bash, or GrokBuild:task",
+                    "include a background-capable bash tool, OpenCode:bash, or SuperchargeBuild:task",
                 )
                 .with_category("requirements")
         }
-        "GrokBuild:search_replace" if !params
+        "SuperchargeBuild:search_replace" if !params
             .get("skip_read_before_edit")
             .and_then(|value| value.as_bool())
             .unwrap_or(false) && !has_tool_kind(proposed, ToolKind::Read) => {
@@ -2169,27 +2180,27 @@ fn explain_requirement_failure(
                 )
                 .with_field_path("params.skip_read_before_edit")
                 .with_expected(
-                    "set skip_read_before_edit=true or include a Read tool such as GrokBuild:read_file",
+                    "set skip_read_before_edit=true or include a Read tool such as SuperchargeBuild:read_file",
                 )
                 .with_bad_value(serde_json::Value::Bool(false))
                 .with_category("requirements")
         }
-        "GrokBuild:enter_plan_mode" => {
+        "SuperchargeBuild:enter_plan_mode" => {
             RequirementError::new(
                     fq_tool_id,
-                    "enter_plan_mode requires GrokBuild:exit_plan_mode so plan mode can always be exited",
+                    "enter_plan_mode requires SuperchargeBuild:exit_plan_mode so plan mode can always be exited",
                 )
                 .with_field_path("tools")
-                .with_expected("include GrokBuild:exit_plan_mode")
+                .with_expected("include SuperchargeBuild:exit_plan_mode")
                 .with_category("requirements")
         }
-        "GrokBuild:exit_plan_mode" => {
+        "SuperchargeBuild:exit_plan_mode" => {
             RequirementError::new(
                     fq_tool_id,
-                    "exit_plan_mode requires GrokBuild:enter_plan_mode so plan mode can be entered before exiting",
+                    "exit_plan_mode requires SuperchargeBuild:enter_plan_mode so plan mode can be entered before exiting",
                 )
                 .with_field_path("tools")
-                .with_expected("include GrokBuild:enter_plan_mode")
+                .with_expected("include SuperchargeBuild:enter_plan_mode")
                 .with_category("requirements")
         }
         _ => {
@@ -2272,14 +2283,14 @@ mod tests {
             memory_backend: None,
             web_search_config: crate::implementations::web_search::WebSearchConfig::default(),
             web_fetch_config:
-                crate::implementations::grok_build::web_fetch::WebFetchConfig::default(),
+                crate::implementations::supercharge_build::web_fetch::WebFetchConfig::default(),
             lsp: None,
             image_gen_config:
-                crate::implementations::grok_build::image_gen::ImageGenConfig::default(),
+                crate::implementations::supercharge_build::image_gen::ImageGenConfig::default(),
             video_gen_config:
-                crate::implementations::grok_build::video_gen::VideoGenConfig::default(),
+                crate::implementations::supercharge_build::video_gen::VideoGenConfig::default(),
             app_builder_deployer_config:
-                crate::implementations::grok_build::app_builder::AppBuilderDeployerConfig::default(),
+                crate::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig::default(),
             api_key_provider: None,
             auth_provider: None,
             attribution_callback: None,
@@ -2306,7 +2317,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:search_replace".to_string(),
+                    id: "SuperchargeBuild:search_replace".to_string(),
                     params: Some(
                         serde_json::json!({ "skip_read_before_edit": true })
                             .as_object()
@@ -2358,7 +2369,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -2367,7 +2378,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:search_replace".to_string(),
+                    id: "SuperchargeBuild:search_replace".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -2402,12 +2413,12 @@ mod tests {
             "rendered description must not contain raw template placeholders"
         );
     }
-    /// Smoke test: finalize the full GrokBuild toolset and verify every tool description is fully
+    /// Smoke test: finalize the full SuperchargeBuild toolset and verify every tool description is fully
     /// rendered -- no unresolved MiniJinja vars, no stale `{max_*}` placeholders, no empty
     /// tool-name references from missing conditional guards.
     #[tokio::test]
     async fn full_toolset_descriptions_render_cleanly() {
-        use crate::implementations::grok_build::{
+        use crate::implementations::supercharge_build::{
             IMAGE_GEN_TOOL_NAME, IMAGE_TO_VIDEO_TOOL_NAME, REFERENCE_TO_VIDEO_TOOL_NAME,
             SCHEDULER_CREATE_TOOL_NAME, SCHEDULER_DELETE_TOOL_NAME,
             SEND_SUBAGENT_MESSAGE_TOOL_NAME,
@@ -2440,7 +2451,7 @@ mod tests {
                 "scheduler_list",
             ]
             .into_iter()
-            .map(|id| ToolConfig::from_id(format!("GrokBuild:{id}")))
+            .map(|id| ToolConfig::from_id(format!("SuperchargeBuild:{id}")))
             .chain(std::iter::empty::<ToolConfig>())
             .chain(std::iter::empty::<ToolConfig>())
             .collect(),
@@ -2547,9 +2558,9 @@ mod tests {
             .finalize(
                 ToolServerConfig {
                     tools: vec![
-                        ToolConfig::from_id("GrokBuild:run_terminal_cmd".to_string()),
-                        ToolConfig::from_id("GrokBuild:get_task_output".to_string()),
-                        ToolConfig::from_id("GrokBuild:kill_task".to_string()),
+                        ToolConfig::from_id("SuperchargeBuild:run_terminal_cmd".to_string()),
+                        ToolConfig::from_id("SuperchargeBuild:get_task_output".to_string()),
+                        ToolConfig::from_id("SuperchargeBuild:kill_task".to_string()),
                     ],
                     behavior_preset: None,
                 },
@@ -2571,9 +2582,9 @@ mod tests {
         use crate::types::tool_io::ToolInput;
         let config = ToolServerConfig {
             tools: vec![
-                ToolConfig::from_id("GrokBuild:run_terminal_cmd".to_string()),
-                ToolConfig::from_id("GrokBuild:get_task_output".to_string()),
-                ToolConfig::from_id("GrokBuild:kill_task".to_string()),
+                ToolConfig::from_id("SuperchargeBuild:run_terminal_cmd".to_string()),
+                ToolConfig::from_id("SuperchargeBuild:get_task_output".to_string()),
+                ToolConfig::from_id("SuperchargeBuild:kill_task".to_string()),
             ],
             behavior_preset: None,
         };
@@ -2657,9 +2668,9 @@ mod tests {
     async fn identity_read_only_honors_per_tool_override() {
         let config = ToolServerConfig {
             tools: vec![
-                ToolConfig::from_id("GrokBuild:run_terminal_cmd".to_string()),
-                ToolConfig::from_id("GrokBuild:get_task_output".to_string()),
-                ToolConfig::from_id("GrokBuild:kill_task".to_string()),
+                ToolConfig::from_id("SuperchargeBuild:run_terminal_cmd".to_string()),
+                ToolConfig::from_id("SuperchargeBuild:get_task_output".to_string()),
+                ToolConfig::from_id("SuperchargeBuild:kill_task".to_string()),
             ],
             behavior_preset: None,
         };
@@ -2682,11 +2693,11 @@ mod tests {
         let parse = |v: serde_json::Value| -> ToolConfig {
             serde_json::from_value(v).expect("ToolConfig deserializes")
         };
-        let known = parse(serde_json::json!({"id": "GrokBuild:read_file", "kind": "read"}));
+        let known = parse(serde_json::json!({"id": "SuperchargeBuild:read_file", "kind": "read"}));
         assert_eq!(known.kind, Some(ToolKind::Read));
-        let typo = parse(serde_json::json!({"id": "GrokBuild:read_file", "kind": "raed"}));
+        let typo = parse(serde_json::json!({"id": "SuperchargeBuild:read_file", "kind": "raed"}));
         assert_eq!(typo.kind, Some(ToolKind::Other));
-        let absent = parse(serde_json::json!({"id": "GrokBuild:read_file"}));
+        let absent = parse(serde_json::json!({"id": "SuperchargeBuild:read_file"}));
         assert_eq!(absent.kind, None);
     }
     /// End-to-end: a `params_name_overrides` rename of `old_string` must flow
@@ -2699,7 +2710,7 @@ mod tests {
             tools: vec![
                 // read_file satisfies search_replace's Read requirement.
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -2708,7 +2719,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:search_replace".to_string(),
+                    id: "SuperchargeBuild:search_replace".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: Some(std::collections::HashMap::from([(
@@ -2792,9 +2803,9 @@ mod tests {
             (desc, field_desc)
         };
         let ids = [
-            "GrokBuild:run_terminal_cmd",
-            "GrokBuild:get_task_output",
-            "GrokBuild:kill_task",
+            "SuperchargeBuild:run_terminal_cmd",
+            "SuperchargeBuild:get_task_output",
+            "SuperchargeBuild:kill_task",
         ];
         let tmp = TempDir::new().unwrap();
         let toolset = ToolRegistryBuilder::new()
@@ -2832,7 +2843,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -2841,7 +2852,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:search_replace".to_string(),
+                    id: "SuperchargeBuild:search_replace".to_string(),
                     params: None, // default: skip_read_before_edit = false
                     name_override: None,
                     params_name_overrides: None,
@@ -2920,7 +2931,7 @@ mod tests {
             other => panic!("Expected SearchReplace(NoMatchesFound), got: {other:?}"),
         }
     }
-    /// Verify GrokBuildConcise tools can be finalized and produce concise output.
+    /// Verify SuperchargeBuildConcise tools can be finalized and produce concise output.
     #[tokio::test]
     async fn test_concise_namespace_tools() {
         use crate::types::output::{ReadFileOutput, ToolOutput};
@@ -2930,7 +2941,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuildConcise:read_file".to_string(),
+                    id: "SuperchargeBuildConcise:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -2939,7 +2950,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuildConcise:search_replace".to_string(),
+                    id: "SuperchargeBuildConcise:search_replace".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -2948,7 +2959,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuildConcise:run_terminal_cmd".to_string(),
+                    id: "SuperchargeBuildConcise:run_terminal_cmd".to_string(),
                     params: Some(
                         serde_json::json!({ "enabled_background": true })
                             .as_object()
@@ -2961,11 +2972,11 @@ mod tests {
                     behavior_version: None,
                     kind: None,
                 },
-                ToolConfig::for_tool::<grok_build::GrepTool>(),
-                ToolConfig::for_tool::<grok_build::KillTaskTool>(),
-                ToolConfig::for_tool::<grok_build::TaskOutputTool>(),
+                ToolConfig::for_tool::<supercharge_build::GrepTool>(),
+                ToolConfig::for_tool::<supercharge_build::KillTaskTool>(),
+                ToolConfig::for_tool::<supercharge_build::TaskOutputTool>(),
                 ToolConfig {
-                    id: "GrokBuild:list_dir".to_string(),
+                    id: "SuperchargeBuild:list_dir".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3009,13 +3020,13 @@ mod tests {
     fn has_tool_id_knows_pinned_tool_config_ids() {
         let builder = ToolRegistryBuilder::new();
         for id in [
-            "GrokBuild:run_terminal_cmd",
-            "GrokBuild:read_file",
-            "GrokBuild:search_replace",
-            "GrokBuild:list_dir",
-            "GrokBuild:grep",
-            "GrokBuild:get_terminal_command_output",
-            "GrokBuild:kill_terminal_command",
+            "SuperchargeBuild:run_terminal_cmd",
+            "SuperchargeBuild:read_file",
+            "SuperchargeBuild:search_replace",
+            "SuperchargeBuild:list_dir",
+            "SuperchargeBuild:grep",
+            "SuperchargeBuild:get_terminal_command_output",
+            "SuperchargeBuild:kill_terminal_command",
         ] {
             assert!(
                 builder.has_tool_id(id),
@@ -3023,7 +3034,7 @@ mod tests {
             );
         }
         assert!(
-            !builder.has_tool_id("GrokBuild:does_not_exist"),
+            !builder.has_tool_id("SuperchargeBuild:does_not_exist"),
             "unknown ids must not be reported as known"
         );
         assert!(
@@ -3038,11 +3049,11 @@ mod tests {
     fn known_tool_kinds_maps_pinned_tool_config_ids() {
         let kinds = ToolRegistryBuilder::new().known_tool_kinds();
         for (id, expected) in [
-            ("GrokBuild:run_terminal_cmd", ToolKind::Execute),
-            ("GrokBuild:read_file", ToolKind::Read),
-            ("GrokBuild:search_replace", ToolKind::Edit),
-            ("GrokBuild:grep", ToolKind::Search),
-            ("GrokBuild:list_dir", ToolKind::List),
+            ("SuperchargeBuild:run_terminal_cmd", ToolKind::Execute),
+            ("SuperchargeBuild:read_file", ToolKind::Read),
+            ("SuperchargeBuild:search_replace", ToolKind::Edit),
+            ("SuperchargeBuild:grep", ToolKind::Search),
+            ("SuperchargeBuild:list_dir", ToolKind::List),
         ] {
             assert_eq!(
                 kinds.get(id),
@@ -3051,12 +3062,12 @@ mod tests {
             );
         }
         assert!(
-            !kinds.contains_key("GrokBuild:does_not_exist"),
+            !kinds.contains_key("SuperchargeBuild:does_not_exist"),
             "unknown ids must be absent"
         );
     }
     /// Regression test: `validate_config` must reject configurations where two tools resolve to the same `client_name`. Without `name_override`,
-    /// the client_name defaults to `entry.id` (e.g. `"read_file"`). If both `GrokBuild:read_file` and `Codex:read_file` are in the config, both
+    /// the client_name defaults to `entry.id` (e.g. `"read_file"`). If both `SuperchargeBuild:read_file` and `Codex:read_file` are in the config, both
     /// would get `client_name = "read_file"`, making the second unreachable at dispatch time.
     #[test]
     fn validate_config_rejects_duplicate_client_name() {
@@ -3064,7 +3075,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3098,7 +3109,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: Some(
                     serde_json::from_value(serde_json::json!({
                         "enabled_background": "yes"
@@ -3118,7 +3129,7 @@ mod tests {
         let Some(error) = errors.first() else {
             panic!("expected one validation error");
         };
-        assert_eq!(error.tool, "GrokBuild:run_terminal_cmd");
+        assert_eq!(error.tool, "SuperchargeBuild:run_terminal_cmd");
         assert_eq!(
             error.field_path.as_deref(),
             Some("params.enabled_background")
@@ -3131,7 +3142,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuildHashline:hashline_read".to_string(),
+                id: "SuperchargeBuildHashline:hashline_read".to_string(),
                 params: Some(
                     serde_json::from_value(serde_json::json!({
                         "hash_len": 0
@@ -3164,7 +3175,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None, // client_name = "read_file"
                     params_name_overrides: None,
@@ -3203,7 +3214,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3408,7 +3419,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
-            tools: vec![ToolConfig::for_tool::<grok_build::ReadFileTool>()],
+            tools: vec![ToolConfig::for_tool::<supercharge_build::ReadFileTool>()],
             behavior_preset: None,
         };
         let ctx = test_session_context(&tmp);
@@ -3440,7 +3451,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
-            tools: vec![ToolConfig::for_tool::<grok_build::ReadFileTool>()],
+            tools: vec![ToolConfig::for_tool::<supercharge_build::ReadFileTool>()],
             behavior_preset: None,
         };
         let ctx = test_session_context(&tmp);
@@ -3539,7 +3550,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
-            tools: vec![ToolConfig::for_tool::<grok_build::ReadFileTool>()],
+            tools: vec![ToolConfig::for_tool::<supercharge_build::ReadFileTool>()],
             behavior_preset: None,
         };
         let ctx = test_session_context(&tmp);
@@ -3568,7 +3579,7 @@ mod tests {
             .finalize(
                 ToolServerConfig {
                     tools: vec![
-                        ToolConfig::for_tool::<grok_build::TodoWriteTool>(),
+                        ToolConfig::for_tool::<supercharge_build::TodoWriteTool>(),
                         ToolConfig::for_tool::<opencode::OpenCodeWriteTool>(),
                     ],
                     behavior_preset: None,
@@ -3684,8 +3695,8 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                ToolConfig::for_tool::<grok_build::ReadFileTool>(),
-                ToolConfig::for_tool::<grok_build::GrepTool>(),
+                ToolConfig::for_tool::<supercharge_build::ReadFileTool>(),
+                ToolConfig::for_tool::<supercharge_build::GrepTool>(),
             ],
             behavior_preset: None,
         };
@@ -3718,7 +3729,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:task".to_string(),
+                id: "SuperchargeBuild:task".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -3734,9 +3745,9 @@ mod tests {
             "task tool should be rejected without get_task_output and kill_task"
         );
         assert!(
-            errors.iter().any(|e| e.tool == "GrokBuild:task"
-                && e.message.contains("GrokBuild:get_task_output")
-                && e.message.contains("GrokBuild:kill_task")),
+            errors.iter().any(|e| e.tool == "SuperchargeBuild:task"
+                && e.message.contains("SuperchargeBuild:get_task_output")
+                && e.message.contains("SuperchargeBuild:kill_task")),
             "error should mention missing background task tools: {errors:?}",
         );
     }
@@ -3748,7 +3759,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:task".to_string(),
+                    id: "SuperchargeBuild:task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3757,7 +3768,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:get_task_output".to_string(),
+                    id: "SuperchargeBuild:get_task_output".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3772,7 +3783,7 @@ mod tests {
         assert!(
             errors
                 .iter()
-                .any(|e| e.tool == "GrokBuild:task" && e.message.contains("GrokBuild:kill_task")),
+                .any(|e| e.tool == "SuperchargeBuild:task" && e.message.contains("SuperchargeBuild:kill_task")),
             "task tool should be rejected without kill_task: {errors:?}",
         );
     }
@@ -3784,7 +3795,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:task".to_string(),
+                    id: "SuperchargeBuild:task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3793,7 +3804,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:kill_task".to_string(),
+                    id: "SuperchargeBuild:kill_task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3808,8 +3819,8 @@ mod tests {
         assert!(
             errors
                 .iter()
-                .any(|e| e.tool == "GrokBuild:task"
-                    && e.message.contains("GrokBuild:get_task_output")),
+                .any(|e| e.tool == "SuperchargeBuild:task"
+                    && e.message.contains("SuperchargeBuild:get_task_output")),
             "task tool should be rejected without get_task_output: {errors:?}",
         );
     }
@@ -3822,7 +3833,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:task".to_string(),
+                    id: "SuperchargeBuild:task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3831,7 +3842,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:get_task_output".to_string(),
+                    id: "SuperchargeBuild:get_task_output".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3840,7 +3851,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:kill_task".to_string(),
+                    id: "SuperchargeBuild:kill_task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3875,44 +3886,44 @@ mod tests {
     }
     #[test]
     fn scheduler_create_rejected_without_delete_list_and_poll() {
-        let errors = scheduler_validate(&["GrokBuild:scheduler_create"]);
+        let errors = scheduler_validate(&["SuperchargeBuild:scheduler_create"]);
         assert!(
             errors
                 .iter()
-                .any(|e| e.tool == "GrokBuild:scheduler_create"),
+                .any(|e| e.tool == "SuperchargeBuild:scheduler_create"),
             "{errors:?}"
         );
     }
     #[test]
     fn scheduler_trio_rejected_without_poll_tool() {
         let errors = scheduler_validate(&[
-            "GrokBuild:scheduler_create",
-            "GrokBuild:scheduler_delete",
-            "GrokBuild:scheduler_list",
+            "SuperchargeBuild:scheduler_create",
+            "SuperchargeBuild:scheduler_delete",
+            "SuperchargeBuild:scheduler_list",
         ]);
         assert!(!errors.is_empty(), "{errors:?}");
     }
     #[test]
     fn scheduler_bundle_accepted_with_get_task_output() {
         let errors = scheduler_validate(&[
-            "GrokBuild:scheduler_create",
-            "GrokBuild:scheduler_delete",
-            "GrokBuild:scheduler_list",
-            "GrokBuild:get_task_output",
-            "GrokBuild:kill_task",
-            "GrokBuild:run_terminal_cmd",
+            "SuperchargeBuild:scheduler_create",
+            "SuperchargeBuild:scheduler_delete",
+            "SuperchargeBuild:scheduler_list",
+            "SuperchargeBuild:get_task_output",
+            "SuperchargeBuild:kill_task",
+            "SuperchargeBuild:run_terminal_cmd",
         ]);
         assert!(errors.is_empty(), "{errors:?}");
     }
     #[test]
     fn scheduler_bundle_accepted_with_terminal_command_output() {
         let errors = scheduler_validate(&[
-            "GrokBuild:scheduler_create",
-            "GrokBuild:scheduler_delete",
-            "GrokBuild:scheduler_list",
-            "GrokBuild:get_terminal_command_output",
-            "GrokBuild:kill_terminal_command",
-            "GrokBuild:run_terminal_cmd",
+            "SuperchargeBuild:scheduler_create",
+            "SuperchargeBuild:scheduler_delete",
+            "SuperchargeBuild:scheduler_list",
+            "SuperchargeBuild:get_terminal_command_output",
+            "SuperchargeBuild:kill_terminal_command",
+            "SuperchargeBuild:run_terminal_cmd",
         ]);
         assert!(errors.is_empty(), "{errors:?}");
     }
@@ -3924,7 +3935,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: Some(
                     serde_json::json!({ "enabled_background": false })
                         .as_object()
@@ -3975,7 +3986,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:run_terminal_cmd".to_string(),
+                    id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                     params: Some(
                         serde_json::json!({ "enabled_background": true })
                             .as_object()
@@ -3989,7 +4000,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:get_task_output".to_string(),
+                    id: "SuperchargeBuild:get_task_output".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -3998,7 +4009,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:kill_task".to_string(),
+                    id: "SuperchargeBuild:kill_task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4056,11 +4067,11 @@ mod tests {
         };
         let config = ToolServerConfig {
             tools: vec![
-                tool("GrokBuild:run_terminal_cmd"),
-                tool("GrokBuild:task"),
-                tool("GrokBuild:get_task_output"),
-                tool("GrokBuild:wait_tasks"),
-                tool("GrokBuild:kill_task"),
+                tool("SuperchargeBuild:run_terminal_cmd"),
+                tool("SuperchargeBuild:task"),
+                tool("SuperchargeBuild:get_task_output"),
+                tool("SuperchargeBuild:wait_tasks"),
+                tool("SuperchargeBuild:kill_task"),
             ],
             behavior_preset: None,
         };
@@ -4127,7 +4138,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: Some(
                     serde_json::json!({ "enabled_background": false, "auto_background_on_timeout": true })
                         .as_object()
@@ -4165,7 +4176,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: Some(
                     serde_json::json!({ "enabled_background": false, "auto_background_on_timeout": false })
                         .as_object()
@@ -4210,7 +4221,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: Some(
                     serde_json::json!({ "enabled_background": false, "auto_background_on_timeout": false })
                         .as_object()
@@ -4236,7 +4247,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -4255,15 +4266,15 @@ mod tests {
         let Some(error) = errors.first() else {
             panic!("expected one bash requirement error: {errors:?}");
         };
-        assert_eq!(error.tool, "GrokBuild:run_terminal_cmd");
+        assert_eq!(error.tool, "SuperchargeBuild:run_terminal_cmd");
         assert_eq!(error.category.as_deref(), Some("requirements"));
         assert_eq!(
             error.field_path.as_deref(),
             Some("params.enabled_background")
         );
         assert_eq!(error.bad_value, Some(serde_json::json!(true)));
-        assert!(error.message.contains("GrokBuild:get_task_output"));
-        assert!(error.message.contains("GrokBuild:kill_task"));
+        assert!(error.message.contains("SuperchargeBuild:get_task_output"));
+        assert!(error.message.contains("SuperchargeBuild:kill_task"));
         assert!(
             error
                 .expected
@@ -4277,7 +4288,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:task".to_string(),
+                id: "SuperchargeBuild:task".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -4296,9 +4307,9 @@ mod tests {
         let Some(error) = errors.first() else {
             panic!("expected one task requirement error: {errors:?}");
         };
-        assert_eq!(error.tool, "GrokBuild:task");
-        assert!(error.message.contains("GrokBuild:get_task_output"));
-        assert!(error.message.contains("GrokBuild:kill_task"));
+        assert_eq!(error.tool, "SuperchargeBuild:task");
+        assert!(error.message.contains("SuperchargeBuild:get_task_output"));
+        assert!(error.message.contains("SuperchargeBuild:kill_task"));
         assert_eq!(error.field_path.as_deref(), Some("tools"));
     }
     #[test]
@@ -4306,7 +4317,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:get_task_output".to_string(),
+                id: "SuperchargeBuild:get_task_output".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -4325,17 +4336,17 @@ mod tests {
         let Some(error) = errors.first() else {
             panic!("expected one get_task_output requirement error: {errors:?}");
         };
-        assert_eq!(error.tool, "GrokBuild:get_task_output");
+        assert_eq!(error.tool, "SuperchargeBuild:get_task_output");
         assert!(error.message.contains("background-capable bash tool"));
         assert!(error.message.contains("OpenCode:bash"));
-        assert!(error.message.contains("GrokBuild:task"));
+        assert!(error.message.contains("SuperchargeBuild:task"));
     }
     #[test]
     fn search_replace_requirement_error_mentions_read_tool() {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:search_replace".to_string(),
+                id: "SuperchargeBuild:search_replace".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -4352,7 +4363,7 @@ mod tests {
         );
         let error = errors
             .iter()
-            .find(|error| error.tool == "GrokBuild:search_replace")
+            .find(|error| error.tool == "SuperchargeBuild:search_replace")
             .expect("search_replace error should be present");
         assert!(error.message.contains("Read tool"));
         assert_eq!(
@@ -4367,7 +4378,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:ask_user_question".to_string(),
+                id: "SuperchargeBuild:ask_user_question".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -4389,7 +4400,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuild:run_terminal_cmd".to_string(),
+                    id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4398,7 +4409,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:read_file".to_string(),
+                    id: "SuperchargeBuild:read_file".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4407,7 +4418,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:search_replace".to_string(),
+                    id: "SuperchargeBuild:search_replace".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4416,7 +4427,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:list_dir".to_string(),
+                    id: "SuperchargeBuild:list_dir".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4425,7 +4436,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:grep".to_string(),
+                    id: "SuperchargeBuild:grep".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4434,7 +4445,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:web_search".to_string(),
+                    id: "SuperchargeBuild:web_search".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4443,7 +4454,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:task".to_string(),
+                    id: "SuperchargeBuild:task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4452,7 +4463,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:get_task_output".to_string(),
+                    id: "SuperchargeBuild:get_task_output".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4461,7 +4472,7 @@ mod tests {
                     kind: None,
                 },
                 ToolConfig {
-                    id: "GrokBuild:kill_task".to_string(),
+                    id: "SuperchargeBuild:kill_task".to_string(),
                     params: None,
                     name_override: None,
                     params_name_overrides: None,
@@ -4510,19 +4521,19 @@ mod tests {
         assert!(
             builder
                 .tools
-                .contains_key("GrokBuildHashline:hashline_read"),
+                .contains_key("SuperchargeBuildHashline:hashline_read"),
             "hashline_read should be registered"
         );
         assert!(
             builder
                 .tools
-                .contains_key("GrokBuildHashline:hashline_edit"),
+                .contains_key("SuperchargeBuildHashline:hashline_edit"),
             "hashline_edit should be registered"
         );
         assert!(
             builder
                 .tools
-                .contains_key("GrokBuildHashline:hashline_grep"),
+                .contains_key("SuperchargeBuildHashline:hashline_grep"),
             "hashline_grep should be registered"
         );
     }
@@ -4532,9 +4543,9 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                hashline_tool_config("GrokBuildHashline:hashline_read"),
-                hashline_tool_config("GrokBuildHashline:hashline_edit"),
-                hashline_tool_config("GrokBuildHashline:hashline_grep"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_read"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_edit"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_grep"),
             ],
             behavior_preset: None,
         };
@@ -4557,9 +4568,9 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let standard_config = ToolServerConfig {
             tools: vec![
-                hashline_tool_config("GrokBuild:read_file"),
-                hashline_tool_config("GrokBuild:search_replace"),
-                hashline_tool_config("GrokBuild:grep"),
+                hashline_tool_config("SuperchargeBuild:read_file"),
+                hashline_tool_config("SuperchargeBuild:search_replace"),
+                hashline_tool_config("SuperchargeBuild:grep"),
             ],
             behavior_preset: None,
         };
@@ -4570,9 +4581,9 @@ mod tests {
         let builder2 = ToolRegistryBuilder::new();
         let hashline_config = ToolServerConfig {
             tools: vec![
-                hashline_tool_config("GrokBuildHashline:hashline_read"),
-                hashline_tool_config("GrokBuildHashline:hashline_edit"),
-                hashline_tool_config("GrokBuildHashline:hashline_grep"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_read"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_edit"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_grep"),
             ],
             behavior_preset: None,
         };
@@ -4587,9 +4598,9 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                hashline_tool_config("GrokBuildHashline:hashline_read"),
-                hashline_tool_config("GrokBuildHashline:hashline_edit"),
-                hashline_tool_config("GrokBuildHashline:hashline_grep"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_read"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_edit"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_grep"),
             ],
             behavior_preset: None,
         };
@@ -4609,9 +4620,9 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                hashline_tool_config("GrokBuild:read_file"),
-                hashline_tool_config("GrokBuildHashline:hashline_edit"),
-                hashline_tool_config("GrokBuild:grep"),
+                hashline_tool_config("SuperchargeBuild:read_file"),
+                hashline_tool_config("SuperchargeBuildHashline:hashline_edit"),
+                hashline_tool_config("SuperchargeBuild:grep"),
             ],
             behavior_preset: None,
         };
@@ -4628,8 +4639,8 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                ToolConfig::for_tool::<grok_build::EnterPlanModeTool>(),
-                ToolConfig::for_tool::<grok_build::ExitPlanModeTool>(),
+                ToolConfig::for_tool::<supercharge_build::EnterPlanModeTool>(),
+                ToolConfig::for_tool::<supercharge_build::ExitPlanModeTool>(),
             ],
             behavior_preset: None,
         };
@@ -4666,7 +4677,7 @@ mod tests {
         let config = ToolServerConfig {
             tools: vec![
                 ToolConfig {
-                    id: "GrokBuildHashline:hashline_read".to_owned(),
+                    id: "SuperchargeBuildHashline:hashline_read".to_owned(),
                     params: Some(
                         serde_json::json!({"scheme": "chunk", "hash_len": 2, "chunk_size": 16})
                             .as_object()
@@ -4679,9 +4690,9 @@ mod tests {
                     behavior_version: None,
                     kind: None,
                 },
-                ToolConfig::for_tool::<grok_build_hashline::HashlineEditTool>(),
-                ToolConfig::for_tool::<grok_build_hashline::HashlineGrepTool>(),
-                ToolConfig::for_tool::<grok_build::ListDirTool>(),
+                ToolConfig::for_tool::<supercharge_build_hashline::HashlineEditTool>(),
+                ToolConfig::for_tool::<supercharge_build_hashline::HashlineGrepTool>(),
+                ToolConfig::for_tool::<supercharge_build::ListDirTool>(),
             ],
             behavior_preset: None,
         };
@@ -4705,7 +4716,7 @@ mod tests {
     }
     fn bash_config_with_background() -> ToolConfig {
         ToolConfig {
-            id: "GrokBuild:run_terminal_cmd".to_owned(),
+            id: "SuperchargeBuild:run_terminal_cmd".to_owned(),
             params: Some(
                 serde_json::json!({ "enabled_background": true })
                     .as_object()
@@ -4719,18 +4730,18 @@ mod tests {
             kind: None,
         }
     }
-    async fn grok_build_bridge(tmp: &TempDir) -> crate::bridge::ToolBridge {
+    async fn supercharge_build_bridge(tmp: &TempDir) -> crate::bridge::ToolBridge {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                ToolConfig::for_tool::<grok_build::ListDirTool>(),
-                ToolConfig::for_tool::<grok_build::ReadFileTool>(),
-                ToolConfig::for_tool::<grok_build::SearchReplaceTool>(),
+                ToolConfig::for_tool::<supercharge_build::ListDirTool>(),
+                ToolConfig::for_tool::<supercharge_build::ReadFileTool>(),
+                ToolConfig::for_tool::<supercharge_build::SearchReplaceTool>(),
                 bash_config_with_background(),
-                ToolConfig::for_tool::<grok_build::TaskOutputTool>(),
-                ToolConfig::for_tool::<grok_build::KillTaskTool>(),
-                ToolConfig::for_tool::<grok_build::GrepTool>(),
-                ToolConfig::for_tool::<grok_build::TodoWriteTool>(),
+                ToolConfig::for_tool::<supercharge_build::TaskOutputTool>(),
+                ToolConfig::for_tool::<supercharge_build::KillTaskTool>(),
+                ToolConfig::for_tool::<supercharge_build::GrepTool>(),
+                ToolConfig::for_tool::<supercharge_build::TodoWriteTool>(),
             ],
             behavior_preset: None,
         };
@@ -4743,7 +4754,7 @@ mod tests {
     async fn hub_dispatch_list_dir() {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("hello.txt"), "world").unwrap();
-        let bridge = grok_build_bridge(&tmp).await;
+        let bridge = supercharge_build_bridge(&tmp).await;
         let result = bridge
             .call(
                 "list_dir",
@@ -4767,7 +4778,7 @@ mod tests {
         std::fs::create_dir_all(&test_dir).unwrap();
         std::fs::write(test_dir.join("parity.txt"), "test").unwrap();
         let args = serde_json::json!({ "target_directory": test_dir.to_str().unwrap() });
-        let hub_bridge = grok_build_bridge(&tmp).await;
+        let hub_bridge = supercharge_build_bridge(&tmp).await;
         let hub_result = hub_bridge
             .call("list_dir", args.clone(), "hub-call")
             .await
@@ -4780,7 +4791,7 @@ mod tests {
             serde_json::json!({ "target_directory": legacy_test_dir.to_str().unwrap() });
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
-            tools: vec![ToolConfig::for_tool::<grok_build::ListDirTool>()],
+            tools: vec![ToolConfig::for_tool::<supercharge_build::ListDirTool>()],
             behavior_preset: None,
         };
         let legacy_toolset = Arc::new(
@@ -4807,7 +4818,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let file = tmp.path().join("editable.txt");
         std::fs::write(&file, "hello world").unwrap();
-        let bridge = grok_build_bridge(&tmp).await;
+        let bridge = supercharge_build_bridge(&tmp).await;
         bridge
             .call(
                 "read_file",
@@ -4840,7 +4851,7 @@ mod tests {
     #[tokio::test]
     async fn hub_dispatch_bash() {
         let tmp = TempDir::new().unwrap();
-        let bridge = grok_build_bridge(&tmp).await;
+        let bridge = supercharge_build_bridge(&tmp).await;
         let result = bridge
             .call(
                 "run_terminal_cmd",
@@ -4862,7 +4873,7 @@ mod tests {
     #[tokio::test]
     async fn hub_dispatch_invalid_args() {
         let tmp = TempDir::new().unwrap();
-        let bridge = grok_build_bridge(&tmp).await;
+        let bridge = supercharge_build_bridge(&tmp).await;
         let result = bridge.call("grep", serde_json::json!({}), "bad-call").await;
         assert!(
             result.is_err(),
@@ -4877,7 +4888,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
-            tools: vec![ToolConfig::for_tool::<grok_build::ListDirTool>()],
+            tools: vec![ToolConfig::for_tool::<supercharge_build::ListDirTool>()],
             behavior_preset: None,
         };
         let toolset = builder
@@ -4908,8 +4919,8 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![
-                ToolConfig::for_tool::<grok_build::ListDirTool>(),
-                ToolConfig::for_tool::<grok_build::ReadFileTool>(),
+                ToolConfig::for_tool::<supercharge_build::ListDirTool>(),
+                ToolConfig::for_tool::<supercharge_build::ReadFileTool>(),
             ],
             behavior_preset: None,
         };
@@ -4972,7 +4983,7 @@ mod tests {
     /// $schema and per-property descriptions are retained.
     #[test]
     fn generate_schema_strips_root_title_and_description() {
-        let schema = generate_schema::<crate::implementations::grok_build::bash::BashToolInput>();
+        let schema = generate_schema::<crate::implementations::supercharge_build::bash::BashToolInput>();
         assert!(
             schema.get("title").is_none(),
             "root title (struct name) must be stripped: {schema}"
@@ -5014,7 +5025,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:read_file".to_string(),
+                id: "SuperchargeBuild:read_file".to_string(),
                 params: None,
                 name_override: None,
                 params_name_overrides: None,
@@ -5087,7 +5098,7 @@ mod tests {
         let builder = ToolRegistryBuilder::new();
         let config = ToolServerConfig {
             tools: vec![ToolConfig {
-                id: "GrokBuild:run_terminal_cmd".to_string(),
+                id: "SuperchargeBuild:run_terminal_cmd".to_string(),
                 params: Some(
                     serde_json::json!({"enabled_background": false})
                         .as_object()

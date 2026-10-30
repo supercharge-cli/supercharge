@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn agent_config_file_wire_matches_workspace_types_mirror() {
-        // The RPC serializes grok-build's AgentConfigFile and the remote consumer deserializes the workspace-types mirror
+        // The RPC serializes supercharge-core's AgentConfigFile and the remote consumer deserializes the workspace-types mirror
         // Pin the cross-crate serde shape so a rename/attr drift on either side can't silently break discovery
         let src = supercharge_agent::prompt::agents_md::AgentConfigFile {
             file_name: "AGENTS.md".to_string(),

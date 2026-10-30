@@ -38,7 +38,7 @@ pub fn tool_config_from_entry(
         name_override.as_deref(),
     )?;
     Ok(ToolConfig {
-        id,
+        id: crate::types::tool::normalize_legacy_tool_id(&id).into_owned(),
         params,
         name_override,
         params_name_overrides: if params_name_overrides.is_empty() {
@@ -86,8 +86,8 @@ mod tests {
 
     #[test]
     fn minimal_entry_converts_with_defaults() {
-        let cfg = tool_config_from_entry(0, entry("GrokBuild:read_file")).unwrap();
-        assert_eq!(cfg.id, "GrokBuild:read_file");
+        let cfg = tool_config_from_entry(0, entry("SuperchargeBuild:read_file")).unwrap();
+        assert_eq!(cfg.id, "SuperchargeBuild:read_file");
         assert_eq!(cfg.params, None);
         assert_eq!(cfg.name_override, None);
         assert_eq!(cfg.params_name_overrides, None);
@@ -97,8 +97,27 @@ mod tests {
     }
 
     #[test]
+    fn legacy_namespace_prefix_is_rewritten() {
+        let cfg = tool_config_from_entry(0, entry("GrokBuild:read_file")).unwrap();
+        assert_eq!(cfg.id, "SuperchargeBuild:read_file");
+        let cfg: ToolConfig = serde_json::from_value(serde_json::json!({
+            "id": "GrokBuildHashline:edit_file",
+            "params": null,
+            "name_override": null,
+            "params_name_overrides": null,
+        }))
+        .unwrap();
+        assert_eq!(cfg.id, "SuperchargeBuildHashline:edit_file");
+        assert_eq!(ToolConfig::from_id("grok_build.ReadFile").id, "supercharge_build.ReadFile");
+        assert_eq!(ToolConfig::from_id("mcp:foo").id, "mcp:foo");
+        let ns: crate::types::tool::ToolNamespace =
+            serde_json::from_value(serde_json::json!("grok_build_concise")).unwrap();
+        assert_eq!(ns.to_string(), "SuperchargeBuildConcise");
+    }
+
+    #[test]
     fn fully_populated_entry_converts_field_by_field() {
-        let mut e = entry("GrokBuild:grep");
+        let mut e = entry("SuperchargeBuild:grep");
         e.params_json = Some(r#"{"max_results": 50}"#.to_owned());
         e.name_override = Some("search".to_owned());
         e.params_name_overrides =
@@ -133,11 +152,11 @@ mod tests {
 
     #[test]
     fn invalid_params_json_is_a_parse_error() {
-        let mut e = entry("GrokBuild:bash");
+        let mut e = entry("SuperchargeBuild:bash");
         e.params_json = Some("{not json".to_owned());
         let err = tool_config_from_entry(3, e).unwrap_err();
         assert_eq!(err.index, 3);
-        assert_eq!(err.tool_id, "GrokBuild:bash");
+        assert_eq!(err.tool_id, "SuperchargeBuild:bash");
         assert_eq!(err.field_path(), "tools[3].params_json");
         assert!(matches!(
             &err.kind,
@@ -147,7 +166,7 @@ mod tests {
 
     #[test]
     fn non_object_params_json_is_a_type_error() {
-        let mut e = entry("GrokBuild:bash");
+        let mut e = entry("SuperchargeBuild:bash");
         e.params_json = Some("[1, 2]".to_owned());
         let err = tool_config_from_entry(1, e).unwrap_err();
         assert_eq!(
@@ -161,8 +180,8 @@ mod tests {
 
     #[test]
     fn name_override_valid_tool_id_charset_is_accepted() {
-        for name in ["search", "GrokBuild:grep", "a-b_C9"] {
-            let mut e = entry("GrokBuild:grep");
+        for name in ["search", "SuperchargeBuild:grep", "a-b_C9"] {
+            let mut e = entry("SuperchargeBuild:grep");
             e.name_override = Some(name.to_owned());
             let cfg = tool_config_from_entry(0, e).unwrap();
             assert_eq!(cfg.name_override.as_deref(), Some(name));
@@ -172,11 +191,11 @@ mod tests {
     #[test]
     fn name_override_outside_tool_id_charset_is_rejected() {
         for name in ["has space", "", "a:b:c", "emoji✨", "dot.name"] {
-            let mut e = entry("GrokBuild:grep");
+            let mut e = entry("SuperchargeBuild:grep");
             e.name_override = Some(name.to_owned());
             let err = tool_config_from_entry(2, e).unwrap_err();
             assert_eq!(err.index, 2, "name={name:?}");
-            assert_eq!(err.tool_id, "GrokBuild:grep");
+            assert_eq!(err.tool_id, "SuperchargeBuild:grep");
             assert_eq!(err.field_path(), "tools[2].name_override");
             assert!(
                 matches!(
@@ -191,7 +210,7 @@ mod tests {
 
     #[test]
     fn server_config_conversion_rejects_invalid_name_override_entry() {
-        let mut bad = entry("GrokBuild:grep");
+        let mut bad = entry("SuperchargeBuild:grep");
         bad.name_override = Some("bad name".to_owned());
         let err = tool_server_config_from_entries(vec![entry("ok"), bad]).unwrap_err();
         assert_eq!(err.index, 1, "fails closed on the offending entry");
@@ -203,9 +222,9 @@ mod tests {
 
     #[test]
     fn server_config_conversion_preserves_valid_name_overrides() {
-        let mut a = entry("GrokBuild:grep");
+        let mut a = entry("SuperchargeBuild:grep");
         a.name_override = Some("search".to_owned());
-        let cfg = tool_server_config_from_entries(vec![a, entry("GrokBuild:bash")]).unwrap();
+        let cfg = tool_server_config_from_entries(vec![a, entry("SuperchargeBuild:bash")]).unwrap();
         assert_eq!(cfg.tools.len(), 2);
         let [first, second] = cfg.tools.as_slice() else {
             panic!("expected 2 tools: {:?}", cfg.tools);

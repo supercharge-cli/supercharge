@@ -7,7 +7,7 @@ fn main_cli_tools_override_preserves_profile_injection_policy() {
         tools: Some(vec!["read_file".into()]),
         ..Default::default()
     };
-    let mut cases = vec![(AgentDefinition::default_grok_build(), true)];
+    let mut cases = vec![(AgentDefinition::default_supercharge_build(), true)];
     for (mut definition, expected_injection) in cases {
         overrides.apply_to_definition(&mut definition);
         assert_eq!(definition.tools, vec!["read_file".to_string()]);
@@ -460,7 +460,7 @@ fn finalize_image_describe_sampler_some_stamps_session_fields() {
     assert_eq!(cfg.max_retries, Some(7));
 }
 #[test]
-fn resolve_aux_model_honors_grok_build_override() {
+fn resolve_aux_model_honors_supercharge_build_override() {
     let endpoints = EndpointsConfig::default();
     let mut catalog = IndexMap::new();
     catalog.insert(
@@ -2263,7 +2263,7 @@ fn parses_model_with_agent_type() {
     assert_eq!(model.info.agent_type, "codex");
 }
 #[test]
-fn model_agent_type_defaults_to_grok_build() {
+fn model_agent_type_defaults_to_supercharge_build() {
     let raw_config: toml::Value = toml::from_str(
         r#"
             [model.my-model]
@@ -5337,7 +5337,7 @@ agent_type = "cursor"
     )
     .unwrap();
     let cfg = Config::new_from_toml_cfg(&raw).expect("[goal] config must parse");
-    let grok_build = crate::util::config::GoalRoleModel {
+    let supercharge_build = crate::util::config::GoalRoleModel {
         model: "Supercharge AI-build".into(),
         agent_type: "Supercharge AI-build-plan".into(),
     };
@@ -5356,7 +5356,7 @@ agent_type = "cursor"
     let planner = cfg.resolve_goal_planner_model(use_current);
     assert_eq!(
         planner.value,
-        GoalRoleModelChoice::Explicit(grok_build.clone())
+        GoalRoleModelChoice::Explicit(supercharge_build.clone())
     );
     assert_eq!(planner.source, ConfigSource::Config);
     assert_eq!(
@@ -5366,7 +5366,7 @@ agent_type = "cursor"
     assert_eq!(
         cfg.resolve_goal_skeptic_models(use_current).value,
         vec![
-            GoalRoleModelChoice::Explicit(grok_build),
+            GoalRoleModelChoice::Explicit(supercharge_build),
             GoalRoleModelChoice::Explicit(composer),
         ]
     );
@@ -7250,7 +7250,7 @@ default = "Supercharge AI-4.5"
     assert_eq!(cfg.models.default.as_deref(), Some("Supercharge AI-4.5"));
 }
 /// Reproduce the enterprise managed config bug: [model.supercharge-build] sets context_window=500k for model="grok-4.5". [models].default="grok-4.5" still resolves to the bare prefetched entry (256k).
-/// Layer 3 only overrides key "grok-build", not key "grok-4.5". After the Layer 4 slug propagation fix, both keys should have 500k.
+/// Layer 3 only overrides key "supercharge-core", not key "grok-4.5". After the Layer 4 slug propagation fix, both keys should have 500k.
 #[test]
 #[ignore = "built-in model list removed; catalog comes from the configured provider"]
 fn slug_propagation_enterprise_managed_config_key_mismatch() {

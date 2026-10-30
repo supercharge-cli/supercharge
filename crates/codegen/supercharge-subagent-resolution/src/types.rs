@@ -71,11 +71,11 @@ pub struct ResumeSourceData {
     pub child_session_id: String,
 }
 
-impl From<supercharge_tools::implementations::grok_build::task::types::SubagentResumeSource>
+impl From<supercharge_tools::implementations::supercharge_build::task::types::SubagentResumeSource>
     for ResumeSourceData
 {
     fn from(
-        source: supercharge_tools::implementations::grok_build::task::types::SubagentResumeSource,
+        source: supercharge_tools::implementations::supercharge_build::task::types::SubagentResumeSource,
     ) -> Self {
         ResumeSourceData {
             subagent_id: source.subagent_id,

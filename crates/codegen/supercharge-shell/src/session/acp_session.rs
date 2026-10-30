@@ -68,7 +68,7 @@ use supercharge_sampler::SamplerConfig as SamplingConfig;
 use supercharge_sampling_types::truncate_bytes;
 use supercharge_tools::computer::local::LocalTerminalBackend;
 use supercharge_tools::implementations::BashToolInput;
-use supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig;
+use supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig;
 use supercharge_tools::types::ToolInput;
 use supercharge_tools::types::compat::CompatConfig;
 use supercharge_tools::types::output::{
@@ -949,17 +949,17 @@ pub(crate) struct SessionActor {
     pub(crate) goal_update_rx: std::cell::RefCell<
         Option<
             tokio::sync::mpsc::UnboundedReceiver<
-                supercharge_tools::implementations::grok_build::update_goal::UpdateGoalEnvelope,
+                supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalEnvelope,
             >,
         >,
     >,
     pub(crate) goal_update_tx: tokio::sync::mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::update_goal::UpdateGoalEnvelope,
+        supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalEnvelope,
     >,
     pub(crate) workflow_manager:
         Arc<tokio::sync::Mutex<crate::session::workflow::manager::WorkflowManager>>,
     pub(crate) workflow_launch_tx: tokio::sync::mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::workflow::WorkflowLaunchEnvelope,
+        supercharge_tools::implementations::supercharge_build::workflow::WorkflowLaunchEnvelope,
     >,
     pub(crate) goal_classifier_enabled: bool,
     /// Master switch for the goal planner subagent.
@@ -998,7 +998,7 @@ pub(crate) struct SessionActor {
     /// Subsequent prompt-flow ticks then don't repeat the pause-on-load check.
     pub(crate) goal_plan_reconciled: std::sync::atomic::AtomicBool,
     pub(crate) pending_classifier_completions: parking_lot::Mutex<
-        VecDeque<supercharge_tools::implementations::grok_build::update_goal::UpdateGoalInput>,
+        VecDeque<supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalInput>,
     >,
     /// [`Self::account_not_achieved_without_sampler`].
     pub(crate) goal_classifier_in_flight: std::sync::atomic::AtomicBool,
@@ -1303,13 +1303,13 @@ impl SessionActor {
             memory_configured: self.memory.backend_params.is_some()
                 || self.memory.configured_storage.is_some(),
             scheduler: tool_names.iter().any(|n| {
-                n == supercharge_tools::implementations::grok_build::SCHEDULER_CREATE_TOOL_NAME
+                n == supercharge_tools::implementations::supercharge_build::SCHEDULER_CREATE_TOOL_NAME
             }),
             hooks: self.hook_registry.borrow().is_some(),
             plugins: self.plugin_registry.borrow().is_some(),
             goal,
             workflows: tool_names.iter().any(|n| {
-                n == supercharge_tools::implementations::grok_build::workflow::WORKFLOW_TOOL_NAME
+                n == supercharge_tools::implementations::supercharge_build::workflow::WORKFLOW_TOOL_NAME
             }),
             workflow_management: false,
         }
@@ -1808,7 +1808,7 @@ mod tool_meta_stamp_tests {
                 let mut fixture = make_replay_send_update_fixture().await;
                 fixture.actor.agent = std::cell::RefCell::new(
                     test_agent_with_tools(vec![ToolConfig::from_id(
-                        "GrokBuild:read_file".to_string(),
+                        "SuperchargeBuild:read_file".to_string(),
                     )])
                     .await,
                 );
@@ -1844,7 +1844,7 @@ mod tool_meta_stamp_tests {
                 );
                 assert_eq!(
                     t.pointer("/namespace").unwrap_or(&serde_json::Value::Null),
-                    "grok_build"
+                    "supercharge_build"
                 );
                 assert!(t.get("input").is_none(), "identity-only before parse");
                 let refined = refined.expect("refinement ToolCallUpdate emitted");
@@ -1864,7 +1864,7 @@ mod tool_meta_stamp_tests {
                 let mut fixture = make_replay_send_update_fixture().await;
                 fixture.actor.agent = std::cell::RefCell::new(
                     test_agent_with_tools(vec![ToolConfig::from_id(
-                        "GrokBuild:read_file".to_string(),
+                        "SuperchargeBuild:read_file".to_string(),
                     )])
                     .await,
                 );

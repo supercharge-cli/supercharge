@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use supercharge_session_events::EventWriter;
-use supercharge_tools::implementations::grok_build::task::backend::ChannelBackend;
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend;
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentOwner, SubagentRequest, SubagentRuntimeOverrides,
 };
 
@@ -406,10 +406,10 @@ pub(crate) fn record_subagent_trace(
 /// Production spawner, wraps the subagent coordinator channel.
 pub(crate) struct ChannelSpawner {
     pub(crate) event_tx: tokio::sync::mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >,
     pub(crate) foreground_wait:
-        Option<supercharge_tools::implementations::grok_build::task::types::SubagentForegroundWait>,
+        Option<supercharge_tools::implementations::supercharge_build::task::types::SubagentForegroundWait>,
     pub(crate) parent_session_id: String,
     pub(crate) parent_prompt_id: Option<String>,
     pub(crate) cwd: Option<String>,

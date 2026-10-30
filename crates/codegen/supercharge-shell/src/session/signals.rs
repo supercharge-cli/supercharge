@@ -258,7 +258,7 @@ pub struct SessionSignals {
     /// Number of edit-and-retry actions (user rewinds and submits a different prompt)
     pub edit_and_retry_count: u32,
 
-    // === Bash tool patterns (grok_build) ===
+    // === Bash tool patterns (supercharge_build) ===
     /// Number of times the bash tool was used for a bare `echo "<msg>"` (or close variant).
     #[serde(default)]
     pub bash_bare_echo_count: u32,

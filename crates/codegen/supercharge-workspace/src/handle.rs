@@ -2858,7 +2858,7 @@ impl WorkspaceHandle {
             .clone()
             .unwrap_or_else(|| (*parent.effective_tool_config()).clone());
         let active_agent_message_id = supercharge_tools::registry::types::ToolConfig::for_tool::<
-            supercharge_tools::implementations::grok_build::SendSubagentMessageTool,
+            supercharge_tools::implementations::supercharge_build::SendSubagentMessageTool,
         >()
         .id;
         baseline.tools.retain(|tool| {

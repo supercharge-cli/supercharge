@@ -1733,7 +1733,7 @@ pub(super) fn resolve_human_intent(
 /// It stays identical to the pager's `LoopCommand`, so the two front-ends can't drift.
 /// Like the pager, there is no host-side interval default: the model derives the cadence from the request and asks when none is given.
 fn build_loop_prompt_blocks(args: &str) -> Vec<acp::ContentBlock> {
-    use supercharge_tools::implementations::grok_build::{
+    use supercharge_tools::implementations::supercharge_build::{
         loop_schedule_instruction, loop_usage_message,
     };
     let text = if args.trim().is_empty() {

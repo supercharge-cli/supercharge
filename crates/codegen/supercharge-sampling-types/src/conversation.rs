@@ -1379,12 +1379,12 @@ impl ConversationItem {
 }
 
 // Shared-compaction L1 bridge: `CompactionItem` / `CompactionItemFactory`
-// Lets the shared engine in `crates/common/supercharge-compaction` operate over grok-build's `ConversationItem` without depending on this crate
+// Lets the shared engine in `crates/common/supercharge-compaction` operate over supercharge-core's `ConversationItem` without depending on this crate
 // That preserves the `SyntheticReason` tags the replay / spawn-time idempotence guards rely on
 impl supercharge_compaction::CompactionItem for ConversationItem {
     fn role(&self) -> supercharge_compaction::CompactionRole {
         use supercharge_compaction::CompactionRole;
-        // grok-build has no distinct `Developer` role; everything maps onto the four `Role` variants `ConversationItem::role()` already returns
+        // supercharge-core has no distinct `Developer` role; everything maps onto the four `Role` variants `ConversationItem::role()` already returns
         match self.role() {
             Role::System => CompactionRole::System,
             Role::User => CompactionRole::User,
@@ -1404,14 +1404,14 @@ impl supercharge_compaction::CompactionItem for ConversationItem {
     }
 
     fn is_compaction_summary(&self) -> bool {
-        // grok-build has no structural marker that uniquely identifies a prior compaction summary
+        // supercharge-core has no structural marker that uniquely identifies a prior compaction summary
         // Returning `false` is safe for the full-replace path, which does not consult this (it summarizes the whole conversation)
-        // Revisit (add a dedicated marker) before routing grok-build history through the shared `history`/`inter` filter
+        // Revisit (add a dedicated marker) before routing supercharge-core history through the shared `history`/`inter` filter
         false
     }
 
     fn attachment_refs(&self) -> Vec<supercharge_compaction::CompactionFileRef> {
-        // grok-build `UserItem`s carry only `Text`/`Image { url }` content parts
+        // supercharge-core `UserItem`s carry only `Text`/`Image { url }` content parts
         // There is no id-and-name attachment-ref concept like the chat harness's `GrokTurn` has
         // The full-replace path does not read this; revisit if image attachments need to survive into the `<grok_user_queries>` preamble
         Vec::new()
@@ -2222,7 +2222,7 @@ mod compaction_item_bridge_tests {
 
     #[test]
     fn metadata_accessors_are_conservative() {
-        // grok-build has no structural compaction-summary marker and no id-and-name attachment refs, so both return empty/false
+        // supercharge-core has no structural compaction-summary marker and no id-and-name attachment refs, so both return empty/false
         assert!(!CompactionItem::is_compaction_summary(
             &ConversationItem::user("u")
         ));
@@ -4662,11 +4662,11 @@ mod tests {
     }
 
     // upgrade_legacy_reasoning: legacy in-memory reconstruction
-    // Three legacy on-disk shapes that the on-read upgrader must lift to sibling Reasoning / BackendToolCall items: v1 assistant with `raw_output: Vec<OutputItem>` (backend-search era); v1 assistant with singular `reasoning: ReasoningContent` (earlier grok-build / chat-completions written as v1); v0 `ChatRequestMessage` with top-level `reasoning_content`.
+    // Three legacy on-disk shapes that the on-read upgrader must lift to sibling Reasoning / BackendToolCall items: v1 assistant with `raw_output: Vec<OutputItem>` (backend-search era); v1 assistant with singular `reasoning: ReasoningContent` (earlier supercharge-core / chat-completions written as v1); v0 `ChatRequestMessage` with top-level `reasoning_content`.
     // Idempotent (current-format rows produce zero siblings); verified by `upgrade_is_idempotent_on_post_pr_rows`
 
     #[test]
-    fn upgrade_legacy_reasoning_singular_grok_build_shape() {
+    fn upgrade_legacy_reasoning_singular_supercharge_build_shape() {
         // Synthetic fixture with truncated text and an encrypted stub for readability
         // The assistant row carries `reasoning: { text, encrypted, id }` inline, the earlier shape
         let raw = serde_json::json!({

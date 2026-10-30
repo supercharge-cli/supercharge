@@ -1137,7 +1137,7 @@ impl AgentView {
         }
     }
     pub(super) fn submit_question_answers(&mut self, skipped: bool) -> InputOutcome {
-        use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionExtResponse;
+        use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionExtResponse;
         self.swap_question_freeform();
         let Some(mut qv) = self.question_view.take() else {
             return InputOutcome::Changed;
@@ -1983,7 +1983,7 @@ mod question_no_freeform_tests {
     };
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
     /// Fixed options, single-select; shaped like the free-usage upsell.
@@ -2352,7 +2352,7 @@ mod question_answer_focus_tests {
     use crate::views::prompt_widget::StashedPrompt;
     use crate::views::question_view::{QuestionFocus, QuestionSelection, QuestionViewState};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use supercharge_tools::implementations::grok_build::ask_user_question::{
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::{
         Question, QuestionOption,
     };
     fn question(prompt: &str, labels: &[&str]) -> Question {

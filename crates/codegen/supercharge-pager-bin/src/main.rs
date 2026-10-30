@@ -445,7 +445,7 @@ async fn kill_leaders() -> Result<()> {
 fn resolve_target(args: &LeaderTargetArgs) -> LeaderTarget {
     match args.pid {
         Some(pid) => LeaderTarget::Pid(pid),
-        None => LeaderTarget::Environment(supercharge_shell::env::GrokBuildEnvironment::Production),
+        None => LeaderTarget::Environment(supercharge_shell::env::SuperchargeBuildEnvironment::Production),
     }
 }
 #[tracing::instrument(skip_all)]
@@ -2649,7 +2649,7 @@ async fn finish_update_on_exit(
 }
 /// Build an [`UpdateConfig`] from the current environment and config files.
 fn build_update_config() -> UpdateConfig {
-    let environment = supercharge_shell::env::GrokBuildEnvironment::from_flags(false, false);
+    let environment = supercharge_shell::env::SuperchargeBuildEnvironment::from_flags(false, false);
     let mut config = UpdateConfig::from_environment(&environment);
     cryptify::flow_stmt!({
         {

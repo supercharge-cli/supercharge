@@ -1431,7 +1431,7 @@ impl SessionActor {
                         self.tool_context.subagent_event_tx
                     {
                         let (tx, rx) = tokio::sync::oneshot::channel();
-                        use supercharge_tools::implementations::grok_build::task::types::{
+                        use supercharge_tools::implementations::supercharge_build::task::types::{
                             SubagentEvent, SubagentListActiveRequest,
                         };
                         let _ =
@@ -1514,7 +1514,7 @@ impl SessionActor {
                             );
                             ScheduledLoopSummary {
                                 task_id: t.id,
-                                interval: supercharge_tools::implementations::grok_build::scheduler::interval::interval_to_human(
+                                interval: supercharge_tools::implementations::supercharge_build::scheduler::interval::interval_to_human(
                                     t.interval_secs,
                                 ),
                                 next_fire_at,

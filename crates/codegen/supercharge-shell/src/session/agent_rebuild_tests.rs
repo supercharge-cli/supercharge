@@ -1,11 +1,11 @@
 use super::*;
 
-use supercharge_tools::implementations::grok_build::task::backend::SubagentBackend;
-use supercharge_tools::implementations::grok_build::task::coordinator::{
+use supercharge_tools::implementations::supercharge_build::task::backend::SubagentBackend;
+use supercharge_tools::implementations::supercharge_build::task::coordinator::{
     ChildCompletion, ChildControl, ChildRunOutput, ChildRunRequest, ChildRunner, SendBoxFuture,
     SubagentCoordinator, SubagentProgress,
 };
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     AgentMessageSenderResource, SubagentDescribeOutcome, SubagentOwner, SubagentRequest,
     SubagentValidateTypeOutcome,
 };
@@ -25,7 +25,7 @@ impl ChildControl for SenderProbeControl {
 impl ChildRunner for SenderProbeRunner {
     type Control = SenderProbeControl;
     type RootControl =
-        supercharge_tools::implementations::grok_build::task::root_control::NoRootControl;
+        supercharge_tools::implementations::supercharge_build::task::root_control::NoRootControl;
     type CompletionData = ();
     type RunFuture = SendBoxFuture<ChildRunOutput<()>>;
     type ValidateFuture = SendBoxFuture<SubagentValidateTypeOutcome>;
@@ -66,7 +66,7 @@ async fn mint_test_sender(owner: SubagentOwner) -> Option<AgentMessageSender> {
         )
         .run(),
     );
-    let backend = supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::from_coordinator(coordinator_sender);
+    let backend = supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::from_coordinator(coordinator_sender);
     let id = uuid::Uuid::now_v7().to_string();
     let spawn = tokio::spawn(async move {
         backend
@@ -112,7 +112,7 @@ async fn child_rebuild_rejects_coordinator_authority() {
 
             let result = spec
                 .build_agent(
-                    AgentDefinition::default_grok_build(),
+                    AgentDefinition::default_supercharge_build(),
                     supercharge_agent::DEFAULT_SYSTEM_PROMPT_LABEL,
                 )
                 .await;
@@ -164,14 +164,14 @@ async fn child_rebuild_message_authority_respects_grant_workflow_and_capability_
             let sender = mint_test_sender(SubagentOwner::Task)
                 .await
                 .expect("non-workflow child sender");
-            let mut definition = AgentDefinition::default_grok_build();
+            let mut definition = AgentDefinition::default_supercharge_build();
             definition.capability_mode = Some(SubagentCapabilityMode::All);
             let agent = child_agent(definition.clone(), Some(sender.clone()), true).await;
             let bridge = agent.tool_bridge();
             assert!(bridge.read_resource::<AgentMessageSenderResource>().await.is_some());
             let backend = bridge
                 .read_resource::<
-                    supercharge_tools::implementations::grok_build::task::backend::SubagentBackendResource,
+                    supercharge_tools::implementations::supercharge_build::task::backend::SubagentBackendResource,
                 >()
                 .await
                 .unwrap();
@@ -179,14 +179,14 @@ async fn child_rebuild_message_authority_respects_grant_workflow_and_capability_
                 backend
                     .backend()
                     .send_active_message(
-                        supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageRequest::try_new(
+                        supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageRequest::try_new(
                             "child",
                             "follow up",
                         )
                         .unwrap(),
                     )
                     .await,
-                supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOutcome::Unsupported,
+                supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOutcome::Unsupported,
             );
             assert!(bridge.tool_for_kind(ToolKind::ActiveAgentMessage).await.is_some());
 

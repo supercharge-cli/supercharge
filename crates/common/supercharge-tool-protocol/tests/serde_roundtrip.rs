@@ -45,7 +45,7 @@ fn user() -> UserId {
 }
 
 fn tool() -> ToolId {
-    ToolId::new("GrokBuild:read_file").unwrap()
+    ToolId::new("SuperchargeBuild:read_file").unwrap()
 }
 
 fn server() -> ServerId {
@@ -60,7 +60,7 @@ fn call_id() -> ToolCallId {
 fn id_types_round_trip_as_bare_strings() {
     assert_eq!(roundtrip(&session()), json!("sess_abc"));
     assert_eq!(roundtrip(&user()), json!("user_123"));
-    assert_eq!(roundtrip(&tool()), json!("GrokBuild:read_file"));
+    assert_eq!(roundtrip(&tool()), json!("SuperchargeBuild:read_file"));
     assert_eq!(roundtrip(&server()), json!("srv-uuidv7"));
     assert_eq!(
         roundtrip(&ConnectionId::new("conn_42").unwrap()),
@@ -264,7 +264,7 @@ fn tool_registration_round_trips_with_and_without_server_id() {
         sessions: Some(vec![session()]),
         user_id: user(),
         server_id: None,
-        description: sample_description("read_file", Some("GrokBuild")),
+        description: sample_description("read_file", Some("SuperchargeBuild")),
         input_schema: Some(json!({"type": "object"})),
         capabilities: None,
         notification_schemas: None,
@@ -399,7 +399,7 @@ fn registration_outcome_variants_round_trip() {
     for (outcome, expected_tag) in cases {
         let json = roundtrip(&outcome);
         assert_eq!(json["outcome"], json!(expected_tag));
-        assert_eq!(json["tool_id"], json!("GrokBuild:read_file"));
+        assert_eq!(json["tool_id"], json!("SuperchargeBuild:read_file"));
     }
 }
 
@@ -964,14 +964,14 @@ fn session_lifecycle_payloads_round_trip() {
     let bind_result = SessionBindServerResult {
         tools: vec![ToolDescription::new("my_tool", "desc")],
         binary_version: Some("1.0.15".to_owned()),
-        unserved_tool_ids: vec!["GrokBuild:monitor".to_owned()],
+        unserved_tool_ids: vec!["SuperchargeBuild:monitor".to_owned()],
         resolve_error: Some("missing_tool_config: no explicit tool configuration".to_owned()),
         image_capabilities: vec![IMAGE_CAPABILITIES_V1.to_owned(), "node.22".to_owned()],
     };
     let v = roundtrip(&bind_result);
     assert_eq!(v["tools"].as_array().unwrap().len(), 1);
     assert_eq!(v["binary_version"], json!("1.0.15"));
-    assert_eq!(v["unserved_tool_ids"], json!(["GrokBuild:monitor"]));
+    assert_eq!(v["unserved_tool_ids"], json!(["SuperchargeBuild:monitor"]));
     assert_eq!(
         v["resolve_error"],
         json!("missing_tool_config: no explicit tool configuration")
@@ -1261,8 +1261,8 @@ fn tools_changed_round_trips_with_per_array_skip_when_empty() {
         updated: vec![tool()],
     };
     let v = roundtrip(&populated);
-    assert_eq!(v["added"][0], json!("GrokBuild:read_file"));
-    assert_eq!(v["updated"][0], json!("GrokBuild:read_file"));
+    assert_eq!(v["added"][0], json!("SuperchargeBuild:read_file"));
+    assert_eq!(v["updated"][0], json!("SuperchargeBuild:read_file"));
     assert!(!v.as_object().unwrap().contains_key("removed"));
 }
 #[test]
@@ -1517,12 +1517,12 @@ fn tool_error_wire_render_limited_omits_card_id_when_none() {
 #[test]
 fn tool_error_wire_terminal_error_round_trips_with_string_code() {
     let err = ToolErrorWire::TerminalError {
-        tool_id: ToolId::new("GrokBuild:bash").unwrap(),
+        tool_id: ToolId::new("SuperchargeBuild:bash").unwrap(),
         message: "exit 137".to_owned(),
     };
     let v = roundtrip(&err);
     assert_eq!(v["code"], json!("terminal_error"));
-    assert_eq!(v["tool_id"], json!("GrokBuild:bash"));
+    assert_eq!(v["tool_id"], json!("SuperchargeBuild:bash"));
     assert_eq!(v["message"], json!("exit 137"));
 }
 

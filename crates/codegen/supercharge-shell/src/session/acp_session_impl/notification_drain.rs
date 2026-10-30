@@ -379,7 +379,7 @@ impl SessionActor {
             .borrow()
             .tool_bridge()
             .update_resource(
-                supercharge_tools::implementations::grok_build::task::types::CurrentPromptIdResource(
+                supercharge_tools::implementations::supercharge_build::task::types::CurrentPromptIdResource(
                     prompt_id.clone(),
                 ),
             )
@@ -449,7 +449,7 @@ impl SessionActor {
         };
         let session_dir = crate::session::persistence::session_dir(&self.session_info);
         let backend =
-            supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+            supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                 event_tx,
             );
         let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel();
@@ -474,12 +474,12 @@ impl SessionActor {
     #[cfg(test)]
     pub(super) async fn list_running_subagents(
         &self,
-    ) -> Vec<supercharge_tools::implementations::grok_build::task::types::SubagentInspection> {
+    ) -> Vec<supercharge_tools::implementations::supercharge_build::task::types::SubagentInspection> {
         self.reconcile_live_orphaned_subagents().await;
         let Some(event_tx) = self.tool_context.subagent_event_tx.clone() else {
             return Vec::new();
         };
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(event_tx)
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(event_tx)
             .list_running(self.session_info.id.0.as_ref())
             .await
     }
@@ -610,7 +610,7 @@ impl SessionActor {
         let Some(buffer) = &self.tool_context.monitor_event_buffer else {
             return;
         };
-        for event in supercharge_tools::implementations::grok_build::monitor::types::drain_owned(
+        for event in supercharge_tools::implementations::supercharge_build::monitor::types::drain_owned(
             buffer,
             Some(self.session_info.id.0.as_ref()),
         ) {
@@ -660,7 +660,7 @@ impl SessionActor {
         notifications: &[PendingNotification],
         task_output_tool_name: &str,
     ) -> Vec<acp::ContentBlock> {
-        use supercharge_tools::implementations::grok_build::monitor::types::MonitorEventNotification;
+        use supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventNotification;
 
         let completion_task_ids: std::collections::HashSet<&str> = notifications
             .iter()
@@ -792,7 +792,7 @@ mod live_orphan_hook_tests {
     use crate::agent::subagent::{LIVE_ORPHAN_RECONCILE_REASON, SubagentMeta};
     use crate::extensions::notification::SessionUpdate;
     use crate::session::persistence::PersistenceMsg;
-    use supercharge_tools::implementations::grok_build::task::types::{
+    use supercharge_tools::implementations::supercharge_build::task::types::{
         SubagentEvent, SubagentInspection, SubagentSnapshot, SubagentSnapshotStatus,
     };
 

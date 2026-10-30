@@ -3,7 +3,7 @@
 use super::common::*;
 
 /// Switching mid-session between models whose agent types differ shows the "requires starting a new session" modal in both directions.
-/// This drives the reverse leg, cursor to grok-build.
+/// This drives the reverse leg, cursor to supercharge-core.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore]
 async fn reverse_agent_type_mismatch_cursor_to_default() {
@@ -40,7 +40,7 @@ async fn reverse_agent_type_mismatch_cursor_to_default() {
         .wait_for_text(MOCK_RESPONSE_SENTINEL, Duration::from_secs(30))
         .expect("response rendered");
 
-    // Switch to default-model, which crosses agent types from cursor to grok-build
+    // Switch to default-model, which crosses agent types from cursor to supercharge-core
     harness
         .inject_keys(b"/model default-model\r")
         .expect("type model switch");

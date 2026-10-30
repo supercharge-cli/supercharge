@@ -39,7 +39,7 @@ fn stop_entry_from_task(task: &supercharge_tools::types::TaskSnapshot) -> StopBa
 }
 
 fn stop_entry_from_subagent(
-    summary: &supercharge_tools::implementations::grok_build::task::types::ActiveSubagentSummary,
+    summary: &supercharge_tools::implementations::supercharge_build::task::types::ActiveSubagentSummary,
 ) -> StopBackgroundTask {
     StopBackgroundTask {
         id: summary.subagent_id.clone(),
@@ -52,12 +52,12 @@ fn stop_entry_from_subagent(
 }
 
 fn stop_cron_from_scheduled(
-    task: &supercharge_tools::implementations::grok_build::scheduler::types::ScheduledTask,
+    task: &supercharge_tools::implementations::supercharge_build::scheduler::types::ScheduledTask,
 ) -> StopSessionCron {
     StopSessionCron {
         id: task.id.clone(),
         schedule:
-            supercharge_tools::implementations::grok_build::scheduler::interval::interval_to_human(
+            supercharge_tools::implementations::supercharge_build::scheduler::interval::interval_to_human(
                 task.interval_secs,
             ),
         recurring: task.recurring,
@@ -147,9 +147,9 @@ impl SessionActor {
 
     pub(crate) async fn list_active_subagents(
         &self,
-    ) -> Vec<supercharge_tools::implementations::grok_build::task::types::ActiveSubagentSummary>
+    ) -> Vec<supercharge_tools::implementations::supercharge_build::task::types::ActiveSubagentSummary>
     {
-        use supercharge_tools::implementations::grok_build::task::types::{
+        use supercharge_tools::implementations::supercharge_build::task::types::{
             SubagentEvent, SubagentListActiveRequest,
         };
         let Some(ref event_tx) = self.tool_context.subagent_event_tx else {
@@ -440,7 +440,7 @@ mod stop_gate_snapshot_tests {
     #[test]
     fn subagent_summary_maps_to_stop_entry() {
         let summary =
-            supercharge_tools::implementations::grok_build::task::types::ActiveSubagentSummary {
+            supercharge_tools::implementations::supercharge_build::task::types::ActiveSubagentSummary {
                 subagent_id: "sub-1".into(),
                 subagent_type: "explore".into(),
                 description: "d".repeat(2000),
@@ -477,7 +477,7 @@ mod stop_gate_snapshot_tests {
     #[test]
     fn scheduled_task_maps_to_stop_cron() {
         let task =
-            supercharge_tools::implementations::grok_build::scheduler::types::ScheduledTask::new(
+            supercharge_tools::implementations::supercharge_build::scheduler::types::ScheduledTask::new(
                 300,
                 "check the build".into(),
                 true,

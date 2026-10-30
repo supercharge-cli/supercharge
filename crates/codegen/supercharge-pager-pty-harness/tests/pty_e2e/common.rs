@@ -193,7 +193,7 @@ pub(crate) fn spawn_polling_session_with_env(
 
 /// Start the mock server with two models that have different agent types.
 /// Returns a `ContentController` configured for agent-type-mismatch testing.
-/// The default model is `"default-model"` (no agent type, so it uses the `grok-build` harness).
+/// The default model is `"default-model"` (no agent type, so it uses the `supercharge-core` harness).
 pub(crate) async fn start_dual_agent_type_content() -> ContentController {
     ContentController::start_with_models(vec![
         MockModel::new("default-model"),

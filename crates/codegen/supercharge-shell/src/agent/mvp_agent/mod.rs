@@ -733,12 +733,12 @@ pub struct MvpAgent {
     >,
     /// Unified sender for all subagent coordinator events.
     /// LEADER-SAFE(shared): channel is multi-producer, coordinator drains.
-    subagent_event_tx: supercharge_tools::implementations::grok_build::task::backend::SubagentCoordinatorSender,
+    subagent_event_tx: supercharge_tools::implementations::supercharge_build::task::backend::SubagentCoordinatorSender,
     /// Receiver for subagent events. Taken once by `start_subagent_coordinator()`.
     /// `None` after the coordinator drain task has been spawned.
     subagent_event_rx: RefCell<
         Option<
-            supercharge_tools::implementations::grok_build::task::coordinator::SubagentCoordinatorReceiver,
+            supercharge_tools::implementations::supercharge_build::task::coordinator::SubagentCoordinatorReceiver,
         >,
     >,
     /// Shell-only presentation state; lifecycle lives in the channel actor.
@@ -749,7 +749,7 @@ pub struct MvpAgent {
     /// Shared buffer for mid-turn monitor event notifications.
     /// Pushed by the `InjectNotification` handler when a turn is active and the notification has `Next` priority.
     /// Drained by the session turn loop (`inject_pending_monitor_events`) into a hidden synthetic user message.
-    monitor_event_buffer: supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer,
+    monitor_event_buffer: supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer,
     /// The process launch directory, captured once at construction.
     /// The deferred launch-dir init paths share this one value instead of each re-calling `std::env::current_dir()`.
     /// A re-call could drift if the process cwd ever changes after startup.
@@ -888,7 +888,7 @@ pub(crate) fn agent_name_after_model_switch(
     }
 }
 /// Harness compatibility for zero-turn / mid-turn model switching. Two stock (non-strict) agents are interchangeable: they share the default wire format and toolset.
-/// So switching e.g. `grok-build` to `grok-build-plan` doesn't require rebuilding the harness. A rebuild would destroy a client-supplied `_meta.agentProfile`.
+/// So switching e.g. `supercharge-core` to `supercharge-core-plan` doesn't require rebuilding the harness. A rebuild would destroy a client-supplied `_meta.agentProfile`.
 /// Strict harnesses (`codex`, …) are only compatible with themselves. Transitions between strict and stock are never compatible.
 pub(crate) fn harnesses_are_compatible(active: &str, required: &str) -> bool {
     use supercharge_agent::config::is_strict_harness_agent_type;

@@ -55,7 +55,7 @@ impl WorkspaceHostKind {
     /// The catalog a server on this host advertises to the hub, and serves when a bind names no
     /// toolset and the host lets it: the sandbox's, minus the API-backed tools on a hub-only host.
     pub fn default_toolset(self) -> ToolServerConfig {
-        let mut catalog = supercharge_agent::workspace_grok_build_toolset();
+        let mut catalog = supercharge_agent::workspace_supercharge_build_toolset();
         if self.is_hub_only() {
             let api_backed = supercharge_agent::api_backed_tool_ids();
             catalog.tools.retain(|tool| !api_backed.contains(&tool.id));

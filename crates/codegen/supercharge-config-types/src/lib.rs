@@ -260,7 +260,7 @@ where
         }
     }
 }
-/// Consent notice from `grok_build_settings.consent_gate`.
+/// Consent notice from `supercharge_build_settings.consent_gate`.
 /// The server decides which accounts see it; the payload carries no targeting.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ConsentGate {
@@ -326,7 +326,7 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub memory_enabled: Option<bool>,
     /// Dedicated memory-v2 settings object. This is isolated from the legacy
-    /// memory fields and populated from `grok_build_memory_v2_*` features.
+    /// memory fields and populated from `supercharge_build_memory_v2_*` features.
     #[serde(default)]
     pub memory_v2: Option<memory::MemoryV2Settings>,
     #[serde(default)]
@@ -375,7 +375,7 @@ pub struct RemoteSettings {
     pub dream_check_interval_secs: Option<u64>,
     /// Cadence (seconds) of the pager's watch for a free account becoming paid.
     /// `0` disables it; the pager clamps and defaults (see its `app::subscription` module).
-    /// It arrives from the `grok_build_settings` remote settings flag via the cli-chat-proxy `/settings` flatten catch-all.
+    /// It arrives from the `supercharge_build_settings` remote settings flag via the cli-chat-proxy `/settings` flatten catch-all.
     #[serde(default)]
     pub subscription_watch_interval_secs: Option<u64>,
     #[serde(default)]
@@ -422,7 +422,7 @@ pub struct RemoteSettings {
     /// It is the lowest-precedence fallback; per-server config, env, and requirements/managed override it.
     #[serde(default)]
     pub mcp_startup_timeout_secs: Option<u64>,
-    /// Global default MCP tool-result inline cap (bytes), from remote settings `grok_build_settings.max_mcp_output_bytes`.
+    /// Global default MCP tool-result inline cap (bytes), from remote settings `supercharge_build_settings.max_mcp_output_bytes`.
     /// Requirements, env, and `config.toml [mcp] max_output_bytes` override it. The built-in default is 20_000.
     #[serde(default)]
     pub max_mcp_output_bytes: Option<u64>,
@@ -442,7 +442,7 @@ pub struct RemoteSettings {
     pub worktree_auto_gc: Option<WorktreeAutoGcSettings>,
     /// Enable/disable the runtime turn-end TodoGate remotely.
     /// Precedence: CLI `--todo-gate`, then this field, then the built-in default (`false`).
-    /// The gate ships disabled; set this to `Some(true)` (via the `grok_build_settings` remote settings key) to enable it.
+    /// The gate ships disabled; set this to `Some(true)` (via the `supercharge_build_settings` remote settings key) to enable it.
     /// See `session::acp_session::resolve_reminder_policy`.
     #[serde(default)]
     pub todo_gate_enabled: Option<bool>,
@@ -596,7 +596,7 @@ pub struct RemoteSettings {
     #[serde(default, deserialize_with = "deserialize_tolerant")]
     pub slash_command_tags: Option<std::collections::BTreeMap<String, String>>,
     /// When present, controls the non-Git-repo warning at session start.
-    /// It arrives as `non_git_warning` in `grok_build_settings`.
+    /// It arrives as `non_git_warning` in `supercharge_build_settings`.
     /// It takes precedence over `[features] non_git_warning` in config.toml.
     /// `Some(true)` enables, `Some(false)` acts as a kill-switch, `None` falls back to local config.
     #[serde(default)]
@@ -619,7 +619,7 @@ pub struct RemoteSettings {
     pub session_summary_model: Option<String>,
     #[serde(default)]
     pub image_description_model: Option<String>,
-    /// Server-side pin for the next-prompt suggestion model (tab-autocomplete ghost text), from the `grok_build_settings` remote settings flag.
+    /// Server-side pin for the next-prompt suggestion model (tab-autocomplete ghost text), from the `supercharge_build_settings` remote settings flag.
     /// It sits below env (`SUPERCHARGE_PROMPT_SUGGESTIONS_MODEL`) and `[models] prompt_suggestion` in config.toml.
     /// It sits above the client hint and the built-in `grok-4.6` default.
     /// When the effective model is not in the shell's model catalog the suggestion request is skipped entirely; the session model is never used instead.
@@ -740,12 +740,12 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub voice_mode_enabled: Option<bool>,
     /// Consolidated panel dock above the prompt. Off when absent.
-    /// `Some(true)` from `grok_build_settings.dock_enabled` turns it on for the targeted cohort.
+    /// `Some(true)` from `supercharge_build_settings.dock_enabled` turns it on for the targeted cohort.
     /// `SUPERCHARGE_DOCK` (or the older `SUPERCHARGE_DOCK_V2`) overrides it locally.
     #[serde(default)]
     pub dock_enabled: Option<bool>,
     /// The terminal-native `terminal` color theme (staged rollout). Hidden when absent.
-    /// `Some(true)` from `grok_build_settings.terminal_theme_enabled` reveals it for the targeted cohort.
+    /// `Some(true)` from `supercharge_build_settings.terminal_theme_enabled` reveals it for the targeted cohort.
     /// `SUPERCHARGE_TERMINAL_THEME` overrides it locally.
     #[serde(default)]
     pub terminal_theme_enabled: Option<bool>,
@@ -758,7 +758,7 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub privacy_notice_rollout: Option<bool>,
     /// Days after a privacy-banner dismiss before it may re-show for users who remain opted out of coding-data sharing.
-    /// It comes from `grok_build_settings`; `None` or `0` means it never re-shows after dismiss.
+    /// It comes from `supercharge_build_settings`; `None` or `0` means it never re-shows after dismiss.
     #[serde(default)]
     pub privacy_banner_reshow_days: Option<u64>,
     /// Remote settings tier of the `remember_tool_approvals` gate (whether per-tool "Always allow …" prompt options are shown).
@@ -802,7 +802,7 @@ pub struct RemoteSettings {
     /// It is used only when no effective TOML permission key is set.
     #[serde(default)]
     pub permission_mode: Option<String>,
-    /// User's subscription tier from remote settings `grok_build_access_gate`.
+    /// User's subscription tier from remote settings `supercharge_build_access_gate`.
     /// E.g. "free", "premium", "supergrok", "supergrok_heavy".
     /// It is stamped on analytics events and the user profile for filtering.
     #[serde(default)]
@@ -820,7 +820,7 @@ pub struct RemoteSettings {
     /// When `None` or `Some(false)`, sessions are shown in a flat list.
     #[serde(default)]
     pub session_picker_grouped: Option<bool>,
-    /// Whether the user is allowed to use Supercharge AI. Remote settings `grok_build_access_gate` targeting rules set it.
+    /// Whether the user is allowed to use Supercharge AI. Remote settings `supercharge_build_access_gate` targeting rules set it.
     /// `None` means no server response yet (the client uses its own fallback check); `Some(false)` means blocked.
     #[serde(default)]
     pub allow_access: Option<bool>,
@@ -835,7 +835,7 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub on_demand_enabled: Option<bool>,
     /// When set to a non-empty URL, the pager's `/usage` command shows a link to that URL instead of fetching billing data from the backend.
-    /// The remote settings `grok_build_usage_redirect_url` feature flag controls it (target it at personal-team users).
+    /// The remote settings `supercharge_build_usage_redirect_url` feature flag controls it (target it at personal-team users).
     /// `None` or empty keeps the default of fetching usage from the backend.
     #[serde(default)]
     pub usage_billing_redirect_url: Option<String>,
@@ -845,11 +845,11 @@ pub struct RemoteSettings {
     /// Enable AI-powered shell command suggestions remotely.
     #[serde(default)]
     pub suggestions_ai_enabled: Option<bool>,
-    /// Global auto-compact threshold percent (0-100) from remote settings `grok_build_settings`.
-    /// A per-model override on `ModelInfo` (`grok_build_models`) takes precedence; user config and env var further override per the resolver chain.
+    /// Global auto-compact threshold percent (0-100) from remote settings `supercharge_build_settings`.
+    /// A per-model override on `ModelInfo` (`supercharge_build_models`) takes precedence; user config and env var further override per the resolver chain.
     #[serde(default)]
     pub auto_compact_threshold_percent: Option<u8>,
-    /// Max subagent nesting depth (`grok_build_settings.subagents_max_depth`).
+    /// Max subagent nesting depth (`supercharge_build_settings.subagents_max_depth`).
     #[serde(default)]
     pub subagents_max_depth: Option<u32>,
     #[serde(default)]
@@ -861,10 +861,10 @@ pub struct RemoteSettings {
     pub subagents_limit_behavior: Option<String>,
     #[serde(default)]
     pub workflow_max_concurrent_agents: Option<u32>,
-    /// Max parallel `image_gen` and `image_edit` tool calls in one model step (`grok_build_settings.max_parallel_image_gen_calls`).
+    /// Max parallel `image_gen` and `image_edit` tool calls in one model step (`supercharge_build_settings.max_parallel_image_gen_calls`).
     #[serde(default)]
     pub max_parallel_image_gen_calls: Option<u32>,
-    /// Max parallel video-gen tool calls in one model step (`grok_build_settings.max_parallel_video_gen_calls`).
+    /// Max parallel video-gen tool calls in one model step (`supercharge_build_settings.max_parallel_video_gen_calls`).
     #[serde(default)]
     pub max_parallel_video_gen_calls: Option<u32>,
     /// Global system-prompt identity label. A per-model override wins; see `resolve_system_prompt_label`.
@@ -894,13 +894,13 @@ pub struct RemoteSettings {
     #[serde(default)]
     pub imagine_tools_disabled: Option<Vec<String>>,
     /// Remote settings gate for the `grok workspace` CLI command (Computer Hub workspace exposure).
-    /// It comes from `grok_build_settings.workspace_command_enabled`.
+    /// It comes from `supercharge_build_settings.workspace_command_enabled`.
     /// `Some(true)` enables it; `None` or `Some(false)` (the default) keep it off.
     #[serde(default)]
     pub workspace_command_enabled: Option<bool>,
     #[serde(default)]
     pub workspace_dashboard_enabled: Option<bool>,
-    /// Soft default for `keep_text_selection` (`"flash"`, `"hold"`, or `"word_select"`), from `grok_build_settings.keep_text_selection_default`.
+    /// Soft default for `keep_text_selection` (`"flash"`, `"hold"`, or `"word_select"`), from `supercharge_build_settings.keep_text_selection_default`.
     /// It applies only when the user has set no local text-selection preference; an explicit local `keep_text_selection` always wins.
     /// An absent or unrecognized value keeps the client default (`flash`).
     /// Set it remotely to stage a new default to a segment, cut everyone over, or revert it for a customer.
@@ -1048,13 +1048,13 @@ where
     }
 }
 /// A model and the harness whose system prompt and toolset flavor that model must run against.
-/// The pair is the atomic configurable unit because a model is only guaranteed to work with a compatible harness (cursor vs grok-build).
+/// The pair is the atomic configurable unit because a model is only guaranteed to work with a compatible harness (cursor vs supercharge-core).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GoalRoleModel {
     /// Model id, e.g. "grok-4". It resolves against available models at spawn time; unknown or unauthorized fails open to the current model.
     pub model: String,
-    /// Harness `agent_type` (e.g. "cursor", "grok-build-plan") whose `AgentDefinition` decides the role subagent's harness flavor.
-    /// The flavor (system prompt and cursor-vs-grok-build toolset) applies regardless of the session or parent agent.
+    /// Harness `agent_type` (e.g. "cursor", "supercharge-core-plan") whose `AgentDefinition` decides the role subagent's harness flavor.
+    /// The flavor (system prompt and cursor-vs-supercharge-core toolset) applies regardless of the session or parent agent.
     /// It is resolved by name (project/plugin/builtin lookup, then re-flavored by the subagent toolset resolver).
     /// The main session's env/ACP/strict-harness precedence chain plays no part.
     /// It is not a subagent type: the role always spawns `general-purpose`, so the harness only re-flavors that toolset.

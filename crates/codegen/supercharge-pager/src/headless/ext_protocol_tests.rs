@@ -589,7 +589,7 @@ fn mcp_elicit_replies_cancelled() {
 
 #[test]
 fn ask_user_question_replies_cancelled() {
-    use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionExtResponse;
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionExtResponse;
     for params in [
         serde_json::json!({
             "sessionId": "s", "toolCallId": "t", "questions": [], "mode": "default",
@@ -607,7 +607,7 @@ fn ask_user_question_replies_cancelled() {
 /// `x.ai/exit_plan_mode` is approved (no feedback) so the shell executes the exit and the model proceeds to implement.
 #[test]
 fn exit_plan_mode_replies_approved() {
-    use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeExtResponse;
+    use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeExtResponse;
     let resp = ext_method_reply(
         "x.ai/exit_plan_mode",
         serde_json::json!({"sessionId": "s", "toolCallId": "t"}),

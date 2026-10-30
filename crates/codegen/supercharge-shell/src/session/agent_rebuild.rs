@@ -37,15 +37,15 @@ use supercharge_agent::prompt::context::PromptAudience;
 use supercharge_agent::prompt::skills::SkillsConfig;
 use supercharge_agent::{Agent, AgentBuilder, CompactionPolicy, ReminderPolicy};
 use supercharge_tools::computer::types::{AsyncFileSystem, TerminalBackend};
-use supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig;
-use supercharge_tools::implementations::grok_build::ask_user_question::types::UserQuestionRequest;
-use supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig;
-use supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer;
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig;
+use supercharge_tools::implementations::supercharge_build::ask_user_question::types::UserQuestionRequest;
+use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig;
+use supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer;
+use supercharge_tools::implementations::supercharge_build::task::types::{
     AgentMessageSender, SubagentCapabilityModeExt, SubagentEvent, TaskModelValidator,
 };
-use supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig;
-use supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig;
+use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig;
+use supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig;
 use supercharge_tools::implementations::lsp::LspBackend;
 use supercharge_tools::implementations::web_search::WebSearchConfig;
 use supercharge_tools::notification::ToolNotificationHandle;
@@ -117,7 +117,7 @@ pub(crate) struct AgentRebuildSpec {
     pub tool_params_json: ResolvedToolParamsJson,
     pub subagent_event_tx: Option<UnboundedSender<SubagentEvent>>,
     pub subagent_coordinator_sender: Option<
-        supercharge_tools::implementations::grok_build::task::backend::SubagentCoordinatorSender,
+        supercharge_tools::implementations::supercharge_build::task::backend::SubagentCoordinatorSender,
     >,
     pub agent_message_sender: Option<AgentMessageSender>,
     pub monitor_event_buffer: Option<MonitorEventBuffer>,
@@ -136,7 +136,7 @@ pub(crate) struct AgentRebuildSpec {
     pub is_non_interactive: bool,
     pub owner_session_id: Option<String>,
     pub parent_scheduler_handle:
-        Option<supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle>,
+        Option<supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle>,
 }
 impl AgentRebuildSpec {
     /// This is the canonical construction path; see module docs for the invariant.
@@ -386,10 +386,10 @@ impl AgentRebuildSpec {
                         }),
                     );
                 if let Some(event_tx) = subagent_event_tx.clone() {
-                    use supercharge_tools::implementations::grok_build::task::backend::{
+                    use supercharge_tools::implementations::supercharge_build::task::backend::{
                         ChannelBackend, SubagentBackendResource,
                     };
-                    use supercharge_tools::implementations::grok_build::task::types::{
+                    use supercharge_tools::implementations::supercharge_build::task::types::{
                         AgentMessageSenderResource, MaxSubagentDepth, SessionIdResource,
                         SubagentDepthCounter, SubagentEventSender,
                     };
@@ -450,7 +450,7 @@ impl AgentRebuildSpec {
                     resources.insert(client);
                 }
                 {
-                    use supercharge_tools::implementations::grok_build::ask_user_question::UserQuestionSender;
+                    use supercharge_tools::implementations::supercharge_build::ask_user_question::UserQuestionSender;
                     resources.insert(UserQuestionSender(user_question_tx.clone()));
                 }
             })
@@ -569,7 +569,7 @@ pub(crate) fn test_rebuild_spec_default() -> Arc<AgentRebuildSpec> {
         user_question_tx: uq_tx,
         subagent_depth: 0,
         subagents_max_depth:
-            supercharge_tools::implementations::grok_build::task::MAX_SUBAGENT_DEPTH,
+            supercharge_tools::implementations::supercharge_build::task::MAX_SUBAGENT_DEPTH,
         session_id_str: "test-session".to_string(),
         blocking_wait_depth: Arc::new(crate::tools::tool_context::BlockingWaitState::new()),
         respect_gitignore: false,
@@ -594,13 +594,13 @@ mod legacy_tests {
         let toolset = agent.tool_bridge().toolset();
         let task_name = toolset
             .tool_name_for_kind(supercharge_tools::types::tool::ToolKind::Task)
-            .expect("GrokBuild Task tool should be present");
+            .expect("SuperchargeBuild Task tool should be present");
         toolset
             .tool_definitions()
             .into_iter()
             .find(|definition| definition.function.name == task_name)
             .and_then(|definition| definition.function.description)
-            .expect("GrokBuild Task description should be present")
+            .expect("SuperchargeBuild Task description should be present")
     }
     /// The `[toolset.web_search]` policy is authoritative on the backend-hosted path.
     /// Agent frontmatter is model-writable (`.supercharge/agents/*.md`), so a configured blocklist must survive a frontmatter allowlist.
@@ -616,7 +616,7 @@ mod legacy_tests {
             excluded_domains: Some(vec!["reddit.com".into()]),
         };
         let definition = || {
-            let mut d = AgentDefinition::default_grok_build();
+            let mut d = AgentDefinition::default_supercharge_build();
             d.tool_overrides = Some(ToolOverrides {
                 x_search: None,
                 web_search: Some(frontmatter.clone()),
@@ -699,7 +699,7 @@ mod legacy_tests {
                     .insert_test_entry("private-unselectable-model", unselectable);
                 let first = spec
                     .build_agent(
-                        AgentDefinition::default_grok_build(),
+                        AgentDefinition::default_supercharge_build(),
                         supercharge_agent::DEFAULT_SYSTEM_PROMPT_LABEL,
                     )
                     .await
@@ -728,7 +728,7 @@ mod legacy_tests {
                 assert!(validator.error_for("beta-public").is_none());
                 let rebuilt = spec
                     .build_agent(
-                        AgentDefinition::default_grok_build(),
+                        AgentDefinition::default_supercharge_build(),
                         supercharge_agent::DEFAULT_SYSTEM_PROMPT_LABEL,
                     )
                     .await

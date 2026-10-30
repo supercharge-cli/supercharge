@@ -16,7 +16,7 @@ impl MvpAgent {
             return;
         };
         let agent_ref = LocalRef::new(self);
-        let limits = supercharge_tools::implementations::grok_build::task::admission::SubagentLimits {
+        let limits = supercharge_tools::implementations::supercharge_build::task::admission::SubagentLimits {
             max_concurrent: self.cfg.borrow().subagents_max_concurrent,
             behavior: self.cfg.borrow().subagents_limit_behavior,
         };
@@ -76,24 +76,24 @@ impl MvpAgent {
         parent_session_id: &str,
         agent_address: String,
         text: String,
-        operation: supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOperation,
-    ) -> supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOutcome {
-        use supercharge_tools::implementations::grok_build::task::backend::SubagentBackend;
+        operation: supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOperation,
+    ) -> supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOutcome {
+        use supercharge_tools::implementations::supercharge_build::task::backend::SubagentBackend;
         if !self
             .cfg
             .borrow()
             .is_feature_enabled(crate::agent::config::Feature::ActiveAgentMessages)
         {
-            return supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOutcome::Unsupported;
+            return supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOutcome::Unsupported;
         }
         if self
             .session_handle_waiting_for_load(&acp::SessionId::new(parent_session_id))
             .await
             .is_none()
         {
-            return supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageOutcome::NotFoundOrNotOwned;
+            return supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageOutcome::NotFoundOrNotOwned;
         }
-        let request = match supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageRequest::try_new_from_human(
+        let request = match supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageRequest::try_new_from_human(
             agent_address,
             text,
             operation,
@@ -101,7 +101,7 @@ impl MvpAgent {
             Ok(request) => request,
             Err(outcome) => return outcome,
         };
-        supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::for_coordinator_session(
+        supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::for_coordinator_session(
                 self.subagent_event_tx.clone(),
                 parent_session_id,
             )

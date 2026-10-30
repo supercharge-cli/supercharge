@@ -335,7 +335,7 @@ async fn file_advertisement_requires_host_preparation_and_bounded_filesystem() {
                         .with_param_rename("tool_input_file", "args_path")
                         .with_param_rename("file", "source");
                 }
-                let mut definition = AgentDefinition::default_grok_build();
+                let mut definition = AgentDefinition::default_supercharge_build();
                 definition.inject_default_tools = false;
                 definition.discover_skills = false;
                 definition.agents_md = false;
@@ -436,7 +436,7 @@ async fn messages_backend_advertises_inline_only_use_tool() {
             let fields = Arc::get_mut(&mut spec).unwrap();
             fields.working_directory = dir.path().to_path_buf();
             fields.bridge_state_path = dir.path().join("tool_state.json");
-            let mut definition = AgentDefinition::default_grok_build();
+            let mut definition = AgentDefinition::default_supercharge_build();
             definition.inject_default_tools = false;
             definition.discover_skills = false;
             definition.agents_md = false;

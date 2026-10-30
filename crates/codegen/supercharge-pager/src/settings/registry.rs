@@ -5,7 +5,7 @@
 use agent_client_protocol as acp;
 use supercharge_shell::agent::config::UiConfig;
 use supercharge_shell::util::config::DISPLAY_REFRESH_DEFAULT_AUTO_CADENCE_ENABLED;
-use supercharge_tools::implementations::grok_build::ask_user_question;
+use supercharge_tools::implementations::supercharge_build::ask_user_question;
 
 /// Stable identity for a setting. We deliberately do NOT use a `SettingId` enum: enum renames would ripple through
 /// call sites.

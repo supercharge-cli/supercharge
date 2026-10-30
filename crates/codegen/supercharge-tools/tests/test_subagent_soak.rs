@@ -21,15 +21,15 @@ use tokio_util::sync::CancellationToken;
 
 use supercharge_test_support::env::env_parse;
 use supercharge_test_support::resources::{ResourceGrowth, ResourceSnapshot};
-use supercharge_tools::implementations::grok_build::task::admission::SubagentLimits;
-use supercharge_tools::implementations::grok_build::task::backend::{
+use supercharge_tools::implementations::supercharge_build::task::admission::SubagentLimits;
+use supercharge_tools::implementations::supercharge_build::task::backend::{
     ChannelBackend, SubagentBackend,
 };
-use supercharge_tools::implementations::grok_build::task::coordinator::{
+use supercharge_tools::implementations::supercharge_build::task::coordinator::{
     ChildCompletion, ChildControl, ChildRunOutput, ChildRunRequest, ChildRunner, CoordinatorConfig,
     LocalBoxFuture, MAX_COMPLETED_ENTRIES, StartedChild, SubagentCoordinator, SubagentProgress,
 };
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     SubagentDescribeOutcome, SubagentOwner, SubagentRegistryCounts, SubagentRequest,
     SubagentResult, SubagentValidateTypeOutcome,
 };
@@ -314,7 +314,7 @@ struct SoakRunner {
 impl ChildRunner for SoakRunner {
     type Control = SoakControl;
     type RootControl =
-        supercharge_tools::implementations::grok_build::task::root_control::NoRootControl;
+        supercharge_tools::implementations::supercharge_build::task::root_control::NoRootControl;
     type CompletionData = ();
     type RunFuture = LocalBoxFuture<ChildRunOutput<()>>;
     type ValidateFuture = LocalBoxFuture<SubagentValidateTypeOutcome>;

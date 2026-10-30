@@ -1,5 +1,5 @@
 use agent_client_protocol as acp;
-use supercharge_tools::implementations::grok_build::{
+use supercharge_tools::implementations::supercharge_build::{
     IMAGE_TO_VIDEO_TOOL_NAME, IMAGINE_VIDEO_COMMAND_NAME, imagine_video_instruction,
     imagine_video_usage_message,
 };

@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoStaticStr};
 use supercharge_tools::implementations::codex;
-use supercharge_tools::implementations::grok_build;
-use supercharge_tools::implementations::grok_build_concise;
+use supercharge_tools::implementations::supercharge_build;
+use supercharge_tools::implementations::supercharge_build_concise;
 use supercharge_tools::implementations::memory;
 use supercharge_tools::implementations::opencode;
 use supercharge_tools::implementations::search_tool;
@@ -67,7 +67,7 @@ fn registered_public_toolset_preset_names() -> Vec<String> {
         .map(|(name, _)| name.clone())
         .collect()
 }
-/// Orchestrator-specific prompt body appended to the standard GrokBuild system prompt (`prompt.md`).
+/// Orchestrator-specific prompt body appended to the standard SuperchargeBuild system prompt (`prompt.md`).
 /// Instructs the GBL model to delegate coding and exploration work to subagents.
 const ORCHESTRATOR_PROMPT_BODY: &str = "\
 ## Orchestrator Mode
@@ -117,45 +117,45 @@ Write prompts the way you would brief a senior engineer:
 - Do NOT summarize or re-explain what the user said \u{2014} get to work immediately";
 /// Bash tool with clearer model-facing names: `run_terminal_cmd` becomes `run_terminal_command` and `is_background` becomes `background`.
 fn bash_tool_config() -> ToolConfig {
-    ToolConfig::from(&grok_build::BashTool)
+    ToolConfig::from(&supercharge_build::BashTool)
         .with_name("run_terminal_command")
         .with_param_rename("is_background", "background")
 }
 /// Task/subagent tool with clearer model-facing names: `task` becomes `spawn_subagent` and `run_in_background` becomes `background`.
 fn task_tool_config() -> ToolConfig {
-    ToolConfig::from(&grok_build::TaskTool)
+    ToolConfig::from(&supercharge_build::TaskTool)
         .with_name("spawn_subagent")
         .with_param_rename("run_in_background", "background")
 }
 /// Task output tool renamed for clarity: `get_task_output` becomes `get_command_or_subagent_output`.
 fn task_output_tool_config() -> ToolConfig {
-    ToolConfig::from(&grok_build::TaskOutputTool).with_name("get_command_or_subagent_output")
+    ToolConfig::from(&supercharge_build::TaskOutputTool).with_name("get_command_or_subagent_output")
 }
 /// `wait_tasks` becomes `wait_commands_or_subagents`.
 fn wait_tasks_tool_config() -> ToolConfig {
-    ToolConfig::from(&grok_build::WaitTasksTool).with_name("wait_commands_or_subagents")
+    ToolConfig::from(&supercharge_build::WaitTasksTool).with_name("wait_commands_or_subagents")
 }
 /// `kill_task` becomes `kill_command_or_subagent`.
 fn kill_task_tool_config() -> ToolConfig {
-    ToolConfig::from(&grok_build::KillTaskTool).with_name("kill_command_or_subagent")
+    ToolConfig::from(&supercharge_build::KillTaskTool).with_name("kill_command_or_subagent")
 }
 /// Complete workspace-executable toolset for hub registration.
-/// Extends `default_grok_build_toolset()` with tools injected by `AgentBuilder` or available only in specific modes.
+/// Extends `default_supercharge_build_toolset()` with tools injected by `AgentBuilder` or available only in specific modes.
 /// In proxy mode the workspace server executes all tools; the shell has zero local dispatch.
-pub fn workspace_grok_build_toolset() -> ToolServerConfig {
-    let mut tools = default_grok_build_toolset().tools;
+pub fn workspace_supercharge_build_toolset() -> ToolServerConfig {
+    let mut tools = default_supercharge_build_toolset().tools;
     tools.push((&opencode::OpenCodeWriteTool).into());
-    tools.push((&grok_build::EnterPlanModeTool).into());
-    tools.push((&grok_build::ExitPlanModeTool).into());
-    tools.push((&grok_build::AskUserQuestionTool).into());
-    tools.push((&grok_build::WebSearchTool).into());
-    tools.push((&grok_build::ImageGenTool).into());
-    tools.push((&grok_build::ImageToVideoTool).into());
-    tools.push((&grok_build::ReferenceToVideoTool).into());
-    tools.push((&grok_build::WebFetchTool).into());
+    tools.push((&supercharge_build::EnterPlanModeTool).into());
+    tools.push((&supercharge_build::ExitPlanModeTool).into());
+    tools.push((&supercharge_build::AskUserQuestionTool).into());
+    tools.push((&supercharge_build::WebSearchTool).into());
+    tools.push((&supercharge_build::ImageGenTool).into());
+    tools.push((&supercharge_build::ImageToVideoTool).into());
+    tools.push((&supercharge_build::ReferenceToVideoTool).into());
+    tools.push((&supercharge_build::WebFetchTool).into());
     tools.push((&memory::search_tool::MemorySearchImpl).into());
     tools.push((&memory::get_tool::MemoryGetImpl).into());
-    tools.push((&grok_build::LspTool).into());
+    tools.push((&supercharge_build::LspTool).into());
     ToolServerConfig {
         tools,
         behavior_preset: None,
@@ -166,10 +166,10 @@ pub fn workspace_grok_build_toolset() -> ToolServerConfig {
 pub fn api_backed_tool_ids() -> Vec<String> {
     #[allow(unused_mut)]
     let mut ids = vec![
-        ToolConfig::from(&grok_build::WebSearchTool).id,
-        ToolConfig::from(&grok_build::ImageGenTool).id,
-        ToolConfig::from(&grok_build::ImageToVideoTool).id,
-        ToolConfig::from(&grok_build::ReferenceToVideoTool).id,
+        ToolConfig::from(&supercharge_build::WebSearchTool).id,
+        ToolConfig::from(&supercharge_build::ImageGenTool).id,
+        ToolConfig::from(&supercharge_build::ImageToVideoTool).id,
+        ToolConfig::from(&supercharge_build::ReferenceToVideoTool).id,
     ];
     ids
 }
@@ -178,16 +178,16 @@ fn grok_computer_toolset() -> ToolServerConfig {
     #[allow(unused_mut)]
     let mut tools = vec![
         bash_tool_config(),
-        (&grok_build::ReadFileTool).into(),
-        (&grok_build::SearchReplaceTool).into(),
+        (&supercharge_build::ReadFileTool).into(),
+        (&supercharge_build::SearchReplaceTool).into(),
         (&opencode::OpenCodeWriteTool).into(),
-        (&grok_build::ListDirTool).into(),
-        (&grok_build::GrepTool).into(),
-        (&grok_build::KillTerminalCommandTool).into(),
-        (&grok_build::GetTerminalCommandOutputTool).into(),
-        (&grok_build::SchedulerCreateTool).into(),
-        (&grok_build::SchedulerDeleteTool).into(),
-        (&grok_build::SchedulerListTool).into(),
+        (&supercharge_build::ListDirTool).into(),
+        (&supercharge_build::GrepTool).into(),
+        (&supercharge_build::KillTerminalCommandTool).into(),
+        (&supercharge_build::GetTerminalCommandOutputTool).into(),
+        (&supercharge_build::SchedulerCreateTool).into(),
+        (&supercharge_build::SchedulerDeleteTool).into(),
+        (&supercharge_build::SchedulerListTool).into(),
     ];
     ToolServerConfig {
         tools,
@@ -198,19 +198,19 @@ fn grok_computer_toolset() -> ToolServerConfig {
 /// E2B daemon selects this profile; ordinary local CLI sessions keep the core
 /// toolset and do not acquire a browser runtime dependency.
 fn supercharge_e2b_toolset() -> ToolServerConfig {
-    let mut tools = default_grok_build_toolset().tools;
-    tools.push((&grok_build::BrowserNavigateTool).into());
-    tools.push((&grok_build::BrowserSnapshotTool).into());
-    tools.push((&grok_build::BrowserClickTool).into());
-    tools.push((&grok_build::BrowserFillTool).into());
-    tools.push((&grok_build::BrowserPressTool).into());
-    tools.push((&grok_build::BrowserScreenshotTool).into());
-    tools.push((&grok_build::BrowserHandoffTool).into());
-    if grok_build::e2b_desktop::available() {
-        tools.push((&grok_build::e2b_desktop::DesktopObserveTool).into());
-        tools.push((&grok_build::e2b_desktop::DesktopActionTool).into());
+    let mut tools = default_supercharge_build_toolset().tools;
+    tools.push((&supercharge_build::BrowserNavigateTool).into());
+    tools.push((&supercharge_build::BrowserSnapshotTool).into());
+    tools.push((&supercharge_build::BrowserClickTool).into());
+    tools.push((&supercharge_build::BrowserFillTool).into());
+    tools.push((&supercharge_build::BrowserPressTool).into());
+    tools.push((&supercharge_build::BrowserScreenshotTool).into());
+    tools.push((&supercharge_build::BrowserHandoffTool).into());
+    if supercharge_build::e2b_desktop::available() {
+        tools.push((&supercharge_build::e2b_desktop::DesktopObserveTool).into());
+        tools.push((&supercharge_build::e2b_desktop::DesktopActionTool).into());
     }
-    tools.push((&grok_build::VectraBotTool).into());
+    tools.push((&supercharge_build::VectraBotTool).into());
     ToolServerConfig {
         tools,
         behavior_preset: None,
@@ -221,11 +221,11 @@ fn supercharge_e2b_toolset() -> ToolServerConfig {
 /// A new preset is covered the moment it becomes resolvable.
 fn native_toolset_presets() -> Vec<(&'static str, ToolServerConfig)> {
     vec![
-        ("supercharge-core", workspace_grok_build_toolset()),
-        ("grok-build", workspace_grok_build_toolset()),
+        ("supercharge-core", workspace_supercharge_build_toolset()),
+        ("grok-build", workspace_supercharge_build_toolset()),
         ("supercharge-e2b", supercharge_e2b_toolset()),
-        ("supercharge-core-concise", grok_build_concise_toolset()),
-        ("supercharge-core-plan", grok_build_plan_toolset()),
+        ("supercharge-core-concise", supercharge_build_concise_toolset()),
+        ("supercharge-core-plan", supercharge_build_plan_toolset()),
         ("codex", codex_toolset()),
         ("explore", explore_toolset()),
         ("plan", plan_toolset()),
@@ -264,99 +264,99 @@ pub fn toolset_for_preset(preset: &str) -> Option<ToolServerConfig> {
         .map(|(_, toolset)| toolset)
         .or_else(|| registered_toolset_preset(&normalized))
 }
-fn default_grok_build_toolset() -> ToolServerConfig {
-    grok_build_core_toolset_with(true, true)
+fn default_supercharge_build_toolset() -> ToolServerConfig {
+    supercharge_build_core_toolset_with(true, true)
 }
 fn default_agent_toolset() -> ToolServerConfig {
-    grok_build_core_toolset(true)
+    supercharge_build_core_toolset(true)
 }
-/// Same as the parent grok-build list, without `workflow`.
+/// Same as the parent supercharge-core list, without `workflow`.
 /// The usual `general-purpose` spawn path must not add that tool and then strip it.
 fn general_purpose_toolset() -> ToolServerConfig {
-    grok_build_core_toolset(false)
+    supercharge_build_core_toolset(false)
 }
-fn grok_build_core_toolset(include_workflow: bool) -> ToolServerConfig {
-    grok_build_core_toolset_with(include_workflow, false)
+fn supercharge_build_core_toolset(include_workflow: bool) -> ToolServerConfig {
+    supercharge_build_core_toolset_with(include_workflow, false)
 }
-fn grok_build_core_toolset_with(
+fn supercharge_build_core_toolset_with(
     include_workflow: bool,
     include_send_feedback: bool,
 ) -> ToolServerConfig {
     let mut tools = vec![
         bash_tool_config(),
-        (&grok_build::ReadFileTool).into(),
-        (&grok_build::SearchReplaceTool).into(),
-        (&grok_build::ListDirTool).into(),
-        (&grok_build::GrepTool).into(),
+        (&supercharge_build::ReadFileTool).into(),
+        (&supercharge_build::SearchReplaceTool).into(),
+        (&supercharge_build::ListDirTool).into(),
+        (&supercharge_build::GrepTool).into(),
         kill_task_tool_config(),
-        (&grok_build::TodoWriteTool).into(),
+        (&supercharge_build::TodoWriteTool).into(),
         task_output_tool_config(),
         wait_tasks_tool_config(),
         task_tool_config(),
-        (&grok_build::SchedulerCreateTool).into(),
-        (&grok_build::SchedulerDeleteTool).into(),
-        (&grok_build::SchedulerListTool).into(),
-        (&grok_build::MonitorTool).into(),
+        (&supercharge_build::SchedulerCreateTool).into(),
+        (&supercharge_build::SchedulerDeleteTool).into(),
+        (&supercharge_build::SchedulerListTool).into(),
+        (&supercharge_build::MonitorTool).into(),
         (&search_tool::SearchTool).into(),
         (&use_tool::UseTool).into(),
-        (&grok_build::UpdateGoalTool).into(),
+        (&supercharge_build::UpdateGoalTool).into(),
         (&supercharge_tools::implementations::curated_memory::CuratedMemoryTool).into(),
     ];
     if include_workflow {
-        tools.push((&grok_build::WorkflowTool).into());
+        tools.push((&supercharge_build::WorkflowTool).into());
     }
     if include_send_feedback {
-        tools.push((&grok_build::SendFeedbackTool).into());
+        tools.push((&supercharge_build::SendFeedbackTool).into());
     }
     ToolServerConfig {
         tools,
         behavior_preset: None,
     }
 }
-fn grok_build_concise_toolset() -> ToolServerConfig {
+fn supercharge_build_concise_toolset() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
-            (&grok_build_concise::BashConciseTool).into(),
-            (&grok_build_concise::ReadFileConciseTool).into(),
-            (&grok_build_concise::SearchReplaceConciseTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
+            (&supercharge_build_concise::BashConciseTool).into(),
+            (&supercharge_build_concise::ReadFileConciseTool).into(),
+            (&supercharge_build_concise::SearchReplaceConciseTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
             kill_task_tool_config(),
-            (&grok_build::TodoWriteTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
             task_output_tool_config(),
-            (&grok_build::SchedulerCreateTool).into(),
-            (&grok_build::SchedulerDeleteTool).into(),
-            (&grok_build::SchedulerListTool).into(),
-            (&grok_build::MonitorTool).into(),
-            (&grok_build::UpdateGoalTool).into(),
-            (&grok_build::WorkflowTool).into(),
+            (&supercharge_build::SchedulerCreateTool).into(),
+            (&supercharge_build::SchedulerDeleteTool).into(),
+            (&supercharge_build::SchedulerListTool).into(),
+            (&supercharge_build::MonitorTool).into(),
+            (&supercharge_build::UpdateGoalTool).into(),
+            (&supercharge_build::WorkflowTool).into(),
         ],
         behavior_preset: None,
     }
 }
 /// Hashline toolset: anchor-based read/edit/search and standard utilities.
 /// `hashline_tools` should be the 3 hashline `ToolConfig` entries; they carry the scheme parameters as tool params.
-pub fn grok_build_hashline_toolset(
+pub fn supercharge_build_hashline_toolset(
     hashline_tools: Vec<supercharge_tools::registry::types::ToolConfig>,
 ) -> ToolServerConfig {
     let mut tools: Vec<supercharge_tools::registry::types::ToolConfig> = vec![bash_tool_config()];
     tools.extend(hashline_tools);
     tools.extend([
-        (&grok_build::ListDirTool).into(),
+        (&supercharge_build::ListDirTool).into(),
         kill_task_tool_config(),
-        (&grok_build::TodoWriteTool).into(),
+        (&supercharge_build::TodoWriteTool).into(),
         task_output_tool_config(),
         wait_tasks_tool_config(),
         task_tool_config(),
-        (&grok_build::WebSearchTool).into(),
-        (&grok_build::SchedulerCreateTool).into(),
-        (&grok_build::SchedulerDeleteTool).into(),
-        (&grok_build::SchedulerListTool).into(),
-        (&grok_build::MonitorTool).into(),
+        (&supercharge_build::WebSearchTool).into(),
+        (&supercharge_build::SchedulerCreateTool).into(),
+        (&supercharge_build::SchedulerDeleteTool).into(),
+        (&supercharge_build::SchedulerListTool).into(),
+        (&supercharge_build::MonitorTool).into(),
         (&search_tool::SearchTool).into(),
         (&use_tool::UseTool).into(),
-        (&grok_build::UpdateGoalTool).into(),
-        (&grok_build::WorkflowTool).into(),
+        (&supercharge_build::UpdateGoalTool).into(),
+        (&supercharge_build::WorkflowTool).into(),
     ]);
     ToolServerConfig {
         tools,
@@ -372,7 +372,7 @@ fn codex_toolset() -> ToolServerConfig {
             (&codex::CodexListDirTool).into(),
             (&codex::CodexGrepFilesTool).into(),
             kill_task_tool_config(),
-            (&grok_build::TodoWriteTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
             task_output_tool_config(),
             (&search_tool::SearchTool).into(),
             (&use_tool::UseTool).into(),
@@ -386,9 +386,9 @@ fn codex_toolset() -> ToolServerConfig {
 fn explore_toolset() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
         ],
         behavior_preset: None,
     }
@@ -399,43 +399,43 @@ fn explore_toolset() -> ToolServerConfig {
 fn plan_toolset() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
-            // (&grok_build::SkillTool).into(),
-            (&grok_build::TodoWriteTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
+            // (&supercharge_build::SkillTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
             // search_replace and run_terminal_command intentionally omitted (read-only)
         ],
         behavior_preset: None,
     }
 }
-/// Extends the default `grok-build` toolset with plan mode tools.
+/// Extends the default `supercharge-core` toolset with plan mode tools.
 /// This allows the agent to enter a structured planning phase before writing code, with user-approved plans.
-fn grok_build_plan_toolset() -> ToolServerConfig {
+fn supercharge_build_plan_toolset() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
             // Standard supercharge-core tools
             bash_tool_config(),
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::SearchReplaceTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::SearchReplaceTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
             kill_task_tool_config(),
-            (&grok_build::TodoWriteTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
             task_output_tool_config(),
             task_tool_config(),
-            (&grok_build::SchedulerCreateTool).into(),
-            (&grok_build::SchedulerDeleteTool).into(),
-            (&grok_build::SchedulerListTool).into(),
-            (&grok_build::MonitorTool).into(),
+            (&supercharge_build::SchedulerCreateTool).into(),
+            (&supercharge_build::SchedulerDeleteTool).into(),
+            (&supercharge_build::SchedulerListTool).into(),
+            (&supercharge_build::MonitorTool).into(),
             (&search_tool::SearchTool).into(),
             (&use_tool::UseTool).into(),
-            (&grok_build::UpdateGoalTool).into(),
-            (&grok_build::WorkflowTool).into(),
+            (&supercharge_build::UpdateGoalTool).into(),
+            (&supercharge_build::WorkflowTool).into(),
             // Plan mode tools
-            (&grok_build::EnterPlanModeTool).into(),
-            (&grok_build::ExitPlanModeTool).into(),
-            (&grok_build::AskUserQuestionTool).into(),
+            (&supercharge_build::EnterPlanModeTool).into(),
+            (&supercharge_build::ExitPlanModeTool).into(),
+            (&supercharge_build::AskUserQuestionTool).into(),
         ],
         behavior_preset: None,
     }
@@ -447,9 +447,9 @@ fn orchestrator_toolset() -> ToolServerConfig {
         tools: vec![
             // Research tools
             bash_tool_config(),
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
             // Subagent orchestration
             task_tool_config(),
             task_output_tool_config(),
@@ -459,24 +459,24 @@ fn orchestrator_toolset() -> ToolServerConfig {
             (&search_tool::SearchTool).into(),
             (&use_tool::UseTool).into(),
             // Planning and user interaction
-            (&grok_build::TodoWriteTool).into(),
-            (&grok_build::EnterPlanModeTool).into(),
-            (&grok_build::ExitPlanModeTool).into(),
-            (&grok_build::AskUserQuestionTool).into(),
-            (&grok_build::UpdateGoalTool).into(),
-            (&grok_build::WorkflowTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
+            (&supercharge_build::EnterPlanModeTool).into(),
+            (&supercharge_build::ExitPlanModeTool).into(),
+            (&supercharge_build::AskUserQuestionTool).into(),
+            (&supercharge_build::UpdateGoalTool).into(),
+            (&supercharge_build::WorkflowTool).into(),
             // Scheduling and monitoring
-            (&grok_build::SchedulerCreateTool).into(),
-            (&grok_build::SchedulerDeleteTool).into(),
-            (&grok_build::SchedulerListTool).into(),
-            (&grok_build::MonitorTool).into(),
+            (&supercharge_build::SchedulerCreateTool).into(),
+            (&supercharge_build::SchedulerDeleteTool).into(),
+            (&supercharge_build::SchedulerListTool).into(),
+            (&supercharge_build::MonitorTool).into(),
             // Web tools
-            (&grok_build::WebSearchTool).into(),
-            (&grok_build::WebFetchTool).into(),
+            (&supercharge_build::WebSearchTool).into(),
+            (&supercharge_build::WebFetchTool).into(),
             // Imagine
-            (&grok_build::ImageGenTool).into(),
-            (&grok_build::ImageToVideoTool).into(),
-            (&grok_build::ReferenceToVideoTool).into(),
+            (&supercharge_build::ImageGenTool).into(),
+            (&supercharge_build::ImageToVideoTool).into(),
+            (&supercharge_build::ReferenceToVideoTool).into(),
             // Memory
             (&memory::MemorySearchImpl).into(),
             (&memory::MemoryGetImpl).into(),
@@ -487,60 +487,60 @@ fn orchestrator_toolset() -> ToolServerConfig {
         behavior_preset: None,
     }
 }
-/// Same as `grok_build_plan_toolset` but excludes `TaskTool`, `TaskOutputTool`, and `KillTaskTool`.
+/// Same as `supercharge_build_plan_toolset` but excludes `TaskTool`, `TaskOutputTool`, and `KillTaskTool`.
 /// Use this when the shell does not have subagent infrastructure wired up.
-fn grok_build_plan_no_subagents_toolset() -> ToolServerConfig {
+fn supercharge_build_plan_no_subagents_toolset() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
-            // Standard grok-build tools, minus TaskTool only
+            // Standard supercharge-core tools, minus TaskTool only
             // KillTaskTool and TaskOutputTool are kept because BashTool's background mode requires them
             bash_tool_config(),
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::SearchReplaceTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::SearchReplaceTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
             kill_task_tool_config(),
-            (&grok_build::TodoWriteTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
             task_output_tool_config(),
-            (&grok_build::SchedulerCreateTool).into(),
-            (&grok_build::SchedulerDeleteTool).into(),
-            (&grok_build::SchedulerListTool).into(),
-            (&grok_build::MonitorTool).into(),
+            (&supercharge_build::SchedulerCreateTool).into(),
+            (&supercharge_build::SchedulerDeleteTool).into(),
+            (&supercharge_build::SchedulerListTool).into(),
+            (&supercharge_build::MonitorTool).into(),
             (&search_tool::SearchTool).into(),
             (&use_tool::UseTool).into(),
-            (&grok_build::UpdateGoalTool).into(),
-            (&grok_build::WorkflowTool).into(),
+            (&supercharge_build::UpdateGoalTool).into(),
+            (&supercharge_build::WorkflowTool).into(),
             // Plan mode tools
-            (&grok_build::EnterPlanModeTool).into(),
-            (&grok_build::ExitPlanModeTool).into(),
-            (&grok_build::AskUserQuestionTool).into(),
+            (&supercharge_build::EnterPlanModeTool).into(),
+            (&supercharge_build::ExitPlanModeTool).into(),
+            (&supercharge_build::AskUserQuestionTool).into(),
         ],
         behavior_preset: None,
     }
 }
-/// Same as `default_grok_build_toolset` with the `AskUserQuestionTool` added, allowing the agent to ask structured questions without full plan mode.
-fn grok_build_ask_user_toolset() -> ToolServerConfig {
+/// Same as `default_supercharge_build_toolset` with the `AskUserQuestionTool` added, allowing the agent to ask structured questions without full plan mode.
+fn supercharge_build_ask_user_toolset() -> ToolServerConfig {
     ToolServerConfig {
         tools: vec![
             bash_tool_config(),
-            (&grok_build::ReadFileTool).into(),
-            (&grok_build::SearchReplaceTool).into(),
-            (&grok_build::ListDirTool).into(),
-            (&grok_build::GrepTool).into(),
+            (&supercharge_build::ReadFileTool).into(),
+            (&supercharge_build::SearchReplaceTool).into(),
+            (&supercharge_build::ListDirTool).into(),
+            (&supercharge_build::GrepTool).into(),
             kill_task_tool_config(),
-            (&grok_build::TodoWriteTool).into(),
+            (&supercharge_build::TodoWriteTool).into(),
             task_output_tool_config(),
             wait_tasks_tool_config(),
             task_tool_config(),
-            (&grok_build::SchedulerCreateTool).into(),
-            (&grok_build::SchedulerDeleteTool).into(),
-            (&grok_build::SchedulerListTool).into(),
-            (&grok_build::MonitorTool).into(),
+            (&supercharge_build::SchedulerCreateTool).into(),
+            (&supercharge_build::SchedulerDeleteTool).into(),
+            (&supercharge_build::SchedulerListTool).into(),
+            (&supercharge_build::MonitorTool).into(),
             (&search_tool::SearchTool).into(),
             (&use_tool::UseTool).into(),
-            (&grok_build::UpdateGoalTool).into(),
-            (&grok_build::WorkflowTool).into(),
-            (&grok_build::AskUserQuestionTool).into(),
+            (&supercharge_build::UpdateGoalTool).into(),
+            (&supercharge_build::WorkflowTool).into(),
+            (&supercharge_build::AskUserQuestionTool).into(),
         ],
         behavior_preset: None,
     }
@@ -650,7 +650,11 @@ where
             Ok(Vec::new())
         }
     }
-    deserializer.deserialize_any(StringOrVec)
+    let tools = deserializer.deserialize_any(StringOrVec)?;
+    Ok(tools
+        .into_iter()
+        .map(|t| supercharge_tools::types::tool::normalize_legacy_tool_id(&t).into_owned())
+        .collect())
 }
 /// Accepts a positive u32 or null/absent. Rejects 0.
 fn deserialize_nonzero_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
@@ -671,24 +675,24 @@ where
 #[strum(serialize_all = "kebab-case")]
 pub enum BuiltinAgentName {
     #[strum(serialize = "grok-build", to_string = "supercharge-core")]
-    GrokBuild,
+    SuperchargeBuild,
     #[strum(
         serialize = "grok-build-concise",
         to_string = "supercharge-core-concise"
     )]
-    GrokBuildConcise,
+    SuperchargeBuildConcise,
     #[strum(serialize = "grok-build-plan", to_string = "supercharge-core-plan")]
-    GrokBuildPlan,
+    SuperchargeBuildPlan,
     #[strum(
         serialize = "grok-build-plan-no-subagents",
         to_string = "supercharge-core-plan-no-subagents"
     )]
-    GrokBuildPlanNoSubagents,
+    SuperchargeBuildPlanNoSubagents,
     #[strum(
         serialize = "grok-build-ask-user",
         to_string = "supercharge-core-ask-user"
     )]
-    GrokBuildAskUser,
+    SuperchargeBuildAskUser,
     Codex,
     Opencode,
     GeneralPurpose,
@@ -698,7 +702,7 @@ pub enum BuiltinAgentName {
     #[strum(serialize = "supercharge-e2b")]
     SuperchargeE2b,
     #[strum(serialize = "supercharge-core-orchestrator")]
-    GrokBuildOrchestrator,
+    SuperchargeBuildOrchestrator,
 }
 /// Resolves via `BuiltinAgentName` and delegates to [`AgentDefinition::is_strict_harness`].
 /// Unknown names return `false`: never enforce a harness we can't verify.
@@ -712,11 +716,11 @@ pub fn is_strict_harness_agent_type(name: &str) -> bool {
 impl BuiltinAgentName {
     pub fn definition(self) -> AgentDefinition {
         match self {
-            Self::GrokBuild => AgentDefinition::default_grok_build(),
-            Self::GrokBuildConcise => AgentDefinition::grok_build_concise(),
-            Self::GrokBuildPlan => AgentDefinition::grok_build_plan(),
-            Self::GrokBuildPlanNoSubagents => AgentDefinition::grok_build_plan_no_subagents(),
-            Self::GrokBuildAskUser => AgentDefinition::grok_build_ask_user(),
+            Self::SuperchargeBuild => AgentDefinition::default_supercharge_build(),
+            Self::SuperchargeBuildConcise => AgentDefinition::supercharge_build_concise(),
+            Self::SuperchargeBuildPlan => AgentDefinition::supercharge_build_plan(),
+            Self::SuperchargeBuildPlanNoSubagents => AgentDefinition::supercharge_build_plan_no_subagents(),
+            Self::SuperchargeBuildAskUser => AgentDefinition::supercharge_build_ask_user(),
             Self::Codex => AgentDefinition::codex(),
             Self::Opencode => AgentDefinition::opencode(),
             Self::GeneralPurpose => AgentDefinition::general_purpose(),
@@ -724,7 +728,7 @@ impl BuiltinAgentName {
             Self::Plan => AgentDefinition::plan(),
             Self::BrowserUse => AgentDefinition::browser_use(),
             Self::SuperchargeE2b => AgentDefinition::supercharge_e2b(),
-            Self::GrokBuildOrchestrator => AgentDefinition::grok_build_orchestrator(),
+            Self::SuperchargeBuildOrchestrator => AgentDefinition::supercharge_build_orchestrator(),
         }
     }
     /// Built-in agents available as subagents via the Task tool.
@@ -888,7 +892,7 @@ pub enum AgentScope {
     User,
     /// ~/.supercharge/bundled/agents/ (lowest-priority bundled cache)
     Bundled,
-    /// Built-in agent (e.g., default_grok_build(), browser_use()).
+    /// Built-in agent (e.g., default_supercharge_build(), browser_use()).
     #[default]
     BuiltIn,
 }
@@ -1397,7 +1401,7 @@ impl AgentDefinition {
     pub fn include_browser_verification(&self) -> bool {
         matches!(
             self.builtin_name,
-            Some(BuiltinAgentName::GrokBuildPlan | BuiltinAgentName::GrokBuildPlanNoSubagents)
+            Some(BuiltinAgentName::SuperchargeBuildPlan | BuiltinAgentName::SuperchargeBuildPlanNoSubagents)
         )
     }
     /// True iff this agent's wire format is non-interchangeable with the stock harness.
@@ -1419,12 +1423,12 @@ impl AgentDefinition {
         file_tools: Vec<supercharge_tools::registry::types::ToolConfig>,
     ) {
         const FILE_TOOL_SLOTS: &[[&str; 2]] = &[
-            ["GrokBuild:read_file", "GrokBuildHashline:hashline_read"],
+            ["SuperchargeBuild:read_file", "SuperchargeBuildHashline:hashline_read"],
             [
-                "GrokBuild:search_replace",
-                "GrokBuildHashline:hashline_edit",
+                "SuperchargeBuild:search_replace",
+                "SuperchargeBuildHashline:hashline_edit",
             ],
-            ["GrokBuild:grep", "GrokBuildHashline:hashline_grep"],
+            ["SuperchargeBuild:grep", "SuperchargeBuildHashline:hashline_grep"],
         ];
         for tool in self.tool_config.tools.iter_mut() {
             let Some(slot) = FILE_TOOL_SLOTS
@@ -1486,16 +1490,16 @@ impl AgentDefinition {
             scope: AgentScope::BuiltIn,
         }
     }
-    pub fn default_grok_build() -> Self {
+    pub fn default_supercharge_build() -> Self {
         Self {
-            tool_config: default_grok_build_toolset(),
+            tool_config: default_supercharge_build_toolset(),
             ..Self::base(
-                BuiltinAgentName::GrokBuild,
+                BuiltinAgentName::SuperchargeBuild,
                 "Supercharge AI agent for software engineering tasks.",
             )
         }
     }
-    /// E2B sandbox agent: full GrokBuild tools plus native Playwright browser_*.
+    /// E2B sandbox agent: full SuperchargeBuild tools plus native Playwright browser_*.
     pub fn supercharge_e2b() -> Self {
         Self {
             tool_config: supercharge_e2b_toolset(),
@@ -1506,39 +1510,39 @@ impl AgentDefinition {
         }
     }
     /// Supercharge AI Concise agent definition — concise output format for SFT/RL.
-    pub fn grok_build_concise() -> Self {
+    pub fn supercharge_build_concise() -> Self {
         Self {
-            tool_config: grok_build_concise_toolset(),
+            tool_config: supercharge_build_concise_toolset(),
             agents_md: false,
             ..Self::base(
-                BuiltinAgentName::GrokBuildConcise,
+                BuiltinAgentName::SuperchargeBuildConcise,
                 "Supercharge AI agent with concise output format.",
             )
         }
     }
-    pub fn grok_build_plan() -> Self {
+    pub fn supercharge_build_plan() -> Self {
         Self {
-            tool_config: grok_build_plan_toolset(),
+            tool_config: supercharge_build_plan_toolset(),
             ..Self::base(
-                BuiltinAgentName::GrokBuildPlan,
+                BuiltinAgentName::SuperchargeBuildPlan,
                 "Supercharge AI agent with plan mode support.",
             )
         }
     }
-    pub fn grok_build_plan_no_subagents() -> Self {
+    pub fn supercharge_build_plan_no_subagents() -> Self {
         Self {
-            tool_config: grok_build_plan_no_subagents_toolset(),
+            tool_config: supercharge_build_plan_no_subagents_toolset(),
             ..Self::base(
-                BuiltinAgentName::GrokBuildPlanNoSubagents,
+                BuiltinAgentName::SuperchargeBuildPlanNoSubagents,
                 "Supercharge AI agent with plan mode (no subagents).",
             )
         }
     }
-    pub fn grok_build_ask_user() -> Self {
+    pub fn supercharge_build_ask_user() -> Self {
         Self {
-            tool_config: grok_build_ask_user_toolset(),
+            tool_config: supercharge_build_ask_user_toolset(),
             ..Self::base(
-                BuiltinAgentName::GrokBuildAskUser,
+                BuiltinAgentName::SuperchargeBuildAskUser,
                 "Supercharge AI agent with ask-user-question tool.",
             )
         }
@@ -1612,16 +1616,16 @@ impl AgentDefinition {
             )
         }
     }
-    /// GBL model with full GrokBuild tools that delegates coding/exploration to subagents.
+    /// GBL model with full SuperchargeBuild tools that delegates coding/exploration to subagents.
     /// Subagent overrides are applied in `handle_subagent_request`.
-    pub fn grok_build_orchestrator() -> Self {
+    pub fn supercharge_build_orchestrator() -> Self {
         Self {
             tool_config: orchestrator_toolset(),
             inject_default_tools: false,
             prompt_body: Some(ORCHESTRATOR_PROMPT_BODY.to_string()),
             ..Self::base(
-                BuiltinAgentName::GrokBuildOrchestrator,
-                "GrokBuild orchestrator that delegates coding to specialized subagents",
+                BuiltinAgentName::SuperchargeBuildOrchestrator,
+                "SuperchargeBuild orchestrator that delegates coding to specialized subagents",
             )
         }
     }
@@ -1724,7 +1728,7 @@ mod tests {
         assert!(plan.tools.len() < gb.tools.len());
     }
     fn feedback_tool_id() -> String {
-        ToolConfig::from(&grok_build::SendFeedbackTool).id
+        ToolConfig::from(&supercharge_build::SendFeedbackTool).id
     }
     fn contains_feedback(config: &ToolServerConfig) -> bool {
         let id = feedback_tool_id();
@@ -1733,13 +1737,13 @@ mod tests {
     fn grok_computer_exclusive_ids() -> Vec<String> {
         #[allow(unused_mut)]
         let mut ids: Vec<String> = vec![
-            ToolConfig::from(&grok_build::GetTerminalCommandOutputTool).id,
-            ToolConfig::from(&grok_build::KillTerminalCommandTool).id,
+            ToolConfig::from(&supercharge_build::GetTerminalCommandOutputTool).id,
+            ToolConfig::from(&supercharge_build::KillTerminalCommandTool).id,
         ];
         ids
     }
     #[test]
-    fn send_feedback_exposure_is_grok_build_only() {
+    fn send_feedback_exposure_is_supercharge_build_only() {
         use strum::IntoEnumIterator;
         let presets = all_toolset_presets();
         for (name, config) in &presets {
@@ -1760,18 +1764,18 @@ mod tests {
         }
         for builtin in BuiltinAgentName::iter() {
             let expected = match builtin {
-                BuiltinAgentName::GrokBuild | BuiltinAgentName::SuperchargeE2b => true,
-                BuiltinAgentName::GrokBuildConcise
-                | BuiltinAgentName::GrokBuildPlan
-                | BuiltinAgentName::GrokBuildPlanNoSubagents
-                | BuiltinAgentName::GrokBuildAskUser
+                BuiltinAgentName::SuperchargeBuild | BuiltinAgentName::SuperchargeE2b => true,
+                BuiltinAgentName::SuperchargeBuildConcise
+                | BuiltinAgentName::SuperchargeBuildPlan
+                | BuiltinAgentName::SuperchargeBuildPlanNoSubagents
+                | BuiltinAgentName::SuperchargeBuildAskUser
                 | BuiltinAgentName::Codex
                 | BuiltinAgentName::Opencode
                 | BuiltinAgentName::GeneralPurpose
                 | BuiltinAgentName::Explore
                 | BuiltinAgentName::Plan
                 | BuiltinAgentName::BrowserUse
-                | BuiltinAgentName::GrokBuildOrchestrator => false,
+                | BuiltinAgentName::SuperchargeBuildOrchestrator => false,
             };
             assert_eq!(
                 contains_feedback(&builtin.definition().tool_config),
@@ -1780,16 +1784,16 @@ mod tests {
             );
         }
         for (name, config) in [
-            ("core", grok_build_core_toolset(true)),
+            ("core", supercharge_build_core_toolset(true)),
             ("general-purpose", general_purpose_toolset()),
-            ("hashline", grok_build_hashline_toolset(vec![])),
+            ("hashline", supercharge_build_hashline_toolset(vec![])),
         ] {
             assert!(
                 !contains_feedback(&config),
                 "toolset `{name}` leaked send_feedback"
             );
         }
-        let workspace = workspace_grok_build_toolset();
+        let workspace = workspace_supercharge_build_toolset();
         assert_eq!(
             workspace
                 .tools
@@ -1820,7 +1824,7 @@ mod tests {
         assert!(!contains_feedback(&acp.tool_config));
     }
     #[test]
-    fn grok_computer_preset_is_curated_grok_build_subset() {
+    fn grok_computer_preset_is_curated_supercharge_build_subset() {
         let gc = toolset_for_preset("grok-computer").unwrap();
         let gb = toolset_for_preset("supercharge-core").unwrap();
         let gb_ids: std::collections::HashSet<&str> =
@@ -1848,30 +1852,30 @@ mod tests {
         let ids: std::collections::HashSet<&str> = gc.tools.iter().map(|t| t.id.as_str()).collect();
         assert!(
             ids.contains(
-                ToolConfig::from(&grok_build::GetTerminalCommandOutputTool)
+                ToolConfig::from(&supercharge_build::GetTerminalCommandOutputTool)
                     .id
                     .as_str()
             )
         );
         assert!(
             ids.contains(
-                ToolConfig::from(&grok_build::KillTerminalCommandTool)
+                ToolConfig::from(&supercharge_build::KillTerminalCommandTool)
                     .id
                     .as_str()
             )
         );
-        assert!(!ids.contains(ToolConfig::from(&grok_build::TaskOutputTool).id.as_str()));
-        assert!(!ids.contains(ToolConfig::from(&grok_build::KillTaskTool).id.as_str()));
-        assert!(!ids.contains(ToolConfig::from(&grok_build::TaskTool).id.as_str()));
+        assert!(!ids.contains(ToolConfig::from(&supercharge_build::TaskOutputTool).id.as_str()));
+        assert!(!ids.contains(ToolConfig::from(&supercharge_build::KillTaskTool).id.as_str()));
+        assert!(!ids.contains(ToolConfig::from(&supercharge_build::TaskTool).id.as_str()));
         for t in &gc.tools {
-            if t.id == ToolConfig::from(&grok_build::GetTerminalCommandOutputTool).id
-                || t.id == ToolConfig::from(&grok_build::KillTerminalCommandTool).id
+            if t.id == ToolConfig::from(&supercharge_build::GetTerminalCommandOutputTool).id
+                || t.id == ToolConfig::from(&supercharge_build::KillTerminalCommandTool).id
             {
                 assert!(t.name_override.is_none(), "tool `{}` must not rename", t.id);
             }
         }
     }
-    /// The grok-computer preset must ship a full-file write tool (legacy `write_file` parity), the same OpenCode `write` tool grok-build uses.
+    /// The grok-computer preset must ship a full-file write tool (legacy `write_file` parity), the same OpenCode `write` tool supercharge-core uses.
     /// Guards against `search_replace` being the only file-mutation path.
     /// With the empty-old_string overwrite guard enabled, that path has no single-tool full rewrite.
     #[test]
@@ -1889,38 +1893,38 @@ mod tests {
         let gc_ids: std::collections::HashSet<&str> =
             gc.tools.iter().map(|t| t.id.as_str()).collect();
         for excluded in [
-            ToolConfig::from(&grok_build::LspTool).id,
-            ToolConfig::from(&grok_build::EnterPlanModeTool).id,
-            ToolConfig::from(&grok_build::ExitPlanModeTool).id,
+            ToolConfig::from(&supercharge_build::LspTool).id,
+            ToolConfig::from(&supercharge_build::EnterPlanModeTool).id,
+            ToolConfig::from(&supercharge_build::ExitPlanModeTool).id,
         ] {
             assert!(
                 !gc_ids.contains(excluded.as_str()),
                 "grok-computer preset must not advertise `{excluded}`"
             );
         }
-        let full = workspace_grok_build_toolset();
+        let full = workspace_supercharge_build_toolset();
         let full_ids: std::collections::HashSet<&str> =
             full.tools.iter().map(|t| t.id.as_str()).collect();
         for present in [
-            ToolConfig::from(&grok_build::LspTool).id,
-            ToolConfig::from(&grok_build::EnterPlanModeTool).id,
-            ToolConfig::from(&grok_build::ExitPlanModeTool).id,
+            ToolConfig::from(&supercharge_build::LspTool).id,
+            ToolConfig::from(&supercharge_build::EnterPlanModeTool).id,
+            ToolConfig::from(&supercharge_build::ExitPlanModeTool).id,
         ] {
             assert!(
                 full_ids.contains(present.as_str()),
-                "workspace_grok_build_toolset must ship `{present}`"
+                "workspace_supercharge_build_toolset must ship `{present}`"
             );
         }
     }
     /// Exhaustive match, so adding a new `BuiltinAgentName` won't compile until classified.
     fn expected_strict_harness(name: BuiltinAgentName) -> bool {
         match name {
-            BuiltinAgentName::Codex | BuiltinAgentName::GrokBuildOrchestrator => true,
-            BuiltinAgentName::GrokBuild
-            | BuiltinAgentName::GrokBuildConcise
-            | BuiltinAgentName::GrokBuildPlan
-            | BuiltinAgentName::GrokBuildPlanNoSubagents
-            | BuiltinAgentName::GrokBuildAskUser
+            BuiltinAgentName::Codex | BuiltinAgentName::SuperchargeBuildOrchestrator => true,
+            BuiltinAgentName::SuperchargeBuild
+            | BuiltinAgentName::SuperchargeBuildConcise
+            | BuiltinAgentName::SuperchargeBuildPlan
+            | BuiltinAgentName::SuperchargeBuildPlanNoSubagents
+            | BuiltinAgentName::SuperchargeBuildAskUser
             | BuiltinAgentName::GeneralPurpose
             | BuiltinAgentName::Explore
             | BuiltinAgentName::Plan
@@ -2330,7 +2334,7 @@ completionRequirement:
         assert!(!def.agents_md);
     }
     #[test]
-    fn test_default_tool_config_has_grok_build_tools() {
+    fn test_default_tool_config_has_supercharge_build_tools() {
         let content = r#"---
 name: default-tools
 description: Test default tool config
@@ -2339,7 +2343,7 @@ description: Test default tool config
         let def = AgentDefinition::parse(content).unwrap();
         assert!(
             !def.tool_config.tools.is_empty(),
-            "default tool_config should have grok_build tools"
+            "default tool_config should have supercharge_build tools"
         );
     }
     #[test]
@@ -2415,8 +2419,8 @@ description: Test default tool config
         }))
         .unwrap();
         assert!(!def.include_browser_verification());
-        assert!(AgentDefinition::grok_build_plan().include_browser_verification());
-        assert!(AgentDefinition::grok_build_plan_no_subagents().include_browser_verification());
+        assert!(AgentDefinition::supercharge_build_plan().include_browser_verification());
+        assert!(AgentDefinition::supercharge_build_plan_no_subagents().include_browser_verification());
     }
     #[test]
     fn test_from_json_has_default_toolset_with_task_tool() {
@@ -2429,7 +2433,7 @@ description: Test default tool config
             "promptBody": "You are a coding assistant."
         });
         let def = AgentDefinition::from_json(&json).unwrap();
-        let task_tool_id = "GrokBuild:task";
+        let task_tool_id = "SuperchargeBuild:task";
         assert!(
             def.tool_config.tools.iter().any(|tc| tc.id == task_tool_id),
             "from_json() without toolConfig should include TaskTool in default toolset, \
@@ -2584,14 +2588,14 @@ description: Test default tool config
     fn test_builtin_agent_name_strum_round_trip() {
         use std::str::FromStr;
         for (s, expected) in [
-            ("supercharge-core", BuiltinAgentName::GrokBuild),
+            ("supercharge-core", BuiltinAgentName::SuperchargeBuild),
             (
                 "supercharge-core-concise",
-                BuiltinAgentName::GrokBuildConcise,
+                BuiltinAgentName::SuperchargeBuildConcise,
             ),
             (
                 "supercharge-core-ask-user",
-                BuiltinAgentName::GrokBuildAskUser,
+                BuiltinAgentName::SuperchargeBuildAskUser,
             ),
             ("codex", BuiltinAgentName::Codex),
             ("opencode", BuiltinAgentName::Opencode),
@@ -2719,7 +2723,7 @@ description: Test default tool config
         assert_eq!(recovered.mcp_inheritance, def.mcp_inheritance);
     }
     fn def_with_template(tpl: crate::prompt::context::TemplateOverride) -> AgentDefinition {
-        let mut def = AgentDefinition::default_grok_build();
+        let mut def = AgentDefinition::default_supercharge_build();
         def.system_prompt = tpl;
         def
     }

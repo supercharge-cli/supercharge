@@ -2193,7 +2193,7 @@ fn tool_call_to_block(
             crate::acp::subagent_message::to_block(tc, labels)
         }
         _ if canonical_tool_name(tc)
-            == Some(supercharge_tools::implementations::grok_build::SEND_FEEDBACK_TOOL_NAME) =>
+            == Some(supercharge_tools::implementations::supercharge_build::SEND_FEEDBACK_TOOL_NAME) =>
         {
             let mut block = OtherToolCallBlock::new("Feedback drafted", String::new());
             if !success {

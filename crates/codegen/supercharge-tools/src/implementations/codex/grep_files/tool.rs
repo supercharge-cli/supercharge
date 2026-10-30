@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tokio::time::timeout;
 
-use crate::implementations::grok_build::grep::ripgrep::rg_path;
+use crate::implementations::supercharge_build::grep::ripgrep::rg_path;
 use crate::types::output::CodexGrepFilesOutput;
 use crate::types::requirements::Expr;
 #[allow(unused_imports)]
@@ -56,8 +56,8 @@ pub struct CodexGrepFilesInput {
 
 // ─── Tool ───────────────────────────────────────────────────────────
 
-/// Codex-namespace grep_files tool — file-path-only regex search. Shares `ToolKind::Search` with the grok-build `GrepTool`. These tools are
-/// namespace-exclusive — consumers enable either `GrokBuild` or `Codex` search, never both simultaneously. This follows the same pattern as
+/// Codex-namespace grep_files tool — file-path-only regex search. Shares `ToolKind::Search` with the supercharge-core `GrepTool`. These tools are
+/// namespace-exclusive — consumers enable either `SuperchargeBuild` or `Codex` search, never both simultaneously. This follows the same pattern as
 /// `CodexListDirTool`/`ListDirTool` (`ToolKind::ListDir`) and `CodexReadFileTool`/`ReadFileImpl` (`ToolKind::Read`).
 #[derive(Debug, Default)]
 pub struct CodexGrepFilesTool;

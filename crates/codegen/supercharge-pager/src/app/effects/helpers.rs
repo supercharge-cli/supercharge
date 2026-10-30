@@ -441,7 +441,7 @@ pub(crate) struct SessionFlags {
 }
 impl SessionFlags {
     /// Resolve the agent profile name from the flags.
-    /// Returns `None` for the default `grok-build` profile (no `_meta` needed; it already includes TaskTool).
+    /// Returns `None` for the default `supercharge-core` profile (no `_meta` needed; it already includes TaskTool).
     /// Chat mode never injects a Build profile (remote owns agent behavior).
     pub(super) fn agent_profile(&self) -> Option<&'static str> {
         if self.chat_mode {

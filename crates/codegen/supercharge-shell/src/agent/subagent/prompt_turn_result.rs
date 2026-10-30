@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::session::commands::{PromptCompletionKind, PromptTurnResult};
-use supercharge_tools::implementations::grok_build::task::types::SubagentResult;
+use supercharge_tools::implementations::supercharge_build::task::types::SubagentResult;
 
 pub(super) enum PromptTurnResultMode {
     Initial { requires_structured_output: bool },

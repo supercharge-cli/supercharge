@@ -38,7 +38,7 @@ fn http_parts(server: &acp::McpServer) -> (String, Vec<(String, String)>) {
 }
 
 fn definition_with(mcp_servers: Vec<McpServerRef>) -> AgentDefinition {
-    let mut definition = AgentDefinition::default_grok_build();
+    let mut definition = AgentDefinition::default_supercharge_build();
     definition.name = "seat".to_owned();
     definition.scope = AgentScope::User;
     definition.mcp_servers = mcp_servers;

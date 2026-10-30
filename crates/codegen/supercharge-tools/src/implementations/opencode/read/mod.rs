@@ -231,7 +231,7 @@ impl supercharge_tool_runtime::Tool for ReadTool {
         // compression — raw bytes (truncated or non-endpoint formats)
         // must never reach the conversation.
         if let Ok(meta) =
-            crate::implementations::grok_build::read_file::bytes_to_metadata(&file_bytes)
+            crate::implementations::supercharge_build::read_file::bytes_to_metadata(&file_bytes)
             && meta.is_image()
         {
             return Ok(crate::implementations::read_file::image::image_read_output(

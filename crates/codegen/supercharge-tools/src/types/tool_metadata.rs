@@ -33,9 +33,9 @@ pub trait ToolMetadata: Send + Sync {
     /// default `is_read_only()` derivation.
     fn kind(&self) -> ToolKind;
 
-    /// Namespace grouping (GrokBuild, Cursor, OpenCode, ...).
+    /// Namespace grouping (SuperchargeBuild, Cursor, OpenCode, ...).
     /// Used to build the fully-qualified tool ID at registration time
-    /// (e.g., `"GrokBuild:grep"`).
+    /// (e.g., `"SuperchargeBuild:grep"`).
     fn tool_namespace(&self) -> ToolNamespace;
 
     /// Raw MiniJinja description template with `${{ tools.by_kind.X }}` and

@@ -48,10 +48,10 @@ impl DrainSource {
     pub(super) fn into_parts(
         self,
     ) -> (
-        supercharge_tools::implementations::grok_build::update_goal::UpdateGoalInput,
+        supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalInput,
         Option<
             tokio::sync::oneshot::Sender<
-                supercharge_tools::implementations::grok_build::update_goal::UpdateGoalAck,
+                supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalAck,
             >,
         >,
     ) {
@@ -67,10 +67,10 @@ impl DrainSource {
 pub(super) fn try_send_ack(
     ack_tx: Option<
         tokio::sync::oneshot::Sender<
-            supercharge_tools::implementations::grok_build::update_goal::UpdateGoalAck,
+            supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalAck,
         >,
     >,
-    ack: supercharge_tools::implementations::grok_build::update_goal::UpdateGoalAck,
+    ack: supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalAck,
 ) {
     if let Some(tx) = ack_tx {
         send_ack(tx, ack);
@@ -79,9 +79,9 @@ pub(super) fn try_send_ack(
 
 pub(super) fn send_ack(
     ack_tx: tokio::sync::oneshot::Sender<
-        supercharge_tools::implementations::grok_build::update_goal::UpdateGoalAck,
+        supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalAck,
     >,
-    ack: supercharge_tools::implementations::grok_build::update_goal::UpdateGoalAck,
+    ack: supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalAck,
 ) {
     if ack_tx.send(ack).is_err() {
         tracing::debug!("update_goal ack receiver dropped before harness could respond");
@@ -1014,7 +1014,7 @@ pub(crate) fn planner_failure_pause_message() -> String {
 }
 
 pub(crate) fn goal_slash_and_harness_available(goal_enabled: bool, tool_names: &[String]) -> bool {
-    use supercharge_tools::implementations::grok_build::UPDATE_GOAL_TOOL_NAME;
+    use supercharge_tools::implementations::supercharge_build::UPDATE_GOAL_TOOL_NAME;
     goal_enabled && tool_names.iter().any(|n| n == UPDATE_GOAL_TOOL_NAME)
 }
 
@@ -1800,7 +1800,7 @@ impl SessionActor {
             .borrow()
             .tool_bridge()
             .update_resource(
-                supercharge_tools::implementations::grok_build::task::types::GoalLoopActive(active),
+                supercharge_tools::implementations::supercharge_build::task::types::GoalLoopActive(active),
             )
             .await;
     }

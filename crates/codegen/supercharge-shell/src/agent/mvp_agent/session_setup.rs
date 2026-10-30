@@ -1602,7 +1602,7 @@ impl MvpAgent {
             });
             crate::agent::subagent::reconcile_orphaned_subagents_with_backend(
                 unfinished_subagents,
-                &supercharge_tools::implementations::grok_build::task::backend::ChannelBackend::new(
+                &supercharge_tools::implementations::supercharge_build::task::backend::ChannelBackend::new(
                     self.subagent_event_tx.event_sender().0,
                 ),
                 &session_dir,
@@ -1638,8 +1638,8 @@ impl MvpAgent {
             available_keys = ?available.keys().take(10).collect::<Vec<_>>(),
             "load_session: restoring persisted model (debug)"
         );
-        let is_grok_build = persisted_model.0.starts_with("supercharge-core");
-        let same_family_fallback = if is_grok_build {
+        let is_supercharge_build = persisted_model.0.starts_with("supercharge-core");
+        let same_family_fallback = if is_supercharge_build {
             available
                 .keys()
                 .find(|id| id.0.starts_with("supercharge-core"))

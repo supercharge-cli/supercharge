@@ -17,8 +17,8 @@ fn ext_response_from<T: serde::Serialize>(value: &T) -> AcpResult<acp::ExtRespon
 /// Answer a reverse `ext_method` request without a UI.
 /// Known interaction methods get a policy reply; dropping `response_tx` instead would fail the whole turn with a channel `recv_failed`.
 pub(crate) fn reply_headless_ext_method(args: AcpArgsBox<acp::ExtRequest>) {
-    use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionExtResponse;
-    use supercharge_tools::implementations::grok_build::exit_plan_mode::ExitPlanModeExtResponse;
+    use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionExtResponse;
+    use supercharge_tools::implementations::supercharge_build::exit_plan_mode::ExitPlanModeExtResponse;
 
     let method = args.request.method.as_ref();
     // Known methods are answered without parsing params: even a malformed request gets the policy reply rather than a dropped channel

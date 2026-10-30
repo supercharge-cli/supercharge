@@ -89,7 +89,7 @@ pub(crate) fn ctx_with_toggle(toggle: HashMap<String, bool>) -> SubagentSpawnCon
         hook_registry: None,
         parent_depth: 0,
         subagents_max_depth:
-            supercharge_tools::implementations::grok_build::task::MAX_SUBAGENT_DEPTH,
+            supercharge_tools::implementations::supercharge_build::task::MAX_SUBAGENT_DEPTH,
         workflow_max_concurrent_agents:
             crate::session::workflow::host_service::DEFAULT_WORKFLOW_MAX_CONCURRENT_AGENTS,
         media_gen_batch_limits: supercharge_tools::media_gen_limits::MediaGenBatchLimits::default(),
@@ -129,7 +129,7 @@ pub(crate) fn ctx_with_toggle(toggle: HashMap<String, bool>) -> SubagentSpawnCon
         parent_notification_handle: None,
         parent_scheduler_handle: None,
         subagent_sampling_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(
-            supercharge_tools::implementations::grok_build::task::admission::DEFAULT_MAX_CONCURRENT,
+            supercharge_tools::implementations::supercharge_build::task::admission::DEFAULT_MAX_CONCURRENT,
         )),
     }
 }

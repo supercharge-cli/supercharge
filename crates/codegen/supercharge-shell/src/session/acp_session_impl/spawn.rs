@@ -253,15 +253,15 @@ pub(crate) async fn spawn_session_actor(
     max_retries: Option<u32>,
     subagent_rate_limit_max_attempts: u32,
     web_search_sampling_config: Option<supercharge_sampler::SamplerConfig>,
-    web_fetch_config: supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig,
-    image_gen_config: supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig,
-    video_gen_config: supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig,
-    app_builder_deployer_config: supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
+    web_fetch_config: supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig,
+    image_gen_config: supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig,
+    video_gen_config: supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig,
+    app_builder_deployer_config: supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig,
     write_file_enabled: bool,
     active_agent_messages_enabled: bool,
     subagent_model_inheritance: bool,
     agent_message_sender: Option<
-        supercharge_tools::implementations::grok_build::task::types::AgentMessageSender,
+        supercharge_tools::implementations::supercharge_build::task::types::AgentMessageSender,
     >,
     goal_enabled: bool,
     background_workflows_enabled: bool,
@@ -298,7 +298,7 @@ pub(crate) async fn spawn_session_actor(
         std::sync::Arc<dyn supercharge_tools::computer::types::TerminalBackend>,
     >,
     parent_scheduler_handle: Option<
-        supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle,
+        supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle,
     >,
     max_turns: Option<usize>,
     forked_tool_override: Option<Vec<ToolSpec>>,
@@ -827,7 +827,7 @@ pub(crate) async fn spawn_session_actor(
     };
     let reminder_policy = resolve_reminder_policy(remote_settings.as_ref(), todo_gate);
     let (user_question_tx, user_question_rx) = tokio::sync::mpsc::unbounded_channel::<
-        supercharge_tools::implementations::grok_build::ask_user_question::types::UserQuestionRequest,
+        supercharge_tools::implementations::supercharge_build::ask_user_question::types::UserQuestionRequest,
     >();
     let attribution_callback_for_spec = auth_manager.as_ref().map(|am| {
         supercharge_login::attribution::ShellAttribution::new_tool_callback(
@@ -1433,7 +1433,7 @@ pub(crate) async fn spawn_session_actor(
             let toolset = agent.tool_bridge().toolset();
             let res = toolset.resources.lock().await;
             res.get::<
-                    supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle,
+                    supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle,
                 >()
                 .cloned()
         };
@@ -1666,7 +1666,7 @@ pub(crate) async fn spawn_session_actor(
         .collect();
     let upload_queue = Arc::new(std::sync::OnceLock::new());
     let (goal_update_tx, goal_update_rx) = tokio::sync::mpsc::unbounded_channel::<
-        supercharge_tools::implementations::grok_build::update_goal::UpdateGoalEnvelope,
+        supercharge_tools::implementations::supercharge_build::update_goal::UpdateGoalEnvelope,
     >();
     let workflow_restore_span = tracing::info_span!("spawn.workflow_restore").entered();
     crate::session::workflow::registry::warm_builtin_cache();
@@ -1754,7 +1754,7 @@ pub(crate) async fn spawn_session_actor(
         ),
     ));
     let (workflow_launch_tx, workflow_launch_rx) = tokio::sync::mpsc::unbounded_channel::<
-        supercharge_tools::implementations::grok_build::workflow::WorkflowLaunchEnvelope,
+        supercharge_tools::implementations::supercharge_build::workflow::WorkflowLaunchEnvelope,
     >();
     crate::session::workflow::request_service::spawn_request_service(
         workflow_launch_rx,
@@ -2250,7 +2250,7 @@ pub(crate) async fn spawn_session_actor(
             .borrow()
             .tool_bridge()
             .update_resource(
-                supercharge_tools::implementations::grok_build::workflow::WorkflowLaunchHandle(
+                supercharge_tools::implementations::supercharge_build::workflow::WorkflowLaunchHandle(
                     session.workflow_launch_tx.clone(),
                 ),
             )
@@ -2261,7 +2261,7 @@ pub(crate) async fn spawn_session_actor(
                 .borrow()
                 .tool_bridge()
                 .update_resource(
-                    supercharge_tools::implementations::grok_build::update_goal::GoalUpdateHandle(
+                    supercharge_tools::implementations::supercharge_build::update_goal::GoalUpdateHandle(
                         session.goal_update_tx.clone(),
                     ),
                 )
@@ -2370,7 +2370,7 @@ pub(crate) async fn spawn_session_actor(
     }
     {
         use agent_client_protocol::Client as _;
-        use supercharge_tools::implementations::grok_build::ask_user_question::{
+        use supercharge_tools::implementations::supercharge_build::ask_user_question::{
             AskUserQuestionExtRequest, AskUserQuestionExtResponse, UserQuestionError,
             UserQuestionResponse,
         };
@@ -2382,7 +2382,7 @@ pub(crate) async fn spawn_session_actor(
         let mut user_question_rx = user_question_rx;
         tokio::task::spawn_local(async move {
             while let Some(mut request) = user_question_rx.recv().await {
-                use supercharge_tools::implementations::grok_build::ask_user_question::AskUserQuestionMode;
+                use supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionMode;
                 let mode = match *current_prompt_mode.lock() {
                     PromptMode::Plan => AskUserQuestionMode::Plan,
                     _ => AskUserQuestionMode::Default,
@@ -2680,15 +2680,15 @@ pub(crate) async fn spawn_session_on_thread(
     max_retries: Option<u32>,
     subagent_rate_limit_max_attempts: u32,
     web_search_sampling_config: Option<supercharge_sampler::SamplerConfig>,
-    web_fetch_config: supercharge_tools::implementations::grok_build::web_fetch::WebFetchConfig,
-    image_gen_config: supercharge_tools::implementations::grok_build::image_gen::ImageGenConfig,
-    video_gen_config: supercharge_tools::implementations::grok_build::video_gen::VideoGenConfig,
-    app_builder_deployer_config: supercharge_tools::implementations::grok_build::app_builder::AppBuilderDeployerConfig,
+    web_fetch_config: supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig,
+    image_gen_config: supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig,
+    video_gen_config: supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig,
+    app_builder_deployer_config: supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig,
     write_file_enabled: bool,
     active_agent_messages_enabled: bool,
     subagent_model_inheritance: bool,
     agent_message_sender: Option<
-        supercharge_tools::implementations::grok_build::task::types::AgentMessageSender,
+        supercharge_tools::implementations::supercharge_build::task::types::AgentMessageSender,
     >,
     goal_enabled: bool,
     background_workflows_enabled: bool,
@@ -2726,7 +2726,7 @@ pub(crate) async fn spawn_session_on_thread(
         std::sync::Arc<dyn supercharge_tools::computer::types::TerminalBackend>,
     >,
     parent_scheduler_handle: Option<
-        supercharge_tools::implementations::grok_build::scheduler::types::SchedulerHandle,
+        supercharge_tools::implementations::supercharge_build::scheduler::types::SchedulerHandle,
     >,
     max_turns: Option<usize>,
     forked_tool_override: Option<Vec<ToolSpec>>,

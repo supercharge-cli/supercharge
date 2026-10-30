@@ -1287,8 +1287,8 @@ async fn an_allow_for_a_folder_untied_to_the_violation_keeps_the_denial() {
 fn the_sandbox_path_follows_the_tools_kind_and_namespace_and_the_folders_mode() {
     let execute = |namespace| Some((ToolKind::Execute, namespace));
     let decodable = [
-        ToolNamespace::GrokBuild,
-        ToolNamespace::GrokBuildConcise,
+        ToolNamespace::SuperchargeBuild,
+        ToolNamespace::SuperchargeBuildConcise,
         ToolNamespace::OpenCode,
     ];
     for namespace in decodable {
@@ -1308,7 +1308,7 @@ fn the_sandbox_path_follows_the_tools_kind_and_namespace_and_the_folders_mode() 
     for namespace in [
         ToolNamespace::MCP,
         ToolNamespace::Codex,
-        ToolNamespace::GrokBuildHashline,
+        ToolNamespace::SuperchargeBuildHashline,
     ] {
         assert_eq!(
             SandboxPath::Shell,
@@ -1320,7 +1320,7 @@ fn the_sandbox_path_follows_the_tools_kind_and_namespace_and_the_folders_mode() 
         assert_eq!(
             SandboxPath::None,
             SandboxPath::for_tool(
-                Some((kind, ToolNamespace::GrokBuild)),
+                Some((kind, ToolNamespace::SuperchargeBuild)),
                 Some(SandboxMode::Enforce)
             ),
             "{kind:?}"

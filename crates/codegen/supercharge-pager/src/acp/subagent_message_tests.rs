@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use supercharge_tools::implementations::grok_build::send_subagent_message::SendSubagentMessageOutput;
+use supercharge_tools::implementations::supercharge_build::send_subagent_message::SendSubagentMessageOutput;
 use supercharge_tools::tool_taxonomy::{CanonicalToolMeta, TOOL_META_KEY, ToolIdentity};
 use supercharge_tools::types::output::ToolOutput;
 use supercharge_tools::types::tool::{ToolKind, ToolNamespace};
@@ -26,7 +26,7 @@ fn canonical_meta(name: &str, kind: ToolKind) -> acp::Meta {
 fn canonical_meta_with_version(name: &str, kind: ToolKind, version: u32) -> acp::Meta {
     let identity = ToolIdentity {
         tool_kind: kind,
-        namespace: ToolNamespace::GrokBuild,
+        namespace: ToolNamespace::SuperchargeBuild,
         presentation_name: kind.presentation_name(),
         read_only: false,
     };
@@ -306,7 +306,7 @@ fn wire_id_is_trimmed_and_a_blank_or_missing_id_still_renders() {
 #[test]
 fn wire_input_is_preserved_without_admission_revalidation() {
     let oversize = "x".repeat(
-        supercharge_tools::implementations::grok_build::task::types::MAX_ACTIVE_AGENT_MESSAGE_BYTES
+        supercharge_tools::implementations::supercharge_build::task::types::MAX_ACTIVE_AGENT_MESSAGE_BYTES
             + 1,
     );
     for (subagent_id, text) in [("null", "hello"), ("sub-123", ""), ("sub-123", &oversize)] {
@@ -351,7 +351,7 @@ fn typed_outcomes_map_exhaustively_to_delivery_presentations() {
         ),
         (
             Output::QuotaExceeded {
-                kind: supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageQuotaKind::SenderTargetInFlight,
+                kind: supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageQuotaKind::SenderTargetInFlight,
                 limit: 4,
             },
             "Message rejected \u{b7} subagent sub-123",
@@ -619,7 +619,7 @@ fn pager_routes_every_terminal_category_to_the_dedicated_block() {
         Output::NotActiveOrFinalizing,
         Output::Saturated { max_in_flight: 8 },
         Output::QuotaExceeded {
-            kind: supercharge_tools::implementations::grok_build::task::types::ActiveAgentMessageQuotaKind::AttemptOutbound,
+            kind: supercharge_tools::implementations::supercharge_build::task::types::ActiveAgentMessageQuotaKind::AttemptOutbound,
             limit: 32,
         },
         Output::Unsupported,

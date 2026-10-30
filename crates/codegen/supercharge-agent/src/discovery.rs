@@ -795,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn test_by_name_builtin_grok_build() {
+    fn test_by_name_builtin_supercharge_build() {
         let def = by_name("supercharge-core");
         assert!(def.is_some());
         assert_eq!(def.unwrap().name, "supercharge-core");
@@ -1055,7 +1055,7 @@ mod tests {
         use std::str::FromStr;
         let variant = BuiltinAgentName::from_str("supercharge-core-orchestrator")
             .expect("from_str must resolve supercharge-core-orchestrator");
-        assert_eq!(variant, BuiltinAgentName::GrokBuildOrchestrator);
+        assert_eq!(variant, BuiltinAgentName::SuperchargeBuildOrchestrator);
         let def = variant.definition();
         assert_eq!(def.name, "supercharge-core-orchestrator");
         assert!(
@@ -1540,7 +1540,7 @@ mod tests {
         let registry = make_plugin_registry("plugin-one", PluginScope::User, vec![]);
         let plugin = registry.get("plugin-one").unwrap();
 
-        let mut def = AgentDefinition::default_grok_build();
+        let mut def = AgentDefinition::default_supercharge_build();
         def.prompt_body = Some("Body ${CLAUDE_PLUGIN_ROOT}/x".to_string());
         def.system_prompt =
             TemplateOverride::Custom("Data at ${CLAUDE_PLUGIN_DATA}/db".to_string());

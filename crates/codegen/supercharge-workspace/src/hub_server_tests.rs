@@ -5,7 +5,7 @@ use crate::handle::tests::{
 };
 use std::sync::Arc;
 use supercharge_tool_protocol::turn_hook;
-use supercharge_tools::implementations::grok_build::scheduler::types::{
+use supercharge_tools::implementations::supercharge_build::scheduler::types::{
     ScheduledTask, SchedulerState,
 };
 use supercharge_tools::types::resources::State;
@@ -265,7 +265,7 @@ async fn list_background_tasks_rpc_stays_truthful_across_rebinds() {
     assert_eq!(tasks.len(), 1, "the task must survive a reused rebind");
     let read_only = ToolServerConfig {
         tools: vec![tc(
-            "GrokBuild:read_file",
+            "SuperchargeBuild:read_file",
             Some(supercharge_tools::types::tool::ToolKind::Read),
         )],
         behavior_preset: None,

@@ -177,8 +177,8 @@ impl Drop for BlockingWaitGuard {
 }
 pub(crate) fn subagent_foreground_wait(
     state: Arc<BlockingWaitState>,
-) -> supercharge_tools::implementations::grok_build::task::types::SubagentForegroundWait {
-    supercharge_tools::implementations::grok_build::task::types::SubagentForegroundWait::new(
+) -> supercharge_tools::implementations::supercharge_build::task::types::SubagentForegroundWait {
+    supercharge_tools::implementations::supercharge_build::task::types::SubagentForegroundWait::new(
         move || Box::new(BlockingWaitGuard::enter(Arc::clone(&state))),
     )
 }
@@ -205,11 +205,11 @@ pub struct ToolContext {
     /// `None` if subagent support is not enabled.
     pub subagent_event_tx: Option<
         tokio::sync::mpsc::UnboundedSender<
-            supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+            supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
         >,
     >,
     pub subagent_coordinator_sender: Option<
-        supercharge_tools::implementations::grok_build::task::backend::SubagentCoordinatorSender,
+        supercharge_tools::implementations::supercharge_build::task::backend::SubagentCoordinatorSender,
     >,
     /// Shared LSP runtime, cloned cheaply (Arc) from parent to child.
     pub lsp: Option<Arc<dyn supercharge_tools::implementations::lsp::LspBackend>>,
@@ -222,7 +222,7 @@ pub struct ToolContext {
     /// The session turn loop (`inject_pending_monitor_events`) drains events pushed here.
     /// They are injected as ONE hidden synthetic user message before the next sampling step.
     pub monitor_event_buffer:
-        Option<supercharge_tools::implementations::grok_build::monitor::types::MonitorEventBuffer>,
+        Option<supercharge_tools::implementations::supercharge_build::monitor::types::MonitorEventBuffer>,
     pub task_completion_reservations:
         Option<supercharge_tools::reminders::task_completion::TaskCompletionReservations>,
     pub task_wake_suppressed:

@@ -1468,7 +1468,7 @@ pub struct Config {
     pub subagents_sampling_limit: usize,
     #[serde(skip)]
     pub subagents_limit_behavior:
-        supercharge_tools::implementations::grok_build::task::admission::LimitBehavior,
+        supercharge_tools::implementations::supercharge_build::task::admission::LimitBehavior,
     #[serde(skip)]
     pub workflow_max_concurrent_agents: usize,
     #[serde(skip)]
@@ -1520,7 +1520,7 @@ pub struct Config {
     /// Resolved by [`crate::config::ToolsConfig::resolve`].
     #[serde(skip)]
     pub zdr_video_output_s3:
-        Option<supercharge_tools::implementations::grok_build::video_gen::ZdrVideoOutputS3Config>,
+        Option<supercharge_tools::implementations::supercharge_build::video_gen::ZdrVideoOutputS3Config>,
     /// Whether to enrich path-not-found errors with CWD reminders, "dropped repo folder" correction, and similar-name suggestions. Default `false`. Enabled via remote settings.
     /// Serialized to `config.json` on GCS so traces can distinguish which sessions had path-not-found hints active.
     #[serde(default)]
@@ -1614,7 +1614,7 @@ pub use supercharge_agent::config::PermissionMode;
 pub use supercharge_shared::ui_config::{ContextualHints, UiConfig};
 /// Set in `config.toml` under `[agent]`: Priority (highest to lowest): ACP session-level `_meta.agentProfile`
 /// CLI `--agent-profile` flag `[agent]` config.toml section (this config) `SUPERCHARGE_AGENT` env var
-/// Default `grok-build` agent
+/// Default `supercharge-core` agent
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AgentSelectionConfig {
@@ -1749,9 +1749,9 @@ impl Default for Config {
             subagent_model_inheritance: false,
             subagents_max_depth: crate::config::SubagentsConfig::DEFAULT_MAX_DEPTH,
             subagents_max_concurrent:
-                supercharge_tools::implementations::grok_build::task::admission::DEFAULT_MAX_CONCURRENT,
+                supercharge_tools::implementations::supercharge_build::task::admission::DEFAULT_MAX_CONCURRENT,
             subagents_sampling_limit:
-                supercharge_tools::implementations::grok_build::task::admission::DEFAULT_MAX_CONCURRENT,
+                supercharge_tools::implementations::supercharge_build::task::admission::DEFAULT_MAX_CONCURRENT,
             subagents_limit_behavior: Default::default(),
             workflow_max_concurrent_agents:
                 crate::session::workflow::host_service::DEFAULT_WORKFLOW_MAX_CONCURRENT_AGENTS,
@@ -2639,7 +2639,7 @@ impl Config {
     /// `imagine_tools_disabled` is a remote force-off (env/config cannot re-enable).
     /// Otherwise: requirement > env > `[features]` > remote > default.
     pub(crate) fn resolve_image_gen(&self) -> Resolved<bool> {
-        use supercharge_tools::implementations::grok_build::IMAGE_GEN_TOOL_NAME;
+        use supercharge_tools::implementations::supercharge_build::IMAGE_GEN_TOOL_NAME;
         if let Some(pinned) = self.requirements.image_gen.pinned() {
             return Resolved::new(pinned, ConfigSource::Requirement);
         }
@@ -2663,7 +2663,7 @@ impl Config {
     /// `image_edit` tool gate.
     /// Same denylist / requirement pattern as [`Self::resolve_image_gen`]; no `[features]` key (defaults on).
     pub(crate) fn resolve_image_edit(&self) -> Resolved<bool> {
-        use supercharge_tools::implementations::grok_build::IMAGE_EDIT_TOOL_NAME;
+        use supercharge_tools::implementations::supercharge_build::IMAGE_EDIT_TOOL_NAME;
         if let Some(pinned) = self.requirements.image_edit.pinned() {
             return Resolved::new(pinned, ConfigSource::Requirement);
         }
@@ -2682,7 +2682,7 @@ impl Config {
     /// Registered as a pair; denylisting either tool name (or `video_gen`) disables both.
     /// Otherwise same precedence as [`Self::resolve_image_gen`].
     pub(crate) fn resolve_video_gen(&self) -> Resolved<bool> {
-        use supercharge_tools::implementations::grok_build::{
+        use supercharge_tools::implementations::supercharge_build::{
             IMAGE_TO_VIDEO_TOOL_NAME, REFERENCE_TO_VIDEO_TOOL_NAME,
         };
         if let Some(pinned) = self.requirements.video_gen.pinned() {
@@ -4248,7 +4248,7 @@ pub struct ModelInfo {
     pub system_prompt_label: Option<String>,
     /// When true, this model uses concise mode (compact system prompt, concise tool output, concise user message prefix, reduced toolset).
     pub use_concise: bool,
-    /// Always has a value; defaults to `"grok-build-plan"` when the server or user config doesn't specify one.
+    /// Always has a value; defaults to `"supercharge-core-plan"` when the server or user config doesn't specify one.
     #[serde(default = "default_agent_type")]
     pub agent_type: String,
     /// Per-chunk idle timeout for inference streaming (see `ModelEntryConfig`).
@@ -4689,7 +4689,7 @@ pub struct Features {
     /// Default: true (index any git repo). Patterns can explicitly match non-git directories.
     #[serde(default)]
     pub codebase_indexing: CodebaseIndexingSetting,
-    /// Show a blocking warning when Grok starts outside a Git repository. Default: false. Used as the local fallback when the `non_git_warning` remote settings flag in `grok_build_settings` is absent.
+    /// Show a blocking warning when Grok starts outside a Git repository. Default: false. Used as the local fallback when the `non_git_warning` remote settings flag in `supercharge_build_settings` is absent.
     /// When the remote flag is present it takes precedence: `Some(false)` from remote settings overrides `true` here.
     #[serde(default)]
     pub non_git_warning: bool,
@@ -5137,7 +5137,7 @@ pub(crate) fn stamp_session_local_sampler_fields(
 }
 /// Finalize the image-describe model and sampler config for user attachments. Shared so the aux resolve happy path and the `None` fallback cannot diverge between those entry points.
 /// On aux resolve `Some`, stamp session-local fields onto the helper config. On `None`, fall back to the active session model and full config.
-/// That avoids forcing `image_description_model` onto the agent endpoint, which 404s on BYOK / non-proxy routes for internal slugs like `grok-build`.
+/// That avoids forcing `image_description_model` onto the agent endpoint, which 404s on BYOK / non-proxy routes for internal slugs like `supercharge-core`.
 pub(crate) fn finalize_image_describe_sampler_config(
     resolved_aux: Option<SamplerConfig>,
     active_session_config: &SamplerConfig,

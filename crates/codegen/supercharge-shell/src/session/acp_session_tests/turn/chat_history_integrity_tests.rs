@@ -116,7 +116,7 @@ async fn mid_turn_user_injection_must_not_duplicate_tool_results_for_one_tool_us
 
             let mut actor = create_test_actor(0, 256_000, 85, gateway_tx, persistence_tx).await;
             actor.sampler_handle = sampler_handle;
-            *actor.agent.borrow_mut() = test_grok_build_agent_with_todo().await;
+            *actor.agent.borrow_mut() = test_supercharge_build_agent_with_todo().await;
 
             let mut cfg = actor
                 .chat_state_handle

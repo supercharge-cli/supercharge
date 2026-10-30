@@ -28,7 +28,7 @@ use crate::permission::shell_access::{
 use crate::permission::state::PermissionState;
 use crate::permission::types::{AccessKind, Decision, RequestPathContext};
 use supercharge_mcp::servers::parse_mcp_qualified_name;
-use supercharge_tools::implementations::grok_build::web_fetch::{
+use supercharge_tools::implementations::supercharge_build::web_fetch::{
     DomainMatcher, domain::normalize_domain,
 };
 use supercharge_tools::types::resources::resolve_model_path;

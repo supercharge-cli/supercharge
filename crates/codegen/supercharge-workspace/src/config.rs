@@ -447,14 +447,14 @@ mod bind_config_tests {
             "preset": "explore",
             "tools": [
                 {
-                    "id": "GrokBuild:grep",
+                    "id": "SuperchargeBuild:grep",
                     "params_json": "{\"max_results\":50}",
                     "name_override": "search",
                     "params_name_overrides": {"pattern": "query"},
                     "behavior_version": "legacy-0.4.10",
                     "description_override": "Search the codebase",
                 },
-                {"id": "GrokBuild:read_file"},
+                {"id": "SuperchargeBuild:read_file"},
             ],
         });
         let cfg = WorkspaceBindConfig::from_metadata(&v);
@@ -471,7 +471,7 @@ mod bind_config_tests {
         let Some(grep) = toolset.tools.first() else {
             panic!("expected grep tool: {:?}", toolset.tools);
         };
-        assert_eq!(grep.id, "GrokBuild:grep");
+        assert_eq!(grep.id, "SuperchargeBuild:grep");
         assert_eq!(
             grep.params,
             serde_json::json!({"max_results": 50}).as_object().cloned()
@@ -492,7 +492,7 @@ mod bind_config_tests {
         assert_eq!(grep.kind, None);
         assert_eq!(
             toolset.tools.get(1).map(|t| t.id.as_str()),
-            Some("GrokBuild:read_file")
+            Some("SuperchargeBuild:read_file")
         );
     }
     #[test]

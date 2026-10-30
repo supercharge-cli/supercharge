@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 
-use supercharge_tools::implementations::grok_build::task::backend::{
+use supercharge_tools::implementations::supercharge_build::task::backend::{
     ChannelBackend, SubagentBackend,
 };
-use supercharge_tools::implementations::grok_build::task::types::{
+use supercharge_tools::implementations::supercharge_build::task::types::{
     ModelOverrideProvenance, SubagentCancelRequest, SubagentCancelTarget, SubagentEvent,
     SubagentOwner, SubagentRequest, SubagentRuntimeOverrides,
 };
@@ -81,7 +81,7 @@ pub(crate) struct WorkflowHostParams {
     pub store: super::store::WorkflowRunStore,
     pub notify: WorkflowNotifySender,
     pub subagent_event_tx: mpsc::UnboundedSender<
-        supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+        supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
     >,
     pub parent_session_id: String,
     pub allow_fork_context: bool,
@@ -985,7 +985,7 @@ mod tests {
         scratch_suffix: &str,
         tracker: Arc<parking_lot::Mutex<WorkflowTracker>>,
         subagent_event_tx: mpsc::UnboundedSender<
-            supercharge_tools::implementations::grok_build::task::types::SubagentEvent,
+            supercharge_tools::implementations::supercharge_build::task::types::SubagentEvent,
         >,
     ) -> (WorkflowHostParams, mpsc::UnboundedReceiver<PersistenceMsg>) {
         let (persist_tx, persist_rx) = mpsc::unbounded_channel::<PersistenceMsg>();
@@ -1175,10 +1175,10 @@ mod tests {
                 .unwrap();
             reply_rx
         };
-        let succeed = |spawn: supercharge_tools::implementations::grok_build::task::types::SubagentSpawnRequest| {
+        let succeed = |spawn: supercharge_tools::implementations::supercharge_build::task::types::SubagentSpawnRequest| {
             spawn
                 .respond_with(|request| {
-                    supercharge_tools::implementations::grok_build::task::types::SubagentResult {
+                    supercharge_tools::implementations::supercharge_build::task::types::SubagentResult {
                         success: true,
                         output: Arc::from("done"),
                         subagent_id: request.id.clone(),
