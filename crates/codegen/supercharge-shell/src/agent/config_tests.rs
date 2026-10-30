@@ -2865,7 +2865,7 @@ fn telemetry_partial_override_retains_defaults() {
     assert_eq!(cfg.telemetry.mixpanel_enabled, defaults.mixpanel_enabled);
 }
 #[test]
-fn auth_alias_maps_to_grok_com_config() {
+fn auth_alias_maps_to_login_config() {
     let raw: toml::Value = toml::from_str(
         r#"
             [auth.oidc]
@@ -2879,8 +2879,9 @@ fn auth_alias_maps_to_grok_com_config() {
     assert_eq!(oidc.issuer, "https://example.okta.com");
     assert_eq!(oidc.client_id, "test-id");
 }
+/// Older config files use the pre-rename section name; it must keep parsing.
 #[test]
-fn grok_com_config_still_works() {
+fn legacy_login_config_section_still_works() {
     let raw: toml::Value = toml::from_str(
         r#"
             [grok_com_config.oidc]
