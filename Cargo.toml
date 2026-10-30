@@ -60,6 +60,7 @@ members = [
     "crates/codegen/supercharge-plugin-marketplace",
     "crates/codegen/supercharge-sampler",
     "crates/codegen/supercharge-sampling-types",
+    "crates/codegen/supercharge-egress-proxy",
     "crates/codegen/supercharge-sandbox",
     "crates/codegen/supercharge-secrets",
     "crates/codegen/supercharge-session-events",
@@ -119,6 +120,8 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+httparse = "1.10"
+subtle = "2.6"
 agent-client-protocol = { version = "0.10.4", features = ["unstable"] }
 alacritty_terminal = "0.26.0"
 ansi-to-tui = "7.0.0"

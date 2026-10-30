@@ -10859,6 +10859,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercharge-egress-proxy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "httparse",
+ "rand 0.9.5",
+ "subtle",
+ "supercharge-sandbox",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "supercharge-env"
 version = "0.1.0"
 dependencies = [
