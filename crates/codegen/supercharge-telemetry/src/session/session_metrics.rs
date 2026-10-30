@@ -273,7 +273,7 @@ mod tests {
         );
     }
 
-    /// The `grok-shell-doom_loop_recovery` Mixpanel event's name and property keys are dashboard contracts; pin them.
+    /// The `supercharge-shell-doom_loop_recovery` Mixpanel event's name and property keys are dashboard contracts; pin them.
     #[test]
     fn doom_loop_recovery_event_shape_is_stable() {
         use crate::events::TelemetryEvent;

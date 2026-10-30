@@ -1765,7 +1765,7 @@ mod tests {
     // ── Lifecycle tool descriptions ──────────────────────────────────────
     //
     // These lock the exact model-facing text. The "cli_default" cases must
-    // match what the grok-shell MiniJinja templates render for the default
+    // match what the supercharge-shell MiniJinja templates render for the default
     // supercharge-core toolset (monitor + task + bash + read present, POSIX). The
     // "toolbox" cases lock the subagent-only rendering used by the backend toolbox.
 

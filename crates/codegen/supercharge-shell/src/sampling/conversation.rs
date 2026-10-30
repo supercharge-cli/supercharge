@@ -1,4 +1,4 @@
-//! Conversation types: re-exports the canonical set from `supercharge_sampling_types` plus grok-shell-specific additions.
+//! Conversation types: re-exports the canonical set from `supercharge_sampling_types` plus supercharge-shell-specific additions.
 
 use std::collections::HashSet;
 
@@ -9,7 +9,7 @@ pub use supercharge_sampling_types::conversation::*;
 mod tests;
 
 /// Tracing context for conversation requests; satisfies `TraceContext` through its blanket impl.
-/// Lives in grok-shell because it references shell-internal config and upload types.
+/// Lives in supercharge-shell because it references shell-internal config and upload types.
 #[derive(Debug, Clone)]
 pub struct ConversationRequestTrace {
     pub gcs_config: crate::session::repo_changes::TraceExportConfig,

@@ -120,7 +120,7 @@ impl EmitterOrigin {
     /// [`crate::client::event_value`] strips the same prefix to derive the wire `event_value`, so the two must stay in lockstep.
     pub fn event_prefix(self) -> &'static str {
         match self {
-            EmitterOrigin::Shell => "grok-shell-",
+            EmitterOrigin::Shell => "supercharge-shell-",
             EmitterOrigin::Workspace => "grok-workspace-",
         }
     }
@@ -452,17 +452,17 @@ mod tests {
     /// Event-name prefixes are wire contract: analytics queries match on them, so they must not drift.
     #[test]
     fn event_prefix_is_stable_per_origin() {
-        assert_eq!(EmitterOrigin::Shell.event_prefix(), "grok-shell-");
+        assert_eq!(EmitterOrigin::Shell.event_prefix(), "supercharge-shell-");
         assert_eq!(EmitterOrigin::Workspace.event_prefix(), "grok-workspace-");
     }
 
-    /// The `Shell` reroute must reproduce the historical `format!("grok-shell-{suffix}")` event name byte-for-byte.
+    /// The `Shell` reroute must reproduce the historical `format!("supercharge-shell-{suffix}")` event name byte-for-byte.
     /// Every existing `log_session_event` / `log_event` / `emit_event` call funnels through `EmitterOrigin::Shell`.
     #[test]
     fn shell_origin_event_name_matches_legacy_format() {
         let suffix = "trace_upload_attempted";
         let rerouted = format!("{}{}", EmitterOrigin::Shell.event_prefix(), suffix);
-        let legacy = format!("grok-shell-{suffix}");
+        let legacy = format!("supercharge-shell-{suffix}");
         assert_eq!(rerouted, legacy);
     }
 

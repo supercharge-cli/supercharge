@@ -747,7 +747,7 @@ impl ScrollbackState {
         if let Some(entry) = self.entries.get_mut(&id)
             && let RenderBlock::ToolCall(ToolCallBlock::Execute(ref mut exec)) = entry.block
         {
-            // Replace output entirely: grok-shell sends the full accumulated buffer each tick
+            // Replace output entirely: supercharge-shell sends the full accumulated buffer each tick
             // The shell now sends clean output (no ANSI codes) when the client sets x.ai/bashOutputNoColor: true, so no stripping is needed
             exec.output = Some(output.to_string());
             entry.invalidate_cache();

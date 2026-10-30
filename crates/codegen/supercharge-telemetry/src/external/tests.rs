@@ -253,7 +253,7 @@ fn client_identifier_allowlist_is_pinned() {
     let expected: &[&str] = &[
         "grok-pager",
         "grok-tui",
-        "grok-shell",
+        "supercharge-shell",
         "grok-web",
         "grok-desktop",
         "grok-code-extension",

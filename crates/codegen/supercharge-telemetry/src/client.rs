@@ -484,12 +484,12 @@ pub fn init_if_needed(
 #[cfg(test)]
 mod tests {
     use super::*;
-    /// Shell events must still strip to their bare suffix, byte-for-byte identical to the previous `strip_prefix("grok-shell-")` behavior.
+    /// Shell events must still strip to their bare suffix, byte-for-byte identical to the previous `strip_prefix("supercharge-shell-")` behavior.
     #[test]
     fn event_value_strips_shell_prefix() {
-        assert_eq!(event_value("grok-shell-turn"), "turn");
+        assert_eq!(event_value("supercharge-shell-turn"), "turn");
         assert_eq!(
-            event_value("grok-shell-trace_upload_attempted"),
+            event_value("supercharge-shell-trace_upload_attempted"),
             "trace_upload_attempted"
         );
     }
@@ -547,7 +547,7 @@ mod tests {
     /// Only the leading emitter prefix is stripped; a suffix that itself looks like another prefix is left intact.
     #[test]
     fn event_value_strips_only_leading_prefix() {
-        assert_eq!(event_value("grok-shell-workspace-x"), "workspace-x");
+        assert_eq!(event_value("supercharge-shell-workspace-x"), "workspace-x");
     }
     /// The stripper recovers the bare suffix for every origin the emitter can produce, tying `event_value` to `EmitterOrigin::event_prefix`.
     #[test]
@@ -632,7 +632,7 @@ mod tests {
         assert_eq!(reserved, expected);
     }
     /// `event_value`'s first-match-wins over `EmitterOrigin::ALL` is only correct because no origin's `event_prefix()` is a prefix of another's.
-    /// A future origin like `"grok-shell-ext-"` would let an earlier `ALL` entry strip the shorter prefix first and yield the wrong `event_value`.
+    /// A future origin like `"supercharge-shell-ext-"` would let an earlier `ALL` entry strip the shorter prefix first and yield the wrong `event_value`.
     /// Pin the invariant so adding such a variant fails the suite rather than silently corrupting analytics.
     #[test]
     fn emitter_prefixes_are_mutually_exclusive() {

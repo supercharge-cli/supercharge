@@ -4,7 +4,7 @@ use super::*;
 fn shorten_location_path_kerem_supercharge_home() {
     assert_eq!(
         shorten_location_path("~/.supercharge/worktrees/code-xai/dashboard-design").as_ref(),
-        "~/.g/w/code-xai/dashboard-design"
+        "~/.s/w/code-xai/dashboard-design"
     );
     assert_eq!(
         shorten_location_path("$SUPERCHARGE_HOME/worktrees/code-xai/dashboard-design").as_ref(),
@@ -88,7 +88,7 @@ fn shorten_location_path_multi_dot_dirs_are_not_traversal() {
     assert_eq!(shorten_location_component("."), ".");
     assert_eq!(shorten_location_component(".."), "..");
     assert_eq!(shorten_location_component("..."), "...");
-    assert_eq!(shorten_location_component(".supercharge"), ".g");
+    assert_eq!(shorten_location_component(".supercharge"), ".s");
     assert_eq!(shorten_location_component("..cache"), "..c");
     assert_eq!(shorten_location_component("...foo"), "...f");
     assert_eq!(shorten_location_component("Documents"), "D");

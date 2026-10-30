@@ -14,7 +14,7 @@ use supercharge_pager_pty_harness::{
     InferenceEndpoint, InferenceExpectation, InferenceRequestMatcher, inference_request_count,
 };
 
-const USER_FEEDBACK_EVENT: &str = "grok-shell-user_feedback";
+const USER_FEEDBACK_EVENT: &str = "supercharge-shell-user_feedback";
 
 const EMPTY_SUBMIT_SENTINEL: &str = "Add feedback text";
 const THANKS_SENTINEL: &str = "Thanks for the feedback";

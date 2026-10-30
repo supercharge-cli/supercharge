@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 /// v1.16: Added `team_id` field (OAuth team identity).
 /// v1.17: Added `input_tokens`, `cached_input_tokens`, `output_tokens` to
 ///        TurnResultMetadata for per-component token attribution.
-/// v1.18: Added `shell_version`: the grok-shell agent binary version, distinct
+/// v1.18: Added `shell_version`: the supercharge-shell agent binary version, distinct
 ///        from `client_version` (the UI client's version). They coincide for the
 ///        TUI but differ for embedding clients like grok-desktop.
 /// v1.19: Added `workspace_type`: classifies the working directory as "git",
@@ -118,7 +118,7 @@ pub struct PromptMetadata {
     /// The agent type / harness name for this session (e.g. "supercharge-core", "codex").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_type: Option<String>,
-    /// Version of the grok-shell agent binary that handled this turn
+    /// Version of the supercharge-shell agent binary that handled this turn
     /// (`supercharge_version::VERSION`). Self-reported by the agent, so it reflects
     /// the binary actually running. Distinct from `client_version`, which is the
     /// UI client's version — for the TUI these coincide, but for embedding clients

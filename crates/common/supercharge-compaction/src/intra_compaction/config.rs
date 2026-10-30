@@ -56,7 +56,7 @@ pub enum IntraSummarizer {
 ///
 /// When `enabled = false` (default), no intra-compaction runs for that agent.
 ///
-/// Uses **percentage** thresholds (borrowed from grok-shell's
+/// Uses **percentage** thresholds (borrowed from supercharge-shell's
 /// `CompactionPolicy`) for portability across models with different context
 /// windows.
 ///

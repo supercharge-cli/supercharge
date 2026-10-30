@@ -46,10 +46,10 @@ use supercharge_auth::bearer_suffix;
 pub use supercharge_sampling_types::ApiBackend;
 
 /// Process-level fallback for the client-identifier request header.
-const DEFAULT_CLIENT_IDENTIFIER: &str = "grok-shell";
+const DEFAULT_CLIENT_IDENTIFIER: &str = "supercharge-shell";
 
 /// Product identifier baked into User-Agent strings.
-const AGENT_PRODUCT: &str = "grok-shell";
+const AGENT_PRODUCT: &str = "supercharge-shell";
 const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 128_000;
 
 /// Per-request tracking headers. Optional fields are skipped when empty/`None`.
@@ -3467,7 +3467,7 @@ mod tests {
         };
         let ua = user_agent_string_for(&origin);
         // No slash between product and the agent product.
-        assert!(ua.starts_with("my-client grok-shell/"));
+        assert!(ua.starts_with("my-client supercharge-shell/"));
     }
 
     #[test]

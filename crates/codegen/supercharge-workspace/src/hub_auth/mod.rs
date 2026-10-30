@@ -294,7 +294,7 @@ fn build_oidc_provider(
 /// Losing one persist is recoverable (see [`write_refreshed_token`]); stalling the persist thread for a minute is not worth it.
 const AUTH_LOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
-/// RAII flock on the sibling `auth.json.lock`, the same advisory lock every grok-shell `auth.json` writer takes.
+/// RAII flock on the sibling `auth.json.lock`, the same advisory lock every supercharge-shell `auth.json` writer takes.
 /// Polls `try_lock` rather than a blocking `flock` to bound the wait.
 /// Never breaks a held lock: a stale holder here would be the shell mid-refresh, exactly the writer we must not race.
 struct AuthFileLockGuard {
@@ -548,7 +548,7 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-                "grok-shell": { "key": "eyJ.older", "user_id": "u-old", "refresh_token": "rt1", "oidc_issuer": "https://auth.x.ai", "oidc_client_id": "grok-cli", "expires_at": "2026-01-01T00:00:00Z" },
+                "supercharge-shell": { "key": "eyJ.older", "user_id": "u-old", "refresh_token": "rt1", "oidc_issuer": "https://auth.x.ai", "oidc_client_id": "grok-cli", "expires_at": "2026-01-01T00:00:00Z" },
                 "other": { "key": "eyJ.newer", "user_id": "u-new", "refresh_token": "rt2", "oidc_issuer": "https://auth.x.ai", "expires_at": "2026-06-01T00:00:00Z" },
                 "grok-desktop": { "key": "eyJ.bearer-only", "user_id": "u-app" }
             }"#,
@@ -601,7 +601,7 @@ mod tests {
             "Path::exists folds the stat error into false"
         );
         assert!(login_session(&unstattable).is_err());
-        assert!(login_session_at(&unstattable, "grok-shell").is_err());
+        assert!(login_session_at(&unstattable, "supercharge-shell").is_err());
         assert!(
             read_auth_entry(&unstattable)
                 .unwrap_err()
@@ -616,11 +616,11 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-                "grok-shell": { "key": "eyJ.a", "user_id": "u-a", "refresh_token": "rt", "oidc_issuer": "https://auth.x.ai", "oidc_client_id": "grok-cli" },
+                "supercharge-shell": { "key": "eyJ.a", "user_id": "u-a", "refresh_token": "rt", "oidc_issuer": "https://auth.x.ai", "oidc_client_id": "grok-cli" },
                 "grok-desktop": { "key": "eyJ.bearer-only", "user_id": "u-app" }
             }"#,
         );
-        let session = login_session_at(&path, "grok-shell")
+        let session = login_session_at(&path, "supercharge-shell")
             .unwrap()
             .expect("a session");
         assert_eq!(session.identity.user_id, "u-a");
@@ -632,7 +632,7 @@ mod tests {
         );
         assert_eq!(login_session_at(&path, "missing").unwrap(), None);
         assert_eq!(
-            login_session_at(&dir.path().join("none.json"), "grok-shell").unwrap(),
+            login_session_at(&dir.path().join("none.json"), "supercharge-shell").unwrap(),
             None
         );
     }

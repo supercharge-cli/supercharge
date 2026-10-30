@@ -4043,7 +4043,7 @@ impl McpClient {
         ClientInfo::new(
             capabilities,
             Implementation::new(
-                format!("grok-shell-{server_name}"),
+                format!("supercharge-shell-{server_name}"),
                 supercharge_version::VERSION.to_string(),
             ),
         )

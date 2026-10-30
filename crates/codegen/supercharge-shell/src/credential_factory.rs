@@ -24,7 +24,7 @@ pub fn build_storage_client_for_proxy(
     auth_manager: Option<Arc<AuthManager>>,
     user_token: Option<String>,
     session_id: Option<String>,
-    client_identifier: &str, // "grok-shell" or "supercharge-pager" etc.
+    client_identifier: &str, // "supercharge-shell" or "supercharge-pager" etc.
 ) -> supercharge_file_utils::storage_client::StorageClient {
     let http_client = supercharge_http::shared_upload_client();
     if let Some(am) = auth_manager {

@@ -89,7 +89,7 @@ pub struct AcpConnection {
     pub rx: AcpClientRx,
     /// Available models and current selection.
     pub models: ModelState,
-    /// Whether the agent is a grok-shell instance.
+    /// Whether the agent is a supercharge-shell instance.
     pub is_grok_shell: bool,
     /// Auth methods advertised by the agent.
     pub auth_methods: Vec<acp::AuthMethod>,

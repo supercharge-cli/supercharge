@@ -298,11 +298,11 @@ mod tests {
     #[test]
     fn optional_header_inserted_when_present_skipped_when_empty() {
         let mut req = "wss://api.x.ai/v1/stt".into_client_request().unwrap();
-        insert_optional_header(&mut req, "x-supercharge-client-identifier", "grok-shell");
+        insert_optional_header(&mut req, "x-supercharge-client-identifier", "supercharge-shell");
         insert_optional_header(&mut req, "User-Agent", "");
         assert_eq!(
             req.headers().get("x-supercharge-client-identifier").unwrap(),
-            "grok-shell"
+            "supercharge-shell"
         );
         assert!(
             req.headers().get("user-agent").is_none(),

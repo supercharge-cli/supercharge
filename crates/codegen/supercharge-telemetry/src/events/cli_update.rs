@@ -98,7 +98,7 @@ impl CliUpdateChannel {
 }
 
 /// One attempt to download and activate a new `grok` binary.
-/// Analytics name: `grok-shell-cli_update`.
+/// Analytics name: `supercharge-shell-cli_update`.
 /// Emitted on failure too; failures carry the typed `error_kind` only (freeform strings leak home paths).
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct CliUpdate {

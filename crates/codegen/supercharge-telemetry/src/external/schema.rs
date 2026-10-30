@@ -430,7 +430,7 @@ pub(crate) const METRIC_ALLOWED_ATTR_KEYS: &[&str] = &[
 pub(crate) const KNOWN_CLIENT_IDENTIFIERS: &[&str] = &[
     "grok-pager",
     "grok-tui",
-    "grok-shell",
+    "supercharge-shell",
     "grok-web",
     "grok-desktop",
     "grok-code-extension",

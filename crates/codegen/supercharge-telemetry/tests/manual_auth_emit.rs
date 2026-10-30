@@ -1,5 +1,5 @@
 #![allow(clippy::disallowed_methods)] // test clients hit localhost mocks
-//! Wire test: `log_event(ManualAuth)` must POST to the product events endpoint as `grok-shell-manual_auth`.
+//! Wire test: `log_event(ManualAuth)` must POST to the product events endpoint as `supercharge-shell-manual_auth`.
 //! It must carry the `reason`/`trigger`/`token_kind`/`principal` fields the `distinct(principal)` alert consumes.
 //! The test mocks the observability backend with a real HTTP collector, so the path from emit to the wire is checked, not just the struct.
 
@@ -70,14 +70,14 @@ async fn manual_auth_posts_to_events_endpoint_as_grok_shell_manual_auth() {
     let event = loop {
         let found = bodies.lock().unwrap().iter().find_map(|b| {
             let e = b.get("events")?.get(0)?;
-            (e.get("event_name")?.as_str()? == "grok-shell-manual_auth").then(|| e.clone())
+            (e.get("event_name")?.as_str()? == "supercharge-shell-manual_auth").then(|| e.clone())
         });
         if let Some(e) = found {
             break e;
         }
         assert!(
             Instant::now() < deadline,
-            "no grok-shell-manual_auth POST received"
+            "no supercharge-shell-manual_auth POST received"
         );
         tokio::time::sleep(Duration::from_millis(25)).await;
     };

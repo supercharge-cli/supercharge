@@ -12,7 +12,7 @@ type = "builtin"
 items = ["cwd", "model", "context"]   # default when omitted
 ```
 
-This renders, for example, `grok-shell-status-line │ Grok 4.5 │ 12% ctx`. Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30.
+This renders, for example, `supercharge-shell-status-line │ my-model │ 12% ctx`. Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30.
 
 | Item | Shows |
 | --- | --- |

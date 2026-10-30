@@ -14,9 +14,9 @@ async fn post_events(server: &MockInferenceServer, body: &Value) -> reqwest::Res
 #[tokio::test]
 async fn post_v1_events_flattens_batches_in_arrival_order() {
     let server = MockInferenceServer::start().await.unwrap();
-    let first = json!({ "event_name": "grok-shell-user_feedback", "event_value": 1 });
-    let second = json!({ "event_name": "grok-shell-session_start", "event_value": 1 });
-    let third = json!({ "event_name": "grok-shell-turn_end", "event_value": 1 });
+    let first = json!({ "event_name": "supercharge-shell-user_feedback", "event_value": 1 });
+    let second = json!({ "event_name": "supercharge-shell-session_start", "event_value": 1 });
+    let third = json!({ "event_name": "supercharge-shell-turn_end", "event_value": 1 });
 
     let response = post_events(
         &server,

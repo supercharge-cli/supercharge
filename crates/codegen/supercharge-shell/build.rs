@@ -1,4 +1,4 @@
-//! Build script for bundling ripgrep for the grok-shell crate.
+//! Build script for bundling ripgrep for the supercharge-shell crate.
 //!
 //! - If `SUPERCHARGE_SHELL_BUNDLE_RG_PATH` is set, always bundle it
 //! - Otherwise, only bundle in release builds
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // OUT_DIR is always set by Cargo/Bazel for build scripts.
         PathBuf::from(env::var("OUT_DIR")?)
     } else if let Ok(xai_root) = env::var("XAI_ROOT") {
-        PathBuf::from(xai_root).join("target/tmp/grok-shell-bundle-rg")
+        PathBuf::from(xai_root).join("target/tmp/supercharge-shell-bundle-rg")
     } else {
         PathBuf::from(env::var("OUT_DIR")?)
     };

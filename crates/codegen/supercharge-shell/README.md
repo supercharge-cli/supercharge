@@ -2196,7 +2196,7 @@ Key options under `[memory]` in `~/.supercharge/config.toml`:
 
 ### Observability
 
-When first-turn memory injection runs, Supercharge emits the `grok-shell-memory_injection`
+When first-turn memory injection runs, Supercharge emits the `supercharge-shell-memory_injection`
 telemetry event. It includes:
 - whether the greeting fallback query path was used
 - result counts and top score

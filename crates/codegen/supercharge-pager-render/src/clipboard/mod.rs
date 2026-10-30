@@ -394,7 +394,7 @@ fn decision_for_legs(legs: &ClipboardWriteLegs, text: &str) -> ClipboardFeedback
     trust::resolve_copy_decision(legs, text, clipboard_environment(legs))
 }
 
-/// Write text and return a toast; emits `grok-shell-clipboard_copy` when enabled.
+/// Write text and return a toast; emits `supercharge-shell-clipboard_copy` when enabled.
 pub fn copy_text(text: &str) -> CopyResult {
     let started = std::time::Instant::now();
     let route = clipboard_route();
