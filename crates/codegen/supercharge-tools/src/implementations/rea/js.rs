@@ -10,8 +10,14 @@ pub struct JsMarkers {
 }
 
 const PATTERNS: &[(&str, &str)] = &[
-    ("require('child_process')", "spawns processes (child_process)"),
-    ("require(\"child_process\")", "spawns processes (child_process)"),
+    (
+        "require('child_process')",
+        "spawns processes (child_process)",
+    ),
+    (
+        "require(\"child_process\")",
+        "spawns processes (child_process)",
+    ),
     ("nodeIntegration: true", "renderer has Node integration"),
     ("nodeIntegration:!0", "renderer has Node integration"),
     ("contextIsolation: false", "context isolation disabled"),
@@ -35,9 +41,15 @@ pub fn js_markers(text: &str) -> JsMarkers {
             out.markers.push((*label).to_owned());
         }
     }
-    out.source_map = text
-        .rfind("sourceMappingURL=")
-        .map(|i| text[i + 17..].lines().next().unwrap_or("").chars().take(256).collect());
+    out.source_map = text.rfind("sourceMappingURL=").map(|i| {
+        text[i + 17..]
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(256)
+            .collect()
+    });
     let longest = text.lines().map(str::len).max().unwrap_or(0);
     out.minified_likely = longest > 2_000;
     out

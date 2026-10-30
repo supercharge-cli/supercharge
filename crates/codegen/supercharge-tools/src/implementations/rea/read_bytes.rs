@@ -28,11 +28,11 @@ pub fn read_with_cap(path: &Path, cap: u64) -> std::io::Result<InspectedBytes> {
     let mut buf = vec![0u8; READ_CHUNK];
     let mut remaining = take;
     while remaining > 0 {
-        let n = file.read(&mut buf[..remaining.min(READ_CHUNK)])?;
+        let n = file.read(buf.get_mut(..remaining.min(READ_CHUNK)).unwrap_or_default())?;
         if n == 0 {
             break;
         }
-        bytes.extend_from_slice(&buf[..n]);
+        bytes.extend_from_slice(buf.get(..n).unwrap_or_default());
         remaining = remaining.saturating_sub(n);
     }
     Ok(InspectedBytes {

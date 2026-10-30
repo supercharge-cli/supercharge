@@ -16,6 +16,7 @@ tracing = { workspace = true }
 supercharge-announcements = { workspace = true }
 supercharge-config = { workspace = true }
 supercharge-mcp = { workspace = true }
+supercharge-sandbox = { path = "../supercharge-sandbox", default-features = false }
 
 [features]
 default-bazel = []

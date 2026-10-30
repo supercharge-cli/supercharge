@@ -39,10 +39,10 @@ pub fn strings_path(path: &str, min_length: Option<usize>, needle: Option<&str>)
 
     let min_len = min_length.unwrap_or(MIN_STRING_LEN).max(1);
     let mut hits = extract_strings(&inspected.bytes, min_len);
-    if let Some(n) = needle {
-        if !n.is_empty() {
-            hits.retain(|h| h.value.contains(n));
-        }
+    if let Some(n) = needle
+        && !n.is_empty()
+    {
+        hits.retain(|h| h.value.contains(n));
     }
     let total = hits.len();
     let truncated_list = total > MAX_STRINGS;
@@ -105,7 +105,9 @@ fn push_hit(out: &mut Vec<StringHit>, bytes: &[u8], start: usize, end: usize, mi
     if len < min_len {
         return;
     }
-    let slice = &bytes[start..end];
+    let Some(slice) = bytes.get(start..end) else {
+        return;
+    };
     let mut value = String::from_utf8_lossy(slice).into_owned();
     if value.len() > MAX_STRING_CHARS {
         value.truncate(MAX_STRING_CHARS);

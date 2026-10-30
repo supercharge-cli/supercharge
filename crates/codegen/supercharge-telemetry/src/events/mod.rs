@@ -31,6 +31,7 @@ mod plugin;
 mod process;
 mod prompt;
 mod redirect;
+mod sandbox;
 mod session;
 mod skills;
 mod slash;
@@ -67,6 +68,7 @@ pub use plugin::*;
 pub use process::*;
 pub use prompt::*;
 pub use redirect::*;
+pub use sandbox::*;
 pub use session::*;
 pub use skills::*;
 pub use slash::*;
@@ -127,6 +129,10 @@ telemetry_event!(RedirectFixupFailed, "redirect_fixup_failed");
 telemetry_event!(RedirectDemoted, "redirect_demoted");
 telemetry_event!(RedirectOverwrite, "redirect_overwrite");
 telemetry_event!(RedirectLimitHit, "redirect_limit_hit");
+telemetry_event!(SandboxCommandEnded, "sandbox_command_ended");
+telemetry_event!(SandboxViolationSettled, "sandbox_violation_settled");
+telemetry_event!(SandboxGrantRecorded, "sandbox_grant_recorded");
+telemetry_event!(SandboxGrantRevoked, "sandbox_grant_revoked");
 
 telemetry_event!(Login, "login", external = crate::external::schema::map_auth);
 telemetry_event!(LoginPickerShown, "login_picker_shown");
@@ -504,6 +510,7 @@ mod tests {
             include_str!("process.rs"),
             include_str!("prompt.rs"),
             include_str!("redirect.rs"),
+            include_str!("sandbox.rs"),
             include_str!("session.rs"),
             include_str!("skills.rs"),
             include_str!("slash.rs"),

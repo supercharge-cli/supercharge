@@ -6,9 +6,9 @@ use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use serde::Serialize;
 
 use super::binary::fat_slice;
+use super::bounds::MAX_BINARY_BYTES;
 use super::bounds::MAX_INSTRUCTIONS;
 use super::evidence::{EvidenceError, EvidenceReply};
-use super::bounds::MAX_BINARY_BYTES;
 use super::read_bytes::read_with_cap;
 
 #[derive(Debug, Serialize)]
@@ -56,7 +56,9 @@ pub fn disassemble_bytes(
     symbol: Option<&str>,
     count: usize,
 ) -> Result<(DisasmResult, Vec<String>), String> {
-    let data = fat_slice(bytes, None).map(|(_, r)| &bytes[r]).unwrap_or(bytes);
+    let data = fat_slice(bytes, None)
+        .and_then(|(_, r)| bytes.get(r))
+        .unwrap_or(bytes);
     let file = object::File::parse(data).map_err(|e| format!("not a parseable executable: {e}"))?;
     let bitness = match file.architecture() {
         Architecture::X86_64 | Architecture::X86_64_X32 => 64,
@@ -72,7 +74,10 @@ pub fn disassemble_bytes(
         (None, Some(name)) => file
             .symbols()
             .chain(file.dynamic_symbols())
-            .find(|s| s.name().is_ok_and(|n| n == name || n.trim_start_matches('_') == name))
+            .find(|s| {
+                s.name()
+                    .is_ok_and(|n| n == name || n.trim_start_matches('_') == name)
+            })
             .map(|s| s.address())
             .ok_or_else(|| format!("symbol {name} not found"))?,
         (None, None) => file.entry(),
@@ -81,9 +86,13 @@ pub fn disassemble_bytes(
         .sections()
         .find(|s| s.address() <= start && start < s.address().saturating_add(s.size()))
         .ok_or_else(|| format!("address 0x{start:x} is not inside any section"))?;
-    let sec_data = section.data().map_err(|e| format!("section data unreadable: {e}"))?;
+    let sec_data = section
+        .data()
+        .map_err(|e| format!("section data unreadable: {e}"))?;
     let off = (start - section.address()) as usize;
-    let slice = sec_data.get(off..).ok_or("address is past the section's file data")?;
+    let slice = sec_data
+        .get(off..)
+        .ok_or("address is past the section's file data")?;
     let mut limitations = vec!["linear sweep: data inside code can decode as junk".to_owned()];
     if count >= MAX_INSTRUCTIONS {
         limitations.push(format!("capped at {MAX_INSTRUCTIONS} instructions"));
@@ -100,10 +109,18 @@ pub fn disassemble_bytes(
 }
 
 /// `rea_disassemble`.
-pub fn disassemble_path(path: &str, address: Option<&str>, symbol: Option<&str>, count: Option<usize>) -> String {
+pub fn disassemble_path(
+    path: &str,
+    address: Option<&str>,
+    symbol: Option<&str>,
+    count: Option<usize>,
+) -> String {
     const OP: &str = "rea_disassemble";
     let addr = match address.map(|a| parse_addr(a).ok_or(a)) {
-        Some(Err(bad)) => return EvidenceError::new(OP, Some(path.into()), format!("bad address {bad}")).to_json_text(),
+        Some(Err(bad)) => {
+            return EvidenceError::new(OP, Some(path.into()), format!("bad address {bad}"))
+                .to_json_text();
+        }
         Some(Ok(a)) => Some(a),
         None => None,
     };
@@ -116,7 +133,8 @@ pub fn disassemble_path(path: &str, address: Option<&str>, symbol: Option<&str>,
         Ok((res, lims)) => {
             let mut reply = EvidenceReply::ok(OP, path, res);
             if inspected.truncated {
-                reply = reply.with_limitation("file larger than the parse cap; parsed only the prefix");
+                reply =
+                    reply.with_limitation("file larger than the parse cap; parsed only the prefix");
             }
             for l in lims {
                 reply = reply.with_limitation(l);
@@ -150,13 +168,21 @@ mod tests {
     fn entry_of_own_binary_or_clear_error() {
         let exe = std::env::current_exe().expect("exe").display().to_string();
         let out = disassemble_path(&exe, None, None, Some(5));
-        assert!(out.contains("instructions") || out.contains("x86-64 only"), "{out}");
+        assert!(
+            out.contains("instructions") || out.contains("x86-64 only"),
+            "{out}"
+        );
     }
 
     #[test]
     fn junk_bytes_never_panic() {
         let mut seed = 7u32;
-        let bytes: Vec<u8> = (0..4096).map(|_| { seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345); (seed >> 16) as u8 }).collect();
+        let bytes: Vec<u8> = (0..4096)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                (seed >> 16) as u8
+            })
+            .collect();
         let _ = decode_x86(64, &bytes, 0, MAX_INSTRUCTIONS);
         let _ = decode_x86(32, &bytes[..3], u64::MAX - 1, 10);
         let _ = disassemble_bytes(&bytes, Some(0), None, 10);

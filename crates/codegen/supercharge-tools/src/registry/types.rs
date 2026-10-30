@@ -485,6 +485,9 @@ pub struct ToolRegistryBuilder {
     /// are only rendered when the client actually delivers them.
     system_reminders_enabled: bool,
     mcp_file_input_preparation: bool,
+    /// The daemon's per-command sandbox seam, stored in `Resources` at finalize so the Bash tool's
+    /// spawn site finds it (`crate::sandbox_launch`).
+    sandbox_launch: Option<crate::sandbox_launch::SandboxLaunchHook>,
 }
 impl Default for ToolRegistryBuilder {
     fn default() -> Self {
@@ -621,6 +624,7 @@ impl ToolRegistryBuilder {
             shared_local_registry: None,
             system_reminders_enabled: true,
             mcp_file_input_preparation: false,
+            sandbox_launch: None,
         };
         b.register_with_params::<grok_build::BashTool, grok_build::bash::BashParams>();
         b.register_with_params::<grok_build::ReadFileTool, grok_build::read_file::ReadFileParams>();
@@ -728,6 +732,12 @@ impl ToolRegistryBuilder {
         self
     }
     /// Dump tools manifest as JSON for the client.
+    /// Inject the per-command sandbox seam; the Bash tool's spawn site reads it back from
+    /// `Resources` (`crate::sandbox_launch`). Without it every command runs unwrapped.
+    pub fn with_sandbox_launch(mut self, hook: crate::sandbox_launch::SandboxLaunchHook) -> Self {
+        self.sandbox_launch = Some(hook);
+        self
+    }
     pub fn get_tools_config_raw(&self) -> serde_json::Value {
         let out: HashMap<&str, serde_json::Value> = self
             .tools
@@ -1000,6 +1010,9 @@ impl ToolRegistryBuilder {
         resources.insert(crate::types::resources::Cwd(cwd.clone()));
         resources.insert(session_folder);
         resources.insert(crate::types::resources::SessionEnv(ctx.session_env));
+        if let Some(hook) = self.sandbox_launch.take() {
+            resources.insert(hook);
+        }
         if let Some(owner_session_id) = ctx.owner_session_id.clone() {
             resources.insert(crate::types::resources::OwnerSessionId(owner_session_id));
         }

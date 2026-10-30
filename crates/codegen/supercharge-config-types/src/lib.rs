@@ -18,6 +18,8 @@ mod permission;
 pub use permission::*;
 mod auth_provider;
 pub use auth_provider::*;
+mod sandbox;
+pub use sandbox::*;
 use serde::{Deserialize, Serialize};
 use supercharge_announcements::RemoteAnnouncement;
 pub use supercharge_config::DisplayRefreshSettings;
@@ -309,6 +311,14 @@ pub struct RemoteSettings {
     /// It is the fallback when no local `[cli] channel` or `--alpha`/`--stable` flag is set.
     #[serde(default)]
     pub release_channel: Option<String>,
+    /// Fleet kill switch for the per-command sandbox rollout (`off`, `observe`, `enforce`): above
+    /// the user's `[sandbox] mode`, below `SUPERCHARGE_SANDBOX_MODE`. Malformed values must not
+    /// fail the parse.
+    #[serde(
+        default,
+        deserialize_with = "supercharge_config::sandbox_mode::optional_sandbox_mode"
+    )]
+    pub sandbox_mode: Option<supercharge_config::sandbox_mode::SandboxMode>,
     /// When `Some(true)`, enable LOC attribution tracking for this session.
     #[serde(default)]
     pub loc_tracking: Option<bool>,

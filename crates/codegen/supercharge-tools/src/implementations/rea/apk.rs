@@ -27,14 +27,20 @@ pub struct ApkInfo {
 }
 
 fn u16_at(b: &[u8], i: usize) -> Option<u16> {
-    b.get(i..i + 2).map(|s| u16::from_le_bytes([s[0], s[1]]))
+    b.get(i..i + 2)
+        .and_then(|s| s.try_into().ok())
+        .map(u16::from_le_bytes)
 }
 fn u32_at(b: &[u8], i: usize) -> Option<u32> {
-    b.get(i..i + 4).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    b.get(i..i + 4)
+        .and_then(|s| s.try_into().ok())
+        .map(u32::from_le_bytes)
 }
 
 fn string_pool(chunk: &[u8]) -> Vec<String> {
-    let (Some(count), Some(flags), Some(start)) = (u32_at(chunk, 8), u32_at(chunk, 16), u32_at(chunk, 20)) else {
+    let (Some(count), Some(flags), Some(start)) =
+        (u32_at(chunk, 8), u32_at(chunk, 16), u32_at(chunk, 20))
+    else {
         return Vec::new();
     };
     let utf8 = flags & 0x100 != 0;
@@ -43,7 +49,13 @@ fn string_pool(chunk: &[u8]) -> Vec<String> {
     for i in 0..count {
         let s = u32_at(chunk, 28 + i * 4)
             .and_then(|off| (start as usize).checked_add(off as usize))
-            .and_then(|at| if utf8 { utf8_str(chunk, at) } else { utf16_str(chunk, at) })
+            .and_then(|at| {
+                if utf8 {
+                    utf8_str(chunk, at)
+                } else {
+                    utf16_str(chunk, at)
+                }
+            })
             .unwrap_or_default();
         out.push(s);
     }
@@ -62,7 +74,8 @@ fn len8(b: &[u8], at: usize) -> Option<(usize, usize)> {
 fn utf8_str(b: &[u8], at: usize) -> Option<String> {
     let (_, at) = len8(b, at)?;
     let (n, at) = len8(b, at)?;
-    b.get(at..at.checked_add(n)?).map(|s| String::from_utf8_lossy(s).into_owned())
+    b.get(at..at.checked_add(n)?)
+        .map(|s| String::from_utf8_lossy(s).into_owned())
 }
 
 fn utf16_str(b: &[u8], at: usize) -> Option<String> {
@@ -72,7 +85,9 @@ fn utf16_str(b: &[u8], at: usize) -> Option<String> {
         len = ((len & 0x7fff) << 16) | u16_at(b, at)? as usize;
         at += 2;
     }
-    let units: Vec<u16> = (0..len.min(65_536)).map_while(|i| u16_at(b, at + i * 2)).collect();
+    let units: Vec<u16> = (0..len.min(65_536))
+        .map_while(|i| u16_at(b, at + i * 2))
+        .collect();
     Some(String::from_utf16_lossy(&units))
 }
 
@@ -100,12 +115,16 @@ pub fn decode_axml(b: &[u8]) -> Result<Vec<String>, String> {
     let mut depth = 0usize;
     let mut at = u16_at(b, 2).ok_or("truncated")? as usize;
     while at + 8 <= b.len() && lines.len() < MAX_MANIFEST_LINES {
-        let (Some(ty), Some(size)) = (u16_at(b, at), u32_at(b, at + 4)) else { break };
+        let (Some(ty), Some(size)) = (u16_at(b, at), u32_at(b, at + 4)) else {
+            break;
+        };
         let size = size as usize;
         if size < 8 {
             break;
         }
-        let chunk = &b[at..b.len().min(at.saturating_add(size))];
+        let Some(chunk) = b.get(at..b.len().min(at.saturating_add(size))) else {
+            break;
+        };
         let s = |i: u32| pool.get(i as usize).cloned().unwrap_or_default();
         match ty {
             0x0001 => pool = string_pool(chunk),
@@ -118,12 +137,19 @@ pub fn decode_axml(b: &[u8]) -> Result<Vec<String>, String> {
                 let mut line = format!("{}<{name}", "  ".repeat(depth.min(32)));
                 for i in 0..attr_count.min(256) {
                     let a = ext + attr_start + i * attr_size;
-                    let (Some(an), Some(raw), Some(dt), Some(data)) =
-                        (u32_at(chunk, a + 4), u32_at(chunk, a + 8), chunk.get(a + 15), u32_at(chunk, a + 16))
-                    else {
+                    let (Some(an), Some(raw), Some(dt), Some(data)) = (
+                        u32_at(chunk, a + 4),
+                        u32_at(chunk, a + 8),
+                        chunk.get(a + 15),
+                        u32_at(chunk, a + 16),
+                    ) else {
                         break;
                     };
-                    line.push_str(&format!(" {}=\"{}\"", s(an), typed_value(&pool, raw, *dt, data)));
+                    line.push_str(&format!(
+                        " {}=\"{}\"",
+                        s(an),
+                        typed_value(&pool, raw, *dt, data)
+                    ));
                 }
                 line.push('>');
                 lines.push(line);
@@ -152,21 +178,37 @@ pub fn apk_path(path: &str, include_manifest: bool) -> String {
     };
     let mut archive = match zip::ZipArchive::new(file) {
         Ok(a) => a,
-        Err(e) => return EvidenceError::new(OP, Some(path.into()), format!("not a zip archive: {e}")).to_json_text(),
+        Err(e) => {
+            return EvidenceError::new(OP, Some(path.into()), format!("not a zip archive: {e}"))
+                .to_json_text();
+        }
     };
-    let mut info = ApkInfo { entry_count_total: archive.len(), ..Default::default() };
+    let mut info = ApkInfo {
+        entry_count_total: archive.len(),
+        ..Default::default()
+    };
     let mut limitations = Vec::new();
     for i in 0..archive.len().min(MAX_ARCHIVE_ENTRIES) {
-        let Ok(f) = archive.by_index_raw(i) else { continue };
+        let Ok(f) = archive.by_index_raw(i) else {
+            continue;
+        };
         let name = f.name().to_owned();
         if name.ends_with(".dex") {
             info.dex_files.push(name.clone());
         } else if name.starts_with("lib/") && name.ends_with(".so") {
             info.native_libs.push(name.clone());
-        } else if name.starts_with("META-INF/") && [".RSA", ".DSA", ".EC", ".SF"].iter().any(|s| name.ends_with(s)) {
+        } else if name.starts_with("META-INF/")
+            && [".RSA", ".DSA", ".EC", ".SF"]
+                .iter()
+                .any(|s| name.ends_with(s))
+        {
             info.signing_files.push(name.clone());
         }
-        info.entries.push(ZipMember { size: f.size(), compressed_size: f.compressed_size(), name });
+        info.entries.push(ZipMember {
+            size: f.size(),
+            compressed_size: f.compressed_size(),
+            name,
+        });
     }
     if archive.len() > MAX_ARCHIVE_ENTRIES {
         limitations.push(format!("listing capped at {MAX_ARCHIVE_ENTRIES} entries"));
@@ -174,14 +216,21 @@ pub fn apk_path(path: &str, include_manifest: bool) -> String {
     if include_manifest {
         let read = archive.by_name("AndroidManifest.xml").ok().map(|f| {
             let mut buf = Vec::new();
-            f.take(MAX_ENTRY_READ * 16).read_to_end(&mut buf).map(|_| buf)
+            f.take(MAX_ENTRY_READ * 16)
+                .read_to_end(&mut buf)
+                .map(|_| buf)
         });
         match read {
-            None => limitations.push("no AndroidManifest.xml (not an APK, or an app bundle)".into()),
+            None => {
+                limitations.push("no AndroidManifest.xml (not an APK, or an app bundle)".into())
+            }
             Some(Err(e)) => limitations.push(format!("manifest unreadable: {e}")),
             Some(Ok(buf)) => match decode_axml(&buf) {
                 Ok(lines) => {
-                    info.package = lines.first().and_then(|l| attr(l, "package")).map(str::to_owned);
+                    info.package = lines
+                        .first()
+                        .and_then(|l| attr(l, "package"))
+                        .map(str::to_owned);
                     info.permissions = lines
                         .iter()
                         .filter(|l| l.trim_start().starts_with("<uses-permission"))
@@ -193,7 +242,9 @@ pub fn apk_path(path: &str, include_manifest: bool) -> String {
             },
         }
     }
-    limitations.push("DEX bytecode is listed, not decompiled; use jadx if rea_external_tools reports it".into());
+    limitations.push(
+        "DEX bytecode is listed, not decompiled; use jadx if rea_external_tools reports it".into(),
+    );
     let mut reply = EvidenceReply::ok(OP, path, info);
     for l in limitations {
         reply = reply.with_limitation(l);

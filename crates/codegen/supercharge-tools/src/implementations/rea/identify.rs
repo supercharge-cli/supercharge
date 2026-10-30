@@ -140,7 +140,8 @@ pub fn identify_path(path: &str) -> String {
     {
         markers.push("node_standalone_candidate".into());
     }
-    if contains_ascii(&inspected.bytes, b"d3n0l4nd") || contains_ascii(&inspected.bytes, b"denort") {
+    if contains_ascii(&inspected.bytes, b"d3n0l4nd") || contains_ascii(&inspected.bytes, b"denort")
+    {
         markers.push("deno_standalone_candidate".into());
     }
 

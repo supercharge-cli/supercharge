@@ -4,9 +4,9 @@ use object::read::macho::{FatArch, MachOFatFile32, MachOFatFile64};
 use object::{Object, ObjectSection, ObjectSegment, ObjectSymbol};
 use serde::Serialize;
 
+use super::bounds::MAX_BINARY_BYTES;
 use super::bounds::MAX_BINARY_ITEMS;
 use super::evidence::{EvidenceError, EvidenceReply};
-use super::bounds::MAX_BINARY_BYTES;
 use super::read_bytes::read_with_cap;
 
 #[derive(Debug, Serialize)]
@@ -56,9 +56,15 @@ fn hex(v: u64) -> String {
 }
 
 /// For a fat Mach-O, return the slice list and the byte range of the chosen slice.
-pub fn fat_slice(bytes: &[u8], arch: Option<&str>) -> Option<(Vec<String>, std::ops::Range<usize>)> {
+pub fn fat_slice(
+    bytes: &[u8],
+    arch: Option<&str>,
+) -> Option<(Vec<String>, std::ops::Range<usize>)> {
     fn pick<A: FatArch>(arches: &[A], arch: Option<&str>) -> (Vec<String>, Option<(u64, u64)>) {
-        let names: Vec<String> = arches.iter().map(|a| format!("{:?}", a.architecture())).collect();
+        let names: Vec<String> = arches
+            .iter()
+            .map(|a| format!("{:?}", a.architecture()))
+            .collect();
         let idx = arch
             .and_then(|want| names.iter().position(|n| n.eq_ignore_ascii_case(want)))
             .unwrap_or(0);
@@ -75,19 +81,30 @@ pub fn fat_slice(bytes: &[u8], arch: Option<&str>) -> Option<(Vec<String>, std::
     (end <= bytes.len()).then_some((names, start..end))
 }
 
-pub fn parse_info(bytes: &[u8], arch: Option<&str>, filter: Option<&str>) -> Result<(BinaryInfo, Vec<String>), String> {
+pub fn parse_info(
+    bytes: &[u8],
+    arch: Option<&str>,
+    filter: Option<&str>,
+) -> Result<(BinaryInfo, Vec<String>), String> {
     let mut limitations = Vec::new();
     let mut info = BinaryInfo::default();
     let data = match fat_slice(bytes, arch) {
         Some((names, range)) => {
-            limitations.push(format!("fat Mach-O: showing slice {} of {}", range.start, names.join(", ")));
+            limitations.push(format!(
+                "fat Mach-O: showing slice {} of {}",
+                range.start,
+                names.join(", ")
+            ));
             info.fat_slices = names;
-            &bytes[range]
+            bytes.get(range).unwrap_or(bytes)
         }
         None => bytes,
     };
-    let file = object::File::parse(data).map_err(|e| format!("not a parseable ELF/PE/Mach-O/COFF/Wasm file: {e}"))?;
-    let keep = |name: &str| filter.is_none_or(|f| name.to_ascii_lowercase().contains(&f.to_ascii_lowercase()));
+    let file = object::File::parse(data)
+        .map_err(|e| format!("not a parseable ELF/PE/Mach-O/COFF/Wasm file: {e}"))?;
+    let keep = |name: &str| {
+        filter.is_none_or(|f| name.to_ascii_lowercase().contains(&f.to_ascii_lowercase()))
+    };
     info.format = format!("{:?}", file.format());
     info.architecture = format!("{:?}", file.architecture());
     info.endianness = format!("{:?}", file.endianness());
@@ -128,7 +145,10 @@ pub fn parse_info(bytes: &[u8], arch: Option<&str>, filter: Option<&str>) -> Res
                     limitations.push(format!("imports capped at {MAX_BINARY_ITEMS}"));
                     break;
                 }
-                info.imports.push(ImportInfo { library: String::from_utf8_lossy(imp.library()).into_owned(), name });
+                info.imports.push(ImportInfo {
+                    library: String::from_utf8_lossy(imp.library()).into_owned(),
+                    name,
+                });
             }
         }
         Err(e) => limitations.push(format!("imports unreadable: {e}")),
@@ -176,7 +196,9 @@ pub fn parse_info(bytes: &[u8], arch: Option<&str>, filter: Option<&str>) -> Res
     }
     info.symbol_count_total = total;
     if total > MAX_BINARY_ITEMS {
-        limitations.push(format!("symbols capped at {MAX_BINARY_ITEMS} of {total}; pass filter to narrow"));
+        limitations.push(format!(
+            "symbols capped at {MAX_BINARY_ITEMS} of {total}; pass filter to narrow"
+        ));
     }
     if total == 0 {
         limitations.push("no symbols found (stripped or filtered)".into());
@@ -198,7 +220,8 @@ pub fn binary_path(path: &str, arch: Option<&str>, filter: Option<&str>) -> Stri
                 reply = reply.with_limitation(l);
             }
             if inspected.truncated {
-                reply = reply.with_limitation("file larger than the inspect cap; parsed only the prefix");
+                reply = reply
+                    .with_limitation("file larger than the inspect cap; parsed only the prefix");
             }
             reply.to_json_text()
         }

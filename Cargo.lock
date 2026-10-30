@@ -10804,6 +10804,7 @@ dependencies = [
  "supercharge-announcements",
  "supercharge-config",
  "supercharge-mcp",
+ "supercharge-sandbox",
  "toml",
  "tracing",
 ]
@@ -12652,6 +12653,7 @@ dependencies = [
  "supercharge-config-types",
  "supercharge-diag-server",
  "supercharge-dirs",
+ "supercharge-egress-proxy",
  "supercharge-env",
  "supercharge-extra-ca",
  "supercharge-fast-worktree",

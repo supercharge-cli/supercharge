@@ -65,12 +65,12 @@ fn hash_path_inner(
         }
         let want = ((limit - hashed) as usize).min(READ_CHUNK);
         let n = file
-            .read(&mut buf[..want])
+            .read(buf.get_mut(..want).unwrap_or_default())
             .map_err(|e| format!("read failed: {e}"))?;
         if n == 0 {
             break;
         }
-        let chunk = &buf[..n];
+        let chunk = buf.get(..n).unwrap_or_default();
         md5.consume(chunk);
         sha.update(chunk);
         blake.update(chunk);

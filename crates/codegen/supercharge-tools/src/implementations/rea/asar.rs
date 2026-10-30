@@ -38,7 +38,8 @@ pub fn parse_header(bytes: &[u8]) -> Result<(serde_json::Value, u64), String> {
     let u32_at = |i: usize| -> Option<u32> {
         bytes
             .get(i..i + 4)
-            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .and_then(|b| b.try_into().ok())
+            .map(u32::from_le_bytes)
     };
     if u32_at(0) != Some(4) {
         return Err("not an ASAR archive (bad size prefix)".into());
@@ -63,14 +64,16 @@ pub fn parse_header(bytes: &[u8]) -> Result<(serde_json::Value, u64), String> {
 pub fn read_header(path: &Path) -> Result<(serde_json::Value, u64), String> {
     let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut prefix = [0u8; 16];
-    file.read_exact(&mut prefix).map_err(|e| format!("too small for ASAR: {e}"))?;
+    file.read_exact(&mut prefix)
+        .map_err(|e| format!("too small for ASAR: {e}"))?;
     let json_len = u32::from_le_bytes([prefix[12], prefix[13], prefix[14], prefix[15]]) as u64;
     if json_len > MAX_ASAR_HEADER {
         return Err(format!("ASAR header of {json_len} bytes exceeds the limit"));
     }
     let mut buf = prefix.to_vec();
     buf.resize(16 + json_len as usize, 0);
-    file.read_exact(&mut buf[16..]).map_err(|e| format!("truncated ASAR header: {e}"))?;
+    file.read_exact(buf.get_mut(16..).unwrap_or_default())
+        .map_err(|e| format!("truncated ASAR header: {e}"))?;
     parse_header(&buf)
 }
 
@@ -83,12 +86,18 @@ pub fn flatten(header: &serde_json::Value) -> (Vec<AsarEntry>, usize) {
         stack.push((String::new(), files, 0));
     }
     while let Some((prefix, files, depth)) = stack.pop() {
-        let Some(map) = files.as_object() else { continue };
+        let Some(map) = files.as_object() else {
+            continue;
+        };
         let mut names: Vec<&String> = map.keys().collect();
         names.sort();
         for name in names.into_iter().rev() {
             let node = &map[name];
-            let path = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
+            let path = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}/{name}")
+            };
             if let Some(sub) = node.get("files") {
                 if depth < 64 {
                     stack.push((path, sub, depth + 1));
@@ -102,8 +111,14 @@ pub fn flatten(header: &serde_json::Value) -> (Vec<AsarEntry>, usize) {
                     offset: node
                         .get("offset")
                         .and_then(|v| v.as_str().and_then(|s| s.parse().ok()).or(v.as_u64())),
-                    unpacked: node.get("unpacked").and_then(|v| v.as_bool()).unwrap_or(false),
-                    executable: node.get("executable").and_then(|v| v.as_bool()).unwrap_or(false),
+                    unpacked: node
+                        .get("unpacked")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    executable: node
+                        .get("executable")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                     path,
                 });
             }
@@ -118,9 +133,17 @@ fn find<'a>(entries: &'a [AsarEntry], entry: &str) -> Option<&'a AsarEntry> {
     entries.iter().find(|e| e.path == want)
 }
 
-fn read_entry_bytes(path: &Path, data_offset: u64, e: &AsarEntry, cap: u64) -> Result<Vec<u8>, String> {
+fn read_entry_bytes(
+    path: &Path,
+    data_offset: u64,
+    e: &AsarEntry,
+    cap: u64,
+) -> Result<Vec<u8>, String> {
     if e.unpacked {
-        return Err(format!("{} is stored unpacked next to the archive (<archive>.unpacked/)", e.path));
+        return Err(format!(
+            "{} is stored unpacked next to the archive (<archive>.unpacked/)",
+            e.path
+        ));
     }
     let off = e.offset.ok_or("entry has no offset")?;
     let mut file = File::open(path).map_err(|e| e.to_string())?;
@@ -129,9 +152,12 @@ fn read_entry_bytes(path: &Path, data_offset: u64, e: &AsarEntry, cap: u64) -> R
     if start.checked_add(e.size).is_none_or(|end| end > len) {
         return Err("entry lies outside the archive".into());
     }
-    file.seek(SeekFrom::Start(start)).map_err(|e| e.to_string())?;
+    file.seek(SeekFrom::Start(start))
+        .map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
-    file.take(e.size.min(cap)).read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    file.take(e.size.min(cap))
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
     Ok(buf)
 }
 
@@ -187,18 +213,22 @@ pub fn asar_path(path: &str, entry: Option<&str>, max_bytes: Option<u64>) -> Str
             },
         );
         if total > MAX_ARCHIVE_ENTRIES {
-            reply = reply.with_limitation(format!("listing capped at {MAX_ARCHIVE_ENTRIES} entries"));
+            reply =
+                reply.with_limitation(format!("listing capped at {MAX_ARCHIVE_ENTRIES} entries"));
         }
         return reply.to_json_text();
     };
     let Some(found) = find(&entries, entry).cloned() else {
-        return EvidenceError::new(OP, Some(path.into()), format!("no entry named {entry}")).to_json_text();
+        return EvidenceError::new(OP, Some(path.into()), format!("no entry named {entry}"))
+            .to_json_text();
     };
     let cap = max_bytes.unwrap_or(MAX_ENTRY_READ).min(MAX_ENTRY_READ);
     match read_entry_bytes(p, data_offset, &found, cap) {
         Ok(bytes) => {
             let text = String::from_utf8_lossy(&bytes).into_owned();
-            let is_js = [".js", ".mjs", ".cjs", ".ts"].iter().any(|s| found.path.ends_with(s));
+            let is_js = [".js", ".mjs", ".cjs", ".ts"]
+                .iter()
+                .any(|s| found.path.ends_with(s));
             let mut reply = EvidenceReply::ok(
                 OP,
                 path,
@@ -210,7 +240,11 @@ pub fn asar_path(path: &str, entry: Option<&str>, max_bytes: Option<u64>) -> Str
                 },
             );
             if (bytes.len() as u64) < found.size {
-                reply = reply.with_limitation(format!("entry truncated to {} of {} bytes", bytes.len(), found.size));
+                reply = reply.with_limitation(format!(
+                    "entry truncated to {} of {} bytes",
+                    bytes.len(),
+                    found.size
+                ));
             }
             reply.to_json_text()
         }
@@ -221,7 +255,9 @@ pub fn asar_path(path: &str, entry: Option<&str>, max_bytes: Option<u64>) -> Str
 /// Reject absolute paths and `..` so extraction stays inside `dest_dir`.
 fn safe_relative(entry: &str) -> Option<&Path> {
     let p = Path::new(entry.trim_start_matches("./"));
-    p.components().all(|c| matches!(c, Component::Normal(_))).then_some(p)
+    p.components()
+        .all(|c| matches!(c, Component::Normal(_)))
+        .then_some(p)
 }
 
 #[derive(Debug, Serialize)]
@@ -242,11 +278,17 @@ pub fn extract(path: &str, entry: Option<&str>, dest_dir: &str) -> String {
     let selected: Vec<&AsarEntry> = match entry {
         Some(name) => match find(&entries, name) {
             Some(e) => vec![e],
-            None => return EvidenceError::new(OP, Some(path.into()), format!("no entry named {name}")).to_json_text(),
+            None => {
+                return EvidenceError::new(OP, Some(path.into()), format!("no entry named {name}"))
+                    .to_json_text();
+            }
         },
         None => entries.iter().collect(),
     };
-    let mut out = Extracted { written: Vec::new(), skipped: Vec::new() };
+    let mut out = Extracted {
+        written: Vec::new(),
+        skipped: Vec::new(),
+    };
     let mut budget: u64 = super::bounds::MAX_EXTRACT_TOTAL;
     for e in selected {
         let Some(rel) = safe_relative(&e.path) else {
@@ -254,7 +296,8 @@ pub fn extract(path: &str, entry: Option<&str>, dest_dir: &str) -> String {
             continue;
         };
         if e.size > budget {
-            out.skipped.push(format!("{}: extraction size budget reached", e.path));
+            out.skipped
+                .push(format!("{}: extraction size budget reached", e.path));
             continue;
         }
         let target = Path::new(dest_dir).join(rel);
@@ -275,7 +318,9 @@ pub fn extract(path: &str, entry: Option<&str>, dest_dir: &str) -> String {
     }
     let mut reply = EvidenceReply::ok(OP, path, out);
     if total > entries.len() {
-        reply = reply.with_limitation(format!("only the first {MAX_ARCHIVE_ENTRIES} entries were considered"));
+        reply = reply.with_limitation(format!(
+            "only the first {MAX_ARCHIVE_ENTRIES} entries were considered"
+        ));
     }
     reply.to_json_text()
 }
@@ -295,12 +340,18 @@ pub(crate) fn build_asar(files: &[(&str, &[u8])]) -> Vec<u8> {
             let d = cur
                 .entry(dir.to_string())
                 .or_insert_with(|| serde_json::json!({"files": {}}));
-            cur = d.get_mut("files").and_then(|f| f.as_object_mut()).expect("dir");
+            cur = d
+                .get_mut("files")
+                .and_then(|f| f.as_object_mut())
+                .expect("dir");
         }
-        cur.insert(parts[parts.len() - 1].to_string(), serde_json::Value::Object(node));
+        cur.insert(
+            parts[parts.len() - 1].to_string(),
+            serde_json::Value::Object(node),
+        );
     }
     let json = serde_json::to_vec(&serde_json::json!({ "files": map })).expect("json");
-    let padded = (json.len() + 3) / 4 * 4;
+    let padded = json.len().div_ceil(4) * 4;
     let header_pickle = 8 + padded;
     let mut out = Vec::new();
     out.extend_from_slice(&4u32.to_le_bytes());
@@ -321,8 +372,14 @@ mod tests {
         let dir = tempfile::tempdir().expect("tmp");
         let bytes = build_asar(&[
             ("package.json", br#"{"main":"main.js"}"#),
-            ("main.js", b"const { app } = require('electron'); require('child_process');"),
-            ("lib/preload.js", b"contextBridge.exposeInMainWorld('x', {})"),
+            (
+                "main.js",
+                b"const { app } = require('electron'); require('child_process');",
+            ),
+            (
+                "lib/preload.js",
+                b"contextBridge.exposeInMainWorld('x', {})",
+            ),
         ]);
         let path = dir.path().join("app.asar");
         std::fs::write(&path, bytes).expect("write");

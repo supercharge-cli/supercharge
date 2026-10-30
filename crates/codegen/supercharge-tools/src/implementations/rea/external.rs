@@ -71,18 +71,6 @@ pub fn status_json() -> String {
     .to_string()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn probe_never_panics() {
-        let s = status_json();
-        assert!(s.contains("rea_external_tools"));
-        assert!(s.contains("ghidraRun") || s.contains("tshark"));
-    }
-}
-
 /// `rea_pcap`: protocol hierarchy and conversations through tshark, when installed.
 pub async fn pcap_summary(path: &str) -> String {
     const OP: &str = "rea_pcap";
@@ -95,15 +83,30 @@ pub async fn pcap_summary(path: &str) -> String {
         .to_json_text();
     };
     if !std::path::Path::new(path).is_file() {
-        return super::evidence::EvidenceError::new(OP, Some(path.into()), "file not found").to_json_text();
+        return super::evidence::EvidenceError::new(OP, Some(path.into()), "file not found")
+            .to_json_text();
     }
     let run = tokio::process::Command::new(&tshark)
         .args(["-n", "-r", path, "-q", "-z", "io,phs", "-z", "conv,ip"])
         .kill_on_drop(true)
         .output();
     let out = match tokio::time::timeout(std::time::Duration::from_secs(120), run).await {
-        Err(_) => return super::evidence::EvidenceError::new(OP, Some(path.into()), "tshark timed out after 120s").to_json_text(),
-        Ok(Err(e)) => return super::evidence::EvidenceError::new(OP, Some(path.into()), format!("tshark failed to start: {e}")).to_json_text(),
+        Err(_) => {
+            return super::evidence::EvidenceError::new(
+                OP,
+                Some(path.into()),
+                "tshark timed out after 120s",
+            )
+            .to_json_text();
+        }
+        Ok(Err(e)) => {
+            return super::evidence::EvidenceError::new(
+                OP,
+                Some(path.into()),
+                format!("tshark failed to start: {e}"),
+            )
+            .to_json_text();
+        }
         Ok(Ok(o)) => o,
     };
     let text = String::from_utf8_lossy(&out.stdout);
@@ -118,4 +121,16 @@ pub async fn pcap_summary(path: &str) -> String {
         reply = reply.with_limitation("tshark exited with an error; see stderr");
     }
     reply.to_json_text()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_never_panics() {
+        let s = status_json();
+        assert!(s.contains("rea_external_tools"));
+        assert!(s.contains("ghidraRun") || s.contains("tshark"));
+    }
 }
