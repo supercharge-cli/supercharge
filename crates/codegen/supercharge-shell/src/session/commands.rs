@@ -472,6 +472,15 @@ pub enum SessionCommand {
     DreamMemory {
         respond_to: oneshot::Sender<crate::extensions::memory::MemoryDreamOutcome>,
     },
+    /// Read what the `/memory` modal shows, for `_supercharge/memory/list`.
+    MemoryList {
+        respond_to: oneshot::Sender<Result<crate::extensions::memory::MemoryListing, String>>,
+    },
+    /// Turn memory on or off for this session, for `_supercharge/memory/toggle`.
+    MemoryToggle {
+        enabled: bool,
+        respond_to: oneshot::Sender<crate::extensions::memory::MemoryToggleResponse>,
+    },
     /// Delete one memory note for `x.ai/memory/forget`.
     MemoryForget {
         path: String,

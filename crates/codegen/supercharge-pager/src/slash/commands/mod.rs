@@ -216,6 +216,10 @@ mod tests {
             registry.get("memory").unwrap().run(&mut ctx, ""),
             CommandResult::Action(Action::OpenMemoryModal)
         ));
+        assert!(matches!(
+            registry.get("memory").unwrap().run(&mut ctx, "on"),
+            CommandResult::Error(_)
+        ));
         assert!(matches!(registry.get("flush").unwrap().run(&mut ctx, ""),
             CommandResult::QueueCommand(text) if text == "/flush"));
         assert!(matches!(registry.get("dream").unwrap().run(&mut ctx, ""),

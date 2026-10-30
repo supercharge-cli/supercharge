@@ -1228,6 +1228,47 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         TaskResult::PluginsListLoaded { agent_id, result } => {
             handle_plugins_list_loaded(app, agent_id, result)
         }
+        TaskResult::MemoryListLoaded { agent_id, result } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                match result {
+                    Ok(_)
+                        if !matches!(
+                            agent.active_modal,
+                            None | Some(crate::views::modal::ActiveModal::MemoryBrowser { .. })
+                        ) => {}
+                    Ok(listing) => {
+                        agent.active_modal =
+                            Some(crate::views::modal::ActiveModal::MemoryBrowser {
+                                state: Box::new(
+                                    crate::views::memory_modal::MemoryModalState::from_listing(
+                                        listing,
+                                    ),
+                                ),
+                            });
+                    }
+                    Err(error) => {
+                        agent.scrollback.push_block(RenderBlock::system(error));
+                    }
+                }
+            }
+            vec![]
+        }
+        TaskResult::MemoryToggleResult { agent_id, result } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                if let Some(crate::views::modal::ActiveModal::MemoryBrowser { state }) =
+                    agent.active_modal.as_mut()
+                {
+                    state.apply_toggle_result(result);
+                } else {
+                    let text = match result {
+                        Ok(response) => response.message,
+                        Err(error) => error,
+                    };
+                    agent.scrollback.push_block(RenderBlock::system(text));
+                }
+            }
+            vec![]
+        }
         TaskResult::MemoryForgetResult {
             agent_id,
             path,

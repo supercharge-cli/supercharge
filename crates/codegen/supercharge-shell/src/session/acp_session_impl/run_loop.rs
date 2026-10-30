@@ -1332,6 +1332,17 @@ pub(super) async fn run_session(
                                 let _ = respond_to.send(outcome);
                             });
                         }
+                        SessionCommand::MemoryList { respond_to } => {
+                            let _ = respond_to.send(session.memory_listing());
+                        }
+                        SessionCommand::MemoryToggle {
+                            enabled,
+                            respond_to,
+                        } => {
+                            // Awaited inline so concurrent toggles cannot interleave mid-transition.
+                            let response = session.memory_toggle_and_list(enabled).await;
+                            let _ = respond_to.send(response);
+                        }
                         SessionCommand::MemoryForget {
                             path,
                             expected_content_hash,

@@ -1173,12 +1173,17 @@ pub(super) fn handle_session_notification_with_origin(
             capture_enabled,
             dream_enabled,
         } => {
-            let entries = crate::views::memory_modal::build_entries(files);
-            let modal_state = crate::views::memory_modal::MemoryModalState::new(entries)
-                .with_enabled(enabled, disabled_reason)
-                .with_capabilities(capture_enabled, dream_enabled);
+            let listing = supercharge_shell::extensions::memory::MemoryListing {
+                files,
+                enabled,
+                disabled_reason,
+                capture_enabled,
+                dream_enabled,
+            };
             agent.active_modal = Some(crate::views::modal::ActiveModal::MemoryBrowser {
-                state: Box::new(modal_state),
+                state: Box::new(crate::views::memory_modal::MemoryModalState::from_listing(
+                    listing,
+                )),
             });
             true
         }

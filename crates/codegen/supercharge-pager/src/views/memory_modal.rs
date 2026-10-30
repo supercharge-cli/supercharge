@@ -38,7 +38,9 @@ use crate::views::drag_select::{
 use crate::views::modal_window::{
     self, ModalContentArea, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
-use supercharge_shell::extensions::memory::{MEMORY_FORGET_MAX_FILE_BYTES, MemoryForgetResponse};
+use supercharge_shell::extensions::memory::{
+    MEMORY_FORGET_MAX_FILE_BYTES, MemoryForgetResponse, MemoryListing, MemoryToggleResponse,
+};
 use supercharge_shell::extensions::notification::MemoryDisabledReason;
 
 const SPLIT_MIN_WIDTH: u16 = 64;
@@ -75,10 +77,7 @@ fn disabled_state_markdown(reason: Option<MemoryDisabledReason>) -> &'static str
     match reason {
         None | Some(MemoryDisabledReason::SessionToggle) => {
             "\
-**Memory is off for this session.**
-
-- Press **t** to turn it back on.
-- `/memory on` does the same from the prompt.
+**Memory is off for this session.** Press **t** to turn it back on.
 
 While off, Supercharge isn't reading or saving notes; anything already remembered is kept on disk. \
 Memory carries conventions, decisions, and project facts between sessions so you don't have \
@@ -89,20 +88,20 @@ to repeat yourself."
 **Memory is unavailable in this session.** Start a new session to pick up your current settings.
 
 This session's memory settings were pinned when it started, and they disable memory, so it \
-can't be turned on here. `/memory status` shows the details."
+can't be turned on here."
         }
         Some(MemoryDisabledReason::NotConfigured) => {
             "\
-**Memory isn't configured.** `/memory status` shows the details.
+**Memory isn't configured.**
 
 No memory storage is set up for this session, so there is nothing to browse or turn on."
         }
         Some(MemoryDisabledReason::Unknown) => {
             "\
-**Memory is off for this session.** `/memory status` shows the details.
+**Memory is off for this session.**
 
-This session reports a reason this version of Supercharge AI doesn't recognize; run `/memory on` \
-from the prompt to try turning it back on."
+This session reports a reason this version of Supercharge AI doesn't recognize; press **t** to try \
+turning it back on."
         }
     }
 }
@@ -230,6 +229,9 @@ pub struct MemoryModalState {
     preview_hash: Option<String>,
     /// Delete awaiting the shell's answer; blocks a second `x` meanwhile.
     pending_delete: Option<PathBuf>,
+    /// Optimistic toggle awaiting the shell's answer; blocks a second `t` meanwhile.
+    /// Holds the pre-flip `(enabled, disabled_reason)` so a failure can revert.
+    pending_toggle: Option<(bool, Option<MemoryDisabledReason>)>,
     pub status: Option<MemoryStatusLine>,
     /// Whether the modal is rendered in fullscreen mode (persisted to config).
     pub fullscreen: bool,
@@ -279,6 +281,7 @@ impl MemoryModalState {
             close_requested: false,
             preview_hash: None,
             pending_delete: None,
+            pending_toggle: None,
             status: None,
             fullscreen: load_fullscreen_pref(),
             filtered_cache,
@@ -313,7 +316,70 @@ impl MemoryModalState {
         self
     }
 
-    /// Memory is off but `/memory on` can turn it back on in this session.
+    pub fn from_listing(listing: MemoryListing) -> Self {
+        let mut state = Self::new(Vec::new());
+        state.apply_listing(listing);
+        state
+    }
+
+    /// Replace the file list and flags with a fresh listing, keeping the window, filter, and fullscreen state.
+    pub fn apply_listing(&mut self, listing: MemoryListing) {
+        self.memory_enabled = listing.enabled;
+        self.disabled_reason = if listing.enabled {
+            None
+        } else {
+            listing.disabled_reason
+        };
+        self.capture_enabled = listing.capture_enabled;
+        self.dream_enabled = listing.dream_enabled;
+        self.entries = build_entries(listing.files);
+        self.pending_delete = None;
+        self.content_cache.clear();
+        // A confirm armed against the old list must not carry its index into the new one.
+        if matches!(self.mode, MemoryModalMode::ConfirmingDelete { .. }) {
+            self.mode = MemoryModalMode::Browse;
+        }
+        self.invalidate_filter();
+        self.selected = 0;
+        self.advance_past_headers();
+        self.clamp_selected();
+        self.load_preview();
+    }
+
+    /// Apply the shell's answer to a `t` toggle: resync from its listing, or revert the optimistic
+    /// flip and surface the failure.
+    pub fn apply_toggle_result(&mut self, result: Result<MemoryToggleResponse, String>) {
+        let previous = self.pending_toggle.take();
+        match result {
+            Ok(response) => {
+                // The reply's flags are authoritative: a refusal leaves memory where it was.
+                self.memory_enabled = response.enabled;
+                self.disabled_reason = response.disabled_reason.filter(|_| !response.enabled);
+                if let Some(listing) = response.listing {
+                    self.apply_listing(listing);
+                }
+                let requested = previous.map(|(was_enabled, _)| !was_enabled);
+                self.status = Some(MemoryStatusLine {
+                    text: response.message,
+                    is_error: requested.is_some_and(|r| r != response.enabled),
+                    ticks_remaining: None,
+                });
+            }
+            Err(message) => {
+                if let Some((enabled, reason)) = previous {
+                    self.memory_enabled = enabled;
+                    self.disabled_reason = reason;
+                }
+                self.status = Some(MemoryStatusLine {
+                    text: message,
+                    is_error: true,
+                    ticks_remaining: None,
+                });
+            }
+        }
+    }
+
+    /// Memory is off but `t` can turn it back on in this session.
     /// `None` (shell predates the field) is assumed toggleable; `Unknown` fails closed.
     pub fn can_enable(&self) -> bool {
         !self.memory_enabled
@@ -1759,27 +1825,15 @@ fn handle_browse(state: &mut MemoryModalState, key: &KeyEvent) -> InputOutcome {
             InputOutcome::Changed
         }
         KeyCode::Char('t') if key.modifiers.is_empty() => {
-            if state.memory_enabled {
-                // Optimistic; the next MemoryFiles notification re-syncs if the command fails
-                state.memory_enabled = false;
-                state.disabled_reason = Some(MemoryDisabledReason::SessionToggle);
-                return InputOutcome::Action(Action::SendSlashCommandPreservingDraft(
-                    "/memory off".to_owned(),
-                ));
-            }
-            if !state.can_enable() {
+            if state.pending_toggle.is_some() || !(state.memory_enabled || state.can_enable()) {
                 return InputOutcome::Unchanged;
             }
-            if state.entries.is_empty() {
-                // Opened while off: the shell sent no file list, so close instead of showing a stale empty list
-                state.close_requested = true;
-            } else {
-                state.memory_enabled = true;
-                state.disabled_reason = None;
-            }
-            InputOutcome::Action(Action::SendSlashCommandPreservingDraft(
-                "/memory on".to_owned(),
-            ))
+            // Optimistic flip; the reply's listing resyncs, or `apply_toggle_result` reverts.
+            state.pending_toggle = Some((state.memory_enabled, state.disabled_reason));
+            let enabled = !state.memory_enabled;
+            state.memory_enabled = enabled;
+            state.disabled_reason = (!enabled).then_some(MemoryDisabledReason::SessionToggle);
+            InputOutcome::Action(Action::MemoryToggle { enabled })
         }
         // `i` aliases `/` (vim-nav "press i to search").
         KeyCode::Char('/') | KeyCode::Char('i') if key.modifiers.is_empty() => {
@@ -2346,7 +2400,7 @@ mod tests {
             .with_enabled(false, Some(MemoryDisabledReason::SessionToggle));
         let text = render_full(&mut state);
         assert!(text.contains("Memory is off for this session"), "{text}");
-        assert!(text.contains("/memory on"), "{text}");
+        assert!(text.contains("Press t to turn it back on"), "{text}");
         let labels: Vec<&str> = build_shortcuts(&state).iter().map(|s| s.label).collect();
         assert_eq!(labels, vec!["t turn on", "^F fullscreen", "Esc close"]);
     }
@@ -2366,7 +2420,6 @@ mod tests {
             handle_memory_key(&mut state, &plain_key('t')),
             InputOutcome::Unchanged
         ));
-        assert!(!state.take_close_request());
 
         // A reason from a newer shell fails closed: no toggle offered.
         let unknown = MemoryModalState::new(Vec::new())
@@ -2375,16 +2428,79 @@ mod tests {
     }
 
     #[test]
-    fn t_from_disabled_empty_modal_sends_on_and_closes() {
+    fn t_from_disabled_modal_toggles_and_resyncs_from_reply() {
         let mut state = MemoryModalState::new(Vec::new())
             .with_enabled(false, Some(MemoryDisabledReason::SessionToggle));
-        let outcome = handle_memory_key(&mut state, &plain_key('t'));
         assert!(matches!(
-            outcome,
-            InputOutcome::Action(Action::SendSlashCommandPreservingDraft(ref cmd)) if cmd == "/memory on"
+            handle_memory_key(&mut state, &plain_key('t')),
+            InputOutcome::Action(Action::MemoryToggle { enabled: true })
         ));
-        assert!(state.take_close_request());
-        assert!(!state.take_close_request());
+        assert!(state.memory_enabled);
+
+        // The reply's listing replaces the empty list without closing the modal, and drops any
+        // delete confirmation armed against the old list.
+        state.mode = MemoryModalMode::ConfirmingDelete { idx: 0 };
+        state.apply_toggle_result(Ok(MemoryToggleResponse {
+            message: "Memory enabled for this session.".into(),
+            enabled: true,
+            disabled_reason: None,
+            listing: Some(MemoryListing {
+                files: vec![
+                    supercharge_shell::extensions::notification::MemoryFileInfo {
+                        path: "/store/global/topics/rust.md".into(),
+                        source: "global".into(),
+                        size_bytes: 12,
+                        modified_epoch_secs: None,
+                        generated: false,
+                    },
+                ],
+                enabled: true,
+                disabled_reason: None,
+                capture_enabled: true,
+                dream_enabled: true,
+            }),
+        }));
+        assert!(!state.shows_notice());
+        assert_eq!(state.mode, MemoryModalMode::Browse);
+        assert_eq!(
+            state.selected_entry().map(|e| e.label.as_str()),
+            Some("rust.md")
+        );
+        assert_eq!(
+            state.status.as_ref().map(|s| s.text.as_str()),
+            Some("Memory enabled for this session.")
+        );
+
+        // A refusal (Ok, state unchanged) with no listing still corrects the optimistic flip and
+        // renders as an error, since the result differs from what was requested.
+        assert!(matches!(
+            handle_memory_key(&mut state, &plain_key('t')),
+            InputOutcome::Action(Action::MemoryToggle { enabled: false })
+        ));
+        state.apply_toggle_result(Ok(MemoryToggleResponse {
+            message: "Memory is already enabled.".into(),
+            enabled: true,
+            disabled_reason: None,
+            listing: None,
+        }));
+        assert!(state.memory_enabled);
+        assert!(state.status.as_ref().is_some_and(|s| s.is_error));
+        assert!(!state.shows_notice());
+
+        // A second `t` is ignored while the first is in flight; a failure reverts the optimistic flip.
+        assert!(matches!(
+            handle_memory_key(&mut state, &plain_key('t')),
+            InputOutcome::Action(Action::MemoryToggle { enabled: false })
+        ));
+        assert!(!state.memory_enabled);
+        assert!(matches!(
+            handle_memory_key(&mut state, &plain_key('t')),
+            InputOutcome::Unchanged
+        ));
+        state.apply_toggle_result(Err("Couldn't change memory state.".into()));
+        assert!(state.memory_enabled);
+        assert!(state.status.as_ref().is_some_and(|s| s.is_error));
+        assert!(!state.shows_notice());
     }
 
     #[test]
@@ -2393,11 +2509,10 @@ mod tests {
         let off = handle_memory_key(&mut state, &plain_key('t'));
         assert!(matches!(
             off,
-            InputOutcome::Action(Action::SendSlashCommandPreservingDraft(ref cmd)) if cmd == "/memory off"
+            InputOutcome::Action(Action::MemoryToggle { enabled: false })
         ));
         assert!(!state.memory_enabled);
         assert!(state.shows_notice());
-        assert!(!state.take_close_request());
 
         // The hidden list must not accept hotkeys: `x` on a session entry would otherwise arm delete.
         state.selected = 3;
@@ -2413,14 +2528,35 @@ mod tests {
             InputOutcome::Unchanged
         ));
 
+        // Off replies still list the files, so turning back on reveals them without a refetch.
+        state.apply_toggle_result(Ok(MemoryToggleResponse {
+            message: "Memory disabled for this session.".into(),
+            enabled: false,
+            disabled_reason: Some(MemoryDisabledReason::SessionToggle),
+            listing: Some(MemoryListing {
+                files: vec![
+                    supercharge_shell::extensions::notification::MemoryFileInfo {
+                        path: "/store/global/topics/rust.md".into(),
+                        source: "global".into(),
+                        size_bytes: 12,
+                        modified_epoch_secs: None,
+                        generated: false,
+                    },
+                ],
+                enabled: false,
+                disabled_reason: Some(MemoryDisabledReason::SessionToggle),
+                capture_enabled: true,
+                dream_enabled: true,
+            }),
+        }));
+        assert!(state.shows_notice());
         let on = handle_memory_key(&mut state, &plain_key('t'));
         assert!(matches!(
             on,
-            InputOutcome::Action(Action::SendSlashCommandPreservingDraft(ref cmd)) if cmd == "/memory on"
+            InputOutcome::Action(Action::MemoryToggle { enabled: true })
         ));
         assert!(state.memory_enabled);
         assert!(!state.shows_notice());
-        assert!(!state.take_close_request());
     }
 
     #[test]

@@ -213,6 +213,8 @@ use memory_dream::*;
 mod goal_support;
 #[path = "acp_session_impl/memory_capture.rs"]
 mod memory_capture;
+#[path = "acp_session_impl/memory_control.rs"]
+mod memory_control;
 #[path = "acp_session_impl/memory_forget.rs"]
 mod memory_forget;
 #[path = "acp_session_impl/memory_status.rs"]

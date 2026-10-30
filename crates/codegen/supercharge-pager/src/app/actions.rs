@@ -829,6 +829,10 @@ pub enum Action {
     DoctorFixCancelled(DoctorFixTarget),
     /// Persist the memory modal fullscreen preference to config.toml.
     PersistMemoryFullscreen(bool),
+    /// Turn memory on or off for the active session (`t` in the `/memory` modal).
+    MemoryToggle {
+        enabled: bool,
+    },
     /// Copy text selected in the `/memory` modal; the outcome is shown in the modal's status line.
     MemoryCopy {
         text: String,
@@ -1894,6 +1898,17 @@ pub enum Effect {
         agent_id: AgentId,
         session_id: acp::SessionId,
     },
+    /// Fetch the `/memory` modal contents (`_supercharge/memory/list`).
+    FetchMemoryList {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+    },
+    /// Turn memory on or off (`_supercharge/memory/toggle`).
+    MemoryToggle {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+        enabled: bool,
+    },
     /// Delete one memory note from the `/memory` modal (x.ai/memory/forget).
     MemoryForget {
         agent_id: AgentId,
@@ -2839,6 +2854,16 @@ pub enum TaskResult {
     PluginsListLoaded {
         agent_id: AgentId,
         result: Result<supercharge_hooks_plugins_types::PluginsListResponse, String>,
+    },
+    /// Memory listing fetched for the `/memory` modal.
+    MemoryListLoaded {
+        agent_id: AgentId,
+        result: Result<supercharge_shell::extensions::memory::MemoryListing, String>,
+    },
+    /// Shell answered a memory on/off request.
+    MemoryToggleResult {
+        agent_id: AgentId,
+        result: Result<supercharge_shell::extensions::memory::MemoryToggleResponse, String>,
     },
     /// Shell answered a `/memory` modal delete request.
     MemoryForgetResult {

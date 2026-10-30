@@ -2661,6 +2661,79 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::FetchMemoryList { agent_id, session_id } => {
+            use supercharge_shell::extensions::memory::{
+                MEMORY_LIST_METHOD, MemoryListRequest, MemoryListing,
+            };
+            let tx = acp_tx.clone();
+            tasks
+                .spawn(async move {
+                    let req_body = MemoryListRequest {
+                        session_id: session_id.0.to_string(),
+                    };
+                    let req = acp::ExtRequest::new(
+                        MEMORY_LIST_METHOD,
+                        serde_json::value::to_raw_value(&req_body)
+                            .expect("serialize memory/list params")
+                            .into(),
+                    );
+                    let result = match acp_send(req, &tx).await {
+                        Ok(resp) => {
+                            serde_json::from_str::<MemoryListing>(resp.0.get())
+                                .map_err(|_| "Couldn't read the shell's reply.".to_string())
+                        }
+                        Err(e) => {
+                            Err(
+                                sanitize_user_error(&format!(
+                        "Couldn't load memory: {e}"
+                    )),
+                            )
+                        }
+                    };
+                    TaskResult::MemoryListLoaded {
+                        agent_id,
+                        result,
+                    }
+                });
+        }
+        Effect::MemoryToggle { agent_id, session_id, enabled } => {
+            use supercharge_shell::extensions::memory::{
+                MEMORY_TOGGLE_METHOD, MemoryToggleRequest, MemoryToggleResponse,
+            };
+            let tx = acp_tx.clone();
+            tasks
+                .spawn(async move {
+                    let req_body = MemoryToggleRequest {
+                        session_id: session_id.0.to_string(),
+                        enabled,
+                    };
+                    let req = acp::ExtRequest::new(
+                        MEMORY_TOGGLE_METHOD,
+                        serde_json::value::to_raw_value(&req_body)
+                            .expect("serialize memory/toggle params")
+                            .into(),
+                    );
+                    let result = match acp_send(req, &tx).await {
+                        Ok(resp) => {
+                            serde_json::from_str::<MemoryToggleResponse>(resp.0.get())
+                                .map_err(|_| "Couldn't read the shell's reply.".to_string())
+                        }
+                        Err(e) => {
+                            Err(
+                                sanitize_user_error(
+                                    &format!(
+                        "Couldn't change memory state: {e}"
+                    ),
+                                ),
+                            )
+                        }
+                    };
+                    TaskResult::MemoryToggleResult {
+                        agent_id,
+                        result,
+                    }
+                });
+        }
         Effect::MemoryForget { agent_id, session_id, path, expected_content_hash } => {
             use supercharge_shell::extensions::memory::{
                 MEMORY_FORGET_METHOD, MemoryForgetRequest, MemoryForgetResponse,
