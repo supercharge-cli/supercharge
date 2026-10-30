@@ -1,5 +1,5 @@
 //! Verifies that a profile's read-deny enforcement is durable in this mount namespace.
-//! The `__GROK_INSIDE_BWRAP` marker and sentinel are reproducible by a caller, so neither proves identity.
+//! The `__SUPERCHARGE_INSIDE_BWRAP` marker and sentinel are reproducible by a caller, so neither proves identity.
 //! Strict deny targets must instead be exact read-only mountpoints.
 //! Namespace seccomp prevents those mounts from being changed after verification.
 //! The sentinel only makes an empty dynamic deny set fail closed outside the expected mount-namespace shape.

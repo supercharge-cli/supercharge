@@ -478,7 +478,7 @@ fn subprocess_read_deny_marker_spoof(workspace: &Path) {
     #[cfg(target_os = "linux")]
     {
         unsafe {
-            std::env::set_var("__GROK_INSIDE_BWRAP", "1");
+            std::env::set_var("__SUPERCHARGE_INSIDE_BWRAP", "1");
         }
         let profile = profile_from_env();
         match supercharge_sandbox::verify_read_deny_enforced(&profile, workspace) {
@@ -980,7 +980,7 @@ fn deny_globs_block_read_write_rename() {
         &["late.pem"],
     );
 }
-/// Spoofing `__GROK_INSIDE_BWRAP` must not pass read-deny verification while a denied path is readable.
+/// Spoofing `__SUPERCHARGE_INSIDE_BWRAP` must not pass read-deny verification while a denied path is readable.
 /// Uses a devbox-extending restrict-network profile, the shape hook write-deny verification does not cover.
 #[test]
 #[cfg(target_os = "linux")]
@@ -1039,7 +1039,7 @@ fn read_deny_forged_mounts_are_refused() {
     let output = cmd
         .env(SCENARIO_ENV, "read_deny_forged_mounts")
         .env(PROFILE_ENV, "forged")
-        .env("__GROK_INSIDE_BWRAP", "1")
+        .env("__SUPERCHARGE_INSIDE_BWRAP", "1")
         .args(["--bind", "/", "/"])
         .arg("--ro-bind")
         .arg(&sentinel)
@@ -1112,7 +1112,7 @@ fn devbox_marker_spoof_does_not_skip_enforcement() {
     let mut cmd = Command::new("bwrap");
     apply_fixture_env(&mut cmd, &home, &grok, &workspace);
     cmd.env(SCENARIO_ENV, "devbox_marker_spoof")
-        .env("__GROK_INSIDE_BWRAP", "1")
+        .env("__SUPERCHARGE_INSIDE_BWRAP", "1")
         .args(["--bind", "/", "/"])
         .args(["--bind", &fake_sys_s, "/sys"]);
     if stage_data {
@@ -1143,6 +1143,10 @@ fn devbox_marker_spoof_does_not_skip_enforcement() {
 #[cfg(target_os = "linux")]
 fn devbox_genuine_reexec_applies_enforcement() {
     if skip_if_enforcement_unavailable() {
+        return;
+    }
+    if !Path::new("/data").exists() {
+        eprintln!("skip: no /data on this host, so devbox needs no bwrap re-exec");
         return;
     }
     let (home, grok, workspace, _ch, _cg, _cw) = fixture_homes("devbox-genuine");
