@@ -213,21 +213,21 @@ pub struct ChatCompletionRequest {
 
     /// custom headers
     #[serde(skip)]
-    pub x_grok_conv_id: Option<String>,
+    pub x_supercharge_conv_id: Option<String>,
     #[serde(skip)]
-    pub x_grok_req_id: Option<String>,
+    pub x_supercharge_req_id: Option<String>,
     #[serde(skip)]
-    pub x_grok_session_id: Option<String>,
+    pub x_supercharge_session_id: Option<String>,
     #[serde(skip)]
-    pub x_grok_turn_idx: Option<String>,
+    pub x_supercharge_turn_idx: Option<String>,
     #[serde(skip)]
-    pub x_grok_transient_retry: Option<String>,
+    pub x_supercharge_transient_retry: Option<String>,
     #[serde(skip)]
-    pub x_grok_agent_id: Option<String>,
+    pub x_supercharge_agent_id: Option<String>,
     #[serde(skip)]
-    pub x_grok_deployment_id: Option<String>,
+    pub x_supercharge_deployment_id: Option<String>,
     #[serde(skip)]
-    pub x_grok_user_id: Option<String>,
+    pub x_supercharge_user_id: Option<String>,
 
     /// Optional opaque tracing context (e.g., where to persist the finalized request payload).
     /// Consumers downcast via `trace.as_ref().unwrap().as_any().downcast_ref::<T>()`.
@@ -254,14 +254,14 @@ impl ChatCompletionRequest {
             search_parameters: None,
             response_format: None,
             reasoning_effort: None,
-            x_grok_conv_id: None,
-            x_grok_req_id: None,
-            x_grok_session_id: None,
-            x_grok_turn_idx: None,
-            x_grok_transient_retry: None,
-            x_grok_agent_id: None,
-            x_grok_deployment_id: None,
-            x_grok_user_id: None,
+            x_supercharge_conv_id: None,
+            x_supercharge_req_id: None,
+            x_supercharge_session_id: None,
+            x_supercharge_turn_idx: None,
+            x_supercharge_transient_retry: None,
+            x_supercharge_agent_id: None,
+            x_supercharge_deployment_id: None,
+            x_supercharge_user_id: None,
             trace: None,
             traceparent: None,
         }
@@ -282,14 +282,14 @@ impl ChatCompletionRequest {
             search_parameters: None,
             response_format: None,
             reasoning_effort: None,
-            x_grok_conv_id: None,
-            x_grok_req_id: None,
-            x_grok_session_id: None,
-            x_grok_turn_idx: None,
-            x_grok_transient_retry: None,
-            x_grok_agent_id: None,
-            x_grok_deployment_id: None,
-            x_grok_user_id: None,
+            x_supercharge_conv_id: None,
+            x_supercharge_req_id: None,
+            x_supercharge_session_id: None,
+            x_supercharge_turn_idx: None,
+            x_supercharge_transient_retry: None,
+            x_supercharge_agent_id: None,
+            x_supercharge_deployment_id: None,
+            x_supercharge_user_id: None,
             trace: None,
             traceparent: None,
         }
@@ -1341,17 +1341,17 @@ pub struct CreateResponseWrapper {
     pub inner: crate::rs::CreateResponse,
 
     /// Custom header: conversation ID for tracking.
-    pub x_grok_conv_id: Option<String>,
+    pub x_supercharge_conv_id: Option<String>,
 
     /// Custom header: request ID for tracking.
-    pub x_grok_req_id: Option<String>,
+    pub x_supercharge_req_id: Option<String>,
 
-    pub x_grok_session_id: Option<String>,
-    pub x_grok_turn_idx: Option<String>,
-    pub x_grok_transient_retry: Option<String>,
-    pub x_grok_agent_id: Option<String>,
-    pub x_grok_deployment_id: Option<String>,
-    pub x_grok_user_id: Option<String>,
+    pub x_supercharge_session_id: Option<String>,
+    pub x_supercharge_turn_idx: Option<String>,
+    pub x_supercharge_transient_retry: Option<String>,
+    pub x_supercharge_agent_id: Option<String>,
+    pub x_supercharge_deployment_id: Option<String>,
+    pub x_supercharge_user_id: Option<String>,
 
     /// Optional tracing context (e.g., where to persist the finalized request payload).
     pub trace: Option<Box<dyn TraceContext>>,
@@ -1367,14 +1367,14 @@ impl CreateResponseWrapper {
     pub fn new(inner: crate::rs::CreateResponse) -> Self {
         Self {
             inner,
-            x_grok_conv_id: None,
-            x_grok_req_id: None,
-            x_grok_session_id: None,
-            x_grok_turn_idx: None,
-            x_grok_transient_retry: None,
-            x_grok_agent_id: None,
-            x_grok_deployment_id: None,
-            x_grok_user_id: None,
+            x_supercharge_conv_id: None,
+            x_supercharge_req_id: None,
+            x_supercharge_session_id: None,
+            x_supercharge_turn_idx: None,
+            x_supercharge_transient_retry: None,
+            x_supercharge_agent_id: None,
+            x_supercharge_deployment_id: None,
+            x_supercharge_user_id: None,
             trace: None,
             traceparent: None,
             extra_tool_entries: vec![],
@@ -1382,12 +1382,12 @@ impl CreateResponseWrapper {
     }
 
     pub fn with_conv_id(mut self, conv_id: impl Into<String>) -> Self {
-        self.x_grok_conv_id = Some(conv_id.into());
+        self.x_supercharge_conv_id = Some(conv_id.into());
         self
     }
 
     pub fn with_req_id(mut self, req_id: impl Into<String>) -> Self {
-        self.x_grok_req_id = Some(req_id.into());
+        self.x_supercharge_req_id = Some(req_id.into());
         self
     }
 
@@ -1412,17 +1412,17 @@ pub struct MessagesRequestWrapper {
     pub inner: crate::messages::MessagesRequest,
 
     /// Custom header: conversation ID for tracking.
-    pub x_grok_conv_id: Option<String>,
+    pub x_supercharge_conv_id: Option<String>,
 
     /// Custom header: request ID for tracking.
-    pub x_grok_req_id: Option<String>,
+    pub x_supercharge_req_id: Option<String>,
 
-    pub x_grok_session_id: Option<String>,
-    pub x_grok_turn_idx: Option<String>,
-    pub x_grok_transient_retry: Option<String>,
-    pub x_grok_agent_id: Option<String>,
-    pub x_grok_deployment_id: Option<String>,
-    pub x_grok_user_id: Option<String>,
+    pub x_supercharge_session_id: Option<String>,
+    pub x_supercharge_turn_idx: Option<String>,
+    pub x_supercharge_transient_retry: Option<String>,
+    pub x_supercharge_agent_id: Option<String>,
+    pub x_supercharge_deployment_id: Option<String>,
+    pub x_supercharge_user_id: Option<String>,
 
     /// Optional tracing context (e.g., where to persist the finalized request payload).
     pub trace: Option<Box<dyn TraceContext>>,
@@ -1434,26 +1434,26 @@ impl MessagesRequestWrapper {
     pub fn new(inner: crate::messages::MessagesRequest) -> Self {
         Self {
             inner,
-            x_grok_conv_id: None,
-            x_grok_req_id: None,
-            x_grok_session_id: None,
-            x_grok_turn_idx: None,
-            x_grok_transient_retry: None,
-            x_grok_agent_id: None,
-            x_grok_deployment_id: None,
-            x_grok_user_id: None,
+            x_supercharge_conv_id: None,
+            x_supercharge_req_id: None,
+            x_supercharge_session_id: None,
+            x_supercharge_turn_idx: None,
+            x_supercharge_transient_retry: None,
+            x_supercharge_agent_id: None,
+            x_supercharge_deployment_id: None,
+            x_supercharge_user_id: None,
             trace: None,
             traceparent: None,
         }
     }
 
     pub fn with_conv_id(mut self, conv_id: impl Into<String>) -> Self {
-        self.x_grok_conv_id = Some(conv_id.into());
+        self.x_supercharge_conv_id = Some(conv_id.into());
         self
     }
 
     pub fn with_req_id(mut self, req_id: impl Into<String>) -> Self {
-        self.x_grok_req_id = Some(req_id.into());
+        self.x_supercharge_req_id = Some(req_id.into());
         self
     }
 

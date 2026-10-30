@@ -665,15 +665,15 @@ pub struct ConversationRequest {
     /// Top-p sampling
     pub top_p: Option<f32>,
     /// Custom headers for xAI tracking
-    pub x_grok_conv_id: Option<String>,
-    pub x_grok_req_id: Option<String>,
-    pub x_grok_session_id: Option<String>,
-    pub x_grok_turn_idx: Option<String>,
+    pub x_supercharge_conv_id: Option<String>,
+    pub x_supercharge_req_id: Option<String>,
+    pub x_supercharge_session_id: Option<String>,
+    pub x_supercharge_turn_idx: Option<String>,
     /// Turn-level resubmit attempt (absent on first submissions); sent as `x-supercharge-transient-retry` so the proxy can count retry traffic.
-    pub x_grok_transient_retry: Option<String>,
-    pub x_grok_agent_id: Option<String>,
-    pub x_grok_deployment_id: Option<String>,
-    pub x_grok_user_id: Option<String>,
+    pub x_supercharge_transient_retry: Option<String>,
+    pub x_supercharge_agent_id: Option<String>,
+    pub x_supercharge_deployment_id: Option<String>,
+    pub x_supercharge_user_id: Option<String>,
     /// Optional opaque tracing context (e.g., where to persist the finalized request payload).
     /// Consumers downcast via `trace.as_ref().unwrap().as_any().downcast_ref::<T>()`.
     pub trace: Option<Box<dyn TraceContext>>,
@@ -684,7 +684,7 @@ pub struct ConversationRequest {
     pub reasoning_effort: Option<crate::ReasoningEffort>,
     /// JSON Schema for structured output (strict mode).
     pub json_schema: Option<serde_json::Value>,
-    /// Sticky routing key for prompt-cache reuse; overrides `x_grok_conv_id` for routing.
+    /// Sticky routing key for prompt-cache reuse; overrides `x_supercharge_conv_id` for routing.
     pub prompt_cache_key: Option<String>,
     /// What the sampler does when the response stops with `Length`.
     pub length_policy: LengthPolicy,
@@ -1720,13 +1720,13 @@ impl ConversationRequest {
 
     /// Set conversation ID header
     pub fn with_conv_id(mut self, conv_id: impl Into<String>) -> Self {
-        self.x_grok_conv_id = Some(conv_id.into());
+        self.x_supercharge_conv_id = Some(conv_id.into());
         self
     }
 
     /// Set request ID header
     pub fn with_req_id(mut self, req_id: impl Into<String>) -> Self {
-        self.x_grok_req_id = Some(req_id.into());
+        self.x_supercharge_req_id = Some(req_id.into());
         self
     }
 

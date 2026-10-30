@@ -1446,7 +1446,7 @@ pub struct CompactionRequestFile {
     /// Schema version for forward compatibility.
     pub schema_version: u32,
     /// Unique artifact identifier (filename stem).
-    /// This is a per-artifact ID, not the model API's `x_grok_req_id` (which is generated per-attempt inside the sampling layer).
+    /// This is a per-artifact ID, not the model API's `x_supercharge_req_id` (which is generated per-attempt inside the sampling layer).
     pub request_id: String,
     /// ISO 8601 timestamp of when the compaction call started.
     pub created_at: String,
@@ -1490,7 +1490,7 @@ pub struct RecapRequestFile {
     /// Schema version for forward compatibility.
     pub schema_version: u32,
     /// Unique artifact identifier (filename stem).
-    /// Distinct from the model API's `x_grok_req_id` (also recorded below for proxy correlation).
+    /// Distinct from the model API's `x_supercharge_req_id` (also recorded below for proxy correlation).
     pub request_id: String,
     /// ISO 8601 timestamp of when the recap model call started.
     pub created_at: String,
@@ -1499,9 +1499,9 @@ pub struct RecapRequestFile {
     /// The model id used for the recap side-call.
     pub model: String,
     /// Sampling request id sent to the proxy (`xai-recap-{uuid}`).
-    pub x_grok_req_id: String,
+    pub x_supercharge_req_id: String,
     /// Sampling conversation id (`recap-{uuid}`).
-    pub x_grok_conv_id: String,
+    pub x_supercharge_conv_id: String,
     /// Whether the side-call requested reasoning/thinking removal before budgeting.
     /// The over-budget path removes reasoning independently.
     pub strip_reasoning: bool,
@@ -1540,8 +1540,8 @@ mod tests {
             created_at: "2026-06-30T00:00:00Z".into(),
             trigger: "auto".into(),
             model: "v9-zingster".into(),
-            x_grok_req_id: "xai-recap-abc".into(),
-            x_grok_conv_id: "recap-abc".into(),
+            x_supercharge_req_id: "xai-recap-abc".into(),
+            x_supercharge_conv_id: "recap-abc".into(),
             strip_reasoning: false,
             reminder_tag: "system-reminder".into(),
             chat_history: vec![],
@@ -1553,7 +1553,7 @@ mod tests {
         let parsed: RecapRequestFile = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.schema_version, 1);
         assert_eq!(parsed.trigger, "auto");
-        assert_eq!(parsed.x_grok_req_id, "xai-recap-abc");
+        assert_eq!(parsed.x_supercharge_req_id, "xai-recap-abc");
         assert_eq!(
             parsed.summary.as_deref(),
             Some("We fixed the flaky test in queue_worker.")

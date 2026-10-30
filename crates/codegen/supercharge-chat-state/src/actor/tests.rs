@@ -1636,8 +1636,8 @@ async fn build_request_includes_all_messages() {
         .await
         .unwrap();
     assert_eq!(request.items.len(), 2);
-    assert_eq!(request.x_grok_conv_id, Some("conv-1".to_string()));
-    assert_eq!(request.x_grok_req_id, Some("req-1".to_string()));
+    assert_eq!(request.x_supercharge_conv_id, Some("conv-1".to_string()));
+    assert_eq!(request.x_supercharge_req_id, Some("req-1".to_string()));
 }
 
 #[tokio::test]

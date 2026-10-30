@@ -69,7 +69,7 @@ impl LazinessAbortReason {
     }
 }
 
-/// Prefix on `x_grok_req_id` for laziness-classifier sampler calls, used by the production producer (`maybe_fire_laziness_check`).
+/// Prefix on `x_supercharge_req_id` for laziness-classifier sampler calls, used by the production producer (`maybe_fire_laziness_check`).
 pub(crate) const LAZINESS_REQ_ID_PREFIX: &str = "xai-laziness-";
 
 /// Preamble on the User-item text of the classifier request.

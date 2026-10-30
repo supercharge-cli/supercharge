@@ -3043,14 +3043,14 @@ impl SessionActor {
                 })),
             );
             let mut request = request;
-            request.x_grok_session_id = Some(self.session_info.id.to_string());
-            request.x_grok_turn_idx =
+            request.x_supercharge_session_id = Some(self.session_info.id.to_string());
+            request.x_supercharge_turn_idx =
                 Some(self.chat_state_handle.get_prompt_index().await.to_string());
-            request.x_grok_agent_id = Some(supercharge_telemetry::id::agent_id());
-            request.x_grok_transient_retry =
+            request.x_supercharge_agent_id = Some(supercharge_telemetry::id::agent_id());
+            request.x_supercharge_transient_retry =
                 (transient_retry_attempts > 0).then(|| transient_retry_attempts.to_string());
-            if request.x_grok_deployment_id.is_none() {
-                request.x_grok_deployment_id = crate::managed_config::resolve_deployment_id(
+            if request.x_supercharge_deployment_id.is_none() {
+                request.x_supercharge_deployment_id = crate::managed_config::resolve_deployment_id(
                     crate::managed_config::resolve_deployment_key().as_deref(),
                 );
             }

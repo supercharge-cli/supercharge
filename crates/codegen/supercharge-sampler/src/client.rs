@@ -1099,8 +1099,8 @@ impl SamplingClient {
         request: ChatCompletionRequest,
     ) -> Result<ChatCompletionResponse> {
         let payload = self.apply_defaults(request)?;
-        let conv_id_header = &payload.x_grok_conv_id.clone().unwrap_or_default();
-        let req_id_header = &payload.x_grok_req_id.clone().unwrap_or_default();
+        let conv_id_header = &payload.x_supercharge_conv_id.clone().unwrap_or_default();
+        let req_id_header = &payload.x_supercharge_req_id.clone().unwrap_or_default();
         let model_id = payload.model.clone().unwrap_or_default();
 
         let request_region = crate::span_timing::Region::from_span(tracing::info_span!(
@@ -1120,12 +1120,12 @@ impl SamplingClient {
             conv_id: conv_id_header,
             req_id: req_id_header,
             model_id: &model_id,
-            session_id: payload.x_grok_session_id.as_deref().unwrap_or_default(),
-            turn_idx: payload.x_grok_turn_idx.as_deref(),
-            transient_retry: payload.x_grok_transient_retry.as_deref(),
-            agent_id: payload.x_grok_agent_id.as_deref().unwrap_or_default(),
-            deployment_id: payload.x_grok_deployment_id.as_deref(),
-            user_id: payload.x_grok_user_id.as_deref(),
+            session_id: payload.x_supercharge_session_id.as_deref().unwrap_or_default(),
+            turn_idx: payload.x_supercharge_turn_idx.as_deref(),
+            transient_retry: payload.x_supercharge_transient_retry.as_deref(),
+            agent_id: payload.x_supercharge_agent_id.as_deref().unwrap_or_default(),
+            deployment_id: payload.x_supercharge_deployment_id.as_deref(),
+            user_id: payload.x_supercharge_user_id.as_deref(),
         };
         self.prepare_bearer().await;
         let SentRequest {
@@ -1401,8 +1401,8 @@ impl SamplingClient {
     )> {
         let mut span_timing = StreamSpanTiming::start(region);
         let payload = self.apply_defaults(request)?;
-        let conv_id_header = &payload.x_grok_conv_id.clone().unwrap_or_default();
-        let req_id_header = &payload.x_grok_req_id.clone().unwrap_or_default();
+        let conv_id_header = &payload.x_supercharge_conv_id.clone().unwrap_or_default();
+        let req_id_header = &payload.x_supercharge_req_id.clone().unwrap_or_default();
         let model_id = payload.model.clone().unwrap_or_default();
 
         // Wrap the request with streaming fields and serialize once.
@@ -1418,12 +1418,12 @@ impl SamplingClient {
             conv_id: conv_id_header,
             req_id: req_id_header,
             model_id: &model_id,
-            session_id: payload.x_grok_session_id.as_deref().unwrap_or_default(),
-            turn_idx: payload.x_grok_turn_idx.as_deref(),
-            transient_retry: payload.x_grok_transient_retry.as_deref(),
-            agent_id: payload.x_grok_agent_id.as_deref().unwrap_or_default(),
-            deployment_id: payload.x_grok_deployment_id.as_deref(),
-            user_id: payload.x_grok_user_id.as_deref(),
+            session_id: payload.x_supercharge_session_id.as_deref().unwrap_or_default(),
+            turn_idx: payload.x_supercharge_turn_idx.as_deref(),
+            transient_retry: payload.x_supercharge_transient_retry.as_deref(),
+            agent_id: payload.x_supercharge_agent_id.as_deref().unwrap_or_default(),
+            deployment_id: payload.x_supercharge_deployment_id.as_deref(),
+            user_id: payload.x_supercharge_user_id.as_deref(),
         };
         self.prepare_bearer().await;
         let SentRequest {
@@ -1624,8 +1624,8 @@ impl SamplingClient {
     ) -> Result<rs::Response> {
         self.apply_response_defaults(&mut request)?;
 
-        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_supercharge_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_supercharge_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone().unwrap_or_default();
 
         let request_region = crate::span_timing::Region::from_span(tracing::info_span!(
@@ -1646,12 +1646,12 @@ impl SamplingClient {
             conv_id: conv_id_header,
             req_id: req_id_header,
             model_id: &model_id,
-            session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
-            turn_idx: request.x_grok_turn_idx.as_deref(),
-            transient_retry: request.x_grok_transient_retry.as_deref(),
-            agent_id: request.x_grok_agent_id.as_deref().unwrap_or_default(),
-            deployment_id: request.x_grok_deployment_id.as_deref(),
-            user_id: request.x_grok_user_id.as_deref(),
+            session_id: request.x_supercharge_session_id.as_deref().unwrap_or_default(),
+            turn_idx: request.x_supercharge_turn_idx.as_deref(),
+            transient_retry: request.x_supercharge_transient_retry.as_deref(),
+            agent_id: request.x_supercharge_agent_id.as_deref().unwrap_or_default(),
+            deployment_id: request.x_supercharge_deployment_id.as_deref(),
+            user_id: request.x_supercharge_user_id.as_deref(),
         };
         let extra_tool_entries = std::mem::take(&mut request.extra_tool_entries);
         let mut request_body = serde_json::to_value(&request.inner).map_err(|e| {
@@ -1770,8 +1770,8 @@ impl SamplingClient {
 
         request.inner.stream = Some(true);
 
-        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_supercharge_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_supercharge_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone().unwrap_or_default();
 
         // Drop process-local trace data (see note in `create_response`).
@@ -1787,12 +1787,12 @@ impl SamplingClient {
             conv_id: conv_id_header,
             req_id: req_id_header,
             model_id: &model_id,
-            session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
-            turn_idx: request.x_grok_turn_idx.as_deref(),
-            transient_retry: request.x_grok_transient_retry.as_deref(),
-            agent_id: request.x_grok_agent_id.as_deref().unwrap_or_default(),
-            deployment_id: request.x_grok_deployment_id.as_deref(),
-            user_id: request.x_grok_user_id.as_deref(),
+            session_id: request.x_supercharge_session_id.as_deref().unwrap_or_default(),
+            turn_idx: request.x_supercharge_turn_idx.as_deref(),
+            transient_retry: request.x_supercharge_transient_retry.as_deref(),
+            agent_id: request.x_supercharge_agent_id.as_deref().unwrap_or_default(),
+            deployment_id: request.x_supercharge_deployment_id.as_deref(),
+            user_id: request.x_supercharge_user_id.as_deref(),
         };
         let extra_tool_entries = std::mem::take(&mut request.extra_tool_entries);
         let mut request_body = serde_json::to_value(&request.inner).map_err(|e| {
@@ -1996,8 +1996,8 @@ impl SamplingClient {
     ) -> Result<messages::MessagesResponse> {
         self.apply_message_defaults(&mut request)?;
 
-        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_supercharge_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_supercharge_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone();
 
         let request_region = crate::span_timing::Region::from_span(tracing::info_span!(
@@ -2017,12 +2017,12 @@ impl SamplingClient {
             conv_id: conv_id_header,
             req_id: req_id_header,
             model_id: &model_id,
-            session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
-            turn_idx: request.x_grok_turn_idx.as_deref(),
-            transient_retry: request.x_grok_transient_retry.as_deref(),
-            agent_id: request.x_grok_agent_id.as_deref().unwrap_or_default(),
-            deployment_id: request.x_grok_deployment_id.as_deref(),
-            user_id: request.x_grok_user_id.as_deref(),
+            session_id: request.x_supercharge_session_id.as_deref().unwrap_or_default(),
+            turn_idx: request.x_supercharge_turn_idx.as_deref(),
+            transient_retry: request.x_supercharge_transient_retry.as_deref(),
+            agent_id: request.x_supercharge_agent_id.as_deref().unwrap_or_default(),
+            deployment_id: request.x_supercharge_deployment_id.as_deref(),
+            user_id: request.x_supercharge_user_id.as_deref(),
         };
         self.prepare_bearer().await;
         let SentRequest {
@@ -2126,8 +2126,8 @@ impl SamplingClient {
 
         request.inner.stream = Some(true);
 
-        let conv_id_header = request.x_grok_conv_id.as_deref().unwrap_or_default();
-        let req_id_header = request.x_grok_req_id.as_deref().unwrap_or_default();
+        let conv_id_header = request.x_supercharge_conv_id.as_deref().unwrap_or_default();
+        let req_id_header = request.x_supercharge_req_id.as_deref().unwrap_or_default();
         let model_id = request.inner.model.clone();
 
         // Drop process-local trace data.
@@ -2143,12 +2143,12 @@ impl SamplingClient {
             conv_id: conv_id_header,
             req_id: req_id_header,
             model_id: &model_id,
-            session_id: request.x_grok_session_id.as_deref().unwrap_or_default(),
-            turn_idx: request.x_grok_turn_idx.as_deref(),
-            transient_retry: request.x_grok_transient_retry.as_deref(),
-            agent_id: request.x_grok_agent_id.as_deref().unwrap_or_default(),
-            deployment_id: request.x_grok_deployment_id.as_deref(),
-            user_id: request.x_grok_user_id.as_deref(),
+            session_id: request.x_supercharge_session_id.as_deref().unwrap_or_default(),
+            turn_idx: request.x_supercharge_turn_idx.as_deref(),
+            transient_retry: request.x_supercharge_transient_retry.as_deref(),
+            agent_id: request.x_supercharge_agent_id.as_deref().unwrap_or_default(),
+            deployment_id: request.x_supercharge_deployment_id.as_deref(),
+            user_id: request.x_supercharge_user_id.as_deref(),
         };
         self.prepare_bearer().await;
         let SentRequest {
@@ -2372,12 +2372,12 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let conv_id_header = request.x_grok_conv_id.clone();
-        let req_id_header = request.x_grok_req_id.clone();
-        let x_grok_session_id = request.x_grok_session_id.clone();
-        let x_grok_turn_idx = request.x_grok_turn_idx.clone();
-        let x_grok_transient_retry = request.x_grok_transient_retry.clone();
-        let x_grok_agent_id = request.x_grok_agent_id.clone();
+        let conv_id_header = request.x_supercharge_conv_id.clone();
+        let req_id_header = request.x_supercharge_req_id.clone();
+        let x_supercharge_session_id = request.x_supercharge_session_id.clone();
+        let x_supercharge_turn_idx = request.x_supercharge_turn_idx.clone();
+        let x_supercharge_transient_retry = request.x_supercharge_transient_retry.clone();
+        let x_supercharge_agent_id = request.x_supercharge_agent_id.clone();
 
         // The hosted tools travel as raw JSON, spliced in after serialization by `splice_extra_tool_entries`, whose doc explains why each one does
         let extra_tools = supercharge_sampling_types::extra_tool_entries(&request.hosted_tools);
@@ -2385,12 +2385,12 @@ impl SamplingClient {
         let responses_request: rs::CreateResponse = (&request).into();
 
         let mut wrapper = CreateResponseWrapper::new(responses_request);
-        wrapper.x_grok_conv_id = conv_id_header;
-        wrapper.x_grok_req_id = req_id_header;
-        wrapper.x_grok_session_id = x_grok_session_id;
-        wrapper.x_grok_turn_idx = x_grok_turn_idx;
-        wrapper.x_grok_transient_retry = x_grok_transient_retry;
-        wrapper.x_grok_agent_id = x_grok_agent_id;
+        wrapper.x_supercharge_conv_id = conv_id_header;
+        wrapper.x_supercharge_req_id = req_id_header;
+        wrapper.x_supercharge_session_id = x_supercharge_session_id;
+        wrapper.x_supercharge_turn_idx = x_supercharge_turn_idx;
+        wrapper.x_supercharge_transient_retry = x_supercharge_transient_retry;
+        wrapper.x_supercharge_agent_id = x_supercharge_agent_id;
         wrapper.extra_tool_entries = extra_tools;
         wrapper.traceparent = request.traceparent;
 
@@ -2409,12 +2409,12 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let conv_id_header = request.x_grok_conv_id.clone();
-        let req_id_header = request.x_grok_req_id.clone();
-        let x_grok_session_id = request.x_grok_session_id.clone();
-        let x_grok_turn_idx = request.x_grok_turn_idx.clone();
-        let x_grok_transient_retry = request.x_grok_transient_retry.clone();
-        let x_grok_agent_id = request.x_grok_agent_id.clone();
+        let conv_id_header = request.x_supercharge_conv_id.clone();
+        let req_id_header = request.x_supercharge_req_id.clone();
+        let x_supercharge_session_id = request.x_supercharge_session_id.clone();
+        let x_supercharge_turn_idx = request.x_supercharge_turn_idx.clone();
+        let x_supercharge_transient_retry = request.x_supercharge_transient_retry.clone();
+        let x_supercharge_agent_id = request.x_supercharge_agent_id.clone();
 
         // The hosted tools travel as raw JSON, spliced in by `create_response` via `splice_extra_tool_entries`, whose doc explains why
         let extra_tools = supercharge_sampling_types::extra_tool_entries(&request.hosted_tools);
@@ -2422,12 +2422,12 @@ impl SamplingClient {
         let responses_request: rs::CreateResponse = (&request).into();
 
         let mut wrapper = CreateResponseWrapper::new(responses_request);
-        wrapper.x_grok_conv_id = conv_id_header;
-        wrapper.x_grok_req_id = req_id_header;
-        wrapper.x_grok_session_id = x_grok_session_id;
-        wrapper.x_grok_turn_idx = x_grok_turn_idx;
-        wrapper.x_grok_transient_retry = x_grok_transient_retry;
-        wrapper.x_grok_agent_id = x_grok_agent_id;
+        wrapper.x_supercharge_conv_id = conv_id_header;
+        wrapper.x_supercharge_req_id = req_id_header;
+        wrapper.x_supercharge_session_id = x_supercharge_session_id;
+        wrapper.x_supercharge_turn_idx = x_supercharge_turn_idx;
+        wrapper.x_supercharge_transient_retry = x_supercharge_transient_retry;
+        wrapper.x_supercharge_agent_id = x_supercharge_agent_id;
         wrapper.extra_tool_entries = extra_tools;
 
         if let Some(trace) = trace {
@@ -2448,22 +2448,22 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let conv_id_header = request.x_grok_conv_id.clone();
-        let req_id_header = request.x_grok_req_id.clone();
-        let x_grok_session_id = request.x_grok_session_id.clone();
-        let x_grok_turn_idx = request.x_grok_turn_idx.clone();
-        let x_grok_transient_retry = request.x_grok_transient_retry.clone();
-        let x_grok_agent_id = request.x_grok_agent_id.clone();
+        let conv_id_header = request.x_supercharge_conv_id.clone();
+        let req_id_header = request.x_supercharge_req_id.clone();
+        let x_supercharge_session_id = request.x_supercharge_session_id.clone();
+        let x_supercharge_turn_idx = request.x_supercharge_turn_idx.clone();
+        let x_supercharge_transient_retry = request.x_supercharge_transient_retry.clone();
+        let x_supercharge_agent_id = request.x_supercharge_agent_id.clone();
 
         let messages_request = build_messages_request(&request);
 
         let mut wrapper = MessagesRequestWrapper::new(messages_request);
-        wrapper.x_grok_conv_id = conv_id_header;
-        wrapper.x_grok_req_id = req_id_header;
-        wrapper.x_grok_session_id = x_grok_session_id;
-        wrapper.x_grok_turn_idx = x_grok_turn_idx;
-        wrapper.x_grok_transient_retry = x_grok_transient_retry;
-        wrapper.x_grok_agent_id = x_grok_agent_id;
+        wrapper.x_supercharge_conv_id = conv_id_header;
+        wrapper.x_supercharge_req_id = req_id_header;
+        wrapper.x_supercharge_session_id = x_supercharge_session_id;
+        wrapper.x_supercharge_turn_idx = x_supercharge_turn_idx;
+        wrapper.x_supercharge_transient_retry = x_supercharge_transient_retry;
+        wrapper.x_supercharge_agent_id = x_supercharge_agent_id;
         wrapper.traceparent = request.traceparent;
 
         if let Some(trace) = trace {
@@ -2481,22 +2481,22 @@ impl SamplingClient {
         self.apply_conversation_defaults(&mut request)?;
 
         let trace = request.trace.take();
-        let conv_id_header = request.x_grok_conv_id.clone();
-        let req_id_header = request.x_grok_req_id.clone();
-        let x_grok_session_id = request.x_grok_session_id.clone();
-        let x_grok_turn_idx = request.x_grok_turn_idx.clone();
-        let x_grok_transient_retry = request.x_grok_transient_retry.clone();
-        let x_grok_agent_id = request.x_grok_agent_id.clone();
+        let conv_id_header = request.x_supercharge_conv_id.clone();
+        let req_id_header = request.x_supercharge_req_id.clone();
+        let x_supercharge_session_id = request.x_supercharge_session_id.clone();
+        let x_supercharge_turn_idx = request.x_supercharge_turn_idx.clone();
+        let x_supercharge_transient_retry = request.x_supercharge_transient_retry.clone();
+        let x_supercharge_agent_id = request.x_supercharge_agent_id.clone();
 
         let messages_request = build_messages_request(&request);
 
         let mut wrapper = MessagesRequestWrapper::new(messages_request);
-        wrapper.x_grok_conv_id = conv_id_header;
-        wrapper.x_grok_req_id = req_id_header;
-        wrapper.x_grok_session_id = x_grok_session_id;
-        wrapper.x_grok_turn_idx = x_grok_turn_idx;
-        wrapper.x_grok_transient_retry = x_grok_transient_retry;
-        wrapper.x_grok_agent_id = x_grok_agent_id;
+        wrapper.x_supercharge_conv_id = conv_id_header;
+        wrapper.x_supercharge_req_id = req_id_header;
+        wrapper.x_supercharge_session_id = x_supercharge_session_id;
+        wrapper.x_supercharge_turn_idx = x_supercharge_turn_idx;
+        wrapper.x_supercharge_transient_retry = x_supercharge_transient_retry;
+        wrapper.x_supercharge_agent_id = x_supercharge_agent_id;
 
         if let Some(trace) = trace {
             wrapper.trace = Some(trace);
@@ -2724,14 +2724,14 @@ mod tests {
             search_parameters: None,
             response_format: None,
             reasoning_effort: None,
-            x_grok_conv_id: None,
-            x_grok_req_id: None,
-            x_grok_session_id: None,
-            x_grok_turn_idx: None,
-            x_grok_transient_retry: None,
-            x_grok_agent_id: None,
-            x_grok_deployment_id: None,
-            x_grok_user_id: None,
+            x_supercharge_conv_id: None,
+            x_supercharge_req_id: None,
+            x_supercharge_session_id: None,
+            x_supercharge_turn_idx: None,
+            x_supercharge_transient_retry: None,
+            x_supercharge_agent_id: None,
+            x_supercharge_deployment_id: None,
+            x_supercharge_user_id: None,
             trace: None,
             traceparent: None,
         };
@@ -2755,8 +2755,8 @@ mod tests {
             Some(true)
         );
         assert!(
-            !obj.keys().any(|k| k.starts_with("x_grok_")),
-            "x_grok_* are header fields and must never serialize into the body: {:?}",
+            !obj.keys().any(|k| k.starts_with("x_supercharge_")),
+            "x_supercharge_* are header fields and must never serialize into the body: {:?}",
             obj.keys().collect::<Vec<_>>()
         );
         assert!(

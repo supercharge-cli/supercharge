@@ -105,7 +105,7 @@ impl SessionActor {
         let session_id = self.session_info.id.to_string();
         // Only the Responses mapping sends the cache key
         // On the other backends the conv id is what ties a call to its conversation, so it has to stay the parent session id
-        // The `btw-`/`recap-` label still shows up in `x_grok_req_id`
+        // The `btw-`/`recap-` label still shows up in `x_supercharge_req_id`
         let conv_id = if call.backend.forwards_prompt_cache_key() {
             call.conv_id
         } else {
@@ -122,10 +122,10 @@ impl SessionActor {
             temperature: None,
             // Effort changes the prompt ahead of the conversation history, so dropping it here would share no prefix with the main turn.
             reasoning_effort: call.reasoning_effort,
-            x_grok_conv_id: Some(conv_id),
-            x_grok_req_id: Some(call.req_id),
-            x_grok_session_id: Some(session_id.clone()),
-            x_grok_agent_id: Some(supercharge_telemetry::id::agent_id()),
+            x_supercharge_conv_id: Some(conv_id),
+            x_supercharge_req_id: Some(call.req_id),
+            x_supercharge_session_id: Some(session_id.clone()),
+            x_supercharge_agent_id: Some(supercharge_telemetry::id::agent_id()),
             prompt_cache_key: Some(session_id),
             // Side calls persist text and never execute tools (the attached tools only align the prompt-cache prefix)
             // A Length sample must fail rather than salvage
@@ -165,8 +165,8 @@ impl SessionActor {
         &self,
         setup: &SideCallSetup,
         items: Vec<ConversationItem>,
-        x_grok_conv_id: String,
-        x_grok_req_id: String,
+        x_supercharge_conv_id: String,
+        x_supercharge_req_id: String,
     ) -> ConversationRequest {
         let tool_defs = self.prepare_tool_definitions().await;
         let tools = self.turn_base_tool_specs(&tool_defs);
@@ -179,8 +179,8 @@ impl SessionActor {
             model: setup.model.clone(),
             reasoning_effort: setup.reasoning_effort,
             backend: setup.client.api_backend(),
-            conv_id: x_grok_conv_id,
-            req_id: x_grok_req_id,
+            conv_id: x_supercharge_conv_id,
+            req_id: x_supercharge_req_id,
         })
     }
 

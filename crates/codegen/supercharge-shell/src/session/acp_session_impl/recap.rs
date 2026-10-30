@@ -90,7 +90,7 @@ fn should_retry_side_question(e: &SamplingError) -> bool {
 /// Everything else is byte-identical.
 fn build_side_question_attempt(base: &ConversationRequest) -> ConversationRequest {
     let mut request = base.clone();
-    request.x_grok_req_id = Some(format!("xai-btw-{}", uuid::Uuid::new_v4()));
+    request.x_supercharge_req_id = Some(format!("xai-btw-{}", uuid::Uuid::new_v4()));
     request
 }
 impl SessionActor {
@@ -344,10 +344,10 @@ impl SessionActor {
         let strip_reasoning = setup.strip_reasoning;
         let model = setup.model.clone();
         let started_at = chrono::Utc::now().to_rfc3339();
-        let x_grok_conv_id = format!("recap-{}", uuid::Uuid::new_v4());
-        let x_grok_req_id = format!("xai-recap-{}", uuid::Uuid::new_v4());
+        let x_supercharge_conv_id = format!("recap-{}", uuid::Uuid::new_v4());
+        let x_supercharge_req_id = format!("xai-recap-{}", uuid::Uuid::new_v4());
         let request = self
-            .side_call_request(&setup, items, x_grok_conv_id.clone(), x_grok_req_id.clone())
+            .side_call_request(&setup, items, x_supercharge_conv_id.clone(), x_supercharge_req_id.clone())
             .await;
         // The artifact records the exact model-facing items after trust projection; the canonical conversation state remains raw
         let chat_history_for_artifact = request.items.clone();
@@ -362,8 +362,8 @@ impl SessionActor {
                     auto,
                     strip_reasoning,
                     tag,
-                    &x_grok_req_id,
-                    &x_grok_conv_id,
+                    &x_supercharge_req_id,
+                    &x_supercharge_conv_id,
                     started_at,
                     None,
                     None,
@@ -389,8 +389,8 @@ impl SessionActor {
                 auto,
                 strip_reasoning,
                 tag,
-                &x_grok_req_id,
-                &x_grok_conv_id,
+                &x_supercharge_req_id,
+                &x_supercharge_conv_id,
                 started_at,
                 None,
                 Some(raw_response.as_str()).filter(|s| !s.is_empty()),
@@ -419,8 +419,8 @@ impl SessionActor {
                 auto,
                 strip_reasoning,
                 tag,
-                &x_grok_req_id,
-                &x_grok_conv_id,
+                &x_supercharge_req_id,
+                &x_supercharge_conv_id,
                 started_at,
                 Some(summary.as_str()),
                 Some(raw_response.as_str()),
@@ -443,8 +443,8 @@ impl SessionActor {
                 auto,
                 strip_reasoning,
                 tag,
-                &x_grok_req_id,
-                &x_grok_conv_id,
+                &x_supercharge_req_id,
+                &x_supercharge_conv_id,
                 started_at,
                 Some(summary.as_str()),
                 Some(raw_response.as_str()),
@@ -462,8 +462,8 @@ impl SessionActor {
             auto,
             strip_reasoning,
             tag,
-            &x_grok_req_id,
-            &x_grok_conv_id,
+            &x_supercharge_req_id,
+            &x_supercharge_conv_id,
             started_at,
             Some(summary.as_str()),
             Some(raw_response.as_str()),
@@ -529,8 +529,8 @@ impl SessionActor {
         auto: bool,
         strip_reasoning: bool,
         reminder_tag: &str,
-        x_grok_req_id: &str,
-        x_grok_conv_id: &str,
+        x_supercharge_req_id: &str,
+        x_supercharge_conv_id: &str,
         started_at: String,
         summary: Option<&str>,
         raw_response: Option<&str>,
@@ -545,8 +545,8 @@ impl SessionActor {
             created_at: started_at,
             trigger: if auto { "auto" } else { "manual" }.to_owned(),
             model: model.to_owned(),
-            x_grok_req_id: x_grok_req_id.to_owned(),
-            x_grok_conv_id: x_grok_conv_id.to_owned(),
+            x_supercharge_req_id: x_supercharge_req_id.to_owned(),
+            x_supercharge_conv_id: x_supercharge_conv_id.to_owned(),
             strip_reasoning,
             reminder_tag: reminder_tag.to_owned(),
             chat_history,
@@ -755,10 +755,10 @@ impl SessionActor {
             temperature: Some(temperature),
             max_output_tokens: Some(max_output_tokens),
             reasoning_effort,
-            x_grok_conv_id: Some(format!("promptsuggest-{}", uuid::Uuid::new_v4())),
-            x_grok_req_id: Some(request_id.clone()),
-            x_grok_session_id: Some(self.session_info.id.to_string()),
-            x_grok_agent_id: Some(supercharge_telemetry::id::agent_id()),
+            x_supercharge_conv_id: Some(format!("promptsuggest-{}", uuid::Uuid::new_v4())),
+            x_supercharge_req_id: Some(request_id.clone()),
+            x_supercharge_session_id: Some(self.session_info.id.to_string()),
+            x_supercharge_agent_id: Some(supercharge_telemetry::id::agent_id()),
             ..Default::default()
         };
 
@@ -904,15 +904,15 @@ mod tests {
     #[test]
     fn side_question_attempts_get_fresh_request_ids() {
         let base = ConversationRequest {
-            x_grok_conv_id: Some("btw-test".into()),
+            x_supercharge_conv_id: Some("btw-test".into()),
             ..Default::default()
         };
         let a = build_side_question_attempt(&base);
         let b = build_side_question_attempt(&base);
-        let (a_id, b_id) = (a.x_grok_req_id.unwrap(), b.x_grok_req_id.unwrap());
+        let (a_id, b_id) = (a.x_supercharge_req_id.unwrap(), b.x_supercharge_req_id.unwrap());
         assert!(a_id.starts_with("xai-btw-"));
         assert_ne!(a_id, b_id, "each attempt must get a fresh req_id");
         // Everything except the request id is byte-identical to the base.
-        assert_eq!(a.x_grok_conv_id, base.x_grok_conv_id);
+        assert_eq!(a.x_supercharge_conv_id, base.x_supercharge_conv_id);
     }
 }

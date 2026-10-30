@@ -533,10 +533,10 @@ impl SessionActor {
                 ConversationItem::user(user_message),
             ],
             model: Some(model),
-            x_grok_conv_id: Some(format!("dream-{}", uuid::Uuid::new_v4())),
-            x_grok_req_id: Some(format!("xai-dream-{}", uuid::Uuid::new_v4())),
-            x_grok_session_id: Some(session_id),
-            x_grok_agent_id: Some(supercharge_telemetry::id::agent_id()),
+            x_supercharge_conv_id: Some(format!("dream-{}", uuid::Uuid::new_v4())),
+            x_supercharge_req_id: Some(format!("xai-dream-{}", uuid::Uuid::new_v4())),
+            x_supercharge_session_id: Some(session_id),
+            x_supercharge_agent_id: Some(supercharge_telemetry::id::agent_id()),
             ..Default::default()
         };
         let response = sampling_client
@@ -648,10 +648,10 @@ impl SessionActor {
             let request = ConversationRequest {
                 items,
                 model: Some(model),
-                x_grok_conv_id: Some(format!("flush-{}", uuid::Uuid::new_v4())),
-                x_grok_req_id: Some(format!("xai-flush-{}", uuid::Uuid::new_v4())),
-                x_grok_session_id: Some(session_id.clone()),
-                x_grok_agent_id: Some(supercharge_telemetry::id::agent_id()),
+                x_supercharge_conv_id: Some(format!("flush-{}", uuid::Uuid::new_v4())),
+                x_supercharge_req_id: Some(format!("xai-flush-{}", uuid::Uuid::new_v4())),
+                x_supercharge_session_id: Some(session_id.clone()),
+                x_supercharge_agent_id: Some(supercharge_telemetry::id::agent_id()),
                 ..Default::default()
             };
 

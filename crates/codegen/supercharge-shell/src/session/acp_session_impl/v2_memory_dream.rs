@@ -1179,10 +1179,10 @@ impl SessionActor {
             model: Some(model.clone()),
             reasoning_effort,
             json_schema: Some(dream_plan_schema()),
-            x_grok_conv_id: Some(format!("dream-v2-{}", uuid::Uuid::new_v4())),
-            x_grok_req_id: Some(format!("xai-dream-v2-{}", uuid::Uuid::new_v4())),
-            x_grok_session_id: Some(self.session_info.id.to_string()),
-            x_grok_agent_id: Some(supercharge_telemetry::id::agent_id()),
+            x_supercharge_conv_id: Some(format!("dream-v2-{}", uuid::Uuid::new_v4())),
+            x_supercharge_req_id: Some(format!("xai-dream-v2-{}", uuid::Uuid::new_v4())),
+            x_supercharge_session_id: Some(self.session_info.id.to_string()),
+            x_supercharge_agent_id: Some(supercharge_telemetry::id::agent_id()),
             ..Default::default()
         };
         tokio::time::timeout(

@@ -703,9 +703,9 @@ async fn manual_recap_generation_failure_persists_request_artifact() {
                         "artifact must include the recap request items"
                     );
                     assert!(
-                        artifact.x_grok_req_id.starts_with("xai-recap-"),
+                        artifact.x_supercharge_req_id.starts_with("xai-recap-"),
                         "req id: {}",
-                        artifact.x_grok_req_id
+                        artifact.x_supercharge_req_id
                     );
                     saw_recap_request = true;
                 }
