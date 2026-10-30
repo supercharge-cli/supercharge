@@ -1051,7 +1051,7 @@ where
 /// The pair is the atomic configurable unit because a model is only guaranteed to work with a compatible harness (cursor vs supercharge-core).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GoalRoleModel {
-    /// Model id, e.g. "grok-4". It resolves against available models at spawn time; unknown or unauthorized fails open to the current model.
+    /// Model id, e.g. "my-model". It resolves against available models at spawn time; unknown or unauthorized fails open to the current model.
     pub model: String,
     /// Harness `agent_type` (e.g. "cursor", "supercharge-core-plan") whose `AgentDefinition` decides the role subagent's harness flavor.
     /// The flavor (system prompt and cursor-vs-supercharge-core toolset) applies regardless of the session or parent agent.

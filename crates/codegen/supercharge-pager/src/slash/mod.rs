@@ -1344,7 +1344,7 @@ fn analyze_input(text: &str, cursor: usize) -> Option<SlashInput> {
 
 /// Parsed slash command invocation.
 pub struct SlashInvocation<'a> {
-    /// Command token (e.g., "model" for "/model grok-4").
+    /// Command token (e.g., "model" for "/model my-model").
     pub token: &'a str,
     /// Everything after the command token, trimmed on the left.
     pub args: &'a str,
@@ -1666,7 +1666,7 @@ mod tests {
         assert!(!is_command_complete("/btw ", &reg));
         assert!(is_command_complete("/btw hi", &reg));
         assert!(is_command_complete("/model", &reg));
-        assert!(is_command_complete("/model grok-4", &reg));
+        assert!(is_command_complete("/model my-model", &reg));
     }
 
     #[test]
@@ -1927,7 +1927,7 @@ mod tests {
         let state = SlashState::default();
         let models = ModelState::default();
 
-        ctrl.refresh(&state, "/model grok-4", 3, &models);
+        ctrl.refresh(&state, "/model my-model", 3, &models);
         let snapshot = state.snapshot();
         assert!(snapshot.open);
         assert!(snapshot.command_recognized);

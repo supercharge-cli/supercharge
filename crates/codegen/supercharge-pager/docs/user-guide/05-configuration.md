@@ -46,11 +46,11 @@ Location: `~/.supercharge/config.toml`. If the file is missing, Supercharge AI u
 auto_update = true                     # check for updates on launch
 
 [models]
-default = "grok-4.5"                   # model used for new sessions
-web_search = "grok-4.5"                # model used by the web_search tool
+default = "my-model"                   # model used for new sessions
+web_search = "my-model"                # model used by the web_search tool
 # Optional picker allowlist (globs on catalog key or model id). Empty = unrestricted.
 # A signed policy pin replaces this list (model id only) and cannot be widened from here.
-# allowed_models = ["grok-4.5", "grok-4*"]
+# allowed_models = ["my-model", "my-*"]
 
 # Defaults applied to every model; a per-model [model.<id>] value always wins.
 # See "Custom Models" for the per-model overrides and full details.
@@ -273,7 +273,7 @@ Provider credentials are validated and stored through `/setup`; global environme
 To override a built-in model, use its name as the section key and set only the fields you need:
 
 ```toml
-[model.grok-4.6]
+[model.my-model]
 api_key = "my-api-key"
 ```
 
@@ -356,7 +356,7 @@ explore = true                        # enable/disable specific types
 plan = false
 
 [subagents.models]
-explore = "grok-4.6"               # route to different models
+explore = "my-model"               # route to different models
 ```
 
 To pin the model a subagent uses, set its entry under `[subagents.models]`.
@@ -646,7 +646,7 @@ auth_token_ttl = 3600
 default = "company-supercharge"
 
 [model.company-supercharge]
-model = "grok-4.6"
+model = "my-model"
 base_url = "https://grok-proxy.acme.com/"
 name = "Grok 4.6 (Proxy)"
 context_window = 128000

@@ -6,7 +6,7 @@ Supercharge AI connects to custom model endpoints for alternative providers, sel
 
 ## Default Models
 
-Supercharge AI uses the provider and default model saved through `/setup`. No upstream account or forced browser authentication is required. `/model` fetches the configured provider’s live model list; select a listed model or enter an ID supported by that provider. Examples using `grok-4.6` or `grok-4.5` refer to actual xAI model IDs, not renamed Supercharge models.
+Supercharge AI uses the provider and default model saved through `/setup`. No upstream account or forced browser authentication is required. `/model` fetches the configured provider’s live model list; select a listed model or enter an ID supported by that provider. In the examples below, replace `my-model` with a model ID your provider offers.
 
 List all available models:
 
@@ -21,7 +21,7 @@ supercharge models
 ### CLI Flag
 
 ```bash
-supercharge -p "Hello" -m grok-4.6
+supercharge -p "Hello" -m my-model
 ```
 
 ### Slash Command
@@ -29,13 +29,13 @@ supercharge -p "Hello" -m grok-4.6
 In the TUI, switch models during a session:
 
 ```
-/model grok-4.6
+/model my-model
 ```
 
 Or use the alias:
 
 ```
-/m grok-4.6
+/m my-model
 ```
 
 ### Model Picker (Ctrl+M)
@@ -48,8 +48,8 @@ Enterprise hosts can pin the **selectable** set — not only the default — in 
 
 ```toml
 [models]
-default = "grok-4.5"
-allowed_models = ["grok-4.5", "grok-4*"]
+default = "my-model"
+allowed_models = ["my-model", "my-*"]
 ```
 
 A fleet pin matches the **model id** (not a user-chosen catalog key), so a local `[model.<name>]` entry cannot widen the set. User-config `allowed_models` still matches catalog key or model id. Omit the key to leave user config standing. An empty array is unrestricted. A present-but-unreadable pin fail-closes (nothing selectable). A default or `-m` value outside the pinned set is rejected once the model catalog is fetched — contact your administrator; the list is not user-editable.
@@ -60,7 +60,7 @@ Set a persistent default in `~/.supercharge/config.toml`:
 
 ```toml
 [models]
-default = "grok-4.5"
+default = "my-model"
 ```
 
 ---
@@ -196,11 +196,11 @@ You can override specific fields of built-in models without redefining everythin
 
 ```toml
 # Override only the API key for a default model
-[model.grok-4.6]
+[model.my-model]
 api_key = "my-api-key"
 
 # Override temperature and add a custom API key
-[model.grok-4.6]
+[model.my-model]
 temperature = 0.5
 api_key = "sk-custom"
 ```
@@ -269,8 +269,8 @@ Bedrock's OpenAI-compatible gateway rejects `reasoning.summary`, so set `reasoni
 command = "aws-bedrock-token"   # prints a Bedrock API key on stdout (e.g. via aws-bedrock-token-generator)
 token_ttl_secs = 3600
 
-[model."bedrock-grok-4.6"]
-model = "xai.grok-4.6"
+[model."bedrock-my-model"]
+model = "provider.my-model"
 base_url = "https://bedrock-mantle.us-west-2.api.aws/openai/v1"
 name = "Grok 4.6 (Bedrock)"
 api_backend = "responses"
@@ -339,7 +339,7 @@ Start Supercharge AI and run `/setup` in the TUI. Enter `https://api.acme.com/v1
 models_base_url = "https://api.acme.com/v1"
 
 # Override only the API key for a specific model
-[model.grok-4.6]
+[model.my-model]
 api_key = "my-api-key"
 ```
 
@@ -357,13 +357,13 @@ The `web_search` tool uses a separate model. Configure it with:
 
 ```toml
 [models]
-web_search = "grok-4.5"
+web_search = "my-model"
 ```
 
 Or via environment variable:
 
 ```bash
-export SUPERCHARGE_WEB_SEARCH_MODEL="grok-4.5"
+export SUPERCHARGE_WEB_SEARCH_MODEL="my-model"
 ```
 
 If you point web search at a custom model, you also need a `[model.*]` entry so Supercharge AI can reach it. Server-side ("backend") web search runs only when the model sets `supports_backend_search = true` (and the build enables backend search); it does not depend on `api_backend`:
@@ -415,7 +415,7 @@ auth_token_ttl = 3600
 default = "company-supercharge"
 
 [model.company-supercharge]
-model = "grok-4.6"
+model = "my-model"
 base_url = "https://grok-proxy.acme.com/"
 name = "Grok 4.6 (Proxy)"
 context_window = 128000

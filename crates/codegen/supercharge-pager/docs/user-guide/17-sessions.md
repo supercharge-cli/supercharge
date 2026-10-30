@@ -249,7 +249,7 @@ await connection.request("session/load", {
 await connection.request("session/set_config_option", {
   sessionId,
   configId: "model",
-  value: { value: "grok-4.6" },
+  value: { value: "my-model" },
 });
 ```
 

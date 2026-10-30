@@ -10,7 +10,7 @@
 //!                                            ← top vpad (configurable)
 //!  ❯ type here, text wraps                   ← prefix + TextArea
 //!    continuation of long input...            ← TextArea continuation
-//!  grok-3 · yolo                             ← info line (optional)
+//!  my-model · yolo                           ← info line (optional)
 //! ```
 //!
 //! The accent line (┃) and selection box are rendered by the caller.

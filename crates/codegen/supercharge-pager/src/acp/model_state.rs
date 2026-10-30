@@ -72,7 +72,7 @@ impl ModelState {
         }
     }
 
-    /// Machine-readable model ID string for the current model (e.g. "grok-4.5").
+    /// Machine-readable model ID string for the current model (e.g. "my-model").
     pub fn current_model_id_str(&self) -> Option<&str> {
         Some(self.current.as_ref()?.0.as_ref())
     }
@@ -231,7 +231,7 @@ impl ModelState {
 
     /// Map a typed or selected effort token to its canonical value for the current model.
     /// Accepts a menu option id (case-insensitive) or a canonical level that appears as a value in that model's menu.
-    /// Levels the model does not offer (e.g. `none` on grok-4.5) are rejected so the TUI fails instead of sending a blocked effort to the API.
+    /// Levels the model does not offer (e.g. `none` on a reasoning-only model) are rejected so the TUI fails instead of sending a blocked effort to the API.
     pub fn resolve_effort_token(&self, token: &str) -> Option<ReasoningEffort> {
         match self.current.as_ref() {
             Some(id) => self.resolve_effort_token_for(id, token),

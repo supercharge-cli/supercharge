@@ -103,7 +103,7 @@ Switch models. With no arguments, Supercharge live-fetches `/models` from the pr
 
 ```
 /model
-/model grok-4.6
+/model my-model
 /model Grok 4.6
 /model Reasoning X high
 ```

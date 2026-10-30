@@ -184,7 +184,7 @@ struct SuggestPromptResponse {
 }
 
 /// Upper bound on the suggestion round-trip. Turn-end prediction is not latency-critical: the user is reading the agent's reply, and the idle window after a turn is typically long.
-/// But a hung call must not pin the oneshot forever. Reasoning models (e.g. `grok-4.6`) can take ~30s on a cold cache.
+/// But a hung call must not pin the oneshot forever. Reasoning models can take ~30s on a cold cache.
 /// A late suggestion is still useful; the pager's generation guard and empty-prompt gating discard it if the user moved on.
 const SUGGEST_PROMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
 

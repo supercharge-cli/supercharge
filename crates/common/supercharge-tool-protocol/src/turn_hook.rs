@@ -38,7 +38,7 @@ pub struct BeforeTurnPayload {
     /// Per-session user-turn counter, 0-based. Not strictly monotonic: a tool-result continuation keeps the issuing turn's number, and
     /// editing or regenerating an earlier message reuses that turn's number (consumers deduping on it treat a regenerate as the same turn).
     pub turn_number: u64,
-    /// Model being used for this turn (e.g. "grok-3").
+    /// Model being used for this turn (e.g. "my-model").
     pub model_id: String,
     /// Whether the session is in YOLO / auto-approve mode.
     #[serde(default)]

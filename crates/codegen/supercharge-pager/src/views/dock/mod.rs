@@ -64,7 +64,7 @@ pub struct DockRow {
     pub kind: String,
     pub description: String,
     pub activity: Option<String>,
-    /// Right-aligned meta column, e.g. `grok-4.5 2m14s` or `every 5m (next in 2m)`.
+    /// Right-aligned meta column, e.g. `my-model 2m14s` or `every 5m (next in 2m)`.
     pub meta: String,
     pub killable: bool,
     /// Loops only paint `[↗]` when a linked child still exists to open.

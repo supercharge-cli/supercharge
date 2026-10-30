@@ -148,7 +148,7 @@ Tools can be extended with [MCP servers](05-configuration.md#mcp-servers) for in
 Type `/` in the prompt to access commands. These provide quick actions without writing a full prompt:
 
 ```
-/model grok-4.6                 # Switch model
+/model my-model                 # Switch model
 /compact                          # Compress conversation history
 /always-approve                   # Toggle always-approve mode
 /new                              # Start a new session
@@ -183,7 +183,7 @@ supercharge --rules "Always use TypeScript. Prefer functional components."
 supercharge --yolo
 
 # Use a specific model
-supercharge -m grok-4.6
+supercharge -m my-model
 
 # Resume a previous session
 supercharge --resume <session-id>
