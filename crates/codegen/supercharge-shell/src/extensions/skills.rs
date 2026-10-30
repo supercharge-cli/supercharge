@@ -87,11 +87,21 @@ pub(crate) struct SkillsToggleRequest {
     pub cwd: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+/// Params for the skills list method. Both serde directions so ACP clients (the pager)
+/// build the request from the same type the agent parses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillsListRequest {
-    /// Working directory for skill discovery context.
+    /// Working directory for skill discovery context. A resident `sessionId` wins over it.
     pub cwd: String,
+    /// The session whose skills to list. When the session is resident its working directory
+    /// is used instead of `cwd`, so a client with several sessions gets the right project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<acp::SessionId>,
+    /// Rescan the skill folders instead of answering from a cache. The shell always rescans,
+    /// so this only matters to backends that cache.
+    #[serde(default)]
+    pub refresh: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,10 +110,31 @@ struct WorkflowsListRequest {
     session_id: acp::SessionId,
 }
 
-#[derive(Debug, Serialize)]
+/// Answer to the skills list and toggle methods, in both serde directions for the same reason
+/// as [`SkillsListRequest`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillsListResponse {
     pub skills: Vec<SkillInfo>,
+    /// Skill folders that exist (or were configured) but could not be scanned. Omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scan_errors: Vec<SkillScanError>,
+}
+
+impl From<Vec<SkillInfo>> for SkillsListResponse {
+    fn from(skills: Vec<SkillInfo>) -> Self {
+        Self {
+            skills,
+            scan_errors: Vec::new(),
+        }
+    }
+}
+
+/// A skill folder that could not be scanned, with a short reason.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillScanError {
+    pub path: String,
+    pub message: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,6 +167,136 @@ async fn reload_skills(
             tracing::warn!("Skills reload timed out");
             vec![]
         }
+    }
+}
+
+/// How long one skills listing may take before it answers with what it has.
+const SKILL_SCAN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Like [`reload_skills`], but folders that could not be scanned, and a scan that ran out of
+/// time, come back as [`SkillScanError`]s instead of silently shrinking the list.
+async fn list_skills_reporting(
+    cwd: &str,
+    plugin_registry: Option<&supercharge_agent::plugins::PluginRegistry>,
+    compat: CompatConfig,
+) -> SkillsListResponse {
+    let config = cli_config::load_config().await.skills;
+    let project_trusted =
+        crate::agent::folder_trust::project_scope_allowed(std::path::Path::new(cwd));
+    let discovery =
+        list_skills_with_plugins(Some(cwd), &config, plugin_registry, compat, project_trusted);
+    let (skills, mut scan_errors) = match tokio::time::timeout(SKILL_SCAN_TIMEOUT, discovery).await
+    {
+        Ok(skills) => (skills, Vec::new()),
+        Err(_) => {
+            tracing::warn!("Skills reload timed out");
+            (
+                Vec::new(),
+                vec![SkillScanError {
+                    path: cwd.to_owned(),
+                    message: "skill scan timed out".to_owned(),
+                }],
+            )
+        }
+    };
+
+    let configured: Vec<std::path::PathBuf> = config
+        .paths
+        .iter()
+        .map(|raw| std::path::PathBuf::from(resolve_skill_path(raw, cwd)))
+        .chain(
+            extra_skill_dirs_from_config()
+                .iter()
+                .map(|dir| crate::util::expand_home(dir)),
+        )
+        .collect();
+    let discovered = auto_skill_dirs(cwd);
+    let check = tokio::task::spawn_blocking(move || unreadable_skill_dirs(&configured, &discovered));
+    match tokio::time::timeout(SKILL_SCAN_TIMEOUT, check).await {
+        Ok(Ok(errors)) => scan_errors.extend(errors),
+        Ok(Err(join_error)) => tracing::warn!(%join_error, "skill folder check panicked"),
+        Err(_) => tracing::warn!("skill folder check timed out"),
+    }
+    SkillsListResponse {
+        skills,
+        scan_errors,
+    }
+}
+
+/// The folders skill discovery looks in on its own, whether or not they exist.
+fn auto_skill_dirs(cwd: &str) -> Vec<std::path::PathBuf> {
+    let cwd_path = std::path::PathBuf::from(cwd);
+    let home_dir = supercharge_tools::util::grok_home::grok_home();
+    let git_root = git2::Repository::discover(&cwd_path)
+        .ok()
+        .and_then(|repo| repo.workdir().map(|p| p.to_path_buf()));
+    let subdirs = ["skills", "commands"];
+    let mut dirs = Vec::new();
+    for root in std::iter::once(cwd_path).chain(git_root) {
+        for dir_name in [".supercharge", ".agents"] {
+            for subdir in subdirs {
+                dirs.push(root.join(dir_name).join(subdir));
+            }
+        }
+    }
+    for subdir in subdirs {
+        dirs.push(home_dir.join(subdir));
+    }
+    if let Some(home) = supercharge_dirs::home_dir() {
+        for subdir in subdirs {
+            dirs.push(home.join(".agents").join(subdir));
+        }
+    }
+    dirs
+}
+
+/// Folders that can't be listed. A `configured` folder that is missing is reported too, since
+/// the user asked for it; a missing `discovered` folder is normal and skipped.
+fn unreadable_skill_dirs(
+    configured: &[std::path::PathBuf],
+    discovered: &[std::path::PathBuf],
+) -> Vec<SkillScanError> {
+    let mut seen = std::collections::HashSet::new();
+    let mut errors = Vec::new();
+    let candidates = configured
+        .iter()
+        .map(|dir| (dir, true))
+        .chain(discovered.iter().map(|dir| (dir, false)));
+    for (dir, is_configured) in candidates {
+        if !seen.insert(dir.clone()) {
+            continue;
+        }
+        let message = match std::fs::metadata(dir) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if !is_configured {
+                    continue;
+                }
+                "folder not found".to_owned()
+            }
+            Err(error) => scan_error_message(&error),
+            Ok(meta) if !meta.is_dir() => {
+                if !is_configured {
+                    continue;
+                }
+                "not a folder".to_owned()
+            }
+            Ok(_) => match std::fs::read_dir(dir) {
+                Ok(_) => continue,
+                Err(error) => scan_error_message(&error),
+            },
+        };
+        errors.push(SkillScanError {
+            path: dir.to_string_lossy().into_owned(),
+            message,
+        });
+    }
+    errors
+}
+
+fn scan_error_message(error: &std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::PermissionDenied => "permission denied".to_owned(),
+        _ => error.to_string(),
     }
 }
 
@@ -404,11 +565,17 @@ pub async fn handle(
 
         "x.ai/skills/list" => {
             let req: SkillsListRequest = serde_json::from_str(args.params.get())?;
-            let skills = reload_skills(&req.cwd, plugin_registry, compat).await;
+            let cwd = req
+                .session_id
+                .as_ref()
+                .and_then(|sid| agent.get_session_cwd(sid))
+                .map(|dir| dir.to_string_lossy().into_owned())
+                .unwrap_or(req.cwd);
+            let listing = list_skills_reporting(&cwd, plugin_registry, compat).await;
             // Sessions otherwise learn about disk changes only from inotify,
             // which misses writes made through another NFS client.
             agent.refresh_skill_baseline_for_all_sessions();
-            super::to_ext_response(Ok(SkillsListResponse { skills }))
+            super::to_ext_response(Ok(listing))
         }
 
         "x.ai/workflows/list" => {
@@ -533,7 +700,7 @@ pub async fn handle(
                     s
                 })
                 .collect();
-            super::to_ext_response(Ok(SkillsListResponse { skills }))
+            super::to_ext_response(Ok(SkillsListResponse::from(skills)))
         }
 
         _ => Err(acp::Error::method_not_found()),
@@ -543,6 +710,91 @@ pub async fn handle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_request_round_trips_with_session_and_refresh() {
+        let req = SkillsListRequest {
+            cwd: ".".to_owned(),
+            session_id: Some(acp::SessionId::new("s1")),
+            refresh: true,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "cwd": ".", "sessionId": "s1", "refresh": true })
+        );
+        // Older clients send only `cwd`.
+        let old: SkillsListRequest = serde_json::from_str(r#"{"cwd":"/p"}"#).unwrap();
+        assert!(old.session_id.is_none());
+        assert!(!old.refresh);
+    }
+
+    #[test]
+    fn list_response_omits_empty_scan_errors() {
+        let empty = serde_json::to_value(SkillsListResponse::from(Vec::new())).unwrap();
+        assert_eq!(empty, serde_json::json!({ "skills": [] }));
+        let with_errors = SkillsListResponse {
+            skills: Vec::new(),
+            scan_errors: vec![SkillScanError {
+                path: "/locked".to_owned(),
+                message: "permission denied".to_owned(),
+            }],
+        };
+        let json = serde_json::to_value(&with_errors).unwrap();
+        assert_eq!(
+            json["scanErrors"],
+            serde_json::json!([{ "path": "/locked", "message": "permission denied" }])
+        );
+        let back: SkillsListResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(back.scan_errors, with_errors.scan_errors);
+    }
+
+    #[test]
+    fn missing_configured_folder_is_reported_but_missing_discovered_folder_is_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("nope");
+        let file = tmp.path().join("file.md");
+        std::fs::write(&file, "x").unwrap();
+        let ok = tmp.path().join("ok");
+        std::fs::create_dir(&ok).unwrap();
+
+        let errors = unreadable_skill_dirs(
+            &[missing.clone(), file.clone(), ok.clone()],
+            &[tmp.path().join("also-missing"), file.clone(), ok],
+        );
+        assert_eq!(
+            errors,
+            vec![
+                SkillScanError {
+                    path: missing.to_string_lossy().into_owned(),
+                    message: "folder not found".to_owned(),
+                },
+                SkillScanError {
+                    path: file.to_string_lossy().into_owned(),
+                    message: "not a folder".to_owned(),
+                },
+            ]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_discovered_folder_is_reported() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let locked = tmp.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let readable_anyway = std::fs::read_dir(&locked).is_ok(); // running as root
+        let errors = unreadable_skill_dirs(&[], std::slice::from_ref(&locked));
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        if readable_anyway {
+            assert!(errors.is_empty());
+        } else {
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].message, "permission denied");
+        }
+    }
 
     #[test]
     fn request_cwd_reads_the_field_from_any_request_shape() {

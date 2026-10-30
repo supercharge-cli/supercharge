@@ -762,14 +762,19 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
             let Some(session_id) = agent.session.session_id.clone() else {
                 return vec![];
             };
-            if let Some(ref mut modal) = agent.extensions_modal {
-                modal.skills_data = crate::views::extensions_modal::TabDataState::Loading;
-                modal.workflows_data = crate::views::extensions_modal::TabDataState::Loading;
-            }
+            let Some(ref mut modal) = agent.extensions_modal else {
+                return vec![];
+            };
+            modal.skills_data = crate::views::extensions_modal::TabDataState::Loading;
+            modal.workflows_data = crate::views::extensions_modal::TabDataState::Loading;
             vec![
                 Effect::FetchSkillsList {
                     agent_id: id,
                     session_id: session_id.clone(),
+                    // `r` on the Workflows tab reloads the skills too, from the cache
+                    refresh: modal.active_tab
+                        == crate::views::extensions_modal::ExtensionsTab::Skills,
+                    fetch: modal.next_skills_fetch(),
                 },
                 Effect::FetchWorkflowsList {
                     agent_id: id,

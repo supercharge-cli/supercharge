@@ -2867,44 +2867,39 @@ pub(crate) fn execute(
                     }
                 });
         }
-        Effect::FetchSkillsList { agent_id, session_id: _ } => {
+        Effect::FetchSkillsList {
+            agent_id,
+            session_id,
+            refresh,
+            fetch,
+        } => {
             let tx = acp_tx.clone();
-            tasks
-                .spawn(async move {
-                    let params = serde_json::json!({
-                    "cwd": "."
-                });
-                    let req = acp::ExtRequest::new(
-                        "x.ai/skills/list",
-                        serde_json::value::to_raw_value(&params)
-                            .expect("serialize skills/list params")
-                            .into(),
-                    );
-                    let result = match acp_send(req, &tx).await {
-                        Ok(resp) => {
-                            let wrapper: serde_json::Value = serde_json::from_str(
-                                    resp.0.get(),
-                                )
-                                .unwrap_or_default();
-                            let inner = wrapper.get("result").unwrap_or(&wrapper);
-                            serde_json::from_value::<
-                                Vec<
-                                    supercharge_tools::implementations::skills::types::SkillInfo,
-                                >,
-                            >(inner.get("skills").cloned().unwrap_or_default())
-                                .map_err(|_| "couldn't load skills".to_string())
+            tasks.spawn(async move {
+                let params = supercharge_shell::extensions::skills::SkillsListRequest {
+                    cwd: ".".to_owned(),
+                    session_id: Some(session_id.clone()),
+                    refresh,
+                };
+                let result = match serde_json::value::to_raw_value(&params) {
+                    Err(e) => Err(format!("couldn't load skills: {e}")),
+                    Ok(raw) => {
+                        let req = acp::ExtRequest::new("x.ai/skills/list", raw.into());
+                        match acp_send(req, &tx).await {
+                            Ok(resp) => crate::acp::skills_listing::parse_reply(resp.0.get())
+                                .map_err(|_| "couldn't load skills".to_string()),
+                            Err(e) => Err(sanitize_user_error(&format!(
+                                "couldn't load skills: {e}"
+                            ))),
                         }
-                        Err(e) => {
-                            Err(
-                                sanitize_user_error(&format!("couldn't load skills: {e}")),
-                            )
-                        }
-                    };
-                    TaskResult::SkillsListLoaded {
-                        agent_id,
-                        result,
                     }
-                });
+                };
+                TaskResult::SkillsListLoaded {
+                    agent_id,
+                    session_id,
+                    fetch,
+                    result,
+                }
+            });
         }
         Effect::FetchWorkflowsList { agent_id, session_id } => {
             let tx = acp_tx.clone();
@@ -2965,16 +2960,7 @@ pub(crate) fn execute(
                     );
                     let result = match acp_send(req, &tx).await {
                         Ok(resp) => {
-                            let wrapper: serde_json::Value = serde_json::from_str(
-                                    resp.0.get(),
-                                )
-                                .unwrap_or_default();
-                            let inner = wrapper.get("result").unwrap_or(&wrapper);
-                            let parsed = serde_json::from_value::<
-                                Vec<
-                                    supercharge_tools::implementations::skills::types::SkillInfo,
-                                >,
-                            >(inner.get("skills").cloned().unwrap_or_default())
+                            let parsed = crate::acp::skills_listing::parse_reply(resp.0.get())
                                 .map_err(|_| "couldn't toggle skill".to_string());
                             if parsed.is_ok() {
                                 let refresh = acp::ExtRequest::new(

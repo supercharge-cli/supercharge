@@ -1286,18 +1286,17 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         TaskResult::PluginCtaCatalogLoaded { agent_id, result } => {
             handle_plugin_cta_catalog_loaded(app, agent_id, result)
         }
-        TaskResult::SkillsListLoaded { agent_id, result } => {
-            use crate::views::extensions_modal::TabDataState;
+        TaskResult::SkillsListLoaded {
+            agent_id,
+            session_id,
+            fetch,
+            result,
+        } => {
             if let Some(agent) = app.agents.get_mut(&agent_id)
+                && agent.session.session_id.as_ref() == Some(&session_id)
                 && let Some(ref mut modal) = agent.extensions_modal
+                && modal.show_skills_listing(fetch, result)
             {
-                modal.skills_data = match result {
-                    Ok(skills) => {
-                        modal.seed_skills_groups_once(&skills);
-                        TabDataState::Loaded(skills)
-                    }
-                    Err(e) => TabDataState::Error(e),
-                };
                 modal.pending_action = None;
                 modal.pending_entry_index = None;
             }

@@ -1930,6 +1930,10 @@ pub enum Effect {
     FetchSkillsList {
         agent_id: AgentId,
         session_id: acp::SessionId,
+        /// Rescan the skill folders; otherwise a backend may answer from its cache.
+        refresh: bool,
+        /// The number the Skills tab gave this fetch; only the newest fetch's answer shows.
+        fetch: u64,
     },
     FetchWorkflowsList {
         agent_id: AgentId,
@@ -2863,7 +2867,9 @@ pub enum TaskResult {
     /// Skills list loaded.
     SkillsListLoaded {
         agent_id: AgentId,
-        result: Result<Vec<supercharge_tools::implementations::skills::types::SkillInfo>, String>,
+        session_id: acp::SessionId,
+        fetch: u64,
+        result: Result<supercharge_shell::extensions::skills::SkillsListResponse, String>,
     },
     WorkflowsListLoaded {
         agent_id: AgentId,
@@ -2873,7 +2879,7 @@ pub enum TaskResult {
     /// Skill toggle completed (enable/disable).
     SkillsToggleDone {
         agent_id: AgentId,
-        result: Result<Vec<supercharge_tools::implementations::skills::types::SkillInfo>, String>,
+        result: Result<supercharge_shell::extensions::skills::SkillsListResponse, String>,
     },
     /// Background marketplace auto-update completed.
     MarketplaceUpdatesAvailable {

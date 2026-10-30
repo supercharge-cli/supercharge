@@ -1349,18 +1349,22 @@ pub(super) fn handle_session_notification_with_origin(
         changed |= app.status_line.take_changed();
     }
     if plugins_changed_needs_skills_refetch {
-        if let Some(agent) = app.agents.get(&parent_id)
-            && let Some(session_id) = agent.session.session_id.clone()
-        {
-            app.pending_effects.push(Effect::FetchSkillsList {
-                agent_id: parent_id,
-                session_id,
-            });
-        } else if let Some(agent) = app.agents.get_mut(&parent_id)
+        if let Some(agent) = app.agents.get_mut(&parent_id)
             && let Some(ref mut modal) = agent.extensions_modal
         {
-            modal.skills_data =
-                crate::views::extensions_modal::TabDataState::Error("No active session".into());
+            match agent.session.session_id.clone() {
+                Some(session_id) => app.pending_effects.push(Effect::FetchSkillsList {
+                    agent_id: parent_id,
+                    session_id,
+                    refresh: false,
+                    fetch: modal.next_skills_fetch(),
+                }),
+                None => {
+                    modal.skills_data = crate::views::extensions_modal::TabDataState::Error(
+                        "No active session".into(),
+                    );
+                }
+            }
         } else {
             tracing::warn!("PluginsChanged: agent or modal disappeared before skills re-fetch");
         }

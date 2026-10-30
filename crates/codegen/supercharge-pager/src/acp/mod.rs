@@ -5,6 +5,7 @@
 pub(crate) const MAX_PLAN_FILE_BYTES: usize = 256 * 1024;
 pub mod leader_bridge;
 pub mod meta;
+pub(crate) mod skills_listing;
 pub mod model_state;
 pub mod spawn;
 pub(crate) mod subagent_label_registry;
