@@ -26,20 +26,20 @@ impl SlashCommand for HooksCommand {
     }
 }
 
-/// Open the hooks/plugins modal on the Plugins tab.
+/// Open the plugin catalog; installed plugins remain available on the Plugins tab.
 pub struct PluginsCommand;
 
 impl SlashCommand for PluginsCommand {
     slash_meta! {
         name: "plugins",
         aliases: ["plugin"],
-        description: "View plugins",
+        description: "Browse and manage plugins",
         usage: "/plugins",
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {
         CommandResult::Action(Action::OpenExtensionsModal {
-            tab: ExtensionsTab::Plugins,
+            tab: ExtensionsTab::Marketplace,
             trigger: ExtensionsModalTrigger::SlashCommand,
         })
     }

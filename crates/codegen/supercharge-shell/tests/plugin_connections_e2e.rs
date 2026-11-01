@@ -13,6 +13,12 @@ fn result(value: Value) -> Value {
 fn staged_plugin_and_accounts_survive_agent_recreation_without_exposing_secrets() {
     run_agent_test(|cwd, _server| async move {
         keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+        // Keep the fixture independent of the hosted catalog's availability.
+        std::fs::write(
+            supercharge_config::supercharge_home().join("plugin-catalog.json"),
+            r#"{"url":"","token":null,"disabled":true}"#,
+        )
+        .unwrap();
         let package = cwd.join("fixture");
         std::fs::create_dir_all(package.join("skills/release-brief")).unwrap();
         std::fs::write(
@@ -30,6 +36,27 @@ fn staged_plugin_and_accounts_survive_agent_recreation_without_exposing_secrets(
         let init = serde_json::to_value(init).unwrap();
         assert_eq!(init["_meta"]["_supercharge/plugins"]["version"], 1);
         let sid = new_session(&conn, &cwd).await;
+        let marketplace =
+            result(ext_method(&conn, "x.ai/marketplace/list", json!({"sessionId":sid})).await);
+        let catalog = marketplace["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|source| source["sourceUrlOrPath"] == "supercharge:catalog")
+            .expect("hosted catalog is included in the slash-command marketplace");
+        assert!(
+            catalog["plugins"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["name"] == "microsoft-learn")
+        );
+        let catalog_install = result(ext_method(&conn, "x.ai/marketplace/action", json!({
+            "sessionId": sid,
+            "action": {"type":"install", "source_url_or_path":"supercharge:catalog", "plugin_relative_path":"starter:microsoft-learn"}
+        })).await);
+        assert_eq!(catalog_install["status"], "success");
+        assert_eq!(catalog_install["requiresReload"], true);
         let response = result(
             ext_method(
                 &conn,

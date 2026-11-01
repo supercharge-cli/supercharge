@@ -13,6 +13,8 @@ use crate::util::config::acquire_init_lock;
 
 type ExtResult = Result<acp::ExtResponse, acp::Error>;
 
+const HOSTED_CATALOG_SOURCE: &str = "supercharge:catalog";
+
 fn load_filtered_marketplace_sources() -> Vec<supercharge_plugin_marketplace::MarketplaceSource> {
     crate::plugin::load_filtered_marketplace_sources()
 }
@@ -58,7 +60,8 @@ async fn handle_list() -> ExtResult {
             tokio::task::spawn_blocking(move || scan_source(&source))
         })
         .collect();
-    let mut results = Vec::with_capacity(scan_handles.len());
+    let catalog = tokio::task::spawn_blocking(crate::plugin::catalog::list_available);
+    let mut results = Vec::with_capacity(scan_handles.len() + 1);
     for (i, (source, handle)) in sources.iter().zip(scan_handles).enumerate() {
         let (scan, catalog_loaded) = handle.await.unwrap_or_else(|e| {
             (
@@ -102,14 +105,211 @@ async fn handle_list() -> ExtResult {
         })),
     );
 
+    let catalog_result = match catalog.await {
+        Ok(Ok(entries)) => hosted_catalog_source(entries, None),
+        Ok(Err(error)) => hosted_catalog_source(Vec::new(), Some(error.to_string())),
+        Err(error) => {
+            hosted_catalog_source(Vec::new(), Some(format!("Catalog task failed: {error}")))
+        }
+    };
+    results.insert(0, catalog_result);
     let response = MarketplaceListResponse { sources: results };
     super::to_ext_response(Ok(response))
+}
+
+fn is_catalog_repo(
+    repo: &supercharge_agent::plugins::install_registry::InstalledRepo,
+    name: &str,
+) -> bool {
+    use supercharge_agent::plugins::install_registry::InstallKind;
+    let InstallKind::Local { source_path, .. } = &repo.kind else {
+        return false;
+    };
+    let home = supercharge_config::supercharge_home();
+    source_path.file_name().is_some_and(|part| part == name)
+        && (source_path.starts_with(home.join("catalog-sources"))
+            || source_path.starts_with(home.join("bundled-plugins")))
+}
+
+fn hosted_catalog_source(
+    entries: Vec<crate::plugin::catalog::CatalogEntry>,
+    error: Option<String>,
+) -> MarketplaceScanResult {
+    let registry = supercharge_agent::plugins::install_registry::InstallRegistry::load();
+    let plugins = entries
+        .into_iter()
+        .map(|entry| {
+            let installed = registry
+                .repos
+                .values()
+                .filter(|repo| is_catalog_repo(repo, &entry.name))
+                .find_map(|repo| repo.plugins.get(&entry.name));
+            let installed_version = installed.and_then(|p| p.version.clone());
+            let status = match installed {
+                None => "not_installed",
+                Some(_)
+                    if installed_version
+                        .as_deref()
+                        .is_some_and(|v| v != entry.version) =>
+                {
+                    "update_available"
+                }
+                Some(_) => "installed",
+            };
+            MarketplacePluginEntry {
+                name: entry.name,
+                version: Some(entry.version),
+                description: Some(format!(
+                    "{} · {} · Authentication: {}",
+                    entry.description, entry.endpoint, entry.authentication
+                )),
+                category: None,
+                author: None,
+                tags: vec![],
+                keywords: vec![],
+                domains: vec![],
+                homepage: None,
+                relative_path: entry.source,
+                skill_count: 0,
+                has_hooks: false,
+                has_agents: false,
+                has_mcp: true,
+                install_status: status.into(),
+                installed_version,
+                components: None,
+                remote_url: None,
+                remote_ref: None,
+                remote_sha: None,
+                remote_subdir: None,
+            }
+        })
+        .collect();
+    MarketplaceScanResult {
+        source_name: "Supercharge catalog".into(),
+        source_kind: "catalog".into(),
+        source_url_or_path: HOSTED_CATALOG_SOURCE.into(),
+        plugins,
+        error,
+    }
 }
 
 async fn handle_action(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     let req: MarketplaceActionRequest = super::parse_params(args)?;
     let sid = acp::SessionId::new(req.session_id);
 
+    // Route catalog packages through the same staged installation and lifecycle operations
+    // used by the app; listing never enables or connects a plugin.
+    let catalog_action = match &req.action {
+        MarketplaceAction::Install {
+            source_url_or_path,
+            plugin_relative_path,
+        } if source_url_or_path == HOSTED_CATALOG_SOURCE => {
+            let source = plugin_relative_path.clone();
+            let entries = tokio::task::spawn_blocking(crate::plugin::catalog::list_available).await;
+            match entries {
+                Ok(Ok(entries)) if entries.iter().any(|entry| entry.source == source) => {
+                    let name = &entries
+                        .iter()
+                        .find(|entry| entry.source == source)
+                        .unwrap()
+                        .name;
+                    let registry =
+                        supercharge_agent::plugins::install_registry::InstallRegistry::load();
+                    if registry
+                        .repos
+                        .values()
+                        .any(|repo| repo.plugins.contains_key(name))
+                    {
+                        return super::to_ext_response(Ok(action_outcome(supercharge_hooks_plugins_types::OutcomeStatus::ValidationError, "A plugin with this name is already installed; manage it from the Plugins tab.".into())));
+                    }
+                    Some(supercharge_hooks_plugins_types::PluginsAction::Install { source })
+                }
+                _ => {
+                    return super::to_ext_response(Ok(action_outcome(
+                        supercharge_hooks_plugins_types::OutcomeStatus::ValidationError,
+                        "Catalog entry unavailable; refresh and try again.".into(),
+                    )));
+                }
+            }
+        }
+        MarketplaceAction::Update {
+            source_url_or_path,
+            plugin_relative_path,
+        } if source_url_or_path == HOSTED_CATALOG_SOURCE => {
+            let name = plugin_relative_path
+                .strip_prefix("catalog:")
+                .and_then(|s| s.rsplit_once('@').map(|(n, _)| n))
+                .or_else(|| plugin_relative_path.strip_prefix("starter:"));
+            name.map(
+                |name| supercharge_hooks_plugins_types::PluginsAction::Update {
+                    plugin_id: Some(name.into()),
+                },
+            )
+        }
+        MarketplaceAction::Uninstall {
+            source_url_or_path,
+            plugin_relative_path,
+        } if source_url_or_path == HOSTED_CATALOG_SOURCE => {
+            let name = plugin_relative_path
+                .strip_prefix("catalog:")
+                .and_then(|s| s.rsplit_once('@').map(|(n, _)| n))
+                .or_else(|| plugin_relative_path.strip_prefix("starter:"));
+            name.map(
+                |name| supercharge_hooks_plugins_types::PluginsAction::Uninstall {
+                    plugin_id: name.into(),
+                    confirmed: false,
+                },
+            )
+        }
+        MarketplaceAction::RemoveSource { source_url_or_path }
+            if source_url_or_path == HOSTED_CATALOG_SOURCE =>
+        {
+            return super::to_ext_response(Ok(action_outcome(
+                supercharge_hooks_plugins_types::OutcomeStatus::ValidationError,
+                "Configure the catalog on the agent to change this source.".into(),
+            )));
+        }
+        _ => None,
+    };
+    if let Some(action) = catalog_action {
+        // Name-based native lifecycle operations must not choose arbitrarily when
+        // multiple installed repositories contain the same plugin name.
+        let lifecycle_name = match &action {
+            supercharge_hooks_plugins_types::PluginsAction::Update {
+                plugin_id: Some(name),
+            } => Some(name),
+            supercharge_hooks_plugins_types::PluginsAction::Uninstall { plugin_id, .. } => {
+                Some(plugin_id)
+            }
+            _ => None,
+        };
+        if let Some(name) = lifecycle_name {
+            let registry = supercharge_agent::plugins::install_registry::InstallRegistry::load();
+            if registry
+                .repos
+                .values()
+                .filter(|repo| repo.plugins.contains_key(name))
+                .count()
+                != 1
+                || !registry
+                    .repos
+                    .values()
+                    .any(|repo| repo.plugins.contains_key(name) && is_catalog_repo(repo, name))
+            {
+                return super::to_ext_response(Ok(action_outcome(supercharge_hooks_plugins_types::OutcomeStatus::ValidationError, "Plugin name is missing or ambiguous; manage the installation from the Plugins tab.".into())));
+            }
+        }
+        let outcome = agent
+            .execute_plugins_action(&sid, action)
+            .await
+            .unwrap_or_else(|| {
+                action_outcome(
+                    supercharge_hooks_plugins_types::OutcomeStatus::InternalError,
+                    "Session unavailable.".into(),
+                )
+            });
+        return super::to_ext_response(Ok(outcome));
+    }
     let outcome = match req.action {
         MarketplaceAction::Refresh { source_url_or_path } => {
             // Force re-sync git caches (local sources are re-scanned on next
@@ -1790,6 +1990,36 @@ mod default_skills_purge_tests {
 #[cfg(test)]
 mod conversion_tests {
     use super::*;
+
+    #[test]
+    fn hosted_catalog_entries_are_browsable_and_keep_their_install_reference() {
+        let source = hosted_catalog_source(
+            vec![crate::plugin::catalog::CatalogEntry {
+                name: "fixture-catalog-plugin-9937".into(),
+                version: "1.2.3".into(),
+                description: "Fixture".into(),
+                endpoint: "https://example.test/mcp".into(),
+                authentication: "oauth".into(),
+                source: "catalog:fixture-catalog-plugin-9937@1.2.3".into(),
+            }],
+            None,
+        );
+        assert_eq!(source.source_url_or_path, HOSTED_CATALOG_SOURCE);
+        let entry = &source.plugins[0];
+        assert_eq!(
+            entry.relative_path,
+            "catalog:fixture-catalog-plugin-9937@1.2.3"
+        );
+        assert_eq!(entry.install_status, "not_installed");
+        assert!(
+            entry
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("https://example.test/mcp")
+        );
+        assert!(entry.description.as_deref().unwrap().contains("oauth"));
+    }
 
     #[test]
     fn to_plugin_entry_carries_homepage_and_keywords() {
