@@ -30,9 +30,9 @@ jobs:
       - name: Install toolchain from rust-toolchain.toml
         run: rustup show active-toolchain || rustup toolchain install
 
-      - name: Install protoc
+      - name: Install build prerequisites
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler pkg-config libdbus-1-dev
           echo "PROTOC=$(command -v protoc)" >> "$GITHUB_ENV"
 
       - uses: actions/cache@v4
