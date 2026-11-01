@@ -131,6 +131,11 @@ pub struct TelemetryConfig {
     pub events_api_key: Option<String>,
     pub mixpanel_token: Option<String>,
     pub mixpanel_enabled: bool,
+    /// PostHog capture API key; requires `posthog_enabled`.
+    pub posthog_api_key: Option<String>,
+    /// PostHog ingestion host, e.g. `https://eu.i.posthog.com` (default US).
+    pub posthog_host: Option<String>,
+    pub posthog_enabled: bool,
     /// `None` inherits from `[features] telemetry`; `Some(false)` disables GCS uploads only.
     pub trace_upload: Option<bool>,
     pub otel_enabled: Option<bool>,
@@ -201,6 +206,9 @@ impl Default for TelemetryConfig {
             events_api_key,
             mixpanel_token,
             mixpanel_enabled,
+            posthog_api_key: None,
+            posthog_host: None,
+            posthog_enabled: false,
             trace_upload: None,
             otel_enabled: None,
             otel_metrics_exporter: None,
@@ -265,6 +273,15 @@ impl TelemetryConfig {
         if let Some(value) = env_bool("SUPERCHARGE_TELEMETRY_MIXPANEL_ENABLED") {
             self.mixpanel_enabled = value;
         }
+        if let Some(value) = Self::env_override("SUPERCHARGE_TELEMETRY_POSTHOG_API_KEY") {
+            self.posthog_api_key = value;
+        }
+        if let Some(value) = Self::env_override("SUPERCHARGE_TELEMETRY_POSTHOG_HOST") {
+            self.posthog_host = value;
+        }
+        if let Some(value) = env_bool("SUPERCHARGE_TELEMETRY_POSTHOG_ENABLED") {
+            self.posthog_enabled = value;
+        }
         if let Some(value) = env_bool("SUPERCHARGE_TELEMETRY_TRACE_UPLOAD") {
             self.trace_upload = Some(value);
         }
@@ -273,6 +290,8 @@ impl TelemetryConfig {
         self.events_url = Self::normalize_optional_string(self.events_url.take());
         self.events_api_key = Self::normalize_optional_string(self.events_api_key.take());
         self.mixpanel_token = Self::normalize_optional_string(self.mixpanel_token.take());
+        self.posthog_api_key = Self::normalize_optional_string(self.posthog_api_key.take());
+        self.posthog_host = Self::normalize_optional_string(self.posthog_host.take());
     }
     fn env_override(name: &str) -> Option<Option<String>> {
         match std::env::var(name) {

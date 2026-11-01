@@ -82,6 +82,25 @@ pub struct PluginArgs {
 
 #[derive(Debug, Subcommand, Clone)]
 pub enum PluginCommand {
+    /// List the pinned built-in plugin catalog.
+    Catalog {
+        #[command(subcommand)]
+        command: Option<CatalogCommand>,
+    },
+    /// Manage plugins and connections on a local or remote agent using ACP. JSON output.
+    Agent {
+        /// Operation, e.g. plugins/list, plugins/action, connections/configure, mcp/list.
+        operation: String,
+        /// Authenticated WSS endpoint. Key comes from SUPERCHARGE_AGENT_KEY.
+        #[arg(long)]
+        agent: Option<String>,
+        /// Working directory ON THE TARGET. Required for remote agents.
+        #[arg(long)]
+        cwd: Option<String>,
+        /// Read a JSON request object from stdin (required for secret values).
+        #[arg(long)]
+        stdin: bool,
+    },
     /// List installed plugins
     List {
         /// Emit machine-readable JSON output.
@@ -155,6 +174,19 @@ pub enum PluginCommand {
     },
     /// Manage marketplace sources
     Marketplace(MarketplaceArgs),
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum CatalogCommand {
+    /// Configure this agent's central plugin catalog. Private read tokens are accepted only through stdin.
+    Configure {
+        #[arg(long, default_value = supercharge_shell::plugin::remote_catalog::DEFAULT_CATALOG_URL)]
+        url: String,
+        #[arg(long)]
+        token_stdin: bool,
+    },
+    /// Disable the hosted catalog and forget its saved token.
+    Clear,
 }
 
 #[derive(Debug, clap::Args, Clone)]
@@ -237,14 +269,94 @@ fn trust_prompt(subject: &str, source_arg: &str) -> String {
 
 pub async fn run(args: PluginArgs) -> Result<()> {
     match args.command {
+        PluginCommand::Agent {
+            operation,
+            agent,
+            cwd,
+            stdin,
+        } => {
+            anyhow::ensure!(
+                [
+                    "plugins/list",
+                    "plugins/details",
+                    "plugins/catalog",
+                    "plugins/catalog_config",
+                    "plugins/catalog_configure",
+                    "plugins/action",
+                    "connections/list",
+                    "connections/configure",
+                    "connections/select",
+                    "connections/disconnect",
+                    "connections/connect",
+                    "connections/status",
+                    "connections/cancel",
+                    "mcp/list"
+                ]
+                .contains(&operation.as_str()),
+                "Unsupported plugin management operation"
+            );
+            anyhow::ensure!(
+                agent.is_none() || cwd.is_some(),
+                "Specify --cwd with the working directory on the remote agent"
+            );
+            let cwd = cwd.unwrap_or(std::env::current_dir()?.to_string_lossy().into_owned());
+            let params = if stdin {
+                use std::io::Read;
+                let mut input = String::new();
+                std::io::stdin()
+                    .take(1024 * 1024)
+                    .read_to_string(&mut input)?;
+                serde_json::from_str(&input)
+                    .map_err(|_| anyhow::anyhow!("Input must be a valid JSON request object"))?
+            } else {
+                serde_json::json!({})
+            };
+            let result =
+                plugin::client::request(agent.as_deref(), &cwd, &operation, params).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            Ok(())
+        }
+        PluginCommand::Catalog { command } => {
+            match command {
+                Some(CatalogCommand::Configure { url, token_stdin }) => {
+                    let token = if token_stdin {
+                        use std::io::Read;
+                        let mut input = String::new();
+                        std::io::stdin().take(16384).read_to_string(&mut input)?;
+                        Some(input.trim().to_owned())
+                    } else {
+                        None
+                    };
+                    plugin::remote_catalog::configure(&url, token)?;
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&plugin::remote_catalog::status()?)?
+                    );
+                }
+                Some(CatalogCommand::Clear) => {
+                    plugin::remote_catalog::clear()?;
+                    println!("Hosted catalog disabled; saved token removed.");
+                }
+                None => {
+                    let entries =
+                        tokio::task::spawn_blocking(plugin::catalog::list_available).await??;
+                    println!("{}", serde_json::to_string_pretty(&entries)?);
+                }
+            }
+            Ok(())
+        }
         PluginCommand::List { json, available } => cmd_list(json, available),
-        PluginCommand::Install { source, trust } => cmd_install(&source, trust),
+        PluginCommand::Install { source, trust } => {
+            tokio::task::spawn_blocking(move || cmd_install(&source, trust)).await?
+        }
         PluginCommand::Uninstall {
             name,
             confirm,
             keep_data,
         } => cmd_uninstall(&name, confirm, keep_data),
-        PluginCommand::Update { name } => cmd_update(name.as_deref()),
+        PluginCommand::Update { name } => {
+            tokio::task::spawn_blocking(move || cmd_update(name.as_deref())).await?
+        }
         PluginCommand::Enable { name } => cmd_enable(&name),
         PluginCommand::Disable { name } => cmd_disable(&name),
         PluginCommand::Details { name } => cmd_details(&name),

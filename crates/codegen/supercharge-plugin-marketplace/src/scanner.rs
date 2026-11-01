@@ -208,7 +208,7 @@ fn scan_single_plugin(plugin_dir: &Path, relative_path: &str) -> MarketplaceEntr
         };
         let hk = plugin_dir.join("hooks").join("hooks.json").exists();
         let ag = plugin_dir.join("agents").is_dir();
-        let mc = plugin_dir.join(".mcp.json").exists();
+        let mc = plugin_dir.join("mcp.json").is_file() || plugin_dir.join(".mcp.json").is_file();
         (sc, hk, ag, mc)
     };
 

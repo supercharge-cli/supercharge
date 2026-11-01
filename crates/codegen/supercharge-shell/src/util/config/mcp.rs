@@ -1235,10 +1235,26 @@ pub(crate) fn parse_mcp_config_with_oauth(
             }
         };
         server_config.expand_strings(sub);
-        if let Some(oauth) = server_config.oauth_config() {
-            oauth_configs.insert(name.clone(), oauth);
+        let (runtime_name, client_secret) = if let Some(plugin) =
+            source_label.strip_prefix("plugin:")
+        {
+            match crate::plugin::connections::apply(plugin, name, &mut server_config) {
+                Ok(name) => name,
+                Err(_) => {
+                    tracing::warn!(server = %name, "Plugin account unavailable; refusing unauthenticated fallback");
+                    continue;
+                }
+            }
+        } else {
+            (name.clone(), None)
+        };
+        if let Some(mut oauth) = server_config.oauth_config() {
+            if client_secret.is_some() {
+                oauth.client_secret = client_secret;
+            }
+            oauth_configs.insert(runtime_name.clone(), oauth);
         }
-        if let Some(server) = server_config.to_acp_mcp_server(name.clone()) {
+        if let Some(server) = server_config.to_acp_mcp_server(runtime_name) {
             servers.push(server);
         } else {
             tracing::warn!(
@@ -1508,7 +1524,11 @@ fn load_claude_json_mcp_servers_from(
 /// One bad entry in a `.mcp.json` or `~/.claude.json` cannot take out its siblings.
 fn mcp_config_from_json_value(value: &serde_json::Value) -> McpConfig {
     let mut mcp_servers = IndexMap::new();
-    if let Some(entries) = value.get("mcpServers").and_then(|v| v.as_object()) {
+    if let Some(entries) = value
+        .get("mcpServers")
+        .or_else(|| value.get("servers"))
+        .and_then(|v| v.as_object())
+    {
         for (name, entry) in entries {
             match serde_json::from_value::<McpServerConfig>(entry.clone()) {
                 Ok(config) => {

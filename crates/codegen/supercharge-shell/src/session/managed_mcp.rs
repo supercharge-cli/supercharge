@@ -606,7 +606,32 @@ fn load_plugin_mcp_servers(
     let Some(config) = crate::util::config::read_mcp_json(mcp_path) else {
         return (vec![], crate::util::config::McpOAuthConfigMap::new());
     };
-    load_plugin_mcp_servers_from_config(&config, plugin_name, plugin_root, plugin_data)
+    let (mut servers, oauth) =
+        load_plugin_mcp_servers_from_config(&config, plugin_name, plugin_root, plugin_data);
+    if mcp_path.file_name().is_some_and(|name| name == "mcp.json") {
+        for server in &mut servers {
+            let name = match server {
+                acp::McpServer::Http(s) => &mut s.name,
+                acp::McpServer::Sse(s) => &mut s.name,
+                acp::McpServer::Stdio(s) => &mut s.name,
+                _ => continue,
+            };
+            *name = crate::plugin::connections::namespaced(plugin_name, name);
+        }
+        return (
+            servers,
+            oauth
+                .into_iter()
+                .map(|(name, value)| {
+                    (
+                        crate::plugin::connections::namespaced(plugin_name, &name),
+                        value,
+                    )
+                })
+                .collect(),
+        );
+    }
+    (servers, oauth)
 }
 
 /// Like [`load_plugin_mcp_servers`] but from an in-memory JSON value (no I/O).

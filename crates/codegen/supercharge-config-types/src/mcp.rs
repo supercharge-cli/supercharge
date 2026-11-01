@@ -570,7 +570,7 @@ impl RelaySyncConfig {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct McpConfig {
-    #[serde(default, rename = "mcpServers")]
+    #[serde(default, rename = "mcpServers", alias = "servers")]
     pub mcp_servers: IndexMap<String, McpServerConfig>,
 }
 

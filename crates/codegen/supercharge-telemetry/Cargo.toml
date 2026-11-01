@@ -32,6 +32,7 @@ git2 = { version = "0.20", default-features = false, features = [
 reqwest = { workspace = true }
 supercharge-secrets = { workspace = true }
 supercharge-mixpanel = { workspace = true }
+supercharge-posthog = { workspace = true }
 supercharge-config = { workspace = true }
 supercharge-extra-ca = { workspace = true }
 supercharge-sampler = { workspace = true }

@@ -58,6 +58,7 @@ members = [
     "crates/codegen/supercharge-pager-render",
     "crates/codegen/supercharge-paths",
     "crates/codegen/supercharge-plugin-marketplace",
+    "crates/codegen/supercharge-posthog",
     "crates/codegen/supercharge-sampler",
     "crates/codegen/supercharge-sampling-types",
     "crates/codegen/supercharge-egress-proxy",
@@ -377,6 +378,7 @@ supercharge-hooks-plugins-types = { path = "crates/codegen/supercharge-hooks-plu
 supercharge-interjection-core = { path = "crates/common/supercharge-interjection-core" }
 supercharge-message-delivery-core = { path = "crates/common/supercharge-message-delivery-core" }
 supercharge-mixpanel = { path = "crates/codegen/supercharge-mixpanel" }
+supercharge-posthog = { path = "crates/codegen/supercharge-posthog" }
 supercharge-prompt-queue = { path = "crates/codegen/supercharge-prompt-queue" }
 supercharge-proto-build = { path = "crates/build/supercharge-proto-build" }
 supercharge-ratatui-inline = { path = "crates/codegen/supercharge-ratatui-inline" }

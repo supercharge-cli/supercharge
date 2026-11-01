@@ -182,7 +182,9 @@ fn snapshot_matches_source(source: &Path, dest: &Path) -> bool {
 /// Re-copy `source_path` into `dest`, or `Ok(None)` to keep the existing snapshot.
 /// Refresh only syncs file contents within the existing plugin set; a changed `(name, subdir)` set keeps the snapshot.
 /// Swap is rename-aside so `dest` is never absent, and a failed promote rolls back.
-fn recopy_local_install(
+/// Atomically replace a managed snapshot after validating its plugin identities.
+/// The caller must hold the install registry lock and persist the returned metadata.
+pub fn recopy_local_install(
     source_path: &Path,
     subdir: Option<&str>,
     dest: &Path,

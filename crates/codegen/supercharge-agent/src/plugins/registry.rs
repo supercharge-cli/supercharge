@@ -558,6 +558,7 @@ fn read_mcp_server_names(path: &Path) -> Result<Vec<String>, ()> {
     let value: serde_json::Value = serde_json::from_str(&content).map_err(|_| ())?;
     let names = value
         .get("mcpServers")
+        .or_else(|| value.get("servers"))
         .and_then(|v| v.as_object())
         .map(|obj| obj.keys().cloned().collect::<Vec<_>>())
         .unwrap_or_default();

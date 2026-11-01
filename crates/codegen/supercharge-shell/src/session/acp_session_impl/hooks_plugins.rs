@@ -366,7 +366,7 @@ impl SessionActor {
                 let cwd = self.session_info.cwd.clone();
                 let cloned_source = source.clone();
                 let installed = tokio::task::spawn_blocking(move || {
-                    crate::plugin::install_plugin(&cloned_source, std::path::Path::new(&cwd))
+                    crate::plugin::stage_plugin(&cloned_source, std::path::Path::new(&cwd))
                 })
                 .await;
                 match installed {

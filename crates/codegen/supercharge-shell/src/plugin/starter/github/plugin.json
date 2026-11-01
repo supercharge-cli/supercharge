@@ -1,0 +1,9 @@
+{
+  "name": "github",
+  "version": "1.0.0",
+  "description": "GitHub repository tools and release briefs",
+  "author": {
+    "name": "Supercharge"
+  },
+  "license": "Apache-2.0"
+}

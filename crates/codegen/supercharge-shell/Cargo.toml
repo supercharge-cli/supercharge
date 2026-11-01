@@ -25,6 +25,8 @@ default-bazel = [
 ]
 
 [dependencies]
+supercharge-secrets = { workspace = true }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 dunce = { workspace = true }
 agent-client-protocol = { workspace = true }
 anyhow = { workspace = true }
@@ -286,3 +288,7 @@ tar = { workspace = true }
 [[bin]]
 name = "chat-history-downgrade"
 path = "src/bin/chat-history-downgrade.rs"
+
+[[test]]
+name = "plugin_connections_e2e"
+required-features = ["test-support"]

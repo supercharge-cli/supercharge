@@ -692,8 +692,9 @@ pub struct ToolsConfig {
     pub disable_zdr_incompatible_tools: bool,
     /// Optional S3 bucket config for ZDR video output. When present (and valid), video tools presign an upload URL and pass it to the API.
     /// The generated video then lands in a team-owned bucket instead of being downloaded locally. Only effective when `disable_zdr_incompatible_tools` is `true`. Populated from `[tools.zdr_video_output_s3]` in config.
-    pub zdr_video_output_s3:
-        Option<supercharge_tools::implementations::supercharge_build::video_gen::ZdrVideoOutputS3Config>,
+    pub zdr_video_output_s3: Option<
+        supercharge_tools::implementations::supercharge_build::video_gen::ZdrVideoOutputS3Config,
+    >,
     pub media_gen: MediaGenToolsConfig,
 }
 impl ToolsConfig {
@@ -1423,6 +1424,18 @@ fn apply_requirements_inner(
         config.telemetry.mixpanel_token,
         redacted
     );
+    enforce_val!(
+        "telemetry",
+        "posthog_enabled",
+        config.telemetry.posthog_enabled
+    );
+    enforce_str!(
+        "telemetry",
+        "posthog_api_key",
+        config.telemetry.posthog_api_key,
+        redacted
+    );
+    enforce_str!("telemetry", "posthog_host", config.telemetry.posthog_host);
     enforce_str!(
         "endpoints",
         "trace_upload_bucket",
@@ -1775,50 +1788,85 @@ pub(crate) async fn run_remove_plugin_path(path: String) -> Result<(), String> {
 /// [`config_write_blocking`]); both writes always run, as the modal arms did inline.
 pub(crate) async fn run_set_plugin_enabled(plugin_id: String, enabled: bool) -> Result<(), String> {
     config_write_blocking(move || {
-        let (r1, r2) = if enabled {
-            (
-                add_enabled_plugin(&plugin_id),
-                remove_disabled_plugin(&plugin_id),
-            )
-        } else {
-            (
-                add_disabled_plugin(&plugin_id),
-                remove_enabled_plugin(&plugin_id),
-            )
-        };
-        r1.and(r2)
+        update_config_toml_locked(
+            &crate::util::supercharge_home::supercharge_home(),
+            |table| set_plugin_activation(table, &plugin_id, enabled),
+        )
     })
     .await
 }
+fn set_plugin_activation(
+    table: &mut toml::value::Table,
+    plugin_id: &str,
+    enabled: bool,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    // Installs use names while session clients use scoped IDs. Update both aliases
+    // atomically so a staged name-level disable cannot mask an explicit enable.
+    let name = plugin_id.rsplit('/').next().unwrap_or(plugin_id);
+    let (add, remove) = if enabled {
+        ("enabled", "disabled")
+    } else {
+        ("disabled", "enabled")
+    };
+    let mut changed = plugins_list_add(table, add, plugin_id)?;
+    changed |= plugins_list_remove(table, remove, plugin_id);
+    if name != plugin_id {
+        changed |= plugins_list_remove(table, remove, name);
+    }
+    Ok(changed)
+}
+#[cfg(test)]
+mod plugin_activation_tests {
+    #[test]
+    fn scoped_enable_removes_staged_name_disable_atomically() {
+        let mut value: toml::Value =
+            toml::from_str("[plugins]\ndisabled = ['fixture']\nenabled = []\n").unwrap();
+        let table = value.as_table_mut().unwrap();
+        assert!(super::set_plugin_activation(table, "user/12345678/fixture", true).unwrap());
+        assert!(table["plugins"]["disabled"].as_array().unwrap().is_empty());
+        assert_eq!(
+            table["plugins"]["enabled"].as_array().unwrap()[0].as_str(),
+            Some("user/12345678/fixture")
+        );
+        assert!(!super::set_plugin_activation(table, "user/12345678/fixture", true).unwrap());
+        assert!(super::set_plugin_activation(table, "user/12345678/fixture", false).unwrap());
+        assert!(table["plugins"]["enabled"].as_array().unwrap().is_empty());
+    }
+}
+
 /// Add a plugin path to `[plugins].paths` in `~/.supercharge/config.toml`.
 /// Deduplicates: if the path is already present, this is a no-op.
 pub(crate) fn add_plugin_path(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
-        plugins_list_add(table, "paths", path)
-    })
+    update_config_toml_locked(
+        &crate::util::supercharge_home::supercharge_home(),
+        |table| plugins_list_add(table, "paths", path),
+    )
 }
 /// Remove a plugin path from `[plugins].paths` in `~/.supercharge/config.toml`.
 ///
 /// If the path is not found, this is a no-op (returns Ok).
 pub(crate) fn remove_plugin_path(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
-        Ok(plugins_list_remove(table, "paths", path))
-    })
+    update_config_toml_locked(
+        &crate::util::supercharge_home::supercharge_home(),
+        |table| Ok(plugins_list_remove(table, "paths", path)),
+    )
 }
 /// Add a plugin to `[plugins].disabled` in `~/.supercharge/config.toml`.
 /// Deduplicates: if already present, this is a no-op.
 pub fn add_disabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
-        plugins_list_add(table, "disabled", plugin_id)
-    })
+    update_config_toml_locked(
+        &crate::util::supercharge_home::supercharge_home(),
+        |table| plugins_list_add(table, "disabled", plugin_id),
+    )
 }
 /// Remove a plugin from `[plugins].disabled` in `~/.supercharge/config.toml`.
 ///
 /// If the plugin is not in the disabled list, this is a no-op.
 pub fn remove_disabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
-        Ok(plugins_list_remove(table, "disabled", plugin_id))
-    })
+    update_config_toml_locked(
+        &crate::util::supercharge_home::supercharge_home(),
+        |table| Ok(plugins_list_remove(table, "disabled", plugin_id)),
+    )
 }
 /// Async [`add_dismissed_plugin_cta`] for UI callers (see [`config_write_blocking`]): the locked
 /// write sleep-polls the config-init flock, so it must stay off the render path.
@@ -1922,7 +1970,8 @@ pub(crate) fn validate_hooks_path(path: &str) -> Result<(), Box<dyn std::error::
             Ok(resolved)
         })
         .map_err(|e: std::io::Error| format!("Cannot resolve hook path: {e}"))?;
-    let canonical_home = dunce::canonicalize(&supercharge_home).unwrap_or_else(|_| supercharge_home.clone());
+    let canonical_home =
+        dunce::canonicalize(&supercharge_home).unwrap_or_else(|_| supercharge_home.clone());
     if !canonical.starts_with(&canonical_home) {
         return Err(format!(
             "Hook path must be under ~/.supercharge/ ({}). Got: {}",
@@ -1963,15 +2012,17 @@ pub(crate) fn auto_enable_plugins(names: &[String]) -> Vec<String> {
 /// Used for project-scope plugins that are disabled by default.
 /// Deduplicates: if already present, this is a no-op.
 pub fn add_enabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
-        plugins_list_add(table, "enabled", plugin_id)
-    })
+    update_config_toml_locked(
+        &crate::util::supercharge_home::supercharge_home(),
+        |table| plugins_list_add(table, "enabled", plugin_id),
+    )
 }
 /// Remove a plugin from `[plugins].enabled` in `~/.supercharge/config.toml`.
 pub fn remove_enabled_plugin(plugin_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    update_config_toml_locked(&crate::util::supercharge_home::supercharge_home(), |table| {
-        Ok(plugins_list_remove(table, "enabled", plugin_id))
-    })
+    update_config_toml_locked(
+        &crate::util::supercharge_home::supercharge_home(),
+        |table| Ok(plugins_list_remove(table, "enabled", plugin_id)),
+    )
 }
 /// Add a hook path to `~/.supercharge/hooks-paths` (one path per line).
 /// If the path is already present (exact string match), this is a no-op.

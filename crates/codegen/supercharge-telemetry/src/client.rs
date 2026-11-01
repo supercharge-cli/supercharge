@@ -1,4 +1,4 @@
-//! Core telemetry tracking: product events and Mixpanel.
+//! Core telemetry tracking: product events, Mixpanel, and PostHog.
 //!
 //! All calls route through [`track`].
 //! Precedence: env overrides config, config overrides remote config, remote config overrides the default.
@@ -13,6 +13,7 @@ use serde_json::json;
 use std::sync::{Arc, Mutex, Once, OnceLock};
 use supercharge_env::env_bool;
 use supercharge_mixpanel::Mixpanel;
+use supercharge_posthog::Posthog;
 /// Event property map shared by all telemetry modules.
 pub type Metadata = serde_json::Map<String, serde_json::Value>;
 /// Strips the [`EmitterOrigin`] prefix so shell events keep their historical `event_value` and workspace events collapse to the same bare suffix.
@@ -36,6 +37,7 @@ pub struct TelemetryClient {
     events_url: Option<String>,
     events_api_key: Option<String>,
     mixpanel: Option<Arc<Mixpanel>>,
+    posthog: Option<Arc<Posthog>>,
     user_id: Option<String>,
     team_id: Option<String>,
     deployment_id: Option<String>,
@@ -54,6 +56,7 @@ impl std::fmt::Debug for TelemetryClient {
                 &self.events_api_key.as_ref().map(|_| "***"),
             )
             .field("mixpanel", &self.mixpanel.as_ref().map(|_| "configured"))
+            .field("posthog", &self.posthog.as_ref().map(|_| "configured"))
             .finish()
     }
 }
@@ -92,6 +95,18 @@ impl TelemetryClient {
         } else {
             None
         };
+        let posthog = if config.posthog_enabled {
+            config.posthog_api_key.as_ref().map(|key| {
+                let posthog = Posthog::with_client(key.as_str(), http_client.clone());
+                let posthog = match config.posthog_host.as_deref() {
+                    Some(host) if !host.is_empty() => posthog.with_host(host),
+                    _ => posthog,
+                };
+                Arc::new(posthog)
+            })
+        } else {
+            None
+        };
         let deployment_id = deployment_key
             .filter(|s| !s.is_empty())
             .map(|k| deployment_id_from_key(&k));
@@ -104,6 +119,7 @@ impl TelemetryClient {
             events_url: config.events_url,
             events_api_key: config.events_api_key,
             mixpanel,
+            posthog,
             user_id,
             team_id,
             deployment_id,
@@ -271,7 +287,7 @@ pub const RESERVED_EVENT_KEYS: &[&str] = &[
     "session_id",
     "turn_number",
 ];
-/// Core telemetry emitter. Routes to product events and Mixpanel.
+/// Core telemetry emitter. Routes to product events, Mixpanel, and PostHog.
 pub async fn track(event_name: &str, request_id: &str, ctx: &UserContext, mut metadata: Metadata) {
     let lock = TELEMETRY_CLIENT.get_or_init(|| Mutex::new(None));
     let client = {
@@ -342,7 +358,7 @@ pub async fn track(event_name: &str, request_id: &str, ctx: &UserContext, mut me
         let time_secs = chrono::Utc::now().timestamp();
         let insert_id = product_analytics_insert_id();
         let mut props: std::collections::HashMap<String, serde_json::Value> =
-            metadata.into_iter().collect();
+            metadata.clone().into_iter().collect();
         props.insert("distinct_id".into(), json!(user_id));
         props.insert("time".into(), json!(time_secs));
         props.insert("$insert_id".into(), json!(insert_id));
@@ -360,6 +376,20 @@ pub async fn track(event_name: &str, request_id: &str, ctx: &UserContext, mut me
             Err(e) => {
                 tracing::warn!(error = %e, event = %event_name, "mixpanel track failed");
             }
+        }
+    }
+    if let Some(ref posthog) = client.posthog {
+        let timestamp = chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        let insert_id = product_analytics_insert_id();
+        let mut props: std::collections::HashMap<String, serde_json::Value> =
+            metadata.clone().into_iter().collect();
+        props.insert("distinct_id".into(), json!(user_id));
+        props.insert("$insert_id".into(), json!(insert_id));
+        if let Err(e) = posthog
+            .capture(event_name, Some(props), Some(timestamp))
+            .await
+        {
+            tracing::warn!(error = %e, event = %event_name, "posthog capture failed");
         }
     }
 }

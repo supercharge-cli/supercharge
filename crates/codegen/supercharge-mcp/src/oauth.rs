@@ -10,6 +10,78 @@ use crate::rmcp::transport::auth::{
     OAuthClientConfig,
 };
 
+/// Consent URLs are exposed only through authenticated owner management operations.
+/// They are transient, never persisted or logged.
+static CONSENT_URLS: std::sync::OnceLock<parking_lot::Mutex<HashMap<String, String>>> =
+    std::sync::OnceLock::new();
+pub fn pending_consent_url(server: &str) -> Option<String> {
+    CONSENT_URLS
+        .get_or_init(Default::default)
+        .lock()
+        .get(server)
+        .cloned()
+}
+static CONSENT_CANCELLATIONS: std::sync::OnceLock<
+    parking_lot::Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
+> = std::sync::OnceLock::new();
+pub fn prepare_consent(server: &str) {
+    CONSENT_CANCELLATIONS
+        .get_or_init(Default::default)
+        .lock()
+        .insert(
+            server.to_owned(),
+            tokio_util::sync::CancellationToken::new(),
+        );
+}
+pub fn cancel_consent(server: &str) {
+    if let Some(token) = CONSENT_CANCELLATIONS
+        .get_or_init(Default::default)
+        .lock()
+        .get(server)
+    {
+        token.cancel();
+    }
+}
+struct ConsentGuard(String);
+impl Drop for ConsentGuard {
+    fn drop(&mut self) {
+        CONSENT_URLS
+            .get_or_init(Default::default)
+            .lock()
+            .remove(&self.0);
+        CONSENT_CANCELLATIONS
+            .get_or_init(Default::default)
+            .lock()
+            .remove(&self.0);
+    }
+}
+struct CallbackGuard(tokio::task::AbortHandle);
+impl Drop for CallbackGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+fn configured_redirect(port: u16, public_url: Option<&str>) -> Result<String, String> {
+    match public_url {
+        None => Ok(format!("http://127.0.0.1:{port}/callback")),
+        Some(raw) => {
+            let url = url::Url::parse(raw).map_err(|_| "Invalid OAuth callback URL")?;
+            if url.scheme() != "https"
+                || url.host_str().is_none()
+                || !url.username().is_empty()
+                || url.password().is_some()
+                || url.query().is_some()
+                || url.fragment().is_some()
+                || url.path() != "/callback"
+            {
+                return Err("Remote OAuth callback must be an explicit HTTPS URL ending in /callback without credentials, query, or fragment".into());
+            }
+            Ok(url.to_string())
+        }
+    }
+}
+
 const MCP_OAUTH_CLIENT_NAME: &str = "Grok";
 
 const CREDENTIAL_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
@@ -249,15 +321,31 @@ async fn run_browser_auth_flow(
         build_authorization_url(server_name, auth_manager, byo_config, &redirect_uri).await?;
     let token_before_browser = stored_access_token(server_name, server_url).await;
 
+    CONSENT_URLS
+        .get_or_init(Default::default)
+        .lock()
+        .insert(server_name.to_owned(), auth_url.clone());
+    let _consent_guard = ConsentGuard(server_name.to_owned());
+    let cancellation = CONSENT_CANCELLATIONS
+        .get_or_init(Default::default)
+        .lock()
+        .entry(server_name.to_owned())
+        .or_insert_with(tokio_util::sync::CancellationToken::new)
+        .clone();
+    if cancellation.is_cancelled() {
+        return Err("OAuth sign-in cancelled".into());
+    }
     open_consent_browser(server_name, &auth_url);
-    await_callback_or_disk_token(
+    tokio::select! {
+        _ = cancellation.cancelled() => Err("OAuth sign-in cancelled".into()),
+        result = await_callback_or_disk_token(
         server_name,
         server_url,
         auth_manager,
         listener,
         token_before_browser,
-    )
-    .await
+    ) => result,
+    }
 }
 
 async fn stored_access_token(server_name: &str, server_url: &str) -> Option<String> {
@@ -357,7 +445,18 @@ pub(crate) async fn ensure_oauth_ready(
 async fn bind_loopback_callback(
     byo_config: Option<&McpOAuthConfig>,
 ) -> Result<(tokio::net::TcpListener, String), String> {
-    let requested_port = byo_config.and_then(|b| b.callback_port).unwrap_or(0);
+    let public_url = std::env::var("SUPERCHARGE_MCP_OAUTH_CALLBACK_URL").ok();
+    let configured_port = std::env::var("SUPERCHARGE_MCP_OAUTH_CALLBACK_PORT")
+        .ok()
+        .map(|p| p.parse::<u16>().map_err(|_| "Invalid OAuth callback port"))
+        .transpose()?;
+    if public_url.is_some() && configured_port.is_none_or(|p| p == 0) {
+        return Err("Remote OAuth requires a fixed SUPERCHARGE_MCP_OAUTH_CALLBACK_PORT".into());
+    }
+    configured_redirect(1, public_url.as_deref())?;
+    let requested_port = configured_port
+        .or_else(|| byo_config.and_then(|b| b.callback_port))
+        .unwrap_or(0);
     let listener =
         tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], requested_port)))
             .await
@@ -366,7 +465,7 @@ async fn bind_loopback_callback(
         .local_addr()
         .map_err(|e| format!("Failed to get loopback port: {e}"))?
         .port();
-    let redirect_uri = format!("http://127.0.0.1:{port}/callback");
+    let redirect_uri = configured_redirect(port, public_url.as_deref())?;
     Ok((listener, redirect_uri))
 }
 
@@ -420,7 +519,7 @@ fn open_consent_browser(server_name: &str, auth_url: &str) {
     if let Err(e) = webbrowser::open(auth_url) {
         // eprintln! corrupts the TUI alternate screen (in-process, fd 2).
         // TODO: show the auth URL via ACP notification instead
-        tracing::warn!(%e, url = %auth_url, "Failed to open browser for MCP OAuth; user must visit URL manually");
+        tracing::warn!(%e, "Failed to open browser for MCP OAuth; use the connection consent link");
     }
 }
 
@@ -461,6 +560,7 @@ async fn await_callback_or_disk_token(
         token_before_browser,
     );
     let (callback_server, callback_rx) = start_oauth_callback_server(listener);
+    let _callback_guard = CallbackGuard(callback_server.abort_handle());
 
     tokio::select! {
         result = callback_rx => {
@@ -719,6 +819,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn callbacks_reject_wrong_state_and_issuer_and_cannot_be_replayed() {
+        let token_ep = start_mock_token_endpoint().await;
+        let (mgr, state) = manager_ready_for_exchange(token_ep).await;
+        assert!(
+            mgr.exchange_code_for_token_with_issuer("code", "wrong-state", Some(TEST_ISSUER))
+                .await
+                .is_err()
+        );
+        assert!(
+            mgr.exchange_code_for_token_with_issuer("code", &state, Some("https://wrong.example"))
+                .await
+                .is_err()
+        );
+        mgr.exchange_code_for_token_with_issuer("code", &state, Some(TEST_ISSUER))
+            .await
+            .unwrap();
+        assert!(
+            mgr.exchange_code_for_token_with_issuer("code", &state, Some(TEST_ISSUER))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
     async fn after_fix_passes_iss_and_token_exchange_succeeds() {
         let token_ep = start_mock_token_endpoint().await;
         let (mgr, state) = manager_ready_for_exchange(token_ep).await;
@@ -839,5 +963,26 @@ mod tests {
 
     fn urlencoding_encode(s: &str) -> String {
         s.replace(':', "%3A").replace('/', "%2F")
+    }
+}
+
+#[cfg(test)]
+mod remote_callback_tests {
+    #[test]
+    fn callback_configuration_is_explicit_and_https_only() {
+        assert_eq!(
+            super::configured_redirect(1234, None).unwrap(),
+            "http://127.0.0.1:1234/callback"
+        );
+        assert!(super::configured_redirect(1234, Some("https://agent.example/callback")).is_ok());
+        for url in [
+            "http://agent.example/callback",
+            "https://user:pass@agent.example/callback",
+            "https://agent.example/other",
+            "https://agent.example/callback?next=evil",
+            "https://agent.example/callback#secret",
+        ] {
+            assert!(super::configured_redirect(1234, Some(url)).is_err());
+        }
     }
 }

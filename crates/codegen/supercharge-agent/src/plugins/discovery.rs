@@ -614,7 +614,8 @@ fn collect_plugin(
             let has_skills =
                 plugin_root.join("skills").is_dir() || plugin_root.join("commands").is_dir();
             let has_agents = plugin_root.join("agents").is_dir();
-            let has_mcp = plugin_root.join(".mcp.json").is_file();
+            let has_mcp =
+                plugin_root.join("mcp.json").is_file() || plugin_root.join(".mcp.json").is_file();
             let has_lsp = plugin_root.join(".lsp.json").is_file();
             let has_hooks = plugin_root.join("hooks").join("hooks.json").is_file();
 

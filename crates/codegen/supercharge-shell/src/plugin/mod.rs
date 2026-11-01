@@ -7,6 +7,10 @@
 //! path funnels through [`acquire`], which owns the blocking-pool (LocalSet) discipline.
 
 pub(crate) mod acquire;
+pub mod catalog;
+pub mod client;
+pub mod connections;
+pub mod remote_catalog;
 mod sources;
 
 pub use sources::{load_filtered_marketplace_sources, load_marketplace_sources};
@@ -106,13 +110,47 @@ impl std::fmt::Display for PluginInstallError {
 
 /// Parse, clone/symlink, register, and enable a plugin. Does not emit telemetry.
 pub fn install_plugin(source: &str, cwd: &Path) -> Result<InstallOutcome, PluginInstallError> {
+    install_with_activation(source, cwd, true)
+}
+
+/// Install for review without authorizing code execution.
+pub fn stage_plugin(source: &str, cwd: &Path) -> Result<InstallOutcome, PluginInstallError> {
+    install_with_activation(source, cwd, false)
+}
+fn install_with_activation(
+    source: &str,
+    cwd: &Path,
+    activate: bool,
+) -> Result<InstallOutcome, PluginInstallError> {
+    let registry_lock = acquire::lock_install_registry()
+        .map_err(|detail| PluginInstallError::RegistryLock { detail })?;
+    let bundled;
+    let source = if let Some(name) = source.strip_prefix("starter:") {
+        bundled =
+            catalog::materialize(name).map_err(|reason| PluginInstallError::Blocked { reason })?;
+        bundled
+            .to_str()
+            .ok_or_else(|| PluginInstallError::Blocked {
+                reason: "Invalid starter path".into(),
+            })?
+    } else if let Some(reference) = source.strip_prefix("catalog:") {
+        bundled =
+            remote_catalog::materialize(reference).map_err(|e| PluginInstallError::Blocked {
+                reason: e.to_string(),
+            })?;
+        bundled
+            .to_str()
+            .ok_or_else(|| PluginInstallError::Blocked {
+                reason: "Invalid catalog package path".into(),
+            })?
+    } else {
+        source
+    };
     let install_source = git_install::parse_install_source(source, cwd);
     let is_local = matches!(install_source, git_install::InstallSource::Local { .. });
     // Release the registry lock before `post_install_plugin`'s config-init flock: holding both
     // inverts the documented init ⊃ registry order (see `acquire::lock_install_registry`).
     let repo_key = {
-        let _registry_lock = acquire::lock_install_registry()
-            .map_err(|detail| PluginInstallError::RegistryLock { detail })?;
         let mut registry = InstallRegistry::load();
         let repo_key =
             acquire::direct_install(&install_source, &mut registry).map_err(|e| match e {
@@ -125,7 +163,24 @@ pub fn install_plugin(source: &str, cwd: &Path) -> Result<InstallOutcome, Plugin
         repo_key
     };
 
-    let (plugin_names, post_warnings) = crate::config::post_install_plugin(&repo_key);
+    drop(registry_lock);
+    let (plugin_names, post_warnings) = if activate {
+        crate::config::post_install_plugin(&repo_key)
+    } else {
+        let registry = InstallRegistry::load();
+        let names: Vec<String> = registry
+            .get_repo(&repo_key)
+            .map(|r| r.plugins.keys().cloned().collect())
+            .unwrap_or_default();
+        for name in &names {
+            crate::config::add_disabled_plugin(name)
+                .and_then(|_| crate::config::remove_enabled_plugin(name))
+                .map_err(|e| PluginInstallError::RegistrySave {
+                    detail: e.to_string(),
+                })?;
+        }
+        (names, Vec::new())
+    };
 
     Ok(InstallOutcome {
         repo_key,
@@ -368,6 +423,52 @@ pub fn update_plugins(name: Option<&str>) -> Result<Vec<RepoUpdateOutcome>, Upda
     let sources = acquire::MarketplaceSourceLists::load();
 
     for (repo_key, repo) in &repos_to_update {
+        if let InstallKind::Local {
+            source_path,
+            subdir,
+        } = &repo.kind
+        {
+            let refreshed = (|| -> anyhow::Result<bool> {
+                if !remote_catalog::refresh_source(source_path)? {
+                    return Ok(false);
+                }
+                let plugins = supercharge_agent::plugins::local_refresh::recopy_local_install(
+                    source_path,
+                    subdir.as_deref(),
+                    &repo.path,
+                    &repo.plugins,
+                )?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Catalog update changed plugin identities; reinstall after review"
+                    )
+                })?;
+                let entry = registry
+                    .get_repo_mut(repo_key)
+                    .ok_or_else(|| anyhow::anyhow!("Installed plugin disappeared"))?;
+                entry.plugins = plugins;
+                entry.updated_at = chrono::Utc::now().to_rfc3339();
+                Ok(true)
+            })();
+            match refreshed {
+                Ok(false) => {}
+                Ok(true) => {
+                    outcomes.push(RepoUpdateOutcome::Updated {
+                        repo_key: repo_key.clone(),
+                        old_commit: None,
+                        new_commit: None,
+                    });
+                    continue;
+                }
+                Err(error) => {
+                    outcomes.push(RepoUpdateOutcome::Failed {
+                        repo_key: repo_key.clone(),
+                        error: error.to_string(),
+                    });
+                    continue;
+                }
+            }
+        }
         let outcome = if let Some(provenance) = repo.marketplace.clone() {
             let plugin_subdir = provenance.plugin_subdir.clone();
             match acquire::marketplace_update(

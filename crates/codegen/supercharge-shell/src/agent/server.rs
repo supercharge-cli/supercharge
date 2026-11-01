@@ -181,6 +181,14 @@ async fn ws_handler(
     headers: HeaderMap,
     Query(query): Query<WsQueryParams>,
 ) -> Response {
+    // This listener has no TLS. Remote access must terminate TLS at a loopback proxy.
+    if !addr.ip().is_loopback() {
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            "Use an HTTPS reverse proxy to the loopback agent listener",
+        )
+            .into_response();
+    }
     let check = check_auth(&headers, &query, &state.secret);
     if check != KeyCheck::Ok {
         warn!(code = ?check.code(), "Unauthorized connection attempt from {}", addr);
@@ -665,6 +673,10 @@ pub async fn run_agent_server(
     config: ServerConfig,
     agent_config: AgentConfig,
 ) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !config.secret.is_empty(),
+        "Agent owner key must not be empty"
+    );
     crate::util::rea::ensure_builtin_skills();
     let state = Arc::new(ServerState {
         agent_config,

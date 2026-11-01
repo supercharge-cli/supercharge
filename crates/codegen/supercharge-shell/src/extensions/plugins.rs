@@ -128,6 +128,85 @@ fn marketplace_source_label(origin: &PluginOrigin) -> Option<String> {
 
 pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     match args.method.as_ref() {
+        "x.ai/plugins/catalog" => {
+            let result = tokio::task::spawn_blocking(crate::plugin::catalog::list_available)
+                .await
+                .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
+            super::to_ext_response(result.map(|plugins| serde_json::json!({"plugins":plugins})))
+        }
+        "x.ai/plugins/catalog_config" => {
+            super::to_ext_response(crate::plugin::remote_catalog::status())
+        }
+        "x.ai/plugins/catalog_configure" => {
+            #[derive(Deserialize)]
+            struct Configure {
+                url: Option<String>,
+                token: Option<String>,
+                #[serde(default)]
+                clear: bool,
+            }
+            let req: Configure = super::parse_params(args)?;
+            let result = tokio::task::spawn_blocking(move || {
+                if req.clear {
+                    crate::plugin::remote_catalog::clear()?;
+                } else {
+                    crate::plugin::remote_catalog::configure(
+                        req.url
+                            .as_deref()
+                            .ok_or_else(|| anyhow::anyhow!("Catalog URL is required"))?,
+                        req.token,
+                    )?;
+                }
+                crate::plugin::remote_catalog::status()
+            })
+            .await
+            .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
+            super::to_ext_response(result)
+        }
+        "x.ai/plugins/details" => {
+            #[derive(Deserialize)]
+            struct Details {
+                id: String,
+            }
+            let req: Details = super::parse_params(args)?;
+            agent.ensure_plugin_registry_async().await;
+            let registry = agent
+                .plugin_registry_snapshot()
+                .ok_or_else(|| acp::Error::internal_error().data("Plugin registry unavailable"))?;
+            let plugins = registry.list();
+            let plugin = plugins
+                .iter()
+                .find(|p| p.id.0 == req.id || p.name == req.id)
+                .ok_or_else(|| acp::Error::invalid_params().data("Plugin not found"))?;
+            let mut servers = Vec::new();
+            if let Some(config) = plugin
+                .mcp_config_path
+                .as_ref()
+                .and_then(|path| crate::util::config::read_mcp_json(path))
+            {
+                for (name, server) in config.mcp_servers {
+                    let permission = match server.transport {
+                        crate::util::config::McpServerTransportConfig::Stdio {
+                            command,
+                            args,
+                            ..
+                        } => {
+                            serde_json::json!({"name":name,"command":command,"arguments":args,"permission":"execute_process"})
+                        }
+                        crate::util::config::McpServerTransportConfig::StreamableHttp {
+                            url,
+                            ..
+                        } => {
+                            serde_json::json!({"name":name,"endpoint":url::Url::parse(&url).map(|mut url| { supercharge_secrets::redact_url(&mut url); url.to_string() }).unwrap_or_else(|_| "Invalid endpoint".into()),"permission":"remote_service_access"})
+                        }
+                    };
+                    servers.push(permission);
+                }
+            }
+            super::to_ext_response(Ok::<_, anyhow::Error>(
+                serde_json::json!({"plugin":loaded_plugin_to_info(plugin),"servers":servers,"hooks":plugin.hook_count}),
+            ))
+        }
         "x.ai/plugins/list" => {
             let req: ListRequest = super::parse_params(args)?;
 

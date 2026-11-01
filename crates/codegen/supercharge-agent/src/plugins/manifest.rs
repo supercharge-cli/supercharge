@@ -183,9 +183,15 @@ impl PluginManifest {
     }
 
     pub fn mcp_config_path(&self, plugin_root: &Path) -> Option<PathBuf> {
-        if matches!(self.mcp_servers, Some(PathOrInline::Inline(_))) {
-            let default = plugin_root.join(".mcp.json");
-            return default.is_file().then_some(default);
+        // Explicit overrides retain legacy semantics; portable packages use mcp.json.
+        if self.mcp_servers.is_none() || matches!(self.mcp_servers, Some(PathOrInline::Inline(_))) {
+            for name in ["mcp.json", ".mcp.json"] {
+                let path = plugin_root.join(name);
+                if path.is_file() && is_path_contained(&path, plugin_root) {
+                    return Some(path);
+                }
+            }
+            return None;
         }
         resolve_component_path(&self.mcp_servers, plugin_root, ".mcp.json", "MCP config")
     }
@@ -820,5 +826,36 @@ mod tests {
             "foo": { "command": "./server" }
         }));
         assert!(manifest.mcp_config_path(&root).is_none());
+    }
+}
+
+#[cfg(test)]
+mod portable_tests {
+    #[test]
+    fn portable_config_precedes_legacy_and_explicit_override_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("mcp.json"), "{}").unwrap();
+        std::fs::write(dir.path().join(".mcp.json"), "{}").unwrap();
+        let mut manifest: super::PluginManifest =
+            serde_json::from_str(r#"{"name":"portable"}"#).unwrap();
+        assert_eq!(
+            manifest.mcp_config_path(dir.path()).unwrap(),
+            dir.path().join("mcp.json")
+        );
+        manifest.mcp_servers = Some(super::PathOrInline::Path(".mcp.json".into()));
+        assert_eq!(
+            manifest.mcp_config_path(dir.path()).unwrap(),
+            dir.path().join(".mcp.json")
+        );
+    }
+    #[test]
+    #[cfg(unix)]
+    fn portable_config_cannot_escape_through_symlink() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("mcp.json")).unwrap();
+        let manifest: super::PluginManifest =
+            serde_json::from_str(r#"{"name":"portable"}"#).unwrap();
+        assert!(manifest.mcp_config_path(root.path()).is_none());
     }
 }

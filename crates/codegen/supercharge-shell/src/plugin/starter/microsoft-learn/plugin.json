@@ -1,0 +1,9 @@
+{
+  "name": "microsoft-learn",
+  "version": "1.0.0",
+  "description": "Research official Microsoft documentation",
+  "author": {
+    "name": "Supercharge"
+  },
+  "license": "Apache-2.0"
+}

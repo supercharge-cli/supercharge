@@ -611,7 +611,7 @@ fn try_load_plugin(dir: &Path, subdir: Option<&str>) -> Option<DiscoveredPlugin>
     // Check convention components
     let has_skills = dir.join("skills").is_dir();
     let has_agents = dir.join("agents").is_dir();
-    let has_mcp = dir.join(".mcp.json").is_file();
+    let has_mcp = dir.join("mcp.json").is_file() || dir.join(".mcp.json").is_file();
     let has_hooks = dir.join("hooks").join("hooks.json").is_file();
 
     if has_skills || has_agents || has_mcp || has_hooks {

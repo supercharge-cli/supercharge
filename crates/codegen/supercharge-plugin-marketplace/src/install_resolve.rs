@@ -13,7 +13,11 @@ pub struct MarketplaceRef {
 /// Recognize `<name>` / `<name>@<qualifier>` install args.
 /// Git URLs, GitHub shorthand, and local paths (including Windows paths) are left for the existing parser.
 pub fn parse_marketplace_ref(arg: &str) -> Option<MarketplaceRef> {
-    if arg.contains("://") || arg.starts_with("git@") {
+    if arg.contains("://")
+        || arg.starts_with("git@")
+        || arg.starts_with("catalog:")
+        || arg.starts_with("starter:")
+    {
         return None;
     }
     if arg.starts_with('/')
@@ -664,5 +668,14 @@ mod tests {
             select_bare_name("sentry", &scanned),
             Err(BareNameError::NotFound)
         );
+    }
+}
+
+#[cfg(test)]
+mod hosted_catalog_ref_tests {
+    #[test]
+    fn reserved_catalog_sources_are_not_marketplace_qualifiers() {
+        assert!(super::parse_marketplace_ref("catalog:github@1.0.0").is_none());
+        assert!(super::parse_marketplace_ref("starter:github").is_none());
     }
 }
