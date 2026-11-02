@@ -65,6 +65,7 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
             | Command::Mcp(_)
             | Command::Plugin(_)
             | Command::Memory(_)
+            | Command::Eval(_)
             | Command::Models
             | Command::Sessions(_)
             | Command::Usage(_)
@@ -107,6 +108,7 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
             | Command::Mcp(_)
             | Command::Plugin(_)
             | Command::Memory(_)
+            | Command::Eval(_)
             | Command::Sessions(_)
             | Command::Usage(_)
             | Command::Setup { .. }
@@ -2361,6 +2363,11 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
                 init_tracing_simple("cli");
                 let _otel_guard = supercharge_telemetry::otel_layer::otel_guard();
                 return supercharge_pager::usage_cmd::run(usage_args);
+            }
+            Command::Eval(eval_args) => {
+                init_tracing_simple("cli");
+                let _otel_guard = supercharge_telemetry::otel_layer::otel_guard();
+                return supercharge_pager::eval_cmd::run(eval_args).await;
             }
             Command::Share(ref share_args) => {
                 init_tracing_simple("cli");

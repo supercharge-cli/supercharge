@@ -101,6 +101,7 @@ supercharge-file-utils = { path = "../supercharge-file-utils" }
 # Crash-recovery registry of open TUI sessions.
 supercharge-active-sessions = { workspace = true }
 supercharge-config = { workspace = true }
+supercharge-eval = { workspace = true }
 supercharge-feedback = { workspace = true }
 supercharge-sampling-types = { path = "../supercharge-sampling-types", optional = true }
 supercharge-tool-types = { workspace = true, optional = true }

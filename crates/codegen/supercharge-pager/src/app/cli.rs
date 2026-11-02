@@ -49,6 +49,8 @@ pub enum Command {
     Plugin(crate::plugin_cmd::PluginArgs),
     /// Manage cross-session memory
     Memory(crate::memory_cmd::MemoryArgs),
+    /// Run the agent against an eval dataset or a best-of-N task
+    Eval(crate::eval_cmd::EvalArgs),
     /// List available models and exit
     Models,
     /// List, search, or restore sessions

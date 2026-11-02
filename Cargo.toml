@@ -35,6 +35,7 @@ members = [
     "crates/codegen/supercharge-dashboard-store",
     "crates/codegen/supercharge-diag-server",
     "crates/codegen/supercharge-env",
+    "crates/codegen/supercharge-eval",
     "crates/codegen/supercharge-extra-ca",
     "crates/codegen/supercharge-feedback",
     "crates/codegen/supercharge-foreign-sessions",
@@ -344,6 +345,7 @@ supercharge-agent-import = { path = "crates/codegen/supercharge-agent-import" }
 supercharge-dashboard-store = { path = "crates/codegen/supercharge-dashboard-store" }
 supercharge-diag-server = { path = "crates/codegen/supercharge-diag-server" }
 supercharge-env = { path = "crates/codegen/supercharge-env" }
+supercharge-eval = { path = "crates/codegen/supercharge-eval" }
 supercharge-extra-ca = { path = "crates/codegen/supercharge-extra-ca" }
 supercharge-feedback = { path = "crates/codegen/supercharge-feedback" }
 supercharge-foreign-sessions = { path = "crates/codegen/supercharge-foreign-sessions" }

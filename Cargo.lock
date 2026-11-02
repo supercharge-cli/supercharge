@@ -11028,6 +11028,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercharge-eval"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "shlex",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "supercharge-extra-ca"
 version = "0.1.0"
 dependencies = [
@@ -11612,6 +11625,7 @@ dependencies = [
  "supercharge-crash-handler",
  "supercharge-dashboard-store",
  "supercharge-dirs",
+ "supercharge-eval",
  "supercharge-extra-ca",
  "supercharge-fast-worktree",
  "supercharge-feedback",
