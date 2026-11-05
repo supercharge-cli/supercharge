@@ -87,3 +87,25 @@ The mock agent pattern used by the crate's own tests is a shell script:
 
 with `--agent sh --agent-args "touch marker"` — any program works, as long as
 it edits files in its working directory.
+
+## Built-in presets
+
+For comparable scores across Supercharge versions, use a built-in preset.
+Each preset materializes one or more temporary git repositories under
+`<out-dir>/presets/<name>/` and grades against a fixed `test_cmd`, so the
+task text and pass criteria do not drift with your local trees.
+
+```bash
+supercharge eval run --preset smoke
+supercharge eval run --preset rust --attempts 3
+supercharge eval run --preset web --concurrency 2
+```
+
+| Preset | Tasks | What passes |
+|---|---|---|
+| `smoke` | `smoke-fix-value` | `value.txt` equals `fixed` |
+| `rust` | `rust-add-one` | `cargo test` in a mini crate (`add_one` returns `n + 1`) |
+| `web` | `web-greeting` | `index.html` heading `#greeting` is exactly `Hello, Supercharge` |
+
+`--preset` and `--dataset` are mutually exclusive. Preset repos are created
+once per `out-dir` and reused on later runs (idempotent materialization).

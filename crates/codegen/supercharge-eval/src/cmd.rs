@@ -17,8 +17,18 @@ pub async fn eval_run(
     attempts: usize,
 ) -> Result<RunSummary, EvalError> {
     let tasks = load_dataset(dataset_path)?;
+    eval_run_tasks(config, &tasks, attempts).await
+}
+
+/// Run the agent over an in-memory task list (for example a built-in preset)
+/// and grade the results. Same artifacts as [`eval_run`].
+pub async fn eval_run_tasks(
+    config: &EvalConfig,
+    tasks: &[Task],
+    attempts: usize,
+) -> Result<RunSummary, EvalError> {
     let runner = Runner::new(config.clone());
-    let run = runner.run_dataset(&tasks, attempts.max(1)).await?;
+    let run = runner.run_dataset(tasks, attempts.max(1)).await?;
 
     let run_dir = config.out_dir.join(&run.run_id);
     let summaries = evaluate_run(&run).await?;

@@ -13,10 +13,12 @@ pub mod cmd;
 pub mod dataset;
 pub mod grader;
 pub mod metrics;
+pub mod presets;
 pub mod replay;
 pub mod runner;
 
 pub use dataset::Task;
+pub use presets::{Preset, load_preset, materialize as materialize_preset};
 pub use grader::Grader;
 pub use metrics::{AttemptGrade, Grade, RunSummary, TaskSummary};
 pub use runner::{AttemptRecord, RunRecord, Runner};

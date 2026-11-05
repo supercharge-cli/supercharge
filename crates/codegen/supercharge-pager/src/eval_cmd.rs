@@ -14,9 +14,12 @@ pub struct EvalArgs {
 pub enum EvalCommand {
     /// Run the agent over a JSONL task dataset and grade the results
     Run {
-        /// Dataset file, or directory of .jsonl files
-        #[arg(long, value_name = "PATH")]
-        dataset: std::path::PathBuf,
+        /// Dataset file, or directory of .jsonl files (required unless --preset)
+        #[arg(long, value_name = "PATH", required_unless_present = "preset")]
+        dataset: Option<std::path::PathBuf>,
+        /// Built-in self-contained task set: smoke, rust, or web
+        #[arg(long, value_name = "NAME", value_parser = ["smoke", "rust", "web"])]
+        preset: Option<String>,
         /// Attempts per task (enables pass@k reporting)
         #[arg(long, default_value_t = 1, value_name = "K")]
         attempts: usize,
@@ -86,6 +89,7 @@ pub async fn run(args: EvalArgs) -> anyhow::Result<()> {
     match args.command {
         EvalCommand::Run {
             dataset,
+            preset,
             attempts,
             concurrency,
             out_dir,
@@ -94,10 +98,19 @@ pub async fn run(args: EvalArgs) -> anyhow::Result<()> {
         } => {
             let config = supercharge_eval::EvalConfig {
                 agent: parse_agent(&agent, &agent_args)?,
-                out_dir,
+                out_dir: out_dir.clone(),
                 max_parallel: concurrency,
             };
-            let summary = supercharge_eval::cmd::eval_run(&config, &dataset, attempts).await?;
+            let summary = if let Some(name) = preset {
+                if dataset.is_some() {
+                    anyhow::bail!("pass either --dataset or --preset, not both");
+                }
+                let tasks = supercharge_eval::load_preset(&name, &out_dir)?;
+                supercharge_eval::cmd::eval_run_tasks(&config, &tasks, attempts).await?
+            } else {
+                let dataset = dataset.expect("clap requires --dataset without --preset");
+                supercharge_eval::cmd::eval_run(&config, &dataset, attempts).await?
+            };
             println!(
                 "pass@1 {:.3} over {} tasks (run {})",
                 summary.pass_at_1, summary.tasks, summary.run_id
