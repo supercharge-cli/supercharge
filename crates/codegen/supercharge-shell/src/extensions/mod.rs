@@ -124,6 +124,13 @@ const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
     "supercharge/setup/device_cancel",
     "supercharge/setup/image_status",
     "supercharge/setup/image_save",
+    "supercharge/connections/list",
+    "supercharge/connections/configure",
+    "supercharge/connections/select",
+    "supercharge/connections/disconnect",
+    "supercharge/connections/connect",
+    "supercharge/connections/status",
+    "supercharge/connections/cancel",
 ];
 
 /// Map a Supercharge extension method name to the legacy name it aliases (both stay accepted).
@@ -193,6 +200,21 @@ mod alias_tests {
         assert_eq!(legacy_alias("supercharge/queue/bogus"), None);
         assert_eq!(legacy_alias("x.ai/interject"), None);
         assert_eq!(legacy_alias("supercharge/sessions/changed"), None);
+        for m in [
+            "list",
+            "configure",
+            "select",
+            "disconnect",
+            "connect",
+            "status",
+            "cancel",
+        ] {
+            assert_eq!(
+                legacy_alias(&format!("supercharge/connections/{m}")),
+                None,
+                "connections must stay Supercharge-native"
+            );
+        }
         for m in [
             "capabilities",
             "fs_notify",

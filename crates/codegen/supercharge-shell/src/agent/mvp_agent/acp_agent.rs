@@ -2001,7 +2001,7 @@ impl acp::Agent for MvpAgent {
             s if s.starts_with("x.ai/compact_conversation") => {
                 crate::extensions::memory::handle(self, &args).await
             }
-            s if s.starts_with("x.ai/connections/") => {
+            s if s.starts_with("supercharge/connections/") => {
                 crate::extensions::connections::handle(self, &args).await
             }
             s if s.starts_with("x.ai/plugins/") => {

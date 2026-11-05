@@ -38,8 +38,8 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> super::ExtResul
         .ok_or_else(|| acp::Error::invalid_params().data("Session not found"))?;
     let result: anyhow::Result<serde_json::Value> = async {
         match args.method.as_ref() {
-            "x.ai/connections/list" => connections::list(),
-            "x.ai/connections/configure" => {
+            "supercharge/connections/list" => connections::list(),
+            "supercharge/connections/configure" => {
                 agent.ensure_plugin_registry_async().await;
                 let registry = agent.plugin_registry_snapshot().ok_or_else(|| anyhow::anyhow!("Plugin registry unavailable"))?;
                 let plugins = registry.list();
@@ -54,11 +54,11 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> super::ExtResul
                 tokio::task::spawn_blocking(move || connections::configure(a, req.secret)).await??;
                 reload(agent, &sid).await
             }
-            "x.ai/connections/select" => {
+            "supercharge/connections/select" => {
                 tokio::task::spawn_blocking(move || connections::select(&req.id)).await??;
                 reload(agent, &sid).await
             }
-            "x.ai/connections/disconnect" => {
+            "supercharge/connections/disconnect" => {
                 let accounts = connections::list()?;
                 let a = accounts["accounts"].as_array().and_then(|a| a.iter().find(|a| a["id"] == req.id)).ok_or_else(|| anyhow::anyhow!("Account not found"))?;
                 let base = format!("{}--{}", a["server"].as_str().unwrap_or_default(), req.id.get(..16).unwrap_or_default());
@@ -78,7 +78,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> super::ExtResul
                 result["providerRevocation"] = serde_json::json!("not_supported; revoke provider access separately");
                 Ok(result)
             }
-            "x.ai/connections/connect" => {
+            "supercharge/connections/connect" => {
                 let server = req.server;
                 let running = FLOWS.with(|f| f.borrow().get(&server).is_some_and(|h| !h.is_finished()));
                 if !running {
@@ -95,11 +95,11 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> super::ExtResul
                 }
                 Ok(serde_json::json!({"status":"pending"}))
             }
-            "x.ai/connections/status" => {
+            "supercharge/connections/status" => {
                 let status = RESULTS.with(|r| r.borrow().get(&req.server).copied()).unwrap_or_else(|| FLOWS.with(|f| if f.borrow().get(&req.server).is_some_and(|task| !task.is_finished()) { "pending" } else { "not_started" }));
                 Ok(serde_json::json!({"status":status,"authorizationUrl":supercharge_mcp::oauth::pending_consent_url(&req.server)}))
             }
-            "x.ai/connections/cancel" => {
+            "supercharge/connections/cancel" => {
                 supercharge_mcp::oauth::cancel_consent(&req.server);
                 FLOWS.with(|f| { if let Some(task) = f.borrow_mut().remove(&req.server) { task.abort(); } });
                 RESULTS.with(|r| { r.borrow_mut().insert(req.server, "cancelled"); });
@@ -111,7 +111,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> super::ExtResul
     if result.is_ok()
         && !matches!(
             args.method.as_ref(),
-            "x.ai/connections/list" | "x.ai/connections/status"
+            "supercharge/connections/list" | "supercharge/connections/status"
         )
     {
         notify(
