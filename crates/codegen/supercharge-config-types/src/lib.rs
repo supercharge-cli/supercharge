@@ -10,6 +10,8 @@ mod flags;
 pub use flags::*;
 mod registry;
 pub use registry::*;
+mod file_acceleration;
+pub use file_acceleration::*;
 mod memory;
 pub use memory::*;
 mod mcp;
@@ -657,6 +659,12 @@ pub struct RemoteSettings {
     /// Absent defaults to disabled (Task.model is honored as written).
     #[serde(default)]
     pub subagent_model_inheritance_enabled: Option<bool>,
+    /// Soft-default for `[features] file_acceleration`. Local env/config override it. Absent = off.
+    #[serde(default)]
+    pub file_acceleration_enabled: Option<bool>,
+    /// Soft-default for `[file_acceleration] routes`. Local env/config override it.
+    #[serde(default)]
+    pub file_acceleration_routes: Option<String>,
     /// Gates `image_gen` and `/imagine`. `None` falls through env, `[features]`, then the default (on).
     #[serde(default)]
     pub image_gen_enabled: Option<bool>,

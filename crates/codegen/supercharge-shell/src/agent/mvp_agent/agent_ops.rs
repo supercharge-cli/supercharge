@@ -4785,6 +4785,7 @@ impl MvpAgent {
             .cfg
             .borrow()
             .is_feature_enabled(crate::agent::config::Feature::ActiveAgentMessages);
+        let file_acceleration = crate::session::file_acceleration::settings(&self.cfg.borrow());
         let subagent_model_inheritance = self
             .cfg
             .borrow()
@@ -5011,6 +5012,7 @@ impl MvpAgent {
                     deployment_key,
                     client_terminal,
                     client_fs_read && client_fs_write,
+                    file_acceleration,
                     gateway_enabled,
                     agent_definition,
                     session_default_agent_profile,

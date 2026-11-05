@@ -227,6 +227,7 @@ pub(crate) async fn spawn_session_actor(
     deployment_key: Option<String>,
     client_terminal_capable: bool,
     client_fs_capable: bool,
+    file_acceleration: crate::session::file_acceleration::FileAccelerationSettings,
     gateway_enabled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     agent_definition: AgentDefinition,
     session_default_agent_profile: Option<String>,
@@ -799,15 +800,18 @@ pub(crate) async fn spawn_session_actor(
     } else {
         drop(terminal_backend_span);
     }
-    let fs_backend: std::sync::Arc<dyn supercharge_tools::computer::types::AsyncFileSystem> =
-        if client_fs_capable && tool_context.gateway.is_some() {
+    let supercharge_tools::computer::file_acceleration::AcceleratedFs {
+        fs: fs_backend,
+        session: file_acceleration_session,
+    } = crate::session::file_acceleration::select_session_fs(
+        (client_fs_capable && tool_context.gateway.is_some()).then(|| {
             std::sync::Arc::new(supercharge_workspace::file_system::AcpFsAdapter::new(
                 tool_context.gateway.clone().unwrap(),
                 tool_context.session_id.clone().unwrap(),
-            ))
-        } else {
-            std::sync::Arc::new(supercharge_tools::computer::local::LocalFs)
-        };
+            )) as std::sync::Arc<dyn supercharge_tools::computer::types::AsyncFileSystem>
+        }),
+        || crate::session::file_acceleration::gate(file_acceleration, &session_info.id.0),
+    );
     let bridge_state_path =
         crate::session::persistence::session_dir(&session_info).join("tool_state.json");
     let initial_agent_name = agent_definition.name.clone();
@@ -2499,7 +2503,10 @@ pub(crate) async fn spawn_session_actor(
             ),
         )
         .await;
-        let _ = session_done_tx.send(());
+                if let Some(file_acceleration_session) = file_acceleration_session {
+            file_acceleration_session.finish();
+        }
+let _ = session_done_tx.send(());
     });
     let handle = SessionHandle {
         cmd_tx,
@@ -2654,6 +2661,7 @@ pub(crate) async fn spawn_session_on_thread(
     deployment_key: Option<String>,
     client_terminal_capable: bool,
     client_fs_capable: bool,
+    file_acceleration: crate::session::file_acceleration::FileAccelerationSettings,
     gateway_enabled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     agent_definition: AgentDefinition,
     session_default_agent_profile: Option<String>,
@@ -2864,6 +2872,7 @@ pub(crate) async fn spawn_session_on_thread(
                     deployment_key,
                     client_terminal_capable,
                     client_fs_capable,
+                    file_acceleration,
                     gateway_enabled,
                     agent_definition,
                     session_default_agent_profile,

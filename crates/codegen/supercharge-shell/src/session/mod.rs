@@ -525,6 +525,7 @@ pub mod export;
 pub mod feedback;
 pub mod feedback_manager;
 pub mod file_system;
+pub(crate) mod file_acceleration;
 pub mod fork;
 pub(crate) mod fs_watch;
 pub(crate) mod goal_classifier;

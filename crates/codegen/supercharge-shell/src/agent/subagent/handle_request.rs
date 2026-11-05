@@ -1487,6 +1487,10 @@ pub(crate) async fn run_shell_child(
         None,
         false,
         false,
+        ctx.agent_config
+            .as_ref()
+            .map(crate::session::file_acceleration::settings)
+            .unwrap_or_default(),
         std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
         definition,
         subagent_session_default_agent_profile,

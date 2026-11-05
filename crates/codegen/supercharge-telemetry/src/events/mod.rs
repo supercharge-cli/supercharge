@@ -18,6 +18,7 @@ mod errors;
 mod extensions;
 mod external_otel;
 mod feedback;
+mod file_acceleration;
 mod git;
 mod hooks;
 mod mcp;
@@ -55,6 +56,7 @@ pub use errors::*;
 pub use extensions::*;
 pub use external_otel::*;
 pub use feedback::*;
+pub use file_acceleration::*;
 pub use git::*;
 pub use hooks::*;
 pub use mcp::*;
@@ -192,6 +194,18 @@ telemetry_event!(
 telemetry_event!(ActiveAgentMessageLimitHit, "active_agent_message_limit_hit");
 telemetry_event!(ActiveAgentMessageQuotaHit, "active_agent_message_quota_hit");
 telemetry_event!(ActiveAgentMessageSettled, "active_agent_message_settled");
+telemetry_event!(
+    FileAccelerationSessionStarted,
+    "file_acceleration_session_started"
+);
+telemetry_event!(
+    FileAccelerationSessionEnded,
+    "file_acceleration_session_ended"
+);
+telemetry_event!(
+    FileAccelerationUnavailableHit,
+    "file_acceleration_unavailable_hit"
+);
 telemetry_event!(WorkflowRunStarted, "workflow_run_started");
 telemetry_event!(WorkflowRunEnded, "workflow_run_ended");
 telemetry_event!(
@@ -638,6 +652,9 @@ mod tests {
             ("Turn", "turn_number"),
             // Intentional: external-stream `session.id` on the event (see `TurnCompleted`).
             ("TurnCompleted", "session_id"),
+            ("FileAccelerationSessionEnded", "session_id"),
+            ("FileAccelerationSessionStarted", "session_id"),
+            ("FileAccelerationUnavailableHit", "session_id"),
             ("TurnCompletedLifecycle", "session_id"),
             ("TurnCompletedLifecycle", "turn_number"),
             ("UserFeedback", "session_id"),

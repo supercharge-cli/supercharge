@@ -1366,6 +1366,9 @@ pub struct Config {
     pub disabled_mcp_tools: std::collections::HashMap<String, Vec<String>>,
     #[serde(default, skip_serializing)]
     pub subagents: crate::config::SubagentsConfig,
+    /// `[file_acceleration]` section: accelerator route override for local sessions.
+    #[serde(default, skip_serializing)]
+    pub file_acceleration: supercharge_config_types::FileAccelerationConfig,
     #[serde(default, skip_serializing)]
     pub memory: crate::config::MemorySettings,
     #[serde(default, skip_serializing)]
@@ -1716,6 +1719,7 @@ impl Default for Config {
             disabled_mcp_servers: Vec::new(),
             disabled_mcp_tools: std::collections::HashMap::new(),
             subagents: crate::config::SubagentsConfig::default(),
+            file_acceleration: supercharge_config_types::FileAccelerationConfig::default(),
             memory: crate::config::MemorySettings::default(),
             memory_v2: crate::config::MemoryV2Settings::default(),
             compaction: CompactionConfig::default(),

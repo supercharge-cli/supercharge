@@ -52,6 +52,8 @@ pub enum Feature {
     Dock,
     /// The terminal-native `terminal` color theme (staged rollout).
     TerminalTheme,
+    /// Hand local sessions' file systems to an installed file accelerator.
+    FileAcceleration,
 }
 
 /// How one feature is written on each surface it can be set from.
@@ -309,6 +311,14 @@ pub const FEATURES: &[FeatureSpec] = &[
         env: "SUPERCHARGE_TERMINAL_THEME",
         default_enabled: false,
         remote: Some(|settings| settings.terminal_theme_enabled),
+    },
+    FeatureSpec {
+        id: Feature::FileAcceleration,
+        key: "file_acceleration",
+        path: "features.file_acceleration",
+        env: "SUPERCHARGE_FILE_ACCELERATION",
+        default_enabled: false,
+        remote: Some(|settings| settings.file_acceleration_enabled),
     },
 ];
 

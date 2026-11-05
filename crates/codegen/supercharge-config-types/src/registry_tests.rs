@@ -87,6 +87,7 @@ fn registered_settings() {
             ),
             ("dock", ("SUPERCHARGE_DOCK", false)),
             ("terminal_theme", ("SUPERCHARGE_TERMINAL_THEME", false)),
+            ("file_acceleration", ("SUPERCHARGE_FILE_ACCELERATION", false)),
         ]),
     );
 }
@@ -124,6 +125,7 @@ fn every_registered_feature_reads_its_own_remote_setting() {
             }
             Feature::Dock => settings.dock_enabled = Some(value),
             Feature::TerminalTheme => settings.terminal_theme_enabled = Some(value),
+            Feature::FileAcceleration => settings.file_acceleration_enabled = Some(value),
             // The one row with no remote tier, stated as such rather than as a projection that reads nothing
             Feature::BackendTools => {
                 assert!(spec.remote.is_none(), "{} grew a remote tier", spec.key);
