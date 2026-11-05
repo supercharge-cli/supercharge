@@ -276,16 +276,11 @@ explore = "my-model"                 # route explore to a specific model
 
 Per-type model overrides apply for any parent. Without an override, a subagent inherits the parent's model.
 
-To keep every subagent on the parent's model, turn on model inheritance:
+The `spawn_subagent` tool offers the agent a `model` argument, and its description lists the models you can pick, for when you explicitly ask for a subagent on a different model. With `[features] subagent_model_inheritance = true` (or `SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE=1`), both are hidden whenever every model in your picker is a first-party model: subagents then always inherit the parent's model, and a spawn that still names one fails with a message asking the agent to retry without it. Catalogs with a third-party model, a model with no declared family, or a catalog still loading keep the argument. `[subagents.models]` pins, roles, and personas are unaffected. Read when a session starts; changing it requires a restart. Precedence: a `requirements.toml`/MDM pin, then the environment variable, then `config.toml`, then remote settings, then the default (off).
 
-```toml
-[subagents]
-inherit_model = true                 # or SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE=1
-```
+The legacy `[subagents] inherit_model = true` key still works when `[features] subagent_model_inheritance` is unset; once you write the features key (including an explicit `false`), it takes over.
 
-With inheritance on, a model the agent picks through the Task tool's `model` argument is ignored
-and the Task tool no longer offers a model list. Pins under `[subagents.models]`, role models, and
-persona models still apply. The environment variable wins over the config file.
+Settings → Features → "Subagent model inheritance" mirrors the same value. The row shows the value that applies after restart. Toggling writes `[features] subagent_model_inheritance = true` or `= false` (an explicit `false` overrides a remote `true`); `d` (reset) deletes the key so `managed_config.toml`, remote settings, or the default apply again. Agents already running keep the mode they started with. When a layer your `config.toml` cannot override decides the value — a `requirements.toml`/MDM pin, the environment variable, the `SUPERCHARGE_CONFIG` overlay, or an active campaign — both the toggle and the reset are refused with a toast that names that layer.
 
 ### Custom Roles and Personas
 

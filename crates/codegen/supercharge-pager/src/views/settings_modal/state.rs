@@ -925,6 +925,7 @@ pub(super) fn action_for_bool(key: SettingKey, new: bool) -> Option<Action> {
         "toolset.ask_user_question.timeout_enabled" => {
             Some(Action::SetAskUserQuestionTimeoutEnabled(new))
         }
+        "subagent_model_inheritance" => Some(Action::SetSubagentModelInheritance(new)),
         "show_thinking_blocks" => Some(Action::SetShowThinkingBlocks(new)),
         "group_tool_verbs" => Some(Action::SetGroupToolVerbs(new)),
         "collapsed_edit_blocks" => Some(Action::SetCollapsedEditBlocks(new)),

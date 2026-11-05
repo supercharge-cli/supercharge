@@ -193,6 +193,9 @@ fn test_app() -> AppView {
         auto_update: None,
         thinking_effort: None,
         ask_user_question_timeout_enabled: None,
+        subagent_model_inheritance: crate::settings::FeatureOverrideState::new(
+            supercharge_shell::agent::config::Feature::SubagentModelInheritance,
+        ),
         zdr_access_enabled: false,
         access_gate_shown_logged: false,
         announcement_cta_impressions_logged: Default::default(),

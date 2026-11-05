@@ -698,6 +698,7 @@ pub(super) fn dispatch_send_prompt_submission(
     let auto_mode_gate_from_app = app.auto_mode_gate;
     let ask_user_question_timeout_enabled_from_app = app.ask_user_question_timeout_enabled;
     let voice_stt_language_from_app = app.voice_config.language.clone();
+    let subagent_model_inheritance_from_app = app.subagent_model_inheritance;
     let leader_mode = app.leader_mode;
     let Some(agent) = app.agents.get_mut(&id) else {
         return prelude;
@@ -787,6 +788,7 @@ pub(super) fn dispatch_send_prompt_submission(
                     auto_mode_gate: auto_mode_gate_from_app,
                     ask_user_question_timeout_enabled: ask_user_question_timeout_enabled_from_app,
                     voice_stt_language: voice_stt_language_from_app,
+                    subagent_model_inheritance: subagent_model_inheritance_from_app,
                 },
             };
 

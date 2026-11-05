@@ -533,8 +533,8 @@ impl Default for EndpointsConfig {
     }
 }
 pub use supercharge_config_types::{
-    BoolFlag, ConfigSource, FEATURES, Feature, FeatureSources, LazinessDetectorPerModelConfig,
-    Resolved,
+    BoolFlag, ConfigSource, FEATURES, Feature, FeatureConfigLayer, FeatureConfigLayers,
+    FeatureLayerValue, FeatureSources, LazinessDetectorPerModelConfig, Resolved,
 };
 /// Resolution result for a `/goal` role's model selection.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1478,7 +1478,7 @@ pub struct Config {
     /// Set alongside `subagents_enabled` from `SubagentsConfig::resolve()`.
     #[serde(skip)]
     pub subagent_model_overrides: std::collections::HashMap<String, String>,
-    /// Resolved `[subagents] inherit_model` / `SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE`.
+    /// Resolved `[features] subagent_model_inheritance` (legacy `[subagents] inherit_model` still feeds the config tier).
     #[serde(skip)]
     pub subagent_model_inheritance: bool,
     /// Per-subagent enable/disable toggles from `[subagents.toggle]` in config.toml.
@@ -2050,6 +2050,22 @@ impl Config {
             };
             config.feature_values.insert(spec.id, value);
         }
+        // Legacy `[subagents] inherit_model` feeds the Feature config tier when the
+        // `[features] subagent_model_inheritance` key is absent, so old configs keep working.
+        if !config
+            .feature_values
+            .contains_key(&Feature::SubagentModelInheritance)
+        {
+            if let Some(legacy) = raw_config
+                .get("subagents")
+                .and_then(|s| s.get("inherit_model"))
+                .and_then(|v| v.as_bool())
+            {
+                config
+                    .feature_values
+                    .insert(Feature::SubagentModelInheritance, legacy);
+            }
+        }
         config.config_warnings.extend(auth_provider_warnings);
         config.config_warnings.extend(model_provider_warnings);
         unrecognized_keys.sort();
@@ -2189,12 +2205,10 @@ impl Config {
         let remote_settings = self.remote_settings.clone();
         self.resolve_subagent_limits(&sa, remote_settings.as_ref());
         self.subagents_enabled = sa.enabled;
-        self.subagent_model_inheritance = crate::config::SubagentsConfig::resolve_inherit_model(
-            std::env::var(crate::config::SubagentsConfig::ENV_INHERIT_MODEL)
-                .ok()
-                .as_deref(),
-            sa.inherit_model,
-        );
+        // Feature registry (pin/env/config/remote/default). Legacy `[subagents] inherit_model`
+        // was folded into `feature_values` at deserialize when the features key was absent.
+        self.subagent_model_inheritance =
+            self.is_feature_enabled(Feature::SubagentModelInheritance);
         self.subagent_model_overrides = sa.models;
         self.subagent_toggle = sa.toggle;
         self.subagent_roles = sa.roles;

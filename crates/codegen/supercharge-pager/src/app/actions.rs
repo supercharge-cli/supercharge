@@ -462,6 +462,11 @@ pub enum Action {
     SetRememberToolApprovals(bool),
     /// Toggle the ask_user_question timeout. SHELL-owned; persisted to `[toolset.ask_user_question].timeout_enabled`. Applies to new sessions.
     SetAskUserQuestionTimeoutEnabled(bool),
+    /// Save `[features].subagent_model_inheritance` as an explicit override. SHELL-owned; agents latch it when built, so it applies on restart.
+    SetSubagentModelInheritance(bool),
+    /// Delete the saved `[features].subagent_model_inheritance` key so the remote setting or the default applies again.
+    /// The reset path uses this instead of writing the compiled default.
+    ClearSubagentModelInheritance,
     /// SHELL-owned `keep_text_selection` (`flash` | `hold`); cache and persist.
     SetKeepTextSelection(crate::appearance::TextSelection),
     /// Set the mouse-wheel scroll speed multiplier (1-100).
@@ -1754,6 +1759,12 @@ pub enum Effect {
         key: crate::settings::SettingKey,
         value: crate::settings::SettingValue,
         rollback_value: crate::settings::SettingValue,
+    },
+    /// Write the user `[features]` key of `feature`, or delete it for `saved == None`; completes as
+    /// [`TaskResult::FeatureOverridePersisted`]. A row issues one of these at a time so the disk follows toggle order.
+    PersistFeatureOverride {
+        feature: supercharge_shell::agent::config::Feature,
+        saved: Option<bool>,
     },
     /// Toggle mouse reporting off and on to unwedge xterm.js's button tracker
     /// (see `AgentView::reset_wedged_mouse_reporting`). An effect so it rides the escape
@@ -3275,6 +3286,11 @@ pub enum TaskResult {
     SettingPersistFailedBestEffort {
         key: crate::settings::SettingKey,
         error: String,
+    },
+    /// One [`Effect::PersistFeatureOverride`] write finished; `Ok` carries what it left on disk.
+    FeatureOverridePersisted {
+        feature: supercharge_shell::agent::config::Feature,
+        result: Result<Option<bool>, String>,
     },
     /// Off-thread clipboard attachment probe finished (see [`Effect::ProbeClipboardAttachment`]); dispatch attaches the chip.
     ClipboardAttachmentProbed {

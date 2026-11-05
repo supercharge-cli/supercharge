@@ -538,6 +538,10 @@ struct SettingsUpdateNotification {
     subscription_watch_interval_secs: Option<u64>,
     dock_enabled: Option<bool>,
     terminal_theme_enabled: Option<bool>,
+    /// The remote tier the pager's settings row shows beside the saved `[features]` key.
+    /// Omitted while the agent has no settings (the pager keeps the tier it seeded itself); `null` once fetched settings lack the key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subagent_model_inheritance_enabled: Option<Option<bool>>,
 }
 /// When the announcements push gate emits despite an unchanged visible list.
 #[derive(Clone, Copy, Debug)]
@@ -1595,6 +1599,9 @@ impl MvpAgent {
                 subscription_watch_interval_secs: None,
                 dock_enabled: rs.and_then(|s| s.dock_enabled),
                 terminal_theme_enabled: rs.and_then(|s| s.terminal_theme_enabled),
+                subagent_model_inheritance_enabled: rs.map(|s| {
+                    config::Feature::SubagentModelInheritance.remote_value(Some(s))
+                }),
             }
         };
         if let Ok(params) = serde_json::value::to_raw_value(&payload) {

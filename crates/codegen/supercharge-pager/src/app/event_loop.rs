@@ -1308,18 +1308,17 @@ pub(crate) async fn run(
     let requirements = supercharge_shell::config::load_merged_requirements();
     let user_config = supercharge_shell::config::load_from_disk().ok();
     let managed_config = supercharge_shell::config::load_managed_config().ok();
-    let effective_config = {
+    let config_layers = {
         let _t = supercharge_telemetry::instrumentation::timer("startup.app_init.effective_config");
-        match supercharge_shell::config::load_effective_config() {
-            Ok(raw) => Some(raw),
-            Err(e) => {
+        supercharge_shell::config::load_effective_config_with_layers()
+            .inspect_err(|e| {
                 tracing::debug!(error = %e, "failed to load effective config, using partial layers");
-                None
-            }
-        }
+            })
+            .ok()
     };
+    let effective_config = config_layers.as_ref().map(|loaded| &loaded.effective);
     let compat = supercharge_shell::agent::config::resolve_compat_sessions_from_raw(
-        effective_config.as_ref().ok_or(()),
+        effective_config.ok_or(()),
         remote_settings.as_ref(),
     );
     app.foreign_session_compat = supercharge_foreign_sessions::EnabledForeignSessionSources {
@@ -1327,7 +1326,7 @@ pub(crate) async fn run(
         codex: compat.codex.sessions,
         cursor: compat.cursor.sessions,
     };
-    if let Some(ref raw) = effective_config {
+    if let Some(raw) = effective_config {
         app.notification_service = crate::notifications::NotificationService::new(
             crate::notifications::load_notification_config(raw),
             app.escape_writer.clone(),
@@ -1346,6 +1345,11 @@ pub(crate) async fn run(
         requirements.as_ref(),
         user_config.as_ref(),
         managed_config.as_ref(),
+        remote_settings.as_ref(),
+    );
+    app.subagent_model_inheritance = crate::settings::FeatureOverrideState::from_layers(
+        supercharge_shell::agent::config::Feature::SubagentModelInheritance,
+        config_layers.as_ref(),
         remote_settings.as_ref(),
     );
     crate::appearance::cache::set_show_thinking_blocks(
@@ -1413,11 +1417,11 @@ pub(crate) async fn run(
             .as_ref()
             .and_then(|s| s.slash_command_tags.as_ref());
         let empty_toml = toml::Value::Table(Default::default());
-        let tags_config = effective_config.as_ref().unwrap_or(&empty_toml);
+        let tags_config = effective_config.unwrap_or(&empty_toml);
         *app.command_tags.borrow_mut() = resolve_slash_command_tags(tags_config, remote_slash_tags);
     }
     let hints = supercharge_shell::util::config::resolve_hints(
-        effective_config.as_ref(),
+        effective_config,
         requirements.as_ref(),
         user_config.as_ref(),
         managed_config.as_ref(),
@@ -1537,7 +1541,7 @@ pub(crate) async fn run(
     );
     app.apply_contextual_hints(resolved_hints);
     let mouse_toggle = supercharge_shell::util::config::resolve_mouse_reporting_toggle(
-        effective_config.as_ref(),
+        effective_config,
         &app.current_ui,
     );
     app.registry = crate::actions::ActionRegistry::defaults_with_config_for(

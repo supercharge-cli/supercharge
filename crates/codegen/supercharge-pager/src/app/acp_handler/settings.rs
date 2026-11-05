@@ -59,6 +59,16 @@ pub(super) fn handle_settings_update(notif: &acp::ExtNotification, app: &mut App
             ..Default::default()
         };
         supercharge_shell::util::config::set_remote_campaigns_from_settings(Some(&rs));
+        // The settings row read its campaign layer at startup; the same re-read the shell does on `/new` keeps its value and lock current
+        match supercharge_shell::config::load_effective_config_with_layers() {
+            Ok(loaded) => {
+                app.subagent_model_inheritance.reseed_config_layers(&loaded);
+                crate::app::dispatch::refresh_open_settings_modals(app);
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "config layers not re-read after a campaign update")
+            }
+        }
     }
 
     if let Some(v) = update.auto_permission_mode_enabled {
@@ -134,6 +144,12 @@ pub(super) fn handle_settings_update(notif: &acp::ExtNotification, app: &mut App
     app.apply_tier_restrictions();
     if let Some(remote_v) = update.dock_enabled {
         crate::views::dock::set_enabled(crate::app::resolve_dock_enabled(Some(remote_v)));
+    }
+    // Presence-aware: omit (an older shell, or one without settings yet) keeps the seeded tier, null means fetched settings cleared it
+    // Only the settings row reads it; running agents keep the mode they latched when built
+    if let Some(remote) = update.subagent_model_inheritance_enabled {
+        app.subagent_model_inheritance.other_tiers.remote = remote;
+        crate::app::dispatch::refresh_open_settings_modals(app);
     }
     if let Some(remote_v) = update.terminal_theme_enabled {
         let enabled = crate::app::resolve_terminal_theme_enabled(Some(remote_v));
@@ -473,6 +489,9 @@ pub(super) struct PagerSettingsUpdate {
     voice_mode_enabled: Option<bool>,
     #[serde(default)]
     dock_enabled: Option<bool>,
+    /// Nested Option: outer `None` = omitted (keep seeded), `Some(None)` = JSON null (clear), `Some(Some(v))` = set.
+    #[serde(default)]
+    subagent_model_inheritance_enabled: Option<Option<bool>>,
     #[serde(default)]
     terminal_theme_enabled: Option<bool>,
     #[serde(default)]

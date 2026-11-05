@@ -1,5 +1,7 @@
 use super::persist::update_config;
-use anyhow::Result;
+use anyhow::{Context, Result};
+use supercharge_config_types::Feature;
+use std::path::Path;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
@@ -217,6 +219,65 @@ pub async fn set_feedback_trace_card(value: bool) -> Result<()> {
         cfg.features.feedback_trace_card = Some(value);
     })
     .await
+}
+
+/// Persist or remove a registry `[features]` key in the user `config.toml`.
+/// `None` deletes the key so the remote and default tiers apply again.
+pub async fn set_feature_override(feature: Feature, value: Option<bool>) -> Result<()> {
+    let _guard = super::persist::lock_config_writes()
+        .await
+        .map_err(|error| {
+            anyhow::anyhow!("lock config.toml to save {}: {error}", feature.path())
+        })?;
+    let path = super::mcp::user_config_path();
+    let key = feature.key().to_owned();
+    let what = feature.path();
+    tokio::task::spawn_blocking(move || write_feature_override(&path, &key, what, value))
+        .await
+        .map_err(|error| anyhow::anyhow!("{what} persistence task failed: {error}"))?
+}
+
+pub(super) fn write_feature_override(
+    path: &Path,
+    key: &str,
+    what: &str,
+    value: Option<bool>,
+) -> Result<()> {
+    let content = super::persist::read_to_string_or_empty(path).map_err(|error| {
+        anyhow::anyhow!("read {} to save {what}: {error}", path.display())
+    })?;
+    let mut document = super::persist::parse_existing_config_toml(&content).map_err(|error| {
+        anyhow::anyhow!(
+            "parse {} to save {what}: {}",
+            path.display(),
+            supercharge_config::toml_error_detail(&content, &error)
+        )
+    })?;
+    let root = document
+        .as_table_mut()
+        .with_context(|| format!("{} must contain a TOML table", path.display()))?;
+    match value {
+        Some(flag) => {
+            let features = root
+                .entry("features".to_owned())
+                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+                .as_table_mut()
+                .with_context(|| format!("{} [features] must be a table", path.display()))?;
+            features.insert(key.to_owned(), toml::Value::Boolean(flag));
+        }
+        None => {
+            if let Some(features) = root.get_mut("features").and_then(toml::Value::as_table_mut) {
+                features.remove(key);
+                if features.is_empty() {
+                    root.remove("features");
+                }
+            }
+        }
+    }
+    let serialized = toml::to_string_pretty(&document)
+        .map_err(|error| anyhow::anyhow!("serialize {} for {what}: {error}", path.display()))?;
+    super::persist::atomic_write_string(path, &serialized)
+        .map_err(|error| anyhow::anyhow!("write {} to save {what}: {error}", path.display()))
 }
 
 /// Persist `[ui].fork_secondary_model` via `update_config`. Caller must validate against the model catalog. Empty string restores the built-in default. A length over [`MAX_DEFAULT_MODEL_LEN`] returns `Err`.

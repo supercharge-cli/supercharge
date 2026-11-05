@@ -161,6 +161,65 @@ fn features_merge_writes_feedback_trace_card_without_splatting_section() {
         "all-None must leave the existing section untouched"
     );
 }
+
+/// `Some` inserts or replaces the key, `None` deletes it (and an emptied `[features]` table), and sibling keys survive every step.
+#[test]
+fn feature_override_writer_inserts_replaces_and_removes_the_key() {
+    use crate::agent::config::Feature;
+    let feature = Feature::SubagentModelInheritance;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("config.toml");
+    std::fs::write(&path, "features = { web_fetch = true }\n").unwrap();
+    let read_features = |path: &std::path::Path| -> Option<TomlValue> {
+        toml::from_str::<TomlValue>(&std::fs::read_to_string(path).unwrap())
+            .unwrap()
+            .get("features")
+            .cloned()
+    };
+    for value in [Some(true), Some(false), None] {
+        super::super::settings_writes::write_feature_override(
+            &path,
+            feature.key(),
+            feature.path(),
+            value,
+        )
+        .unwrap();
+        let features = read_features(&path).expect("sibling key keeps the table");
+        assert_eq!(
+            value,
+            features.get(feature.key()).and_then(TomlValue::as_bool)
+        );
+        assert_eq!(
+            Some(true),
+            features.get("web_fetch").and_then(TomlValue::as_bool)
+        );
+    }
+    std::fs::write(&path, "").unwrap();
+    super::super::settings_writes::write_feature_override(
+        &path,
+        feature.key(),
+        feature.path(),
+        Some(true),
+    )
+    .unwrap();
+    assert_eq!(
+        Some(true),
+        read_features(&path).and_then(|f| f.get(feature.key()).and_then(TomlValue::as_bool))
+    );
+    super::super::settings_writes::write_feature_override(
+        &path,
+        feature.key(),
+        feature.path(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        None,
+        read_features(&path),
+        "an emptied [features] table is dropped"
+    );
+}
+
 /// `[rea] enabled` round-trips, and an unset toggle writes nothing.
 #[test]
 fn rea_merge_writes_enabled_and_reloads() {

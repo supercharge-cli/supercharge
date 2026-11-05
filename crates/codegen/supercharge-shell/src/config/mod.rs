@@ -978,7 +978,9 @@ fn walk_toml(
 /// The `[skills]` table from an effective config, shared by the reload dispatch and `grok inspect`.
 pub(crate) use crate::config::reloader::parse_skills_config;
 /// Effective config: the layers plus the campaign overlay (remote cache and `SUPERCHARGE_CAMPAIGNS_OVERRIDE`).
-pub use crate::util::config::load_effective_config;
+pub use crate::util::config::{
+    EffectiveConfigLayers, load_effective_config, load_effective_config_with_layers,
+};
 /// Effective config with disk campaigns only, for one-shot entrypoints that never fetch remote settings.
 /// This avoids resolving against a never-seeded cache.
 pub use crate::util::config::load_effective_config_disk_only;

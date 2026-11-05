@@ -652,6 +652,11 @@ pub struct RemoteSettings {
     /// It is the fallback when no local `[features] subagent_worktree_snapshot` is set in config.toml; absent defaults to disabled.
     #[serde(default)]
     pub subagent_worktree_snapshot_enabled: Option<bool>,
+    /// Soft-default for the shell-side model-inheritance gate when the local/env/config tiers leave the feature unset.
+    /// When `Some(true)`, a Task that names a first-party model inherits the parent's model instead.
+    /// Absent defaults to disabled (Task.model is honored as written).
+    #[serde(default)]
+    pub subagent_model_inheritance_enabled: Option<bool>,
     /// Gates `image_gen` and `/imagine`. `None` falls through env, `[features]`, then the default (on).
     #[serde(default)]
     pub image_gen_enabled: Option<bool>,

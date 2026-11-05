@@ -55,6 +55,7 @@ pub(crate) fn refresh_open_settings_modals(app: &mut AppView) {
     let auto_mode_gate_from_app = app.auto_mode_gate;
     let ask_user_question_timeout_enabled_from_app = app.ask_user_question_timeout_enabled;
     let voice_stt_language_from_app = app.voice_config.language.clone();
+    let subagent_model_inheritance_from_app = app.subagent_model_inheritance;
     for agent in app.agents.values_mut() {
         // Walk both `Settings` and `ResetSettingsConfirm`
         // The confirm dialog embeds settings state that must stay fresh through async persist failures
@@ -93,6 +94,7 @@ pub(crate) fn refresh_open_settings_modals(app: &mut AppView) {
                 auto_mode_gate: auto_mode_gate_from_app,
                 ask_user_question_timeout_enabled: ask_user_question_timeout_enabled_from_app,
                 voice_stt_language: voice_stt_language_from_app.clone(),
+                subagent_model_inheritance: subagent_model_inheritance_from_app,
             };
         }
     }
@@ -189,6 +191,7 @@ pub(in crate::app::dispatch) fn dispatch_open_settings(
     let auto_mode_gate_from_app = app.auto_mode_gate;
     let ask_user_question_timeout_enabled_from_app = app.ask_user_question_timeout_enabled;
     let voice_stt_language_from_app = app.voice_config.language.clone();
+    let subagent_model_inheritance_from_app = app.subagent_model_inheritance;
     // Theme rows are `hidden_in_minimal`. Snapshot this AppView's mode, not `MINIMAL_MODE_ACTIVE`
     // (other tests flip that process flag in parallel and would drop `theme` from the list).
     let visibility = RowVisibility {
@@ -240,6 +243,7 @@ pub(in crate::app::dispatch) fn dispatch_open_settings(
         auto_mode_gate: auto_mode_gate_from_app,
         ask_user_question_timeout_enabled: ask_user_question_timeout_enabled_from_app,
         voice_stt_language: voice_stt_language_from_app,
+        subagent_model_inheritance: subagent_model_inheritance_from_app,
     };
     let mut state = Box::new(SettingsModalState::new_with_row_visibility(
         registry,
@@ -626,12 +630,27 @@ pub(in crate::app::dispatch) fn dispatch_confirm_reset_setting(
                 return vec![];
             };
             let default_value = crate::settings::default_value_for(meta);
+            let Some(action) = action_for_reset(key, &default_value) else {
+                tracing::error!(
+                    target: "settings",
+                    key,
+                    ?default_value,
+                    "reset has no action_for_reset arm — registry/dispatch skew",
+                );
+                return vec![];
+            };
 
             // Gate idempotent reset: a value already at its default only shows a toast
+            // Not for a `[features]` override, where reset deletes the key: a saved value equal to the default is still an override
             let pager_snapshot = build_pager_snapshot(app);
             let current_value =
                 crate::settings::current_value_for(key, &app.current_ui, &pager_snapshot);
-            if current_value.as_ref() == Some(&default_value) {
+            if current_value.as_ref() == Some(&default_value)
+                && !matches!(
+                    action,
+                    Action::SetCodingDataSharing { .. } | Action::ClearSubagentModelInheritance
+                )
+            {
                 tracing::debug!(
                     target: "settings",
                     key,
@@ -643,16 +662,6 @@ pub(in crate::app::dispatch) fn dispatch_confirm_reset_setting(
                 });
                 return vec![];
             }
-
-            let Some(action) = action_for_reset(key, &default_value) else {
-                tracing::error!(
-                    target: "settings",
-                    key,
-                    ?default_value,
-                    "reset has no action_for_reset arm — registry/dispatch skew",
-                );
-                return vec![];
-            };
             tracing::info!(
                 target: "settings",
                 key,
@@ -892,6 +901,7 @@ pub(crate) fn build_pager_snapshot(app: &AppView) -> crate::settings::PagerLocal
         auto_mode_gate: app.auto_mode_gate,
         ask_user_question_timeout_enabled: app.ask_user_question_timeout_enabled,
         voice_stt_language: app.voice_config.language.clone(),
+        subagent_model_inheritance: app.subagent_model_inheritance,
     }
 }
 
@@ -951,6 +961,9 @@ pub(in crate::app::dispatch) fn action_for_reset(
         }
         ("toolset.ask_user_question.timeout_enabled", SettingValue::Bool(b)) => {
             Some(Action::SetAskUserQuestionTimeoutEnabled(*b))
+        }
+        ("subagent_model_inheritance", SettingValue::Bool(_)) => {
+            Some(Action::ClearSubagentModelInheritance)
         }
         ("keep_text_selection", SettingValue::Enum(s)) => {
             crate::appearance::TextSelection::from_canonical(s).map(Action::SetKeepTextSelection)

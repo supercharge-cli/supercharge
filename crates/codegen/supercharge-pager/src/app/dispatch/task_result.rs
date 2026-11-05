@@ -2309,6 +2309,9 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             app.show_toast(&format!("\u{2717} Could not save {key}: {scrubbed}"));
             vec![]
         }
+        TaskResult::FeatureOverridePersisted { feature, result } => {
+            super::settings::handle_feature_override_persisted(app, feature, result)
+        }
         TaskResult::NousDeviceStarted { generation, result } => {
             let mut open_url = None;
             let next = get_active_agent_mut(app).and_then(|agent| {

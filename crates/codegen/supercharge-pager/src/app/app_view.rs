@@ -939,6 +939,8 @@ pub struct AppView {
     /// from the effective TOML merge like `show_tips`. `None` = unset in TOML
     /// (default `true`); toggles write the user layer.
     pub ask_user_question_timeout_enabled: Option<bool>,
+    /// `[features].subagent_model_inheritance` as the settings modal shows it: the saved user key plus the tiers seeded at startup.
+    pub subagent_model_inheritance: crate::settings::FeatureOverrideState,
     /// Whether ZDR users are allowed to use the product.
     /// Server-controlled via RemoteSettings (remote settings). Default `false` (blocked) during beta.
     pub zdr_access_enabled: bool,
@@ -1413,6 +1415,9 @@ impl AppView {
             auto_update: None,
             thinking_effort: None,
             ask_user_question_timeout_enabled: None,
+            subagent_model_inheritance: crate::settings::FeatureOverrideState::new(
+                supercharge_shell::agent::config::Feature::SubagentModelInheritance,
+            ),
             zdr_access_enabled: false,
             access_gate_shown_logged: false,
             announcement_cta_impressions_logged: Default::default(),

@@ -224,6 +224,7 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 | `features.repo_status_in_system_prompt` | `boolean` | `pin` | `user` | Enable or disable `repo_status_in_system_prompt`. Default true. Also `SUPERCHARGE_REPO_STATUS_IN_SYSTEM_PROMPT`. |
 | `features.session_recap` | `boolean` | `pin` | `user` | Enable or disable `session_recap`. Default true. Also `SUPERCHARGE_SESSION_RECAP`. |
 | `features.session_search` | `boolean` | `pin` | `user` | Enable or disable `session_search`. Default true. Also `SUPERCHARGE_SESSION_SEARCH`. |
+| `features.subagent_model_inheritance` | `boolean` | `pin` | `user` | Hide the subagent `model` argument when every model you can pick is a first-party model, so subagents inherit the parent's model. Default false. Also `SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE`. Legacy `[subagents] inherit_model` still applies when this key is unset. Read when a session starts; changing it requires a restart. |
 | `features.subagent_worktree_snapshot` | `boolean` | `pin` | `user` | Enable or disable `subagent_worktree_snapshot`. Default false. Also `SUPERCHARGE_SUBAGENT_WORKTREE_SNAPSHOT`. |
 | `features.support_permission` | `boolean` | `yes` | `user` | Allow the agent to ask permission for tool executions. |
 | `features.telemetry` | `boolean / session_metrics / off` | `pin` | `user` | Product telemetry mode. Enterprise default is off. |

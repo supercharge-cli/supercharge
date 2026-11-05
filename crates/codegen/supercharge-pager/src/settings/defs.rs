@@ -10,7 +10,7 @@ use crate::appearance::ScrollMode;
 use crate::appearance::TextSelection;
 use crate::appearance::permission_cursor::DefaultSelectedPermission;
 
-use supercharge_shell::agent::config::UiConfig;
+use supercharge_shell::agent::config::{Feature, UiConfig};
 use supercharge_shell::util::config::DISPLAY_REFRESH_DEFAULT_AUTO_CADENCE_ENABLED;
 use supercharge_tools::implementations::supercharge_build::ask_user_question;
 
@@ -977,6 +977,40 @@ pub fn default_settings() -> Vec<SettingMeta> {
                 supports_preview: false,
             },
             restart_required: false,
+            hidden_in_minimal: false,
+        },
+        // SHELL-owned `[features].subagent_model_inheritance`, a registry feature row rather than a `[ui]` key
+        // `restart_required` because each agent latches the mode when it is built; the row's value is the next-start resolution
+        // Each `\n` starts a new line in the expanded detail (a Bool row never reaches the single-line sub-pane header)
+        SettingMeta {
+            key: "subagent_model_inheritance",
+            category: SettingCategory::Models,
+            owner: SettingOwner::Shell,
+            label: "Subagent model inheritance",
+            description: "On: Supercharge cannot set models for subagents\n\
+                          Off: Supercharge may choose a different model for a subagent. Takes effect \
+                          after restart.\n\
+                          NOTE: This setting only applies when all models are first-party \
+                          \"model_family\". You likely don't need to configure this setting.",
+            keywords: &[
+                "subagent",
+                "subagents",
+                "subagent model",
+                "same model",
+                "model",
+                "parent",
+                "inherit",
+                "inheritance",
+                "picker",
+                "argument",
+                "task",
+                "spawn",
+                "features",
+            ],
+            kind: SettingKind::Bool {
+                default: Feature::SubagentModelInheritance.default_enabled(),
+            },
+            restart_required: true,
             hidden_in_minimal: false,
         },
         SettingMeta {
