@@ -649,6 +649,16 @@ pub fn apply_otel_config(auth_manager: &AuthManager, grok_com_config: &GrokComCo
         crate::agent::otel_gate::open_at_startup();
     }
 }
+/// Another process is wedged inside its own open+flock of the leader lock (stalled Supercharge home). Only `tracing`
+/// here: a socket probe, pid read, or log open under the Supercharge home could wedge this process too. Best effort: a
+/// client-spawned leader's stderr is `$SUPERCHARGE_HOME/leader.log`, so even this line can park in `write(2)` there.
+fn refuse_in_flight_leader_lock(e: crate::leader::LockError) -> anyhow::Error {
+    tracing::error!(
+        error = %e,
+        "leader lock acquisition already in flight in another process (stalled filesystem?); exiting without touching the lock"
+    );
+    anyhow::Error::new(e).context("refusing to start a second leader-lock acquirer")
+}
 /// Boot-time switches of [`run_leader`], set by `grok agent leader` flags.
 pub struct LeaderRunOptions {
     /// Keep serving after the last IPC client disconnects (devbox / systemd leaders).
@@ -697,6 +707,9 @@ pub async fn run_leader(
     let mut lock = LeaderLock::new(ws_url);
     let socket_path = lock.socket_path().clone();
     match lock.try_acquire() {
+        Err(e @ LockError::AcquireInProgress { .. }) => {
+            return Err(refuse_in_flight_leader_lock(e));
+        }
         Ok(true) => {
             lock.write_pid()?;
             debug!("Acquired leader lock, proceeding as leader");
@@ -714,11 +727,14 @@ pub async fn run_leader(
                 ));
             }
             match lock.acquire_reopen_timeout(LEADER_ACQUIRE_TIMEOUT).await {
+                Err(e @ LockError::AcquireInProgress { .. }) => {
+                    return Err(refuse_in_flight_leader_lock(e));
+                }
                 Ok(()) => {
                     lock.write_pid()?;
                     debug!("Acquired leader lock after bounded wait, proceeding as leader");
                 }
-                Err(LockError::Timeout(_)) => {
+                Err(LockError::Timeout { .. }) => {
                     info!(
                         "Timed out waiting for the leader lock ({}). Exiting so the \
                          client adopts whoever won it.",
@@ -736,6 +752,7 @@ pub async fn run_leader(
         }
         Err(e) => return Err(anyhow::anyhow!("Failed to acquire leader lock: {}", e)),
     }
+
     lock.cleanup_socket()?;
     info!("Leader server starting");
     let (ipc_to_agent_tx, mut ipc_to_agent_rx) = mpsc::unbounded_channel::<String>();

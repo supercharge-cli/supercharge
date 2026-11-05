@@ -21,6 +21,7 @@ members = [
     "crates/codegen/supercharge-dirs",
     "crates/codegen/supercharge-fast-worktree",
     "crates/codegen/supercharge-file-utils",
+    "crates/codegen/supercharge-file-lock",
     "crates/codegen/supercharge-fsnotify",
     "crates/codegen/supercharge-fuzzy-file-search",
     "crates/codegen/supercharge-gix-status",
@@ -347,6 +348,7 @@ supercharge-diag-server = { path = "crates/codegen/supercharge-diag-server" }
 supercharge-env = { path = "crates/codegen/supercharge-env" }
 supercharge-eval = { path = "crates/codegen/supercharge-eval" }
 supercharge-extra-ca = { path = "crates/codegen/supercharge-extra-ca" }
+supercharge-file-lock = { path = "crates/codegen/supercharge-file-lock" }
 supercharge-feedback = { path = "crates/codegen/supercharge-feedback" }
 supercharge-foreign-sessions = { path = "crates/codegen/supercharge-foreign-sessions" }
 supercharge-http = { path = "crates/codegen/supercharge-http" }

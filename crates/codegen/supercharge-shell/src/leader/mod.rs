@@ -65,8 +65,8 @@ mod transport;
 use crate::env::SuperchargeBuildEnvironment;
 pub use client::{ClientError, DisconnectReason, LeaderClient, LeaderRegistration};
 pub use lock::{
-    LEADER_SOCKET_ENV, LeaderLock, LockError, compute_ws_url_suffix, lock_path_for_ws_url,
-    lock_path_for_ws_url_in, socket_path_for_ws_url, socket_path_for_ws_url_in,
+    LEADER_SOCKET_ENV, LeaderLock, LockError, SLOT_DIR_ENV, compute_ws_url_suffix,
+    lock_path_for_ws_url, lock_path_for_ws_url_in, socket_path_for_ws_url, socket_path_for_ws_url_in,
     ws_url_suffix_from_paths,
 };
 pub use protocol::{
@@ -1504,6 +1504,10 @@ pub async fn connect_or_spawn(
             Ok(false) => {
                 debug!("Lock held by another process, probing socket connectability");
             }
+            Err(e @ LockError::AcquireInProgress { .. }) => {
+                debug!(error = %e, "leader lock is being acquired by another process; not spawning a leader");
+                return Err(ConnectionError::Lock(e));
+            }
             Err(e) => {
                 return Err(e.into());
             }
@@ -1863,6 +1867,12 @@ mod tests {
             "boom".into()
         )));
         assert!(!is_terminal_refusal(&ConnectionError::Cancelled));
+        assert!(!is_terminal_refusal(&ConnectionError::Lock(
+            LockError::AcquireInProgress {
+                path: PathBuf::from("/x/leader.lock"),
+                holder_pid: Some(1),
+            }
+        )));
     }
     /// Per-PID eviction budget: allows `max` attempts, then denies; a PID change resets the counter so a fresh zombie gets its own budget.
     #[test]

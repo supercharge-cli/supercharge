@@ -11111,6 +11111,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercharge-file-lock"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "libc",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "supercharge-file-utils"
 version = "0.1.0"
 dependencies = [
@@ -12166,6 +12177,7 @@ dependencies = [
  "supercharge-extra-ca",
  "supercharge-fast-worktree",
  "supercharge-feedback",
+ "supercharge-file-lock",
  "supercharge-file-utils",
  "supercharge-foreign-sessions",
  "supercharge-fsnotify",

@@ -367,6 +367,12 @@ fn baseline_env_from_parent(
         "GIT_CONFIG_GLOBAL".into(),
         supercharge_home.join("gitconfig").into_os_string(),
     );
+    // Leader-lock acquire slots stay inside the sandbox instead of the developer's `/tmp/supercharge-file-lock-<uid>`.
+    // Literal on purpose: `supercharge_file_lock::SLOT_DIR_ENV` lives in a crate this one does not depend on.
+    env.insert(
+        "SUPERCHARGE_FILE_LOCK_SLOT_DIR".into(),
+        temp.join("lock-slots").into_os_string(),
+    );
     env
 }
 
@@ -782,6 +788,10 @@ mod tests {
         assert_eq!(
             env_value(&sandbox, "TMPDIR"),
             Some(sandbox.temp_dir().into())
+        );
+        assert_eq!(
+            env_value(&sandbox, "SUPERCHARGE_FILE_LOCK_SLOT_DIR"),
+            Some(sandbox.temp_dir().join("lock-slots").into())
         );
         assert_eq!(
             env_value(&sandbox, "SUPERCHARGE_API_KEY").as_deref(),

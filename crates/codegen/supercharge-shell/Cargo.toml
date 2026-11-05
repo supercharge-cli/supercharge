@@ -157,6 +157,7 @@ supercharge-agent = { path = "../supercharge-agent" }
 supercharge-bundle = { workspace = true }
 supercharge-config = { workspace = true }
 supercharge-feedback = { workspace = true }
+supercharge-file-lock = { workspace = true }
 supercharge-config-types = { workspace = true }
 supercharge-env = { workspace = true }
 supercharge-dirs = { workspace = true }
