@@ -1478,9 +1478,6 @@ pub struct Config {
     /// Set alongside `subagents_enabled` from `SubagentsConfig::resolve()`.
     #[serde(skip)]
     pub subagent_model_overrides: std::collections::HashMap<String, String>,
-    /// Resolved `[features] subagent_model_inheritance` (legacy `[subagents] inherit_model` still feeds the config tier).
-    #[serde(skip)]
-    pub subagent_model_inheritance: bool,
     /// Per-subagent enable/disable toggles from `[subagents.toggle]` in config.toml.
     /// Keys are agent names, values are booleans. Omitted agents default to enabled.
     #[serde(skip)]
@@ -1746,7 +1743,6 @@ impl Default for Config {
             cli_agents: Vec::new(),
             cli_agent_overrides: CliAgentOverrides::default(),
             subagents_enabled: true,
-            subagent_model_inheritance: false,
             subagents_max_depth: crate::config::SubagentsConfig::DEFAULT_MAX_DEPTH,
             subagents_max_concurrent:
                 supercharge_tools::implementations::supercharge_build::task::admission::DEFAULT_MAX_CONCURRENT,
@@ -2205,10 +2201,8 @@ impl Config {
         let remote_settings = self.remote_settings.clone();
         self.resolve_subagent_limits(&sa, remote_settings.as_ref());
         self.subagents_enabled = sa.enabled;
-        // Feature registry (pin/env/config/remote/default). Legacy `[subagents] inherit_model`
-        // was folded into `feature_values` at deserialize when the features key was absent.
-        self.subagent_model_inheritance =
-            self.is_feature_enabled(Feature::SubagentModelInheritance);
+        // Legacy `[subagents] inherit_model` folds into `feature_values` at deserialize when the
+        // features key is absent; read Feature::SubagentModelInheritance at use time.
         self.subagent_model_overrides = sa.models;
         self.subagent_toggle = sa.toggle;
         self.subagent_roles = sa.roles;

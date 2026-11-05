@@ -4785,7 +4785,10 @@ impl MvpAgent {
             .cfg
             .borrow()
             .is_feature_enabled(crate::agent::config::Feature::ActiveAgentMessages);
-        let subagent_model_inheritance = self.cfg.borrow().subagent_model_inheritance;
+        let subagent_model_inheritance = self
+            .cfg
+            .borrow()
+            .is_feature_enabled(crate::agent::config::Feature::SubagentModelInheritance);
         let goal_enabled = self.cfg.borrow().resolve_goal().value;
         let background_workflows_enabled = self.cfg.borrow().resolve_workflows().value;
         let subagents_enabled = self.cfg.borrow().subagents_enabled;
