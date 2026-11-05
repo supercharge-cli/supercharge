@@ -51,6 +51,8 @@ pub enum Command {
     Memory(crate::memory_cmd::MemoryArgs),
     /// Run the agent against an eval dataset or a best-of-N task
     Eval(crate::eval_cmd::EvalArgs),
+    /// Install or manage the optional local headless browser
+    Browser(crate::browser_cmd::BrowserArgs),
     /// List available models and exit
     Models,
     /// List, search, or restore sessions

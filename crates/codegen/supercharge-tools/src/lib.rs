@@ -21,6 +21,7 @@ pub use util::mcp_truncate::{
 pub mod attribution;
 
 pub mod bridge;
+pub mod browser;
 pub mod computer;
 pub mod gitignore;
 pub mod implementations;

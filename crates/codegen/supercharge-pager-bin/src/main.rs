@@ -66,6 +66,8 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
             | Command::Plugin(_)
             | Command::Memory(_)
             | Command::Eval(_)
+            | Command::Browser(_)
+            | Command::Browser(_)
             | Command::Models
             | Command::Sessions(_)
             | Command::Usage(_)
@@ -2363,6 +2365,9 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
                 init_tracing_simple("cli");
                 let _otel_guard = supercharge_telemetry::otel_layer::otel_guard();
                 return supercharge_pager::usage_cmd::run(usage_args);
+            }
+            Command::Browser(browser_args) => {
+                return supercharge_pager::browser_cmd::run(browser_args).await;
             }
             Command::Eval(eval_args) => {
                 init_tracing_simple("cli");
