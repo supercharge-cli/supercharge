@@ -8,11 +8,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoStaticStr};
 use supercharge_tools::implementations::codex;
-use supercharge_tools::implementations::supercharge_build;
-use supercharge_tools::implementations::supercharge_build_concise;
 use supercharge_tools::implementations::memory;
 use supercharge_tools::implementations::opencode;
 use supercharge_tools::implementations::search_tool;
+use supercharge_tools::implementations::supercharge_build;
+use supercharge_tools::implementations::supercharge_build_concise;
 use supercharge_tools::implementations::use_tool;
 use supercharge_tools::registry::types::{ToolConfig, ToolServerConfig};
 /// Process-global registry of externally-provided toolset presets.
@@ -224,7 +224,10 @@ fn native_toolset_presets() -> Vec<(&'static str, ToolServerConfig)> {
         ("supercharge-core", workspace_supercharge_build_toolset()),
         ("grok-build", workspace_supercharge_build_toolset()),
         ("supercharge-e2b", supercharge_e2b_toolset()),
-        ("supercharge-core-concise", supercharge_build_concise_toolset()),
+        (
+            "supercharge-core-concise",
+            supercharge_build_concise_toolset(),
+        ),
         ("supercharge-core-plan", supercharge_build_plan_toolset()),
         ("codex", codex_toolset()),
         ("explore", explore_toolset()),
@@ -265,7 +268,11 @@ pub fn toolset_for_preset(preset: &str) -> Option<ToolServerConfig> {
         .or_else(|| registered_toolset_preset(&normalized))
 }
 fn default_supercharge_build_toolset() -> ToolServerConfig {
-    supercharge_build_core_toolset_with(true, true)
+    let mut config = supercharge_build_core_toolset_with(true, true);
+    config
+        .tools
+        .extend(supercharge_tools::browser::maybe_local_browser_tool_configs());
+    config
 }
 fn default_agent_toolset() -> ToolServerConfig {
     supercharge_build_core_toolset(true)
@@ -719,7 +726,9 @@ impl BuiltinAgentName {
             Self::SuperchargeBuild => AgentDefinition::default_supercharge_build(),
             Self::SuperchargeBuildConcise => AgentDefinition::supercharge_build_concise(),
             Self::SuperchargeBuildPlan => AgentDefinition::supercharge_build_plan(),
-            Self::SuperchargeBuildPlanNoSubagents => AgentDefinition::supercharge_build_plan_no_subagents(),
+            Self::SuperchargeBuildPlanNoSubagents => {
+                AgentDefinition::supercharge_build_plan_no_subagents()
+            }
             Self::SuperchargeBuildAskUser => AgentDefinition::supercharge_build_ask_user(),
             Self::Codex => AgentDefinition::codex(),
             Self::Opencode => AgentDefinition::opencode(),
@@ -1401,7 +1410,10 @@ impl AgentDefinition {
     pub fn include_browser_verification(&self) -> bool {
         matches!(
             self.builtin_name,
-            Some(BuiltinAgentName::SuperchargeBuildPlan | BuiltinAgentName::SuperchargeBuildPlanNoSubagents)
+            Some(
+                BuiltinAgentName::SuperchargeBuildPlan
+                    | BuiltinAgentName::SuperchargeBuildPlanNoSubagents
+            )
         )
     }
     /// True iff this agent's wire format is non-interchangeable with the stock harness.
@@ -1423,12 +1435,18 @@ impl AgentDefinition {
         file_tools: Vec<supercharge_tools::registry::types::ToolConfig>,
     ) {
         const FILE_TOOL_SLOTS: &[[&str; 2]] = &[
-            ["SuperchargeBuild:read_file", "SuperchargeBuildHashline:hashline_read"],
+            [
+                "SuperchargeBuild:read_file",
+                "SuperchargeBuildHashline:hashline_read",
+            ],
             [
                 "SuperchargeBuild:search_replace",
                 "SuperchargeBuildHashline:hashline_edit",
             ],
-            ["SuperchargeBuild:grep", "SuperchargeBuildHashline:hashline_grep"],
+            [
+                "SuperchargeBuild:grep",
+                "SuperchargeBuildHashline:hashline_grep",
+            ],
         ];
         for tool in self.tool_config.tools.iter_mut() {
             let Some(slot) = FILE_TOOL_SLOTS
@@ -1727,6 +1745,57 @@ mod tests {
         assert!(explore.tools.len() < plan.tools.len());
         assert!(plan.tools.len() < gb.tools.len());
     }
+    fn toolset_has_local_browser(config: &ToolServerConfig) -> bool {
+        config
+            .tools
+            .iter()
+            .any(|tool| tool.id.ends_with(":local_browser_open"))
+    }
+    #[test]
+    fn local_browser_tools_are_gated_on_install_in_default_and_workspace_toolsets() {
+        let installed = supercharge_tools::browser::is_installed();
+        assert_eq!(
+            toolset_has_local_browser(&default_supercharge_build_toolset()),
+            installed
+        );
+        assert_eq!(
+            toolset_has_local_browser(&workspace_supercharge_build_toolset()),
+            installed
+        );
+        assert!(
+            !toolset_has_local_browser(&general_purpose_toolset()),
+            "general-purpose must not advertise local browser tools"
+        );
+        assert!(
+            !toolset_has_local_browser(&explore_toolset()),
+            "explore must not advertise local browser tools"
+        );
+        let e2b = supercharge_e2b_toolset();
+        assert!(
+            e2b.tools
+                .iter()
+                .any(|tool| tool.id.ends_with(":browser_navigate")),
+            "cloud browser tools stay on the E2B preset"
+        );
+        assert_eq!(toolset_has_local_browser(&e2b), installed);
+    }
+    #[test]
+    fn local_browser_tool_ids_do_not_collide_with_cloud_browser_ids() {
+        for id in supercharge_tools::browser::LOCAL_BROWSER_TOOL_IDS {
+            assert!(
+                !id.starts_with("browser_"),
+                "local id `{id}` collides with cloud browser_* wire ids"
+            );
+        }
+        let e2b = supercharge_e2b_toolset();
+        let e2b_ids: std::collections::HashSet<_> =
+            e2b.tools.iter().map(|tool| tool.id.as_str()).collect();
+        for config in supercharge_tools::browser::local_browser_tool_configs() {
+            if e2b_ids.contains(config.id.as_str()) {
+                panic!("local tool {} collides with an E2B tool id", config.id);
+            }
+        }
+    }
     fn feedback_tool_id() -> String {
         ToolConfig::from(&supercharge_build::SendFeedbackTool).id
     }
@@ -1864,8 +1933,20 @@ mod tests {
                     .as_str()
             )
         );
-        assert!(!ids.contains(ToolConfig::from(&supercharge_build::TaskOutputTool).id.as_str()));
-        assert!(!ids.contains(ToolConfig::from(&supercharge_build::KillTaskTool).id.as_str()));
+        assert!(
+            !ids.contains(
+                ToolConfig::from(&supercharge_build::TaskOutputTool)
+                    .id
+                    .as_str()
+            )
+        );
+        assert!(
+            !ids.contains(
+                ToolConfig::from(&supercharge_build::KillTaskTool)
+                    .id
+                    .as_str()
+            )
+        );
         assert!(!ids.contains(ToolConfig::from(&supercharge_build::TaskTool).id.as_str()));
         for t in &gc.tools {
             if t.id == ToolConfig::from(&supercharge_build::GetTerminalCommandOutputTool).id
@@ -2420,7 +2501,9 @@ description: Test default tool config
         .unwrap();
         assert!(!def.include_browser_verification());
         assert!(AgentDefinition::supercharge_build_plan().include_browser_verification());
-        assert!(AgentDefinition::supercharge_build_plan_no_subagents().include_browser_verification());
+        assert!(
+            AgentDefinition::supercharge_build_plan_no_subagents().include_browser_verification()
+        );
     }
     #[test]
     fn test_from_json_has_default_toolset_with_task_tool() {

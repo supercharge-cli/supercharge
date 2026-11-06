@@ -1,8 +1,8 @@
 use crate::{
     computer::types::{AsyncFileSystem, TerminalBackend},
     implementations::{
-        codex, supercharge_build, supercharge_build_concise, supercharge_build_hashline, opencode,
-        skills::types::SkillInfo,
+        codex, opencode, skills::types::SkillInfo, supercharge_build, supercharge_build_concise,
+        supercharge_build_hashline,
     },
     notification::ToolNotificationHandle,
     persistence::ResourcesPersistence,
@@ -637,14 +637,16 @@ impl ToolRegistryBuilder {
             mcp_file_input_preparation: false,
             sandbox_launch: None,
         };
-        b.register_with_params::<supercharge_build::BashTool, supercharge_build::bash::BashParams>();
+        b.register_with_params::<supercharge_build::BashTool, supercharge_build::bash::BashParams>(
+        );
         b.register_with_params::<supercharge_build::ReadFileTool, supercharge_build::read_file::ReadFileParams>();
         b.register_with_params::<
                 supercharge_build::SearchReplaceTool,
                 supercharge_build::search_replace::SearchReplaceParams,
             >();
         b.register_with_params::<supercharge_build::ListDirTool, supercharge_build::list_dir::ListDirParams>();
-        b.register_with_params::<supercharge_build::GrepTool, supercharge_build::grep::GrepParams>();
+        b.register_with_params::<supercharge_build::GrepTool, supercharge_build::grep::GrepParams>(
+        );
         b.register::<supercharge_build::KillTaskTool>();
         b.register::<supercharge_build::KillTerminalCommandTool>();
         b.register::<supercharge_build::TodoWriteTool>();
@@ -665,6 +667,12 @@ impl ToolRegistryBuilder {
         b.register::<supercharge_build::BrowserPressTool>();
         b.register::<supercharge_build::BrowserScreenshotTool>();
         b.register::<supercharge_build::BrowserHandoffTool>();
+        b.register::<crate::browser::LocalBrowserOpenTool>();
+        b.register::<crate::browser::LocalBrowserReadTool>();
+        b.register::<crate::browser::LocalBrowserClickTool>();
+        b.register::<crate::browser::LocalBrowserTypeTool>();
+        b.register::<crate::browser::LocalBrowserScreenshotTool>();
+        b.register::<crate::browser::LocalBrowserEvaluateTool>();
         b.register::<supercharge_build::e2b_desktop::DesktopObserveTool>();
         b.register::<supercharge_build::e2b_desktop::DesktopActionTool>();
         b.register::<supercharge_build::VectraBotTool>();
@@ -1009,7 +1017,9 @@ impl ToolRegistryBuilder {
         }
         let session_folder = crate::types::resources::SessionFolder(ctx.session_folder.clone());
         let feedback_drafts_path =
-            crate::implementations::supercharge_build::send_feedback::drafts_file_path(&session_folder.0);
+            crate::implementations::supercharge_build::send_feedback::drafts_file_path(
+                &session_folder.0,
+            );
         let renderer = TemplateRenderer::new(kind_to_name.clone(), kind_params.clone())
             .with_system_reminders_enabled(self.system_reminders_enabled)
             .with_feedback_drafts_path(feedback_drafts_path);
@@ -1104,10 +1114,12 @@ impl ToolRegistryBuilder {
                 }
             }
         }
-        if let crate::implementations::supercharge_build::web_fetch::WebFetchConfig::Enabled { params } =
-            &ctx.web_fetch_config
+        if let crate::implementations::supercharge_build::web_fetch::WebFetchConfig::Enabled {
+            params,
+        } = &ctx.web_fetch_config
         {
-            match crate::implementations::supercharge_build::web_fetch::WebFetchClient::new(params) {
+            match crate::implementations::supercharge_build::web_fetch::WebFetchClient::new(params)
+            {
                 Ok(client) => {
                     resources.insert(client);
                 }
@@ -1288,16 +1300,17 @@ impl ToolRegistryBuilder {
             };
         let shared_resources = resources.into_shared();
         if let (Some(cmd_rx), Some(cancel_token)) = (scheduler_cmd_rx, &scheduler_cancel_token) {
-            let actor = crate::implementations::supercharge_build::scheduler::actor::SchedulerActor {
-                resources: shared_resources.clone(),
-                resources_persistence: persistence.clone(),
-                notification_handle: scheduler_notification_handle,
-                cmd_rx,
-                cancel_token: cancel_token.clone(),
-                clock: Default::default(),
-                pending_removal: None,
-                blocked_expiries: Default::default(),
-            };
+            let actor =
+                crate::implementations::supercharge_build::scheduler::actor::SchedulerActor {
+                    resources: shared_resources.clone(),
+                    resources_persistence: persistence.clone(),
+                    notification_handle: scheduler_notification_handle,
+                    cmd_rx,
+                    cancel_token: cancel_token.clone(),
+                    clock: Default::default(),
+                    pending_removal: None,
+                    blocked_expiries: Default::default(),
+                };
             tokio::spawn(actor.run());
         }
         Ok(FinalizedToolset {
@@ -3027,6 +3040,13 @@ mod tests {
             "SuperchargeBuild:grep",
             "SuperchargeBuild:get_terminal_command_output",
             "SuperchargeBuild:kill_terminal_command",
+            "SuperchargeBuild:local_browser_open",
+            "SuperchargeBuild:local_browser_read",
+            "SuperchargeBuild:local_browser_click",
+            "SuperchargeBuild:local_browser_type",
+            "SuperchargeBuild:local_browser_screenshot",
+            "SuperchargeBuild:local_browser_evaluate",
+            "SuperchargeBuild:browser_navigate",
         ] {
             assert!(
                 builder.has_tool_id(id),
@@ -3781,9 +3801,8 @@ mod tests {
         };
         let errors = builder.validate_config(&config);
         assert!(
-            errors
-                .iter()
-                .any(|e| e.tool == "SuperchargeBuild:task" && e.message.contains("SuperchargeBuild:kill_task")),
+            errors.iter().any(|e| e.tool == "SuperchargeBuild:task"
+                && e.message.contains("SuperchargeBuild:kill_task")),
             "task tool should be rejected without kill_task: {errors:?}",
         );
     }
@@ -3817,10 +3836,8 @@ mod tests {
         };
         let errors = builder.validate_config(&config);
         assert!(
-            errors
-                .iter()
-                .any(|e| e.tool == "SuperchargeBuild:task"
-                    && e.message.contains("SuperchargeBuild:get_task_output")),
+            errors.iter().any(|e| e.tool == "SuperchargeBuild:task"
+                && e.message.contains("SuperchargeBuild:get_task_output")),
             "task tool should be rejected without get_task_output: {errors:?}",
         );
     }
@@ -4983,7 +5000,8 @@ mod tests {
     /// $schema and per-property descriptions are retained.
     #[test]
     fn generate_schema_strips_root_title_and_description() {
-        let schema = generate_schema::<crate::implementations::supercharge_build::bash::BashToolInput>();
+        let schema =
+            generate_schema::<crate::implementations::supercharge_build::bash::BashToolInput>();
         assert!(
             schema.get("title").is_none(),
             "root title (struct name) must be stripped: {schema}"

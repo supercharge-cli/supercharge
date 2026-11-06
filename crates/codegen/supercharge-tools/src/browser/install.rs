@@ -100,10 +100,14 @@ pub async fn install_latest() -> Result<PathBuf, BrowserInstallError> {
         )));
     };
     let archive = archive_name(stem);
-    let client = reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .build()?;
-    let release: serde_json::Value = client.get(RELEASES_API).send().await?.error_for_status()?.json().await?;
+    let client = reqwest::Client::builder().user_agent(USER_AGENT).build()?;
+    let release: serde_json::Value = client
+        .get(RELEASES_API)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
     let tag = release
         .get("tag_name")
         .and_then(|v| v.as_str())
@@ -129,7 +133,13 @@ pub async fn install_latest() -> Result<PathBuf, BrowserInstallError> {
         .and_then(|u| u.as_str())
         .ok_or_else(|| BrowserInstallError::Message("asset missing download URL".into()))?;
 
-    let bytes = client.get(url).send().await?.error_for_status()?.bytes().await?;
+    let bytes = client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
     let dir = browser_dir();
     std::fs::create_dir_all(&dir)?;
     let archive_path = dir.join(&archive);
@@ -166,7 +176,11 @@ pub async fn install_latest() -> Result<PathBuf, BrowserInstallError> {
 }
 
 fn find_binary(dir: &Path) -> Option<PathBuf> {
-    let name = if cfg!(windows) { "obscura.exe" } else { "obscura" };
+    let name = if cfg!(windows) {
+        "obscura.exe"
+    } else {
+        "obscura"
+    };
     for entry in walkdir_shallow(dir) {
         if entry.file_name().is_some_and(|n| n == name) && entry.is_file() {
             return Some(entry);
@@ -231,6 +245,17 @@ description: Use the local headless browser for interactive pages; prefer web_fe
 - Use the **browser** when the page needs JavaScript, login flows, clicks, typing, or a screenshot.
 - Keep the browser session short: navigate, extract what you need, then stop.
 - Never use the browser for `file://` URLs that reach outside the workspace you were asked about.
+
+# Callable tools
+
+These tools exist only after `supercharge browser install`. They are distinct from the cloud `browser_*` tools.
+
+- `local_browser_open` — open or navigate to a URL
+- `local_browser_read` — read visible page text
+- `local_browser_click` — click a CSS selector
+- `local_browser_type` — type into a CSS selector
+- `local_browser_screenshot` — capture a PNG screenshot
+- `local_browser_evaluate` — run JavaScript and return the value
 "#;
 
 /// Write the bundled browser skill under `$SUPERCHARGE_HOME/skills/browser/`.
@@ -251,5 +276,17 @@ mod tests {
         // Just ensures the match arms compile and return something coherent.
         let _ = asset_stem_for_host();
         assert!(supported_platforms_summary().contains("linux-x86_64"));
+    }
+
+    #[test]
+    fn bundled_skill_names_callable_local_browser_tools() {
+        for name in crate::browser::LOCAL_BROWSER_TOOL_IDS {
+            assert!(
+                BROWSER_SKILL.contains(&format!("`{name}`")),
+                "skill missing `{name}`"
+            );
+        }
+        assert!(!BROWSER_SKILL.contains("`browser_navigate`"));
+        assert!(!BROWSER_SKILL.contains("`browser_screenshot`"));
     }
 }
