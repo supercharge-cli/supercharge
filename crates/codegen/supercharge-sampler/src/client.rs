@@ -449,6 +449,8 @@ pub struct SamplingClient {
     header_injector: Option<crate::config::SharedHeaderInjector>,
     /// Set when `base_url` is agentrouter: the session id shared by its identity headers.
     agentrouter_session_id: Option<String>,
+    /// Stable conversation identity for documented inference session headers.
+    inference_session_id: String,
     /// Endpoint URL builder, resolved once from `base_url` and `query_params`.
     endpoint: EndpointTemplate,
     first_use_noted: Arc<AtomicBool>,
@@ -815,6 +817,13 @@ impl SamplingClient {
             bearer_resolver: config.bearer_resolver,
             header_injector: config.header_injector,
             agentrouter_session_id,
+            inference_session_id: config
+                .conversation_group_id
+                .as_ref()
+                .map(|id| id.as_ref().trim())
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned)
+                .unwrap_or_else(crate::opencode_inference::new_session_id),
             endpoint,
             first_use_noted: Arc::new(AtomicBool::new(false)),
         })
@@ -837,6 +846,9 @@ impl SamplingClient {
     /// The credential tail is captured at build time — see [`SentRequest`] for
     /// why a record-time re-read would race the recovery a 401 triggers.
     fn post(&self, url: impl reqwest::IntoUrl) -> SentRequest {
+        let url = url
+            .into_url()
+            .unwrap_or_else(|_| reqwest::Url::parse("http://invalid.invalid").expect("static"));
         if !self.first_use_noted.load(Ordering::Relaxed)
             && !self.first_use_noted.swap(true, Ordering::Relaxed)
         {
@@ -910,6 +922,17 @@ impl SamplingClient {
         // Fresh ids on every request so long sessions do not reuse one id (see agentrouter module).
         if self.agentrouter_session_id.is_some() {
             for (name, value) in crate::agentrouter::per_request_headers() {
+                if let (Ok(name), Ok(value)) =
+                    (HeaderName::from_str(name), HeaderValue::from_str(&value))
+                {
+                    headers.insert(name, value);
+                }
+            }
+        }
+        if crate::opencode_inference::is_canonical_inference_url(&url) {
+            for (name, value) in
+                crate::opencode_inference::identity_headers(&self.inference_session_id)
+            {
                 if let (Ok(name), Ok(value)) =
                     (HeaderName::from_str(name), HeaderValue::from_str(&value))
                 {
@@ -3366,6 +3389,125 @@ mod tests {
         assert!(!crate::agentrouter::is_agentrouter_base_url(
             "https://api.zenllm.org/v1"
         ));
+    }
+
+    fn opencode_config(base_url: &str) -> SamplerConfig {
+        SamplerConfig {
+            api_key: Some("test-key".to_string()),
+            base_url: base_url.to_string(),
+            model: "glm-5.3".to_string(),
+            context_window: 8192,
+            conversation_group_id: Some("conv-stable-1".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn opencode_post_sends_supercharge_ua_and_stable_session() {
+        let client = SamplingClient::new(opencode_config(
+            crate::opencode_inference::ZEN_CHAT_BASE_URL,
+        ))
+        .expect("build");
+        let url = format!(
+            "{}/chat/completions",
+            crate::opencode_inference::ZEN_CHAT_BASE_URL
+        );
+        let first = client.post(url.clone()).builder.build().expect("build");
+        let second = client.post(url).builder.build().expect("build");
+        let ua = first
+            .headers()
+            .get(USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .unwrap();
+        assert_eq!(ua, crate::opencode_inference::user_agent());
+        assert!(ua.starts_with("supercharge/"));
+        let session = first
+            .headers()
+            .get(crate::opencode_inference::SESSION_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .unwrap();
+        assert_eq!(session, "conv-stable-1");
+        assert_eq!(
+            first
+                .headers()
+                .get(crate::opencode_inference::SESSION_HEADER),
+            second
+                .headers()
+                .get(crate::opencode_inference::SESSION_HEADER)
+        );
+        assert!(!first.headers().contains_key("x-opencode-client"));
+        assert!(!first.headers().contains_key("x-opencode-project"));
+    }
+
+    #[test]
+    fn opencode_session_differs_across_clients_without_shared_context() {
+        let a = SamplingClient::new(SamplerConfig {
+            api_key: Some("k".into()),
+            base_url: crate::opencode_inference::GO_CHAT_BASE_URL.into(),
+            model: "glm-5.3-flash".into(),
+            context_window: 8192,
+            ..Default::default()
+        })
+        .expect("a");
+        let b = SamplingClient::new(SamplerConfig {
+            api_key: Some("k".into()),
+            base_url: crate::opencode_inference::GO_CHAT_BASE_URL.into(),
+            model: "glm-5.3-flash".into(),
+            context_window: 8192,
+            ..Default::default()
+        })
+        .expect("b");
+        let url = format!(
+            "{}/chat/completions",
+            crate::opencode_inference::GO_CHAT_BASE_URL
+        );
+        let ha = a
+            .post(url.clone())
+            .builder
+            .build()
+            .unwrap()
+            .headers()
+            .get(crate::opencode_inference::SESSION_HEADER)
+            .unwrap()
+            .clone();
+        let hb = b
+            .post(url)
+            .builder
+            .build()
+            .unwrap()
+            .headers()
+            .get(crate::opencode_inference::SESSION_HEADER)
+            .unwrap()
+            .clone();
+        assert_ne!(ha, hb);
+        assert!(!ha.to_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn opencode_headers_absent_on_lookalike_and_unrelated_hosts() {
+        for base in [
+            "https://opencode.ai.example/inference/openai/v1",
+            "https://api.example.com/v1",
+            "http://127.0.0.1:9/v1",
+        ] {
+            let client = SamplingClient::new(opencode_config(base)).expect("build");
+            let req = client
+                .post(format!("{base}/chat/completions"))
+                .builder
+                .build()
+                .expect("build");
+            assert!(
+                !req.headers()
+                    .contains_key(crate::opencode_inference::SESSION_HEADER),
+                "{base}"
+            );
+            let ua = req
+                .headers()
+                .get(USER_AGENT)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default();
+            assert_ne!(ua, crate::opencode_inference::user_agent(), "{base}");
+        }
     }
 
     // Regression: a past change dropped HeaderInjector (traceparent) from sampling requests.

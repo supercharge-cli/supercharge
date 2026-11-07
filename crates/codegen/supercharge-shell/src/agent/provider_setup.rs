@@ -307,6 +307,24 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         curated: &["zhipu/glm-5.1", "deepseek/deepseek-v3"],
     },
     SetupProviderProfile {
+        id: supercharge_sampler::opencode_inference::GO_PROVIDER_ID,
+        name: "OpenCode Go",
+        description: "Subscription inference via Chat Completions",
+        base_url: supercharge_sampler::opencode_inference::GO_CHAT_BASE_URL,
+        default_model: "glm-5.3-flash",
+        format: SetupWireFormat::Openai,
+        curated: &["glm-5.3-flash", "glm-5.2", "kimi-k2.7-code"],
+    },
+    SetupProviderProfile {
+        id: supercharge_sampler::opencode_inference::ZEN_PROVIDER_ID,
+        name: "OpenCode Zen",
+        description: "Pay-as-you-go inference via Chat Completions",
+        base_url: supercharge_sampler::opencode_inference::ZEN_CHAT_BASE_URL,
+        default_model: "glm-5.3",
+        format: SetupWireFormat::Openai,
+        curated: &["glm-5.3", "glm-5.3-flash", "minimax-m3"],
+    },
+    SetupProviderProfile {
         id: "agentrouter",
         name: "AgentRouter",
         description: "GPT Sol models — Responses API, ZCode identity headers sent automatically",
@@ -560,16 +578,33 @@ pub fn fetch_setup_provider_catalog(
         .map(str::to_owned)
         .unwrap_or_else(|| endpoints.api_base_url.clone());
     let normalized = normalize_provider_base_url(base_url.as_str())?;
-    let api_key = provider_setup_api_key_from_toml(&toml_config).unwrap_or_default();
+    let api_key = catalog_fetch_api_key(&toml_config);
     let format = setup_wire_format_from_config(&toml_config);
     let provider_id = setup_profile_id_from_config(&toml_config);
-    let models = fetch_provider_models(&normalized, &api_key, format, provider_id.as_deref())?;
+    let list_url = endpoints
+        .models_list_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty());
+    let models = fetch_provider_models_with_list_url(
+        &normalized,
+        &api_key,
+        format,
+        provider_id.as_deref(),
+        list_url,
+    )?;
     Ok(provider_models_to_catalog(
         models,
         &normalized,
         &api_key,
         format,
     ))
+}
+
+pub fn resolve_provider_models_list_url(base_url: &str, provider_id: Option<&str>) -> String {
+    supercharge_sampler::opencode_inference::models_list_url_for(provider_id, base_url)
+        .map(str::to_owned)
+        .unwrap_or_else(|| provider_models_list_url(base_url))
 }
 
 pub fn provider_models_list_url(base_url: &str) -> String {
@@ -612,6 +647,55 @@ fn is_non_chat_model(id: &str) -> bool {
         || lower.contains("audio")
         || lower.contains("speech")
         || lower.contains("transcri")
+        || lower.contains("jev")
+        || lower.contains("systemone")
+}
+
+fn model_entry_input_cost(entry: &Value) -> Option<f64> {
+    let cost = entry.get("cost").or_else(|| entry.get("pricing"));
+    match cost {
+        Some(Value::Object(map)) => map
+            .get("input")
+            .or_else(|| map.get("prompt"))
+            .and_then(Value::as_f64)
+            .or_else(|| {
+                map.get("input")
+                    .or_else(|| map.get("prompt"))
+                    .and_then(Value::as_u64)
+                    .map(|n| n as f64)
+            }),
+        Some(Value::Array(items)) => items.iter().find_map(|item| {
+            item.get("input")
+                .and_then(Value::as_f64)
+                .or_else(|| item.get("input").and_then(Value::as_u64).map(|n| n as f64))
+        }),
+        _ => None,
+    }
+}
+
+fn model_entry_free_flag(entry: &Value) -> bool {
+    matches!(
+        entry.get("free").or_else(|| entry.get("official_app_only")),
+        Some(Value::Bool(true))
+    )
+}
+
+/// Zen official-app-only chat models are not usable from this client.
+pub fn zen_official_app_only_model(entry: &Value, id: &str) -> bool {
+    if let Some(cost) = model_entry_input_cost(entry) {
+        return cost <= 0.0;
+    }
+    if model_entry_free_flag(entry) {
+        return true;
+    }
+    let lower = id.to_ascii_lowercase();
+    lower.ends_with("-free") || lower.contains("-free-")
+}
+
+pub fn zen_unsupported_model_message(id: &str) -> String {
+    format!(
+        "`{id}` is limited to the official application free tier. Use a paid OpenCode Zen model or OpenCode Go."
+    )
 }
 
 /// Name-based guess for whether a model accepts a thinking/reasoning parameter.
@@ -829,6 +913,10 @@ fn is_loopback_host(host: &str) -> bool {
 
 /// Parse an OpenAI- or Anthropic-compatible `/models` JSON body.
 pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
+    parse_openai_models_list_for(body, None)
+}
+
+fn parse_openai_models_list_for(body: &Value, provider_id: Option<&str>) -> Vec<ProviderModel> {
     let entries = body
         .get("data")
         .or_else(|| body.get("models"))
@@ -866,6 +954,11 @@ pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
         if id.is_empty() || id.len() > MAX_MODEL_ID_LEN || is_non_chat_model(id) {
             continue;
         }
+        if provider_id == Some(supercharge_sampler::opencode_inference::ZEN_PROVIDER_ID)
+            && zen_official_app_only_model(&entry, id)
+        {
+            continue;
+        }
         models.push(ProviderModel {
             id: id.to_owned(),
             name: name.to_owned(),
@@ -883,6 +976,7 @@ pub fn parse_openai_models_list(body: &Value) -> Vec<ProviderModel> {
 
 fn apply_catalog_auth(
     mut request: reqwest::blocking::RequestBuilder,
+    endpoint: &str,
     base_url: &str,
     api_key: &str,
     format: SetupWireFormat,
@@ -891,6 +985,13 @@ fn apply_catalog_auth(
     if supercharge_sampler::agentrouter::is_agentrouter_base_url(base_url) {
         let session_id = supercharge_sampler::agentrouter::new_session_id();
         for (name, value) in supercharge_sampler::agentrouter::static_identity_headers(&session_id)
+        {
+            request = request.header(name, value);
+        }
+    }
+    if supercharge_sampler::opencode_inference::is_canonical_inference_url_str(endpoint) {
+        let session_id = supercharge_sampler::opencode_inference::new_session_id();
+        for (name, value) in supercharge_sampler::opencode_inference::identity_headers(&session_id)
         {
             request = request.header(name, value);
         }
@@ -920,9 +1021,10 @@ fn fetch_models_once(
     base_url: &str,
     api_key: &str,
     format: SetupWireFormat,
+    provider_id: Option<&str>,
 ) -> Result<Vec<ProviderModel>, ProviderSetupError> {
     let client = crate::http::shared_startup_blocking_client();
-    let request = apply_catalog_auth(client.get(endpoint), base_url, api_key, format);
+    let request = apply_catalog_auth(client.get(endpoint), endpoint, base_url, api_key, format);
     let response = request
         .send()
         .map_err(|error| ProviderSetupError::Fetch(error.to_string()))?;
@@ -931,7 +1033,10 @@ fn fetch_models_once(
         .text()
         .map_err(|error| ProviderSetupError::Fetch(error.to_string()))?;
     if !status.is_success() {
-        let snippet = body.trim().chars().take(240).collect::<String>();
+        let snippet = redact_secret(body.trim(), api_key)
+            .chars()
+            .take(240)
+            .collect::<String>();
         return Err(ProviderSetupError::Fetch(if snippet.is_empty() {
             format!("provider returned HTTP {status}")
         } else {
@@ -940,7 +1045,7 @@ fn fetch_models_once(
     }
     let parsed: Value = serde_json::from_str(&body)
         .map_err(|error| ProviderSetupError::Fetch(format!("invalid models JSON: {error}")))?;
-    Ok(parse_openai_models_list(&parsed))
+    Ok(parse_openai_models_list_for(&parsed, provider_id))
 }
 
 /// Fetch the live catalog using the saved credential, or anonymously when absent.
@@ -950,6 +1055,16 @@ pub fn fetch_provider_models(
     api_key: &str,
     format: SetupWireFormat,
     provider_id: Option<&str>,
+) -> Result<Vec<ProviderModel>, ProviderSetupError> {
+    fetch_provider_models_with_list_url(base_url, api_key, format, provider_id, None)
+}
+
+pub fn fetch_provider_models_with_list_url(
+    base_url: &str,
+    api_key: &str,
+    format: SetupWireFormat,
+    provider_id: Option<&str>,
+    models_list_url: Option<&str>,
 ) -> Result<Vec<ProviderModel>, ProviderSetupError> {
     let mut api_key = api_key.to_owned();
     if provider_id == Some("nous") {
@@ -966,14 +1081,26 @@ pub fn fetch_provider_models(
     if api_key.len() > MAX_API_KEY_LEN {
         return Err(ProviderSetupError::ApiKeyTooLong);
     }
-    let endpoint = provider_models_list_url(&base_url);
-    let models = fetch_models_once(&endpoint, &base_url, api_key, format)?;
+    let endpoint = models_list_url
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| resolve_provider_models_list_url(&base_url, provider_id));
+    let models = fetch_models_once(&endpoint, &base_url, api_key, format, provider_id)?;
     if models.is_empty() {
         return Err(ProviderSetupError::Fetch(
             "provider returned no models".to_owned(),
         ));
     }
     Ok(models)
+}
+
+fn redact_secret(text: &str, secret: &str) -> String {
+    let secret = secret.trim();
+    if secret.is_empty() {
+        return text.to_owned();
+    }
+    text.replace(secret, "[redacted]")
 }
 
 pub fn persist_provider_setup(setup: &ProviderSetup) -> Result<(), ProviderSetupError> {
@@ -1065,7 +1192,10 @@ fn apply_provider_setup_to_document(
         endpoints.insert("models_base_url", toml_edit::value(base_url));
         endpoints.insert(
             "models_list_url",
-            toml_edit::value(provider_models_list_url(base_url)),
+            toml_edit::value(resolve_provider_models_list_url(
+                base_url,
+                (!provider_id.is_empty()).then_some(provider_id),
+            )),
         );
     }
     {
@@ -1144,7 +1274,7 @@ fn apply_provider_setup_to_document(
     // Browser sign-in and a pasted key are different saved entries. Writing one
     // must leave the other's credential table alone, and neither aliases a
     // process-wide MISTRAL_API_KEY.
-    if provider_id == "mistral" || provider_id == "mistral-auth" {
+    if uses_isolated_provider_credentials(provider_id) {
         let slots = document_table_mut(document, "provider_credentials")?;
         let slot = child_table_mut(
             slots,
@@ -1156,14 +1286,16 @@ fn apply_provider_setup_to_document(
         } else {
             slot.insert("api_key", toml_edit::value(api_key));
         }
-        slot.insert(
-            "mode",
-            toml_edit::value(if provider_id == "mistral-auth" {
-                "browser"
-            } else {
-                "api_key"
-            }),
-        );
+        if provider_id == "mistral" || provider_id == "mistral-auth" {
+            slot.insert(
+                "mode",
+                toml_edit::value(if provider_id == "mistral-auth" {
+                    "browser"
+                } else {
+                    "api_key"
+                }),
+            );
+        }
         slot.insert("base_url", toml_edit::value(base_url));
     }
     Ok(())
@@ -1290,6 +1422,26 @@ fn repoint_stale_role_models(
 
 /// Key stored for one Mistral setup entry. The active `setup` key is used only
 /// when that entry is the selected provider. The other entry's slot is ignored.
+fn uses_isolated_provider_credentials(provider_id: &str) -> bool {
+    matches!(
+        provider_id,
+        "mistral"
+            | "mistral-auth"
+            | supercharge_sampler::opencode_inference::GO_PROVIDER_ID
+            | supercharge_sampler::opencode_inference::ZEN_PROVIDER_ID
+    )
+}
+
+pub fn catalog_fetch_api_key(config: &toml::Value) -> String {
+    let id = setup_profile_id_from_config(config);
+    if let Some(id) = id.as_deref()
+        && uses_isolated_provider_credentials(id)
+    {
+        return isolated_provider_api_key(config, id).unwrap_or_default();
+    }
+    provider_setup_api_key_from_toml(config).unwrap_or_default()
+}
+
 pub fn isolated_provider_api_key(config: &toml::Value, provider_id: &str) -> Option<String> {
     let slotted = config
         .get("provider_credentials")
@@ -2210,6 +2362,7 @@ mod tests {
         let client = crate::http::shared_startup_blocking_client();
         let request = apply_catalog_auth(
             client.get("https://agentrouter.org/v1/models"),
+            "https://agentrouter.org/v1/models",
             "https://agentrouter.org/v1",
             "test-key",
             SetupWireFormat::Responses,
@@ -2239,6 +2392,7 @@ mod tests {
         let client = crate::http::shared_startup_blocking_client();
         let request = apply_catalog_auth(
             client.get("https://api.example.com/v1/models"),
+            "https://api.example.com/v1/models",
             "https://api.example.com/v1",
             "test-key",
             SetupWireFormat::Openai,
@@ -2973,6 +3127,232 @@ mod tests {
         .unwrap();
         let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "provider credentials must be owner-only");
+    }
+
+    #[test]
+    fn go_and_zen_profiles_are_separate_from_zenllm() {
+        let go = find_setup_provider("opencode-go").expect("go");
+        let zen = find_setup_provider("opencode-zen").expect("zen");
+        let zenllm = find_setup_provider("zenllm").expect("zenllm");
+        assert_eq!(go.name, "OpenCode Go");
+        assert_eq!(zen.name, "OpenCode Zen");
+        assert_eq!(
+            go.base_url,
+            supercharge_sampler::opencode_inference::GO_CHAT_BASE_URL
+        );
+        assert_eq!(
+            zen.base_url,
+            supercharge_sampler::opencode_inference::ZEN_CHAT_BASE_URL
+        );
+        assert_eq!(go.default_model, "glm-5.3-flash");
+        assert_eq!(zen.default_model, "glm-5.3");
+        assert_eq!(go.format, SetupWireFormat::Openai);
+        assert_eq!(zen.format, SetupWireFormat::Openai);
+        assert_eq!(zenllm.base_url, "https://api.zenllm.org/v1");
+        assert_eq!(
+            resolve_provider_models_list_url(go.base_url, Some(go.id)),
+            supercharge_sampler::opencode_inference::GO_MODELS_URL
+        );
+        assert_eq!(
+            resolve_provider_models_list_url(zen.base_url, Some(zen.id)),
+            supercharge_sampler::opencode_inference::ZEN_MODELS_URL
+        );
+        assert_ne!(
+            resolve_provider_models_list_url(go.base_url, Some(go.id)),
+            provider_models_list_url(go.base_url)
+        );
+        assert_eq!(
+            resolve_provider_models_list_url("http://127.0.0.1:9/v1", Some(go.id)),
+            "http://127.0.0.1:9/v1/models"
+        );
+    }
+
+    #[test]
+    fn go_and_zen_keys_stay_isolated_from_each_other_and_setup_global() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: supercharge_sampler::opencode_inference::GO_CHAT_BASE_URL.to_owned(),
+                api_key: "go-secret-key".to_owned(),
+                model_id: "glm-5.3-flash".to_owned(),
+                model_name: "GLM".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "opencode-go".to_owned(),
+            },
+        )
+        .unwrap();
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: supercharge_sampler::opencode_inference::ZEN_CHAT_BASE_URL.to_owned(),
+                api_key: "zen-secret-key".to_owned(),
+                model_id: "glm-5.3".to_owned(),
+                model_name: "GLM 5.3".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "opencode-zen".to_owned(),
+            },
+        )
+        .unwrap();
+        let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            isolated_provider_api_key(&parsed, "opencode-go").as_deref(),
+            Some("go-secret-key")
+        );
+        assert_eq!(
+            isolated_provider_api_key(&parsed, "opencode-zen").as_deref(),
+            Some("zen-secret-key")
+        );
+        assert_eq!(
+            active_setup_provider_id(&parsed).as_deref(),
+            Some("opencode-zen")
+        );
+        assert_eq!(catalog_fetch_api_key(&parsed), "zen-secret-key");
+        assert_ne!(catalog_fetch_api_key(&parsed), "go-secret-key");
+        assert_eq!(
+            parsed["endpoints"]["models_list_url"].as_str(),
+            Some(supercharge_sampler::opencode_inference::ZEN_MODELS_URL)
+        );
+        assert!(
+            !std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("OPENCODE_API_KEY")
+        );
+        let mistral = isolated_provider_api_key(&parsed, "mistral");
+        assert!(mistral.is_none() || mistral.as_deref() != Some("zen-secret-key"));
+    }
+
+    #[test]
+    fn zen_eligibility_drops_free_metadata_and_keeps_paid_and_unknown() {
+        let body = json!({
+            "data": [
+                {"id": "glm-5.3", "cost": {"input": 1.4, "output": 4.4}},
+                {"id": "glm-5.3-flash-free", "cost": {"input": 0, "output": 0}},
+                {"id": "mystery-model"},
+                {"id": "beam-free", "free": true},
+                {"id": "jev-1.13"}
+            ]
+        });
+        let zen = parse_openai_models_list_for(
+            &body,
+            Some(supercharge_sampler::opencode_inference::ZEN_PROVIDER_ID),
+        );
+        let ids: Vec<_> = zen.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["glm-5.3", "mystery-model"]);
+        let go = parse_openai_models_list_for(
+            &body,
+            Some(supercharge_sampler::opencode_inference::GO_PROVIDER_ID),
+        );
+        let go_ids: Vec<_> = go.iter().map(|m| m.id.as_str()).collect();
+        assert!(go_ids.contains(&"glm-5.3-flash-free"));
+        assert!(go_ids.contains(&"beam-free"));
+        assert!(!go_ids.contains(&"jev-1.13"));
+        assert!(zen_unsupported_model_message("glm-5.3-flash-free").contains("OpenCode Go"));
+    }
+
+    #[test]
+    fn go_catalog_fetch_uses_explicit_list_path_and_saved_key() {
+        let (models, requests) = with_models_server(
+            |request| {
+                if request.contains("get /inference/go/v1/models")
+                    && request.contains("authorization: bearer go-secret-key")
+                {
+                    (
+                        "200 OK",
+                        r#"{"data":[{"id":"glm-5.3-flash"},{"id":"beam-free"}]}"#,
+                    )
+                } else {
+                    ("404 Not Found", r#"{"error":"wrong path or key"}"#)
+                }
+            },
+            |base_url| {
+                let list = format!(
+                    "{}/inference/go/v1/models",
+                    base_url.trim_end_matches("/v1")
+                );
+                fetch_provider_models_with_list_url(
+                    base_url,
+                    "go-secret-key",
+                    SetupWireFormat::Openai,
+                    Some("opencode-go"),
+                    Some(&list),
+                )
+            },
+        );
+        let models = models.expect("catalog");
+        let ids: Vec<_> = models.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&"glm-5.3-flash"));
+        assert!(ids.contains(&"beam-free"));
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("get /inference/go/v1/models"));
+        assert!(requests[0].contains("authorization: bearer go-secret-key"));
+        assert!(!requests[0].contains("zen-secret-key"));
+    }
+
+    #[test]
+    fn zen_catalog_errors_redact_keys() {
+        let (result, _) = with_models_server(
+            |_| {
+                (
+                    "401 Unauthorized",
+                    r#"{"error":"bad go-secret-key-not-in-body"}"#,
+                )
+            },
+            |base_url| {
+                fetch_provider_models(
+                    base_url,
+                    "super-secret-zen-key",
+                    SetupWireFormat::Openai,
+                    Some("opencode-zen"),
+                )
+            },
+        );
+        let error = result.unwrap_err().to_string();
+        assert!(!error.contains("super-secret-zen-key"));
+    }
+
+    #[test]
+    fn catalog_auth_on_canonical_inference_uses_supercharge_identity() {
+        let client = crate::http::shared_startup_blocking_client();
+        let endpoint = supercharge_sampler::opencode_inference::GO_MODELS_URL;
+        let request = apply_catalog_auth(
+            client.get(endpoint),
+            endpoint,
+            supercharge_sampler::opencode_inference::GO_CHAT_BASE_URL,
+            "test-key",
+            SetupWireFormat::Openai,
+        )
+        .build()
+        .unwrap();
+        let ua = supercharge_sampler::opencode_inference::user_agent();
+        assert_eq!(
+            request
+                .headers()
+                .get("user-agent")
+                .and_then(|v| v.to_str().ok()),
+            Some(ua.as_str())
+        );
+        assert!(
+            request
+                .headers()
+                .contains_key(supercharge_sampler::opencode_inference::SESSION_HEADER)
+        );
+        assert!(!request.headers().contains_key("x-opencode-client"));
+        let request = apply_catalog_auth(
+            client.get("https://opencode.ai.example/inference/v1/models"),
+            "https://opencode.ai.example/inference/v1/models",
+            "https://opencode.ai.example/inference/openai/v1",
+            "test-key",
+            SetupWireFormat::Openai,
+        )
+        .build()
+        .unwrap();
+        assert!(
+            !request
+                .headers()
+                .contains_key(supercharge_sampler::opencode_inference::SESSION_HEADER)
+        );
     }
 }
 

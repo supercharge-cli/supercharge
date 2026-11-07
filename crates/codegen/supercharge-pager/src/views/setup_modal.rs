@@ -2476,4 +2476,29 @@ mod tests {
         );
         assert!(matches!(state.step, SetupStep::PickProvider));
     }
+
+    #[test]
+    fn setup_rows_include_opencode_go_and_zen_without_renaming_zenllm() {
+        let state = SetupModalState::new();
+        let names: Vec<_> = state
+            .provider_rows()
+            .iter()
+            .filter_map(|row| match row {
+                ProviderRow::Builtin(profile) => Some((profile.id, profile.name)),
+                _ => None,
+            })
+            .collect();
+        assert!(names.contains(&("opencode-go", "OpenCode Go")));
+        assert!(names.contains(&("opencode-zen", "OpenCode Zen")));
+        assert!(names.contains(&("zenllm", "ZenLLM")));
+        assert!(names.contains(&("mistral", "Mistral API Key")));
+        assert!(names.contains(&("mistral-auth", "Mistral Auth")));
+        assert_eq!(
+            names
+                .iter()
+                .filter(|(id, _)| *id == "opencode-go" || *id == "opencode-zen")
+                .count(),
+            2
+        );
+    }
 }

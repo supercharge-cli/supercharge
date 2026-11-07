@@ -23,6 +23,7 @@ pub mod dynamic_credentials;
 pub mod events;
 pub mod handle;
 pub mod metrics;
+pub mod opencode_inference;
 mod prewarm;
 mod request_compression;
 pub mod retry;
