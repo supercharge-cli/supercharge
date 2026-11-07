@@ -4976,6 +4976,7 @@ impl AppView {
     /// Produces redraws when there are running entries with animated accents.
     pub fn tick(&mut self) -> bool {
         let mut needs_redraw = false;
+        needs_redraw |= self.spin_mistral_credits();
         needs_redraw |= self.minimal_state.needs_frames();
         needs_redraw |= self.poll_clipboard_focus_tip();
         if matches!(self.active_view, ActiveView::Welcome) {
@@ -5320,6 +5321,32 @@ impl AppView {
         needs_redraw
     }
     /// Check if animation ticks should be scheduled.
+    fn mistral_credits_loading(&self) -> bool {
+        let loading = |modal: &crate::views::modal::ActiveModal| {
+            matches!(
+                modal,
+                crate::views::modal::ActiveModal::DocViewer { title, content, .. }
+                    if title == crate::slash::commands::credits::MODAL_TITLE
+                        && crate::slash::commands::credits::is_loading(content)
+            )
+        };
+        self.welcome_doc_viewer.as_ref().is_some_and(loading)
+            || self.agents.values().any(|agent| agent.active_modal.as_ref().is_some_and(loading))
+    }
+
+    fn spin_mistral_credits(&mut self) -> bool {
+        let mut spun = false;
+        if let Some(modal) = self.welcome_doc_viewer.as_mut() {
+            spun |= crate::slash::commands::credits::spin_loading_modal(modal);
+        }
+        for agent in self.agents.values_mut() {
+            if let Some(modal) = agent.active_modal.as_mut() {
+                spun |= crate::slash::commands::credits::spin_loading_modal(modal);
+            }
+        }
+        spun
+    }
+
     pub fn needs_animation(&self) -> bool {
         self.tick_demand() != TickDemand::None
     }
@@ -5331,6 +5358,9 @@ impl AppView {
     }
     fn view_tick_demand(&self) -> TickDemand {
         if self.pending_action.is_some() {
+            return TickDemand::Fast;
+        }
+        if self.mistral_credits_loading() {
             return TickDemand::Fast;
         }
         if self.minimal_state.needs_frames() {

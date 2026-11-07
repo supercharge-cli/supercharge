@@ -67,7 +67,6 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
             | Command::Memory(_)
             | Command::Eval(_)
             | Command::Browser(_)
-            | Command::Browser(_)
             | Command::Models
             | Command::Sessions(_)
             | Command::Usage(_)
@@ -111,6 +110,7 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
             | Command::Plugin(_)
             | Command::Memory(_)
             | Command::Eval(_)
+            | Command::Browser(_)
             | Command::Sessions(_)
             | Command::Usage(_)
             | Command::Setup { .. }

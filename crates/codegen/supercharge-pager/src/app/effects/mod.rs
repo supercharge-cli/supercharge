@@ -4680,6 +4680,20 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::FetchMistralCredits => {
+            tasks.spawn(async move {
+                let content = tokio::task::spawn_blocking(|| {
+                    let config = supercharge_shell::config::load_effective_config()
+                        .unwrap_or(toml::Value::Table(toml::map::Map::new()));
+                    supercharge_shell::agent::mistral_credits::credits_report_from_config(&config)
+                })
+                .await
+                .unwrap_or_else(|_| {
+                    "Balance unavailable: the usage lookup was interrupted.".to_string()
+                });
+                TaskResult::MistralCreditsReady { content }
+            });
+        }
         Effect::FetchBundleStatus => {
             let tx = acp_tx.clone();
             tasks

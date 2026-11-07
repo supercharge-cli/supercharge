@@ -730,6 +730,8 @@ pub enum Action {
     },
     /// `/usage`: session token and cost totals.
     ShowUsage,
+    /// `/credits`: open the Mistral balance popup and load it in the background.
+    ShowMistralCredits,
     /// Commit a read-only list of the queued prompts as a system block (`/queue`).
     /// This is what minimal mode uses in place of the `QueuePane`.
     ShowQueue,
@@ -2082,6 +2084,8 @@ pub enum Effect {
     },
     /// Fetch current bundle cache status via `x.ai/bundle/status`.
     FetchBundleStatus,
+    /// Read the selected Mistral plan and budget off the UI thread.
+    FetchMistralCredits,
     /// Fetch a bundled entry's raw content via `x.ai/bundle/entry/get`.
     FetchCatalogEntry {
         kind: String,
@@ -3357,6 +3361,10 @@ pub enum TaskResult {
     MistralBrowserFinished {
         generation: u64,
         result: Result<(), String>,
+    },
+    /// Background `/credits` lookup finished.
+    MistralCreditsReady {
+        content: String,
     },
 }
 #[cfg(test)]

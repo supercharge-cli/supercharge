@@ -26,6 +26,8 @@ pub const AUTH_API_BASE_URL: &str = "https://console.mistral.ai/api";
 pub const INFERENCE_BASE_URL: &str = "https://api.mistral.ai/v1";
 
 const POLL_INTERVAL: Duration = Duration::from_secs(3);
+/// A 429 on poll or exchange is a refusal, not a created key. Back off, then retry.
+const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(8);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Stop polling even if the server advertises a longer lifetime.
@@ -184,18 +186,24 @@ fn finish_attempt<T: SignInTransport>(
             ));
         }
         match poll_once(transport, &started.poll_url) {
-            Err(error) if error.code == SignInCode::PollFailed => {
+            Err(error)
+                if error.code == SignInCode::PollFailed || error.code == SignInCode::RateLimited =>
+            {
                 consecutive_poll_failures += 1;
                 if consecutive_poll_failures >= MAX_CONSECUTIVE_POLL_FAILURES {
                     return Err(error);
                 }
-                sleep_until(hooks, deadline)?;
+                sleep_until(
+                    hooks,
+                    deadline,
+                    error.code == SignInCode::RateLimited,
+                )?;
                 continue;
             }
             Err(error) => return Err(error),
             Ok(Poll::Pending) => {
                 consecutive_poll_failures = 0;
-                sleep_until(hooks, deadline)?;
+                sleep_until(hooks, deadline, false)?;
             }
             Ok(Poll::Expired) => {
                 return Err(SignInError::new(
@@ -227,13 +235,17 @@ fn finish_attempt<T: SignInTransport>(
                 }
                 // One exchange. A transport failure after the request is sent
                 // is uncertain: the key may already exist, so this is not retried.
-                return exchange_once(transport, &started.process_id, &token, verifier);
+                return exchange_once(transport, hooks, &started.process_id, &token, verifier);
             }
         }
     }
 }
 
-fn sleep_until(hooks: &SignInHooks, deadline: DateTime<Utc>) -> Result<(), SignInError> {
+fn sleep_until(
+    hooks: &SignInHooks,
+    deadline: DateTime<Utc>,
+    rate_limited: bool,
+) -> Result<(), SignInError> {
     let remaining = deadline - (hooks.now)();
     if remaining <= chrono::Duration::zero() {
         return Err(SignInError::new(
@@ -242,7 +254,12 @@ fn sleep_until(hooks: &SignInHooks, deadline: DateTime<Utc>) -> Result<(), SignI
         ));
     }
     let remaining = remaining.to_std().unwrap_or(hooks.poll_interval);
-    (hooks.sleep)(hooks.poll_interval.min(remaining));
+    let pause = if rate_limited {
+        hooks.poll_interval.max(RATE_LIMIT_BACKOFF)
+    } else {
+        hooks.poll_interval
+    };
+    (hooks.sleep)(pause.min(remaining));
     Ok(())
 }
 
@@ -400,6 +417,7 @@ fn poll_once<T: SignInTransport>(transport: &T, poll_url: &str) -> Result<Poll, 
 
 fn exchange_once<T: SignInTransport>(
     transport: &T,
+    hooks: &SignInHooks,
     process_id: &str,
     exchange_token: &str,
     verifier: &str,
@@ -425,18 +443,31 @@ fn exchange_once<T: SignInTransport>(
         "code_verifier": verifier,
     })
     .to_string();
-    let reply = match transport.call("POST", &url, Some(body)) {
-        Ok(reply) => reply,
-        Err(_) => {
-            return Err(SignInError::new(
-                SignInCode::ExchangeUncertain,
-                "Browser sign-in could not be confirmed. It was not retried, so a second key was not created. Start sign-in again.",
-            ));
+    // 429 means the exchange was refused. The same token can be sent again.
+    // A dropped response is different: the key may already exist, so that path
+    // stays one-shot.
+    let mut rate_limits = 0u32;
+    let reply = loop {
+        let reply = match transport.call("POST", &url, Some(body.clone())) {
+            Ok(reply) => reply,
+            Err(_) => {
+                return Err(SignInError::new(
+                    SignInCode::ExchangeUncertain,
+                    "Browser sign-in could not be confirmed. It was not retried, so a second key was not created. Start sign-in again.",
+                ));
+            }
+        };
+        if reply.status != 429 {
+            break reply;
         }
+        rate_limits += 1;
+        if rate_limits >= MAX_CONSECUTIVE_POLL_FAILURES {
+            return Err(rate_limited());
+        }
+        let deadline = (hooks.now)()
+            + chrono::Duration::from_std(RATE_LIMIT_BACKOFF).unwrap_or(chrono::Duration::seconds(8));
+        sleep_until(hooks, deadline, true)?;
     };
-    if reply.status == 429 {
-        return Err(rate_limited());
-    }
     if reply.status == 403 && workspace_denied(&reply.body) {
         return Err(SignInError::new(
             SignInCode::ExchangeFailed,
@@ -653,6 +684,7 @@ fn production_transport() -> Result<ReqwestTransport, SignInError> {
         .redirect(reqwest::redirect::Policy::none())
         .timeout(REQUEST_TIMEOUT)
         .connect_timeout(CONNECT_TIMEOUT)
+        .user_agent("Supercharge")
         .build()
         .map_err(|_| {
             SignInError::new(
@@ -1136,6 +1168,57 @@ mod tests {
     }
 
     #[test]
+    fn exchange_rate_limit_retries_then_accepts_the_key() {
+        let refusals = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let seen = std::sync::Arc::clone(&refusals);
+        let calls = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+        let recorded = std::sync::Arc::clone(&calls);
+        struct RetryExchange {
+            refusals: std::sync::Arc<std::sync::atomic::AtomicU32>,
+            calls: std::sync::Arc<Mutex<Vec<String>>>,
+        }
+        impl SignInTransport for RetryExchange {
+            fn call(
+                &self,
+                method: &str,
+                url: &str,
+                json_body: Option<String>,
+            ) -> Result<HttpReply, TransportError> {
+                self.calls.lock().unwrap().push(url.to_owned());
+                if method == "POST" && url.ends_with("/vibe/sign-in") {
+                    return ok_json(200, happy_start());
+                }
+                if method == "GET" {
+                    return ok_json(
+                        200,
+                        serde_json::json!({"status": "completed", "exchange_token": "exchange-secret"}),
+                    );
+                }
+                let n = self.refusals.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n < 2 {
+                    ok_json(429, serde_json::json!({"detail": "slow"}))
+                } else {
+                    let _ = json_body;
+                    ok_json(200, serde_json::json!({"api_key": "issued-after-wait"}))
+                }
+            }
+        }
+        let transport = RetryExchange {
+            refusals: seen,
+            calls: recorded,
+        };
+        let (_clock, hooks) = SignInHooks::virtual_clock(during_sign_in());
+        assert_eq!(authenticate(&transport, &hooks).unwrap(), "issued-after-wait");
+        let posts = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|url| url.contains("/exchange"))
+            .count();
+        assert_eq!(posts, 3);
+    }
+
+    #[test]
     fn expired_denied_missing_key_rate_limit_and_malformed() {
         let cases: Vec<(
             Box<dyn Fn(&str, &str, Option<&str>) -> Result<HttpReply, TransportError> + Send>,
@@ -1153,10 +1236,6 @@ mod tests {
                 Box::new(|_, _, _| ok_json(410, serde_json::json!({}))),
                 SignInCode::Expired,
             ),
-            (
-                Box::new(|_, _, _| ok_json(429, serde_json::json!({"detail": "slow-sk-secret"}))),
-                SignInCode::RateLimited,
-            ),
         ];
         for (step, code) in cases {
             let script = Script::new(vec![
@@ -1173,6 +1252,21 @@ mod tests {
             assert!(!error.to_string().contains("slow-sk-secret"));
             assert!(!format!("{error:?}").contains("slow"));
         }
+
+        let script = Script::new(vec![
+            Box::new(|_, _, _| ok_json(200, happy_start())),
+            Box::new(|_, _, _| ok_json(429, serde_json::json!({"detail": "slow-sk-secret"}))),
+            Box::new(|_, _, _| ok_json(429, serde_json::json!({"detail": "slow-sk-secret"}))),
+            Box::new(|_, _, _| ok_json(429, serde_json::json!({"detail": "slow-sk-secret"}))),
+        ]);
+        let (_c, hooks) = SignInHooks::virtual_clock(
+            DateTime::parse_from_rfc3339("2026-11-06T12:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+        );
+        let error = authenticate(&script, &hooks).unwrap_err();
+        assert_eq!(error.code, SignInCode::RateLimited);
+        assert!(!error.to_string().contains("slow-sk-secret"));
 
         let script = script_until_exchange(Box::new(|_, _, _| {
             ok_json(200, serde_json::json!({"detail": "no key"}))

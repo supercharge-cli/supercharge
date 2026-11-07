@@ -2069,6 +2069,17 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::MistralCreditsReady { content } => {
+            if let ActiveView::Agent(id) = app.active_view
+                && let Some(agent) = app.agents.get_mut(&id)
+                && let Some(modal) = agent.active_modal.as_mut()
+            {
+                crate::slash::commands::credits::finish_loading_modal(modal, content);
+            } else if let Some(modal) = app.welcome_doc_viewer.as_mut() {
+                crate::slash::commands::credits::finish_loading_modal(modal, content);
+            }
+            vec![]
+        }
         TaskResult::BundleStatusReady {
             has_cache,
             version,

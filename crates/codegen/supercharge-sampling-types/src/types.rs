@@ -618,9 +618,17 @@ pub enum FinishReason {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChatResponseMessage {
     pub role: Role,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::serde_helpers::string_or_text_parts"
+    )]
     pub content: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::serde_helpers::string_or_text_parts"
+    )]
     pub reasoning_content: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_calls: Vec<ToolCallResponse>,
@@ -643,6 +651,7 @@ pub struct ToolCallResponse {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ToolCallFunction {
     pub name: String,
+    #[serde(deserialize_with = "crate::serde_helpers::string_or_json")]
     pub arguments: String,
 }
 
@@ -741,6 +750,9 @@ pub struct ToolCallDelta {
     /// Only present in the first chunk (usually "function").
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// Some providers put the function name beside `function` instead of inside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// The function name and/or argument fragment.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub function: Option<ToolCallFunctionDelta>,
@@ -753,7 +765,11 @@ pub struct ToolCallFunctionDelta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Argument fragment (may be empty or partial JSON).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::serde_helpers::string_or_json_opt"
+    )]
     pub arguments: Option<String>,
 }
 
@@ -761,8 +777,17 @@ pub struct ToolCallFunctionDelta {
 pub struct ChatChunkDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<Role>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::serde_helpers::string_or_text_parts"
+    )]
     pub content: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::serde_helpers::string_or_text_parts"
+    )]
     pub reasoning_content: Option<String>,
     /// A JSON `null` deserializes as an empty vec.
     #[serde(

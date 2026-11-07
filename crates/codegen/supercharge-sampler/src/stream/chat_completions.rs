@@ -18,6 +18,35 @@ use crate::events::{SamplingChannel, SamplingErrorInfo, SamplingEvent};
 use crate::metrics::InferenceLatencyStats;
 use crate::types::RequestId;
 
+/// Later chunks sometimes repeat a prefix of the name, or send the next fragment.
+/// An empty fragment must not wipe a name that already arrived.
+fn merge_tool_name(current: &str, fragment: &str) -> String {
+    if current.is_empty() || fragment.starts_with(current) {
+        fragment.to_owned()
+    } else if current.ends_with(fragment) || current.starts_with(fragment) {
+        current.to_owned()
+    } else {
+        let mut merged = current.to_owned();
+        merged.push_str(fragment);
+        merged
+    }
+}
+
+/// Mistral sometimes streams a complete `arguments` object and never sends `function.name`.
+/// The shell schema for that payload is `run_terminal_cmd`.
+fn infer_tool_name_from_arguments(arguments: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(arguments).ok()?;
+    let object = value.as_object()?;
+    let command = object.get("command").and_then(serde_json::Value::as_str)?;
+    if command.trim().is_empty() {
+        return None;
+    }
+    if object.contains_key("file_path") || object.contains_key("old_string") {
+        return None;
+    }
+    Some("run_terminal_cmd".to_owned())
+}
+
 /// The output stream emits exactly one terminal event per request.
 /// Callers must not consume past the terminal event (the implementation `return`s after yielding it).
 pub fn stream_chat_completions<'a>(
@@ -200,14 +229,20 @@ pub fn stream_chat_completions<'a>(
                         id_for_event = Some(id);
                     }
                     if let Some(func) = tc_delta.function {
-                        if let Some(name) = func.name {
-                            entry.1 = name.clone();
-                            name_for_event = Some(name);
+                        if let Some(name) = func.name.filter(|name| !name.is_empty()) {
+                            entry.1 = merge_tool_name(&entry.1, &name);
+                            name_for_event = Some(entry.1.clone());
                         }
                         if let Some(args) = func.arguments {
                             entry.2.push_str(&args);
                             args_for_event = Some(args);
                         }
+                    }
+                    if entry.1.is_empty()
+                        && let Some(name) = tc_delta.name.filter(|name| !name.is_empty())
+                    {
+                        entry.1 = merge_tool_name(&entry.1, &name);
+                        name_for_event = Some(entry.1.clone());
                     }
 
                     yield SamplingEvent::ToolCallDelta {
@@ -266,15 +301,22 @@ pub fn stream_chat_completions<'a>(
         // ── Build the final response ─────────────────────────────────
         let mut tool_calls: Vec<ToolCall> = tool_call_acc
             .into_values()
-            .map(|(id, name, arguments)| ToolCall {
-                // Strict providers reject the follow-up tool message when its id is empty, so synthesize a stable one
-                id: std::sync::Arc::<str>::from(if id.is_empty() {
-                    format!("call_{}", uuid::Uuid::new_v4().simple())
+            .map(|(id, name, arguments)| {
+                let name = if name.is_empty() {
+                    infer_tool_name_from_arguments(&arguments).unwrap_or_default()
                 } else {
-                    id
-                }),
-                name,
-                arguments: std::sync::Arc::<str>::from(arguments),
+                    name
+                };
+                ToolCall {
+                    // Strict providers reject the follow-up tool message when its id is empty, so synthesize a stable one
+                    id: std::sync::Arc::<str>::from(if id.is_empty() {
+                        format!("call_{}", uuid::Uuid::new_v4().simple())
+                    } else {
+                        id
+                    }),
+                    name,
+                    arguments: std::sync::Arc::<str>::from(arguments),
+                }
             })
             .collect();
         if let Some((name, arguments)) = function_call_acc
@@ -609,6 +651,7 @@ mod tests {
                 index: 0,
                 id: Some("call_cut".into()),
                 kind: Some("function".into()),
+                name: None,
                 function: Some(ToolCallFunctionDelta {
                     name: Some("do_thing".into()),
                     arguments: Some("{\"x\": \"trunc".into()),
@@ -640,6 +683,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unnamed_command_payload_becomes_run_terminal_cmd() {
+        let raw = stream::iter::<Vec<Result<ChatCompletionChunk, SamplingError>>>(vec![Ok(
+            make_chunk(vec![ChatChunkDelta {
+                role: None,
+                content: None,
+                reasoning_content: None,
+                tool_calls: vec![ChunkToolCallDelta {
+                    index: 0,
+                    id: Some("call_shell".into()),
+                    kind: Some("function".into()),
+                    name: None,
+                    function: Some(ToolCallFunctionDelta {
+                        name: None,
+                        arguments: Some(
+                            r#"{"command":"find vibe -maxdepth 2 -type d","description":"list"}"#
+                                .into(),
+                        ),
+                    }),
+                }],
+                tool_call_id: None,
+                function_call: None,
+            }]),
+        )])
+        .boxed();
+        let events = collect(stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            Duration::from_secs(60),
+        ))
+        .await;
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                let calls = response.tool_calls();
+                assert_eq!(nth(calls, 0).name.as_str(), "run_terminal_cmd");
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn tool_call_stream_without_ids_gets_synthesized_id() {
         let mk = |id: Option<&str>, name: Option<&str>, args: &str| {
             make_chunk(vec![ChatChunkDelta {
@@ -650,6 +734,7 @@ mod tests {
                     index: 0,
                     id: id.map(Into::into),
                     kind: None,
+                    name: None,
                     function: Some(ToolCallFunctionDelta {
                         name: name.map(Into::into),
                         arguments: Some(args.into()),
@@ -698,6 +783,7 @@ mod tests {
                 index: 0,
                 id: Some("call_abc".into()),
                 kind: Some("function".into()),
+                name: None,
                 function: Some(ToolCallFunctionDelta {
                     name: Some("do_thing".into()),
                     arguments: Some("{\"x\":".into()),
@@ -715,6 +801,7 @@ mod tests {
                 index: 0,
                 id: None,
                 kind: None,
+                name: None,
                 function: Some(ToolCallFunctionDelta {
                     name: None,
                     arguments: Some("1}".into()),

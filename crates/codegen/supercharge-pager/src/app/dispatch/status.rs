@@ -640,6 +640,18 @@ pub(super) fn dispatch_open_tutorial(app: &mut AppView) -> Vec<Effect> {
     vec![]
 }
 
+pub(super) fn dispatch_show_mistral_credits(app: &mut AppView) -> Vec<Effect> {
+    if app.screen_mode.is_minimal() {
+        return vec![Effect::FetchMistralCredits];
+    }
+    dispatch_show_release_notes(
+        app,
+        crate::slash::commands::credits::MODAL_TITLE.to_string(),
+        crate::slash::commands::credits::loading_body(0),
+    );
+    vec![Effect::FetchMistralCredits]
+}
+
 pub(super) fn dispatch_show_release_notes(
     app: &mut AppView,
     title: String,

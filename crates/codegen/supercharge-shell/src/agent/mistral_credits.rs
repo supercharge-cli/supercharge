@@ -117,7 +117,16 @@ pub fn render_credits<T: CreditsTransport>(
             lines.push(unavailable("the budget request failed"));
         }
     }
-    lines.join("\n")
+    lines.join("\n\n")
+}
+
+fn fmt_amount(value: f64) -> String {
+    let text = format!("{value:.4}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+fn fmt_money(value: f64) -> String {
+    format!("{value:.2}")
 }
 
 fn render_whoami(reply: &CreditsReply) -> Vec<String> {
@@ -251,13 +260,34 @@ fn render_budget(reply: &CreditsReply, field: &str) -> Vec<String> {
             "API key pool"
         }
     )];
-    if let Some(used) = detail.get("usage_percentage").and_then(|v| v.as_f64()) {
-        lines.push(format!("Used: {used}%"));
+    let used_pct = detail.get("usage_percentage").and_then(|v| v.as_f64());
+    let limit = detail.get("initial_budget").and_then(|v| v.as_f64());
+    let currency = detail
+        .get("currency")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    if let Some(used) = used_pct {
+        lines.push(format!("Used: {}%", fmt_amount(used)));
     }
-    if let Some(limit) = detail.get("initial_budget").and_then(|v| v.as_f64()) {
-        match detail.get("currency").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
-            Some(currency) => lines.push(format!("Limit: {limit} {currency}")),
-            None => lines.push(format!("Limit: {limit} (the response did not name a currency)")),
+    if let (Some(used), Some(limit)) = (used_pct, limit) {
+        let spent = used * limit / 100.0;
+        match &currency {
+            Some(currency) => lines.push(format!("Spent: {} {currency}", fmt_money(spent))),
+            None => lines.push(format!(
+                "Spent: {} (the response did not name a currency)",
+                fmt_money(spent)
+            )),
+        }
+    }
+    if let Some(limit) = limit {
+        match &currency {
+            Some(currency) => lines.push(format!("Limit: {} {currency}", fmt_amount(limit))),
+            None => lines.push(format!(
+                "Limit: {} (the response did not name a currency)",
+                fmt_amount(limit)
+            )),
         }
     }
     if let Some(reset) = detail.get("reset_at").and_then(|v| v.as_str()) {
@@ -440,10 +470,11 @@ mode = "api_key"
         assert!(text.contains("Workspace: Personal"));
         assert!(text.contains("Subscription plan: INDIVIDUAL"));
         assert!(text.contains("Used: 42.5%"));
+        assert!(text.contains("Spent: 127.50 EUR"));
         assert!(text.contains("Limit: 300 EUR"));
         assert!(text.contains("Reset: 2026-11-01T00:00:00Z"));
-        assert!(!text.contains("50"));
         assert!(!text.contains("USD"));
+        assert!(!text.contains("3%"));
         assert!(!text.contains("auth-secret"));
         assert!(!text.contains("pasted-secret"));
         let calls = transport.calls.lock().unwrap();
@@ -471,6 +502,7 @@ mode = "api_key"
         let text = render_credits(&selection, &transport);
         assert!(text.contains("Limit: 80 EUR"));
         assert!(text.contains("Used: 10%"));
+        assert!(text.contains("Spent: 8.00 EUR"));
         assert!(!text.contains("Limit: 9"));
         assert!(transport.calls.lock().unwrap().iter().all(|(_, b)| b == "pasted-secret"));
     }

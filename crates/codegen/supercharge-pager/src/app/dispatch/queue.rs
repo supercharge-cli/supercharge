@@ -498,6 +498,27 @@ pub(super) fn maybe_drain_queue(agent: &mut AgentView) -> QueueDrain {
                 page_flip_entry: None,
             }
         }
+        QueueEntryKind::Command
+            if crate::slash::parse_invocation(&queued.text)
+                .is_none_or(|inv| inv.token != "compact") =>
+        {
+            agent.begin_local_turn(&prompt_id);
+            agent
+                .scrollback
+                .push_block(RenderBlock::user_prompt(&queued.text));
+            let prompt_idx = agent.scrollback.len().saturating_sub(1);
+            agent.scrollback.follow_new_turn(Some(prompt_idx), page_flip_on_send());
+            QueueDrain {
+                effects: vec![Effect::SendPrompt {
+                    agent_id,
+                    session_id,
+                    text: queued.text,
+                    prompt_id,
+                    skill_token_ranges: queued.skill_token_ranges,
+                }],
+                page_flip_entry: None,
+            }
+        }
         QueueEntryKind::Command => {
             agent.session.start_command(AgentCommand::Compact);
             // Compact owns the pane; a leftover wake marker must not shadow stop.
