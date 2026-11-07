@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "assert_matches"
-version = "1.5.0"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
@@ -727,7 +727,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "autocfg"
-version = "1.5.0"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
@@ -1584,7 +1584,7 @@ dependencies = [
 
 [[package]]
 name = "byteorder"
-version = "1.5.0"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
@@ -2271,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.5.0"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
@@ -6111,7 +6111,7 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.5.0"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
@@ -11586,7 +11586,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-pager"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "agent-client-protocol",
  "ansi-to-tui",
@@ -11693,7 +11693,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-pager-bin"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -12358,7 +12358,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-superagent"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -12741,7 +12741,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-version"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "semver",
 ]
