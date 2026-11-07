@@ -623,6 +623,7 @@ fn available_commands_orders_builtins_first() {
             "flush",
             "dream",
             "memory",
+            "credits",
             "context",
             "hooks-trust",
             "hooks-list",

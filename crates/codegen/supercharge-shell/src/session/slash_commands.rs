@@ -142,6 +142,16 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         },
     },
     BuiltinCommand {
+        name: "credits",
+        description: "Show the selected Mistral account plan and usage balance",
+        argument_hint: None,
+        aliases: &[],
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        resolve: |_args| BuiltinAction::Credits,
+    },
+    BuiltinCommand {
         name: "context",
         description: "Show context window usage and session stats",
         argument_hint: None,
@@ -491,6 +501,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "context",
     "copy",
     "cost",
+    "credits",
     "dashboard",
     "debug",
     "delete",
@@ -1352,6 +1363,7 @@ pub(super) enum BuiltinAction {
         name: String,
         input: String,
     },
+    Credits,
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
@@ -1389,6 +1401,7 @@ impl BuiltinAction {
             BuiltinAction::DeepResearch { .. } => "deep-research",
             BuiltinAction::WorkflowManage { .. } => "workflow",
             BuiltinAction::WorkflowLaunch { .. } => "workflow",
+            BuiltinAction::Credits => "credits",
         }
     }
     pub(crate) fn args_provided(&self) -> bool {
@@ -1426,6 +1439,7 @@ impl BuiltinAction {
             BuiltinAction::DeepResearch { .. } => true,
             BuiltinAction::WorkflowManage { .. } => true,
             BuiltinAction::WorkflowLaunch { input, .. } => !input.is_empty(),
+            BuiltinAction::Credits => false,
         }
     }
 }

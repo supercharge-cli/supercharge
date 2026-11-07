@@ -1244,6 +1244,12 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::PersistImageProviderSetup { setup, generation } => {
             vec![Effect::PersistImageProviderSetup { setup, generation }]
         }
+        Action::StartMistralBrowser { generation } => {
+            vec![Effect::StartMistralBrowser { generation }]
+        }
+        Action::WaitMistralBrowser { generation } => {
+            vec![Effect::WaitMistralBrowser { generation }]
+        }
         Action::StartNousDeviceLogin { generation } => {
             vec![Effect::StartNousDeviceLogin { generation }]
         }

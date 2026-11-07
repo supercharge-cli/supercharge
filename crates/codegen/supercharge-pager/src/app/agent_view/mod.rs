@@ -1898,6 +1898,38 @@ pub(super) fn apply_setup_outcome(
                 InputOutcome::Action(Action::CopyText(url))
             }
         }
+        SetupOutcome::StartMistralBrowser { generation } => {
+            InputOutcome::Action(Action::StartMistralBrowser { generation })
+        }
+        SetupOutcome::WaitMistralBrowser { generation } => {
+            InputOutcome::Action(Action::WaitMistralBrowser { generation })
+        }
+        SetupOutcome::OpenMistralSignInUrl => {
+            let url = match &agent.active_modal {
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                    state.browser_sign_in_url.clone()
+                }
+                _ => String::new(),
+            };
+            if url.is_empty() {
+                InputOutcome::Unchanged
+            } else {
+                InputOutcome::Action(Action::OpenUrl(url))
+            }
+        }
+        SetupOutcome::CopyMistralSignInUrl => {
+            let url = match &agent.active_modal {
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                    state.browser_sign_in_url.clone()
+                }
+                _ => String::new(),
+            };
+            if url.is_empty() {
+                InputOutcome::Unchanged
+            } else {
+                InputOutcome::Action(Action::CopyText(url))
+            }
+        }
         SetupOutcome::StartNousDeviceLogin { generation } => {
             InputOutcome::Action(Action::StartNousDeviceLogin { generation })
         }

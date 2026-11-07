@@ -13,6 +13,8 @@ pub(crate) mod handlers;
 pub use handlers::context_window::{format_context_window, parse_context_window};
 pub mod image_provider;
 pub mod init;
+pub mod mistral_browser_sign_in;
+pub mod mistral_credits;
 pub mod model_providers;
 pub mod mvp_agent;
 pub mod nous_oauth;

@@ -2312,6 +2312,80 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         TaskResult::FeatureOverridePersisted { feature, result } => {
             super::settings::handle_feature_override_persisted(app, feature, result)
         }
+        TaskResult::MistralBrowserStarted { generation, result } => {
+            let mut open_url = None;
+            let next = get_active_agent_mut(app).and_then(|agent| {
+                let crate::views::modal::ActiveModal::ProviderSetup { state } =
+                    agent.active_modal.as_mut()?
+                else {
+                    return None;
+                };
+                match result {
+                    Ok(()) => {
+                        open_url = supercharge_shell::agent::mistral_browser_sign_in::sign_in_url(
+                            generation,
+                        );
+                        state
+                            .apply_mistral_browser_started(generation)
+                            .map(|outcome| match outcome {
+                                crate::views::setup_modal::SetupOutcome::WaitMistralBrowser {
+                                    generation,
+                                } => Action::WaitMistralBrowser { generation },
+                                _ => Action::WaitMistralBrowser { generation },
+                            })
+                    }
+                    Err(message) => {
+                        state.browser_return = true;
+                        state.step = crate::views::setup_modal::SetupStep::FetchError { message };
+                        None
+                    }
+                }
+            });
+            let mut effects = vec![];
+            if let Some(url) = open_url {
+                effects.extend(crate::app::dispatch::router::dispatch(
+                    Action::OpenUrl(url),
+                    app,
+                ));
+            }
+            if let Some(action) = next {
+                effects.extend(crate::app::dispatch::router::dispatch(action, app));
+            }
+            effects
+        }
+        TaskResult::MistralBrowserFinished { generation, result } => {
+            let next = get_active_agent_mut(app).and_then(|agent| {
+                let crate::views::modal::ActiveModal::ProviderSetup { state } =
+                    agent.active_modal.as_mut()?
+                else {
+                    return None;
+                };
+                if !matches!(
+                    state.step,
+                    crate::views::setup_modal::SetupStep::BrowserSignIn
+                ) {
+                    return None;
+                }
+                match state.apply_mistral_browser_finished(generation, result) {
+                    Some(crate::views::setup_modal::SetupOutcome::Fetch {
+                        base_url,
+                        api_key,
+                        format,
+                        provider_id,
+                        generation,
+                    }) => Some(Action::FetchProviderModels {
+                        base_url,
+                        api_key,
+                        format,
+                        provider_id,
+                        generation,
+                    }),
+                    _ => None,
+                }
+            });
+            next.map(|action| crate::app::dispatch::router::dispatch(action, app))
+                .unwrap_or_default()
+        }
         TaskResult::NousDeviceStarted { generation, result } => {
             let mut open_url = None;
             let next = get_active_agent_mut(app).and_then(|agent| {

@@ -39,6 +39,10 @@ pub enum SetupStep {
     BaseUrl,
     PickFormat,
     ApiKey,
+    /// Mistral: browser sign-in or a pasted API key.
+    MistralAuthChoice,
+    /// Waiting on the Mistral console browser sign-in.
+    BrowserSignIn,
     /// Nous Portal RFC 8628 device-code login (free-tier JWTs).
     DeviceAuth,
     Fetching,
@@ -83,6 +87,10 @@ pub struct SetupModalState {
     device_user_code: String,
     device_verification_uri: String,
     device_status: String,
+    pub(crate) browser_sign_in_url: String,
+    browser_status: String,
+    /// Fetch errors from browser sign-in return to the Mistral choice step.
+    pub(crate) browser_return: bool,
     /// Typed model id waiting for a second Enter (not in the live/catalog list).
     pending_unknown: Option<String>,
     /// Live `/models` fetch is in flight while a seeded catalog is already shown.
@@ -110,6 +118,16 @@ pub enum SetupOutcome {
         model_id: String,
         effort: Option<String>,
     },
+    /// Start Mistral console browser sign-in (PKCE). The URL is kept off this value.
+    StartMistralBrowser {
+        generation: u64,
+    },
+    /// Poll and exchange off the UI thread. The issued key stays in the sign-in session.
+    WaitMistralBrowser {
+        generation: u64,
+    },
+    OpenMistralSignInUrl,
+    CopyMistralSignInUrl,
     /// Start Nous Portal device-code OAuth.
     StartNousDeviceLogin {
         generation: u64,
@@ -206,6 +224,9 @@ impl SetupModalState {
             device_user_code: String::new(),
             device_verification_uri: String::new(),
             device_status: String::new(),
+            browser_sign_in_url: String::new(),
+            browser_status: String::new(),
+            browser_return: false,
             pending_unknown: None,
             live_refreshing: false,
         }
@@ -528,6 +549,72 @@ impl SetupModalState {
         }
     }
 
+    pub fn apply_mistral_browser_started(&mut self, generation: u64) -> Option<SetupOutcome> {
+        if self.generation != generation {
+            return None;
+        }
+        self.browser_sign_in_url =
+            supercharge_shell::agent::mistral_browser_sign_in::sign_in_url(generation)
+                .unwrap_or_default();
+        self.browser_status = if self.browser_sign_in_url.is_empty() {
+            "Waiting for browser sign-in. If the page did not open, cancel and try again.".into()
+        } else {
+            "Finish sign-in in the browser. If it did not open, use the link below.".into()
+        };
+        self.step = SetupStep::BrowserSignIn;
+        Some(SetupOutcome::WaitMistralBrowser { generation })
+    }
+
+    pub fn apply_mistral_browser_finished(
+        &mut self,
+        generation: u64,
+        result: Result<(), String>,
+    ) -> Option<SetupOutcome> {
+        if self.generation != generation {
+            return None;
+        }
+        match result {
+            Ok(()) => {
+                let Some(api_key) =
+                    supercharge_shell::agent::mistral_browser_sign_in::take_api_key(generation)
+                else {
+                    self.browser_return = true;
+                    self.step = SetupStep::FetchError {
+                        message: "Browser sign-in finished without an API key.".into(),
+                    };
+                    return None;
+                };
+                self.api_key.set_text(api_key);
+                self.api_key_prefilled = false;
+                self.api_key_owner = None;
+                self.browser_status = "Signed in. Fetching models…".into();
+                self.generation = next_generation();
+                self.step = SetupStep::Fetching;
+                match normalize_provider_base_url(self.base_url.text()) {
+                    Ok(base_url) => Some(SetupOutcome::Fetch {
+                        base_url,
+                        api_key: self.api_key.text().to_owned(),
+                        format: self.format,
+                        provider_id: self.provider_id.clone(),
+                        generation: self.generation,
+                    }),
+                    Err(error) => {
+                        self.browser_return = true;
+                        self.step = SetupStep::FetchError {
+                            message: error.to_string(),
+                        };
+                        None
+                    }
+                }
+            }
+            Err(message) => {
+                self.browser_return = true;
+                self.step = SetupStep::FetchError { message };
+                None
+            }
+        }
+    }
+
     pub fn device_login_url(&self) -> &str {
         if self.device_verification_uri.is_empty() {
             "https://portal.nousresearch.com/oauth/device"
@@ -555,6 +642,18 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
             | SetupStep::Fetching
             | SetupStep::Saving
             | SetupStep::DeviceAuth => SetupOutcome::Close,
+            SetupStep::MistralAuthChoice => {
+                state.step = SetupStep::PickProvider;
+                state.selected = 0;
+                SetupOutcome::Changed
+            }
+            SetupStep::BrowserSignIn => {
+                supercharge_shell::agent::mistral_browser_sign_in::cancel_live(state.generation);
+                state.browser_status.clear();
+                state.step = SetupStep::PickProvider;
+                state.selected = 0;
+                SetupOutcome::Changed
+            }
             SetupStep::BaseUrl => {
                 state.step = SetupStep::PickProvider;
                 state.filter.reset();
@@ -573,6 +672,11 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
             SetupStep::ApiKey | SetupStep::FetchError { .. } => {
                 if state.picker_only {
                     return SetupOutcome::Close;
+                }
+                if state.browser_return && state.provider_id == "mistral-auth" {
+                    state.step = SetupStep::PickProvider;
+                    state.selected = 0;
+                    return SetupOutcome::Changed;
                 }
                 if state.kind == SetupKind::Chat {
                     pick_format_or_api_key(state);
@@ -610,6 +714,8 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
 
     match &state.step {
         SetupStep::Fetching | SetupStep::Saving => SetupOutcome::Unchanged,
+        SetupStep::MistralAuthChoice => handle_mistral_auth_choice(state, key),
+        SetupStep::BrowserSignIn => handle_browser_sign_in(state, key),
         SetupStep::DeviceAuth => handle_device_auth(state, key),
         SetupStep::PickProvider => handle_pick_provider(state, key),
         SetupStep::BaseUrl => handle_base_url(state, key),
@@ -617,6 +723,11 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
         SetupStep::ApiKey => handle_api_key(state, key),
         SetupStep::FetchError { .. } => {
             if matches!(key.code, KeyCode::Enter) {
+                if state.browser_return && state.provider_id == "mistral-auth" {
+                    state.step = SetupStep::PickProvider;
+                    state.selected = 0;
+                    return SetupOutcome::Changed;
+                }
                 if state.format_only {
                     pick_format_or_api_key(state);
                     return SetupOutcome::Changed;
@@ -648,7 +759,10 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
             }
             _ => SetupOutcome::Changed,
         },
-        SetupStep::PickEffort | SetupStep::PickFormat => SetupOutcome::Unchanged,
+        SetupStep::PickEffort
+        | SetupStep::PickFormat
+        | SetupStep::MistralAuthChoice
+        | SetupStep::BrowserSignIn => SetupOutcome::Unchanged,
         SetupStep::BaseUrl => match state.base_url.insert_paste(text) {
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
@@ -735,6 +849,53 @@ fn handle_pick_format(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutco
     SetupOutcome::Changed
 }
 
+fn handle_mistral_auth_choice(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
+    match key.code {
+        KeyCode::Up => {
+            state.selected = state.selected.saturating_sub(1);
+            SetupOutcome::Changed
+        }
+        KeyCode::Down => {
+            state.selected = (state.selected + 1).min(1);
+            SetupOutcome::Changed
+        }
+        KeyCode::Enter => {
+            if state.selected == 0 {
+                state.generation = next_generation();
+                state.browser_return = true;
+                state.browser_status = "Starting browser sign-in…".into();
+                state.api_key.set_text("");
+                state.api_key_prefilled = false;
+                state.api_key_owner = None;
+                state.step = SetupStep::BrowserSignIn;
+                SetupOutcome::StartMistralBrowser {
+                    generation: state.generation,
+                }
+            } else {
+                state.browser_return = false;
+                state.selected = 0;
+                pick_format_or_api_key(state);
+                SetupOutcome::Changed
+            }
+        }
+        _ => SetupOutcome::Unchanged,
+    }
+}
+
+fn handle_browser_sign_in(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
+    match key.code {
+        KeyCode::Enter | KeyCode::Char('o') | KeyCode::Char('O') => {
+            SetupOutcome::OpenMistralSignInUrl
+        }
+        KeyCode::Char('c') | KeyCode::Char('C')
+            if !key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            SetupOutcome::CopyMistralSignInUrl
+        }
+        _ => SetupOutcome::Unchanged,
+    }
+}
+
 fn handle_device_auth(_state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
     match key.code {
         KeyCode::Enter | KeyCode::Char('o') | KeyCode::Char('O') => SetupOutcome::OpenNousLoginUrl,
@@ -769,6 +930,21 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.base_url.set_text(profile.base_url);
                 state.filter.reset();
                 state.selected = 0;
+                if profile.id == "mistral-auth" {
+                    state.browser_return = false;
+                    state.browser_sign_in_url.clear();
+                    state.browser_status = "Starting browser sign-in…".into();
+                    // Browser auth mints its own key. Drop any prefilled paste
+                    // or previously saved key so it cannot be submitted here.
+                    state.api_key.set_text("");
+                    state.api_key_prefilled = false;
+                    state.api_key_owner = None;
+                    state.generation = next_generation();
+                    state.step = SetupStep::BrowserSignIn;
+                    return SetupOutcome::StartMistralBrowser {
+                        generation: state.generation,
+                    };
+                }
                 if profile.id == "nous" {
                     if let Ok(token) = supercharge_shell::agent::nous_oauth::resolve_access_token() {
                         // Never save the previous provider's key against the Nous endpoint.
@@ -1094,6 +1270,8 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
         SetupStep::BaseUrl => format!("{prefix}  ·  base URL"),
         SetupStep::PickFormat => format!("{prefix}  ·  API format"),
         SetupStep::ApiKey => format!("{prefix}  ·  API key"),
+        SetupStep::MistralAuthChoice => format!("{prefix}  ·  Mistral sign-in"),
+        SetupStep::BrowserSignIn => format!("{prefix}  ·  browser sign-in"),
         SetupStep::DeviceAuth => format!("{prefix}  ·  Nous Portal login"),
         SetupStep::Fetching => format!("{prefix}  ·  fetching models"),
         SetupStep::FetchError { .. } => format!("{prefix}  ·  error"),
@@ -1136,6 +1314,30 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
             state.custom_model.text(),
             true,
         ),
+        SetupStep::MistralAuthChoice => {
+            render_status(
+                buf,
+                inner,
+                &theme,
+                "Choose Mistral Auth or Mistral API Key from the provider list.",
+            );
+        }
+        SetupStep::BrowserSignIn => {
+            let url = if state.browser_sign_in_url.is_empty() {
+                "(link appears when sign-in starts)"
+            } else {
+                state.browser_sign_in_url.as_str()
+            };
+            render_status(
+                buf,
+                inner,
+                &theme,
+                &format!(
+                    "{}\n\n{url}\n\nEnter/o opens the link  ·  c copies it  ·  Esc cancels",
+                    state.browser_status
+                ),
+            );
+        }
         SetupStep::DeviceAuth => {
             let uri = if state.device_verification_uri.is_empty() {
                 "https://portal.nousresearch.com/oauth/device"
@@ -1227,6 +1429,40 @@ fn shortcuts_for(step: &SetupStep) -> Vec<Shortcut<'static>> {
             },
             Shortcut {
                 label: "Esc close",
+                clickable: false,
+                id: 2,
+            },
+        ],
+        SetupStep::MistralAuthChoice => vec![
+            Shortcut {
+                label: "↑/↓ choose",
+                clickable: false,
+                id: 3,
+            },
+            Shortcut {
+                label: "Enter continue",
+                clickable: false,
+                id: 1,
+            },
+            Shortcut {
+                label: "Esc back",
+                clickable: false,
+                id: 2,
+            },
+        ],
+        SetupStep::BrowserSignIn => vec![
+            Shortcut {
+                label: "o open",
+                clickable: false,
+                id: 1,
+            },
+            Shortcut {
+                label: "c copy",
+                clickable: false,
+                id: 3,
+            },
+            Shortcut {
+                label: "Esc cancel",
                 clickable: false,
                 id: 2,
             },
@@ -2180,5 +2416,64 @@ mod tests {
             }
             other => panic!("expected save, got {other:?}"),
         }
+    }
+
+    fn select_provider(state: &mut SetupModalState, id: &str) {
+        let index = state
+            .provider_rows()
+            .iter()
+            .position(|row| matches!(row, ProviderRow::Builtin(p) if p.id == id))
+            .expect(id);
+        state.selected = index;
+        handle_setup_key(state, &enter());
+    }
+
+    #[test]
+    fn mistral_offers_browser_sign_in_and_keeps_paste_fallback() {
+        let mut state = SetupModalState::new();
+        let names: Vec<_> = state
+            .provider_rows()
+            .iter()
+            .filter_map(|row| match row {
+                ProviderRow::Builtin(profile) => Some(profile.name),
+                _ => None,
+            })
+            .collect();
+        assert!(names.contains(&"Mistral Auth"));
+        assert!(names.contains(&"Mistral API Key"));
+        select_provider(&mut state, "mistral");
+        assert_eq!(state.provider_id, "mistral");
+        assert!(matches!(state.step, SetupStep::PickFormat));
+        handle_setup_key(&mut state, &enter());
+        assert!(matches!(state.step, SetupStep::ApiKey));
+        for ch in "pasted-key".chars() {
+            handle_setup_key(&mut state, &char_key(ch));
+        }
+        match handle_setup_key(&mut state, &enter()) {
+            SetupOutcome::Fetch { api_key, provider_id, .. } => {
+                assert_eq!(api_key, "pasted-key");
+                assert_eq!(provider_id, "mistral");
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mistral_browser_choice_starts_sign_in_without_a_pasted_key() {
+        let mut state = SetupModalState::new();
+        select_provider(&mut state, "mistral-auth");
+        assert_eq!(state.provider_id, "mistral-auth");
+        assert!(matches!(state.step, SetupStep::BrowserSignIn));
+        assert!(state.api_key.text().is_empty());
+        handle_setup_key(
+            &mut state,
+            &KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: KeyEventState::NONE,
+            },
+        );
+        assert!(matches!(state.step, SetupStep::PickProvider));
     }
 }

@@ -15,6 +15,20 @@ impl SessionActor {
             },
         );
         match action {
+            BuiltinAction::Credits => {
+                let text = tokio::task::spawn_blocking(|| {
+                    let config = crate::config::load_effective_config().unwrap_or(toml::Value::Table(
+                        toml::map::Map::new(),
+                    ));
+                    crate::agent::mistral_credits::credits_report_from_config(&config)
+                })
+                .await
+                .unwrap_or_else(|_| {
+                    "Balance unavailable: the usage lookup was interrupted.".to_string()
+                });
+                self.send_host_turn_slash_command_output(&text).await;
+                ok_end_turn(0, None)
+            }
             BuiltinAction::Help => {
                 let text =
                     crate::session::slash_commands::help_text(self.command_availability().await);
@@ -1015,6 +1029,8 @@ impl SessionActor {
                 String::new(),
                 "Usage:".to_string(),
                 "/setup <provider> <api_key>".to_string(),
+                "/setup mistral-auth".to_string(),
+                "/setup mistral browser".to_string(),
                 "/setup <base_url> <api_key> [model]".to_string(),
                 String::new(),
                 "Built-in providers:".to_string(),
@@ -1033,6 +1049,15 @@ impl SessionActor {
         let rest: Vec<&str> = parts.collect();
         if second.is_empty() {
             if let Some(profile) = find_setup_provider(first) {
+                if profile.id == "mistral" {
+                    return format!(
+                        "Usage: /setup mistral <api_key>\nMistral Auth is separate: /setup mistral-auth\nDefault model: `{}`\n{}",
+                        profile.default_model, profile.description
+                    );
+                }
+                if profile.id == "mistral-auth" {
+                    return self.mistral_browser_setup().await;
+                }
                 return format!(
                     "Usage: /setup {} <api_key>\nDefault model: `{}`\n{}",
                     profile.id, profile.default_model, profile.description
@@ -1040,6 +1065,11 @@ impl SessionActor {
             }
             return "Usage: /setup <provider> <api_key>  or  /setup <base_url> <api_key> [model]"
                 .to_string();
+        }
+        if first == "mistral-auth"
+            || (first == "mistral" && (second == "browser" || second == "--browser"))
+        {
+            return self.mistral_browser_setup().await;
         }
         let (base_url, api_key, model_id, format, provider_id) =
             if let Some(profile) = find_setup_provider(first) {
@@ -1106,6 +1136,87 @@ impl SessionActor {
         match persist_provider_setup(&setup) {
             Ok(()) => format!(
                 "Saved provider settings. Default model: `{model_id}`.\nStart a new Supercharge session to use it."
+            ),
+            Err(err) => format!("Could not save provider settings: {err}"),
+        }
+    }
+
+    async fn mistral_browser_setup(&self) -> String {
+        use crate::agent::mistral_browser_sign_in::{self, HEADLESS_GENERATION, INFERENCE_BASE_URL};
+        use crate::agent::provider_setup::{
+            ProviderSetup, fetch_provider_models, find_setup_provider, persist_provider_setup,
+        };
+        let started = tokio::task::spawn_blocking(|| {
+            mistral_browser_sign_in::begin_live(HEADLESS_GENERATION)
+        })
+        .await;
+        let url = match started {
+            Ok(Ok(url)) => url,
+            Ok(Err(error)) => return error.to_string(),
+            Err(_) => return "Browser sign-in was interrupted.".to_string(),
+        };
+        let opened = mistral_browser_sign_in::try_open_browser(&url);
+        let opener = if opened {
+            "Opened the sign-in page in your browser."
+        } else {
+            "Could not open a browser from this session. Open the link below to continue."
+        };
+        self.send_host_turn_slash_command_output(&format!(
+            "{opener}\n{url}\nWaiting for you to finish sign-in. This stops automatically if it expires."
+        ))
+        .await;
+        let signed_in =
+            tokio::task::spawn_blocking(|| mistral_browser_sign_in::wait_live(HEADLESS_GENERATION))
+                .await;
+        let () = match signed_in {
+            Ok(Ok(())) => (),
+            Ok(Err(error)) => return error.to_string(),
+            Err(_) => return "Browser sign-in was interrupted.".to_string(),
+        };
+        let Some(api_key) = mistral_browser_sign_in::take_api_key(HEADLESS_GENERATION) else {
+            return "Browser sign-in finished without an API key.".to_string();
+        };
+        let profile = match find_setup_provider("mistral-auth") {
+            Some(profile) => profile,
+            None => return "Mistral provider profile is unavailable.".to_string(),
+        };
+        let key_for_fetch = api_key.clone();
+        let listed = tokio::task::spawn_blocking(move || {
+            fetch_provider_models(
+                INFERENCE_BASE_URL,
+                &key_for_fetch,
+                profile.format,
+                Some("mistral-auth"),
+            )
+        })
+        .await;
+        let models = match listed {
+            Ok(Ok(models)) => models,
+            Ok(Err(err)) => return format!("Signed in, but could not list models: {err}"),
+            Err(_) => return "Signed in, but could not list models.".to_string(),
+        };
+        let model_id = models
+            .iter()
+            .find(|model| model.id == profile.default_model)
+            .map(|model| model.id.clone())
+            .or_else(|| models.first().map(|model| model.id.clone()))
+            .unwrap_or_else(|| profile.default_model.to_owned());
+        let model_name = models
+            .iter()
+            .find(|model| model.id == model_id)
+            .map(|model| model.name.clone())
+            .unwrap_or_else(|| model_id.clone());
+        let setup = ProviderSetup {
+            base_url: INFERENCE_BASE_URL.to_owned(),
+            api_key,
+            model_id: model_id.clone(),
+            model_name,
+            format: profile.format,
+            provider_id: "mistral-auth".to_owned(),
+        };
+        match persist_provider_setup(&setup) {
+            Ok(()) => format!(
+                "Saved Mistral Auth. Default model: `{model_id}`.\nThe pasted Mistral API Key entry was left unchanged.\nStart a new Supercharge session to use it."
             ),
             Err(err) => format!("Could not save provider settings: {err}"),
         }

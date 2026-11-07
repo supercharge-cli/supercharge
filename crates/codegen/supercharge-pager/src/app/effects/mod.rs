@@ -5152,6 +5152,31 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::StartMistralBrowser { generation } => {
+            tasks.spawn(async move {
+                let result = tokio::task::spawn_blocking(move || {
+                    supercharge_shell::agent::mistral_browser_sign_in::begin_live(generation)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                })
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|r| r);
+                TaskResult::MistralBrowserStarted { generation, result }
+            });
+        }
+        Effect::WaitMistralBrowser { generation } => {
+            tasks.spawn(async move {
+                let result = tokio::task::spawn_blocking(move || {
+                    supercharge_shell::agent::mistral_browser_sign_in::wait_live(generation)
+                        .map_err(|error| error.to_string())
+                })
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|r| r);
+                TaskResult::MistralBrowserFinished { generation, result }
+            });
+        }
         Effect::StartNousDeviceLogin { generation } => {
             tasks.spawn(async move {
                 let result = tokio::task::spawn_blocking(

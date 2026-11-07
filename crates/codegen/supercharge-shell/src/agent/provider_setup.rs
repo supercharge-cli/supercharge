@@ -241,9 +241,18 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         curated: &["qwen3.6-plus", "qwen3-coder-plus", "qwen-max"],
     },
     SetupProviderProfile {
+        id: "mistral-auth",
+        name: "Mistral Auth",
+        description: "Browser sign-in for the Mistral console. Uses Chat Completions at api.mistral.ai.",
+        base_url: "https://api.mistral.ai/v1",
+        default_model: "large-model-latest",
+        format: SetupWireFormat::Openai,
+        curated: &["large-model-latest", "codestral-latest"],
+    },
+    SetupProviderProfile {
         id: "mistral",
-        name: "Mistral AI",
-        description: "Mistral / Codestral",
+        name: "Mistral API Key",
+        description: "Manually supplied Mistral API key (Chat Completions)",
         base_url: "https://api.mistral.ai/v1",
         default_model: "large-model-latest",
         format: SetupWireFormat::Openai,
@@ -1132,6 +1141,31 @@ fn apply_provider_setup_to_document(
         model.remove("env_key");
         model.remove("auth_provider");
     }
+    // Browser sign-in and a pasted key are different saved entries. Writing one
+    // must leave the other's credential table alone, and neither aliases a
+    // process-wide MISTRAL_API_KEY.
+    if provider_id == "mistral" || provider_id == "mistral-auth" {
+        let slots = document_table_mut(document, "provider_credentials")?;
+        let slot = child_table_mut(
+            slots,
+            provider_id,
+            &format!("provider_credentials.{provider_id}"),
+        )?;
+        if api_key.is_empty() {
+            slot.remove("api_key");
+        } else {
+            slot.insert("api_key", toml_edit::value(api_key));
+        }
+        slot.insert(
+            "mode",
+            toml_edit::value(if provider_id == "mistral-auth" {
+                "browser"
+            } else {
+                "api_key"
+            }),
+        );
+        slot.insert("base_url", toml_edit::value(base_url));
+    }
     Ok(())
 }
 
@@ -1252,6 +1286,31 @@ fn repoint_stale_role_models(
             t.insert(key, toml_edit::value(new_default));
         }
     }
+}
+
+/// Key stored for one Mistral setup entry. The active `setup` key is used only
+/// when that entry is the selected provider. The other entry's slot is ignored.
+pub fn isolated_provider_api_key(config: &toml::Value, provider_id: &str) -> Option<String> {
+    let slotted = config
+        .get("provider_credentials")
+        .and_then(|slots| slots.get(provider_id))
+        .and_then(|slot| slot.get("api_key"))
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .map(str::to_owned);
+    if slotted.is_some() {
+        return slotted;
+    }
+    let active_id = setup_profile_id_from_config(config);
+    if active_id.as_deref() != Some(provider_id) {
+        return None;
+    }
+    provider_setup_api_key_from_toml(config)
+}
+
+pub fn active_setup_provider_id(config: &toml::Value) -> Option<String> {
+    setup_profile_id_from_config(config)
 }
 
 /// Credential written by `/setup` for custom-endpoint catalog fetches.

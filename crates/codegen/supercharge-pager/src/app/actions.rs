@@ -626,6 +626,12 @@ pub enum Action {
         setup: supercharge_shell::agent::provider_setup::ProviderSetup,
         generation: u64,
     },
+    StartMistralBrowser {
+        generation: u64,
+    },
+    WaitMistralBrowser {
+        generation: u64,
+    },
     StartNousDeviceLogin {
         generation: u64,
     },
@@ -2365,6 +2371,12 @@ pub enum Effect {
         setup: supercharge_shell::agent::provider_setup::ProviderSetup,
         generation: u64,
     },
+    StartMistralBrowser {
+        generation: u64,
+    },
+    WaitMistralBrowser {
+        generation: u64,
+    },
     StartNousDeviceLogin {
         generation: u64,
     },
@@ -3337,6 +3349,14 @@ pub enum TaskResult {
     NousDeviceFinished {
         generation: u64,
         result: Result<String, String>,
+    },
+    MistralBrowserStarted {
+        generation: u64,
+        result: Result<(), String>,
+    },
+    MistralBrowserFinished {
+        generation: u64,
+        result: Result<(), String>,
     },
 }
 #[cfg(test)]

@@ -1390,7 +1390,7 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
 
     // Build the execution context from app-wide state. The dashboard is session-less, so `session_id` is `None`.
     // Session-less opt-ins (`/model`, `/plan`) and pager-global commands still run and may toast if a dispatcher needs an agent
-    let result = {
+    let (result, typed_name) = {
         let Some(invocation) = parse_invocation(trimmed.as_str()) else {
             return vec![];
         };
@@ -1445,6 +1445,9 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
                 .record_command_use(invocation.token, invocation.token);
         }
 
+        // Keep the token the user typed. `/plugins` opens the marketplace tab, and the
+        // tab's canonical slash name must not replace the invocation in the session toast.
+        let typed_name = invocation.token.to_string();
         let dashboard_multiline = app.dashboard.as_ref().is_some_and(|d| d.multiline_mode);
         let mut ctx = CommandExecCtx {
             models: &app.models,
@@ -1480,7 +1483,7 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
                 subagent_model_inheritance: subagent_model_inheritance_from_app,
             },
         };
-        command.run(&mut ctx, invocation.args)
+        (command.run(&mut ctx, invocation.args), typed_name)
     };
 
     match result {
@@ -1570,6 +1573,17 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
             if let Some(d) = app.dashboard.as_mut() {
                 d.dispatch.set_text("");
                 d.set_error_toast("No plan to show on the dashboard");
+            }
+            vec![]
+        }
+        // Session-only modals have no agent here. Name the toast from the typed token
+        // (`/plugins`, including an alias) rather than the tab the command would open.
+        CommandResult::Action(Action::OpenExtensionsModal { .. } | Action::OpenConfigAgentsModal(_)) => {
+            if let Some(d) = app.dashboard.as_mut() {
+                d.dispatch.set_text("");
+                d.set_error_toast(&format!(
+                    "/{typed_name} only works in a session. Open an agent first."
+                ));
             }
             vec![]
         }
