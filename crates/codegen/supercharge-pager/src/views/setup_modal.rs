@@ -45,6 +45,8 @@ pub enum SetupStep {
     BrowserSignIn,
     /// Nous Portal RFC 8628 device-code login (free-tier JWTs).
     DeviceAuth,
+    /// Waiting on the Codex CLI browser sign-in (OAuth PKCE → ~/.codex/auth.json).
+    CodexSignIn,
     Fetching,
     FetchError {
         message: String,
@@ -91,6 +93,9 @@ pub struct SetupModalState {
     browser_status: String,
     /// Fetch errors from browser sign-in return to the Mistral choice step.
     pub(crate) browser_return: bool,
+    /// Live Codex sign-in session (verifier kept in process memory).
+    codex_sign_in: Option<supercharge_shell::agent::codex_oauth::CodexSignInStarted>,
+    codex_status: String,
     /// Typed model id waiting for a second Enter (not in the live/catalog list).
     pending_unknown: Option<String>,
     /// Live `/models` fetch is in flight while a seeded catalog is already shown.
@@ -144,6 +149,18 @@ pub enum SetupOutcome {
         verification_uri_complete: String,
         expires_in: u64,
         interval: u64,
+        generation: u64,
+    },
+    /// Start Codex CLI browser sign-in (binds the localhost callback listener).
+    StartCodexSignIn {
+        generation: u64,
+    },
+    /// Open the Codex authorize URL in the default browser.
+    OpenCodexSignInUrl,
+    /// Copy the Codex authorize URL to the clipboard.
+    CopyCodexSignInUrl,
+    /// Wait for the localhost callback and exchange the code.
+    WaitCodexSignIn {
         generation: u64,
     },
 }
@@ -227,6 +244,8 @@ impl SetupModalState {
             browser_sign_in_url: String::new(),
             browser_status: String::new(),
             browser_return: false,
+            codex_sign_in: None,
+            codex_status: String::new(),
             pending_unknown: None,
             live_refreshing: false,
         }
@@ -622,6 +641,70 @@ impl SetupModalState {
             self.device_verification_uri.as_str()
         }
     }
+
+    pub fn codex_sign_in_url(&self) -> &str {
+        self.codex_sign_in
+            .as_ref()
+            .map(|s| s.sign_in_url.as_str())
+            .unwrap_or("")
+    }
+
+    /// Apply a started Codex sign-in (listener bound, URL built).
+    pub fn apply_codex_sign_in_started(
+        &mut self,
+        generation: u64,
+        started: Result<supercharge_shell::agent::codex_oauth::CodexSignInStarted, String>,
+    ) -> Option<SetupOutcome> {
+        if generation != self.generation {
+            return None;
+        }
+        match started {
+            Ok(started) => {
+                self.codex_sign_in = Some(started);
+                self.codex_status = "Opened in your browser. Finish sign-in to continue.".into();
+                self.step = SetupStep::CodexSignIn;
+                Some(SetupOutcome::WaitCodexSignIn { generation })
+            }
+            Err(message) => {
+                self.step = SetupStep::FetchError { message };
+                None
+            }
+        }
+    }
+
+    /// Apply a finished Codex sign-in. Tokens are already in `~/.codex/auth.json`;
+    /// the setup key stays empty because auth comes from the credential source.
+    pub fn apply_codex_sign_in_finished(
+        &mut self,
+        generation: u64,
+        result: Result<(), String>,
+    ) -> Option<SetupOutcome> {
+        if generation != self.generation {
+            return None;
+        }
+        match result {
+            Ok(()) => {
+                self.codex_sign_in = None;
+                self.codex_status = "Signed in. Loading models…".into();
+                self.generation = next_generation();
+                self.step = SetupStep::Fetching;
+                Some(SetupOutcome::Fetch {
+                    base_url: supercharge_shell::agent::codex_oauth::CHATGPT_CODEX_BASE_URL
+                        .to_owned(),
+                    // The bearer comes from the Codex credential source, not config.toml.
+                    api_key: String::new(),
+                    format: self.format,
+                    provider_id: self.provider_id.clone(),
+                    generation: self.generation,
+                })
+            }
+            Err(message) => {
+                self.codex_sign_in = None;
+                self.step = SetupStep::FetchError { message };
+                None
+            }
+        }
+    }
 }
 
 pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
@@ -650,6 +733,22 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
             SetupStep::BrowserSignIn => {
                 supercharge_shell::agent::mistral_browser_sign_in::cancel_live(state.generation);
                 state.browser_status.clear();
+                state.step = SetupStep::PickProvider;
+                state.selected = 0;
+                SetupOutcome::Changed
+            }
+            SetupStep::CodexSignIn => {
+                supercharge_shell::agent::codex_oauth::cancel_live(state.generation);
+                state.codex_sign_in = None;
+                state.codex_status.clear();
+                state.step = SetupStep::PickProvider;
+                state.selected = 0;
+                SetupOutcome::Changed
+            }
+            SetupStep::CodexSignIn => {
+                // Dropping the session closes the listener; no callback will be accepted.
+                state.codex_sign_in = None;
+                state.codex_status.clear();
                 state.step = SetupStep::PickProvider;
                 state.selected = 0;
                 SetupOutcome::Changed
@@ -716,6 +815,7 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
         SetupStep::Fetching | SetupStep::Saving => SetupOutcome::Unchanged,
         SetupStep::MistralAuthChoice => handle_mistral_auth_choice(state, key),
         SetupStep::BrowserSignIn => handle_browser_sign_in(state, key),
+        SetupStep::CodexSignIn => handle_codex_sign_in(state, key),
         SetupStep::DeviceAuth => handle_device_auth(state, key),
         SetupStep::PickProvider => handle_pick_provider(state, key),
         SetupStep::BaseUrl => handle_base_url(state, key),
@@ -762,7 +862,8 @@ pub fn handle_setup_paste(state: &mut SetupModalState, text: &str) -> SetupOutco
         SetupStep::PickEffort
         | SetupStep::PickFormat
         | SetupStep::MistralAuthChoice
-        | SetupStep::BrowserSignIn => SetupOutcome::Unchanged,
+        | SetupStep::BrowserSignIn
+        | SetupStep::CodexSignIn => SetupOutcome::Unchanged,
         SetupStep::BaseUrl => match state.base_url.insert_paste(text) {
             LineEditOutcome::Unhandled => SetupOutcome::Unchanged,
             _ => SetupOutcome::Changed,
@@ -908,6 +1009,20 @@ fn handle_device_auth(_state: &mut SetupModalState, key: &KeyEvent) -> SetupOutc
     }
 }
 
+fn handle_codex_sign_in(_state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
+    match key.code {
+        KeyCode::Enter | KeyCode::Char('o') | KeyCode::Char('O') => {
+            SetupOutcome::OpenCodexSignInUrl
+        }
+        KeyCode::Char('c') | KeyCode::Char('C')
+            if !key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            SetupOutcome::CopyCodexSignInUrl
+        }
+        _ => SetupOutcome::Unchanged,
+    }
+}
+
 fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOutcome {
     let rows = state.provider_rows();
     match key.code {
@@ -973,6 +1088,19 @@ fn handle_pick_provider(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                     state.device_status = "Starting Nous Portal login…".into();
                     state.step = SetupStep::DeviceAuth;
                     return SetupOutcome::StartNousDeviceLogin {
+                        generation: state.generation,
+                    };
+                }
+                if profile.id == "codex" {
+                    // Always run the browser PKCE flow (like `codex login`), so a fresh
+                    // sign-in replaces any tokens already in ~/.codex/auth.json.
+                    state.api_key.set_text("");
+                    state.api_key_prefilled = false;
+                    state.api_key_owner = None;
+                    state.generation = next_generation();
+                    state.codex_status = "Starting browser sign-in…".into();
+                    state.step = SetupStep::CodexSignIn;
+                    return SetupOutcome::StartCodexSignIn {
                         generation: state.generation,
                     };
                 }
@@ -1273,6 +1401,7 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
         SetupStep::MistralAuthChoice => format!("{prefix}  ·  Mistral sign-in"),
         SetupStep::BrowserSignIn => format!("{prefix}  ·  browser sign-in"),
         SetupStep::DeviceAuth => format!("{prefix}  ·  Nous Portal login"),
+        SetupStep::CodexSignIn => format!("{prefix}  ·  ChatGPT sign-in"),
         SetupStep::Fetching => format!("{prefix}  ·  fetching models"),
         SetupStep::FetchError { .. } => format!("{prefix}  ·  error"),
         SetupStep::PickModel => format!("{prefix}  ·  choose model"),
@@ -1356,6 +1485,23 @@ pub fn render_setup_modal(buf: &mut Buffer, area: Rect, state: &mut SetupModalSt
                 &format!(
                     "To continue:\n  1. Open: {uri}\n  2. If prompted, enter code: {code}\n\n{}\n\nEnter/o opens the link  ·  c copies it",
                     state.device_status
+                ),
+            );
+        }
+        SetupStep::CodexSignIn => {
+            let url = state.codex_sign_in_url();
+            let url = if url.is_empty() {
+                "(link appears when sign-in starts)"
+            } else {
+                url
+            };
+            render_status(
+                buf,
+                inner,
+                &theme,
+                &format!(
+                    "{}\n\n{url}\n\nEnter/o opens the link  ·  c copies it  ·  Esc cancels",
+                    state.codex_status
                 ),
             );
         }
@@ -1468,6 +1614,23 @@ fn shortcuts_for(step: &SetupStep) -> Vec<Shortcut<'static>> {
             },
         ],
         SetupStep::DeviceAuth => vec![
+            Shortcut {
+                label: "o open",
+                clickable: false,
+                id: 1,
+            },
+            Shortcut {
+                label: "c copy",
+                clickable: false,
+                id: 3,
+            },
+            Shortcut {
+                label: "Esc cancel",
+                clickable: false,
+                id: 2,
+            },
+        ],
+        SetupStep::CodexSignIn => vec![
             Shortcut {
                 label: "o open",
                 clickable: false,

@@ -644,6 +644,14 @@ pub enum Action {
         interval: u64,
         generation: u64,
     },
+    /// Start Codex CLI browser sign-in (binds the localhost callback listener).
+    StartCodexSignIn {
+        generation: u64,
+    },
+    /// Wait for the localhost callback and exchange the code.
+    WaitCodexSignIn {
+        generation: u64,
+    },
     /// Open settings on a registry key: its chooser, or the browse row when
     /// the setting is locked.
     OpenSettingsFocus {
@@ -2393,6 +2401,14 @@ pub enum Effect {
         interval: u64,
         generation: u64,
     },
+    /// Start Codex CLI browser sign-in (binds the localhost callback listener).
+    StartCodexSignIn {
+        generation: u64,
+    },
+    /// Wait for the localhost callback and exchange the code.
+    WaitCodexSignIn {
+        generation: u64,
+    },
 }
 /// Wire params for `x.ai/session/rename`.
 /// Shared with the effect executor so dispatch tests can pin the exact camelCase payload.
@@ -3353,6 +3369,14 @@ pub enum TaskResult {
     NousDeviceFinished {
         generation: u64,
         result: Result<String, String>,
+    },
+    CodexSignInStarted {
+        generation: u64,
+        result: Result<supercharge_shell::agent::codex_oauth::CodexSignInStarted, String>,
+    },
+    CodexSignInFinished {
+        generation: u64,
+        result: Result<(), String>,
     },
     MistralBrowserStarted {
         generation: u64,

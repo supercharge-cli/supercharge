@@ -1950,6 +1950,38 @@ pub(super) fn apply_setup_outcome(
             interval,
             generation,
         }),
+        SetupOutcome::StartCodexSignIn { generation } => {
+            InputOutcome::Action(Action::StartCodexSignIn { generation })
+        }
+        SetupOutcome::WaitCodexSignIn { generation } => {
+            InputOutcome::Action(Action::WaitCodexSignIn { generation })
+        }
+        SetupOutcome::OpenCodexSignInUrl => {
+            let url = match &agent.active_modal {
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                    state.codex_sign_in_url().to_owned()
+                }
+                _ => String::new(),
+            };
+            if url.is_empty() {
+                InputOutcome::Unchanged
+            } else {
+                InputOutcome::Action(Action::OpenUrl(url))
+            }
+        }
+        SetupOutcome::CopyCodexSignInUrl => {
+            let url = match &agent.active_modal {
+                Some(crate::views::modal::ActiveModal::ProviderSetup { state }) => {
+                    state.codex_sign_in_url().to_owned()
+                }
+                _ => String::new(),
+            };
+            if url.is_empty() {
+                InputOutcome::Unchanged
+            } else {
+                InputOutcome::Action(Action::CopyText(url))
+            }
+        }
         SetupOutcome::Changed => InputOutcome::Changed,
         SetupOutcome::Unchanged => InputOutcome::Unchanged,
     }

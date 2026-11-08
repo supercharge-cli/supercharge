@@ -11,6 +11,7 @@ pub mod feedback_client;
 pub mod folder_trust;
 pub(crate) mod handlers;
 pub use handlers::context_window::{format_context_window, parse_context_window};
+pub mod codex_oauth;
 pub mod image_provider;
 pub mod init;
 pub mod mistral_browser_sign_in;

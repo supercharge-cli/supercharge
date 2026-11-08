@@ -1255,6 +1255,12 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::StartNousDeviceLogin { generation } => {
             vec![Effect::StartNousDeviceLogin { generation }]
         }
+        Action::StartCodexSignIn { generation } => {
+            vec![Effect::StartCodexSignIn { generation }]
+        }
+        Action::WaitCodexSignIn { generation } => {
+            vec![Effect::WaitCodexSignIn { generation }]
+        }
         Action::PollNousDeviceLogin {
             device_code,
             user_code,

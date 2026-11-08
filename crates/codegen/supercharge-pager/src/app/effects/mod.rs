@@ -5231,6 +5231,28 @@ pub(crate) fn execute(
                 TaskResult::NousDeviceFinished { generation, result }
             });
         }
+        Effect::StartCodexSignIn { generation } => {
+            tasks.spawn(async move {
+                let result = tokio::task::spawn_blocking(move || {
+                    supercharge_shell::agent::codex_oauth::begin_live(generation)
+                })
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|r| r);
+                TaskResult::CodexSignInStarted { generation, result }
+            });
+        }
+        Effect::WaitCodexSignIn { generation } => {
+            tasks.spawn(async move {
+                let result = tokio::task::spawn_blocking(move || {
+                    supercharge_shell::agent::codex_oauth::wait_live(generation)
+                })
+                .await
+                .map_err(|error| format!("task join error: {error}"))
+                .and_then(|r| r);
+                TaskResult::CodexSignInFinished { generation, result }
+            });
+        }
         Effect::FetchProviderModels { base_url, api_key, format, provider_id, generation } => {
             tasks
                 .spawn(async move {

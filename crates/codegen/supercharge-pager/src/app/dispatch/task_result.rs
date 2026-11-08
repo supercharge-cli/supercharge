@@ -2481,6 +2481,63 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             next.map(|action| crate::app::dispatch::router::dispatch(action, app))
                 .unwrap_or_default()
         }
+        TaskResult::CodexSignInStarted { generation, result } => {
+            let mut open_url = None;
+            let next = get_active_agent_mut(app).and_then(|agent| {
+                let crate::views::modal::ActiveModal::ProviderSetup { state } =
+                    agent.active_modal.as_mut()?
+                else {
+                    return None;
+                };
+                match state.apply_codex_sign_in_started(generation, result) {
+                    Some(crate::views::setup_modal::SetupOutcome::WaitCodexSignIn {
+                        generation,
+                    }) => {
+                        open_url = Some(state.codex_sign_in_url().to_owned());
+                        Some(Action::WaitCodexSignIn { generation })
+                    }
+                    _ => None,
+                }
+            });
+            let mut effects = vec![];
+            if let Some(url) = open_url {
+                effects.extend(crate::app::dispatch::router::dispatch(
+                    Action::OpenUrl(url),
+                    app,
+                ));
+            }
+            if let Some(action) = next {
+                effects.extend(crate::app::dispatch::router::dispatch(action, app));
+            }
+            effects
+        }
+        TaskResult::CodexSignInFinished { generation, result } => {
+            let next = get_active_agent_mut(app).and_then(|agent| {
+                let crate::views::modal::ActiveModal::ProviderSetup { state } =
+                    agent.active_modal.as_mut()?
+                else {
+                    return None;
+                };
+                match state.apply_codex_sign_in_finished(generation, result) {
+                    Some(crate::views::setup_modal::SetupOutcome::Fetch {
+                        base_url,
+                        api_key,
+                        format,
+                        provider_id,
+                        generation,
+                    }) => Some(Action::FetchProviderModels {
+                        base_url,
+                        api_key,
+                        format,
+                        provider_id,
+                        generation,
+                    }),
+                    _ => None,
+                }
+            });
+            next.map(|action| crate::app::dispatch::router::dispatch(action, app))
+                .unwrap_or_default()
+        }
         TaskResult::ProviderModelsFetched { generation, result } => {
             // Accept while Fetching (empty seed) or PickModel (seeded catalog shown during refresh).
             let is_current = get_active_agent_mut(app).is_some_and(|agent| {

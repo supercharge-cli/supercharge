@@ -356,6 +356,15 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         curated: &["llama3.3", "qwen2.5-coder", "codellama"],
     },
     SetupProviderProfile {
+        id: "codex",
+        name: "ChatGPT (Codex)",
+        description: "ChatGPT plan via Codex browser sign-in (Responses API)",
+        base_url: crate::agent::codex_oauth::CHATGPT_CODEX_BASE_URL,
+        default_model: "gpt-6.1-terra",
+        format: SetupWireFormat::Responses,
+        curated: crate::agent::codex_oauth::CURATED_MODELS,
+    },
+    SetupProviderProfile {
         id: "lmstudio",
         name: "LM Studio",
         description: "Local desktop server, key optional",
@@ -708,10 +717,15 @@ pub fn infer_thinking_from_id(id: &str) -> bool {
         return true;
     }
     // Explicit non-thinking variants.
-    if s.contains("non-reasoning") || s.contains("instruct") && !s.contains("qwen3") || s.contains("embed") {
+    if s.contains("non-reasoning")
+        || s.contains("instruct") && !s.contains("qwen3")
+        || s.contains("embed")
+    {
         return false;
     }
-    let tokens: Vec<&str> = s.split(|c: char| c == '-' || c == '_' || c == ':' || c == '.').collect();
+    let tokens: Vec<&str> = s
+        .split(|c: char| c == '-' || c == '_' || c == ':' || c == '.')
+        .collect();
     let first = tokens.first().copied().unwrap_or("");
     let version_after = |prefix: &str| -> Option<f32> {
         let rest = s.strip_prefix(prefix)?;
@@ -723,7 +737,8 @@ pub fn infer_thinking_from_id(id: &str) -> bool {
         num.trim_end_matches('.').parse().ok()
     };
     // o-series: o1, o3, o4-mini, ...
-    if first.len() >= 2 && first.starts_with('o') && first[1..].chars().all(|c| c.is_ascii_digit()) {
+    if first.len() >= 2 && first.starts_with('o') && first[1..].chars().all(|c| c.is_ascii_digit())
+    {
         return true;
     }
     if let Some(v) = version_after("gpt") {
@@ -750,7 +765,12 @@ pub fn infer_thinking_from_id(id: &str) -> bool {
     if s.starts_with("qwq") || s.starts_with("qwen3") || s.starts_with("qvq") {
         return true;
     }
-    if s.starts_with("magistral") || s.starts_with("kimi-k2-thinking") || s.starts_with("glm-4.5") || s.starts_with("glm-4.6") || s.starts_with("glm-5") {
+    if s.starts_with("magistral")
+        || s.starts_with("kimi-k2-thinking")
+        || s.starts_with("glm-4.5")
+        || s.starts_with("glm-4.6")
+        || s.starts_with("glm-5")
+    {
         return true;
     }
     false
@@ -765,12 +785,13 @@ pub fn reasoning_effort_ids_for_model(id: &str) -> &'static [&'static str] {
     }
     let s = id.to_ascii_lowercase();
     let s = s.rsplit('/').next().unwrap_or(&s).to_owned();
-    let gpt_ver: Option<f32> = s
-        .strip_prefix("gpt-")
-        .and_then(|r| {
-            let n: String = r.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
-            n.trim_end_matches('.').parse().ok()
-        });
+    let gpt_ver: Option<f32> = s.strip_prefix("gpt-").and_then(|r| {
+        let n: String = r
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        n.trim_end_matches('.').parse().ok()
+    });
     if gpt_ver.is_some_and(|v| v >= 5.1)
         || s.contains("xhigh")
         || s.contains("-max")
@@ -824,7 +845,13 @@ pub fn model_metadata_thinking(entry: &Value) -> Option<bool> {
             return Some(!a.is_empty());
         }
     }
-    for key in ["capabilities", "features", "architecture", "meta", "metadata"] {
+    for key in [
+        "capabilities",
+        "features",
+        "architecture",
+        "meta",
+        "metadata",
+    ] {
         match obj.get(key) {
             Some(Value::Object(nested)) => {
                 if let Some(b) = flag_in(nested) {
@@ -1075,6 +1102,18 @@ pub fn fetch_provider_models_with_list_url(
             }
             Err(_) => {}
         }
+    }
+    // The ChatGPT Codex backend has no models-list endpoint; its catalog is fixed.
+    if provider_id == Some(crate::agent::codex_oauth::CODEX_PROVIDER_ID) {
+        return Ok(crate::agent::codex_oauth::CURATED_MODELS
+            .iter()
+            .map(|id| ProviderModel {
+                id: (*id).to_owned(),
+                name: (*id).to_owned(),
+                context_window: None,
+                supports_thinking: true,
+            })
+            .collect());
     }
     let api_key = api_key.as_str();
     let base_url = normalize_provider_base_url(base_url)?;
@@ -1353,11 +1392,11 @@ fn drop_stale_allowlist(document: &mut toml_edit::DocumentMut, new_default: &str
                 || setup_models.contains(p)
                 || crate::agent::remote_config::is_studio_model_id(p))
     });
-    let blocks_new_default = match crate::agent::remote_config::ModelGlobSet::compile(Some(&patterns))
-    {
-        Ok(Some(set)) => !set.matches(new_default, new_default),
-        _ => false,
-    };
+    let blocks_new_default =
+        match crate::agent::remote_config::ModelGlobSet::compile(Some(&patterns)) {
+            Ok(Some(set)) => !set.matches(new_default, new_default),
+            _ => false,
+        };
     if tool_written || blocks_new_default {
         tracing::info!(?patterns, "/setup: removing stale [models] allowed_models");
         models.remove("allowed_models");
@@ -1422,6 +1461,8 @@ fn repoint_stale_role_models(
 
 /// Key stored for one Mistral setup entry. The active `setup` key is used only
 /// when that entry is the selected provider. The other entry's slot is ignored.
+/// Codex keeps its tokens in `~/.codex/auth.json` (shared with the Codex CLI),
+/// so no key is stored in config.toml at all.
 fn uses_isolated_provider_credentials(provider_id: &str) -> bool {
     matches!(
         provider_id,
@@ -1429,6 +1470,7 @@ fn uses_isolated_provider_credentials(provider_id: &str) -> bool {
             | "mistral-auth"
             | supercharge_sampler::opencode_inference::GO_PROVIDER_ID
             | supercharge_sampler::opencode_inference::ZEN_PROVIDER_ID
+            | crate::agent::codex_oauth::CODEX_PROVIDER_ID
     )
 }
 
@@ -1621,7 +1663,9 @@ fn model_entry_provider_setup(
         .and_then(toml::Value::as_str)
         .map(str::to_owned);
     let provider = provider_binding.as_deref().and_then(|id| {
-        parsed.get("model_providers").and_then(|providers| providers.get(id))
+        parsed
+            .get("model_providers")
+            .and_then(|providers| providers.get(id))
     });
     let base_url = model
         .get("base_url")
@@ -1823,7 +1867,9 @@ mod tests {
                 axum::response::Response::builder()
                     .status(401)
                     .header("content-type", "application/json")
-                    .body(axum::body::Body::from(r#"{"error":{"message":"recorded"}}"#))
+                    .body(axum::body::Body::from(
+                        r#"{"error":{"message":"recorded"}}"#,
+                    ))
                     .unwrap()
             }
         });
@@ -1855,7 +1901,15 @@ mod tests {
             "[model.model-b]\nmodel = \"model-b\"\napi_base_url = \"https://old.example/v1\"\nenv_key = \"OLD_PROVIDER_KEY\"\n",
         )
         .unwrap();
-        persist_provider_setup_at(&path, &setup("https://provider-b.example/v1", "sk-provider-b-222", "model-b")).unwrap();
+        persist_provider_setup_at(
+            &path,
+            &setup(
+                "https://provider-b.example/v1",
+                "sk-provider-b-222",
+                "model-b",
+            ),
+        )
+        .unwrap();
         let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert!(raw["models"].get("allowed_models").is_none());
         let table = raw["model"]["model-b"].as_table().unwrap();
@@ -1868,14 +1922,21 @@ mod tests {
     fn setup_drops_leftover_setup_allowlist_but_keeps_hand_written_one() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        persist_provider_setup_at(&path, &setup("https://provider-a.example/v1", "sk-a-111", "model-a")).unwrap();
+        persist_provider_setup_at(
+            &path,
+            &setup("https://provider-a.example/v1", "sk-a-111", "model-a"),
+        )
+        .unwrap();
         // What 1.3.42 could leave behind: only setup-written model ids.
-        let text = std::fs::read_to_string(&path).unwrap().replace(
-            "[models]\n",
-            "[models]\nallowed_models = [\"model-a\"]\n",
-        );
+        let text = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("[models]\n", "[models]\nallowed_models = [\"model-a\"]\n");
         std::fs::write(&path, text).unwrap();
-        persist_provider_setup_at(&path, &setup("https://provider-b.example/v1", "sk-b-222", "model-b")).unwrap();
+        persist_provider_setup_at(
+            &path,
+            &setup("https://provider-b.example/v1", "sk-b-222", "model-b"),
+        )
+        .unwrap();
         let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert!(raw["models"].get("allowed_models").is_none());
 
@@ -1886,11 +1947,22 @@ mod tests {
                 &format!("[models]\nallowed_models = {hand}\n"),
             );
             std::fs::write(&path, text).unwrap();
-            persist_provider_setup_at(&path, &setup("https://provider-c.example/v1", "sk-c-333", "model-c")).unwrap();
-            let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-            assert!(raw["models"].get("allowed_models").is_some(), "{hand} is hand-written");
+            persist_provider_setup_at(
+                &path,
+                &setup("https://provider-c.example/v1", "sk-c-333", "model-c"),
+            )
+            .unwrap();
+            let raw: toml::Value =
+                toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(
+                raw["models"].get("allowed_models").is_some(),
+                "{hand} is hand-written"
+            );
             let mut doc: toml::Value = raw.clone();
-            doc["models"].as_table_mut().unwrap().remove("allowed_models");
+            doc["models"]
+                .as_table_mut()
+                .unwrap()
+                .remove("allowed_models");
             std::fs::write(&path, toml::to_string(&doc).unwrap()).unwrap();
         }
     }
@@ -1901,7 +1973,15 @@ mod tests {
     /// The config a real user had after Supercharge Studio and then /setup: a Studio model with
     /// a dead key, a /setup default, and every role model plus `allowed_models` on the Studio id.
     fn write_field_config(path: &std::path::Path) {
-        persist_provider_setup_at(path, &setup("https://gen.pollinations.example/v1", "sk-poll-111", FIELD_DEFAULT)).unwrap();
+        persist_provider_setup_at(
+            path,
+            &setup(
+                "https://gen.pollinations.example/v1",
+                "sk-poll-111",
+                FIELD_DEFAULT,
+            ),
+        )
+        .unwrap();
         let text = std::fs::read_to_string(path).unwrap().replace(
             "[models]\n",
             &format!(
@@ -1943,37 +2023,66 @@ mod tests {
         // On load, before any /setup.
         let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
-        assert!(crate::agent::remote_config::stale_user_allowlist_reason(&cfg, cfg.models.allowed_models.as_deref().unwrap()).is_some());
+        assert!(
+            crate::agent::remote_config::stale_user_allowlist_reason(
+                &cfg,
+                cfg.models.allowed_models.as_deref().unwrap()
+            )
+            .is_some()
+        );
         let catalog = field_catalog(&cfg);
         for id in [FIELD_DEFAULT, "fast-model", "large-model"] {
-            assert!(catalog.get(id).is_some_and(|e| e.info.user_selectable), "{id} must be switchable");
+            assert!(
+                catalog.get(id).is_some_and(|e| e.info.user_selectable),
+                "{id} must be switchable"
+            );
         }
         assert!(crate::agent::remote_config::validate_selectable(&cfg, &catalog).is_ok());
-        let (picked, _, _) = crate::agent::remote_config::resolve_default_model(&cfg, &catalog, false);
-        assert_eq!(picked, FIELD_DEFAULT, "the session must run on models.default");
+        let (picked, _, _) =
+            crate::agent::remote_config::resolve_default_model(&cfg, &catalog, false);
+        assert_eq!(
+            picked, FIELD_DEFAULT,
+            "the session must run on models.default"
+        );
         let roles = crate::config::ModelOverrideConfig::resolve(None, None, &raw, None);
         assert_eq!(roles.web_search, FIELD_DEFAULT);
         assert_eq!(roles.session_summary.as_deref(), Some(FIELD_DEFAULT));
         assert_eq!(roles.image_description.as_deref(), Some(FIELD_DEFAULT));
-        assert_eq!(roles.prompt_suggestion, crate::config::PromptSuggestModelPin::Pinned(FIELD_DEFAULT.to_owned()));
+        assert_eq!(
+            roles.prompt_suggestion,
+            crate::config::PromptSuggestModelPin::Pinned(FIELD_DEFAULT.to_owned())
+        );
 
         // /setup again (same provider) and then a provider switch: list gone, roles repointed.
-        for (url, model) in [("https://gen.pollinations.example/v1", FIELD_DEFAULT), ("https://provider-b.example/v1", "model-b1")] {
+        for (url, model) in [
+            ("https://gen.pollinations.example/v1", FIELD_DEFAULT),
+            ("https://provider-b.example/v1", "model-b1"),
+        ] {
             if model != FIELD_DEFAULT {
                 std::fs::remove_file(&path).unwrap();
                 write_field_config(&path);
             }
             persist_provider_setup_at(&path, &setup(url, "sk-new-222", model)).unwrap();
-            let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let raw: toml::Value =
+                toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
             assert!(raw["models"].get("allowed_models").is_none(), "{model}");
-            for key in ["web_search", "session_summary", "prompt_suggestion", "image_description"] {
+            for key in [
+                "web_search",
+                "session_summary",
+                "prompt_suggestion",
+                "image_description",
+            ] {
                 assert_eq!(raw["models"][key].as_str(), Some(model), "models.{key}");
             }
             assert_eq!(raw["ui"]["fork_secondary_model"].as_str(), Some(model));
             assert_eq!(raw["models"]["default"].as_str(), Some(model));
             let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
             let listed = crate::agent::config::resolve_model_list(&cfg, None);
-            let (picked, _, _) = crate::agent::remote_config::resolve_default_model(&cfg, &crate::agent::remote_config::resolve_model_catalog(&cfg, Some(listed)), false);
+            let (picked, _, _) = crate::agent::remote_config::resolve_default_model(
+                &cfg,
+                &crate::agent::remote_config::resolve_model_catalog(&cfg, Some(listed)),
+                false,
+            );
             assert_eq!(picked, model);
         }
     }
@@ -1984,30 +2093,70 @@ mod tests {
     fn hand_written_allowlist_that_admits_the_default_is_still_enforced() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        persist_provider_setup_at(&path, &setup("https://gen.pollinations.example/v1", "sk-poll-111", FIELD_DEFAULT)).unwrap();
+        persist_provider_setup_at(
+            &path,
+            &setup(
+                "https://gen.pollinations.example/v1",
+                "sk-poll-111",
+                FIELD_DEFAULT,
+            ),
+        )
+        .unwrap();
         let base = std::fs::read_to_string(&path).unwrap();
         for hand in [
             format!(r#"["{FIELD_DEFAULT}", "my-own-model"]"#),
             r#"["community/*"]"#.to_owned(),
         ] {
-            let text = base.replace("[models]\n", &format!("[models]\nallowed_models = {hand}\n"));
+            let text = base.replace(
+                "[models]\n",
+                &format!("[models]\nallowed_models = {hand}\n"),
+            );
             std::fs::write(&path, &text).unwrap();
             let raw: toml::Value = toml::from_str(&text).unwrap();
             let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
-            assert_eq!(crate::agent::remote_config::stale_user_allowlist_reason(&cfg, cfg.models.allowed_models.as_deref().unwrap()), None, "{hand}");
+            assert_eq!(
+                crate::agent::remote_config::stale_user_allowlist_reason(
+                    &cfg,
+                    cfg.models.allowed_models.as_deref().unwrap()
+                ),
+                None,
+                "{hand}"
+            );
             let catalog = field_catalog(&cfg);
             assert!(catalog[FIELD_DEFAULT].info.user_selectable, "{hand}");
-            assert!(!catalog["fast-model"].info.user_selectable, "{hand} must still block fast-model");
-            assert!(!catalog["large-model"].info.user_selectable, "{hand} must still block large-model");
-            let (picked, _, _) = crate::agent::remote_config::resolve_default_model(&cfg, &catalog, false);
+            assert!(
+                !catalog["fast-model"].info.user_selectable,
+                "{hand} must still block fast-model"
+            );
+            assert!(
+                !catalog["large-model"].info.user_selectable,
+                "{hand} must still block large-model"
+            );
+            let (picked, _, _) =
+                crate::agent::remote_config::resolve_default_model(&cfg, &catalog, false);
             assert_eq!(picked, FIELD_DEFAULT);
             // Re-running /setup for the same default keeps the policy.
-            persist_provider_setup_at(&path, &setup("https://gen.pollinations.example/v1", "sk-poll-222", FIELD_DEFAULT)).unwrap();
-            let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-            assert!(raw["models"].get("allowed_models").is_some(), "{hand} is hand-written");
+            persist_provider_setup_at(
+                &path,
+                &setup(
+                    "https://gen.pollinations.example/v1",
+                    "sk-poll-222",
+                    FIELD_DEFAULT,
+                ),
+            )
+            .unwrap();
+            let raw: toml::Value =
+                toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(
+                raw["models"].get("allowed_models").is_some(),
+                "{hand} is hand-written"
+            );
         }
         // A list that blocks the default is not a usable policy: ignored on load.
-        let text = base.replace("[models]\n", "[models]\nallowed_models = [\"my-own-model\"]\n");
+        let text = base.replace(
+            "[models]\n",
+            "[models]\nallowed_models = [\"my-own-model\"]\n",
+        );
         let raw: toml::Value = toml::from_str(&text).unwrap();
         let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
         let catalog = field_catalog(&cfg);
@@ -2021,8 +2170,16 @@ mod tests {
         use indexmap::IndexMap;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        persist_provider_setup_at(&path, &setup("https://provider-a.example/v1", "sk-a-111", "model-a")).unwrap();
-        persist_provider_setup_at(&path, &setup("https://provider-b.example/v1", "sk-b-222", "model-b1")).unwrap();
+        persist_provider_setup_at(
+            &path,
+            &setup("https://provider-a.example/v1", "sk-a-111", "model-a"),
+        )
+        .unwrap();
+        persist_provider_setup_at(
+            &path,
+            &setup("https://provider-b.example/v1", "sk-b-222", "model-b1"),
+        )
+        .unwrap();
         let clean = std::fs::read_to_string(&path).unwrap();
         // Leftover from 1.3.42 on load (written behind setup's back, so no migration ran).
         let leftover = clean.replace(
@@ -2035,13 +2192,15 @@ mod tests {
             // B's /models lists more than the one model setup saved.
             let listed = crate::agent::config::resolve_model_list(&cfg, None);
             let template = listed.get("model-b1").unwrap().clone();
-            let mut prefetched: IndexMap<String, crate::agent::config::ModelEntry> = IndexMap::new();
+            let mut prefetched: IndexMap<String, crate::agent::config::ModelEntry> =
+                IndexMap::new();
             for id in ["model-b1", "model-b2", "model-b3"] {
                 let mut entry = template.clone();
                 entry.info.model = id.to_owned();
                 prefetched.insert(id.to_owned(), entry);
             }
-            let catalog = crate::agent::remote_config::resolve_model_catalog(&cfg, Some(prefetched));
+            let catalog =
+                crate::agent::remote_config::resolve_model_catalog(&cfg, Some(prefetched));
             for id in ["model-b1", "model-b2", "model-b3"] {
                 assert!(
                     catalog.get(id).is_some_and(|e| e.info.user_selectable),
@@ -2058,7 +2217,12 @@ mod tests {
         );
         let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
         let msg = crate::agent::remote_config::allowlist_denied_message(&cfg);
-        assert!(msg.contains("allowed_models") && msg.contains("[models]") && msg.contains("config.toml"), "{msg}");
+        assert!(
+            msg.contains("allowed_models")
+                && msg.contains("[models]")
+                && msg.contains("config.toml"),
+            "{msg}"
+        );
     }
 
     /// Regression: a second `/setup` that switches provider A -> B (different key) must make the
@@ -2070,8 +2234,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
         for (url, key, model, format) in [
-            (&url_a, "sk-provider-a-111", "model-a", SetupWireFormat::Anthropic),
-            (&url_b, "sk-provider-b-222", "model-b", SetupWireFormat::Openai),
+            (
+                &url_a,
+                "sk-provider-a-111",
+                "model-a",
+                SetupWireFormat::Anthropic,
+            ),
+            (
+                &url_b,
+                "sk-provider-b-222",
+                "model-b",
+                SetupWireFormat::Openai,
+            ),
         ] {
             persist_provider_setup_at(
                 &path,
@@ -2092,7 +2266,11 @@ mod tests {
             Some("sk-provider-b-222")
         );
         let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
-        let default = cfg.models.default.clone().expect("setup writes [models] default");
+        let default = cfg
+            .models
+            .default
+            .clone()
+            .expect("setup writes [models] default");
         assert_eq!(default, "model-b");
         let catalog = crate::agent::config::resolve_model_list(&cfg, None);
         let entry = crate::agent::config::find_model_by_id(&catalog, &default).unwrap();
@@ -2100,16 +2278,24 @@ mod tests {
         assert_eq!(creds.api_key.as_deref(), Some("sk-provider-b-222"));
         assert_eq!(creds.base_url, url_b);
         assert!(
-            !entry.extra_headers.keys().any(|h| h.eq_ignore_ascii_case("anthropic-version")),
+            !entry
+                .extra_headers
+                .keys()
+                .any(|h| h.eq_ignore_ascii_case("anthropic-version")),
             "provider A's Messages headers must not stick to provider B"
         );
-        let sampler = crate::agent::config::sampling_config_for_model(entry, creds, None, None, None, None);
+        let sampler =
+            crate::agent::config::sampling_config_for_model(entry, creds, None, None, None, None);
         let client = supercharge_sampler::SamplingClient::new(sampler).unwrap();
         let request: supercharge_sampling_types::types::ChatCompletionRequest =
-            serde_json::from_value(json!({"messages": [{"role": "user", "content": "hi"}]})).unwrap();
+            serde_json::from_value(json!({"messages": [{"role": "user", "content": "hi"}]}))
+                .unwrap();
         let _ = client.chat_completion(request).await;
 
-        assert!(seen_a.lock().unwrap().is_empty(), "nothing may reach provider A");
+        assert!(
+            seen_a.lock().unwrap().is_empty(),
+            "nothing may reach provider A"
+        );
         let seen = seen_b.lock().unwrap();
         let (req_path, auth, body) = seen.first().expect("request reached provider B");
         assert!(req_path.starts_with("/v1/"), "{req_path}");
@@ -2799,42 +2985,100 @@ mod tests {
 
     #[test]
     fn reasoning_effort_ids_by_family() {
-        assert_eq!(reasoning_effort_ids_for_model("gpt-6-astra"), &["xhigh", "high", "medium", "low"]);
-        assert_eq!(reasoning_effort_ids_for_model("gpt-5"), &["high", "medium", "low"]);
-        assert_eq!(reasoning_effort_ids_for_model("o4-mini"), &["high", "medium", "low"]);
+        assert_eq!(
+            reasoning_effort_ids_for_model("gpt-6-astra"),
+            &["xhigh", "high", "medium", "low"]
+        );
+        assert_eq!(
+            reasoning_effort_ids_for_model("gpt-5"),
+            &["high", "medium", "low"]
+        );
+        assert_eq!(
+            reasoning_effort_ids_for_model("o4-mini"),
+            &["high", "medium", "low"]
+        );
         assert!(reasoning_effort_ids_for_model("gpt-4o").is_empty());
     }
 
     #[test]
     fn infers_thinking_for_current_families() {
         for id in [
-            "gpt-6-astra", "gpt-5.2", "openai/gpt-5-mini", "o1", "o3-pro", "o4-mini",
-            "claude-3-7-sonnet-20250219", "claude-sonnet-4-5", "claude-opus-4-1",
-            "gemini-2.5-pro", "gemini-3-flash", "deepseek-r1", "deepseek-reasoner",
-            "qwq-32b", "qwen3-235b-a22b", "gpt-oss-120b", "my-thinking-model",
+            "gpt-6-astra",
+            "gpt-5.2",
+            "openai/gpt-5-mini",
+            "o1",
+            "o3-pro",
+            "o4-mini",
+            "claude-3-7-sonnet-20250219",
+            "claude-sonnet-4-5",
+            "claude-opus-4-1",
+            "gemini-2.5-pro",
+            "gemini-3-flash",
+            "deepseek-r1",
+            "deepseek-reasoner",
+            "qwq-32b",
+            "qwen3-235b-a22b",
+            "gpt-oss-120b",
+            "my-thinking-model",
         ] {
             assert!(infer_thinking_from_id(id), "{id} should infer thinking");
         }
         for id in [
-            "gpt-4o", "gpt-4.1-mini", "claude-3-5-sonnet", "gemini-2.0-flash",
-            "deepseek-chat", "llama-3.3-70b", "text-embedding-3-large",
+            "gpt-4o",
+            "gpt-4.1-mini",
+            "claude-3-5-sonnet",
+            "gemini-2.0-flash",
+            "deepseek-chat",
+            "llama-3.3-70b",
+            "text-embedding-3-large",
         ] {
-            assert!(!infer_thinking_from_id(id), "{id} should not infer thinking");
+            assert!(
+                !infer_thinking_from_id(id),
+                "{id} should not infer thinking"
+            );
         }
     }
 
     #[test]
     fn metadata_thinking_wins_over_name() {
         use serde_json::json;
-        assert_eq!(model_metadata_thinking(&json!({"supported_parameters":["tools","reasoning","include_reasoning"]})), Some(true));
-        assert_eq!(model_metadata_thinking(&json!({"supported_parameters":["tools","temperature"]})), Some(false));
-        assert_eq!(model_metadata_thinking(&json!({"capabilities":{"reasoning":true}})), Some(true));
-        assert_eq!(model_metadata_thinking(&json!({"capabilities":{"thinking":false}})), Some(false));
-        assert_eq!(model_metadata_thinking(&json!({"thinking":{"supported":true}})), Some(true));
-        assert_eq!(model_metadata_thinking(&json!({"features":["vision","reasoning"]})), Some(true));
+        assert_eq!(
+            model_metadata_thinking(
+                &json!({"supported_parameters":["tools","reasoning","include_reasoning"]})
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            model_metadata_thinking(&json!({"supported_parameters":["tools","temperature"]})),
+            Some(false)
+        );
+        assert_eq!(
+            model_metadata_thinking(&json!({"capabilities":{"reasoning":true}})),
+            Some(true)
+        );
+        assert_eq!(
+            model_metadata_thinking(&json!({"capabilities":{"thinking":false}})),
+            Some(false)
+        );
+        assert_eq!(
+            model_metadata_thinking(&json!({"thinking":{"supported":true}})),
+            Some(true)
+        );
+        assert_eq!(
+            model_metadata_thinking(&json!({"features":["vision","reasoning"]})),
+            Some(true)
+        );
         assert_eq!(model_metadata_thinking(&json!({"id":"x"})), None);
-        assert!(model_entry_supports_thinking(&json!({"id":"gpt-6-astra"}), "gpt-6-astra", ""));
-        assert!(!model_entry_supports_thinking(&json!({"supported_parameters":["tools"]}), "o3", ""));
+        assert!(model_entry_supports_thinking(
+            &json!({"id":"gpt-6-astra"}),
+            "gpt-6-astra",
+            ""
+        ));
+        assert!(!model_entry_supports_thinking(
+            &json!({"supported_parameters":["tools"]}),
+            "o3",
+            ""
+        ));
     }
 
     #[test]
@@ -2893,13 +3137,20 @@ mod tests {
                 {"id": "pollinations/baz", "title": " ", "name": "Baz Name"}
             ]
         }));
-        let by_id: std::collections::BTreeMap<_, _> = models
-            .into_iter()
-            .map(|m| (m.id, m.name))
-            .collect();
-        assert_eq!(by_id.get("pollinations/foo").map(String::as_str), Some("Foo Title"));
-        assert_eq!(by_id.get("pollinations/bar").map(String::as_str), Some("Bar"));
-        assert_eq!(by_id.get("pollinations/baz").map(String::as_str), Some("Baz Name"));
+        let by_id: std::collections::BTreeMap<_, _> =
+            models.into_iter().map(|m| (m.id, m.name)).collect();
+        assert_eq!(
+            by_id.get("pollinations/foo").map(String::as_str),
+            Some("Foo Title")
+        );
+        assert_eq!(
+            by_id.get("pollinations/bar").map(String::as_str),
+            Some("Bar")
+        );
+        assert_eq!(
+            by_id.get("pollinations/baz").map(String::as_str),
+            Some("Baz Name")
+        );
     }
 
     #[test]
@@ -2919,7 +3170,6 @@ mod tests {
             vec!["Claude A", "Claude B", "c"]
         );
     }
-
 
     #[test]
     fn load_existing_falls_back_to_model_entry_base_url() {
@@ -3363,11 +3613,28 @@ mod context_window_metadata_tests {
 
     #[test]
     fn reads_provider_context_metadata() {
-        assert_eq!(provider_model_context_window(&json!({"id":"a","context_length":1_000_000})), Some(1_000_000));
-        assert_eq!(provider_model_context_window(&json!({"id":"a","context_window":"2000000"})), Some(2_000_000));
-        assert_eq!(provider_model_context_window(&json!({"id":"a","top_provider":{"context_length":400000}})), Some(400_000));
-        assert_eq!(provider_model_context_window(&json!({"id":"a","inputTokenLimit":1048576})), Some(1_048_576));
+        assert_eq!(
+            provider_model_context_window(&json!({"id":"a","context_length":1_000_000})),
+            Some(1_000_000)
+        );
+        assert_eq!(
+            provider_model_context_window(&json!({"id":"a","context_window":"2000000"})),
+            Some(2_000_000)
+        );
+        assert_eq!(
+            provider_model_context_window(
+                &json!({"id":"a","top_provider":{"context_length":400000}})
+            ),
+            Some(400_000)
+        );
+        assert_eq!(
+            provider_model_context_window(&json!({"id":"a","inputTokenLimit":1048576})),
+            Some(1_048_576)
+        );
         assert_eq!(provider_model_context_window(&json!({"id":"a"})), None);
-        assert_eq!(provider_model_context_window(&json!({"id":"a","context_length":0})), None);
+        assert_eq!(
+            provider_model_context_window(&json!({"id":"a","context_length":0})),
+            None
+        );
     }
 }
