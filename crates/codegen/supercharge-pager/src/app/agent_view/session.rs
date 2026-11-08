@@ -357,6 +357,7 @@ impl AgentView {
             available_modes: Vec::new(),
             session_mode: supercharge_tools::types::SessionMode::Default,
             session_mode_pending: None,
+            published_mode_id: None,
             deferred_session_mode: None,
             deferred_permission_mode: None,
             pending_extensions_fetch: false,

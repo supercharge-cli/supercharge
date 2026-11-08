@@ -620,7 +620,7 @@ impl acp::Agent for MvpAgent {
                     "_supercharge/mcp/sdk": true,
                     "_supercharge/pluginDirs": true,
                     "_supercharge/plugins": { "version": 1, "catalog": true, "connections": true },
-                    "methods": ["_supercharge/plugins/list", "_supercharge/plugins/action", "_supercharge/plugins/catalog", "_supercharge/plugins/catalog_config", "_supercharge/plugins/catalog_configure", "_supercharge/plugins/details", "_supercharge/connections/list", "_supercharge/connections/configure", "_supercharge/connections/select", "_supercharge/connections/disconnect", "_supercharge/connections/connect", "_supercharge/connections/status", "_supercharge/connections/cancel"],
+                    "methods": ["_supercharge/plugins/list", "_supercharge/plugins/action", "_supercharge/plugins/catalog", "_supercharge/plugins/catalog_config", "_supercharge/plugins/catalog_configure", "_supercharge/plugins/details", "_supercharge/connections/list", "_supercharge/connections/configure", "_supercharge/connections/select", "_supercharge/connections/disconnect", "_supercharge/connections/connect", "_supercharge/connections/status", "_supercharge/connections/cancel", "_supercharge/agents/list", "_supercharge/agents/create"],
                     // Provider setup over ACP (`_supercharge/setup/*`, same logic as `/setup`).
                     "_supercharge/setup": true,
                     "_supercharge/setup/methods": crate::extensions::setup::METHODS
@@ -2071,6 +2071,9 @@ impl acp::Agent for MvpAgent {
             }
             m if crate::extensions::setup::METHODS.contains(&m) => {
                 crate::extensions::setup::handle(self, m, &args).await
+            }
+            m if crate::extensions::custom_agents::METHODS.contains(&m) => {
+                crate::extensions::custom_agents::handle(self, m, &args).await
             }
             crate::agent::handlers::thinking_probe::THINKING_PROBE_METHOD => {
                 // params: { sessionId, force?: bool }

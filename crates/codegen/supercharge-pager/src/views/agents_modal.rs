@@ -245,6 +245,8 @@ pub struct AgentsModalState {
     pub(crate) content_rect: Option<Rect>,
     pub persona_input: Option<PersonaCreateInput>,
     pub persona_confirm: Option<PersonaConfirmAction>,
+    /// Create form on the Agents tab. Same fields as a persona; saved as an agent markdown file.
+    pub agent_input: Option<PersonaCreateInput>,
     /// Inline message shown briefly. Cleared on next action.
     pub message: Option<AgentsModalMessage>,
     /// Working directory for rebuilding the agent list.
@@ -303,6 +305,7 @@ impl AgentsModalState {
             content_rect: None,
             persona_input: None,
             persona_confirm: None,
+            agent_input: None,
             message: None,
             cwd: cwd.to_path_buf(),
             bundle: bundle.clone(),
@@ -415,6 +418,10 @@ pub fn build_agent_list(
         if def.scope == AgentScope::BuiltIn {
             continue;
         }
+        // Skill packs and bundled agents stay out of this list. `/new_agent` writes `custom: true`.
+        if !supercharge_agent::custom_agent::is_custom_agent(&def) {
+            continue;
+        }
         let is_subagent_name = subagent_names.contains(&def.name);
         if is_subagent_name && def.scope != AgentScope::Project {
             continue;
@@ -454,6 +461,9 @@ pub fn build_agent_list(
     }
     if let Some(registry) = plugins {
         for agent in supercharge_agent::discovery::plugin_agents(registry) {
+            if !supercharge_agent::custom_agent::is_custom_agent(&agent.definition) {
+                continue;
+            }
             if entries.iter().any(|e| e.name == agent.qualified_name) {
                 continue;
             }
@@ -1074,6 +1084,13 @@ pub fn render_agents_modal(
 }
 /// Build footer shortcuts for the Agents tab.
 fn build_agents_tab_shortcuts<'a>(state: &AgentsModalState) -> Vec<Shortcut<'a>> {
+    if state.agent_input.is_some() {
+        return vec![
+            Shortcut { label: "Tab switch field", clickable: false, id: 0 },
+            Shortcut { label: "Enter create", clickable: false, id: 0 },
+            Shortcut { label: "Esc cancel", clickable: false, id: 0 },
+        ];
+    }
     let mut shortcuts = vec![
         Shortcut {
             label: "j/k nav",
@@ -1087,6 +1104,11 @@ fn build_agents_tab_shortcuts<'a>(state: &AgentsModalState) -> Vec<Shortcut<'a>>
         },
         Shortcut {
             label: "E/\u{2190} collapse",
+            clickable: false,
+            id: 0,
+        },
+        Shortcut {
+            label: "n new",
             clickable: false,
             id: 0,
         },
@@ -1271,6 +1293,17 @@ fn render_agents_tab(
     state: &mut AgentsModalState,
     theme: &Theme,
 ) {
+    if let Some(ref input) = state.agent_input {
+        render_persona_create_form(
+            buf,
+            content_area,
+            input,
+            state.message.as_ref().map(|m| m.text.as_str()),
+            theme,
+            "Create agent",
+        );
+        return;
+    }
     let mut y = content_area.y;
     let w = content_area.width as usize;
     if let Some(ref msg) = state.message {
@@ -1555,6 +1588,7 @@ fn render_personas_tab(
             input,
             state.message.as_ref().map(|m| m.text.as_str()),
             theme,
+            "Create New Persona",
         );
         return;
     }
@@ -1888,10 +1922,10 @@ fn render_persona_create_form(
     input: &PersonaCreateInput,
     message: Option<&str>,
     theme: &Theme,
+    title: &str,
 ) {
     let mut y = content_area.y;
     let w = content_area.width as usize;
-    let title = "Create New Persona";
     let title_style = Style::default()
         .fg(theme.text_primary)
         .add_modifier(Modifier::BOLD);
@@ -2040,7 +2074,9 @@ fn clear_overlays_for_tab(state: &mut AgentsModalState, tab: AgentsTab) {
             state.persona_input = None;
             state.persona_confirm = None;
         }
-        AgentsTab::Personas => {}
+        AgentsTab::Personas => {
+            state.agent_input = None;
+        }
     }
 }
 fn switch_agents_tab(state: &mut AgentsModalState, tab: AgentsTab) {
@@ -2052,6 +2088,9 @@ fn switch_agents_tab(state: &mut AgentsModalState, tab: AgentsTab) {
 /// Handle a key event while the agents modal is open.
 pub fn handle_agents_key(state: &mut AgentsModalState, key: &KeyEvent) -> AgentsModalOutcome {
     state.message = None;
+    if state.agent_input.is_some() && state.active_tab == AgentsTab::Agents {
+        return handle_agent_create_form_key(state, key);
+    }
     if state.persona_input.is_some() && state.active_tab == AgentsTab::Personas {
         return handle_persona_create_form_key(state, key);
     }
@@ -2118,10 +2157,19 @@ pub fn handle_agents_key(state: &mut AgentsModalState, key: &KeyEvent) -> Agents
     }
 }
 pub fn handle_agents_paste(state: &mut AgentsModalState, text: &str) -> AgentsModalOutcome {
-    if let Some(input) = state.persona_input.as_mut() {
-        let Some(editor) = input.active_editor_mut() else {
-            return AgentsModalOutcome::Unchanged;
-        };
+    let editor = state
+        .agent_input
+        .as_mut()
+        .filter(|_| state.active_tab == AgentsTab::Agents)
+        .and_then(|input| input.active_editor_mut())
+        .or_else(|| {
+            state
+                .persona_input
+                .as_mut()
+                .filter(|_| state.active_tab == AgentsTab::Personas)
+                .and_then(|input| input.active_editor_mut())
+        });
+    if let Some(editor) = editor {
         let outcome = editor.insert_paste(text);
         if outcome == LineEditOutcome::TextChanged {
             state.message = None;
@@ -2225,6 +2273,10 @@ fn handle_agents_tab_key(state: &mut AgentsModalState, key: &KeyEvent) -> Agents
             AgentsModalOutcome::Changed
         }
         KeyCode::Char('q') => AgentsModalOutcome::Close,
+        KeyCode::Char('n') => {
+            state.agent_input = Some(PersonaCreateInput::new());
+            AgentsModalOutcome::Changed
+        }
         KeyCode::Char('s') => {
             if let Some(entry) = state.agents.get(state.selected) {
                 if entry.definition.plugin_name.is_some() {
@@ -2464,6 +2516,74 @@ fn handle_persona_create_form_key(
                 state.refresh_personas();
                 state.message = Some(AgentsModalMessage::success(format!(
                     "Created persona '{label}'"
+                )));
+            }
+            Err(e) => {
+                state.message = Some(AgentsModalMessage::error(e));
+            }
+        }
+        return AgentsModalOutcome::Changed;
+    }
+    let Some(editor) = input.active_editor_mut() else {
+        return AgentsModalOutcome::Unchanged;
+    };
+    finish_line_edit(editor.handle_key(key))
+}
+fn handle_agent_create_form_key(
+    state: &mut AgentsModalState,
+    key: &KeyEvent,
+) -> AgentsModalOutcome {
+    let Some(input) = state.agent_input.as_mut() else {
+        return AgentsModalOutcome::Unchanged;
+    };
+    let cwd = state.cwd.clone();
+    if key.code == KeyCode::Esc {
+        state.agent_input = None;
+        return AgentsModalOutcome::Changed;
+    }
+    if crate::input::key::is_shift_tab(key) {
+        input.active_field = handle_persona_create_form_tab_key(input.active_field, true);
+        return AgentsModalOutcome::Changed;
+    }
+    if crate::input::key::KeyShortcut::key(KeyCode::Tab).matches(key) {
+        input.active_field = handle_persona_create_form_tab_key(input.active_field, false);
+        return AgentsModalOutcome::Changed;
+    }
+    if try_toggle_create_scope(input.active_field, &mut input.scope, key) {
+        return AgentsModalOutcome::Changed;
+    }
+    if let Some(field) = persona_create_form_field_nav(input.active_field, key) {
+        input.active_field = field;
+        return AgentsModalOutcome::Changed;
+    }
+    if key.code == KeyCode::Enter {
+        let name = input.name().trim().to_string();
+        let description = input.description().trim().to_string();
+        let instructions = input.instructions().trim().to_string();
+        let scope = match input.scope {
+            ConfigFileScope::User => supercharge_agent::custom_agent::CustomAgentScope::User,
+            ConfigFileScope::Project => supercharge_agent::custom_agent::CustomAgentScope::Project,
+        };
+        if name.is_empty() {
+            state.message = Some(AgentsModalMessage::error("Name is required"));
+            return AgentsModalOutcome::Changed;
+        }
+        match supercharge_agent::custom_agent::write_custom_agent(
+            &cwd,
+            &supercharge_agent::custom_agent::CustomAgentDraft {
+                name,
+                description,
+                instructions,
+                scope,
+            },
+        ) {
+            Ok(path) => {
+                let label = path.file_stem().and_then(|s| s.to_str()).unwrap_or("agent");
+                let label = label.to_string();
+                state.agent_input = None;
+                state.rebuild_agents();
+                state.message = Some(AgentsModalMessage::success(format!(
+                    "Created agent '{label}'. Pick it in the chat mode menu."
                 )));
             }
             Err(e) => {
@@ -2850,6 +2970,7 @@ mod tests {
                 content_rect: None,
                 persona_input: None,
                 persona_confirm: None,
+                agent_input: None,
                 message: None,
                 cwd: PathBuf::new(),
                 bundle: bundle.clone(),
@@ -2892,6 +3013,7 @@ mod tests {
             content_rect: None,
             persona_input: None,
             persona_confirm: None,
+            agent_input: None,
             message: None,
             cwd: PathBuf::new(),
             bundle: BundleState::default(),
@@ -3403,7 +3525,7 @@ mod tests {
         let _ = input.set_field_cursor_byte(CreateField::Name, text.len() - 1);
         let create_area = Rect::new(0, 0, 24, 12);
         let mut create_buffer = Buffer::empty(create_area);
-        render_persona_create_form(&mut create_buffer, &create_area, &input, None, &theme);
+        render_persona_create_form(&mut create_buffer, &create_area, &input, None, &theme, "Create New Persona");
         let editor_width = create_area.width as usize - "Name: ".len();
         let create_view = input.name_editor().viewport(editor_width);
         let Some(create_visible) = input.name().get(create_view.visible_byte_range.clone()) else {
@@ -3420,7 +3542,7 @@ mod tests {
         input.set_field_text(CreateField::Description, &text);
         let _ = input.set_field_cursor_byte(CreateField::Description, text.len() - 1);
         let mut inactive_buffer = Buffer::empty(create_area);
-        render_persona_create_form(&mut inactive_buffer, &create_area, &input, None, &theme);
+        render_persona_create_form(&mut inactive_buffer, &create_area, &input, None, &theme, "Create New Persona");
         let description_text = ("Description: ".len() as u16..create_area.width)
             .filter_map(|x| inactive_buffer.cell((x, 4)).map(|c| c.symbol()))
             .collect::<String>();
@@ -3470,16 +3592,11 @@ mod tests {
         let entries = build_agent_list(cwd.path(), &HashMap::new(), Some(&registry));
         let entry = entries
             .iter()
-            .find(|e| e.name == "my-plugin:reviewer")
-            .expect("plugin agent must be listed under its qualified name");
-        assert_eq!(entry.description, "Reviews code");
-        assert!(entry.enabled);
-        assert!(!entry.is_builtin);
+            .find(|e| e.name == "my-plugin:reviewer");
         assert!(
-            entry.source_path.is_some(),
-            "source path opens the .md file"
+            entry.is_none(),
+            "plugin and skill agents stay out of /agents"
         );
-        assert_eq!(entry.definition.plugin_name.as_deref(), Some("my-plugin"));
     }
     #[test]
     fn build_agent_list_plugin_agent_toggle_keys_on_qualified_name() {
@@ -3488,10 +3605,9 @@ mod tests {
         let cwd = tempfile::tempdir().unwrap();
         let toggle = HashMap::from([("my-plugin:reviewer".to_string(), false)]);
         let entries = build_agent_list(cwd.path(), &toggle, Some(&registry));
-        let entry = entries
-            .iter()
-            .find(|e| e.name == "my-plugin:reviewer")
-            .expect("disabled plugin agent stays visible in the list");
-        assert!(!entry.enabled);
+        assert!(
+            entries.iter().all(|e| e.name != "my-plugin:reviewer"),
+            "plugin and skill agents stay out of /agents"
+        );
     }
 }

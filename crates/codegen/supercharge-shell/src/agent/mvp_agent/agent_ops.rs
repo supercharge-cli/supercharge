@@ -3452,11 +3452,23 @@ impl MvpAgent {
             crate::session::plan_mode::PromptMode::Ask => "ask",
             crate::session::plan_mode::PromptMode::Agent => "default",
         };
-        Ok(acp::SessionModeState::new(current, vec![
+        let cwd = self
+            .get_session_cwd(session_id)
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let mut modes = vec![
             acp::SessionMode::new("default", "Default"),
             acp::SessionMode::new("plan", "Plan"),
             acp::SessionMode::new("ask", "Ask"),
-        ]))
+        ];
+        for custom in supercharge_agent::custom_agent::modes_for_cwd(&cwd) {
+            if modes.iter().any(|mode| mode.id.0.as_ref() == custom.id) {
+                continue;
+            }
+            modes.push(
+                acp::SessionMode::new(custom.id, custom.name).description(custom.description),
+            );
+        }
+        Ok(acp::SessionModeState::new(current, modes))
     }
     pub(super) fn session_config_options(
         &self,

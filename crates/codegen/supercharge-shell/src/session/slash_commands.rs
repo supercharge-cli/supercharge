@@ -67,6 +67,18 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         resolve: |_args| BuiltinAction::Help,
     },
     BuiltinCommand {
+        name: "new_agent",
+        description: "Create a custom agent in this chat. You can paste the full prompt, or let the agent draft it.",
+        argument_hint: Some("[name or full prompt]"),
+        aliases: &["new-agent"],
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        resolve: |args| BuiltinAction::NewAgent {
+            brief: args.to_string(),
+        },
+    },
+    BuiltinCommand {
         name: "setup",
         description: "Configure provider base URL, API key, and default model",
         argument_hint: Some("[<provider> <api_key>] | [<base_url> <api_key> [model]]"),
@@ -1364,6 +1376,9 @@ pub(super) enum BuiltinAction {
         input: String,
     },
     Credits,
+    NewAgent {
+        brief: String,
+    },
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
@@ -1402,6 +1417,7 @@ impl BuiltinAction {
             BuiltinAction::WorkflowManage { .. } => "workflow",
             BuiltinAction::WorkflowLaunch { .. } => "workflow",
             BuiltinAction::Credits => "credits",
+            BuiltinAction::NewAgent { .. } => "new_agent",
         }
     }
     pub(crate) fn args_provided(&self) -> bool {
@@ -1440,6 +1456,7 @@ impl BuiltinAction {
             BuiltinAction::WorkflowManage { .. } => true,
             BuiltinAction::WorkflowLaunch { input, .. } => !input.is_empty(),
             BuiltinAction::Credits => false,
+            BuiltinAction::NewAgent { brief } => !brief.trim().is_empty(),
         }
     }
 }

@@ -704,6 +704,13 @@ impl SessionActor {
                 }
                 otel_command_name = Some(action.command_name().to_string());
                 match action {
+                    BuiltinAction::NewAgent { brief } => {
+                        supercharge_telemetry::session_ctx::log_event(slash_used);
+                        let dir = supercharge_dirs::supercharge_home().join("agents");
+                        vec![text_block(supercharge_agent::custom_agent::new_agent_interview(
+                            &brief, &dir,
+                        ))]
+                    }
                     BuiltinAction::GoalSet {
                         objective,
                         token_budget,

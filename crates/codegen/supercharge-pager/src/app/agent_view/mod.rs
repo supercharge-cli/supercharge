@@ -184,6 +184,7 @@ pub(crate) use role::{AgentRole, ChildLink, ComposerRoute, ViewSurface};
 mod selection;
 mod session;
 mod session_mode;
+pub(crate) use session_mode::ShiftTabStop;
 mod shell_completion;
 mod subagent_takeover;
 #[cfg(test)]
@@ -1268,6 +1269,8 @@ pub struct AgentView {
     pub(crate) available_modes: Vec<agent_client_protocol::SessionMode>,
     /// Last confirmed mode. Plan surfaces still read `plan_mode_active`; this covers the rest.
     pub(crate) session_mode: supercharge_tools::types::SessionMode,
+    /// Raw mode id from the agent, including custom agents whose id is not `default` / `plan` / `ask`.
+    pub(crate) published_mode_id: Option<String>,
     /// Optimistic Shift+Tab pick over `available_modes`, cleared like `plan_mode_pending`.
     pub(crate) session_mode_pending: Option<supercharge_tools::types::SessionMode>,
     /// Session mode to apply once this agent's ACP session exists. Set when the agent is spawned from the dashboard with `/plan` active (the session does not exist yet, so the mode can't be sent immediately).

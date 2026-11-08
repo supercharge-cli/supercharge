@@ -8,6 +8,7 @@ pub mod agent;
 pub mod builder;
 pub mod compaction;
 pub mod config;
+pub mod custom_agent;
 pub mod discovery;
 pub mod error;
 pub mod plugins;

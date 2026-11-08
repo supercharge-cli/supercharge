@@ -763,19 +763,87 @@ fn dispatch_cycle_mode_inner(app: &mut AppView) -> Vec<Effect> {
         return effects;
     };
 
-    // Published modes own the ring. The permission arms below are Grok-shell only.
-    if let Some((next, name)) = agent.next_published_mode() {
-        let name = name.to_owned();
-        // Leave is abandon; re-enter clears a leftover Abandoned intent.
-        agent.stage_plan_mode(next.is_plan());
-        agent.pick_published_mode(next.clone());
-        agent.show_mode_switch_banner(&name);
-        refresh_open_settings_modals(app);
-        tracing::info!(mode = next.as_id(), "Mode cycle: published mode");
-        return vec![Effect::SetSessionMode {
-            session_id,
-            mode_id: acp::SessionModeId::new(next.as_id()),
-        }];
+    // Published modes own the ring, then Always-Approve and Auto-Review.
+    if let Some(stop) = agent.next_shift_tab_stop() {
+        use crate::app::agent_view::ShiftTabStop;
+        match stop {
+            ShiftTabStop::Mode { id, name } => {
+                agent.stage_plan_mode(id == "plan");
+                agent.pick_published_mode(&id);
+                agent.show_mode_switch_banner(&name);
+                refresh_open_settings_modals(app);
+                app.current_ui.permission_mode = Some("ask".into());
+                tracing::info!(mode = %id, "Mode cycle: published mode");
+                return vec![
+                    Effect::SetSessionMode {
+                        session_id: session_id.clone(),
+                        mode_id: acp::SessionModeId::new(id),
+                    },
+                    Effect::PersistPermissionMode {
+                        canonical: "ask",
+                        session_id: Some(session_id),
+                        persist: crate::app::actions::PermissionModePersist::BestEffort,
+                    },
+                ];
+            }
+            ShiftTabStop::AlwaysApprove => {
+                if let Some(warning) = yolo_locked {
+                    if let Some(agent) = app.agents.get_mut(&id) {
+                        agent.show_toast(warning);
+                    }
+                    return vec![];
+                }
+                set_yolo_mode_inner(app, true);
+                app.current_ui.permission_mode = Some("always-approve".into());
+                refresh_open_settings_modals(app);
+                if let Some(agent) = app.agents.get_mut(&id) {
+                    agent.stage_plan_mode(false);
+                    agent.published_mode_id = None;
+                    agent.session.auto_mode = false;
+                    agent.show_mode_switch_banner("Always-Approve");
+                }
+                tracing::info!("Mode cycle: published ring → Always-Approve");
+                return vec![
+                    Effect::SetSessionMode {
+                        session_id: session_id.clone(),
+                        mode_id: acp::SessionModeId::new(
+                            supercharge_tools::types::SessionMode::Default.as_id(),
+                        ),
+                    },
+                    Effect::PersistPermissionMode {
+                        canonical: "always-approve",
+                        session_id: Some(session_id),
+                        persist: crate::app::actions::PermissionModePersist::BestEffort,
+                    },
+                ];
+            }
+            ShiftTabStop::AutoReview => {
+                set_yolo_mode_inner(app, false);
+                app.current_ui.permission_mode = Some("auto".into());
+                refresh_open_settings_modals(app);
+                if let Some(agent) = app.agents.get_mut(&id) {
+                    agent.stage_plan_mode(false);
+                    agent.published_mode_id = None;
+                    agent.session.yolo_mode = false;
+                    agent.session.auto_mode = true;
+                    agent.show_mode_switch_banner("Auto-Review");
+                }
+                tracing::info!("Mode cycle: published ring → Auto-Review");
+                return vec![
+                    Effect::SetSessionMode {
+                        session_id: session_id.clone(),
+                        mode_id: acp::SessionModeId::new(
+                            supercharge_tools::types::SessionMode::Default.as_id(),
+                        ),
+                    },
+                    Effect::PersistPermissionMode {
+                        canonical: "auto",
+                        session_id: Some(session_id),
+                        persist: crate::app::actions::PermissionModePersist::BestEffort,
+                    },
+                ];
+            }
+        }
     }
 
     // Effective plan state: prefer optimistic pending over confirmed active.

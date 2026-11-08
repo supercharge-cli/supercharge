@@ -2359,7 +2359,6 @@ fn show_export_copy_tip_shows_and_counts_when_flag_on() {
 
 #[test]
 fn cycle_mode_walks_the_agents_published_modes() {
-    use supercharge_tools::types::SessionMode;
     let mut app = test_app_with_agent();
     app.agents
         .get_mut(&AgentId(0))
@@ -2374,33 +2373,25 @@ fn cycle_mode_walks_the_agents_published_modes() {
         )));
 
     let mut sent = Vec::new();
-    for _ in 0..3 {
+    for _ in 0..4 {
         let effects = dispatch(Action::CycleMode, &mut app);
-        let [Effect::SetSessionMode { mode_id, .. }] = effects.as_slice() else {
-            panic!("a published-mode cycle is one set_mode and nothing else: {effects:?}");
-        };
-        sent.push(mode_id.0.to_string());
+        let mode_id = effects.iter().find_map(|effect| match effect {
+            Effect::SetSessionMode { mode_id, .. } => Some(mode_id.0.to_string()),
+            _ => None,
+        });
+        sent.push(mode_id.expect("cycle sends a mode"));
     }
 
-    assert_eq!(vec!["ask", "plan", "default"], sent);
+    assert_eq!(
+        vec!["ask", "plan", "default", "default"],
+        sent,
+        "ask, plan, Always-Approve, Auto-Review"
+    );
     let agent = test_agent(&app, AgentId(0));
+    assert!(agent.session.is_auto(), "the fourth press is Auto-Review");
     assert_eq!(
-        SessionMode::Default,
-        agent.effective_session_mode(),
-        "three presses come back around before any confirmation arrives"
-    );
-    assert_eq!(Some(false), agent.plan_mode_pending);
-    assert!(
-        !agent.session.is_yolo() && !agent.session.is_auto(),
-        "the permission axis stays put"
-    );
-    assert_eq!(
-        Some("Switched to mode: Agent".to_owned()),
-        agent
-            .mode_switch_banner
-            .as_ref()
-            .map(|(msg, _)| msg.clone()),
-        "the banner uses the name the agent gave the mode"
+        Some("Switched to mode: Auto-Review".to_owned()),
+        agent.mode_switch_banner.as_ref().map(|(msg, _)| msg.clone())
     );
 }
 

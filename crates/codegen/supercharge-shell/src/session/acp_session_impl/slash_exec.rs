@@ -15,6 +15,12 @@ impl SessionActor {
             },
         );
         match action {
+            BuiltinAction::NewAgent { brief } => {
+                let dir = supercharge_dirs::supercharge_home().join("agents");
+                let text = supercharge_agent::custom_agent::new_agent_interview(&brief, &dir);
+                self.send_host_turn_slash_command_output(&text).await;
+                ok_end_turn(0, None)
+            }
             BuiltinAction::Credits => {
                 let text = tokio::task::spawn_blocking(|| {
                     let config = crate::config::load_effective_config().unwrap_or(toml::Value::Table(

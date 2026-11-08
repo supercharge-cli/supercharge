@@ -9,6 +9,7 @@ pub(crate) mod chat_conversation_history;
 pub mod code_nav;
 pub mod connections;
 pub mod consent;
+pub(crate) mod custom_agents;
 pub mod content;
 pub mod debug;
 pub mod feedback;
@@ -124,6 +125,8 @@ const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
     "supercharge/setup/device_cancel",
     "supercharge/setup/image_status",
     "supercharge/setup/image_save",
+    "supercharge/agents/list",
+    "supercharge/agents/create",
     "supercharge/connections/list",
     "supercharge/connections/configure",
     "supercharge/connections/select",
