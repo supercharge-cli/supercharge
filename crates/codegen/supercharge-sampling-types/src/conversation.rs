@@ -4936,11 +4936,12 @@ mod tests {
         let input = input_items_json(&req);
         let summary = summarise_input(&input);
 
-        assert_eq!(summary.len(), 4);
-        assert_eq!(summary.get(2).map(String::as_str), Some("reasoning:r1"));
+        // System rides in `instructions`; input is [user, reasoning, assistant].
+        assert_eq!(summary.len(), 3);
+        assert_eq!(summary.get(1).map(String::as_str), Some("reasoning:r1"));
 
         // Encrypted content absent on the wire.
-        let enc = input.get(2).and_then(|v| v.get("encrypted_content"));
+        let enc = input.get(1).and_then(|v| v.get("encrypted_content"));
         assert!(enc.is_none() || enc.and_then(|v| v.as_str()).is_none());
 
         // The legacy placeholder sentinel must not appear

@@ -372,7 +372,6 @@ impl SetupModalState {
     fn provider_rows(&self) -> Vec<ProviderRow> {
         let query = self.filter.text().trim().to_ascii_lowercase();
         let mut rows: Vec<ProviderRow> = setup_provider_profiles()
-            .iter()
             .filter(|profile| {
                 if self.kind == SetupKind::Image
                     && profile.format

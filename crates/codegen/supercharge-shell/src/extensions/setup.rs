@@ -135,7 +135,6 @@ fn model_json(m: &ProviderModel) -> Value {
 fn providers_json() -> Value {
     Value::Array(
         ps::setup_provider_profiles()
-            .iter()
             .map(|p| {
                 json!({
                     "id": p.id,
@@ -380,7 +379,7 @@ mod tests {
 
     #[test]
     fn builtin_provider_fills_url_format_and_default_model() {
-        let p = ps::setup_provider_profiles()[0];
+        let p = ps::setup_provider_profiles().next().expect("a builtin profile");
         let t = resolve_target(&json!({"providerId": p.id, "apiKey": "k"}), None).unwrap();
         assert_eq!(t.provider_id, p.id);
         assert_eq!(t.format, p.format);

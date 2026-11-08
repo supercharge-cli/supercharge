@@ -115,6 +115,9 @@ pub fn bootstrap_with_cancel(
     };
     supercharge_telemetry::id::prefetch_agent_id();
     supercharge_telemetry::startup::enter(supercharge_telemetry::startup::StartupPhase::Bootstrap);
+    // Every agent path bootstraps through here, so the codex credential source
+    // is registered once per process regardless of which constructor runs.
+    crate::agent::codex_oauth::install_credential_source();
     let mut cfg = cfg.clone();
     let profile = crate::managed_config::startup_profile();
     let warmed_auth = auth_manager.current();

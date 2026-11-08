@@ -93,6 +93,10 @@ impl From<&ConversationRequest> for rs::CreateResponse {
     fn from(req: &ConversationRequest) -> Self {
         let input = build_responses_input(req);
         let tools = build_responses_tools(req);
+        // Some Responses backends (ChatGPT codex) reject system-role messages in
+        // `input` with 400 "System messages are not allowed"; the system prompt
+        // rides the top-level `instructions` field instead.
+        let instructions = system_instructions_from(req);
 
         let tool_choice = req.tool_choice.as_ref().map(|tc| match tc {
             ConversationToolChoice::Auto => rs::ToolChoiceParam::Mode(rs::ToolChoiceOptions::Auto),
@@ -125,7 +129,7 @@ impl From<&ConversationRequest> for rs::CreateResponse {
             conversation: None,
             include: None,
             input,
-            instructions: None,
+            instructions,
             max_output_tokens: req.max_output_tokens,
             max_tool_calls: None,
             metadata: None,
@@ -162,9 +166,25 @@ impl From<&ConversationRequest> for rs::CreateResponse {
 pub(super) fn build_responses_input(req: &ConversationRequest) -> rs::InputParam {
     let items: Vec<rs::InputItem> = repair_tool_pairing_ref(&req.items)
         .iter()
+        .filter(|item| !matches!(item, ConversationItem::System(_)))
         .flat_map(conversation_item_to_input_items)
         .collect();
     rs::InputParam::Items(items)
+}
+
+/// Join the request's System items into the top-level `instructions` string.
+/// Leading System is the normal case (the agent prompt); later ones (synthetic
+/// reminders) append in order so nothing is silently dropped.
+fn system_instructions_from(req: &ConversationRequest) -> Option<String> {
+    let parts: Vec<&str> = req
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            ConversationItem::System(s) => Some(s.content.as_ref()),
+            _ => None,
+        })
+        .collect();
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
 /// Inject the `type: "reasoning_text"` discriminator the API requires.

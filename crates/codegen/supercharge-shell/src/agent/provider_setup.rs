@@ -117,8 +117,13 @@ pub struct SetupProviderProfile {
 }
 
 /// Built-in provider profiles, plus a Custom row in the TUI.
-pub fn setup_provider_profiles() -> &'static [SetupProviderProfile] {
+/// The codex (ChatGPT browser sign-in) profile stays findable via [`find_setup_provider`]
+/// for saved configs but is hidden from the picker: the ChatGPT codex backend streams
+/// SSE events (`response.metadata`) supercharge's parser rejects.
+pub fn setup_provider_profiles() -> impl Iterator<Item = &'static SetupProviderProfile> {
     SETUP_PROVIDERS
+        .iter()
+        .filter(|profile| profile.id != crate::agent::codex_oauth::CODEX_PROVIDER_ID)
 }
 
 pub fn find_setup_provider(id: &str) -> Option<&'static SetupProviderProfile> {
