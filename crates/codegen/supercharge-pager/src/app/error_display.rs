@@ -929,12 +929,12 @@ mod tests {
         let formatted = format_request_failure(
             None,
             Some(WireErrorType::IdleTimeout),
-            "inference idle timeout after 90s with no chunks",
+            "inference stalled after 90s with no response data",
         );
         assert_eq!(formatted.status, None);
         assert_eq!(
             formatted.message(),
-            "No response from the model: inference idle timeout after 90s with no chunks. \
+            "No response from the model: inference stalled after 90s with no response data. \
              Try sending again."
         );
     }

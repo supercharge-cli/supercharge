@@ -145,6 +145,43 @@ impl SessionActor {
         }
 
         match event {
+            SamplingEvent::ModelExchange {
+                request_id,
+                stage,
+                status_code,
+                elapsed_ms,
+                body_bytes,
+                item_count,
+                tool_count,
+                model,
+                max_output_tokens,
+                temperature,
+                reasoning_effort,
+                stream,
+            } => {
+                let stage = match stage {
+                    supercharge_sampler::ModelExchangeStage::RequestSent => "request_sent",
+                    supercharge_sampler::ModelExchangeStage::ResponseHeaders => "response_headers",
+                };
+                supercharge_telemetry::unified_log::info(
+                    "shell.turn.model_http",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "sampler_request_id": request_id.as_str(),
+                        "stage": stage,
+                        "status_code": status_code,
+                        "elapsed_ms": elapsed_ms,
+                        "body_bytes": body_bytes,
+                        "item_count": item_count,
+                        "tool_count": tool_count,
+                        "model": model,
+                        "max_output_tokens": max_output_tokens,
+                        "temperature": temperature,
+                        "reasoning_effort": reasoning_effort,
+                        "stream": stream,
+                    })),
+                );
+            }
             SamplingEvent::StreamStarted {
                 request_id,
                 timestamp_ms,
@@ -166,8 +203,22 @@ impl SessionActor {
                 }
                 self.chat_state_handle.record_stream_start(timestamp_ms);
                 self.open_stream_apply_span(&request_id);
+                supercharge_telemetry::unified_log::info(
+                    "shell.turn.model_stream_open",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "sampler_request_id": request_id.as_str(),
+                    })),
+                );
             }
-            SamplingEvent::FirstToken { .. } => {
+            SamplingEvent::FirstToken { request_id } => {
+                supercharge_telemetry::unified_log::info(
+                    "shell.turn.first_chunk",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "sampler_request_id": request_id.as_str(),
+                    })),
+                );
                 self.emit_event(crate::session::events::Event::FirstToken);
             }
             SamplingEvent::ChannelToken {
@@ -249,6 +300,16 @@ impl SessionActor {
                 name,
                 arguments_delta,
             } => {
+                if name.is_some() {
+                    supercharge_telemetry::unified_log::info(
+                        "shell.turn.first_tool_delta",
+                        Some(self.session_info.id.0.as_ref()),
+                        Some(serde_json::json!({
+                            "sampler_request_id": request_id.as_str(),
+                            "tool": name,
+                        })),
+                    );
+                }
                 // Mark the capture's phase so a partial taken now records it was cut off mid tool call rather than mid reasoning or response
                 // Mark only an already-active capture: a tool-call-only turn has no reasoning or text, so its capture stays empty and never uploads
                 {

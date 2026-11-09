@@ -503,7 +503,7 @@ pub fn format_sampling_error(err: &SamplingError, retry_count: Option<u32>) -> S
         }
         SamplingError::IdleTimeout { elapsed_secs } => {
             format!(
-                "{}Model stopped responding after {}s. The model may be overloaded or stuck. Try again or use a different model.",
+                "{}Model request stalled after {}s with no response data. The provider did not return headers or the next stream chunk. Try again or use a different model.",
                 retry_prefix, elapsed_secs
             )
         }

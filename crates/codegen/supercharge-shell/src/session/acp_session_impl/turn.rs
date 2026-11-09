@@ -3092,6 +3092,14 @@ impl SessionActor {
                     "elapsed_since_turn_start_ms": conv_turn_start.elapsed().as_millis() as u64,
                     // Nonzero means this submission is a transient resubmit
                     "transient_retry_attempts": transient_retry_attempts,
+                    "item_count": request.items.len(),
+                    "tool_count": request.tools.len(),
+                    "hosted_tool_count": request.hosted_tools.len(),
+                    "model": request.model,
+                    "max_output_tokens": request.max_output_tokens,
+                    "temperature": request.temperature,
+                    "reasoning_effort": request.reasoning_effort.map(|effort| effort.as_ref().to_string()),
+                    "stream": true,
                 })),
             );
             let model_timer = std::time::Instant::now();

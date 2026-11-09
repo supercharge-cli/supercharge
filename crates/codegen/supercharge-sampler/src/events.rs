@@ -29,6 +29,15 @@ pub enum StripReason {
     /// The failure may be transient and blames no particular image.
     PayloadHeuristic,
 }
+/// Where a model HTTP call is in the send/receive path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelExchangeStage {
+    /// The request body is about to be sent. Header status is unknown.
+    RequestSent,
+    /// Response headers arrived. `status_code` is the HTTP status.
+    ResponseHeaders,
+}
+
 /// Events emitted by the sampler for a single in-flight request.
 /// Events are sent on the shared event channel that callers subscribe to.
 /// The session translates these into ACP notifications.
@@ -38,6 +47,22 @@ pub enum SamplingEvent {
     StreamStarted {
         request_id: RequestId,
         timestamp_ms: i64,
+    },
+
+    /// Model HTTP exchange stage. Emitted before the body is sent and again when response headers arrive.
+    ModelExchange {
+        request_id: RequestId,
+        stage: ModelExchangeStage,
+        status_code: Option<u16>,
+        elapsed_ms: u64,
+        body_bytes: u64,
+        item_count: u32,
+        tool_count: u32,
+        model: String,
+        max_output_tokens: Option<u32>,
+        temperature: Option<f32>,
+        reasoning_effort: Option<String>,
+        stream: bool,
     },
 
     /// First content token received for a request.
@@ -158,6 +183,7 @@ impl SamplingEvent {
     pub fn request_id(&self) -> &RequestId {
         match self {
             Self::StreamStarted { request_id, .. }
+            | Self::ModelExchange { request_id, .. }
             | Self::FirstToken { request_id }
             | Self::ChannelToken { request_id, .. }
             | Self::ToolCallDelta { request_id, .. }

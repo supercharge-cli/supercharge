@@ -27,7 +27,9 @@ use crate::actor::request_metadata::{
 use crate::client::{ApiBackend, SamplingClient};
 use crate::config::{RetryPolicy, SamplerConfig};
 use crate::doom_loop_recovery::{FailedResponseCapture, append_recovery_context};
-use crate::events::{SamplingErrorInfo, SamplingErrorKind, SamplingEvent, StripReason};
+use crate::events::{
+    ModelExchangeStage, SamplingErrorInfo, SamplingErrorKind, SamplingEvent, StripReason,
+};
 use crate::handle::CollectedSamplingResult;
 use crate::metrics::InferenceLatencyStats;
 use crate::retry::{self as retry_mod, RetryDecision, clone_error, resolve_max_retries};
@@ -577,6 +579,44 @@ async fn sleep_or_cancel(
     }
 }
 
+fn model_exchange(request_id: &RequestId, request: &ConversationRequest) -> SamplingEvent {
+    SamplingEvent::ModelExchange {
+        request_id: request_id.clone(),
+        stage: ModelExchangeStage::RequestSent,
+        status_code: None,
+        elapsed_ms: 0,
+        body_bytes: 0,
+        item_count: request.items.len() as u32,
+        tool_count: request.tools.len() as u32,
+        model: request.model.clone().unwrap_or_default(),
+        max_output_tokens: request.max_output_tokens,
+        temperature: request.temperature,
+        reasoning_effort: request.reasoning_effort.map(|effort| effort.as_ref().to_string()),
+        stream: true,
+    }
+}
+
+fn headers_exchange(
+    request_id: &RequestId,
+    client: &SamplingClient,
+    elapsed: Duration,
+) -> SamplingEvent {
+    SamplingEvent::ModelExchange {
+        request_id: request_id.clone(),
+        stage: ModelExchangeStage::ResponseHeaders,
+        status_code: Some(client.last_stream_status()),
+        elapsed_ms: elapsed.as_millis() as u64,
+        body_bytes: client.last_request_bytes(),
+        item_count: 0,
+        tool_count: 0,
+        model: String::new(),
+        max_output_tokens: None,
+        temperature: None,
+        reasoning_effort: None,
+        stream: true,
+    }
+}
+
 /// Run a single attempt: build the raw stream, drive it through the matching L2 transform, and forward all non-terminal events to `event_tx`.
 /// `None` disarms the mid-stream abort and the terminal confidence check so the attempt completes and its response can be accepted.
 ///
@@ -673,6 +713,9 @@ async fn run_wire_attempt(
     names: &WireToolNames,
 ) -> AttemptOutcome {
     let length_policy = request.length_policy;
+    let exchange = model_exchange(&request_id, &request);
+    let _ = event_tx.send(exchange);
+    let attempt_started = tokio::time::Instant::now();
     match client.api_backend() {
         ApiBackend::ChatCompletions => {
             // Keep a clone for the compatibility fallback. A few OpenAI-compatible
@@ -680,7 +723,14 @@ async fn run_wire_attempt(
             // non-streaming response contains the actual text.
             let fallback_request = request.clone();
             let (raw, metadata) = match client.conversation_stream(request).await {
-                Ok(pair) => pair,
+                Ok(pair) => {
+                    let _ = event_tx.send(headers_exchange(
+                        &request_id,
+                        client,
+                        attempt_started.elapsed(),
+                    ));
+                    pair
+                }
                 Err(e) => return AttemptOutcome::InitFailed { error: e },
             };
             let (teed, captured) = tee_errors(raw);
@@ -717,7 +767,14 @@ async fn run_wire_attempt(
         ApiBackend::Responses => {
             let (raw, metadata, doom_loop) =
                 match client.conversation_stream_responses(request).await {
-                    Ok(parts) => parts,
+                    Ok(parts) => {
+                        let _ = event_tx.send(headers_exchange(
+                            &request_id,
+                            client,
+                            attempt_started.elapsed(),
+                        ));
+                        parts
+                    }
                     Err(e) => return AttemptOutcome::InitFailed { error: e },
                 };
             if doom_check.is_none()
@@ -757,7 +814,14 @@ async fn run_wire_attempt(
         }
         ApiBackend::Messages => {
             let (raw, metadata) = match client.conversation_stream_messages(request).await {
-                Ok(pair) => pair,
+                Ok(pair) => {
+                    let _ = event_tx.send(headers_exchange(
+                        &request_id,
+                        client,
+                        attempt_started.elapsed(),
+                    ));
+                    pair
+                }
                 Err(e) => return AttemptOutcome::InitFailed { error: e },
             };
             let (teed, captured) = tee_errors(raw);

@@ -49,7 +49,8 @@ pub use config::{
 };
 pub use doom_loop::DoomLoopSignalCollector;
 pub use events::{
-    SamplingChannel, SamplingErrorInfo, SamplingErrorKind, SamplingEvent, StripReason,
+    ModelExchangeStage, SamplingChannel, SamplingErrorInfo, SamplingErrorKind, SamplingEvent,
+    StripReason,
 };
 pub use handle::{CollectedSamplingResult, DoomLoopRecoveryAttempt, SamplerHandle};
 pub use metrics::{InferenceLatencyStats, compute_percentiles};

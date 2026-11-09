@@ -50,6 +50,10 @@ const DEFAULT_CLIENT_IDENTIFIER: &str = "supercharge-shell";
 
 /// Product identifier baked into User-Agent strings.
 const AGENT_PRODUCT: &str = "supercharge-shell";
+
+/// Test-only override for [`SamplingClient::response_headers_timeout`]. `0` uses the env/default.
+static HEADERS_TIMEOUT_OVERRIDE_SECS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 128_000;
 
 /// Per-request tracking headers. Optional fields are skipped when empty/`None`.
@@ -454,6 +458,10 @@ pub struct SamplingClient {
     /// Endpoint URL builder, resolved once from `base_url` and `query_params`.
     endpoint: EndpointTemplate,
     first_use_noted: Arc<AtomicBool>,
+    /// HTTP status of the last streaming response, `0` until headers arrive.
+    last_stream_status: Arc<std::sync::atomic::AtomicU16>,
+    /// Serialized JSON size of the last streaming request body before compression.
+    last_request_bytes: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl std::fmt::Debug for SamplingClient {
@@ -826,6 +834,8 @@ impl SamplingClient {
                 .unwrap_or_else(crate::opencode_inference::new_session_id),
             endpoint,
             first_use_noted: Arc::new(AtomicBool::new(false)),
+            last_stream_status: Arc::new(std::sync::atomic::AtomicU16::new(0)),
+            last_request_bytes: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
 
@@ -1341,6 +1351,8 @@ impl SamplingClient {
             tracing::error!("Failed to serialize request body: {}", e);
             SamplingError::Serialization(e)
         })?;
+        self.last_request_bytes
+            .store(json.len() as u64, Ordering::Relaxed);
         let mut request = builder.build().map_err(|e| {
             tracing::error!("Failed to build HTTP request: {}", e);
             SamplingError::Http(e)
@@ -1375,17 +1387,58 @@ impl SamplingClient {
             .map_err(Into::into)
     }
 
+    pub(crate) fn last_stream_status(&self) -> u16 {
+        self.last_stream_status.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn last_request_bytes(&self) -> u64 {
+        self.last_request_bytes.load(Ordering::Relaxed)
+    }
+
+    fn response_headers_timeout() -> Option<std::time::Duration> {
+        let override_secs = HEADERS_TIMEOUT_OVERRIDE_SECS.load(Ordering::Relaxed);
+        let secs = if override_secs > 0 {
+            override_secs
+        } else {
+            std::env::var("SUPERCHARGE_RESPONSE_HEADERS_TIMEOUT_SECS")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(120)
+        };
+        (secs > 0).then(|| std::time::Duration::from_secs(secs))
+    }
+
     async fn execute_stream_request(
         &self,
         built_request: reqwest::Request,
         span_timing: &mut StreamSpanTiming,
     ) -> Result<reqwest::Response> {
         span_timing.record_request_build();
-        let response = self.http.execute(built_request).await.map_err(|e| {
+        self.last_stream_status.store(0, Ordering::Relaxed);
+        let pending = self.http.execute(built_request);
+        let response = match Self::response_headers_timeout() {
+            Some(limit) => match tokio::time::timeout(limit, pending).await {
+                Ok(result) => result,
+                Err(_elapsed) => {
+                    let message = format!(
+                        "no HTTP response headers within {}s after the model request was sent",
+                        limit.as_secs()
+                    );
+                    span_timing.record_transport_failure(&message);
+                    return Err(SamplingError::IdleTimeout {
+                        elapsed_secs: limit.as_secs(),
+                    });
+                }
+            },
+            None => pending.await,
+        }
+        .map_err(|e| {
             tracing::debug!("HTTP request failed: {}", e);
             span_timing.record_transport_failure(&e.to_string());
             e
         })?;
+        self.last_stream_status
+            .store(response.status().as_u16(), Ordering::Relaxed);
         span_timing.record_response_headers();
         Ok(response)
     }
@@ -4188,6 +4241,46 @@ mod tests {
         let mut request = CreateResponseWrapper::new(rs::CreateResponse::default());
         without.apply_response_defaults(&mut request).unwrap();
         assert_eq!(request.inner.reasoning, None);
+    }
+
+    /// A server that accepts the connection and never sends headers must fail
+    /// instead of leaving the turn at `waiting_for_model`.
+    #[tokio::test]
+    async fn stream_request_fails_when_response_headers_never_arrive() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let Ok((socket, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = [0_u8; 1024];
+            let _ = socket.readable().await;
+            let _ = socket.try_read(&mut buf);
+            std::future::pending::<()>().await;
+        });
+
+        HEADERS_TIMEOUT_OVERRIDE_SECS.store(1, Ordering::Relaxed);
+        let client = SamplingClient::new(SamplerConfig {
+            base_url: format!("http://{addr}/v1"),
+            api_backend: ApiBackend::ChatCompletions,
+            ..minimal_config()
+        })
+        .unwrap();
+        let request = ChatCompletionRequest::new(
+            "test-model",
+            vec![ChatRequestMessage::user("Reply with exactly OK")],
+        );
+        let outcome = client.chat_completion_stream(request).await;
+        HEADERS_TIMEOUT_OVERRIDE_SECS.store(0, Ordering::Relaxed);
+        server.abort();
+        let error = match outcome {
+            Err(error) => error,
+            Ok(_) => panic!("silent server must time out"),
+        };
+        assert!(
+            matches!(error, SamplingError::IdleTimeout { elapsed_secs: 1 }),
+            "expected a 1s headers timeout, got {error:?}"
+        );
     }
 }
 
