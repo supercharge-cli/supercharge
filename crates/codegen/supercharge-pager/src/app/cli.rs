@@ -546,6 +546,9 @@ pub struct PagerArgs {
         alias = "dangerously-skip-permissions"
     )]
     pub yolo: bool,
+    /// Start the session with the built-in Lean 4 agent (Leanstral).
+    #[arg(long = "lean")]
+    pub lean: bool,
     /// Trust this folder and persist the decision to the trust store.
     #[arg(long = "trust", alias = "trust-folder", hide = true)]
     pub trust: bool,

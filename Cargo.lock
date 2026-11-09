@@ -11586,7 +11586,7 @@ dependencies = [
 
 [[package]]
 name = "supercharge-pager"
-version = "1.4.5"
+version = "1.4.8"
 dependencies = [
  "agent-client-protocol",
  "ansi-to-tui",

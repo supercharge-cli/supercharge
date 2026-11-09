@@ -1790,6 +1790,11 @@ fn schedule_startup_prewarm() {
     supercharge_shell::agent::mvp_agent::warm_async_http_client();
 }
 fn configure_process_env(mut args: PagerArgs) -> Result<PagerArgs> {
+    unsafe {
+        if args.lean {
+            std::env::set_var("SUPERCHARGE_AGENT", "lean");
+        }
+    }
     flag_dashboard_at_startup_if_requested(&mut args)?;
     let args = args.apply_cwd()?;
     unsafe {
