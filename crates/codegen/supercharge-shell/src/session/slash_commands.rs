@@ -101,6 +101,16 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         resolve: resolve_compact,
     },
     BuiltinCommand {
+        name: "lean",
+        description: "Switch this chat to the Lean 4 agent (Leanstral)",
+        argument_hint: None,
+        aliases: &[],
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        resolve: |_args| BuiltinAction::SwitchToLean,
+    },
+    BuiltinCommand {
         name: "always-approve",
         description: "Toggle always-approve mode (skip all permission prompts)",
         argument_hint: Some("on|off"),
@@ -1379,6 +1389,7 @@ pub(super) enum BuiltinAction {
     NewAgent {
         brief: String,
     },
+    SwitchToLean,
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
@@ -1418,6 +1429,7 @@ impl BuiltinAction {
             BuiltinAction::WorkflowLaunch { .. } => "workflow",
             BuiltinAction::Credits => "credits",
             BuiltinAction::NewAgent { .. } => "new_agent",
+            BuiltinAction::SwitchToLean => "lean",
         }
     }
     pub(crate) fn args_provided(&self) -> bool {
@@ -1457,6 +1469,7 @@ impl BuiltinAction {
             BuiltinAction::WorkflowLaunch { input, .. } => !input.is_empty(),
             BuiltinAction::Credits => false,
             BuiltinAction::NewAgent { brief } => !brief.trim().is_empty(),
+            BuiltinAction::SwitchToLean => false,
         }
     }
 }

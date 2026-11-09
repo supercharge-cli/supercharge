@@ -708,6 +708,8 @@ pub enum BuiltinAgentName {
     BrowserUse,
     #[strum(serialize = "supercharge-e2b")]
     SuperchargeE2b,
+    #[strum(serialize = "lean")]
+    Lean,
     #[strum(serialize = "supercharge-core-orchestrator")]
     SuperchargeBuildOrchestrator,
 }
@@ -737,6 +739,7 @@ impl BuiltinAgentName {
             Self::Plan => AgentDefinition::plan(),
             Self::BrowserUse => AgentDefinition::browser_use(),
             Self::SuperchargeE2b => AgentDefinition::supercharge_e2b(),
+            Self::Lean => AgentDefinition::lean(),
             Self::SuperchargeBuildOrchestrator => AgentDefinition::supercharge_build_orchestrator(),
         }
     }
@@ -1634,6 +1637,19 @@ impl AgentDefinition {
             )
         }
     }
+    /// Lean 4 theorem-proving agent, ported 1:1 from the upstream `lean.md`
+    /// definition (system prompt kept verbatim so behavior matches the
+    /// reference implementation).
+    pub fn lean() -> Self {
+        Self {
+            prompt_mode: PromptMode::Full,
+            prompt_body: Some(crate::prompt::lean::LEAN_AGENT_PROMPT.to_string()),
+            ..Self::base(
+                BuiltinAgentName::Lean,
+                "Specialized mode for Lean 4 code analysis, proof assistance, and theorem proving",
+            )
+        }
+    }
     /// GBL model with full SuperchargeBuild tools that delegates coding/exploration to subagents.
     /// Subagent overrides are applied in `handle_subagent_request`.
     pub fn supercharge_build_orchestrator() -> Self {
@@ -1844,6 +1860,7 @@ mod tests {
                 | BuiltinAgentName::Explore
                 | BuiltinAgentName::Plan
                 | BuiltinAgentName::BrowserUse
+                | BuiltinAgentName::Lean
                 | BuiltinAgentName::SuperchargeBuildOrchestrator => false,
             };
             assert_eq!(
@@ -2011,7 +2028,8 @@ mod tests {
             | BuiltinAgentName::Plan
             | BuiltinAgentName::Opencode
             | BuiltinAgentName::SuperchargeE2b
-            | BuiltinAgentName::BrowserUse => false,
+            | BuiltinAgentName::BrowserUse
+            | BuiltinAgentName::Lean => false,
         }
     }
     /// Invariant: structural `is_strict_harness()` must match the hand-classified expectation for every built-in variant.
@@ -2829,5 +2847,21 @@ description: Test default tool config
                 );
             }
         }
+    }
+    #[test]
+    fn lean_agent_resolves_from_name_and_carries_its_prompt() {
+        let def = <BuiltinAgentName as std::str::FromStr>::from_str("lean")
+            .expect("/lean must resolve to the built-in Lean agent")
+            .definition();
+        let body = def
+            .prompt_body
+            .as_deref()
+            .expect("lean agent ships a prompt body");
+        assert!(body.contains("You are Leanstral"), "prompt identity kept");
+        assert!(
+            body.contains("Phase 1 - Orient"),
+            "the Lean working method must survive prompt edits"
+        );
+        assert_eq!(def.prompt_mode, PromptMode::Full);
     }
 }

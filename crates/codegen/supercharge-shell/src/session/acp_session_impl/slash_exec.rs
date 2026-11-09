@@ -35,6 +35,32 @@ impl SessionActor {
                 self.send_host_turn_slash_command_output(&text).await;
                 ok_end_turn(0, None)
             }
+            BuiltinAction::SwitchToLean => {
+                // Rebuild this session around the built-in Lean 4 agent profile.
+                match self
+                    .handle_rebuild_agent_for_definition(
+                        supercharge_agent::config::BuiltinAgentName::Lean.definition(),
+                        "lean".to_string(),
+                    )
+                    .await
+                {
+                    Ok(()) => {
+                        self.send_host_turn_slash_command_output(
+                            "Lean agent active. Type your Lean 4 task, or /help for commands.",
+                        )
+                        .await;
+                        ok_end_turn(0, None)
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "switching to the Lean agent failed");
+                        self.send_host_turn_slash_command_output(
+                            "Could not switch to the Lean agent. Try /new_agent or restart the session.",
+                        )
+                        .await;
+                        ok_end_turn(0, None)
+                    }
+                }
+            }
             BuiltinAction::Help => {
                 let text =
                     crate::session::slash_commands::help_text(self.command_availability().await);
