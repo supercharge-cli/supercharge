@@ -805,6 +805,21 @@ pub fn default_settings() -> Vec<SettingMeta> {
             restart_required: false,
             hidden_in_minimal: false,
         },
+        // PAGER-owned UI setting persisted to `[ui].narrator`: speak a short turn summary
+        // through the system TTS binary after each completed turn (`/narrator`).
+        SettingMeta {
+            key: "narrator",
+            category: SettingCategory::Appearance,
+            owner: SettingOwner::Shell,
+            label: "Narrator (speak turn summaries)",
+            description: "Speak a short spoken summary of each completed turn via the system text-to-speech program (spd-say or say). Off by default.",
+            keywords: &["narrator", "voice", "tts", "speech", "speak", "audio"],
+            kind: SettingKind::Bool {
+                default: false,
+            },
+            restart_required: false,
+            hidden_in_minimal: false,
+        },
         // --- theme and auto themes -------------------------------------------
         SettingMeta {
             key: "theme",

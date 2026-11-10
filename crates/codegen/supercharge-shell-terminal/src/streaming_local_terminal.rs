@@ -328,6 +328,21 @@ pub async fn kill_terminal(
         return Ok(Some(KillOutcome::AlreadyExited));
     }
 
+    // The child was spawned with `ProcessSession` (setsid), so its pid is the process-group id:
+    // killing the group reaches the whole tree (a dev server, its workers, shells it spawned)
+    // instead of only the command leader. Falls back to the leader-only kill below.
+    #[cfg(unix)]
+    if let Some(pid) = child.id()
+        && let Ok(pgid) = supercharge_tty_utils::ProcessGroupId::new(pid)
+    {
+        unsafe {
+            libc::killpg(pgid.get() as libc::pid_t, libc::SIGKILL);
+        }
+        // The group signal already hit the leader; reap so the bounded wait below has a target
+        let _ = tokio::time::timeout(KILL_REAP_TIMEOUT, child.wait()).await;
+        return Ok(Some(KillOutcome::Killed));
+    }
+
     // `process_wrap::tokio::ChildWrapper::kill()` returns a boxed future that isn't guaranteed to be `Unpin`
     // We use `start_kill()` and `wait()` instead
     match child.start_kill() {

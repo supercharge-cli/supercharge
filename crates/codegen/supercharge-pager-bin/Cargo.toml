@@ -86,6 +86,7 @@ clap = { workspace = true, features = ["derive"] }
 default = [
     "jemalloc",
     "sandbox-enforce",
+    "teleport",
     ]
 default-bazel = [
     "jemalloc",
@@ -96,6 +97,7 @@ jemalloc = ["dep:tikv-jemallocator", "dep:tikv-jemalloc-sys", "dep:tikv-jemalloc
 # supercharge-workspace no longer enables sandbox-enforce by default, so enable it here.
 sandbox-enforce = ["supercharge-pager/sandbox-enforce", "supercharge-workspace/sandbox-enforce"]
 local-workspace = ["supercharge-pager/local-workspace"]
+teleport = ["supercharge-pager/teleport"]
 release-dist = [
     "supercharge-pager/release-dist",
     ]

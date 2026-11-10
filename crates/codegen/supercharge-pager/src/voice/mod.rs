@@ -21,6 +21,7 @@
 //! partial yet keeps its target so its one final lands as the next draft.
 
 mod auth;
+pub(crate) mod narrator;
 mod handle;
 
 pub use auth::{build_stt_routes, clip_route_for};

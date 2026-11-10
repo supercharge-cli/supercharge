@@ -741,6 +741,42 @@ pub(in crate::app::dispatch) fn dispatch_toggle_vim_mode(app: &mut AppView) -> V
     }]
 }
 
+/// Toggle narrator speech of turn summaries (`/narrator` slash command path).
+/// Mirrors `dispatch_toggle_vim_mode`: cache toggle, settings-modal refresh, a system-line
+/// confirmation, and a `[ui].narrator` persist so the choice survives restart.
+pub(in crate::app::dispatch) fn dispatch_toggle_narrator(app: &mut AppView) -> Vec<Effect> {
+    let prev = crate::appearance::cache::load_narrator();
+    let enabled = !prev;
+    set_narrator_inner(app, enabled);
+    refresh_open_settings_modals(app);
+    let msg = if enabled {
+        "Narrator: on — completed turns will be spoken via the system TTS program."
+    } else {
+        "Narrator: off"
+    };
+    tracing::info!(narrator = enabled, "Narrator toggled");
+    if let ActiveView::Agent(id) = app.active_view
+        && let Some(agent) = app.agents.get_mut(&id)
+    {
+        agent
+            .scrollback
+            .push_block(RenderBlock::system(msg.to_string()));
+    } else {
+        app.show_toast(msg);
+    }
+    vec![Effect::PersistSetting {
+        key: "narrator",
+        value: crate::settings::SettingValue::Bool(enabled),
+        rollback_value: crate::settings::SettingValue::Bool(prev),
+    }]
+}
+
+/// State-only mutation for `narrator`: the pager cache the speak hook reads.
+pub(super) fn set_narrator_inner(app: &mut AppView, new: bool) {
+    crate::appearance::cache::set_narrator(new);
+    let _ = app;
+}
+
 /// Toggle timestamps (Ctrl+? keybinding path).
 /// Delegates to the registry-driven `set_timestamps` so persistence, the cache, and UI reconciliation all flow through a single code path.
 pub(in crate::app::dispatch) fn dispatch_toggle_timestamps(app: &mut AppView) -> Vec<Effect> {
@@ -1285,6 +1321,8 @@ pub(in crate::app::dispatch) fn apply_setting_rollback(
         ("scroll_lines", SettingValue::Int(i)) => set_scroll_lines_inner(app, *i as u8),
         // vim_mode: direct inner call.
         ("vim_mode", SettingValue::Bool(b)) => set_vim_mode_inner(app, *b),
+        // narrator: direct inner call (fire-and-forget speak path reads the cache).
+        ("narrator", SettingValue::Bool(b)) => set_narrator_inner(app, *b),
         ("remember_tool_approvals", SettingValue::Bool(b)) => {
             set_remember_tool_approvals_inner(app, *b)
         }

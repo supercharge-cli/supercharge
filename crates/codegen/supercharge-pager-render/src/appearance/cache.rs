@@ -308,6 +308,34 @@ pub fn set_show_thinking_blocks(enabled: bool) {
     SHOW_THINKING_BLOCKS_LOADED.with(|l| l.set(true));
 }
 
+// -- Narrator -----------------------------------------------------------------
+
+const NARRATOR_DEFAULT: bool = false;
+
+thread_local! {
+    static NARRATOR_CURRENT: Cell<bool> = const { Cell::new(NARRATOR_DEFAULT) };
+    static NARRATOR_LOADED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Read cached `narrator`, seeding from `[ui].narrator` on first call.
+pub fn load_narrator() -> bool {
+    NARRATOR_LOADED.with(|loaded| {
+        if !loaded.get() {
+            NARRATOR_CURRENT.with(|c| {
+                c.set(load_bool_from_effective_config("narrator", NARRATOR_DEFAULT))
+            });
+            loaded.set(true);
+        }
+    });
+    NARRATOR_CURRENT.with(|c| c.get())
+}
+
+/// Replace cached `narrator`.
+pub fn set_narrator(enabled: bool) {
+    NARRATOR_CURRENT.with(|c| c.set(enabled));
+    NARRATOR_LOADED.with(|l| l.set(true));
+}
+
 // -- Group tool verbs ---------------------------------------------------------
 
 thread_local! {

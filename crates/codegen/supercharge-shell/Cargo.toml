@@ -12,6 +12,9 @@ dhat-heap = ["dep:dhat"]
 # it via `required-features`. Forwards `supercharge-login/test-support` for downstream test builds.
 test-support = ["supercharge-login/test-support"]
 test-util = []
+# `/teleport`: push the workspace to an E2B sandbox and pull bundles back
+# (`supercharge-superagent`'s `e2b` feature compiles the third-party e2b-rs client).
+teleport = ["supercharge-superagent/e2b"]
 # Local Computer Hub workspace_server (own/attach + crash-restart). Requires
 local-workspace = []
 # CI default set (preferred over cargo `default` for hermetic CI builds):

@@ -90,6 +90,9 @@ pub fn render_credits<T: CreditsTransport>(
     };
 
     let mut lines = vec![selection.label.to_owned()];
+    // Credential traceability: the last 4 characters of the key in use, so a stale or
+    // shell-overridden credential is recognizable at a glance without ever exposing it.
+    lines.push(format!("Key in use: {}", mask_key(&selection.api_key)));
     match transport.get(&whoami_url, &selection.api_key) {
         Ok(reply) => lines.extend(render_whoami(&reply)),
         Err(CreditsTransportError::Timeout) => {
@@ -311,6 +314,17 @@ fn render_budget(reply: &CreditsReply, field: &str) -> Vec<String> {
 
 fn unavailable(why: &str) -> String {
     format!("Balance unavailable: {why}.\nAccount dashboard: {DASHBOARD_URL}")
+}
+
+/// Last 4 characters of the credential, masked, for `/credits` traceability only.
+/// Short keys render fully masked rather than leaking more than they hide.
+fn mask_key(key: &str) -> String {
+    let trimmed = key.trim();
+    if trimmed.len() >= 12 {
+        format!("••••{}", &trimmed[trimmed.len() - 4..])
+    } else {
+        "••••".to_owned()
+    }
 }
 
 fn string_field(value: &serde_json::Value, paths: &[&str]) -> Option<String> {
@@ -559,5 +573,24 @@ api_key = "sk-openai"
         assert!(text.contains("/usage"));
         assert!(!text.contains("sk-openai"));
         assert!(!text.contains("Limit:"));
+    }
+
+    #[test]
+    fn mask_key_shows_only_last_four() {
+        assert_eq!(mask_key("sk-abcdefghijklmnop"), "••••mnop");
+        assert_eq!(mask_key("short"), "••••");
+        assert_eq!(mask_key(""), "••••");
+    }
+
+    #[test]
+    fn credits_body_includes_masked_key() {
+        let config = config_with("mistral", "auth-secret", "sk-long-key-abc123");
+        let selection = selection_from_config(&config).unwrap();
+        let transport = MapTransport {
+            calls: Mutex::new(Vec::new()),
+            replies: Mutex::new(vec![ok(serde_json::json!({}))]),
+        };
+        let text = render_credits(&selection, &transport);
+        assert!(text.contains("sk-long-key-abc123"), "transport receives the key");
     }
 }

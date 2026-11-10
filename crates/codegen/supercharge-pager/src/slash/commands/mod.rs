@@ -44,6 +44,7 @@ pub mod memory;
 pub mod memory_ops;
 pub mod model;
 pub mod multiline;
+pub mod narrator;
 pub mod new;
 pub mod personas;
 pub mod plan;
@@ -58,6 +59,7 @@ pub mod remember;
 pub mod rename;
 pub mod resume;
 pub mod rewind;
+pub mod retry;
 pub mod screen_mode_switch;
 pub mod scroll_debug;
 pub mod session_info;
@@ -122,6 +124,8 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(share::ShareCommand),
         Arc::new(rename::RenameCommand),
         Arc::new(history::HistoryCommand),
+        Arc::new(retry::RetryCommand),
+        Arc::new(narrator::NarratorCommand),
         Arc::new(transcript::TranscriptCommand),
         Arc::new(export::ExportCommand),
         Arc::new(copy::CopyCommand),

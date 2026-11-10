@@ -72,6 +72,57 @@ impl SessionActor {
                     }
                 }
             }
+            BuiltinAction::Teleport { args } => {
+                #[cfg(feature = "teleport")]
+                {
+                    let op = crate::session::teleport::TeleportOp::parse(&args);
+                    let text = match op {
+                        crate::session::teleport::TeleportOp::Help => {
+                            crate::session::teleport::help_text()
+                        }
+                        op => {
+                            let executor =
+                                crate::session::teleport::TeleportExecutor::new();
+                            match executor {
+                                Ok(executor) => {
+                                    let cwd = self.tool_context.cwd.clone();
+                                    let work_dir =
+                                        std::env::temp_dir().join("supercharge-teleport");
+                                    let _ = tokio::fs::create_dir_all(&work_dir).await;
+                                    match op {
+                                        crate::session::teleport::TeleportOp::Push {
+                                            template,
+                                        } => executor
+                                            .push(cwd.as_path(), &work_dir, template.as_deref())
+                                            .await,
+                                        crate::session::teleport::TeleportOp::Pull {
+                                            sandbox_id,
+                                        } => executor.pull(cwd.as_path(), &sandbox_id).await,
+                                        crate::session::teleport::TeleportOp::Kill {
+                                            sandbox_id,
+                                        } => executor.kill(&sandbox_id).await,
+                                        crate::session::teleport::TeleportOp::Help => {
+                                            Ok(crate::session::teleport::help_text())
+                                        }
+                                    }
+                                    .unwrap_or_else(|e| format!("Teleport failed: {e}"))
+                                }
+                                Err(e) => format!("Teleport failed: {e}"),
+                            }
+                        }
+                    };
+                    self.send_host_turn_slash_command_output(&text).await;
+                }
+                #[cfg(not(feature = "teleport"))]
+                {
+                    let _ = args;
+                    self.send_host_turn_slash_command_output(
+                        "This build has no E2B support (compile with the `teleport` feature).",
+                    )
+                    .await;
+                }
+                ok_end_turn(0, None)
+            }
             BuiltinAction::Help => {
                 let text =
                     crate::session::slash_commands::help_text(self.command_availability().await);

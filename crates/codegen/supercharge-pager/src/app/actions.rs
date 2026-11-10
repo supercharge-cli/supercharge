@@ -450,6 +450,8 @@ pub enum Action {
     /// Toggle vim-style scrollback keybindings (j/k, h/l, g/G, y/Y, etc.).
     /// Delegates to `set_vim_mode` so the new value is persisted to `[ui].vim_mode` in config.toml, the same path as the settings modal.
     ToggleVimMode,
+    /// Toggle spoken turn summaries (`/narrator`). Persisted to `[ui].narrator` via `Effect::PersistSetting`.
+    ToggleNarrator,
     /// Set vim-style scrollback keybindings. SHELL-owned: persisted to `[ui].vim_mode` in config.toml via `Effect::PersistSetting`.
     /// Used by the settings modal; the `ToggleVimMode` variant covers the `/vim-mode` slash-command path.
     SetVimMode(bool),
@@ -1009,6 +1011,8 @@ pub enum Action {
     },
     /// Edit the current minimal-mode composer draft in an external editor.
     EditPromptExternal,
+    /// Re-send the session's most recent prompt (the last non-command entry of prompt history).
+    RetryLastPrompt,
     /// Toggle the expanded goal detail overlay.
     ToggleGoalDetail,
     ToggleWorkflows,

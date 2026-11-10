@@ -449,6 +449,39 @@ pub(super) fn dispatch_open_history_search(app: &mut AppView) -> Vec<Effect> {
     vec![]
 }
 
+/// `/retry`: re-send the most recent prompt.
+/// Picks the newest genuine prompt from session history (most-recent-first), skipping
+/// slash commands and `!` shell echoes, then routes it through the normal send path.
+/// An interrupted turn is already rewound by the stop gesture, so the retry replaces
+/// it instead of appending a duplicate answer.
+pub(super) fn dispatch_retry_last_prompt(app: &mut AppView) -> Vec<Effect> {
+    let retry_text = super::ctx::get_active_agent_mut(app).and_then(|agent| {
+        agent
+            .session
+            .prompt_history
+            .iter()
+            .find(|text| {
+                let t = text.trim();
+                !t.is_empty() && !t.starts_with('/') && !t.starts_with('!')
+            })
+            .cloned()
+    });
+    match retry_text {
+        Some(text) => dispatch_send_prompt(app, text),
+        None => {
+            if let Some(agent) = super::ctx::get_active_agent_mut(app) {
+                push_and_page_flip(
+                    &mut agent.scrollback,
+                    RenderBlock::system("Nothing to retry: no earlier prompt found in this session."),
+                );
+            } else {
+                app.show_toast("Nothing to retry: no active session.");
+            }
+            vec![]
+        }
+    }
+}
+
 /// Show the "ctrl+z to undo" hint after the user wiped a substantial draft.
 /// Gated by the per-tip `contextual_hints.undo` gate (default ON).
 /// The ephemeral-tip seen gate caps it at `UNDO_TIP_SEEN_CAP` shows per session (in-memory `app.tip_seen_counts`); nothing is persisted to disk.
@@ -1631,6 +1664,19 @@ pub(super) fn handle_prompt_response(
 
         let was_bash_turn = agent.bash_turn;
         finish_turn_view(agent, TurnEnd::Completed);
+
+        // Narrator: speak the opening of the final assistant message when `/narrator` is on.
+        // Non-cancelled completed turns only; a wedged TTS binary cannot block the turn end
+        // (the speak call is fire-and-forget).
+        if !was_cancelling {
+            let last_agent_text = (0..agent.scrollback.len()).rev().find_map(|i| {
+                match &agent.scrollback.entry(i)?.block {
+                    RenderBlock::AgentMessage(block) => Some(block.text()),
+                    _ => None,
+                }
+            });
+            crate::voice::narrator::speak_turn_summary(last_agent_text);
+        }
 
         // In-turn reviews die with their ext method. A post-turn review is the waiting UI and stays.
         // Cancelled or failed turns do not open approve/build for an in-progress or rejected plan.

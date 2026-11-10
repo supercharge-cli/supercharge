@@ -111,6 +111,18 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         resolve: |_args| BuiltinAction::SwitchToLean,
     },
     BuiltinCommand {
+        name: "teleport",
+        description: "Push this workspace to a cloud VM (E2B); pull or kill later",
+        argument_hint: Some("[template] | pull <sandbox-id> | kill <sandbox-id>"),
+        aliases: &[],
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        resolve: |args| BuiltinAction::Teleport {
+            args: args.trim().to_string(),
+        },
+    },
+    BuiltinCommand {
         name: "always-approve",
         description: "Toggle always-approve mode (skip all permission prompts)",
         argument_hint: Some("on|off"),
@@ -524,6 +536,9 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "copy",
     "cost",
     "credits",
+    "retry",
+    "teleport",
+    "narrator",
     "dashboard",
     "debug",
     "delete",
@@ -1390,6 +1405,9 @@ pub(super) enum BuiltinAction {
         brief: String,
     },
     SwitchToLean,
+    Teleport {
+        args: String,
+    },
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
@@ -1430,6 +1448,7 @@ impl BuiltinAction {
             BuiltinAction::Credits => "credits",
             BuiltinAction::NewAgent { .. } => "new_agent",
             BuiltinAction::SwitchToLean => "lean",
+            BuiltinAction::Teleport { .. } => "teleport",
         }
     }
     pub(crate) fn args_provided(&self) -> bool {
@@ -1470,6 +1489,7 @@ impl BuiltinAction {
             BuiltinAction::Credits => false,
             BuiltinAction::NewAgent { brief } => !brief.trim().is_empty(),
             BuiltinAction::SwitchToLean => false,
+            BuiltinAction::Teleport { args } => !args.trim().is_empty(),
         }
     }
 }

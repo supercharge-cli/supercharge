@@ -181,6 +181,27 @@ impl E2bExecutor {
             .map_err(|error| E2bError::Execution(error.to_string()))
     }
 
+    /// Upload one file's bytes to the sandbox at `path` (binary-safe, octet-stream).
+    pub async fn upload_file(&self, sandbox_id: &str, path: &str, data: Vec<u8>) -> Result<(), E2bError> {
+        let sandbox = self.connect_sandbox(sandbox_id).await?;
+        sandbox
+            .files()
+            .write(path, data, Default::default())
+            .await
+            .map_err(|error| E2bError::Execution(error.to_string()))?;
+        Ok(())
+    }
+
+    /// Download one file's bytes from the sandbox at `path`.
+    pub async fn download_file(&self, sandbox_id: &str, path: &str) -> Result<Vec<u8>, E2bError> {
+        let sandbox = self.connect_sandbox(sandbox_id).await?;
+        sandbox
+            .files()
+            .read_bytes(path, None)
+            .await
+            .map_err(|error| E2bError::Execution(error.to_string()))
+    }
+
     async fn create_sandbox(&self) -> Result<e2b_rs::Sandbox, E2bError> {
         let mut builder = e2b_rs::Sandbox::create()
             .template(self.plan.template.clone())

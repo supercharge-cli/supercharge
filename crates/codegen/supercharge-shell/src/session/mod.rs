@@ -573,6 +573,8 @@ pub(crate) mod slash_commands;
 pub mod usage_file;
 pub use slash_commands::PAGER_COMMAND_KEYS;
 pub mod interrupted_turn;
+#[cfg(feature = "teleport")]
+pub(crate) mod teleport;
 pub(crate) mod repo_status_prefix;
 pub mod storage;
 pub(crate) mod streaming_capture;

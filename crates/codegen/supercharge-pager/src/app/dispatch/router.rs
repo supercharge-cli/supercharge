@@ -43,8 +43,9 @@ use super::permissions::{
 };
 use super::prompt::{
     dispatch_accept_word_select_tip, dispatch_clear_prompt, dispatch_open_history_search,
-    dispatch_send_bash_command, dispatch_send_prompt, dispatch_send_prompt_inner,
-    dispatch_show_plan_nudge, dispatch_show_undo_tip, dispatch_show_word_select_tip,
+    dispatch_retry_last_prompt, dispatch_send_bash_command, dispatch_send_prompt,
+    dispatch_send_prompt_inner, dispatch_show_plan_nudge, dispatch_show_undo_tip,
+    dispatch_show_word_select_tip,
 };
 use super::queue;
 use super::queue::dispatch_drain_queue;
@@ -96,7 +97,8 @@ use super::settings::ui::{
     dispatch_open_format_picker, dispatch_open_howto_guides, dispatch_open_image_setup,
     dispatch_open_live_model_picker, dispatch_open_live_model_picker_unknown, dispatch_open_reset_confirm, dispatch_open_settings,
     dispatch_open_setup, dispatch_toggle_compact_mode, dispatch_toggle_mouse_capture,
-    dispatch_toggle_multiline, dispatch_toggle_timestamps, dispatch_toggle_vim_mode,
+    dispatch_toggle_multiline, dispatch_toggle_narrator, dispatch_toggle_timestamps,
+    dispatch_toggle_vim_mode,
 };
 use super::status::{
     dispatch_copy_session_id, dispatch_open_gboom, dispatch_open_tutorial,
@@ -517,6 +519,7 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         }
         Action::ClearPrompt => dispatch_clear_prompt(app),
         Action::OpenHistorySearch => dispatch_open_history_search(app),
+        Action::RetryLastPrompt => dispatch_retry_last_prompt(app),
         Action::OpenScrollbackSearch(query) => {
             with_active_agent(app, |agent| {
                 agent.open_scrollback_search(query.as_deref());
@@ -1155,6 +1158,7 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::ToggleMultiline => dispatch_toggle_multiline(app),
         Action::ToggleCompactMode => dispatch_toggle_compact_mode(app),
         Action::ToggleVimMode => dispatch_toggle_vim_mode(app),
+        Action::ToggleNarrator => dispatch_toggle_narrator(app),
         Action::SetVimMode(v) => set_vim_mode(app, v),
         Action::SetRememberToolApprovals(v) => set_remember_tool_approvals(app, v),
         Action::SetAskUserQuestionTimeoutEnabled(v) => {
