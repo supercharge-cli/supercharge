@@ -2857,7 +2857,7 @@ description: Test default tool config
             .prompt_body
             .as_deref()
             .expect("lean agent ships a prompt body");
-        assert!(body.contains("You are Leanstral"), "prompt identity kept");
+        assert!(body.contains("You are Leancharge"), "prompt identity kept");
         assert!(
             body.contains("Phase 1 - Orient"),
             "the Lean working method must survive prompt edits"

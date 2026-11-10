@@ -102,7 +102,7 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     },
     BuiltinCommand {
         name: "lean",
-        description: "Switch this chat to the Lean 4 agent (Leanstral)",
+        description: "Switch this chat to the Lean 4 agent (Leancharge)",
         argument_hint: None,
         aliases: &[],
         gate: BuiltinGate::AlwaysOn,
