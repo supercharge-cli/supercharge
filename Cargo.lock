@@ -10811,6 +10811,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "supercharge-codecov"
+version = "0.1.0"
+
+[[package]]
 name = "supercharge-compaction"
 version = "0.1.0"
 dependencies = [
@@ -11632,6 +11636,7 @@ dependencies = [
  "supercharge-agent-import",
  "supercharge-announcements",
  "supercharge-chat-state",
+ "supercharge-codecov",
  "supercharge-config",
  "supercharge-crash-handler",
  "supercharge-dashboard-store",

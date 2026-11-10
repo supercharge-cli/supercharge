@@ -16,6 +16,7 @@ members = [
     "crates/codegen/supercharge-lifecycle",
     "crates/codegen/supercharge-chat-state",
     "crates/codegen/supercharge-codebase-graph",
+    "crates/codegen/supercharge-codecov",
     "crates/codegen/supercharge-compaction-transcript",
     "crates/codegen/supercharge-crash-handler",
     "crates/codegen/supercharge-dirs",
@@ -329,6 +330,7 @@ supercharge-acp-lib = { path = "crates/codegen/supercharge-acp-lib" }
 supercharge-agent-lifecycle = { path = "crates/codegen/supercharge-agent-lifecycle" }
 supercharge-lifecycle = { path = "crates/codegen/supercharge-lifecycle" }
 supercharge-circuit-breaker = { path = "crates/common/supercharge-circuit-breaker" }
+supercharge-codecov = { path = "crates/codegen/supercharge-codecov" }
 supercharge-compaction-transcript = { path = "crates/codegen/supercharge-compaction-transcript" }
 supercharge-computer-hub-core = { path = "crates/common/supercharge-computer-hub-core" }
 supercharge-computer-hub-sdk = { path = "crates/common/supercharge-computer-hub-sdk" }

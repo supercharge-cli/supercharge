@@ -36,6 +36,9 @@ pub enum CommandResult {
     Handled,
     /// Build or act on TUI doctor state from live app/session inputs.
     Doctor(DoctorRequest),
+    /// Run the local codecov engine (report) or inject the fix prompt (fix).
+    /// Needs the session cwd, so the dispatch layer executes the analysis.
+    Codecov(crate::slash::commands::codecov::CodecovRequest),
     /// Command failed with an error message.
     Error(String),
     /// Command produced a user-visible message.
