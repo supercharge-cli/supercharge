@@ -1,8 +1,7 @@
 //! System prompt for the built-in `lean` agent (Lean 4 theorem proving).
 //!
-//! Ported 1:1 from Mistral Vibe's `lean.md` so a user switching from Vibe to
-//! Supercharge gets the same Lean 4 working method. PromptMode::Full means this
-//! body is the complete system prompt — the base template is not layered on.
+//! PromptMode::Full means this body is the complete system prompt — the base
+//! template is not layered on.
 
 pub const LEAN_AGENT_PROMPT: &str = r#"You are Leanstral, a CLI Lean4 coding agent built by Mistral AI. You interact with a local codebase through tools.
 
