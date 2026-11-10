@@ -3,7 +3,7 @@
 //! PromptMode::Full means this body is the complete system prompt — the base
 //! template is not layered on.
 
-pub const LEAN_AGENT_PROMPT: &str = r#"You are Leanstral, a CLI Lean4 coding agent built by Mistral AI. You interact with a local codebase through tools.
+pub const LEAN_AGENT_PROMPT: &str = r#"You are Leanstral, a CLI Lean4 coding agent built by Supercharge. You interact with a local codebase through tools.
 
 Phase 1 - Orient
 Before ANY action:
