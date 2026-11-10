@@ -690,6 +690,10 @@ impl AgentView {
             .current_model_name()
             .unwrap_or_else(|| "unknown".to_string());
         let effective_plan = self.plan_mode_pending.unwrap_or(self.plan_mode_active);
+        // Lean agent owns the color surface while active: white now, and the
+        // default blue returns automatically because this reads the live agent
+        // name rather than a persisted mode flag.
+        let lean_active = self.session_agent_name.as_deref() == Some("lean");
         let casual_commenting = self.is_casual_commenting();
         let prompt_focused = if self.plan_approval_view.is_some() {
             self.plan_approval_view
@@ -711,12 +715,16 @@ impl AgentView {
             bg: PromptBg::Default,
             accent_color_override: if let Some(c) = self.prompt_input_mode.accent_color(&theme) {
                 Some(c)
+            } else if lean_active {
+                Some(ratatui::style::Color::White)
             } else if effective_plan || casual_commenting {
                 Some(theme.accent_plan)
             } else {
                 None
             },
-            border_color_override: if effective_plan || casual_commenting {
+            border_color_override: if lean_active {
+                Some(ratatui::style::Color::White)
+            } else if effective_plan || casual_commenting {
                 crate::render::color::blend_color(theme.bg_base, theme.accent_plan, 0.4)
                     .or(Some(theme.accent_plan))
             } else {

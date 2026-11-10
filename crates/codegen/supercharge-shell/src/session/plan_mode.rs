@@ -231,6 +231,24 @@ impl PlanModeTracker {
         self.pending_activation = None;
         true
     }
+    /// Hard reset for harness rebuilds (e.g. `/lean`): drop every plan-mode
+    /// trace — state, reminders, buffered activations, approval chrome — with
+    /// no exit reminder. Used when the session switches to an agent whose
+    /// prompt does not know plan mode exists; a stale Active state would
+    /// silently leak plan constraints and coloring into the new agent.
+    pub(crate) fn reset_for_agent_rebuild(&mut self) -> bool {
+        let had_any = self.state != PlanModeState::Inactive
+            || self.awaiting_plan_approval
+            || self.pending_activation.is_some()
+            || self.pending_exit_reminder;
+        self.state = PlanModeState::Inactive;
+        self.reminder_count = 0;
+        self.was_previously_active = false;
+        self.awaiting_plan_approval = false;
+        self.pending_exit_reminder = false;
+        self.pending_activation = None;
+        had_any
+    }
     /// Client toggled plan mode OFF.
     /// `turn_in_flight`: whether a model turn is currently running.
     pub(crate) fn user_exit(&mut self, turn_in_flight: bool) {

@@ -36,6 +36,17 @@ impl SessionActor {
                 ok_end_turn(0, None)
             }
             BuiltinAction::SwitchToLean => {
+                // Lean's prompt knows nothing about plan mode; carrying an active
+                // plan state across the rebuild would leak constraints and
+                // coloring into the fresh harness. Drop it unconditionally.
+                if self.plan_mode.lock().reset_for_agent_rebuild() {
+                    supercharge_telemetry::session_ctx::log_event(
+                        supercharge_telemetry::events::SlashCommandUsed {
+                            command: "lean".to_string(),
+                            args_provided: true,
+                        },
+                    );
+                }
                 // Rebuild this session around the built-in Lean 4 agent profile.
                 match self
                     .rebuild_agent_for_definition_now(
