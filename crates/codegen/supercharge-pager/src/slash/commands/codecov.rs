@@ -44,9 +44,11 @@ impl SlashCommand for CodecovCommand {
             Some(rest) => (true, rest.trim()),
             None => (false, args),
         };
-        CommandResult::Codecov(CodecovRequest {
-            fix,
-            scope: scope.to_string(),
+        let scope = scope.to_string();
+        CommandResult::Codecov(if fix {
+            CodecovRequest::Fix { scope }
+        } else {
+            CodecovRequest::Report { scope }
         })
     }
 }

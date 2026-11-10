@@ -744,14 +744,6 @@ pub fn handle_setup_key(state: &mut SetupModalState, key: &KeyEvent) -> SetupOut
                 state.selected = 0;
                 SetupOutcome::Changed
             }
-            SetupStep::CodexSignIn => {
-                // Dropping the session closes the listener; no callback will be accepted.
-                state.codex_sign_in = None;
-                state.codex_status.clear();
-                state.step = SetupStep::PickProvider;
-                state.selected = 0;
-                SetupOutcome::Changed
-            }
             SetupStep::BaseUrl => {
                 state.step = SetupStep::PickProvider;
                 state.filter.reset();
