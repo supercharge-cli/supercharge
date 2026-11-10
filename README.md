@@ -1,5 +1,7 @@
 # Supercharged Rust Agent
 
+[![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff3001?style=for-the-badge&labelColor=black)](https://e2b.dev/startups)
+
 This private repository is a Rust-first, self-hostable agent daemon with durable execution, messaging gateways, memory, jobs, approvals, and isolated cloud execution. It extends a public upstream Rust agent workspace rather than maintaining a separate Python service.
 
 The current tree is based on a pinned upstream Rust workspace revision. That workspace provides the core agent shell, tools, workspace/execution boundaries, configuration, MCP support, memory-related crates, hooks, plugins, headless operation, and terminal UI. This repository extends those boundaries instead of replacing them with a second runtime.
