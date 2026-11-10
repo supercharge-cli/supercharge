@@ -38,7 +38,7 @@ impl SessionActor {
             BuiltinAction::SwitchToLean => {
                 // Rebuild this session around the built-in Lean 4 agent profile.
                 match self
-                    .handle_rebuild_agent_for_definition(
+                    .rebuild_agent_for_definition_now(
                         supercharge_agent::config::BuiltinAgentName::Lean.definition(),
                         "lean".to_string(),
                     )

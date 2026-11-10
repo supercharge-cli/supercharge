@@ -283,6 +283,19 @@ impl SessionActor {
                     .data("rebuild_agent: turn in flight, refusing to rebuild harness"));
             }
         }
+        self.rebuild_agent_for_definition_now(definition, system_prompt_label)
+            .await
+    }
+    /// Rebuild without the "turn in flight" guard. For slash-command-initiated
+    /// rebuilds (`/lean`), the running task IS the builtin turn itself: queue
+    /// promotion only happens between turns, so no model inference is active
+    /// and swapping the agent here is safe. The guard exists for the out-of-band
+    /// `set_session_model` path above, where a turn may genuinely be streaming.
+    pub(super) async fn rebuild_agent_for_definition_now(
+        &self,
+        definition: supercharge_agent::AgentDefinition,
+        system_prompt_label: String,
+    ) -> Result<(), acp::Error> {
         let new_agent_name = definition.name.clone();
         let previous_mcp_servers = self.agent.borrow().definition().mcp_servers.clone();
         tracing::info!(

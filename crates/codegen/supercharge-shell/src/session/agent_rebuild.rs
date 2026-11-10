@@ -605,6 +605,19 @@ mod legacy_tests {
     /// The `[toolset.web_search]` policy is authoritative on the backend-hosted path.
     /// Agent frontmatter is model-writable (`.supercharge/agents/*.md`), so a configured blocklist must survive a frontmatter allowlist.
     #[tokio::test(flavor = "current_thread")]
+    async fn lean_definition_builds_in_rebuild_spec() {
+        // Reproduces the exact `/lean` slash-command path: BuiltinAgentName::Lean
+        // definition through AgentBuilder inside the default test rebuild spec.
+        let spec = test_rebuild_spec_default();
+        let definition = supercharge_agent::config::BuiltinAgentName::Lean.definition();
+        match spec.build_agent(definition, "lean".to_string()).await {
+            Ok(agent) => {
+                assert_eq!(agent.definition().name, "lean");
+            }
+            Err(e) => panic!("LEAN_BUILD_FAILED: {e}"),
+        }
+    }
+    #[tokio::test(flavor = "current_thread")]
     async fn config_web_search_domains_beat_agent_frontmatter() {
         use supercharge_sampling_types::{HostedTool, ToolOverrides, WebSearchOptions};
         let frontmatter = WebSearchOptions {
