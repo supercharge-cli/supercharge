@@ -4,6 +4,7 @@ pub mod announcements;
 pub mod auto;
 pub mod btw;
 pub mod cd;
+pub mod codecov;
 pub mod compact;
 pub mod compact_mode;
 pub mod config_agents;
@@ -164,6 +165,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(isetup::ISetupCommand),
         Arc::new(imodels::IModelsCommand),
         Arc::new(privacy::PrivacyCommand),
+        Arc::new(codecov::CodecovCommand),
         Arc::new(doctor::DoctorCommand),
         Arc::new(import_claude::ImportClaudeCommand),
         Arc::new(home::HomeCommand),

@@ -1,0 +1,11 @@
+[package]
+license = "Apache-2.0"
+name = "supercharge-codecov"
+version = "0.1.0"
+edition.workspace = true
+description = "Local-only coverage and code-duplication analysis for the /codecov command. No network, no uploads."
+
+[dependencies]
+
+[lints]
+workspace = true

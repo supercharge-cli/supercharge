@@ -126,6 +126,61 @@ pub(super) fn dispatch_doctor(request: DoctorRequest, app: &mut AppView) -> Vec<
     vec![]
 }
 
+/// Run the native codecov engine against the session cwd and either render the
+/// report or queue the fix prompt for the confirmed gaps.
+pub(super) fn dispatch_codecov(
+    request: crate::slash::commands::codecov::CodecovRequest,
+    app: &mut AppView,
+) -> Vec<Effect> {
+    let ActiveView::Agent(agent_id) = app.active_view else {
+        return vec![];
+    };
+    let scope = request.scope().trim().to_string();
+    let scope_arg = (!scope.is_empty()).then_some(scope.as_str());
+    let report = {
+        let Some(agent) = app.agents.get(&agent_id) else {
+            return vec![];
+        };
+        supercharge_codecov::analyze(&agent.session.cwd, scope_arg)
+    };
+    let Some(agent) = app.agents.get_mut(&agent_id) else {
+        return vec![];
+    };
+    if request.is_fix() {
+        let gap_count = report.dups.len()
+            + report
+                .coverage
+                .as_ref()
+                .map_or(0, |coverage| coverage.per_target.len().min(5));
+        let prompt = report.fix_prompt();
+        let id = agent.session.next_queue_id;
+        agent.session.next_queue_id += 1;
+        agent
+            .session
+            .pending_prompts
+            .push_back(crate::app::agent::QueuedPrompt {
+                wire_blocks: Some(vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))]),
+                display_as_skill: false,
+                ..crate::app::agent::QueuedPrompt::plain(
+                    id,
+                    "/codecov fix".to_string(),
+                    crate::app::agent::QueueEntryKind::Prompt,
+                )
+            });
+        agent.scrollback.push_block(RenderBlock::system(format!(
+            "Queued a fix turn for {gap_count} gap(s); the agent will only touch the listed items."
+        )));
+        return vec![];
+    }
+    agent
+        .scrollback
+        .push_block(RenderBlock::system(report.render()));
+    agent.scrollback.push_block(RenderBlock::system(
+        "Fix these gaps? Run /codecov fix to have the agent write tests and dedupe the listed items.",
+    ));
+    vec![]
+}
+
 pub(super) fn open_doctor_fix_question(
     app: &mut AppView,
     target: DoctorFixTarget,
@@ -868,6 +923,13 @@ pub(super) fn dispatch_send_prompt_submission(
                     agent.prompt.set_text("");
                 }
                 effects.extend(dispatch_doctor(request, app));
+                return effects;
+            }
+            CommandResult::Codecov(request) => {
+                if consume_input {
+                    agent.prompt.set_text("");
+                }
+                effects.extend(dispatch_codecov(request, app));
                 return effects;
             }
             CommandResult::Action(Action::ExitSession) => {

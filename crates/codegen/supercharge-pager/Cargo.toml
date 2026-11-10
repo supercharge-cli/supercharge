@@ -8,6 +8,7 @@ authors = ["iotserver24"]
 [dependencies]
 # TTY safety — detach subprocesses from the controlling terminal
 dunce = { workspace = true }
+supercharge-codecov = { workspace = true }
 supercharge-tty-utils = { workspace = true }
 supercharge-version = { workspace = true }
 
