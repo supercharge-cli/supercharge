@@ -321,6 +321,24 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         curated: &["deepseek/deepseek-v4.1-flash", "z-ai/glm-5.3-flash"],
     },
     SetupProviderProfile {
+        id: "wiro",
+        name: "Wiro",
+        description: "Chat Completions at llm.wiro.ai. API Key Only: paste the key. Signature projects: paste key:secret in the same field.",
+        base_url: "https://llm.wiro.ai/v1",
+        default_model: "openai/gpt-5-6-sol",
+        format: SetupWireFormat::Openai,
+        curated: &["openai/gpt-5-6-sol", "qwen/qwen2-5-7b-instruct"],
+    },
+    SetupProviderProfile {
+        id: "free-ai",
+        name: "Free.ai",
+        description: "Self-hosted Chat Completions at api.free.ai. Setup lists grant-eligible self-hosted chat models only, not the full public catalog.",
+        base_url: "https://api.free.ai/v1",
+        default_model: "qwen7b",
+        format: SetupWireFormat::Openai,
+        curated: &["qwen7b", "qwen3-8b"],
+    },
+    SetupProviderProfile {
         id: supercharge_sampler::opencode_inference::GO_PROVIDER_ID,
         name: "OpenCode Go",
         description: "Subscription inference via Chat Completions",
@@ -703,6 +721,19 @@ fn model_entry_free_flag(entry: &Value) -> bool {
     )
 }
 
+/// Grant-eligible Free.ai chat models are self-hosted only.
+/// External and premium catalog entries are excluded from `/setup` listing.
+fn freeai_grant_chat_model(entry: &Value) -> bool {
+    let Some(obj) = entry.as_object() else {
+        return false;
+    };
+    obj.get("self_hosted").and_then(Value::as_bool) == Some(true)
+        && obj
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|typ| typ.eq_ignore_ascii_case("chat"))
+}
+
 /// Zen official-app-only chat models are not usable from this client.
 pub fn zen_official_app_only_model(entry: &Value, id: &str) -> bool {
     if let Some(cost) = model_entry_input_cost(entry) {
@@ -1045,6 +1076,9 @@ fn parse_openai_models_list_for(body: &Value, provider_id: Option<&str>) -> Vec<
         if provider_id == Some(supercharge_sampler::opencode_inference::ZEN_PROVIDER_ID)
             && zen_official_app_only_model(&entry, id)
         {
+            continue;
+        }
+        if provider_id == Some("free-ai") && !freeai_grant_chat_model(&entry) {
             continue;
         }
         models.push(ProviderModel {
@@ -3907,6 +3941,313 @@ mod tests {
         );
         assert_eq!(auth, "Bearer openscale-chat-key");
         assert_eq!(body["model"], "deepseek/deepseek-v4.1-flash");
+        assert_eq!(body["stream"], true);
+    }
+    #[test]
+    fn wiro_profile_uses_llm_gateway_chat_completions() {
+        let profile = find_setup_provider("wiro").expect("wiro profile");
+        assert_eq!(profile.name, "Wiro");
+        assert_eq!(profile.base_url, "https://llm.wiro.ai/v1");
+        assert!(!profile.base_url.contains("api.wiro.ai"));
+        assert_eq!(profile.format, SetupWireFormat::Openai);
+        assert_eq!(profile.default_model, "openai/gpt-5-6-sol");
+        assert!(profile.curated.contains(&"openai/gpt-5-6-sol"));
+        assert!(profile.description.contains("key:secret"));
+        assert_eq!(
+            provider_models_list_url(profile.base_url),
+            "https://llm.wiro.ai/v1/models"
+        );
+        assert!(setup_provider_profiles().any(|row| row.id == "wiro"));
+    }
+
+    #[test]
+    fn wiro_normalizes_base_url_and_models_suffix() {
+        assert_eq!(
+            normalize_provider_base_url("https://llm.wiro.ai/v1").unwrap(),
+            "https://llm.wiro.ai/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("https://llm.wiro.ai/v1/models").unwrap(),
+            "https://llm.wiro.ai/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("llm.wiro.ai/v1").unwrap(),
+            "https://llm.wiro.ai/v1"
+        );
+    }
+
+    #[test]
+    fn wiro_catalog_fetch_sends_bearer_key() {
+        let (models, requests) = with_models_server(
+            |_| {
+                (
+                    "200 OK",
+                    r#"{"object":"list","data":[{"id":"openai/gpt-5-6-sol","context_length":1050000,"supported_parameters":["tools","reasoning_effort"]}]}"#,
+                )
+            },
+            |base_url| {
+                fetch_provider_models(
+                    base_url,
+                    "wiro-test-key",
+                    SetupWireFormat::Openai,
+                    Some("wiro"),
+                )
+            },
+        );
+        let models = models.expect("authenticated catalog");
+        assert_eq!(models[0].id, "openai/gpt-5-6-sol");
+        assert_eq!(models[0].context_window, Some(1_050_000));
+        assert!(models[0].supports_thinking);
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("get /v1/models http/1.1\r\n"));
+        assert!(requests[0].contains("authorization: bearer wiro-test-key\r\n"));
+    }
+
+    #[test]
+    fn wiro_catalog_fetch_sends_signature_key_secret_as_bearer() {
+        let (models, requests) = with_models_server(
+            |_| {
+                (
+                    "200 OK",
+                    r#"{"object":"list","data":[{"id":"openai/gpt-5-6-sol"}]}"#,
+                )
+            },
+            |base_url| {
+                fetch_provider_models(
+                    base_url,
+                    "wiro-key:wiro-secret",
+                    SetupWireFormat::Openai,
+                    Some("wiro"),
+                )
+            },
+        );
+        assert_eq!(models.unwrap()[0].id, "openai/gpt-5-6-sol");
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("authorization: bearer wiro-key:wiro-secret\r\n"));
+        assert!(!requests[0].contains("x-api-key:"));
+    }
+
+    #[test]
+    fn wiro_persist_writes_chat_completions_bearer_and_model() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://llm.wiro.ai/v1".to_owned(),
+                api_key: "wiro-key:wiro-secret".to_owned(),
+                model_id: "openai/gpt-5-6-sol".to_owned(),
+                model_name: "Wiro catalog model".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "wiro".to_owned(),
+            },
+        )
+        .unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("models_base_url = \"https://llm.wiro.ai/v1\""));
+        assert!(body.contains("models_list_url = \"https://llm.wiro.ai/v1/models\""));
+        assert!(body.contains("default = \"openai/gpt-5-6-sol\""));
+        assert!(body.contains("api_key = \"wiro-key:wiro-secret\""));
+        assert!(body.contains("id = \"wiro\""));
+        assert!(body.contains("api_backend = \"chat_completions\""));
+        assert!(body.contains("auth_scheme = \"bearer\""));
+        let parsed: toml::Value = toml::from_str(&body).unwrap();
+        assert_eq!(
+            provider_setup_api_key_from_toml(&parsed).as_deref(),
+            Some("wiro-key:wiro-secret")
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn wiro_setup_chat_request_uses_existing_completions_client() {
+        let (url, seen) = recording_endpoint().await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: url.clone(),
+                api_key: "wiro-key:wiro-secret".to_owned(),
+                model_id: "openai/gpt-5-6-sol".to_owned(),
+                model_name: "Wiro catalog model".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "wiro".to_owned(),
+            },
+        )
+        .unwrap();
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        let default = cfg.models.default.clone().expect("default model");
+        let catalog = crate::agent::config::resolve_model_list(&cfg, None);
+        let entry = crate::agent::config::find_model_by_id(&catalog, &default).unwrap();
+        let creds = crate::agent::config::resolve_credentials(entry, None);
+        assert_eq!(creds.api_key.as_deref(), Some("wiro-key:wiro-secret"));
+        assert_eq!(creds.base_url, url);
+        let sampler =
+            crate::agent::config::sampling_config_for_model(entry, creds, None, None, None, None);
+        let client = supercharge_sampler::SamplingClient::new(sampler).unwrap();
+        let request: supercharge_sampling_types::types::ChatCompletionRequest =
+            serde_json::from_value(json!({"messages": [{"role": "user", "content": "hi"}]}))
+                .unwrap();
+        let _ = client.chat_completion_stream(request).await;
+        let seen = seen.lock().unwrap();
+        let (req_path, auth, body) = seen.first().expect("chat request recorded");
+        assert!(
+            req_path.contains("/chat/completions"),
+            "unexpected path {req_path}"
+        );
+        assert_eq!(auth, "Bearer wiro-key:wiro-secret");
+        assert_eq!(body["model"], "openai/gpt-5-6-sol");
+        assert_eq!(body["stream"], true);
+    }
+
+    #[test]
+    fn freeai_profile_uses_self_hosted_default() {
+        let profile = find_setup_provider("free-ai").expect("free-ai profile");
+        assert_eq!(profile.name, "Free.ai");
+        assert_eq!(profile.base_url, "https://api.free.ai/v1");
+        assert_eq!(profile.format, SetupWireFormat::Openai);
+        assert_eq!(profile.default_model, "qwen7b");
+        assert!(profile.curated.contains(&"qwen7b"));
+        assert!(profile.description.contains("self-hosted"));
+        assert!(profile.description.contains("not the full public catalog"));
+        assert_eq!(
+            provider_models_list_url(profile.base_url),
+            "https://api.free.ai/v1/models"
+        );
+        assert!(setup_provider_profiles().any(|row| row.id == "free-ai"));
+    }
+
+    #[test]
+    fn freeai_catalog_fetch_is_public_without_authorization() {
+        let (models, requests) = with_models_server(
+            |_| {
+                (
+                    "200 OK",
+                    r#"{"models":[{"id":"qwen7b","name":"Self-hosted chat","type":"chat","self_hosted":true},{"id":"external-chat","type":"chat","self_hosted":false}]}"#,
+                )
+            },
+            |base_url| {
+                fetch_provider_models(base_url, "", SetupWireFormat::Openai, Some("free-ai"))
+            },
+        );
+        let models = models.expect("public catalog");
+        let ids: Vec<&str> = models.iter().map(|model| model.id.as_str()).collect();
+        assert_eq!(ids, vec!["qwen7b"]);
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("get /v1/models http/1.1\r\n"));
+        assert!(!requests[0].contains("authorization:"));
+    }
+
+    #[test]
+    fn freeai_parse_keeps_only_self_hosted_chat_models() {
+        let body = json!({
+            "models": [
+                {
+                    "id": "qwen7b",
+                    "name": "Self-hosted chat",
+                    "type": "chat",
+                    "self_hosted": true
+                },
+                {
+                    "id": "qwen-coder",
+                    "name": "Self-hosted code",
+                    "type": "code",
+                    "self_hosted": true
+                },
+                {
+                    "id": "sdxl",
+                    "name": "Self-hosted image",
+                    "type": "image",
+                    "self_hosted": true
+                },
+                {
+                    "id": "premium-chat",
+                    "name": "External chat",
+                    "type": "chat",
+                    "self_hosted": false
+                }
+            ]
+        });
+        let models = parse_openai_models_list_for(&body, Some("free-ai"));
+        assert_eq!(
+            models
+                .iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["qwen7b"]
+        );
+        let unfiltered = parse_openai_models_list(&body);
+        let unfiltered_ids: Vec<&str> = unfiltered.iter().map(|model| model.id.as_str()).collect();
+        assert!(unfiltered_ids.contains(&"qwen7b"));
+        assert!(unfiltered_ids.contains(&"premium-chat"));
+        assert!(unfiltered_ids.contains(&"qwen-coder"));
+    }
+
+    #[test]
+    fn freeai_persist_writes_chat_completions_and_self_hosted_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://api.free.ai/v1".to_owned(),
+                api_key: "sk-free-test-key".to_owned(),
+                model_id: "qwen7b".to_owned(),
+                model_name: "Self-hosted chat".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "free-ai".to_owned(),
+            },
+        )
+        .unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("models_base_url = \"https://api.free.ai/v1\""));
+        assert!(body.contains("models_list_url = \"https://api.free.ai/v1/models\""));
+        assert!(body.contains("default = \"qwen7b\""));
+        assert!(body.contains("id = \"free-ai\""));
+        assert!(body.contains("api_backend = \"chat_completions\""));
+        assert!(body.contains("auth_scheme = \"bearer\""));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn freeai_setup_chat_request_uses_completions_alias() {
+        let (url, seen) = recording_endpoint().await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: url.clone(),
+                api_key: "sk-free-test-key".to_owned(),
+                model_id: "qwen7b".to_owned(),
+                model_name: "Self-hosted chat".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "free-ai".to_owned(),
+            },
+        )
+        .unwrap();
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        let default = cfg.models.default.clone().expect("default model");
+        let catalog = crate::agent::config::resolve_model_list(&cfg, None);
+        let entry = crate::agent::config::find_model_by_id(&catalog, &default).unwrap();
+        let creds = crate::agent::config::resolve_credentials(entry, None);
+        assert_eq!(creds.api_key.as_deref(), Some("sk-free-test-key"));
+        let sampler =
+            crate::agent::config::sampling_config_for_model(entry, creds, None, None, None, None);
+        let client = supercharge_sampler::SamplingClient::new(sampler).unwrap();
+        let request: supercharge_sampling_types::types::ChatCompletionRequest =
+            serde_json::from_value(json!({"messages": [{"role": "user", "content": "hi"}]}))
+                .unwrap();
+        let _ = client.chat_completion_stream(request).await;
+        let seen = seen.lock().unwrap();
+        let (req_path, auth, body) = seen.first().expect("chat request recorded");
+        assert!(
+            req_path.contains("/chat/completions"),
+            "unexpected path {req_path}"
+        );
+        assert_eq!(auth, "Bearer sk-free-test-key");
+        assert_eq!(body["model"], "qwen7b");
         assert_eq!(body["stream"], true);
     }
 }

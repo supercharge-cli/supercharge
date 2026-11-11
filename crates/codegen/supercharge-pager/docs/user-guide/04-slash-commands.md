@@ -462,7 +462,7 @@ This setting doesn't touch `[features] telemetry`, `trace_upload`, or your exter
 
 ### `/setup`
 
-Open Supercharge AI’s provider setup wizard. Pick a built-in provider (OpenAI, Anthropic, OpenRouter, OpenScale, Pollinations, Ollama, and others) or Custom. For Custom, enter the provider base URL. Choose Chat Completions, Messages, or Responses, then enter any credential required by that provider. Supercharge fetches `/models` from that API (Anthropic-compatible providers use `x-api-key`) and lists chat models so you can choose the default, or type a custom model id. The chosen model, endpoint, format, and credential are stored under `~/.supercharge/config.toml`, and the current session switches to that model immediately.
+Open Supercharge AI’s provider setup wizard. Pick a built-in provider (OpenAI, Anthropic, OpenRouter, OpenScale, Wiro, Free.ai, Pollinations, Ollama, and others) or Custom. For Custom, enter the provider base URL. Choose Chat Completions, Messages, or Responses, then enter any credential required by that provider. Supercharge fetches `/models` from that API (Anthropic-compatible providers use `x-api-key`) and lists chat models so you can choose the default, or type a custom model id. For Wiro Signature projects, enter `key:secret` in the API key field. Free.ai setup lists grant-eligible self-hosted chat models only, not the full public catalog. The chosen model, endpoint, format, and credential are stored under `~/.supercharge/config.toml`, and the current session switches to that model immediately.
 
 ```
 /setup
