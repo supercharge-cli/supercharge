@@ -147,6 +147,15 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         ],
     },
     SetupProviderProfile {
+        id: "openscale",
+        name: "OpenScale",
+        description: "Public model catalog via OpenAI-compatible Chat Completions",
+        base_url: "https://api.openscale.so/v1",
+        default_model: "deepseek/deepseek-v4.1-flash",
+        format: SetupWireFormat::Openai,
+        curated: &["deepseek/deepseek-v4.1-flash", "z-ai/glm-5.3-flash"],
+    },
+    SetupProviderProfile {
         id: "openai",
         name: "OpenAI",
         description: "api.openai.com",
@@ -310,15 +319,6 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         default_model: "zhipu/glm-5.1",
         format: SetupWireFormat::Openai,
         curated: &["zhipu/glm-5.1", "deepseek/deepseek-v3"],
-    },
-    SetupProviderProfile {
-        id: "openscale",
-        name: "OpenScale",
-        description: "Public model catalog via OpenAI-compatible Chat Completions",
-        base_url: "https://api.openscale.so/v1",
-        default_model: "deepseek/deepseek-v4.1-flash",
-        format: SetupWireFormat::Openai,
-        curated: &["deepseek/deepseek-v4.1-flash", "z-ai/glm-5.3-flash"],
     },
     SetupProviderProfile {
         id: "wiro",
@@ -3699,6 +3699,49 @@ mod tests {
                 .contains_key(supercharge_sampler::opencode_inference::SESSION_HEADER)
         );
     }
+    #[test]
+    fn setup_list_places_openscale_second_after_pollinations() {
+        let ids: Vec<&str> = setup_provider_profiles()
+            .map(|profile| profile.id)
+            .collect();
+        assert_eq!(ids.first().copied(), Some("pollinations"));
+        assert_eq!(ids.get(1).copied(), Some("openscale"));
+        assert_eq!(
+            ids,
+            vec![
+                "pollinations",
+                "openscale",
+                "openai",
+                "anthropic",
+                "openrouter",
+                "deepseek",
+                "google",
+                "groq",
+                "zai",
+                "kimi-coding",
+                "kimi",
+                "qwen",
+                "mistral-auth",
+                "mistral",
+                "together",
+                "fireworks",
+                "grok",
+                "routingrun",
+                "zenllm",
+                "wiro",
+                "free-ai",
+                "opencode-go",
+                "opencode-zen",
+                "agentrouter",
+                "nous",
+                "ollama",
+                "lmstudio",
+            ]
+        );
+        assert!(!ids.contains(&"codex"));
+        assert!(find_setup_provider("codex").is_some());
+    }
+
     #[test]
     fn openscale_profile_uses_chat_completions_and_canonical_base() {
         let profile = find_setup_provider("openscale").expect("openscale profile");
