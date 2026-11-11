@@ -17,6 +17,8 @@ pub enum CliUpdateErrorKind {
     SmokeTimeout,
     SmokeNonzero,
     SmokeSpawn,
+    SmokeVersionMismatch,
+    SmokeMissingVersion,
     Download,
     Activate,
     Other,

@@ -46,6 +46,10 @@ fn run_update(base: &str, config_toml: &str, extra_args: &[&str]) -> std::proces
         .env("SUPERCHARGE_HOME", home.path())
         .env("PATH", std::env::var("PATH").unwrap_or_default())
         .env("SUPERCHARGE_CLI_BASE_URL", base)
+        // Pin to the internal installer so this fixture talks to the local
+        // channel pointer, not the public gh-release latest (which can embed a
+        // different cargo version than the advertised tag).
+        .env("SUPERCHARGE_INSTALLER", "internal")
         .output()
         .expect("spawn grok update")
 }

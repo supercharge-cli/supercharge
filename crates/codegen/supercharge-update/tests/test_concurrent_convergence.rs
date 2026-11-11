@@ -107,7 +107,15 @@ case "$*" in
       prev="$a"
     done
     if [ -n "$out" ]; then
-      printf '#!/bin/sh\nexit 0\n' > "$out"
+      base=$(basename "$out")
+      ver=${{base#supercharge-}}
+      ver=${{ver%%-*}}
+      cat > "$out" <<EOF
+#!/bin/sh
+[ "\$1" = --version ] || exit 0
+printf 'supercharge ${{ver}} (test)\n'
+exit 0
+EOF
       chmod +x "$out"
     fi
     ;;
@@ -130,7 +138,14 @@ fn setup_gh_release(running_version: &str) -> FakeBinGuard {
     reset_home();
     set_test_version(running_version);
     // SAFETY: serial_test ensures no race; reset_home clears this between tests.
-    unsafe { std::env::set_var("SUPERCHARGE_INSTALLER", "gh-release") };
+    unsafe {
+        std::env::set_var("SUPERCHARGE_INSTALLER", "gh-release");
+        // Force API latest + HTTP asset fetch to miss so the fake `gh` is used.
+        std::env::set_var(
+            "SUPERCHARGE_GITHUB_REPO",
+            "supercharge-cli/test-no-such-repo",
+        );
+    }
     FakeBinGuard::install("gh", fake_gh_serving_releases)
 }
 

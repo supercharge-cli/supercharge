@@ -56,7 +56,10 @@ async fn fetch_npm_tag_passes_pkg_and_tag_to_npm() {
     let args = &log[0];
     assert!(args.contains("view"), "args: {args}");
     // For "latest" tag, no `@latest` suffix is appended in pkg_spec.
-    assert!(args.contains("@supercharge-cli/supercharge"), "args: {args}");
+    assert!(
+        args.contains("@supercharge-cli/supercharge"),
+        "args: {args}"
+    );
     assert!(!args.contains("@latest"), "args: {args}");
     assert!(args.contains("--json"), "args: {args}");
 }
@@ -208,7 +211,10 @@ async fn install_npm_calls_npm_with_version_arg() {
     assert_eq!(log.len(), 1, "exactly one npm invocation");
     let args = &log[0];
     assert!(args.contains("i -g"), "args: {args}");
-    assert!(args.contains("@supercharge-cli/supercharge@0.1.181"), "args: {args}");
+    assert!(
+        args.contains("@supercharge-cli/supercharge@0.1.181"),
+        "args: {args}"
+    );
 }
 
 #[tokio::test]
@@ -402,7 +408,7 @@ async fn fetch_gh_release_passes_repo_flag() {
     let log = g.args_log();
     assert!(log[0].contains("--repo"), "args: {}", log[0]);
     assert!(
-        log[0].contains("xai-org-shared/supercharge-core"),
+        log[0].contains(&supercharge_update::version::github_release_repo()),
         "args: {}",
         log[0]
     );

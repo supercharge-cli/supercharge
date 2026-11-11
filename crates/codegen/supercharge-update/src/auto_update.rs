@@ -63,9 +63,13 @@ fn manual_install_cmd(channel: &str) -> String {
         };
     }
     if cfg!(windows) {
-        format!("$env:SUPERCHARGE_CHANNEL='{channel}'; irm https://www.superchargeai.in/install.ps1 | iex")
+        format!(
+            "$env:SUPERCHARGE_CHANNEL='{channel}'; irm https://www.superchargeai.in/install.ps1 | iex"
+        )
     } else {
-        format!("curl -fsSL https://www.superchargeai.in/install.sh | SUPERCHARGE_CHANNEL='{channel}' bash")
+        format!(
+            "curl -fsSL https://www.superchargeai.in/install.sh | SUPERCHARGE_CHANNEL='{channel}' bash"
+        )
     }
 }
 
@@ -157,6 +161,8 @@ pub fn classify_install_error(err: &anyhow::Error) -> CliUpdateErrorKind {
             SmokeTestFailure::Timeout => CliUpdateErrorKind::SmokeTimeout,
             SmokeTestFailure::Spawn(_) => CliUpdateErrorKind::SmokeSpawn,
             SmokeTestFailure::NonZero { .. } => CliUpdateErrorKind::SmokeNonzero,
+            SmokeTestFailure::VersionMismatch { .. } => CliUpdateErrorKind::SmokeVersionMismatch,
+            SmokeTestFailure::MissingVersion { .. } => CliUpdateErrorKind::SmokeMissingVersion,
         };
     }
     match err.downcast_ref::<InstallPhaseError>() {
@@ -1258,7 +1264,10 @@ async fn remove_stale_models_cache() {
 /// and the pre-rename name).
 async fn remove_stale_pager(bin_dir: &std::path::Path) {
     let ext = if cfg!(windows) { ".exe" } else { "" };
-    for prefix in [crate::version::BIN_PREFIX, crate::version::LEGACY_BIN_PREFIX] {
+    for prefix in [
+        crate::version::BIN_PREFIX,
+        crate::version::LEGACY_BIN_PREFIX,
+    ] {
         let link = bin_dir.join(format!("{prefix}-pager{ext}"));
         if link.exists() || link.is_symlink() {
             let _ = tokio::fs::remove_file(&link).await;
@@ -1324,7 +1333,10 @@ async fn migrate_legacy_layout(
 
 /// Prune old versioned downloads under both the current and the pre-rename prefix.
 async fn cleanup_all_old_downloads(download_dir: &std::path::Path, version: &str) {
-    for prefix in [crate::version::BIN_PREFIX, crate::version::LEGACY_BIN_PREFIX] {
+    for prefix in [
+        crate::version::BIN_PREFIX,
+        crate::version::LEGACY_BIN_PREFIX,
+    ] {
         cleanup_old_downloads(download_dir, prefix, version).await;
         cleanup_old_downloads(download_dir, &format!("{prefix}-pager"), version).await;
     }
@@ -1517,6 +1529,16 @@ enum SmokeTestFailure {
     Spawn(String),
     #[error("{}", nonzero_message(status, stderr))]
     NonZero { status: String, stderr: String },
+    #[error(
+        "downloaded binary version does not match {expected}.
+         Reported: {reported}
+         Your current version is unchanged."
+    )]
+    VersionMismatch { expected: String, reported: String },
+    #[error(
+        "downloaded binary did not report a parseable version.\n         Reported: {reported}\n         Your current version is unchanged."
+    )]
+    MissingVersion { reported: String },
 }
 
 /// `--version` exited nonzero; include stderr only when there is any.
@@ -1532,7 +1554,10 @@ fn nonzero_message(status: &str, stderr: &str) -> String {
     )
 }
 
-async fn smoke_test_binary(binary_path: &std::path::Path) -> Result<(), SmokeTestFailure> {
+async fn smoke_test_binary(
+    binary_path: &std::path::Path,
+    advertised: &str,
+) -> Result<(), SmokeTestFailure> {
     // ETXTBSY race: a concurrent updater's child in this process briefly holds every open fd between fork and exec pre_exec
     // in detach_command forces the fork/exec path. The held fds include the write side of a download just renamed onto
     // `binary_path`. So retry instead of failing the install (and deleting a racer's freshly installed binary)
@@ -1541,13 +1566,29 @@ async fn smoke_test_binary(binary_path: &std::path::Path) -> Result<(), SmokeTes
         let mut cmd = tokio::process::Command::new(binary_path);
         cmd.arg("--version")
             .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
         supercharge_tools::util::detach_command(&mut cmd);
         match tokio::time::timeout(SMOKE_TEST_TIMEOUT, cmd.output()).await {
             Err(_) => return Err(SmokeTestFailure::Timeout),
-            Ok(Ok(output)) if output.status.success() => return Ok(()),
+            Ok(Ok(output)) if output.status.success() => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let reported = stdout
+                    .lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty())
+                    .unwrap_or("(empty --version output)")
+                    .to_string();
+                let expected = advertised.trim().trim_start_matches(['v', 'V']).to_string();
+                if supercharge_version::parse_cli_version_line(&stdout).is_none() {
+                    return Err(SmokeTestFailure::MissingVersion { reported });
+                }
+                if !supercharge_version::cli_version_matches_advertised(&stdout, advertised) {
+                    return Err(SmokeTestFailure::VersionMismatch { expected, reported });
+                }
+                return Ok(());
+            }
             Ok(Ok(output)) => {
                 let status = output
                     .status
@@ -1639,7 +1680,7 @@ async fn download_verified_from_base(
         elapsed_ms = tracing::field::Empty,
     ));
     let smoke_started = Instant::now();
-    let smoke_result = smoke_test_binary(&binary_path).await;
+    let smoke_result = smoke_test_binary(&binary_path, &version).await;
     smoke_span
         .span()
         .record("elapsed_ms", smoke_started.elapsed().as_millis() as i64);
@@ -1677,10 +1718,13 @@ async fn activate_verified_download(download: &VerifiedDownload) -> Result<()> {
     tokio::fs::create_dir_all(&bin_dir).await?;
 
     // Atomic swap of ~/.supercharge/bin/{supercharge,agent} -> downloaded binary.
-    let link_path = swap_managed_bin_links(&download.binary_path, &bin_dir).await?;
+    // Refresh of PATH copies is transactional with this swap: a PATH refresh failure
+    // rolls the managed links back so we never report success / restart with a stale PATH binary.
+    let pending = swap_managed_bin_links(&download.binary_path, &bin_dir).await?;
 
     remove_stale_pager(&bin_dir).await;
     migrate_legacy_layout(&download.binary_path, &bin_dir, &supercharge_home).await;
+    let link_path = commit_or_rollback_after_refresh(pending, &download.binary_path).await?;
 
     // Hook exes beside supercharge.exe and the bundled MinGit; supercharge is already live, so a failure here is only logged.
     #[cfg(windows)]
@@ -1713,9 +1757,15 @@ async fn regenerate_completions(binary: &std::path::Path, supercharge_home: &std
     let user_home = supercharge_dirs::home_dir().unwrap_or_default();
 
     let completions: &[(&str, std::path::PathBuf)] = &[
-        ("bash", supercharge_home.join("completions/bash/supercharge.bash")),
+        (
+            "bash",
+            supercharge_home.join("completions/bash/supercharge.bash"),
+        ),
         ("zsh", supercharge_home.join("completions/zsh/_supercharge")),
-        ("fish", user_home.join(".config/fish/completions/supercharge.fish")),
+        (
+            "fish",
+            user_home.join(".config/fish/completions/supercharge.fish"),
+        ),
     ];
 
     for (shell, dest) in completions {
@@ -1761,14 +1811,324 @@ fn relative_symlink_target(target: &std::path::Path, link: &std::path::Path) -> 
     target.to_path_buf()
 }
 
+struct PendingManagedSwap {
+    link_path: std::path::PathBuf,
+    captured: Vec<LinkRollback>,
+}
+
+impl PendingManagedSwap {
+    async fn commit(self) {
+        for cap in &self.captured {
+            cap.cleanup().await;
+        }
+    }
+
+    async fn rollback(self) -> Result<()> {
+        let mut first_err: Option<anyhow::Error> = None;
+        for cap in self.captured.iter().rev() {
+            if let Err(e) = cap.restore().await {
+                tracing::warn!(
+                    "failed to roll back managed bin link {}: {e:#}",
+                    cap.link_path().display()
+                );
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+                continue;
+            }
+            cap.cleanup().await;
+        }
+        match first_err {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
+    }
+}
+
+async fn commit_or_rollback_after_refresh(
+    pending: PendingManagedSwap,
+    new_binary: &std::path::Path,
+) -> Result<std::path::PathBuf> {
+    let local_bin = supercharge_dirs::home_dir().map(|home| home.join(".local/bin"));
+    let launched = std::env::current_exe().ok();
+    commit_or_rollback_after_refresh_in(
+        pending,
+        new_binary,
+        local_bin.as_deref(),
+        launched.as_deref(),
+        &supercharge_home(),
+    )
+    .await
+}
+
+/// Swap is already done. Refresh PATH copies; on failure restore managed links and
+/// any PATH copies this refresh already changed, then return an actionable error.
+pub(crate) async fn commit_or_rollback_after_refresh_in(
+    pending: PendingManagedSwap,
+    new_binary: &std::path::Path,
+    local_bin: Option<&std::path::Path>,
+    launched_exe: Option<&std::path::Path>,
+    supercharge_home: &std::path::Path,
+) -> Result<std::path::PathBuf> {
+    let link_path = pending.link_path.clone();
+    match refresh_bootstrap_entrypoints_in(new_binary, local_bin, launched_exe, supercharge_home)
+        .await
+    {
+        Ok(()) => {
+            pending.commit().await;
+            Ok(link_path)
+        }
+        Err(refresh_err) => {
+            let rollback = pending.rollback().await;
+            let err = refresh_err.context(
+                "failed to refresh PATH/bootstrap entrypoints; the update was not completed.                  Managed binaries were rolled back to the previous version so PATH and managed                  links stay together. Fix the PATH entrypoint (permissions or location) and re-run                  the update.",
+            );
+            match rollback {
+                Ok(()) => Err(err),
+                Err(rb) => Err(err).context(format!(
+                    "also failed to restore managed links: {rb:#}. Manual recovery may be required"
+                )),
+            }
+        }
+    }
+}
+
+fn is_managed_home_path(path: &std::path::Path, supercharge_home: &std::path::Path) -> bool {
+    path.starts_with(supercharge_home.join("bin"))
+        || path.starts_with(supercharge_home.join("downloads"))
+}
+
+fn is_cli_entry_name(path: &std::path::Path) -> bool {
+    matches!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some("supercharge" | "sc" | "supercharge.exe" | "sc.exe")
+    )
+}
+
+fn files_equivalent(a: &std::path::Path, b: &std::path::Path) -> bool {
+    let Ok(a_meta) = std::fs::symlink_metadata(a) else {
+        return false;
+    };
+    if a_meta.file_type().is_symlink() {
+        if let Ok(target) = std::fs::read_link(a) {
+            let resolved = a
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join(target);
+            return files_equivalent(&resolved, b);
+        }
+        return false;
+    }
+    let Ok(b_meta) = std::fs::symlink_metadata(b) else {
+        return false;
+    };
+    if b_meta.file_type().is_symlink() {
+        if let Ok(target) = std::fs::read_link(b) {
+            let resolved = b
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join(target);
+            return files_equivalent(a, &resolved);
+        }
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        a_meta.is_file()
+            && b_meta.is_file()
+            && a_meta.dev() == b_meta.dev()
+            && a_meta.ino() == b_meta.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
+/// `install.sh` copies the CLI into `$HOME/.local/bin` (or a custom bindir) as regular files.
+/// The updater used to swap only `~/.supercharge/bin` links, so `sc -v` on PATH stayed at the
+/// pre-update binary after "Update installed. Restarting".
+#[cfg_attr(not(unix), allow(clippy::unused_async))]
+pub(crate) async fn refresh_bootstrap_entrypoints_in(
+    new_binary: &std::path::Path,
+    local_bin: Option<&std::path::Path>,
+    launched_exe: Option<&std::path::Path>,
+    supercharge_home: &std::path::Path,
+) -> Result<()> {
+    #[cfg(not(unix))]
+    {
+        let _ = (new_binary, local_bin, launched_exe, supercharge_home);
+        return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        use std::collections::BTreeSet;
+        let mut completed: Vec<BootstrapRollback> = Vec::new();
+        let mut candidates: BTreeSet<std::path::PathBuf> = BTreeSet::new();
+        if let Some(dir) = local_bin {
+            candidates.insert(dir.join("supercharge"));
+            candidates.insert(dir.join("sc"));
+        }
+        if let Some(exe) = launched_exe {
+            candidates.insert(exe.to_path_buf());
+            if is_cli_entry_name(exe)
+                && let Some(parent) = exe.parent()
+            {
+                candidates.insert(parent.join("supercharge"));
+                candidates.insert(parent.join("sc"));
+            }
+        }
+        let launched_canon = launched_exe.and_then(|p| dunce::canonicalize(p).ok());
+        for dest in candidates {
+            let Ok(meta) = tokio::fs::symlink_metadata(&dest).await else {
+                continue;
+            };
+            if meta.file_type().is_symlink() {
+                if let Ok(target) = tokio::fs::read_link(&dest).await {
+                    let target_str = target.to_string_lossy();
+                    if target_str.contains(".supercharge/downloads/")
+                        && !target_str.ends_with("-latest")
+                    {
+                        let prior = target.clone();
+                        if let Err(e) = atomic_symlink_swap(new_binary, &dest).await {
+                            restore_bootstrap_rollbacks(&completed).await;
+                            return Err(e).context(format!(
+                                "failed to retarget PATH symlink {}",
+                                dest.display()
+                            ));
+                        }
+                        completed.push(BootstrapRollback::Symlink {
+                            dest: dest.clone(),
+                            prior,
+                        });
+                    }
+                }
+                continue;
+            }
+            if !meta.file_type().is_file() {
+                continue;
+            }
+            let canon = dunce::canonicalize(&dest).unwrap_or_else(|_| dest.clone());
+            if is_managed_home_path(&canon, supercharge_home) {
+                continue;
+            }
+            let name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let is_ours = match name {
+                "supercharge" | "supercharge.exe" => true,
+                "sc" | "sc.exe" => {
+                    launched_canon.as_ref().is_some_and(|exe| *exe == canon)
+                        || files_equivalent(&dest, &dest.with_file_name("supercharge"))
+                }
+                _ => launched_canon.as_ref().is_some_and(|exe| *exe == canon),
+            };
+            if !is_ours {
+                continue;
+            }
+            match replace_regular_bootstrap_file(new_binary, &dest).await {
+                Ok(rb) => completed.push(BootstrapRollback::File(rb)),
+                Err(e) => {
+                    restore_bootstrap_rollbacks(&completed).await;
+                    return Err(e).context(format!(
+                        "failed to refresh PATH entrypoint {}",
+                        dest.display()
+                    ));
+                }
+            }
+        }
+        for rb in &completed {
+            rb.cleanup().await;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+struct BootstrapFileRollback {
+    dest: std::path::PathBuf,
+    backup: std::path::PathBuf,
+}
+
+#[cfg(unix)]
+enum BootstrapRollback {
+    File(BootstrapFileRollback),
+    Symlink {
+        dest: std::path::PathBuf,
+        prior: std::path::PathBuf,
+    },
+}
+
+#[cfg(unix)]
+impl BootstrapRollback {
+    async fn restore(&self) -> Result<()> {
+        match self {
+            BootstrapRollback::File(rb) => tokio::fs::rename(&rb.backup, &rb.dest)
+                .await
+                .with_context(|| {
+                    format!("restoring previous PATH entrypoint {}", rb.dest.display())
+                }),
+            BootstrapRollback::Symlink { dest, prior } => atomic_symlink_swap(prior, dest)
+                .await
+                .with_context(|| format!("restoring previous PATH symlink {}", dest.display())),
+        }
+    }
+
+    async fn cleanup(&self) {
+        if let BootstrapRollback::File(rb) = self {
+            let _ = tokio::fs::remove_file(&rb.backup).await;
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn restore_bootstrap_rollbacks(completed: &[BootstrapRollback]) {
+    for rb in completed.iter().rev() {
+        if let Err(e) = rb.restore().await {
+            tracing::warn!("failed to restore PATH entrypoint during rollback: {e:#}");
+        } else {
+            rb.cleanup().await;
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn replace_regular_bootstrap_file(
+    src: &std::path::Path,
+    dest: &std::path::Path,
+) -> Result<BootstrapFileRollback> {
+    use std::os::unix::fs::PermissionsExt;
+    let backup = unique_temp_sibling(dest, "bootstrap.bak");
+    tokio::fs::copy(dest, &backup)
+        .await
+        .with_context(|| format!("backing up PATH entrypoint {}", dest.display()))?;
+    let tmp = unique_temp_sibling(dest, "bootstrap");
+    if let Err(e) = async {
+        tokio::fs::copy(src, &tmp).await?;
+        tokio::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).await?;
+        tokio::fs::rename(&tmp, dest).await?;
+        Ok::<(), anyhow::Error>(())
+    }
+    .await
+    {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        let _ = tokio::fs::remove_file(&backup).await;
+        return Err(e).context(format!("replacing PATH entrypoint {}", dest.display()));
+    }
+    Ok(BootstrapFileRollback {
+        dest: dest.to_path_buf(),
+        backup,
+    })
+}
+
 /// The bootstrap installers (`install.sh`, `install.ps1`, `deploy/install-supercharge.sh`) maintain `supercharge` and
 /// `sc` in lockstep, and so must the updater. Otherwise `supercharge update` leaves `sc` pinned at the previous
 /// version. Any earlier successful swaps are rolled back if a later one fails, including *removing* a link that
 /// didn't exist before.
-async fn swap_managed_bin_links(
+
+pub(crate) async fn swap_managed_bin_links(
     binary_path: &std::path::Path,
     bin_dir: &std::path::Path,
-) -> Result<std::path::PathBuf> {
+) -> Result<PendingManagedSwap> {
     let grok_name = if cfg!(windows) {
         "supercharge.exe"
     } else {
@@ -1780,15 +2140,20 @@ async fn swap_managed_bin_links(
         (binary_path.to_path_buf(), grok_link.clone()),
         (binary_path.to_path_buf(), bin_dir.join(agent_name)),
     ];
-    replace_managed_bins(&pairs).await?;
-    Ok(grok_link)
+    let captured = replace_managed_bins(&pairs).await?;
+    Ok(PendingManagedSwap {
+        link_path: grok_link,
+        captured,
+    })
 }
 
 /// Point every `dest` in `pairs` at its `src` (a symlink on Unix, a copy through
 /// `windows_replace_exe` on Windows) as one unit: every `dest` is captured
 /// up-front, then replaced in order, and a failure restores the completed ones in
 /// reverse, including removing a `dest` that did not exist before.
-async fn replace_managed_bins(pairs: &[(std::path::PathBuf, std::path::PathBuf)]) -> Result<()> {
+async fn replace_managed_bins(
+    pairs: &[(std::path::PathBuf, std::path::PathBuf)],
+) -> Result<Vec<LinkRollback>> {
     // Capture every dest up-front so a later capture failure can't strand an earlier one mid-swap
     let mut captured: Vec<LinkRollback> = Vec::with_capacity(pairs.len());
     for (_, dest) in pairs {
@@ -1850,10 +2215,7 @@ async fn replace_managed_bins(pairs: &[(std::path::PathBuf, std::path::PathBuf)]
         }
     }
 
-    for cap in &captured {
-        cap.cleanup().await;
-    }
-    Ok(())
+    Ok(captured)
 }
 
 /// Snapshot of a managed-bin link's prior state for rollback in [`replace_managed_bins`].
@@ -2244,7 +2606,7 @@ async fn download_github_release_asset(
     arch: &str,
     dest: &std::path::Path,
 ) -> Result<()> {
-    let repo = crate::version::GH_RELEASE_REPO;
+    let repo = crate::version::github_release_repo();
     let tag = format!("v{}", version.trim_start_matches('v'));
     let ext = if os == "windows" { ".exe" } else { "" };
     let names = [format!("supercharge-{os}-{arch}{ext}")];
@@ -2275,7 +2637,7 @@ async fn gh_release_download(tag: &str, pattern: &str, dest: &std::path::Path) -
         "download",
         tag,
         "--repo",
-        crate::version::GH_RELEASE_REPO,
+        &crate::version::github_release_repo(),
         "--pattern",
         pattern,
         "--output",
@@ -2347,10 +2709,16 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
         tokio::fs::set_permissions(&binary_path, std::fs::Permissions::from_mode(0o755)).await?;
     }
 
+    if let Err(fail) = smoke_test_binary(&binary_path, &version).await {
+        let _ = tokio::fs::remove_file(&binary_path).await;
+        return Err(fail.into());
+    }
+
     // Atomic swap of ~/.supercharge/bin/{supercharge,agent} -> downloaded binary.
-    swap_managed_bin_links(&binary_path, &bin_dir).await?;
+    let pending = swap_managed_bin_links(&binary_path, &bin_dir).await?;
     remove_stale_pager(&bin_dir).await;
     migrate_legacy_layout(&binary_path, &bin_dir, &supercharge_home).await;
+    commit_or_rollback_after_refresh(pending, &binary_path).await?;
 
     // Update supercharge-latest -> versioned binary so any existing symlinks that route
     // through it (e.g. /usr/local/bin/supercharge -> ~/.supercharge/downloads/supercharge-latest)
@@ -2368,13 +2736,16 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
     // ~/.supercharge/downloads/ (legacy layout — skips the supercharge-latest indirection).
     // Permission errors are ignored
     #[cfg(unix)]
-    for name in ["supercharge", "sc", crate::version::LEGACY_BIN_PREFIX, "agent"] {
+    for name in [
+        "supercharge",
+        "sc",
+        crate::version::LEGACY_BIN_PREFIX,
+        "agent",
+    ] {
         let system_link = std::path::PathBuf::from(format!("/usr/local/bin/{name}"));
         if let Ok(existing_target) = tokio::fs::read_link(&system_link).await {
             let target_str = existing_target.to_string_lossy();
-            if target_str.contains(".supercharge/downloads/")
-                && !target_str.ends_with("-latest")
-            {
+            if target_str.contains(".supercharge/downloads/") && !target_str.ends_with("-latest") {
                 let _ = atomic_symlink_swap(&binary_path, &system_link).await;
             }
         }

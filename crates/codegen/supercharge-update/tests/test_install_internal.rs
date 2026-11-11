@@ -9,6 +9,7 @@
 #![cfg(unix)]
 
 mod common;
+use common::small_good_artifact;
 
 use serial_test::serial;
 use wiremock::matchers::{method, path};
@@ -64,7 +65,7 @@ async fn mount_gcs(version: &str, platform: &str) -> MockServer {
     // Main supercharge binary download.
     Mock::given(method("GET"))
         .and(path(format!("/supercharge-{version}-{platform}")))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"#!/bin/sh\nexit 0\n".to_vec()))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(small_good_artifact()))
         .mount(&server)
         .await;
 
@@ -93,7 +94,7 @@ async fn install_internal_pinned_version_writes_binary_and_symlink() {
         .join("downloads")
         .join(format!("supercharge-0.1.181-{platform}"));
     assert!(downloaded.exists(), "binary downloaded: {downloaded:?}");
-    assert_eq!(std::fs::read(&downloaded).unwrap(), b"#!/bin/sh\nexit 0\n");
+    assert_eq!(std::fs::read(&downloaded).unwrap(), small_good_artifact());
 
     let symlink = home.join("bin").join("supercharge");
     assert!(symlink.is_symlink(), "supercharge symlink created");
@@ -107,7 +108,10 @@ async fn install_internal_pinned_version_writes_binary_and_symlink() {
     let agent_link = home.join("bin").join("sc");
     assert!(agent_link.is_symlink(), "agent symlink created");
     let agent_target = std::fs::read_link(&agent_link).unwrap();
-    assert_eq!(agent_target, target, "agent and supercharge point at same target");
+    assert_eq!(
+        agent_target, target,
+        "agent and supercharge point at same target"
+    );
 }
 
 /// Regression: pre-existing `agent` symlink from a prior install must be swapped to the new version, not left stale (the original bug).
@@ -127,7 +131,7 @@ async fn install_internal_updates_stale_agent_symlink_to_new_version() {
     std::fs::create_dir_all(&bin_dir).unwrap();
     std::fs::create_dir_all(&download_dir).unwrap();
     let old_binary = download_dir.join(format!("supercharge-0.1.180-{platform}"));
-    std::fs::write(&old_binary, b"#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::write(&old_binary, small_good_artifact()).unwrap();
     let rel_old = std::path::Path::new("..")
         .join("downloads")
         .join(format!("supercharge-0.1.180-{platform}"));
@@ -163,7 +167,7 @@ async fn install_internal_rolls_back_grok_when_agent_swap_fails() {
     std::fs::create_dir_all(&bin_dir).unwrap();
     std::fs::create_dir_all(&download_dir).unwrap();
     let old_binary = download_dir.join(format!("supercharge-0.1.180-{platform}"));
-    std::fs::write(&old_binary, b"#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::write(&old_binary, small_good_artifact()).unwrap();
     let rel_old = std::path::Path::new("..")
         .join("downloads")
         .join(format!("supercharge-0.1.180-{platform}"));
@@ -341,7 +345,7 @@ async fn install_internal_alpha_channel_resolves_max_of_alpha_and_stable() {
         .await;
     Mock::given(method("GET"))
         .and(path(format!("/supercharge-0.1.181-{platform}")))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"#!/bin/sh\nexit 0\n".to_vec()))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(small_good_artifact()))
         .mount(&server)
         .await;
 
@@ -434,15 +438,21 @@ async fn install_internal_cleans_up_old_versions_keeping_n_minus_one() {
     let home = test_home();
     let downloads = home.join("downloads");
     assert!(
-        downloads.join(format!("supercharge-0.1.181-{platform}")).exists(),
+        downloads
+            .join(format!("supercharge-0.1.181-{platform}"))
+            .exists(),
         "current"
     );
     assert!(
-        downloads.join(format!("supercharge-0.1.180-{platform}")).exists(),
+        downloads
+            .join(format!("supercharge-0.1.180-{platform}"))
+            .exists(),
         "N-1 retained"
     );
     assert!(
-        !downloads.join(format!("supercharge-0.1.179-{platform}")).exists(),
+        !downloads
+            .join(format!("supercharge-0.1.179-{platform}"))
+            .exists(),
         "oldest deleted"
     );
 

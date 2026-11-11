@@ -23,8 +23,8 @@ use serial_test::serial;
 
 use common::artifact_server::{ArtifactServer, Mode};
 use common::{
-    can_exec_shell_scripts, host_platform, make_update_config, reset_home, small_good_artifact,
-    test_home,
+    can_exec_shell_scripts, host_platform, make_update_config, mismatched_version_artifact,
+    reset_home, small_good_artifact, test_home,
 };
 use supercharge_update::auto_update::install_internal_from_base;
 
@@ -35,7 +35,7 @@ use supercharge_update::auto_update::install_internal_from_base;
 /// A real executable larger than the 16 MiB parallel threshold (at least 2 chunks), so the parallel byte-range path is exercised.
 /// The shell exits on line 2, never reading the newline padding.
 fn large_good_artifact() -> Vec<u8> {
-    let mut v = b"#!/bin/sh\nexit 0\n".to_vec();
+    let mut v = small_good_artifact();
     v.resize(33 * 1024 * 1024, b'\n');
     v
 }
@@ -294,6 +294,34 @@ async fn smoke_test_rejects_garbage_and_keeps_previous_good() {
         .await
         .expect("clean serve after a failure should succeed");
     assert_invariant(home, &prev_good, &new_binary, Expect::NewBinary);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn smoke_test_rejects_version_mismatch_and_keeps_previous_good() {
+    if !can_exec_shell_scripts() {
+        eprintln!("skipping: shell scripts cannot execute in this sandbox");
+        return;
+    }
+    let server = ArtifactServer::start(mismatched_version_artifact());
+    let home = test_home();
+    reset_home();
+    let platform = host_platform();
+    let prev_good = seed_previous_good(home, "0.1.100", &platform);
+    let cfg = make_update_config("stable");
+
+    let result = install_internal_from_base(Some("1.4.15"), &cfg, &server.uri()).await;
+    let err = result.expect_err("mismatched version must not install");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("does not match") && msg.contains("1.4.9") && msg.contains("1.4.15"),
+        "version mismatch must name advertised and reported versions, got: {msg}"
+    );
+
+    let new_binary = home
+        .join("downloads")
+        .join(format!("supercharge-1.4.15-{platform}"));
+    assert_invariant(home, &prev_good, &new_binary, Expect::PreviousGood);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

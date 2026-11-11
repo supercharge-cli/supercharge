@@ -54,9 +54,100 @@ pub fn display_version_with_commit(version_with_commit: &str, channel_label: &st
     format!("{}{}", version_with_commit, channel_label)
 }
 
+/// Parse the package version from a CLI `--version` line such as
+/// `supercharge 1.4.15 (dd042d764dd2)` or `supercharge 1.4.15 (dd042d764dd2) [stable]`.
+pub fn parse_cli_version_line(output: &str) -> Option<&str> {
+    let line = output
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())?;
+    let rest = line.strip_prefix("supercharge ")?.trim_start();
+    let version = rest.split_whitespace().next()?;
+    if version.is_empty() {
+        return None;
+    }
+    Some(version)
+}
+
+fn normalize_advertised_version(advertised: &str) -> &str {
+    let trimmed = advertised.trim();
+    trimmed
+        .strip_prefix('v')
+        .or_else(|| trimmed.strip_prefix('V'))
+        .unwrap_or(trimmed)
+}
+
+/// True when `--version` output reports the same package version as the advertised release.
+pub fn cli_version_matches_advertised(output: &str, advertised: &str) -> bool {
+    match parse_cli_version_line(output) {
+        Some(got) => got == normalize_advertised_version(advertised),
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_cli_version_line_reads_package_version() {
+        assert_eq!(
+            parse_cli_version_line("supercharge 1.4.15 (dd042d764dd2)\n"),
+            Some("1.4.15")
+        );
+        assert_eq!(
+            parse_cli_version_line("supercharge 1.4.9 (dd042d764dd2) [stable]\n"),
+            Some("1.4.9")
+        );
+        assert_eq!(
+            parse_cli_version_line("\n  supercharge 1.4.19 (abcdef012345)\n"),
+            Some("1.4.19")
+        );
+        assert_eq!(parse_cli_version_line("not a version"), None);
+        assert_eq!(parse_cli_version_line(""), None);
+    }
+
+    #[test]
+    fn cli_version_matches_advertised_rejects_release_tag_mismatch() {
+        let claimed_1415_asset = "supercharge 1.4.9 (dd042d764dd2)\n";
+        assert!(
+            !cli_version_matches_advertised(claimed_1415_asset, "1.4.15"),
+            "v1.4.15 assets must not be accepted when the binary reports 1.4.9"
+        );
+        assert!(!cli_version_matches_advertised(
+            claimed_1415_asset,
+            "v1.4.15"
+        ));
+        assert!(cli_version_matches_advertised(claimed_1415_asset, "1.4.9"));
+        assert!(cli_version_matches_advertised(
+            "supercharge 1.4.19 (abc012345678)\n",
+            "v1.4.19"
+        ));
+        assert!(!cli_version_matches_advertised("supercharge\n", "1.4.19"));
+    }
+
+    #[test]
+    fn cli_version_matches_advertised_uses_exact_version_boundary() {
+        assert!(
+            !cli_version_matches_advertised("supercharge 1.4.15 (dd042d764dd2)\n", "1.4.1"),
+            "1.4.15 must not satisfy advertised 1.4.1"
+        );
+        assert!(!cli_version_matches_advertised(
+            "supercharge 1.4.1 (dd042d764dd2)\n",
+            "1.4.15"
+        ));
+        assert!(!cli_version_matches_advertised(
+            "supercharge 1.4.19 (abcdef012345)\n",
+            "1.4.1"
+        ));
+        assert!(!cli_version_matches_advertised(
+            "supercharge 1.4.19 (abcdef012345)\n",
+            "1.4.9"
+        ));
+        assert!(!cli_version_matches_advertised("", "1.4.19"));
+        assert!(!cli_version_matches_advertised("ok\n", "1.4.19"));
+        assert!(!cli_version_matches_advertised("supercharge\n", "1.4.19"));
+    }
 
     /// Checks that the channel label is appended for alpha, stable, and empty labels.
     #[test]

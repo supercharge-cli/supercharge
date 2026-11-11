@@ -12,6 +12,7 @@
 #![cfg(unix)]
 
 mod common;
+use common::small_good_artifact;
 
 use serial_test::serial;
 use wiremock::matchers::{method, path};
@@ -78,7 +79,7 @@ async fn mount_gcs_with_channels(
 
     Mock::given(method("GET"))
         .and(path(format!("/supercharge-{binary_version}-{platform}")))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"#!/bin/sh\nexit 0\n".to_vec()))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(small_good_artifact()))
         .mount(&server)
         .await;
 
@@ -165,15 +166,21 @@ async fn internal_install_rollback_then_upgrade_sequence() {
     // Cleanup retains the current and the highest-semver non-current binary (N-1 by version, not install order)
     let downloads = test_home().join("downloads");
     assert!(
-        downloads.join(format!("supercharge-0.2.8-{platform}")).exists(),
+        downloads
+            .join(format!("supercharge-0.2.8-{platform}"))
+            .exists(),
         "current"
     );
     assert!(
-        downloads.join(format!("supercharge-0.2.7-{platform}")).exists(),
+        downloads
+            .join(format!("supercharge-0.2.7-{platform}"))
+            .exists(),
         "N-1 by semver"
     );
     assert!(
-        !downloads.join(format!("supercharge-0.2.5-{platform}")).exists(),
+        !downloads
+            .join(format!("supercharge-0.2.5-{platform}"))
+            .exists(),
         "lowest cleaned up"
     );
 }
@@ -202,7 +209,7 @@ async fn internal_install_alpha_rollback_pointer_resolves_correctly() {
     // Semver considers 0.2.8-alpha.1 < 0.2.8 but > 0.2.7
     Mock::given(method("GET"))
         .and(path(format!("/supercharge-0.2.8-alpha.1-{platform}")))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"#!/bin/sh\nexit 0\n".to_vec()))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(small_good_artifact()))
         .mount(&server)
         .await;
 
@@ -242,7 +249,7 @@ async fn internal_install_alpha_user_gets_newer_stable_after_stable_passes_alpha
         .await;
     Mock::given(method("GET"))
         .and(path(format!("/supercharge-0.2.7-{platform}")))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"#!/bin/sh\nexit 0\n".to_vec()))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(small_good_artifact()))
         .mount(&server)
         .await;
 
@@ -436,7 +443,7 @@ fn fake_managed_install(version: &str) {
     std::fs::create_dir_all(&downloads).unwrap();
     std::fs::create_dir_all(&bin).unwrap();
     let name = format!("supercharge-{version}-{}", host_platform());
-    std::fs::write(downloads.join(&name), b"#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::write(downloads.join(&name), small_good_artifact()).unwrap();
     std::os::unix::fs::symlink(
         std::path::Path::new("../downloads").join(&name),
         bin.join("supercharge"),

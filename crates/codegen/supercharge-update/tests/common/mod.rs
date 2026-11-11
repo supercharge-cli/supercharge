@@ -48,6 +48,7 @@ pub fn test_home() -> &'static PathBuf {
             std::env::remove_var("SUPERCHARGE_TEST_VERSION");
             std::env::remove_var("NPM_TOKEN");
             std::env::remove_var("SUPERCHARGE_INSTALLER");
+            std::env::remove_var("SUPERCHARGE_GITHUB_REPO");
             std::env::remove_var("SUPERCHARGE_MANAGED_BY_NPM");
             std::env::remove_var("SUPERCHARGE_MANAGED_BY_INTERNAL");
         }
@@ -69,6 +70,7 @@ pub fn reset_home() {
         std::env::remove_var("SUPERCHARGE_TEST_VERSION");
         std::env::remove_var("NPM_TOKEN");
         std::env::remove_var("SUPERCHARGE_INSTALLER");
+        std::env::remove_var("SUPERCHARGE_GITHUB_REPO");
     }
 }
 
@@ -133,9 +135,32 @@ pub fn can_exec_shell_scripts() -> bool {
         .unwrap_or(false)
 }
 
-/// A small real executable: exits 0 for `--version`, so the smoke-test passes.
+/// A small real executable: exits 0 for `--version` and reports the version encoded
+/// in its filename (`supercharge-<version>-<os>-<arch>`), so smoke-test version
+/// checks pass for whatever release the test is installing.
 pub fn small_good_artifact() -> Vec<u8> {
+    br#"#!/bin/sh
+base=$(basename "$0")
+ver=${base#supercharge-}
+ver=${ver%-*}
+ver=${ver%-*}
+printf 'supercharge %s\n' "$ver"
+exit 0
+"#
+    .to_vec()
+}
+
+/// Runnable artifact that lies about its version, matching the v1.4.15 release-tag mismatch.
+pub fn mismatched_version_artifact() -> Vec<u8> {
+    b"#!/bin/sh\nprintf 'supercharge 1.4.9 (dd042d764dd2)\n'\nexit 0\n".to_vec()
+}
+
+pub fn empty_version_artifact() -> Vec<u8> {
     b"#!/bin/sh\nexit 0\n".to_vec()
+}
+
+pub fn malformed_version_artifact() -> Vec<u8> {
+    b"#!/bin/sh\nprintf 'ok\\n'\nexit 0\n".to_vec()
 }
 
 /// Backdate every file in `SUPERCHARGE_HOME/downloads` by ~2 hours. `cleanup_old_downloads` deliberately never deletes a
@@ -209,6 +234,13 @@ impl FakeBinGuard {
 
     /// Install a fake `gh` using the standard [`fake_gh_script`] template.
     pub fn install_gh() -> Self {
+        // SAFETY: tests using FakeBinGuard must be #[serial].
+        unsafe {
+            std::env::set_var(
+                "SUPERCHARGE_GITHUB_REPO",
+                "supercharge-cli/test-no-such-repo",
+            );
+        }
         Self::install("gh", fake_gh_script)
     }
 
@@ -316,6 +348,25 @@ if echo "$@" | grep -q 'release list'; then
     if [ -f {dq}/gh-stable-only-stdout ]; then cat {dq}/gh-stable-only-stdout; fi
   else
     if [ -f {dq}/gh-with-pre-stdout ]; then cat {dq}/gh-with-pre-stdout; fi
+  fi
+elif echo "$@" | grep -q 'release download'; then
+  out=""
+  prev=""
+  for a in "$@"; do
+    if [ "$prev" = "--output" ]; then out="$a"; fi
+    prev="$a"
+  done
+  if [ -n "$out" ]; then
+    base=$(basename "$out")
+    ver=${{base#supercharge-}}
+    ver=${{ver%%-*}}
+    cat > "$out" <<EOF
+#!/bin/sh
+[ "\$1" = --version ] || exit 0
+printf 'supercharge ${{ver}} (test)\n'
+exit 0
+EOF
+    chmod +x "$out"
   fi
 elif [ -f {dq}/gh-stdout ]; then
   cat {dq}/gh-stdout

@@ -13,6 +13,15 @@ const TTL_SECONDS_BEFORE_AUTO_UPDATE: Duration = Duration::from_secs(60 * 30);
 const NPM_PACKAGE: &str = "@supercharge-cli/supercharge";
 pub const GH_RELEASE_REPO: &str = "supercharge-cli/supercharge-releases";
 
+/// Repo used for latest-tag lookup and asset downloads. Tests may override
+/// `SUPERCHARGE_GITHUB_REPO` so they never hit the official release assets.
+pub fn github_release_repo() -> String {
+    std::env::var("SUPERCHARGE_GITHUB_REPO")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| GH_RELEASE_REPO.to_string())
+}
+
 /// Prefix of versioned downloads in `~/.supercharge/downloads/`
 /// (`supercharge-{version}-{os}-{arch}`).
 pub(crate) const BIN_PREFIX: &str = "supercharge";
@@ -272,10 +281,7 @@ pub async fn fetch_gh_release_version(channel: &str) -> Result<String> {
 
 /// Latest GitHub release tag via the public API (no `gh` CLI).
 pub async fn fetch_github_api_latest() -> Result<String> {
-    let repo = std::env::var("SUPERCHARGE_GITHUB_REPO")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| GH_RELEASE_REPO.to_string());
+    let repo = github_release_repo();
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
     let client = supercharge_extra_ca::build_reqwest_client(|builder| {
         builder.user_agent("supercharge-cli")
@@ -297,11 +303,12 @@ pub async fn fetch_github_api_latest() -> Result<String> {
 }
 
 async fn fetch_gh_release_latest(exclude_pre: bool) -> Result<String> {
+    let repo = github_release_repo();
     let mut args = vec![
         "release",
         "list",
         "--repo",
-        GH_RELEASE_REPO,
+        repo.as_str(),
         "--limit",
         "1",
         "--exclude-drafts",
@@ -328,7 +335,7 @@ async fn fetch_gh_release_latest(exclude_pre: bool) -> Result<String> {
     // Tags are formatted as "v0.1.141", strip the leading "v"
     let version = tag.strip_prefix('v').unwrap_or(&tag).to_string();
     if version.is_empty() {
-        anyhow::bail!("No releases found in {}", GH_RELEASE_REPO);
+        anyhow::bail!("No releases found in {repo}");
     }
     Ok(version)
 }
@@ -700,14 +707,17 @@ mod tests {
             ("supercharge-0.2.5-windows-x86_64.exe", Some("0.2.5")),
             // Pre-releases must round-trip whole
             // Truncating to "0.1.220" would make an alpha install masquerade as the release and mask updates from alpha to stable
-            ("supercharge-0.1.220-alpha.4-linux-x86_64", Some("0.1.220-alpha.4")),
+            (
+                "supercharge-0.1.220-alpha.4-linux-x86_64",
+                Some("0.1.220-alpha.4"),
+            ),
             ("supercharge-0.1.220-alpha.4", Some("0.1.220-alpha.4")), // npm layout
             ("supercharge-pager-0.1.5-darwin-arm64", None),           // "pager" is not a version
             ("supercharge-garbage-darwin-arm64", None),               // unparseable version
             ("supercharge-0.2.46", Some("0.2.46")),                   // no platform suffix
-            ("other-0.2.46-darwin-arm64", None),               // wrong prefix
-            ("supercharge-latest", None),                             // symlink alias, not a version
-            ("supercharge", None),                             // bare name
+            ("other-0.2.46-darwin-arm64", None),                      // wrong prefix
+            ("supercharge-latest", None), // symlink alias, not a version
+            ("supercharge", None),        // bare name
             ("", None),
         ];
         for (name, expected) in cases {
@@ -720,8 +730,11 @@ mod tests {
 
         // bin_prefix discrimination: the pager binary parses under its own prefix but not under "supercharge"
         assert_eq!(
-            version_from_versioned_binary_name("supercharge-pager-0.1.5-darwin-arm64", "supercharge-pager")
-                .as_deref(),
+            version_from_versioned_binary_name(
+                "supercharge-pager-0.1.5-darwin-arm64",
+                "supercharge-pager"
+            )
+            .as_deref(),
             Some("0.1.5")
         );
     }

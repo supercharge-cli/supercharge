@@ -4,8 +4,10 @@ use super::*;
 fn test_tmp_download_path_is_unique_per_version_and_per_attempt() {
     // The old `with_extension("tmp")` collapsed every 0.1.x versioned name onto a single `supercharge-0.1.tmp`
     // The helper must keep distinct versions distinct AND make repeated attempts (same process, e.g. concurrent tokio tasks) unique.
-    let dest_181 = std::path::Path::new("/home/u/.supercharge/downloads/supercharge-0.1.181-linux-x86_64");
-    let dest_182 = std::path::Path::new("/home/u/.supercharge/downloads/supercharge-0.1.182-linux-x86_64");
+    let dest_181 =
+        std::path::Path::new("/home/u/.supercharge/downloads/supercharge-0.1.181-linux-x86_64");
+    let dest_182 =
+        std::path::Path::new("/home/u/.supercharge/downloads/supercharge-0.1.182-linux-x86_64");
 
     let a = tmp_download_path(dest_181);
     let b = tmp_download_path(dest_182);
@@ -221,7 +223,11 @@ async fn test_reconcile_agent_repoints_diverged_agent() {
         bin.join("supercharge"),
     )
     .unwrap();
-    std::os::unix::fs::symlink("../downloads/supercharge-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/supercharge-0.1.199-macos-aarch64",
+        bin.join("sc"),
+    )
+    .unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
@@ -306,7 +312,11 @@ async fn test_reconcile_agent_skips_when_grok_dangling() {
     )
     .unwrap();
     std::fs::write(downloads.join("supercharge-0.1.199-macos-aarch64"), "old").unwrap();
-    std::os::unix::fs::symlink("../downloads/supercharge-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/supercharge-0.1.199-macos-aarch64",
+        bin.join("sc"),
+    )
+    .unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
@@ -322,7 +332,11 @@ async fn test_reconcile_agent_skips_when_grok_not_symlink() {
     let (_dir, bin, downloads) = managed_layout();
     std::fs::write(bin.join("supercharge"), "copy-binary").unwrap();
     std::fs::write(downloads.join("supercharge-0.1.199-macos-aarch64"), "old").unwrap();
-    std::os::unix::fs::symlink("../downloads/supercharge-0.1.199-macos-aarch64", bin.join("sc")).unwrap();
+    std::os::unix::fs::symlink(
+        "../downloads/supercharge-0.1.199-macos-aarch64",
+        bin.join("sc"),
+    )
+    .unwrap();
 
     reconcile_agent_to_grok(&bin).await;
 
@@ -461,7 +475,11 @@ async fn test_relative_symlink_survives_directory_move() {
     let alice_bin = alice.join("bin");
     std::fs::create_dir_all(&alice_downloads).unwrap();
     std::fs::create_dir_all(&alice_bin).unwrap();
-    std::fs::write(alice_downloads.join("supercharge-0.1.203"), "binary-content").unwrap();
+    std::fs::write(
+        alice_downloads.join("supercharge-0.1.203"),
+        "binary-content",
+    )
+    .unwrap();
 
     // Create a relative symlink (what relative_symlink_target produces)
     let rel_target = std::path::Path::new("../downloads/supercharge-0.1.203");
@@ -618,7 +636,10 @@ async fn test_cleanup_old_downloads_keeps_current_plus_one() {
     cleanup_old_downloads(d, "supercharge", "0.1.145").await;
 
     // Current must survive.
-    assert!(d.join("supercharge-0.1.145-macos-aarch64").exists(), "current");
+    assert!(
+        d.join("supercharge-0.1.145-macos-aarch64").exists(),
+        "current"
+    );
     // Newest old version (0.1.144) must survive.
     assert!(d.join("supercharge-0.1.144-macos-aarch64").exists(), "N-1");
     // Everything else should be deleted.
@@ -646,10 +667,26 @@ async fn test_cleanup_old_downloads_does_not_touch_other_binaries() {
     let d = dir.path();
 
     // supercharge and supercharge-pager should not interfere with each other.
-    std::fs::write(d.join("supercharge-0.1.140-macos-aarch64"), "old-supercharge").unwrap();
-    std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current-supercharge").unwrap();
-    std::fs::write(d.join("supercharge-pager-0.1.140-macos-aarch64"), "old-pager").unwrap();
-    std::fs::write(d.join("supercharge-pager-0.1.141-macos-aarch64"), "current-pager").unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.140-macos-aarch64"),
+        "old-supercharge",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.141-macos-aarch64"),
+        "current-supercharge",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("supercharge-pager-0.1.140-macos-aarch64"),
+        "old-pager",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("supercharge-pager-0.1.141-macos-aarch64"),
+        "current-pager",
+    )
+    .unwrap();
 
     // Cleanup only supercharge; pager files must be untouched
     make_all_stale(d);
@@ -697,7 +734,11 @@ async fn test_cleanup_old_downloads_removes_stale_tmp_keeps_fresh_tmp() {
     std::fs::write(d.join("supercharge-0.1.140-macos-aarch64.tmp"), "partial").unwrap();
     make_stale(&d.join("supercharge-0.1.140-macos-aarch64.tmp"));
     // Fresh tmp: a concurrent updater's in-flight download is kept, or its atomic rename would fail with ENOENT
-    std::fs::write(d.join("supercharge-0.1.142-macos-aarch64.77-0.tmp"), "inflight").unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.142-macos-aarch64.77-0.tmp"),
+        "inflight",
+    )
+    .unwrap();
     std::fs::write(d.join("supercharge-0.1.141-macos-aarch64"), "current").unwrap();
 
     cleanup_old_downloads(d, "supercharge", "0.1.141").await;
@@ -707,7 +748,8 @@ async fn test_cleanup_old_downloads_removes_stale_tmp_keeps_fresh_tmp() {
         "stale tmp cleaned up"
     );
     assert!(
-        d.join("supercharge-0.1.142-macos-aarch64.77-0.tmp").exists(),
+        d.join("supercharge-0.1.142-macos-aarch64.77-0.tmp")
+            .exists(),
         "fresh in-flight tmp must NOT be swept"
     );
     assert!(
@@ -734,8 +776,14 @@ async fn test_cleanup_old_downloads_keeps_fresh_versioned_binary() {
 
     cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists(), "current");
-    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists(), "N-1 kept");
+    assert!(
+        d.join("supercharge-0.1.141-macos-aarch64").exists(),
+        "current"
+    );
+    assert!(
+        d.join("supercharge-0.1.140-macos-aarch64").exists(),
+        "N-1 kept"
+    );
     assert!(
         d.join("supercharge-0.1.138-macos-aarch64").exists(),
         "fresh just-renamed binary must NOT be deleted"
@@ -816,8 +864,14 @@ async fn test_cleanup_old_downloads_pager_multi_version() {
 
     cleanup_old_downloads(d, "supercharge-pager", "0.1.151").await;
 
-    assert!(d.join("supercharge-pager-0.1.151-linux-x64").exists(), "current");
-    assert!(d.join("supercharge-pager-0.1.150-linux-x64").exists(), "N-1 kept");
+    assert!(
+        d.join("supercharge-pager-0.1.151-linux-x64").exists(),
+        "current"
+    );
+    assert!(
+        d.join("supercharge-pager-0.1.150-linux-x64").exists(),
+        "N-1 kept"
+    );
     assert!(
         !d.join("supercharge-pager-0.1.149-linux-x64").exists(),
         "0.1.149 deleted"
@@ -856,11 +910,27 @@ async fn test_cleanup_old_downloads_alpha_versions() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
 
-    std::fs::write(d.join("supercharge-0.1.148-alpha.1-macos-aarch64"), "alpha-148-1").unwrap();
-    std::fs::write(d.join("supercharge-0.1.148-alpha.2-macos-aarch64"), "alpha-148-2").unwrap();
-    std::fs::write(d.join("supercharge-0.1.149-alpha.1-macos-aarch64"), "alpha-149-1").unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.148-alpha.1-macos-aarch64"),
+        "alpha-148-1",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.148-alpha.2-macos-aarch64"),
+        "alpha-148-2",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.149-alpha.1-macos-aarch64"),
+        "alpha-149-1",
+    )
+    .unwrap();
     // Current version is the newest alpha.
-    std::fs::write(d.join("supercharge-0.1.150-alpha.1-macos-aarch64"), "current").unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.150-alpha.1-macos-aarch64"),
+        "current",
+    )
+    .unwrap();
 
     make_all_stale(d);
 
@@ -894,7 +964,11 @@ async fn test_cleanup_old_downloads_mixed_stable_and_alpha() {
     let d = dir.path();
 
     std::fs::write(d.join("supercharge-0.1.148-macos-aarch64"), "stable-148").unwrap();
-    std::fs::write(d.join("supercharge-0.1.149-alpha.1-macos-aarch64"), "alpha-149").unwrap();
+    std::fs::write(
+        d.join("supercharge-0.1.149-alpha.1-macos-aarch64"),
+        "alpha-149",
+    )
+    .unwrap();
     std::fs::write(d.join("supercharge-0.1.149-macos-aarch64"), "stable-149").unwrap();
     // Current is a stable release.
     std::fs::write(d.join("supercharge-0.1.150-macos-aarch64"), "current").unwrap();
@@ -904,7 +978,10 @@ async fn test_cleanup_old_downloads_mixed_stable_and_alpha() {
     cleanup_old_downloads(d, "supercharge", "0.1.150").await;
 
     // Current must survive.
-    assert!(d.join("supercharge-0.1.150-macos-aarch64").exists(), "current");
+    assert!(
+        d.join("supercharge-0.1.150-macos-aarch64").exists(),
+        "current"
+    );
     // Newest old is 0.1.149 stable (semver: 0.1.149 > 0.1.149-alpha.1).
     assert!(
         d.join("supercharge-0.1.149-macos-aarch64").exists(),
@@ -1046,6 +1123,21 @@ fn test_smoke_test_failure_messages_distinguish_causes() {
     .to_string();
     assert!(nz.contains("exited 137"), "{nz}");
     assert!(nz.contains("stderr: killed"), "{nz}");
+    let mismatch = SmokeTestFailure::VersionMismatch {
+        expected: "1.4.15".into(),
+        reported: "supercharge 1.4.9 (dd042d764dd2)".into(),
+    }
+    .to_string();
+    assert!(mismatch.contains("does not match 1.4.15"), "{mismatch}");
+    assert!(mismatch.contains("1.4.9"), "{mismatch}");
+    let missing = SmokeTestFailure::MissingVersion {
+        reported: "(empty --version output)".into(),
+    }
+    .to_string();
+    assert!(
+        missing.contains("did not report a parseable version"),
+        "{missing}"
+    );
 }
 
 #[test]
@@ -1084,6 +1176,19 @@ fn test_classify_install_error() {
                 stderr: String::new(),
             },
             CliUpdateErrorKind::SmokeNonzero,
+        ),
+        (
+            SmokeTestFailure::VersionMismatch {
+                expected: "1.4.19".into(),
+                reported: "1.4.9".into(),
+            },
+            CliUpdateErrorKind::SmokeVersionMismatch,
+        ),
+        (
+            SmokeTestFailure::MissingVersion {
+                reported: "(empty --version output)".into(),
+            },
+            CliUpdateErrorKind::SmokeMissingVersion,
         ),
     ] {
         assert_eq!(classify_install_error(&smoke.into()), expected);
@@ -1537,8 +1642,14 @@ async fn test_cleanup_old_downloads_only_one_old_keeps_it() {
     cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
     // Only one old version, so it is kept as N-1
-    assert!(d.join("supercharge-0.1.140-macos-aarch64").exists(), "N-1 kept");
-    assert!(d.join("supercharge-0.1.141-macos-aarch64").exists(), "current");
+    assert!(
+        d.join("supercharge-0.1.140-macos-aarch64").exists(),
+        "N-1 kept"
+    );
+    assert!(
+        d.join("supercharge-0.1.141-macos-aarch64").exists(),
+        "current"
+    );
 }
 
 #[tokio::test]
@@ -1618,7 +1729,10 @@ async fn test_cleanup_old_downloads_darwin_platform_recognized() {
 
     cleanup_old_downloads(d, "supercharge", "0.1.141").await;
 
-    assert!(d.join("supercharge-0.1.141-darwin-arm64").exists(), "current");
+    assert!(
+        d.join("supercharge-0.1.141-darwin-arm64").exists(),
+        "current"
+    );
     assert!(d.join("supercharge-0.1.140-darwin-arm64").exists(), "N-1");
 }
 
@@ -2380,9 +2494,14 @@ async fn download_cli_artifact_falls_back_to_plain() {
 
     let dir = tempfile::tempdir().unwrap();
     let dest = dir.path().join("supercharge-1.2.3-linux-x86_64");
-    download_cli_artifact_from_gcs(&server.uri(), "supercharge-1.2.3-linux-x86_64", &dest, false)
-        .await
-        .expect("fall back to the plain binary when compressed forms are absent");
+    download_cli_artifact_from_gcs(
+        &server.uri(),
+        "supercharge-1.2.3-linux-x86_64",
+        &dest,
+        false,
+    )
+    .await
+    .expect("fall back to the plain binary when compressed forms are absent");
 
     assert_eq!(std::fs::read(&dest).unwrap(), payload);
     assert_decoded_executable(&dest);
@@ -2409,9 +2528,14 @@ async fn download_cli_artifact_prefers_compressed_over_plain() {
 
     let dir = tempfile::tempdir().unwrap();
     let dest = dir.path().join("supercharge-1.2.3-linux-x86_64");
-    download_cli_artifact_from_gcs(&server.uri(), "supercharge-1.2.3-linux-x86_64", &dest, false)
-        .await
-        .expect("prefer the compressed sidecar when present");
+    download_cli_artifact_from_gcs(
+        &server.uri(),
+        "supercharge-1.2.3-linux-x86_64",
+        &dest,
+        false,
+    )
+    .await
+    .expect("prefer the compressed sidecar when present");
 
     assert_eq!(
         std::fs::read(&dest).unwrap(),
@@ -2425,7 +2549,10 @@ async fn download_cli_artifact_prefers_compressed_over_plain() {
 fn cli_object_candidates_try_windows_exe_first() {
     assert_eq!(
         cli_object_candidates("supercharge-1.2.3-windows-x86_64", true),
-        ["supercharge-1.2.3-windows-x86_64.exe", "supercharge-1.2.3-windows-x86_64"]
+        [
+            "supercharge-1.2.3-windows-x86_64.exe",
+            "supercharge-1.2.3-windows-x86_64"
+        ]
     );
     assert_eq!(
         cli_object_candidates("supercharge-1.2.3-linux-x86_64", false),
@@ -2449,5 +2576,346 @@ fn npm_entry_is_recognized_by_the_binary_location() {
 
     let resolved = dunce::canonicalize(&path_entry).unwrap();
     assert!(super::is_under_node_modules(&resolved));
-    assert!(!super::is_under_node_modules(&root.join("home/bin/supercharge")));
+    assert!(!super::is_under_node_modules(
+        &root.join("home/bin/supercharge")
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_bootstrap_entrypoints_updates_local_bin_copy_and_leaves_unrelated_sc() {
+    let root = tempfile::tempdir().unwrap();
+    let local_bin = root.path().join("home/.local/bin");
+    let managed = root.path().join("home/.supercharge");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    std::fs::create_dir_all(managed.join("downloads")).unwrap();
+    let new_binary = managed.join("downloads/supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    let launched = local_bin.join("supercharge");
+    std::fs::write(&launched, b"old-binary\n").unwrap();
+    std::os::unix::fs::symlink("supercharge", local_bin.join("sc")).unwrap();
+    std::fs::write(local_bin.join("unrelated"), b"not-ours\n").unwrap();
+    let other_sc_dir = root.path().join("other");
+    std::fs::create_dir_all(&other_sc_dir).unwrap();
+    let unrelated_sc = other_sc_dir.join("sc");
+    std::fs::write(&unrelated_sc, b"someone-elses-sc\n").unwrap();
+
+    refresh_bootstrap_entrypoints_in(&new_binary, Some(&local_bin), Some(&launched), &managed)
+        .await
+        .unwrap();
+
+    assert_eq!(std::fs::read(&launched).unwrap(), b"new-binary\n");
+    assert!(
+        files_equivalent(&launched, &local_bin.join("sc")),
+        "install.sh sc symlink must still resolve to the refreshed supercharge"
+    );
+    assert_eq!(
+        std::fs::read(local_bin.join("unrelated")).unwrap(),
+        b"not-ours\n"
+    );
+    assert_eq!(std::fs::read(&unrelated_sc).unwrap(), b"someone-elses-sc\n");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_bootstrap_entrypoints_updates_custom_bindir_symlink_sc() {
+    let root = tempfile::tempdir().unwrap();
+    let local_bin = root.path().join("home/.local/bin");
+    let custom = root.path().join("opt/custom-bin");
+    let managed = root.path().join("home/.supercharge");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    std::fs::create_dir_all(&custom).unwrap();
+    std::fs::create_dir_all(managed.join("downloads")).unwrap();
+    let new_binary = managed.join("downloads/supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    let launched = custom.join("supercharge");
+    std::fs::write(&launched, b"old-custom\n").unwrap();
+    std::os::unix::fs::symlink("supercharge", custom.join("sc")).unwrap();
+
+    refresh_bootstrap_entrypoints_in(&new_binary, Some(&local_bin), Some(&launched), &managed)
+        .await
+        .unwrap();
+
+    assert_eq!(std::fs::read(&launched).unwrap(), b"new-binary\n");
+    assert!(files_equivalent(&launched, &custom.join("sc")));
+    assert!(!local_bin.join("supercharge").exists());
+    assert!(!local_bin.join("sc").exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_bootstrap_entrypoints_leaves_unrelated_sc_in_same_bindir() {
+    let root = tempfile::tempdir().unwrap();
+    let local_bin = root.path().join("home/.local/bin");
+    let managed = root.path().join("home/.supercharge");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    std::fs::create_dir_all(managed.join("downloads")).unwrap();
+    let new_binary = managed.join("downloads/supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    let launched = local_bin.join("supercharge");
+    std::fs::write(&launched, b"old-binary\n").unwrap();
+    // install.sh keeps an existing unrelated `sc` when it is not -ef supercharge.
+    std::fs::write(local_bin.join("sc"), b"other-sc-tool\n").unwrap();
+
+    refresh_bootstrap_entrypoints_in(&new_binary, Some(&local_bin), Some(&launched), &managed)
+        .await
+        .unwrap();
+
+    assert_eq!(std::fs::read(&launched).unwrap(), b"new-binary\n");
+    assert_eq!(
+        std::fs::read(local_bin.join("sc")).unwrap(),
+        b"other-sc-tool\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_bootstrap_entrypoints_does_not_replace_managed_binaries() {
+    let root = tempfile::tempdir().unwrap();
+    let local_bin = root.path().join("home/.local/bin");
+    let managed = root.path().join("home/.supercharge");
+    let bin_dir = managed.join("bin");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    std::fs::create_dir_all(managed.join("downloads")).unwrap();
+    let new_binary = managed.join("downloads/supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    let managed_file = bin_dir.join("supercharge");
+    std::fs::write(&managed_file, b"managed-regular-should-stay\n").unwrap();
+    let launched = local_bin.join("supercharge");
+    std::fs::write(&launched, b"old-binary\n").unwrap();
+
+    refresh_bootstrap_entrypoints_in(&new_binary, Some(&local_bin), Some(&managed_file), &managed)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        std::fs::read(&managed_file).unwrap(),
+        b"managed-regular-should-stay\n"
+    );
+    assert_eq!(std::fs::read(&launched).unwrap(), b"new-binary\n");
+}
+
+#[cfg(unix)]
+struct DirModeGuard {
+    path: std::path::PathBuf,
+    restore: u32,
+}
+
+#[cfg(unix)]
+impl Drop for DirModeGuard {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(self.restore));
+    }
+}
+
+#[cfg(unix)]
+fn assert_actionable_refresh_failure(err: &anyhow::Error) {
+    let msg = format!("{err:#}");
+    let lower = msg.to_lowercase();
+    assert!(
+        msg.contains("PATH") || msg.contains("bootstrap") || lower.contains("entrypoint"),
+        "refresh failure must name the PATH/bootstrap entrypoint problem: {msg}"
+    );
+    assert!(
+        lower.contains("not completed")
+            || lower.contains("rolled back")
+            || lower.contains("re-run"),
+        "refresh failure must be actionable, not a silent success/restart: {msg}"
+    );
+    assert!(
+        !lower.contains("update installed") && !lower.contains("restarting"),
+        "refresh failure must not report a successful install/restart: {msg}"
+    );
+}
+
+#[cfg(unix)]
+fn resolved(path: &std::path::Path) -> std::path::PathBuf {
+    dunce::canonicalize(path).unwrap_or_else(|e| panic!("canonicalize {}: {e}", path.display()))
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_permission_failure_preserves_previous_path_and_unrelated_sc() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let local_bin = root.path().join("home/.local/bin");
+    let managed = root.path().join("home/.supercharge");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    std::fs::create_dir_all(managed.join("downloads")).unwrap();
+    let new_binary = managed.join("downloads/supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    let launched = local_bin.join("supercharge");
+    std::fs::write(&launched, b"old-binary\n").unwrap();
+    std::fs::write(local_bin.join("sc"), b"other-sc-tool\n").unwrap();
+
+    std::fs::set_permissions(&local_bin, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let _restore = DirModeGuard {
+        path: local_bin.clone(),
+        restore: 0o755,
+    };
+
+    let err =
+        refresh_bootstrap_entrypoints_in(&new_binary, Some(&local_bin), Some(&launched), &managed)
+            .await
+            .expect_err("refresh must fail closed when the PATH directory is not writable");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("PATH") || msg.contains("entrypoint") || msg.contains("bootstrap"),
+        "must name the failing PATH entrypoint: {msg}"
+    );
+
+    drop(_restore);
+    assert_eq!(std::fs::read(&launched).unwrap(), b"old-binary\n");
+    assert_eq!(
+        std::fs::read(local_bin.join("sc")).unwrap(),
+        b"other-sc-tool\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_partial_failure_rolls_back_already_refreshed_path_copies() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    // Lexicographic BTreeSet order: writable dir is refreshed first, then blocked fails.
+    let writable = root.path().join("a-writable");
+    let blocked = root.path().join("z-blocked");
+    let managed = root.path().join("home/.supercharge");
+    std::fs::create_dir_all(&writable).unwrap();
+    std::fs::create_dir_all(&blocked).unwrap();
+    std::fs::create_dir_all(managed.join("downloads")).unwrap();
+    let new_binary = managed.join("downloads/supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    let first = writable.join("supercharge");
+    let launched = blocked.join("supercharge");
+    std::fs::write(&first, b"old-writable\n").unwrap();
+    std::fs::write(&launched, b"old-blocked\n").unwrap();
+    std::os::unix::fs::symlink("supercharge", writable.join("sc")).unwrap();
+    std::fs::write(blocked.join("unrelated-sc"), b"leave-me\n").unwrap();
+
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let _restore = DirModeGuard {
+        path: blocked.clone(),
+        restore: 0o755,
+    };
+
+    let err =
+        refresh_bootstrap_entrypoints_in(&new_binary, Some(&writable), Some(&launched), &managed)
+            .await
+            .expect_err("a later PATH refresh failure must fail the whole refresh");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("PATH") || msg.contains("entrypoint") || msg.contains("bootstrap"),
+        "must name the failing PATH entrypoint: {msg}"
+    );
+
+    drop(_restore);
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        b"old-writable\n",
+        "already-refreshed PATH copy must be rolled back"
+    );
+    assert_eq!(std::fs::read(&launched).unwrap(), b"old-blocked\n");
+    assert_eq!(
+        std::fs::read(blocked.join("unrelated-sc")).unwrap(),
+        b"leave-me\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn refresh_permission_failure_rolls_back_managed_links_and_reports_failure() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let local_bin = root.path().join("home/.local/bin");
+    let managed = root.path().join("home/.supercharge");
+    let bin_dir = managed.join("bin");
+    let downloads = managed.join("downloads");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    std::fs::create_dir_all(&downloads).unwrap();
+    let old_binary = downloads.join("supercharge-1.4.8-linux-x86_64");
+    let new_binary = downloads.join("supercharge-1.4.19-linux-x86_64");
+    std::fs::write(&old_binary, b"old-managed\n").unwrap();
+    std::fs::write(&new_binary, b"new-binary\n").unwrap();
+    std::os::unix::fs::symlink(&old_binary, bin_dir.join("supercharge")).unwrap();
+    std::os::unix::fs::symlink(&old_binary, bin_dir.join("sc")).unwrap();
+    let launched = local_bin.join("supercharge");
+    std::fs::write(&launched, b"old-binary\n").unwrap();
+    std::fs::write(local_bin.join("sc"), b"other-sc-tool\n").unwrap();
+
+    std::fs::set_permissions(&local_bin, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let _restore = DirModeGuard {
+        path: local_bin.clone(),
+        restore: 0o755,
+    };
+
+    let pending = swap_managed_bin_links(&new_binary, &bin_dir)
+        .await
+        .expect("managed swap itself must succeed before refresh");
+    let err = commit_or_rollback_after_refresh_in(
+        pending,
+        &new_binary,
+        Some(&local_bin),
+        Some(&launched),
+        &managed,
+    )
+    .await
+    .expect_err("activation must not report success when PATH refresh fails");
+    assert_actionable_refresh_failure(&err);
+
+    drop(_restore);
+    assert_eq!(std::fs::read(&launched).unwrap(), b"old-binary\n");
+    assert_eq!(
+        std::fs::read(local_bin.join("sc")).unwrap(),
+        b"other-sc-tool\n",
+        "unrelated sc in the same bindir must not be overwritten"
+    );
+    assert_eq!(
+        resolved(&bin_dir.join("supercharge")),
+        resolved(&old_binary),
+        "managed supercharge must roll back to the previous-good binary"
+    );
+    assert_eq!(
+        resolved(&bin_dir.join("sc")),
+        resolved(&old_binary),
+        "managed sc must roll back with supercharge"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn smoke_test_rejects_empty_malformed_and_prefix_versions() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let cases: &[(&str, &[u8], &str, &str)] = &[
+        (
+            "empty",
+            b"#!/bin/sh\nexit 0\n",
+            "1.4.19",
+            "did not report a parseable version",
+        ),
+        (
+            "malformed",
+            b"#!/bin/sh\nprintf 'ok\\n'\nexit 0\n",
+            "1.4.19",
+            "did not report a parseable version",
+        ),
+        (
+            "prefix",
+            b"#!/bin/sh\nprintf 'supercharge 1.4.15 (dd042d764dd2)\\n'\nexit 0\n",
+            "1.4.1",
+            "does not match 1.4.1",
+        ),
+    ];
+    for (name, body, advertised, needle) in cases {
+        let path = dir.path().join(name);
+        std::fs::write(&path, body).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let err = smoke_test_binary(&path, advertised).await.expect_err(name);
+        let msg = err.to_string();
+        assert!(msg.contains(needle), "{name}: expected {needle:?} in {msg}");
+    }
 }
