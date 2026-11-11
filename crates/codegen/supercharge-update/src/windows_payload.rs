@@ -451,7 +451,7 @@ mod windows {
             .zip(GROVE_EXES)
             .map(|(src, exe)| (src.clone(), bin_dir.join(format!("{exe}.exe"))))
             .collect();
-        replace_managed_bins(&pairs).await
+        replace_managed_bins(&pairs).await.map(|_| ())
     }
 
     /// Extract into `git\.staging-<supercharge-version>`, check the tree is usable,
