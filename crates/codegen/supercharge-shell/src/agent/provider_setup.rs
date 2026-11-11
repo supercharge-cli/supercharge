@@ -312,6 +312,15 @@ const SETUP_PROVIDERS: &[SetupProviderProfile] = &[
         curated: &["zhipu/glm-5.1", "deepseek/deepseek-v3"],
     },
     SetupProviderProfile {
+        id: "openscale",
+        name: "OpenScale",
+        description: "Public model catalog via OpenAI-compatible Chat Completions",
+        base_url: "https://api.openscale.so/v1",
+        default_model: "deepseek/deepseek-v4.1-flash",
+        format: SetupWireFormat::Openai,
+        curated: &["deepseek/deepseek-v4.1-flash", "z-ai/glm-5.3-flash"],
+    },
+    SetupProviderProfile {
         id: supercharge_sampler::opencode_inference::GO_PROVIDER_ID,
         name: "OpenCode Go",
         description: "Subscription inference via Chat Completions",
@@ -875,17 +884,40 @@ pub fn model_metadata_thinking(entry: &Value) -> Option<bool> {
             _ => {}
         }
     }
-    for key in ["supported_parameters", "supportedParameters", "parameters"] {
-        if let Some(params) = obj.get(key).and_then(Value::as_array) {
-            if params.is_empty() {
-                continue;
+    let params_indicate_thinking = |params: &Value| -> Option<bool> {
+        if let Some(items) = params.as_array() {
+            if items.is_empty() {
+                return None;
             }
             return Some(
-                params
+                items
                     .iter()
                     .filter_map(Value::as_str)
                     .any(|p| PARAMS.contains(&p.to_ascii_lowercase().as_str())),
             );
+        }
+        if let Some(map) = params.as_object() {
+            if map.is_empty() {
+                return None;
+            }
+            return Some(PARAMS.iter().any(|name| map.contains_key(*name)));
+        }
+        None
+    };
+    for key in ["supported_parameters", "supportedParameters", "parameters"] {
+        if let Some(flag) = obj.get(key).and_then(params_indicate_thinking) {
+            return Some(flag);
+        }
+    }
+    for key in ["output_modalities", "input_modalities"] {
+        if let Some(items) = obj.get(key).and_then(Value::as_array) {
+            for item in items {
+                for params_key in ["supported_parameters", "supportedParameters", "parameters"] {
+                    if let Some(flag) = item.get(params_key).and_then(params_indicate_thinking) {
+                        return Some(flag);
+                    }
+                }
+            }
         }
     }
     None
@@ -898,9 +930,19 @@ pub fn model_metadata_thinking(entry: &Value) -> Option<bool> {
 pub(crate) fn provider_model_context_window(entry: &Value) -> Option<u64> {
     let obj = entry.as_object()?;
     let as_u64 = |v: &Value| {
-        v.as_u64()
+        let direct = v
+            .as_u64()
             .or_else(|| v.as_f64().filter(|f| *f >= 1.0).map(|f| f as u64))
-            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
+            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<u64>().ok()));
+        direct
+            .or_else(|| {
+                v.get("value").and_then(|inner| {
+                    inner
+                        .as_u64()
+                        .or_else(|| inner.as_f64().filter(|f| *f >= 1.0).map(|f| f as u64))
+                        .or_else(|| inner.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
+                })
+            })
             .filter(|n| *n > 0)
     };
     const KEYS: [&str; 9] = [
@@ -924,6 +966,20 @@ pub(crate) fn provider_model_context_window(entry: &Value) -> Option<u64> {
                     KEYS.iter()
                         .chain(["context", "max_tokens"].iter())
                         .find_map(|k| nested.get(*k).and_then(as_u64))
+                })
+        })
+        .or_else(|| {
+            obj.get("input_modalities")
+                .and_then(Value::as_array)
+                .and_then(|items| {
+                    items.iter().find_map(|item| {
+                        item.get("supported_inputs")
+                            .and_then(Value::as_object)
+                            .and_then(|inputs| {
+                                KEYS.iter().find_map(|k| inputs.get(*k).and_then(as_u64))
+                            })
+                            .or_else(|| KEYS.iter().find_map(|k| item.get(*k).and_then(as_u64)))
+                    })
                 })
         })
 }
@@ -3609,6 +3665,250 @@ mod tests {
                 .contains_key(supercharge_sampler::opencode_inference::SESSION_HEADER)
         );
     }
+    #[test]
+    fn openscale_profile_uses_chat_completions_and_canonical_base() {
+        let profile = find_setup_provider("openscale").expect("openscale profile");
+        assert_eq!(profile.name, "OpenScale");
+        assert_eq!(profile.base_url, "https://api.openscale.so/v1");
+        assert_eq!(profile.format, SetupWireFormat::Openai);
+        assert_eq!(profile.default_model, "deepseek/deepseek-v4.1-flash");
+        assert!(profile.curated.contains(&"deepseek/deepseek-v4.1-flash"));
+        assert!(profile.curated.contains(&"z-ai/glm-5.3-flash"));
+        assert_eq!(
+            provider_models_list_url(profile.base_url),
+            "https://api.openscale.so/v1/models"
+        );
+        assert_eq!(
+            resolve_provider_models_list_url(profile.base_url, Some(profile.id)),
+            "https://api.openscale.so/v1/models"
+        );
+        assert!(setup_provider_profiles().any(|row| row.id == "openscale"));
+    }
+
+    #[test]
+    fn openscale_normalizes_base_url_and_models_suffix() {
+        assert_eq!(
+            normalize_provider_base_url("https://api.openscale.so/v1").unwrap(),
+            "https://api.openscale.so/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("https://api.openscale.so/v1/").unwrap(),
+            "https://api.openscale.so/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("https://api.openscale.so/v1/models").unwrap(),
+            "https://api.openscale.so/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("api.openscale.so/v1").unwrap(),
+            "https://api.openscale.so/v1"
+        );
+    }
+
+    #[test]
+    fn openscale_catalog_fetch_is_public_without_authorization() {
+        let (models, requests) = with_models_server(
+            |_| {
+                (
+                    "200 OK",
+                    r#"{"object":"list","data":[{"id":"deepseek/deepseek-v4.1-flash"},{"id":"z-ai/glm-5.3-flash"}]}"#,
+                )
+            },
+            |base_url| {
+                fetch_provider_models(base_url, "", SetupWireFormat::Openai, Some("openscale"))
+            },
+        );
+        let models = models.expect("public catalog");
+        let ids: Vec<&str> = models.iter().map(|model| model.id.as_str()).collect();
+        assert!(ids.contains(&"deepseek/deepseek-v4.1-flash"));
+        assert!(ids.contains(&"z-ai/glm-5.3-flash"));
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("get /v1/models http/1.1\r\n"));
+        assert!(!requests[0].contains("authorization:"));
+        assert!(!requests[0].contains("x-api-key:"));
+    }
+
+    #[test]
+    fn openscale_catalog_fetch_sends_bearer_when_key_is_present() {
+        let (models, requests) = with_models_server(
+            |_| {
+                (
+                    "200 OK",
+                    r#"{"object":"list","data":[{"id":"deepseek/deepseek-v4.1-flash"}]}"#,
+                )
+            },
+            |base_url| {
+                fetch_provider_models(
+                    base_url,
+                    "openscale-test-key",
+                    SetupWireFormat::Openai,
+                    Some("openscale"),
+                )
+            },
+        );
+        assert_eq!(models.unwrap()[0].id, "deepseek/deepseek-v4.1-flash");
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("authorization: bearer openscale-test-key\r\n"));
+        assert!(!requests[0].contains("x-api-key:"));
+    }
+
+    #[test]
+    fn openscale_parses_nested_catalog_context_and_reasoning() {
+        let body = json!({
+            "object": "list",
+            "data": [
+                {
+                    "id": "deepseek/deepseek-v4.1-flash",
+                    "name": "OpenScale catalog model",
+                    "input_modalities": [{
+                        "type": "text",
+                        "supported_inputs": {
+                            "max_context_length": { "value": 1048568, "unit": "token" }
+                        }
+                    }],
+                    "output_modalities": [{
+                        "type": "text",
+                        "supported_parameters": {
+                            "tools": { "type": "boolean" },
+                            "reasoning": { "type": "boolean" },
+                            "include_reasoning": { "type": "boolean" },
+                            "reasoning_effort": {
+                                "type": "enum",
+                                "values": ["none", "low", "high", "max"]
+                            }
+                        }
+                    }]
+                },
+                {
+                    "id": "z-ai/glm-5.3-flash",
+                    "name": "OpenScale catalog model 2",
+                    "input_modalities": [{
+                        "type": "text",
+                        "supported_inputs": {
+                            "max_context_length": { "value": 1048576, "unit": "token" }
+                        }
+                    }],
+                    "output_modalities": [{
+                        "type": "text",
+                        "supported_parameters": {
+                            "reasoning": { "type": "boolean", "default": true },
+                            "include_reasoning": { "type": "boolean" }
+                        }
+                    }]
+                }
+            ]
+        });
+        let models = parse_openai_models_list(&body);
+        let by_id: std::collections::BTreeMap<_, _> = models
+            .into_iter()
+            .map(|model| (model.id.clone(), model))
+            .collect();
+        let first = by_id.get("deepseek/deepseek-v4.1-flash").expect("first id");
+        assert_eq!(first.name, "OpenScale catalog model");
+        assert_eq!(first.context_window, Some(1_048_568));
+        assert!(first.supports_thinking, "catalog marks reasoning support");
+        let second = by_id.get("z-ai/glm-5.3-flash").expect("second id");
+        assert_eq!(second.context_window, Some(1_048_576));
+        assert!(second.supports_thinking);
+    }
+
+    #[test]
+    fn openscale_persist_writes_chat_completions_bearer_and_model() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://api.openscale.so/v1".to_owned(),
+                api_key: "openscale-saved-key".to_owned(),
+                model_id: "deepseek/deepseek-v4.1-flash".to_owned(),
+                model_name: "OpenScale catalog model".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "openscale".to_owned(),
+            },
+        )
+        .unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("models_base_url = \"https://api.openscale.so/v1\""));
+        assert!(body.contains("models_list_url = \"https://api.openscale.so/v1/models\""));
+        assert!(body.contains("default = \"deepseek/deepseek-v4.1-flash\""));
+        assert!(body.contains("api_key = \"openscale-saved-key\""));
+        assert!(body.contains("id = \"openscale\""));
+        assert!(body.contains("api_backend = \"chat_completions\""));
+        assert!(body.contains("auth_scheme = \"bearer\""));
+        let parsed: toml::Value = toml::from_str(&body).unwrap();
+        assert_eq!(
+            provider_setup_api_key_from_toml(&parsed).as_deref(),
+            Some("openscale-saved-key")
+        );
+        assert_eq!(
+            active_setup_provider_id(&parsed).as_deref(),
+            Some("openscale")
+        );
+        assert_eq!(catalog_fetch_api_key(&parsed), "openscale-saved-key");
+        let catalog = provider_models_to_catalog(
+            vec![ProviderModel {
+                id: "deepseek/deepseek-v4.1-flash".to_owned(),
+                name: "OpenScale catalog model".to_owned(),
+                context_window: Some(1_048_568),
+                supports_thinking: true,
+            }],
+            "https://api.openscale.so/v1",
+            "openscale-saved-key",
+            SetupWireFormat::Openai,
+        );
+        let entry = catalog
+            .get("deepseek/deepseek-v4.1-flash")
+            .expect("catalog entry");
+        assert_eq!(entry.info.api_backend, ApiBackend::ChatCompletions);
+        assert_eq!(entry.info.auth_scheme, AuthScheme::Bearer);
+        assert_eq!(entry.api_key.as_deref(), Some("openscale-saved-key"));
+        assert_eq!(entry.info.context_window.get(), 1_048_568);
+        assert!(entry.info.supports_reasoning_effort);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn openscale_setup_chat_request_uses_existing_completions_client() {
+        let (url, seen) = recording_endpoint().await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: url.clone(),
+                api_key: "openscale-chat-key".to_owned(),
+                model_id: "deepseek/deepseek-v4.1-flash".to_owned(),
+                model_name: "OpenScale catalog model".to_owned(),
+                format: SetupWireFormat::Openai,
+                provider_id: "openscale".to_owned(),
+            },
+        )
+        .unwrap();
+        let raw: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+        let default = cfg.models.default.clone().expect("default model");
+        let catalog = crate::agent::config::resolve_model_list(&cfg, None);
+        let entry = crate::agent::config::find_model_by_id(&catalog, &default).unwrap();
+        let creds = crate::agent::config::resolve_credentials(entry, None);
+        assert_eq!(creds.api_key.as_deref(), Some("openscale-chat-key"));
+        assert_eq!(creds.base_url, url);
+        let sampler =
+            crate::agent::config::sampling_config_for_model(entry, creds, None, None, None, None);
+        let client = supercharge_sampler::SamplingClient::new(sampler).unwrap();
+        let request: supercharge_sampling_types::types::ChatCompletionRequest =
+            serde_json::from_value(json!({"messages": [{"role": "user", "content": "hi"}]}))
+                .unwrap();
+        let _ = client.chat_completion_stream(request).await;
+        let seen = seen.lock().unwrap();
+        let (req_path, auth, body) = seen.first().expect("chat request recorded");
+        assert!(
+            req_path.contains("/chat/completions"),
+            "unexpected path {req_path}"
+        );
+        assert_eq!(auth, "Bearer openscale-chat-key");
+        assert_eq!(body["model"], "deepseek/deepseek-v4.1-flash");
+        assert_eq!(body["stream"], true);
+    }
 }
 
 #[cfg(test)]
@@ -3640,6 +3940,18 @@ mod context_window_metadata_tests {
         assert_eq!(
             provider_model_context_window(&json!({"id":"a","context_length":0})),
             None
+        );
+        assert_eq!(
+            provider_model_context_window(&json!({
+                "id": "deepseek/deepseek-v4.1-flash",
+                "input_modalities": [{
+                    "type": "text",
+                    "supported_inputs": {
+                        "max_context_length": { "value": 1048568, "unit": "token" }
+                    }
+                }]
+            })),
+            Some(1_048_568)
         );
     }
 }
