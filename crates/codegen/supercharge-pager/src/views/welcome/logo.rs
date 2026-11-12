@@ -1,4 +1,5 @@
-//! The logo is hidden entirely on legacy Windows consoles: the ConHost raster fonts do not cover the U+2800 braille block, so it renders as tofu.
+//! The welcome column and hero box use the animated ASCII art from [`ascii_logo`] on every platform, scaled down to fit.
+//! The braille art below remains only for the sign-in screens and the minimal-mode card.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
@@ -31,19 +32,27 @@ const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
 const FULL_LOGO_MIN_HEIGHT: u16 = 26;
 
 /// Which logo art the stacked column shows.
-/// The terminal height picks the tier; the stacked layout steps it down only while the column would not fit beside the draft.
+/// The stacked layout picks the largest ASCII size that fits the terminal (see [`LogoTier::ASCII_SIZES`]) and steps it down while the column would not fit beside the draft.
+/// `Full`/`Compact` are the braille art used by the sign-in screens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogoTier {
     Ascii,
+    AsciiSmall,
+    AsciiTiny,
+    AsciiMini,
     Full,
     Compact,
     Hidden,
 }
 
 impl LogoTier {
-    pub fn for_height(window_height: u16) -> Self {
-        Self::for_height_and_hidden(window_height, logo_hidden())
-    }
+    /// The animated ASCII sizes, largest first.
+    pub const ASCII_SIZES: [Self; 4] = [
+        Self::Ascii,
+        Self::AsciiSmall,
+        Self::AsciiTiny,
+        Self::AsciiMini,
+    ];
 
     /// Takes the legacy-console flag as a parameter so tests can drive it directly.
     fn for_height_and_hidden(window_height: u16, hidden: bool) -> Self {
@@ -58,7 +67,7 @@ impl LogoTier {
 
     fn art(self) -> Option<&'static str> {
         match self {
-            Self::Ascii => None,
+            Self::Ascii | Self::AsciiSmall | Self::AsciiTiny | Self::AsciiMini => None,
             Self::Full => Some(LOGO),
             Self::Compact => Some(LOGO_SMALL),
             Self::Hidden => None,
@@ -66,20 +75,22 @@ impl LogoTier {
     }
 
     pub fn rows(self) -> u16 {
-        if self == Self::Ascii {
-            ascii_logo::ROWS
-        } else {
-            self.art().map_or(0, count_lines)
+        match self {
+            Self::Ascii => ascii_logo::ROWS,
+            Self::AsciiSmall => ascii_logo::SMALL_ROWS,
+            Self::AsciiTiny => ascii_logo::TINY_ROWS,
+            Self::AsciiMini => ascii_logo::MINI_ROWS,
+            _ => self.art().map_or(0, count_lines),
         }
     }
 
-    /// The next smaller tier; `None` once hidden.
-    pub fn step_down(self) -> Option<Self> {
+    pub fn cols(self) -> u16 {
         match self {
-            Self::Ascii => Some(Self::Full),
-            Self::Full => Some(Self::Compact),
-            Self::Compact => Some(Self::Hidden),
-            Self::Hidden => None,
+            Self::Ascii => ascii_logo::COLS,
+            Self::AsciiSmall => ascii_logo::SMALL_COLS,
+            Self::AsciiTiny => ascii_logo::TINY_COLS,
+            Self::AsciiMini => ascii_logo::MINI_COLS,
+            _ => self.art().map_or(0, visual_width),
         }
     }
 }
@@ -219,10 +230,17 @@ pub fn render_logo(area: Rect, buf: &mut Buffer, theme: &Theme, window_height: u
 
 /// Paint the tier the layout reserved rows for, so the art can never outgrow its slot.
 pub fn render_logo_tier(area: Rect, buf: &mut Buffer, theme: &Theme, tier: LogoTier) {
-    if tier == LogoTier::Ascii {
-        ascii_logo::render(area, buf, theme, animation_elapsed().as_secs_f64());
-    } else if let Some(logo) = tier.art() {
-        render_into(area, buf, theme, logo);
+    let elapsed = animation_elapsed().as_secs_f64();
+    match tier {
+        LogoTier::Ascii => ascii_logo::render(area, buf, theme, elapsed),
+        LogoTier::AsciiSmall => ascii_logo::render_small(area, buf, theme, elapsed),
+        LogoTier::AsciiTiny => ascii_logo::render_tiny(area, buf, theme, elapsed),
+        LogoTier::AsciiMini => ascii_logo::render_mini(area, buf, theme, elapsed),
+        _ => {
+            if let Some(logo) = tier.art() {
+                render_into(area, buf, theme, logo);
+            }
+        }
     }
 }
 
@@ -325,6 +343,42 @@ mod tests {
         render_full_logo(area, &mut buf, &Theme::tokyonight());
         let row: String = (0..63).map(|x| buf[(x, 1)].symbol()).collect();
         assert!(row.contains(".qq__             .__."), "{row}");
+    }
+
+    #[test]
+    fn ascii_sizes_shrink_strictly_largest_first() {
+        assert_eq!(
+            LogoTier::ASCII_SIZES,
+            [
+                LogoTier::Ascii,
+                LogoTier::AsciiSmall,
+                LogoTier::AsciiTiny,
+                LogoTier::AsciiMini
+            ]
+        );
+        for pair in LogoTier::ASCII_SIZES.windows(2) {
+            assert!(pair[0].rows() > pair[1].rows() && pair[0].cols() > pair[1].cols());
+        }
+    }
+
+    #[test]
+    fn every_ascii_tier_paints_ascii_only() {
+        for tier in LogoTier::ASCII_SIZES {
+            let area = Rect::new(0, 0, tier.cols(), tier.rows());
+            let mut buf = Buffer::empty(area);
+            render_logo_tier(area, &mut buf, &Theme::tokyonight(), tier);
+            let ink: Vec<_> = buf
+                .content
+                .iter()
+                .map(|c| c.symbol())
+                .filter(|s| *s != " ")
+                .collect();
+            assert!(!ink.is_empty(), "{tier:?} painted nothing");
+            assert!(
+                ink.iter().all(|s| s.is_ascii()),
+                "{tier:?} painted non-ASCII (braille) glyphs"
+            );
+        }
     }
 
     #[test]

@@ -11,6 +11,12 @@ pub(super) const COLS: u16 = 63;
 pub(super) const ROWS: u16 = 28;
 pub(super) const SMALL_COLS: u16 = 48;
 pub(super) const SMALL_ROWS: u16 = 20;
+/// Smallest downscale that still reads as the logo; lets a default 120x30 terminal keep the art.
+pub(super) const TINY_COLS: u16 = 32;
+pub(super) const TINY_ROWS: u16 = 14;
+/// Silhouette-only size for short terminals (e.g. 80x25).
+pub(super) const MINI_COLS: u16 = 24;
+pub(super) const MINI_ROWS: u16 = 10;
 const START: f64 = 0.5;
 const PASS: f64 = 2.0;
 const EVERY: f64 = 5.0;
@@ -191,6 +197,14 @@ pub(super) fn render_small(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed:
     render_sized(area, buf, theme, elapsed, SMALL_COLS, SMALL_ROWS);
 }
 
+pub(super) fn render_tiny(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64) {
+    render_sized(area, buf, theme, elapsed, TINY_COLS, TINY_ROWS);
+}
+
+pub(super) fn render_mini(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64) {
+    render_sized(area, buf, theme, elapsed, MINI_COLS, MINI_ROWS);
+}
+
 fn render_sized(area: Rect, buf: &mut Buffer, theme: &Theme, elapsed: f64, cols: u16, rows: u16) {
     if area.width < cols || area.height < rows {
         return;
@@ -310,6 +324,22 @@ mod tests {
             .count();
         assert!(ink > 200, "small art must remain recognizable");
         assert_ne!(initial.content, moving.content);
+    }
+
+    #[test]
+    fn tiny_art_stays_recognizable_and_ascii() {
+        let area = Rect::new(0, 0, TINY_COLS, TINY_ROWS);
+        let theme = Theme::tokyonight();
+        let mut buf = Buffer::empty(area);
+        render_tiny(area, &mut buf, &theme, 0.0);
+        let ink: Vec<_> = buf
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .filter(|s| *s != " ")
+            .collect();
+        assert!(ink.len() > 120, "tiny art must remain recognizable");
+        assert!(ink.iter().all(|s| s.is_ascii()), "console-safe glyphs only");
     }
 
     #[test]

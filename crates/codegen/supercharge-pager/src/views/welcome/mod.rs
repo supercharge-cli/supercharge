@@ -254,20 +254,13 @@ impl StackedColumn {
             <= self.content_height
     }
 
-    /// The tier the terminal height allows, stepped down only while the column would overflow beside the draft and the reserved rows.
-    fn logo_tier(&self, reserved: u16, ascii_fits_width: bool) -> LogoTier {
-        let mut tier = if ascii_fits_width && self.fits(LogoTier::Ascii, reserved) {
-            LogoTier::Ascii
-        } else {
-            LogoTier::for_height(self.content_height)
-        };
-        while !self.fits(tier, reserved) {
-            match tier.step_down() {
-                Some(smaller) => tier = smaller,
-                None => break,
-            }
-        }
-        tier
+    /// The largest animated ASCII logo that fits `avail_width` and the column beside the draft and the reserved rows; hidden when none does.
+    /// Every platform takes the same path, so Windows consoles show the same art as other terminals (never the braille fallback).
+    fn logo_tier(&self, reserved: u16, avail_width: u16) -> LogoTier {
+        LogoTier::ASCII_SIZES
+            .into_iter()
+            .find(|tier| avail_width >= tier.cols() && self.fits(*tier, reserved))
+            .unwrap_or(LogoTier::Hidden)
     }
 }
 /// Gap between prompt and version line.
@@ -411,10 +404,7 @@ impl WelcomeLayout {
         let logo_tier = if compact {
             LogoTier::Hidden
         } else {
-            column.logo_tier(
-                reserved,
-                allow_hero_box && content_area.width >= ascii_logo::COLS + H_MARGIN * 2,
-            )
+            column.logo_tier(reserved, content_area.width.saturating_sub(H_MARGIN * 2))
         };
         let fixed_above = column.fixed_above(logo_tier);
 
@@ -3443,7 +3433,7 @@ mod tests {
         assert_places_every_row(&tall, &input(Some(max)));
     }
 
-    /// iTerm2's default 80x25 (content 22): the compact logo stays while the column fits and steps down only when it does not.
+    /// iTerm2's default 80x25 (content 22): the 10-row mini ASCII logo stays while the column fits and hides only when it does not.
     #[test]
     fn stacked_logo_keeps_its_tier_until_the_column_overflows() {
         let area = Rect::new(0, 0, 80, 22);
@@ -3454,37 +3444,100 @@ mod tests {
             ..Default::default()
         };
         let one_line = WelcomeLayout::compute(input(None));
-        assert_eq!(one_line.logo_tier, LogoTier::Compact);
-        // Compact logo 7 + gap 1 + menu 4 + flex 1 + prompt + version 2 = 15 + prompt: fits up to a 7-row draft
-        // The one-line layout has a 3-row flex gap, so the first 3 extra rows move nothing; the next one shifts the column up
-        for extra in 1..=4u16 {
-            let layout = WelcomeLayout::compute(input(Some(PROMPT_HEIGHT + extra)));
-            assert_eq!(layout.logo_tier, LogoTier::Compact, "{extra} extra rows");
-            if extra <= 3 {
-                assert_eq!(
-                    layout.logo, one_line.logo,
-                    "{extra} extra rows: the logo holds still"
-                );
-                assert_eq!(
-                    layout.menu.y, one_line.menu.y,
-                    "{extra} extra rows: the menu holds still"
-                );
-            } else {
-                assert_eq!(
-                    layout.logo.y,
-                    one_line.logo.y - (extra - 3),
-                    "{extra} extra rows"
-                );
-            }
-            assert_places_every_row(&layout, &input(Some(PROMPT_HEIGHT + extra)));
-        }
-        let past = WelcomeLayout::compute(input(Some(PROMPT_HEIGHT + 5)));
+        assert_eq!(one_line.logo_tier, LogoTier::AsciiMini);
+        // Mini logo 10 + gap 1 + menu 4 + flex 1 + prompt + version 2 = 18 + prompt: fits up to a 4-row draft
+        let layout = WelcomeLayout::compute(input(Some(PROMPT_HEIGHT + 1)));
+        assert_eq!(layout.logo_tier, LogoTier::AsciiMini);
+        assert_eq!(layout.logo.height, ascii_logo::MINI_ROWS);
+        assert_places_every_row(&layout, &input(Some(PROMPT_HEIGHT + 1)));
+        let past = WelcomeLayout::compute(input(Some(PROMPT_HEIGHT + 2)));
         assert_eq!(past.logo_tier, LogoTier::Hidden);
+        assert_places_every_row(&past, &input(Some(PROMPT_HEIGHT + 2)));
         let max = prompt_max_height(&input(None));
         assert_eq!(max, 11);
         let tall = WelcomeLayout::compute(input(Some(max)));
         assert_eq!(tall.logo_tier, LogoTier::Hidden);
         assert_places_every_row(&tall, &input(Some(max)));
+    }
+
+    /// Windows PowerShell / Windows Terminal (default 120x30, often taller) sits below the framed-hero width.
+    /// The open layout there must show the same animated ASCII logo as every other terminal, never the braille dots.
+    #[test]
+    fn mid_width_terminals_use_the_ascii_logo_not_braille() {
+        for (width, height, expected) in [
+            (120, 27, LogoTier::AsciiTiny),
+            (120, 35, LogoTier::AsciiSmall),
+            (120, 45, LogoTier::Ascii),
+            (100, 30, LogoTier::AsciiTiny),
+            (140, 40, LogoTier::AsciiSmall),
+            (80, 24, LogoTier::AsciiMini),
+        ] {
+            let input = WelcomeLayoutInput {
+                content_area: Rect::new(0, 0, width, height),
+                menu_height: 4,
+                tip_height: 1,
+                ..Default::default()
+            };
+            let layout = WelcomeLayout::compute(input);
+            assert!(!layout.has_hero_box(), "{width}x{height}");
+            assert_eq!(layout.logo_tier, expected, "{width}x{height}");
+            assert!(layout.logo.width >= expected.cols(), "{width}x{height}");
+            assert_eq!(layout.logo.height, expected.rows(), "{width}x{height}");
+            assert!(layout.prompt.y > layout.logo.bottom(), "{width}x{height}");
+            assert!(layout.version.bottom() <= height, "{width}x{height}");
+        }
+    }
+
+    /// The blocked and trust screens share the stacked column, so they pick the ASCII logo too.
+    #[test]
+    fn stacked_only_screens_use_the_ascii_logo() {
+        let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
+            content_area: Rect::new(0, 0, 120, 35),
+            menu_height: 4,
+            ..Default::default()
+        });
+        assert!(LogoTier::ASCII_SIZES.contains(&layout.logo_tier));
+    }
+
+    /// Too narrow or too short for even the mini ASCII logo: hide it rather than overflow or fall back to braille.
+    #[test]
+    fn tiny_terminals_hide_the_logo_without_overflowing() {
+        for (width, height) in [(20, 40), (27, 40), (80, 12), (40, 18), (1, 1), (0, 0)] {
+            let input = WelcomeLayoutInput {
+                content_area: Rect::new(0, 0, width, height),
+                menu_height: 4,
+                ..Default::default()
+            };
+            let layout = WelcomeLayout::compute(input);
+            assert_eq!(layout.logo_tier, LogoTier::Hidden, "{width}x{height}");
+            assert_eq!(layout.logo.height, 0, "{width}x{height}");
+        }
+    }
+
+    #[test]
+    fn render_welcome_at_windows_terminal_default_size_paints_no_braille() {
+        let auth = AuthState::Done;
+        let trust = TrustState::Done;
+        let params = render_params(&auth, &trust, None);
+        for (width, height) in [(120, 30), (120, 40), (100, 30)] {
+            let area = Rect::new(0, 0, width, height);
+            let mut picker = PickerState::default();
+            let mut prompt = PromptWidget::new();
+            let mut buf = Buffer::empty(area);
+            let _ = render_welcome(area, &mut buf, &params, &mut prompt, &mut picker);
+            let braille = buf
+                .content
+                .iter()
+                .filter(|c| {
+                    c.symbol()
+                        .chars()
+                        .any(|ch| ('\u{2800}'..='\u{28FF}').contains(&ch))
+                })
+                .count();
+            assert_eq!(braille, 0, "{width}x{height}: braille logo painted");
+            let ascii_art = buf.content.iter().filter(|c| c.symbol() == "8").count();
+            assert!(ascii_art > 20, "{width}x{height}: ASCII logo missing");
+        }
     }
 
     #[test]
@@ -3568,9 +3621,9 @@ mod tests {
         }
     }
 
-    /// 80x33: the 11-row full logo holds beside every draft up to 14 rows and only steps down to compact past that.
+    /// 80x33: the ASCII logo steps through its sizes as the draft grows and hides only past the last one.
     #[test]
-    fn stacked_full_logo_survives_the_whole_draft_range_when_it_fits() {
+    fn stacked_ascii_logo_steps_down_through_the_whole_draft_range() {
         let area = Rect::new(0, 0, 80, 33);
         let input = |prompt_height| WelcomeLayoutInput {
             content_area: area,
@@ -3582,12 +3635,19 @@ mod tests {
         assert_eq!(max, 16);
         for prompt_height in PROMPT_HEIGHT..=max {
             let layout = WelcomeLayout::compute(input(prompt_height));
-            let expected = if prompt_height <= 14 {
-                LogoTier::Full
-            } else {
-                LogoTier::Compact
+            // logo rows + 8 + prompt must fit in 33
+            let expected = match prompt_height {
+                ..=5 => LogoTier::AsciiSmall,
+                6..=11 => LogoTier::AsciiTiny,
+                12..=15 => LogoTier::AsciiMini,
+                _ => LogoTier::Hidden,
             };
             assert_eq!(layout.logo_tier, expected, "prompt {prompt_height}");
+            assert_eq!(
+                layout.logo.height,
+                expected.rows(),
+                "prompt {prompt_height}"
+            );
             assert_places_every_row(&layout, &input(prompt_height));
         }
     }
@@ -3634,7 +3694,7 @@ mod tests {
     /// A draft that no longer fits beside the full logo steps the reserved rows AND the painted art down together.
     #[test]
     fn stacked_logo_art_matches_the_rows_reserved_for_a_tall_draft() {
-        // Full logo 11 + gap 1 + menu 4 + flex 1 + prompt + version 2 = 19 + prompt: 26 rows fit the full logo beside a one-line draft; a 13-row draft hides it
+        // Tiny logo 14 + gap 1 + menu 4 + flex 1 + prompt + version 2 = 22 + prompt: 26 rows fit it beside a one-line draft; a 13-row draft hides it
         let area = Rect::new(0, 0, 60, 26);
         let input = |prompt_height| WelcomeLayoutInput {
             content_area: area,
@@ -3643,7 +3703,7 @@ mod tests {
             ..Default::default()
         };
         let one_line = WelcomeLayout::compute(input(None));
-        assert_eq!(one_line.logo_tier, LogoTier::Full);
+        assert_eq!(one_line.logo_tier, LogoTier::AsciiTiny);
         assert_eq!(one_line.logo.height, one_line.logo_tier.rows());
 
         let tall = WelcomeLayout::compute(input(Some(13)));
@@ -3673,7 +3733,7 @@ mod tests {
     /// The consent screen passes 0 prompt rows and must sit exactly where it did before the composer could grow.
     #[test]
     fn zero_row_prompt_is_not_charged_for_a_one_line_box_when_centering() {
-        // 80x28, a 9-row body, a 2-row menu: the 11-row full logo + gap 1 + gap 1 + body 9 leaves 6 rows,
+        // 80x28, a 9-row body, a 2-row menu: the 10-row mini ASCII logo + gap 1 + gap 1 + body 9 leaves 7 rows,
         // so there is no centering slack and the logo sits at the top; the zero-row prompt adds no phantom rows
         let area = Rect::new(0, 0, 80, 28);
         let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
@@ -3683,7 +3743,7 @@ mod tests {
             prompt_height: Some(0),
             ..Default::default()
         });
-        assert_eq!(layout.logo_tier, LogoTier::Full);
+        assert_eq!(layout.logo_tier, LogoTier::AsciiMini);
         assert_eq!(layout.logo.y, 0);
         assert_eq!(layout.prompt.height, 0);
     }
@@ -4402,7 +4462,8 @@ the usual channels. "
         assert!(!one_line.has_hero_box());
         let slot = one_line.changelog.height;
         assert!(slot > 0);
-        assert_eq!(one_line.logo_tier, LogoTier::Full);
+        let first = one_line.logo_tier;
+        assert!(LogoTier::ASCII_SIZES.contains(&first), "{first:?}");
         let max = prompt_max_height(&input(None));
         let mut saw_logo_yield = false;
         for prompt_height in PROMPT_HEIGHT..=max {
@@ -4411,7 +4472,7 @@ the usual channels. "
                 layout.changelog.height, slot,
                 "prompt {prompt_height}: the announcement must keep its rows"
             );
-            saw_logo_yield |= layout.logo_tier != LogoTier::Full;
+            saw_logo_yield |= layout.logo_tier != first;
             assert_places_every_row(&layout, &input(Some(prompt_height)));
         }
         assert!(
