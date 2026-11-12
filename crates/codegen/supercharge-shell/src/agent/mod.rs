@@ -19,6 +19,7 @@ pub mod mistral_credits;
 pub mod model_providers;
 pub mod mvp_agent;
 pub mod nous_oauth;
+pub mod os_random;
 pub(crate) mod otel_gate;
 pub mod provider_setup;
 pub(crate) mod proxy;

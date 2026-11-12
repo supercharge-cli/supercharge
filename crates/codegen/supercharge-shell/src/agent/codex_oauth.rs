@@ -144,20 +144,16 @@ pub fn code_challenge_s256(verifier: &str) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest)
 }
 
-pub fn generate_pkce_pair() -> (String, String) {
-    let mut bytes = [0u8; 48];
-    let mut file = std::fs::File::open("/dev/urandom").expect("urandom");
-    std::io::Read::read_exact(&mut file, &mut bytes).expect("urandom");
-    let verifier = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
+/// PKCE verifier (48 OS CSPRNG bytes, base64url) and its S256 challenge.
+pub fn generate_pkce_pair() -> std::io::Result<(String, String)> {
+    let verifier = crate::agent::os_random::secure_token_b64url::<48>()?;
     let challenge = code_challenge_s256(&verifier);
-    (verifier, challenge)
+    Ok((verifier, challenge))
 }
 
-fn generate_state() -> String {
-    let mut bytes = [0u8; 32];
-    let mut file = std::fs::File::open("/dev/urandom").expect("urandom");
-    std::io::Read::read_exact(&mut file, &mut bytes).expect("urandom");
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+/// OAuth `state` (32 OS CSPRNG bytes, base64url).
+fn generate_state() -> std::io::Result<String> {
+    crate::agent::os_random::secure_token_b64url::<32>()
 }
 
 /// Authorize URL with the same shape as the Codex CLI (scope + originator
@@ -198,8 +194,10 @@ fn bind_callback_listener() -> std::io::Result<(std::net::TcpListener, u16)> {
 /// keeps the listener.
 pub fn begin_live(generation: u64) -> Result<CodexSignInStarted, String> {
     let (listener, port) = bind_callback_listener().map_err(|e| e.to_string())?;
-    let (verifier, challenge) = generate_pkce_pair();
-    let state = generate_state();
+    let (verifier, challenge) = generate_pkce_pair()
+        .map_err(|e| format!("Could not generate a secure sign-in code: {e}"))?;
+    let state =
+        generate_state().map_err(|e| format!("Could not generate a secure sign-in code: {e}"))?;
     let redirect_uri = format!("http://127.0.0.1:{port}/auth/callback");
     let sign_in_url = build_authorize_url(&redirect_uri, &challenge, &state);
     let started = CodexSignInStarted {
@@ -694,6 +692,41 @@ mod tests {
             code_challenge_s256(verifier),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
         );
+    }
+
+    #[test]
+    fn generated_pkce_pair_is_valid_and_unique() {
+        let (verifier, challenge) = generate_pkce_pair().unwrap();
+        assert_eq!(verifier.len(), 64);
+        assert!((43..=128).contains(&verifier.len()));
+        assert!(
+            verifier
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        );
+        assert_eq!(challenge, code_challenge_s256(&verifier));
+        assert_eq!(challenge.len(), 43);
+        let (verifier2, challenge2) = generate_pkce_pair().unwrap();
+        assert_ne!(verifier, verifier2);
+        assert_ne!(challenge, challenge2);
+    }
+
+    #[test]
+    fn pkce_generation_does_not_open_a_device_path() {
+        let src = include_str!("codex_oauth.rs");
+        let needle = ["/dev/", "urandom"].concat();
+        assert!(!src.contains(&needle));
+    }
+
+    #[test]
+    fn generated_state_is_valid_and_unique() {
+        let a = generate_state().unwrap();
+        assert_eq!(a.len(), 43);
+        assert!(
+            a.bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        );
+        assert_ne!(a, generate_state().unwrap());
     }
 
     #[test]

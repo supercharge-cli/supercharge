@@ -142,21 +142,23 @@ pub fn code_challenge_s256(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(digest)
 }
 
-pub fn generate_pkce_pair() -> (String, String) {
-    let mut bytes = [0u8; 48];
-    let file = std::fs::File::open("/dev/urandom").expect("urandom");
-    let mut file = file;
-    std::io::Read::read_exact(&mut file, &mut bytes).expect("urandom");
-    let verifier = URL_SAFE_NO_PAD.encode(bytes);
+/// PKCE verifier (48 OS CSPRNG bytes, base64url) and its S256 challenge.
+pub fn generate_pkce_pair() -> Result<(String, String), SignInError> {
+    let verifier = crate::agent::os_random::secure_token_b64url::<48>().map_err(|e| {
+        SignInError::new(
+            SignInCode::StartFailed,
+            format!("Could not generate a secure sign-in code: {e}"),
+        )
+    })?;
     let challenge = code_challenge_s256(&verifier);
-    (verifier, challenge)
+    Ok((verifier, challenge))
 }
 
 pub fn authenticate<T: SignInTransport>(
     transport: &T,
     hooks: &SignInHooks,
 ) -> Result<String, SignInError> {
-    let (verifier, challenge) = generate_pkce_pair();
+    let (verifier, challenge) = generate_pkce_pair()?;
     let started = start_process(transport, &challenge)?;
     finish_attempt(transport, hooks, &started, &verifier)
 }
@@ -742,7 +744,7 @@ fn lock_slot() -> std::sync::MutexGuard<'static, Option<LiveSession>> {
 /// Start a sign-in and keep the verifier in process memory for this generation.
 pub fn begin_live(generation: u64) -> Result<String, SignInError> {
     let transport = production_transport()?;
-    let (verifier, challenge) = generate_pkce_pair();
+    let (verifier, challenge) = generate_pkce_pair()?;
     let started = start_process(&transport, &challenge)?;
     let url = started.sign_in_url.clone();
     let cancel = Arc::new(AtomicBool::new(false));
@@ -1007,6 +1009,30 @@ mod tests {
             code_challenge_s256(verifier),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
         );
+    }
+
+    #[test]
+    fn generated_pkce_pair_is_valid_and_unique() {
+        let (verifier, challenge) = generate_pkce_pair().unwrap();
+        assert_eq!(verifier.len(), 64);
+        assert!((43..=128).contains(&verifier.len()));
+        assert!(
+            verifier
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        );
+        assert_eq!(challenge, code_challenge_s256(&verifier));
+        assert_eq!(challenge.len(), 43);
+        let (verifier2, challenge2) = generate_pkce_pair().unwrap();
+        assert_ne!(verifier, verifier2);
+        assert_ne!(challenge, challenge2);
+    }
+
+    #[test]
+    fn pkce_generation_does_not_open_a_device_path() {
+        let src = include_str!("mistral_browser_sign_in.rs");
+        let needle = ["/dev/", "urandom"].concat();
+        assert!(!src.contains(&needle));
     }
 
     #[test]

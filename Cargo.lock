@@ -12151,6 +12151,7 @@ dependencies = [
  "parking_lot",
  "pretty_assertions",
  "prod-mc-cli-chat-proxy-types",
+ "rand 0.9.5",
  "regex",
  "reqwest 0.12.24",
  "reqwest-middleware 0.4.2",
