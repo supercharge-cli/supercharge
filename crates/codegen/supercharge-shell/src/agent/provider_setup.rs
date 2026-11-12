@@ -126,6 +126,16 @@ pub fn setup_provider_profiles() -> impl Iterator<Item = &'static SetupProviderP
         .filter(|profile| profile.id != crate::agent::codex_oauth::CODEX_PROVIDER_ID)
 }
 
+/// Whether a built-in provider works without an API key: its default endpoint is a
+/// loopback server (a local model server where a key is optional). Remote endpoints always
+/// count as needing a key, so this fails closed.
+pub fn setup_provider_key_optional(profile: &SetupProviderProfile) -> bool {
+    url::Url::parse(profile.base_url)
+        .ok()
+        .and_then(|u| u.host_str().map(is_loopback_host))
+        .unwrap_or(false)
+}
+
 pub fn find_setup_provider(id: &str) -> Option<&'static SetupProviderProfile> {
     SETUP_PROVIDERS.iter().find(|profile| profile.id == id)
 }
@@ -2923,6 +2933,49 @@ mod tests {
         assert_eq!(restored.base_url, "https://api.example.com/v1");
         assert_eq!(restored.provider_id, "saved");
         assert!(restored.api_key.is_empty());
+    }
+
+    #[test]
+    fn only_local_server_profiles_are_key_optional() {
+        let optional: Vec<&str> = SETUP_PROVIDERS
+            .iter()
+            .filter(|p| setup_provider_key_optional(p))
+            .map(|p| p.id)
+            .collect();
+        assert_eq!(optional, vec!["ollama", "lmstudio"]);
+        for p in SETUP_PROVIDERS.iter().filter(|p| !setup_provider_key_optional(p)) {
+            assert!(p.base_url.starts_with("https://"), "{} is remote", p.id);
+        }
+    }
+
+    #[test]
+    fn key_optional_provider_lists_and_saves_without_key() {
+        let (models, requests) = with_models_server(
+            |_| ("200 OK", r#"{"data":[{"id":"local-model"}]}"#),
+            |base_url| fetch_provider_models(base_url, "", SetupWireFormat::Openai, Some("ollama")),
+        );
+        assert_eq!(models.unwrap()[0].id, "local-model");
+        assert_eq!(requests.len(), 1);
+        assert!(!requests[0].contains("authorization:"), "no credential is sent");
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "http://127.0.0.1:11434/v1".into(),
+                api_key: String::new(),
+                model_id: "local-model".into(),
+                model_name: "local-model".into(),
+                format: SetupWireFormat::Openai,
+                provider_id: "ollama".into(),
+            },
+        )
+        .unwrap();
+        let saved = load_existing_provider_setup_details_at(&path).unwrap();
+        assert_eq!(saved.provider_id, "ollama");
+        assert_eq!(saved.base_url, "http://127.0.0.1:11434/v1");
+        assert!(saved.api_key.is_empty());
     }
 
     #[test]

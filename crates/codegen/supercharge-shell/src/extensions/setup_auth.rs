@@ -68,12 +68,22 @@ pub(crate) fn interactive_kinds(provider_id: &str) -> &'static [AuthKind] {
     }
 }
 
-/// Every auth method a listed provider accepts: interactive kinds first, then `api_key`
-/// when the provider takes a pasted key.
+/// Whether a provider needs no credential at all (local model servers). Unknown ids and
+/// sign-in providers are never key-optional.
+pub(crate) fn key_optional(provider_id: &str) -> bool {
+    interactive_kinds(provider_id).is_empty()
+        && ps::find_setup_provider(provider_id).is_some_and(ps::setup_provider_key_optional)
+}
+
+/// Every auth method a listed provider accepts: interactive kinds first, then `none` when
+/// it works without a credential, then `api_key` when it takes a pasted key.
 pub(crate) fn auth_methods(provider_id: &str) -> Vec<&'static str> {
     let kinds = interactive_kinds(provider_id);
     let mut out: Vec<&'static str> = kinds.iter().map(|k| k.as_str()).collect();
     if kinds.is_empty() {
+        if key_optional(provider_id) {
+            out.push("none");
+        }
         out.push("api_key");
     }
     out
@@ -716,6 +726,14 @@ mod tests {
         assert_eq!(auth_methods("nous"), vec!["device"]);
         assert_eq!(auth_methods("mistral-auth"), vec!["browser"]);
         assert_eq!(auth_methods("openai"), vec!["api_key"]);
+        assert_eq!(auth_methods("ollama"), vec!["none", "api_key"]);
+        assert_eq!(auth_methods("lmstudio"), vec!["none", "api_key"]);
+        assert_eq!(auth_methods("no-such-provider"), vec!["api_key"]);
+        assert!(key_optional("ollama"));
+        assert!(!key_optional("openai"));
+        assert!(!key_optional("nous"));
+        assert!(!key_optional("mistral-auth"));
+        assert!(!key_optional("no-such-provider"));
         assert_eq!(signed_in("openai", None), None);
         let cfg: toml::Value = toml::from_str(&format!(
             "[provider_credentials.mistral-auth]\napi_key = \"{SECRET}\"\n"

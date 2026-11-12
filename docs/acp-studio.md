@@ -180,10 +180,18 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 | `_supercharge/setup/auth_poll` | `{ loginId }` | `AuthLogin` |
 | `_supercharge/setup/auth_cancel` | `{ loginId }` | `{ cancelled }` |
 
-- `Provider`: `{ id, name, description, baseUrl, defaultModel, format: "openai"|"anthropic"|"responses", curated: [string], auth: "api_key"|"oauth_device", authMethods: [AuthMethod], signedIn: bool|null }`.
+- `Provider`: `{ id, name, description, baseUrl, defaultModel, format: "openai"|"anthropic"|"responses", curated: [string], auth: "api_key"|"oauth_device", authMethods: [AuthMethod], keyOptional: bool, signedIn: bool|null }`.
   `auth` is the legacy single value (unchanged since 1.4.19). `authMethods` lists every way the
-  provider accepts credentials, interactive kinds first: `"device"`, `"browser"`, `"api_key"`.
-  A provider whose list has no `"api_key"` takes no pasted key; hide the key field for it.
+  provider accepts credentials, in this order: interactive kinds (`"device"`, `"browser"`),
+  then `"none"`, then `"api_key"`.
+  - No `"api_key"`: the provider takes no pasted key; hide the key field.
+  - `"none"` (and `keyOptional: true`): the provider works with no credential, so show the key
+    field as optional. `setup/models` / `setup/save` work with no `apiKey`. Today these are the
+    local model servers `ollama` and `lmstudio`: a built-in provider counts only when its
+    default endpoint is a loopback address, so a remote provider is never key-optional.
+  - Only `"api_key"`: a key is required.
+  The legacy `auth` value stays `"api_key"` for key-optional providers (as in 1.4.19); read
+  `authMethods` / `keyOptional` instead.
   `signedIn` is `null` for key-only providers.
 - `AuthLogin`: `{ loginId, providerId, kind, status: "pending"|"done"|"denied"|"expired"|"error", interval, message? }`.
 - `Model`: `{ id, name, supportsThinking, contextWindow }` (`contextWindow` may be `null`).

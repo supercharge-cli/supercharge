@@ -193,6 +193,7 @@ fn providers_json() -> Value {
                     // Legacy single value kept for 1.4.19 clients; `authMethods` is the full list.
                     "auth": if p.id == OAUTH_PROVIDER { "oauth_device" } else { "api_key" },
                     "authMethods": auth::auth_methods(p.id),
+                    "keyOptional": auth::key_optional(p.id),
                     "signedIn": auth::signed_in(p.id, config.as_ref()),
                 })
             })
@@ -518,6 +519,17 @@ mod tests {
         assert!(browser["signedIn"].is_boolean());
         let key_only = find("openai");
         assert_eq!(key_only["authMethods"], json!(["api_key"]));
+        assert_eq!(key_only["keyOptional"], false);
+        assert_eq!(browser["keyOptional"], false);
+        assert_eq!(nous["keyOptional"], false);
+        for id in ["ollama", "lmstudio"] {
+            let local = find(id);
+            // Legacy `auth` keeps its 1.4.19 value; the new fields carry key-optional.
+            assert_eq!(local["auth"], "api_key");
+            assert_eq!(local["authMethods"], json!(["none", "api_key"]));
+            assert_eq!(local["keyOptional"], true);
+            assert!(local["signedIn"].is_null());
+        }
         assert!(key_only["signedIn"].is_null());
         assert!(v.get("authLogin").is_some());
         assert!(v["oauth"]["mistral-auth"]["signedIn"].is_boolean());
@@ -562,6 +574,17 @@ mod tests {
         assert_eq!(t.api_key, "sk-issued-by-sign-in");
         // Key-only providers never borrow a sign-in key.
         assert_eq!(stored_sign_in_key("openai", Some(&config)), None);
+    }
+
+    #[test]
+    fn key_optional_provider_resolves_without_api_key() {
+        let t = resolve_target_with(&json!({"providerId": "ollama"}), None, &|_| None).unwrap();
+        assert_eq!(t.base_url, "http://127.0.0.1:11434/v1");
+        assert_eq!(t.api_key, "");
+        // A key saved for a remote provider is never borrowed.
+        let t = resolve_target_with(&json!({"providerId": "lmstudio"}), Some(&saved()), &|_| None)
+            .unwrap();
+        assert_eq!(t.api_key, "");
     }
 
     #[test]
