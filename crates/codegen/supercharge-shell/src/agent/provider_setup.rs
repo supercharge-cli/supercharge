@@ -1865,7 +1865,7 @@ pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
 }
 
 /// Path-injectable form of [`load_existing_provider_setup_details`].
-fn load_existing_provider_setup_details_at(path: &Path) -> Option<ExistingProviderSetup> {
+pub(crate) fn load_existing_provider_setup_details_at(path: &Path) -> Option<ExistingProviderSetup> {
     let content = crate::util::config::read_to_string_or_empty(path).unwrap_or_default();
     let parsed = if content.trim().is_empty() {
         None

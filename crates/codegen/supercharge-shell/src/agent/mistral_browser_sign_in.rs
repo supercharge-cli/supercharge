@@ -763,6 +763,21 @@ pub fn sign_in_url(generation: u64) -> Option<String> {
     })
 }
 
+/// When a live sign-in stops being usable: the server's expiry, capped at the
+/// sign-in lifetime the waiter enforces. `None` when the generation is stale.
+pub fn live_expires_at(generation: u64) -> Option<DateTime<Utc>> {
+    let cap = Utc::now()
+        + chrono::Duration::from_std(MAX_SIGN_IN_LIFETIME).unwrap_or(chrono::Duration::minutes(15));
+    lock_slot().as_ref().and_then(|session| {
+        (session.generation == generation).then(|| session.started.expires_at.min(cap))
+    })
+}
+
+/// Poll cadence of the live waiter, in seconds.
+pub fn poll_interval_secs() -> u64 {
+    POLL_INTERVAL.as_secs().max(1)
+}
+
 pub fn cancel_live(generation: u64) {
     if let Some(session) = lock_slot().as_ref() {
         if session.generation == generation {

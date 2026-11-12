@@ -10,6 +10,7 @@
 //! | `setup/device_cancel` | `{}` | `{cancelled}` |
 //! | `setup/image_status` | `{}` | image provider state |
 //! | `setup/image_save` | `{providerId?, baseUrl?, apiKey?, modelId, format?}` | `{saved, modelId}` |
+//! | `setup/auth_start` / `auth_poll` / `auth_cancel` | see [`super::setup_auth`] | provider sign-in |
 
 use std::sync::Mutex;
 
@@ -21,6 +22,7 @@ use crate::agent::nous_oauth::{self, DeviceCodePending, DevicePollStatus};
 use crate::agent::provider_setup::{
     self as ps, ProviderModel, ProviderSetup, ProviderSetupError, SetupWireFormat,
 };
+use crate::extensions::setup_auth::{self as auth, AuthError};
 use crate::extensions::{ExtResult, to_raw_response};
 
 pub(crate) const STATUS: &str = "supercharge/setup/status";
@@ -33,8 +35,18 @@ pub(crate) const IMAGE_STATUS: &str = "supercharge/setup/image_status";
 pub(crate) const IMAGE_SAVE: &str = "supercharge/setup/image_save";
 
 /// All setup methods (without the leading underscore), for routing and capability lists.
-pub(crate) const METHODS: [&str; 8] = [
-    STATUS, MODELS, SAVE, DEVICE_START, DEVICE_POLL, DEVICE_CANCEL, IMAGE_STATUS, IMAGE_SAVE,
+pub(crate) const METHODS: [&str; 11] = [
+    STATUS,
+    MODELS,
+    SAVE,
+    DEVICE_START,
+    DEVICE_POLL,
+    DEVICE_CANCEL,
+    IMAGE_STATUS,
+    IMAGE_SAVE,
+    auth::AUTH_START,
+    auth::AUTH_POLL,
+    auth::AUTH_CANCEL,
 ];
 
 /// Provider id that signs in with the device-code flow instead of an API key.
@@ -51,6 +63,13 @@ fn invalid(msg: impl Into<String>) -> acp::Error {
 
 fn internal(msg: impl Into<String>) -> acp::Error {
     acp::Error::internal_error().data(msg.into())
+}
+
+fn auth_err(e: AuthError) -> acp::Error {
+    match e {
+        AuthError::Invalid(m) => invalid(m),
+        AuthError::Internal(m) => internal(m),
+    }
 }
 
 fn setup_err(e: ProviderSetupError) -> acp::Error {
@@ -84,6 +103,30 @@ pub(crate) fn resolve_target(
     p: &Value,
     saved: Option<&ps::ExistingProviderSetup>,
 ) -> Result<Target, acp::Error> {
+    resolve_target_with(p, saved, &|id| stored_sign_in_key(id, user_config().as_ref()))
+}
+
+fn user_config() -> Option<toml::Value> {
+    let path = crate::util::config::user_config_path();
+    let content = crate::util::config::read_to_string_or_empty(&path).ok()?;
+    toml::from_str::<toml::Value>(&content).ok()
+}
+
+/// Key a browser sign-in saved for its provider, so `models` / `save` work without an
+/// `apiKey` even when another provider is active. Never returned to the client.
+fn stored_sign_in_key(provider_id: &str, config: Option<&toml::Value>) -> Option<String> {
+    if !auth::interactive_kinds(provider_id).contains(&auth::AuthKind::Browser) {
+        return None;
+    }
+    ps::isolated_provider_api_key(config?, provider_id)
+}
+
+/// [`resolve_target`] with the stored sign-in key lookup injected.
+pub(crate) fn resolve_target_with(
+    p: &Value,
+    saved: Option<&ps::ExistingProviderSetup>,
+    stored_key: &dyn Fn(&str) -> Option<String>,
+) -> Result<Target, acp::Error> {
     let provider_id = str_param(p, &["providerId", "provider_id", "provider"]).unwrap_or("");
     let profile = (!provider_id.is_empty())
         .then(|| ps::find_setup_provider(provider_id))
@@ -109,6 +152,8 @@ pub(crate) fn resolve_target(
                 ps::normalize_provider_base_url(&s.base_url).ok().as_deref() == Some(base_url.as_str())
             })
             .map(|s| s.api_key.clone())
+            .filter(|k| !k.is_empty())
+            .or_else(|| profile.and_then(|pr| stored_key(pr.id)))
             .unwrap_or_default(),
     };
     let provider_id = profile
@@ -133,6 +178,7 @@ fn model_json(m: &ProviderModel) -> Value {
 }
 
 fn providers_json() -> Value {
+    let config = user_config();
     Value::Array(
         ps::setup_provider_profiles()
             .map(|p| {
@@ -144,7 +190,10 @@ fn providers_json() -> Value {
                     "defaultModel": p.default_model,
                     "format": p.format.as_str(),
                     "curated": p.curated,
+                    // Legacy single value kept for 1.4.19 clients; `authMethods` is the full list.
                     "auth": if p.id == OAUTH_PROVIDER { "oauth_device" } else { "api_key" },
+                    "authMethods": auth::auth_methods(p.id),
+                    "signedIn": auth::signed_in(p.id, config.as_ref()),
                 })
             })
             .collect(),
@@ -170,7 +219,11 @@ pub(crate) fn status_json() -> Value {
         "format": saved.as_ref().map(|s| s.format.as_str()),
         "hasApiKey": saved.as_ref().is_some_and(|s| !s.api_key.is_empty()),
         "modelId": saved_default_model(),
-        "oauth": { "nous": { "signedIn": nous_oauth::signed_in() } },
+        "oauth": {
+            "nous": { "signedIn": nous_oauth::signed_in() },
+            "mistral-auth": { "signedIn": auth::signed_in("mistral-auth", user_config().as_ref()) },
+        },
+        "authLogin": auth::current_view(),
         "deviceLoginPending": pending_device().lock().unwrap_or_else(|e| e.into_inner()).is_some(),
         "configPath": crate::util::config::user_config_path().to_string_lossy(),
         "providers": providers_json(),
@@ -360,8 +413,46 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
                 "providers": providers_json(),
             }))
         }
+        auth::AUTH_START => {
+            let provider_id = str_param(&p, &["providerId", "provider_id", "provider"])
+                .unwrap_or("")
+                .to_owned();
+            let kind = auth::choose_kind(&provider_id, str_param(&p, &["kind"])).map_err(auth_err)?;
+            let flow = {
+                let provider_id = provider_id.clone();
+                tokio::task::spawn_blocking(move || auth::production_flow(&provider_id, kind))
+                    .await
+                    .map_err(|e| internal(e.to_string()))?
+                    .map_err(auth_err)?
+            };
+            to_raw_response(&auth::install(&provider_id, kind, flow, auth_notifier(agent)))
+        }
+        auth::AUTH_POLL => {
+            let login_id = str_param(&p, &["loginId", "login_id"]).unwrap_or("");
+            let (view, reload) = auth::poll(login_id, &auth_notifier(agent)).map_err(auth_err)?;
+            if reload {
+                // Same as `save`: new sessions see the signed-in provider's catalog.
+                let _ = crate::extensions::session_admin::handle_reload_models(agent);
+            }
+            to_raw_response(&view)
+        }
+        auth::AUTH_CANCEL => {
+            let login_id = str_param(&p, &["loginId", "login_id"]).unwrap_or("");
+            let cancelled = auth::cancel(login_id).map_err(auth_err)?;
+            to_raw_response(&json!({ "cancelled": cancelled }))
+        }
         other => Err(acp::Error::method_not_found().data(other.to_owned())),
     }
+}
+
+/// Sends `_supercharge/setup/auth_changed` to this connection's client.
+fn auth_notifier(agent: &MvpAgent) -> auth::Notify {
+    let gateway = agent.gateway.clone();
+    std::sync::Arc::new(move |value: Value| {
+        if let Ok(raw) = serde_json::value::to_raw_value(&value) {
+            gateway.forward_fire_and_forget(acp::ExtNotification::new(auth::AUTH_CHANGED, raw.into()));
+        }
+    })
 }
 
 #[cfg(test)]
@@ -403,6 +494,83 @@ mod tests {
     fn unknown_provider_without_url_is_rejected() {
         assert!(resolve_target(&json!({"providerId": "nope-provider"}), None).is_err());
         assert!(resolve_target(&json!({}), None).is_err());
+    }
+
+    #[test]
+    fn methods_advertise_auth_trigger() {
+        for m in [auth::AUTH_START, auth::AUTH_POLL, auth::AUTH_CANCEL, DEVICE_START, STATUS] {
+            assert!(METHODS.contains(&m), "{m}");
+        }
+    }
+
+    #[test]
+    fn status_providers_advertise_auth_methods_and_keep_legacy_auth() {
+        let v = status_json();
+        let providers = v["providers"].as_array().unwrap();
+        let find = |id: &str| providers.iter().find(|p| p["id"] == id).cloned().unwrap();
+        let nous = find("nous");
+        assert_eq!(nous["auth"], "oauth_device");
+        assert_eq!(nous["authMethods"], json!(["device"]));
+        assert!(nous["signedIn"].is_boolean());
+        let browser = find("mistral-auth");
+        assert_eq!(browser["auth"], "api_key");
+        assert_eq!(browser["authMethods"], json!(["browser"]));
+        assert!(browser["signedIn"].is_boolean());
+        let key_only = find("openai");
+        assert_eq!(key_only["authMethods"], json!(["api_key"]));
+        assert!(key_only["signedIn"].is_null());
+        assert!(v.get("authLogin").is_some());
+        assert!(v["oauth"]["mistral-auth"]["signedIn"].is_boolean());
+        assert!(!v.to_string().contains("apiKey\":\"sk"));
+    }
+
+    #[test]
+    fn browser_sign_in_key_is_used_without_api_key() {
+        // After browser sign-in, the issued key lives in the CLI config (persisted the way
+        // the CLI's own sign-in does); `models` / `save` resolve it with no `apiKey`.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        ps::persist_provider_setup_at(
+            &path,
+            &ProviderSetup {
+                base_url: "https://api.mistral.ai/v1".into(),
+                api_key: "sk-issued-by-sign-in".into(),
+                model_id: "large-model-latest".into(),
+                model_name: "large-model-latest".into(),
+                format: SetupWireFormat::Openai,
+                provider_id: "mistral-auth".into(),
+            },
+        )
+        .unwrap();
+        let config: toml::Value =
+            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(auth::signed_in("mistral-auth", Some(&config)), Some(true));
+        let saved = ps::load_existing_provider_setup_details_at(&path);
+        let lookup = |id: &str| stored_sign_in_key(id, Some(&config));
+        let t = resolve_target_with(&json!({"providerId": "mistral-auth"}), saved.as_ref(), &lookup)
+            .unwrap();
+        assert_eq!(t.api_key, "sk-issued-by-sign-in");
+        // Still found when another provider is active.
+        let other = ps::ExistingProviderSetup {
+            base_url: "https://api.other.test/v1".into(),
+            api_key: "sk-other".into(),
+            format: SetupWireFormat::Openai,
+            provider_id: "openai".into(),
+        };
+        let t = resolve_target_with(&json!({"providerId": "mistral-auth"}), Some(&other), &lookup)
+            .unwrap();
+        assert_eq!(t.api_key, "sk-issued-by-sign-in");
+        // Key-only providers never borrow a sign-in key.
+        assert_eq!(stored_sign_in_key("openai", Some(&config)), None);
+    }
+
+    #[test]
+    fn device_sign_in_resolves_without_api_key() {
+        // Device sign-in keeps its token in the CLI's own OAuth file; the target carries no
+        // key and the model fetch resolves the token itself (same as `device_*`).
+        let t = resolve_target_with(&json!({"providerId": "nous"}), None, &|_| None).unwrap();
+        assert_eq!(t.provider_id, "nous");
+        assert_eq!(t.api_key, "");
     }
 
     #[test]

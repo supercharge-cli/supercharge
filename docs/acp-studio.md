@@ -162,13 +162,13 @@ emits `config_option_update` with the refreshed `reasoning_effort` option.
 
 Same logic as the TUI `/setup`; writes `~/.supercharge/config.toml` and hot-reloads the model
 catalog. Advertised in `initialize` `_meta`: `"supercharge": { "setup": true, "imageSetup": true,
-"deviceLogin": true }`, `"_supercharge/setup": true`, and `"_supercharge/setup/methods": [...]`.
+"deviceLogin": true, "authLogin": true }`, `"_supercharge/setup": true`, and `"_supercharge/setup/methods": [...]`.
 Errors use ACP `invalid_params` (bad input, provider rejected, login expired/denied) or
 `internal_error` (I/O).
 
 | Method | Request | Response |
 |---|---|---|
-| `_supercharge/setup/status` | `{}` | `{ configured, providerId, baseUrl, format, hasApiKey, modelId, oauth: { nous: { signedIn } }, deviceLoginPending, configPath, providers: [Provider] }` |
+| `_supercharge/setup/status` | `{}` | `{ configured, providerId, baseUrl, format, hasApiKey, modelId, oauth: { nous: { signedIn }, "mistral-auth": { signedIn } }, deviceLoginPending, authLogin: AuthLogin \| null, configPath, providers: [Provider] }` |
 | `_supercharge/setup/models` | `{ providerId?, baseUrl?, apiKey?, format? }` | `{ models: [Model], providerId, baseUrl, format, defaultModel }` |
 | `_supercharge/setup/save` | `{ providerId?, baseUrl?, apiKey?, modelId?, modelName?, format?, sessionId? }` | `{ saved: true, modelId, reloaded, switchedSessions: [string], models: [Model], message }` |
 | `_supercharge/setup/device_start` | `{}` | `{ userCode, verificationUri, verificationUriComplete, expiresIn, interval }` |
@@ -176,8 +176,16 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 | `_supercharge/setup/device_cancel` | `{}` | `{ cancelled }` |
 | `_supercharge/setup/image_status` | `{}` | `{ configured, baseUrl, hasApiKey, modelId, providers: [Provider] }` |
 | `_supercharge/setup/image_save` | `{ providerId?, baseUrl?, apiKey?, modelId?, format? }` | `{ saved: true, modelId }` |
+| `_supercharge/setup/auth_start` | `{ providerId, kind?: "device" \| "browser" }` | `{ loginId, providerId, kind, url, userCode?, expiresIn, interval }` |
+| `_supercharge/setup/auth_poll` | `{ loginId }` | `AuthLogin` |
+| `_supercharge/setup/auth_cancel` | `{ loginId }` | `{ cancelled }` |
 
-- `Provider`: `{ id, name, description, baseUrl, defaultModel, format: "openai"|"anthropic"|"responses", curated: [string], auth: "api_key"|"oauth_device" }`.
+- `Provider`: `{ id, name, description, baseUrl, defaultModel, format: "openai"|"anthropic"|"responses", curated: [string], auth: "api_key"|"oauth_device", authMethods: [AuthMethod], signedIn: bool|null }`.
+  `auth` is the legacy single value (unchanged since 1.4.19). `authMethods` lists every way the
+  provider accepts credentials, interactive kinds first: `"device"`, `"browser"`, `"api_key"`.
+  A provider whose list has no `"api_key"` takes no pasted key; hide the key field for it.
+  `signedIn` is `null` for key-only providers.
+- `AuthLogin`: `{ loginId, providerId, kind, status: "pending"|"done"|"denied"|"expired"|"error", interval, message? }`.
 - `Model`: `{ id, name, supportsThinking, contextWindow }` (`contextWindow` may be `null`).
 - Target resolution: `providerId` (built-in) supplies `baseUrl`, `format` and the default model;
   `baseUrl` alone means a custom OpenAI-compatible endpoint (`format` defaults to `openai`).
@@ -205,3 +213,26 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 - Chats against the Nous inference API always use the token currently in `nous_oauth.json`
   (re-read when the file changes, refreshed before expiry), so a new login applies without
   restarting the agent.
+- Provider sign-in (`auth_*`, any provider whose `authMethods` has `"device"` or `"browser"`):
+  1. `auth_start { providerId }` starts the provider's own flow inside the CLI. Without `kind`
+     the provider's first `authMethods` entry is used; an explicit `kind` must be listed for
+     that provider. The result always carries `url` (open it locally or show it on another
+     device) and, for `device`, a `userCode` to show. Nothing is opened by the CLI itself.
+  2. Poll `auth_poll { loginId }` every `interval` seconds, or wait for the
+     `_supercharge/setup/auth_changed` notification (payload: `AuthLogin`), sent once when the
+     status becomes `done`, `denied`, `expired` or `error`. `slow_down` is handled inside the
+     CLI; the reported `interval` grows instead.
+  3. On `done`, `setup/status` shows the provider `signedIn: true`; call `setup/models` /
+     `setup/save` with that `providerId` and no `apiKey`. The first `auth_poll` that sees `done`
+     hot-reloads the catalog.
+  4. `auth_cancel { loginId }` stops the flow (`cancelled: false` for an unknown or finished id).
+  One sign-in runs at a time: a new `auth_start` cancels the previous one. A cancelled or
+  replaced `loginId` makes `auth_poll` fail with `invalid_params`; a finished one keeps
+  returning its final status until the next `auth_start`. Unknown providers, key-only
+  providers, unsupported kinds and a missing `loginId` fail with `invalid_params`.
+- Credentials never cross ACP: responses and notifications carry no token, refresh token, API
+  key, PKCE verifier or device code. A device sign-in saves its token where `device_*` does;
+  a browser sign-in saves the issued key in `config.toml` under that provider (and makes it the
+  active provider with its default model, as the CLI's own sign-in does), so `setup/save` then
+  picks the model.
+- `device_*` stay as the Nous-only path for existing clients; new clients should use `auth_*`.

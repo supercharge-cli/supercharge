@@ -607,7 +607,7 @@ impl acp::Agent for MvpAgent {
                     );
                     serde_json::json!({
                     "grokShell": true,
-                    "supercharge": { "steer": true, "sessionsChanged": true, "modelsList": true, "setup": true, "imageSetup": true, "deviceLogin": true },
+                    "supercharge": { "steer": true, "sessionsChanged": true, "modelsList": true, "setup": true, "imageSetup": true, "deviceLogin": true, "authLogin": true },
                     // Re-deriving this precedence client-side has regressed OIDC refresh, so clients consume the agent's choice from here
                     "defaultAuthMethodId": default_auth_method_id_wire,
                     // The agent can drive in-process SDK MCP servers over the ACP reverse channel (`x.ai/mcp/sdk_call`)

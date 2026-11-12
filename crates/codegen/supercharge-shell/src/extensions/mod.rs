@@ -42,6 +42,7 @@ pub mod session_search;
 pub(crate) mod session_state;
 pub mod session_updates;
 pub(crate) mod setup;
+pub(crate) mod setup_auth;
 pub mod share;
 pub mod skills;
 pub mod subagent_message;
@@ -125,6 +126,10 @@ const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
     "supercharge/setup/device_cancel",
     "supercharge/setup/image_status",
     "supercharge/setup/image_save",
+    "supercharge/setup/auth_start",
+    "supercharge/setup/auth_poll",
+    "supercharge/setup/auth_cancel",
+    "supercharge/setup/auth_changed",
     "supercharge/agents/list",
     "supercharge/agents/create",
     "supercharge/connections/list",
