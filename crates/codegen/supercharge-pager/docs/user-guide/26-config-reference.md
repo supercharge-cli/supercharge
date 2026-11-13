@@ -536,6 +536,7 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 
 | Key | Type / Values | Requirements | Managed | Details |
 | --- | --- | --- | --- | --- |
+| `telemetry.usage_stats` | `boolean` | `pin` | `user` | Anonymous usage stats. `false` opts out. Also SUPERCHARGE_TELEMETRY / DO_NOT_TRACK and `supercharge telemetry off`. See [Usage Stats and Privacy](28-telemetry-and-privacy.md). |
 | `telemetry.otel_enabled` | `boolean` | `pin` | `user` | External OTEL master switch. Also SUPERCHARGE_EXTERNAL_OTEL. |
 | `telemetry.otel_metrics_exporter` | `otlp / console / none` | `pin` | `user` | External OTEL metrics exporter. Also OTEL_METRICS_EXPORTER. |
 | `telemetry.otel_logs_exporter` | `otlp / console / none` | `pin` | `user` | External OTEL logs exporter. Also OTEL_LOGS_EXPORTER. |

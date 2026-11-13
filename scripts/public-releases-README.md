@@ -82,6 +82,10 @@ Do not point Zed at bare `supercharge` — that starts the TUI. ACP is `supercha
 
 Full notes: `docs/zed-acp.md`. Registry listing files: `docs/acp-registry/`.
 
+## Anonymous usage stats
+
+Supercharge sends anonymous usage stats (random install id, version, OS/arch, subcommand names, session counts, provider family) to help prioritize work. It never sends prompts, code, file paths, keys, or personal details. Turn it off with `supercharge telemetry off`, `SUPERCHARGE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. Details: `docs/user-guide/28-telemetry-and-privacy.md` (also extracted to `~/.supercharge/docs/user-guide/`).
+
 ## Releases
 
 Binaries are published from GitHub Actions when a `v*` tag is pushed to the main Supercharge repo. Each release includes:

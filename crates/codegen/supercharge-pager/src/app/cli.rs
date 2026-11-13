@@ -149,6 +149,63 @@ See ~/.supercharge/README.md for more information.
     /// The dashboard shows every session, top-level and subagents.
     /// Disabled when `[dashboard].enabled = false` in `~/.supercharge/config.toml` or when the `SUPERCHARGE_AGENT_DASHBOARD=0` env var is set.
     Dashboard,
+    /// Show or change anonymous usage stats (on, off, status)
+    Telemetry {
+        #[arg(value_enum, default_value_t = TelemetryAction::Status)]
+        action: TelemetryAction,
+    },
+}
+/// `supercharge telemetry <action>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum TelemetryAction {
+    /// Allow anonymous usage stats
+    On,
+    /// Stop sending anonymous usage stats
+    Off,
+    /// Show whether usage stats are on and what is collected
+    Status,
+}
+impl Command {
+    /// Static subcommand label for anonymous usage stats. Never includes argument values.
+    pub fn usage_name(&self) -> &'static str {
+        match self {
+            Command::Agent(args) => match args.mode {
+                Some(AgentCmd::Stdio) => "agent stdio",
+                Some(AgentCmd::Headless(_)) => "agent headless",
+                Some(AgentCmd::Serve(_)) => "agent serve",
+                Some(AgentCmd::Daemon(_)) => "agent daemon",
+                Some(AgentCmd::Leader(_)) => "agent leader",
+                None => "agent",
+            },
+            Command::Acp(_) => "acp",
+            Command::Inspect { .. } => "inspect",
+            Command::Doctor(_) => "doctor",
+            Command::Leader(_) => "leader",
+            Command::Logout => "logout",
+            Command::Login { .. } => "login",
+            Command::Mcp(_) => "mcp",
+            Command::Plugin(_) => "plugin",
+            Command::Memory(_) => "memory",
+            Command::Eval(_) => "eval",
+            Command::Browser(_) => "browser",
+            Command::Models => "models",
+            Command::Sessions(_) => "sessions",
+            Command::Usage(_) => "usage",
+            Command::Setup { .. } => "setup",
+            Command::Share(_) => "share",
+            Command::Wrap(_) => "wrap",
+            Command::Export(_) => "export",
+            Command::Trace(_) => "trace",
+            Command::Update { .. } => "update",
+            Command::Version { .. } => "version",
+            Command::Completions { .. } => "completions",
+            Command::Worktree(_) => "worktree",
+            Command::DiskUsage(_) => "du",
+            Command::Workspace(_) => "workspace",
+            Command::Dashboard => "dashboard",
+            Command::Telemetry { .. } => "telemetry",
+        }
+    }
 }
 /// Arguments for the `wrap` subcommand: the command to run, then its args.
 #[derive(Debug, clap::Args, Clone)]

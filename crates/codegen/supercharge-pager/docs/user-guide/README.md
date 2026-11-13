@@ -54,3 +54,4 @@ Automate, script, and integrate Supercharge AI with other systems.
 | 24 | [Monitoring Usage (External OpenTelemetry)](24-monitoring-usage.md) | Customer OTEL export |
 | 25 | [Status Line](25-status-line.md) | The bottom status row: built-in segments, command scripts, and the stdin JSON contract |
 | 26 | [Configuration Reference](26-config-reference.md) | Field list for `config.toml`, `managed_config.toml`, and `requirements.toml` |
+| 28 | [Usage Stats and Privacy](28-telemetry-and-privacy.md) | What anonymous usage stats are sent, and `supercharge telemetry off` |

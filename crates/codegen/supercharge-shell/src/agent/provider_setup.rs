@@ -136,6 +136,39 @@ pub fn setup_provider_key_optional(profile: &SetupProviderProfile) -> bool {
         .unwrap_or(false)
 }
 
+/// Label for anonymous usage stats: the built-in provider id whose endpoint matches
+/// `base_url`, `local` for a loopback server, otherwise `custom`. Never the URL itself,
+/// so private or self-hosted endpoints are not reported.
+pub fn usage_provider_label(base_url: &str) -> &'static str {
+    let Ok(url) = url::Url::parse(base_url.trim()) else {
+        return "custom";
+    };
+    let Some(host) = url.host_str() else {
+        return "custom";
+    };
+    if is_loopback_host(host) {
+        return "local";
+    }
+    let path = url.path().trim_end_matches('/');
+    let mut host_match: Option<&'static str> = None;
+    for profile in SETUP_PROVIDERS {
+        let Ok(known) = url::Url::parse(profile.base_url) else {
+            continue;
+        };
+        if !known
+            .host_str()
+            .is_some_and(|h| h.eq_ignore_ascii_case(host))
+        {
+            continue;
+        }
+        if known.path().trim_end_matches('/') == path {
+            return profile.id;
+        }
+        host_match.get_or_insert(profile.id);
+    }
+    host_match.unwrap_or("custom")
+}
+
 pub fn find_setup_provider(id: &str) -> Option<&'static SetupProviderProfile> {
     SETUP_PROVIDERS.iter().find(|profile| profile.id == id)
 }
@@ -1945,6 +1978,31 @@ fn load_existing_provider_setup_for_model_at(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn usage_provider_label_never_reports_urls() {
+        for profile in SETUP_PROVIDERS {
+            let label = usage_provider_label(profile.base_url);
+            // Profiles sharing an endpoint report the first one's id.
+            assert!(
+                label == "local" || SETUP_PROVIDERS.iter().any(|p| p.id == label),
+                "{} mapped to {label}",
+                profile.id
+            );
+            // A trailing slash does not change the label.
+            assert_eq!(
+                usage_provider_label(&format!("{}/", profile.base_url)),
+                label
+            );
+        }
+        assert_eq!(usage_provider_label("http://127.0.0.1:9999/v1"), "local");
+        assert_eq!(usage_provider_label("http://localhost:8080/v1"), "local");
+        assert_eq!(
+            usage_provider_label("https://llm.corp.internal/v1"),
+            "custom"
+        );
+        assert_eq!(usage_provider_label("not a url"), "custom");
+    }
 
     /// Spawn a local endpoint that records `(path, authorization, body)` of every request.
     async fn recording_endpoint() -> (

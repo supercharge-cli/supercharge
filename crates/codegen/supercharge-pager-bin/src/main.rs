@@ -80,7 +80,8 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
             | Command::Completions { .. }
             | Command::Worktree(_)
             | Command::DiskUsage(_)
-            | Command::Workspace(_),
+            | Command::Workspace(_)
+            | Command::Telemetry { .. },
         ) => (Entrypoint::Cli, Interactivity::Unattended),
         None if is_interactive => return None,
         None => (Entrypoint::Headless, Interactivity::Unattended),
@@ -122,7 +123,8 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
             | Command::Version { .. }
             | Command::Completions { .. }
             | Command::DiskUsage(_)
-            | Command::Workspace(_),
+            | Command::Workspace(_)
+            | Command::Telemetry { .. },
         ) => false,
     }
 }
@@ -950,6 +952,7 @@ fn cache_outgoing_acp_state(msg: &str, state: &std::sync::Mutex<StdioReplayState
         .get("method")
         .and_then(|m| m.as_str())
         .unwrap_or_default();
+    track_relayed_acp_session(method);
     match method {
         "initialize" => {
             let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
@@ -1207,6 +1210,7 @@ fn shutdown_and_flush_telemetry(exit_code: i32) -> ! {
         supercharge_telemetry::sentry::flush_on_shutdown();
     }
     supercharge_telemetry::otel_layer::shutdown_otel();
+    supercharge_telemetry::usage_stats::flush(USAGE_STATS_EXIT_FLUSH);
     supercharge_telemetry::debug_log::flush();
     finalize_span_profile();
     std::process::exit(exit_code);
@@ -2074,6 +2078,109 @@ fn dispatch_doctor_if_requested(args: &PagerArgs) -> bool {
     }
     true
 }
+/// Upper bound on how long process exit waits for queued usage stats.
+const USAGE_STATS_EXIT_FLUSH: std::time::Duration = std::time::Duration::from_millis(1200);
+/// With a shared leader, editor (ACP) sessions are created in the leader process; the
+/// stdio bridge sees the request first, so it counts the ACP session here.
+fn track_relayed_acp_session(method: &str) {
+    use supercharge_telemetry::usage_stats::{self, RunMode, SessionKind, UsageEvent};
+    if usage_stats::run_mode() != Some(RunMode::Acp) {
+        return;
+    }
+    let kind = match method {
+        "session/new" => SessionKind::New,
+        "session/load" => SessionKind::Load,
+        "session/resume" => SessionKind::Resume,
+        _ => return,
+    };
+    usage_stats::track(UsageEvent::AcpSessionStarted { kind });
+}
+fn usage_run_mode(args: &PagerArgs) -> supercharge_telemetry::usage_stats::RunMode {
+    use supercharge_telemetry::usage_stats::RunMode;
+    let one_shot =
+        args.single.is_some() || args.prompt_json.is_some() || args.prompt_file.is_some();
+    match &args.command {
+        Some(Command::Agent(a)) => match a.mode {
+            Some(AgentCmd::Stdio) => RunMode::Acp,
+            Some(AgentCmd::Leader(_)) => RunMode::Leader,
+            Some(AgentCmd::Serve(_) | AgentCmd::Daemon(_)) => RunMode::Server,
+            Some(AgentCmd::Headless(_)) | None => RunMode::Headless,
+        },
+        Some(Command::Dashboard) => RunMode::Tui,
+        Some(_) => RunMode::Command,
+        None if one_shot => RunMode::Headless,
+        None => RunMode::Tui,
+    }
+}
+/// Start anonymous usage stats (no network on this thread), print the one-time
+/// notice, and record the launch. Never fails.
+fn start_usage_stats(args: &PagerArgs) {
+    use std::io::IsTerminal;
+    use supercharge_telemetry::usage_stats::{self, InitOptions, RunMode, UsageEvent};
+    let run_mode = usage_run_mode(args);
+    let outcome = usage_stats::init(InitOptions {
+        app_version: supercharge_version::VERSION.to_string(),
+        run_mode,
+        install_method: Some(supercharge_update::auto_update::installer_hint()),
+        config_setting: supercharge_shell::agent::config::usage_stats_config_sync(),
+    });
+    if !outcome.decision.is_enabled() {
+        return;
+    }
+    let quiet_mode = matches!(run_mode, RunMode::Acp | RunMode::Leader | RunMode::Server);
+    if outcome.show_notice && !quiet_mode && std::io::stderr().is_terminal() {
+        eprintln!("{}\n", usage_stats::FIRST_RUN_NOTICE);
+        usage_stats::mark_notice_shown();
+    }
+    if !outcome.top_level {
+        return;
+    }
+    usage_stats::track(UsageEvent::AppStarted);
+    let command = match &args.command {
+        Some(command) => command.usage_name(),
+        None if run_mode == RunMode::Headless => "prompt",
+        None => "interactive",
+    };
+    usage_stats::track(UsageEvent::CommandRun { command });
+}
+/// `supercharge telemetry on|off|status`.
+fn run_telemetry_command(action: supercharge_pager::app::cli::TelemetryAction) {
+    use supercharge_pager::app::cli::TelemetryAction;
+    use supercharge_telemetry::usage_stats;
+    let config_setting = supercharge_shell::agent::config::usage_stats_config_sync();
+    match action {
+        TelemetryAction::On | TelemetryAction::Off => {
+            let enable = action == TelemetryAction::On;
+            if let Err(e) = usage_stats::set_enabled(enable) {
+                eprintln!("supercharge: could not save telemetry setting: {e}");
+                std::process::exit(1);
+            }
+            let status = usage_stats::status(config_setting);
+            println!(
+                "Anonymous usage stats turned {}.",
+                if enable { "on" } else { "off" }
+            );
+            if enable && !status.decision.is_enabled() {
+                println!("Still off: {}", status.decision.describe());
+            }
+        }
+        TelemetryAction::Status => {
+            let status = usage_stats::status(config_setting);
+            println!("Anonymous usage stats: {}", status.decision.describe());
+            if let Some(id) = status.anonymous_id.as_deref() {
+                println!("Anonymous install id: {id}");
+            }
+            println!("Settings file: {}", status.state_file.display());
+            println!();
+            println!("{}", usage_stats::WHAT_IS_COLLECTED);
+            println!();
+            println!(
+                "Turn off: `supercharge telemetry off`, SUPERCHARGE_TELEMETRY=0, DO_NOT_TRACK=1, \
+                 or `usage_stats = false` under [telemetry] in ~/.supercharge/config.toml."
+            );
+        }
+    }
+}
 fn main() {
     supercharge_version::set_full_version(env!("VERSION_WITH_COMMIT"));
     supercharge_telemetry::startup::mark_process_start();
@@ -2114,6 +2221,11 @@ fn main() {
         eprintln!("supercharge: {err:#}");
         std::process::exit(1);
     });
+    if let Some(Command::Telemetry { action }) = &args.command {
+        run_telemetry_command(*action);
+        return;
+    }
+    start_usage_stats(&args);
     supercharge_pager::memory_trace::start(supercharge_pager::memory_trace::default_dir());
     raise_fd_limit();
     if let Err(e) = supercharge_config::validate_requirements() {
@@ -2175,14 +2287,29 @@ fn main() {
     if let Err(e) = result {
         supercharge_tty_utils::restore_native_stderr();
         finalize_span_profile();
+        let startup_failure = e
+            .downcast_ref::<supercharge_pager::app::StartupFailure>()
+            .is_some();
         let report = match e.downcast_ref::<supercharge_pager::app::StartupFailure>() {
             Some(startup) => startup.user_report(),
             None => format!("Error: {e:#}"),
         };
         supercharge_pager::best_effort_stderr::eprint_line(&report);
+        supercharge_telemetry::usage_stats::track(
+            supercharge_telemetry::usage_stats::UsageEvent::ErrorOccurred {
+                category: if startup_failure {
+                    supercharge_telemetry::usage_stats::ErrorCategory::Startup
+                } else {
+                    supercharge_telemetry::usage_stats::ErrorCategory::Fatal
+                },
+                code: Some(1),
+            },
+        );
+        supercharge_telemetry::usage_stats::flush(USAGE_STATS_EXIT_FLUSH);
         drop(_sentry_guard);
         std::process::exit(1);
     }
+    supercharge_telemetry::usage_stats::flush(USAGE_STATS_EXIT_FLUSH);
     finalize_span_profile();
 }
 #[tracing::instrument(level = "debug", skip_all)]
@@ -2461,6 +2588,11 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
             Command::Dashboard => {
                 args.command = Some(Command::Dashboard);
                 flag_dashboard_at_startup_if_requested(&mut args)?;
+            }
+            // Normally handled synchronously in `main` before usage stats start.
+            Command::Telemetry { action } => {
+                run_telemetry_command(action);
+                return Ok(());
             }
         }
     }

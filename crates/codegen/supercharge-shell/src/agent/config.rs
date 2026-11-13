@@ -3195,6 +3195,21 @@ pub(crate) fn is_telemetry_explicitly_disabled_sync() -> bool {
         .default(true)
         .resolve()
 }
+/// `[telemetry] usage_stats` for anonymous usage stats, read before the runtime starts.
+/// An admin pin in `requirements.toml` wins over the merged user/managed config.
+/// `None` when unset anywhere.
+pub fn usage_stats_config_sync() -> Option<bool> {
+    fn extract(root: &toml::Value) -> Option<bool> {
+        root.get("telemetry")?.get("usage_stats")?.as_bool()
+    }
+    if let Some(pinned) = read_requirements_toml().as_ref().and_then(extract) {
+        return Some(pinned);
+    }
+    crate::config::load_effective_config()
+        .ok()
+        .as_ref()
+        .and_then(extract)
+}
 /// Sync sibling of [`is_telemetry_disabled_sync`] scoped to Sentry.
 /// Inherits from telemetry when no Sentry-specific signal is set.
 pub fn is_error_reporting_disabled_sync() -> bool {

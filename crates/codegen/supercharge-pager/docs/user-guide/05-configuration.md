@@ -788,6 +788,8 @@ The key ones. See the README for the complete list.
 |----------|-------------|
 | `SUPERCHARGE_MEMORY` | Enable (`1`) or disable (`0`) cross-session memory |
 | `SUPERCHARGE_SUBAGENTS` | Enable (`1`) or disable (`0`) subagents |
+| `SUPERCHARGE_TELEMETRY` | `0` turns off anonymous usage stats; `1` forces them on (see [Usage Stats and Privacy](28-telemetry-and-privacy.md)) |
+| `DO_NOT_TRACK` | `1` turns off anonymous usage stats |
 | `SUPERCHARGE_SUBAGENT_MODEL_INHERITANCE` | `1` / `0` pin for `[features] subagent_model_inheritance` (legacy `[subagents] inherit_model` still applies when the features key is unset) |
 | `SUPERCHARGE_WORKFLOWS` | Enable (`1`) or disable (`0`) background workflows and select the `/goal` driver (default on: host-owned workflow driver; off: legacy `update_goal`) |
 | `SUPERCHARGE_WEB_FETCH` | Enable (`1`) or disable (`0`) the web_fetch tool |

@@ -206,12 +206,49 @@ fn spawn_session_sweep(session_info: &SessionInfo) {
         persistence::cleanup_stale_sessions(&live_session_dir);
     });
 }
+/// Anonymous usage stats for a session start (no-op unless the binary enabled them).
+/// ACP is counted here only for the in-process stdio agent; with a shared leader the
+/// stdio bridge process reports it instead, so editor sessions are counted once.
+fn track_usage_session_started(kind: SessionStartKind) {
+    use supercharge_telemetry::usage_stats::{self, RunMode, SessionKind, UsageEvent};
+    if !usage_stats::is_active() {
+        return;
+    }
+    let kind = match kind {
+        SessionStartKind::New => SessionKind::New,
+        SessionStartKind::Load => SessionKind::Load,
+        SessionStartKind::Resume => SessionKind::Resume,
+    };
+    usage_stats::track(UsageEvent::SessionStarted { kind });
+    if usage_stats::run_mode() == Some(RunMode::Acp) {
+        usage_stats::track(UsageEvent::AcpSessionStarted { kind });
+    }
+}
+/// Anonymous usage stats: which provider family / wire API / model a session uses.
+/// The provider is a built-in id, `local`, or `custom`; the endpoint URL is never sent.
+fn track_usage_provider(base_url: &str, api_backend: &crate::sampling::ApiBackend, model_id: &str) {
+    use supercharge_telemetry::usage_stats::{self, ApiStyle, UsageEvent};
+    if !usage_stats::is_active() {
+        return;
+    }
+    let api_style = match api_backend {
+        crate::sampling::ApiBackend::ChatCompletions => ApiStyle::ChatCompletions,
+        crate::sampling::ApiBackend::Responses => ApiStyle::Responses,
+        crate::sampling::ApiBackend::Messages => ApiStyle::Messages,
+    };
+    usage_stats::track(UsageEvent::ProviderUsed {
+        provider: crate::agent::provider_setup::usage_provider_label(base_url).to_owned(),
+        api_style,
+        model: model_id.to_owned(),
+    });
+}
 fn log_session_started(
     session_id: &acp::SessionId,
     kind: SessionStartKind,
     setup_duration: std::time::Duration,
     restored_from_disk: bool,
 ) {
+    track_usage_session_started(kind);
     supercharge_telemetry::session_ctx::log_session_event(
         crate::agent::session_metrics::SessionStarted::new(
             session_id.0.to_string(),
@@ -521,6 +558,11 @@ impl MvpAgent {
                 .unwrap_or_else(|| self.models_manager.current_model_id()),
         };
         let session_model_id = model_id.clone();
+        track_usage_provider(
+            &session_sampling.base_url,
+            &session_sampling.api_backend,
+            &session_model_id.0,
+        );
         let (persistence, root_identity) = if is_chat_kind {
             (crate::session::persistence::PersistenceHandle::noop(), None)
         } else {
@@ -961,9 +1003,14 @@ impl MvpAgent {
             goal_mode_state: _persisted_goal_mode,
             workflow_runs: persisted_workflow_runs,
         } = persistence_info;
-        let persisted_base_url = self
-            .resolve_sampling_config_for_model(&summary.current_model_id, origin_client.clone())
-            .base_url;
+        let persisted_sampling = self
+            .resolve_sampling_config_for_model(&summary.current_model_id, origin_client.clone());
+        track_usage_provider(
+            &persisted_sampling.base_url,
+            &persisted_sampling.api_backend,
+            &summary.current_model_id.0,
+        );
+        let persisted_base_url = persisted_sampling.base_url;
         spawn_sampler_transport_prewarm(&persisted_base_url);
         let restored =
             RestoredSignals::read(persisted_signals.as_ref(), persisted_plan_mode.as_ref());

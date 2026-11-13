@@ -176,6 +176,8 @@ pub struct TelemetryConfig {
     pub otel_metrics_client_certificate: Option<String>,
     pub otel_metrics_client_key: Option<String>,
     pub otel_metrics_include_session_id: Option<bool>,
+    /// Anonymous usage stats (see `usage_stats`). `Some(false)` opts out; unset follows the default (on).
+    pub usage_stats: Option<bool>,
 }
 fn internal_defaults() -> (Option<String>, Option<String>, Option<String>, bool) {
     (None, None, None, false)
@@ -235,6 +237,7 @@ impl Default for TelemetryConfig {
             otel_metrics_client_certificate: None,
             otel_metrics_client_key: None,
             otel_metrics_include_session_id: None,
+            usage_stats: None,
         }
     }
 }

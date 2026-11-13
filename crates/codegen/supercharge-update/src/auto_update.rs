@@ -485,6 +485,19 @@ fn env_installer() -> Option<&'static str> {
     None
 }
 
+/// Best-effort install method without touching config or the network (for anonymous
+/// usage stats): env markers first, then whether the binary lives under `node_modules`.
+pub fn installer_hint() -> &'static str {
+    if let Some(i) = env_installer() {
+        return i;
+    }
+    if path_resolves_to_npm_entry() {
+        "npm"
+    } else {
+        "gh-release"
+    }
+}
+
 pub async fn get_installer() -> Option<&'static str> {
     if let Some(i) = env_installer() {
         return Some(i);

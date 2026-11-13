@@ -16,6 +16,7 @@ pub mod http;
 pub mod id;
 pub mod otel_layer;
 pub mod sentry;
+pub mod usage_stats;
 
 // Leaf modules re-exported at crate root below, so the public API stays unchanged.
 mod logs;
