@@ -312,7 +312,8 @@ pub fn status(config_setting: Option<bool>) -> Status {
 pub const WHAT_IS_COLLECTED: &str = "Anonymous usage stats: a random install id, CLI version, OS and CPU \
 architecture, install method, which subcommand ran, session starts, the provider / API style / model \
 id a session uses, editor (ACP) session starts, and coarse error kinds and exit codes. Never prompts, code, file \
-contents, paths, usernames, hostnames, emails, IP-based identity, API keys, or model output.";
+contents, paths, usernames, hostnames, emails, API keys, or model output. The stats service may store the IP address a \
+request comes from, but no location is derived from it.";
 
 /// One-time first-run notice.
 pub const FIRST_RUN_NOTICE: &str = "Supercharge collects anonymous usage stats (version, OS, commands, \
@@ -548,7 +549,8 @@ fn build_item(base: &BaseContext, event: &UsageEvent, timestamp: String) -> Valu
         props.insert("install_method".into(), json!(sanitize_label(method)));
     }
     props.insert("$lib".into(), json!("supercharge-cli"));
-    // Anonymous events: no person profile, no IP address or IP-based location.
+    // Anonymous events: no person profile, no IP in the payload, no IP-based location.
+    // (The ingestion service may still store the request's source IP.)
     props.insert("$process_person_profile".into(), json!(false));
     props.insert("$geoip_disable".into(), json!(true));
     props.insert("$ip".into(), Value::Null);

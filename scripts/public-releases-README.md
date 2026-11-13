@@ -84,7 +84,7 @@ Full notes: `docs/zed-acp.md`. Registry listing files: `docs/acp-registry/`.
 
 ## Anonymous usage stats
 
-Supercharge sends anonymous usage stats (random install id, version, OS/arch, subcommand names, session counts, provider family) to help prioritize work. It never sends prompts, code, file paths, keys, or personal details. Turn it off with `supercharge telemetry off`, `SUPERCHARGE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. Details: `docs/user-guide/28-telemetry-and-privacy.md` (also extracted to `~/.supercharge/docs/user-guide/`).
+Supercharge sends anonymous usage stats (random install id, version, OS/arch, subcommand names, session counts, provider family) to help prioritize work. It never sends prompts, code, file paths, keys, or personal details. The stats service may store the IP address a request comes from, but no location is derived from it. Turn it off with `supercharge telemetry off`, `SUPERCHARGE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. Details: `docs/user-guide/28-telemetry-and-privacy.md` (also extracted to `~/.supercharge/docs/user-guide/`).
 
 ## Releases
 

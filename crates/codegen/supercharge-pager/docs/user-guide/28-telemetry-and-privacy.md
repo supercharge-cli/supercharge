@@ -17,8 +17,10 @@ Every event carries:
 | `install_method` | `npm`, `gh-release` | Best-effort guess. |
 | `run_mode` | `tui`, `headless`, `acp`, `leader`, `command` | How the process was started. |
 
-Events are sent without a person profile, and with IP capture and IP-based location
-turned off (`$process_person_profile: false`, `$geoip_disable: true`, `$ip: null`).
+Events are sent without a person profile (`$process_person_profile: false`), and the CLI
+does not put an IP address in the event (`$ip: null`). The stats service may still store
+the IP address the request arrives from, but no location is derived from it
+(`$geoip_disable: true`).
 
 Events:
 
