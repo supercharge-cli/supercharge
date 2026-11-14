@@ -23,9 +23,8 @@ impl SessionActor {
             }
             BuiltinAction::Credits => {
                 let text = tokio::task::spawn_blocking(|| {
-                    let config = crate::config::load_effective_config().unwrap_or(toml::Value::Table(
-                        toml::map::Map::new(),
-                    ));
+                    let config = crate::config::load_effective_config()
+                        .unwrap_or(toml::Value::Table(toml::map::Map::new()));
                     crate::agent::mistral_credits::credits_report_from_config(&config)
                 })
                 .await
@@ -81,8 +80,7 @@ impl SessionActor {
                             crate::session::teleport::help_text()
                         }
                         op => {
-                            let executor =
-                                crate::session::teleport::TeleportExecutor::new();
+                            let executor = crate::session::teleport::TeleportExecutor::new();
                             match executor {
                                 Ok(executor) => {
                                     let cwd = self.tool_context.cwd.clone();
@@ -90,11 +88,11 @@ impl SessionActor {
                                         std::env::temp_dir().join("supercharge-teleport");
                                     let _ = tokio::fs::create_dir_all(&work_dir).await;
                                     match op {
-                                        crate::session::teleport::TeleportOp::Push {
-                                            template,
-                                        } => executor
-                                            .push(cwd.as_path(), &work_dir, template.as_deref())
-                                            .await,
+                                        crate::session::teleport::TeleportOp::Push { template } => {
+                                            executor
+                                                .push(cwd.as_path(), &work_dir, template.as_deref())
+                                                .await
+                                        }
                                         crate::session::teleport::TeleportOp::Pull {
                                             sandbox_id,
                                         } => executor.pull(cwd.as_path(), &sandbox_id).await,
@@ -121,6 +119,26 @@ impl SessionActor {
                     )
                     .await;
                 }
+                ok_end_turn(0, None)
+            }
+            BuiltinAction::NoMistake { args } => {
+                let cwd = self.tool_context.cwd.as_path().to_path_buf();
+                let text =
+                    tokio::task::spawn_blocking(move || match crate::no_mistake::parse_invocation(
+                        &args,
+                    ) {
+                        Err(err) => err.to_string(),
+                        Ok(request) => {
+                            let output = request.output;
+                            match crate::no_mistake::run_in_dir(&cwd, request) {
+                                Ok(report) => report.render(output),
+                                Err(err) => err.to_string(),
+                            }
+                        }
+                    })
+                    .await
+                    .unwrap_or_else(|_| "The no-mistake gate was interrupted.".to_string());
+                self.send_host_turn_slash_command_output(&text).await;
                 ok_end_turn(0, None)
             }
             BuiltinAction::Help => {
@@ -1236,7 +1254,9 @@ impl SessionActor {
     }
 
     async fn mistral_browser_setup(&self) -> String {
-        use crate::agent::mistral_browser_sign_in::{self, HEADLESS_GENERATION, INFERENCE_BASE_URL};
+        use crate::agent::mistral_browser_sign_in::{
+            self, HEADLESS_GENERATION, INFERENCE_BASE_URL,
+        };
         use crate::agent::provider_setup::{
             ProviderSetup, fetch_provider_models, find_setup_provider, persist_provider_setup,
         };

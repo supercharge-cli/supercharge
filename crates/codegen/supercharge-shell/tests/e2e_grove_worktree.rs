@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use supercharge_shell::util::config::{ENV_WORKTREE_TYPE, RemoteSettings};
 use tempfile::TempDir;
 
-const CREATE_SYNC: &str = "x.ai/git/worktree/create_from_worktree_sync";
+const CREATE_SYNC: &str = "supercharge/git/worktree/create_from_worktree_sync";
 const DAEMON_READY: Duration = Duration::from_secs(15);
 
 fn env_truthy(name: &str) -> bool {

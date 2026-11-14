@@ -137,6 +137,9 @@ See ~/.supercharge/README.md for more information.
     },
     /// Manage git worktrees
     Worktree(crate::worktree_cmd::WorktreeArgs),
+    /// Validate committed work through the Supercharge review, test, and lint gate
+    #[command(name = "no-mistake")]
+    NoMistake(crate::no_mistake_cmd::NoMistakeArgs),
     /// Show what the Supercharge configuration home uses on disk
     #[command(name = "du", visible_alias = "disk-usage")]
     DiskUsage(crate::disk_usage_cmd::DiskUsageArgs),
@@ -200,6 +203,7 @@ impl Command {
             Command::Version { .. } => "version",
             Command::Completions { .. } => "completions",
             Command::Worktree(_) => "worktree",
+            Command::NoMistake(_) => "no-mistake",
             Command::DiskUsage(_) => "du",
             Command::Workspace(_) => "workspace",
             Command::Dashboard => "dashboard",

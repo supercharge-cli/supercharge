@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use supercharge_workspace::session::git::find_git_root_from_path;
 use supercharge_workspace::worktree::remove_jj_workspace;
 
-const WORKTREE_LOG: &str = "xai_worktree";
+const WORKTREE_LOG: &str = "supercharge_worktree";
 
 /// Best-effort teardown of a dest created by a resume that later failed.
 #[tracing::instrument(skip_all)]

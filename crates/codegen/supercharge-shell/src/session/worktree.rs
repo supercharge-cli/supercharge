@@ -9,7 +9,7 @@ use supercharge_telemetry::region;
 use supercharge_telemetry::region::Parent;
 use supercharge_workspace::session::git::find_git_root_from_path;
 pub use supercharge_workspace::worktree::*;
-const WORKTREE_LOG: &str = "xai_worktree";
+const WORKTREE_LOG: &str = "supercharge_worktree";
 impl From<ShellWorktreeType> for WorktreeType {
     fn from(t: ShellWorktreeType) -> Self {
         match t {

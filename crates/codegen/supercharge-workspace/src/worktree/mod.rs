@@ -41,7 +41,7 @@ pub use supercharge_workspace_types::rpc::worktree::{
     transport_for_resolved,
 };
 
-const WORKTREE_LOG: &str = "xai_worktree";
+const WORKTREE_LOG: &str = "supercharge_worktree";
 
 async fn blocking_copy_on_write<F, T>(work: F) -> std::result::Result<T, tokio::task::JoinError>
 where
@@ -852,7 +852,11 @@ pub fn worktree_base_dir_for_source_in(
     }
 }
 
-fn resolve_worktree_path(supercharge_home: &Path, req: &CreateWorktreeRequest, git_root: &Path) -> String {
+fn resolve_worktree_path(
+    supercharge_home: &Path,
+    req: &CreateWorktreeRequest,
+    git_root: &Path,
+) -> String {
     if let Some(ref path) = req.worktree_path {
         return path.clone();
     }
@@ -886,7 +890,10 @@ fn worktree_record_for_cwd(cwd: &str) -> Option<(WorktreeDb, WorktreeRecord)> {
 }
 
 /// [`worktree_record_for_cwd`] against the `worktrees.db` and worktree root under an explicit grok home.
-fn worktree_record_for_cwd_in(supercharge_home: &Path, cwd: &str) -> Option<(WorktreeDb, WorktreeRecord)> {
+fn worktree_record_for_cwd_in(
+    supercharge_home: &Path,
+    cwd: &str,
+) -> Option<(WorktreeDb, WorktreeRecord)> {
     let worktrees_dir = supercharge_home.join("worktrees");
     let mut path = Path::new(cwd);
     if !path.starts_with(&worktrees_dir) {
@@ -2691,7 +2698,7 @@ pub struct ResumeSessionInWorktreeRequest {
     pub git_ref: Option<String>,
 }
 
-/// Response from `x.ai/git/worktree/resume_session`.
+/// Response from `supercharge/git/worktree/resume_session`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResumeSessionInWorktreeResponse {

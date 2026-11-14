@@ -15,6 +15,7 @@ pub mod actions;
 pub mod agent_runtime;
 pub mod app;
 pub mod best_effort_stderr;
+pub mod browser_cmd;
 pub mod client_identity;
 pub mod completions_cmd;
 mod config_toml_edit;
@@ -23,7 +24,6 @@ pub mod disk_usage_cmd;
 pub mod docs;
 pub mod doctor_cmd;
 pub mod eval_cmd;
-pub mod browser_cmd;
 pub mod export_cmd;
 pub(crate) mod fs_size;
 pub mod git_info;
@@ -47,8 +47,8 @@ pub mod notifications;
 pub mod obf;
 pub mod plugin_cmd;
 pub(crate) mod ponytail;
-pub(crate) mod rea_mode;
 pub mod pty_wrap;
+pub(crate) mod rea_mode;
 pub mod recent_dirs;
 pub mod scrollback;
 pub mod sessions_cmd;
@@ -73,6 +73,7 @@ pub use supercharge_pager_render::{
     appearance, clipboard, glyphs, host, input, link_opener, modal_window_state, prompt_images,
     render, search, syntax, terminal, theme, util,
 };
+pub mod no_mistake_cmd;
 #[cfg(test)]
 pub mod test_util;
 pub mod trace_cmd;

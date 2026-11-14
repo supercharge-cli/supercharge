@@ -40,6 +40,7 @@ pub mod instrumentation;
 pub mod leader;
 pub mod managed_config;
 pub mod mcp_doctor;
+pub mod no_mistake;
 pub use supercharge_models as models;
 pub mod plugin;
 pub mod relay;

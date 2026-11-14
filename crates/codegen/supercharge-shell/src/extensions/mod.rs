@@ -9,8 +9,8 @@ pub(crate) mod chat_conversation_history;
 pub mod code_nav;
 pub mod connections;
 pub mod consent;
-pub(crate) mod custom_agents;
 pub mod content;
+pub(crate) mod custom_agents;
 pub mod debug;
 pub mod feedback;
 pub(crate) mod feedback_drafts;
@@ -151,6 +151,14 @@ pub(crate) fn legacy_alias(method: &str) -> Option<String> {
     if method == interject::STEER_METHOD || method == "supercharge/interject" {
         return Some(interject::INTERJECT_METHOD.to_string());
     }
+    // Worktree methods are canonical under supercharge/git/worktree/*.
+    // Pre-rename x.ai/git/worktree/* names stay accepted on the receive path.
+    if let Some(rest) = method.strip_prefix("x.ai/git/worktree") {
+        return Some(format!("supercharge/git/worktree{rest}"));
+    }
+    if method == "supercharge/git/worktree" || method.starts_with("supercharge/git/worktree/") {
+        return None;
+    }
     if NATIVE_SUPERCHARGE_METHODS.contains(&method) {
         return None;
     }
@@ -207,6 +215,16 @@ mod alias_tests {
         }
         assert_eq!(legacy_alias("supercharge/queue/bogus"), None);
         assert_eq!(legacy_alias("x.ai/interject"), None);
+        assert_eq!(
+            legacy_alias("x.ai/git/worktree/list").as_deref(),
+            Some("supercharge/git/worktree/list")
+        );
+        assert_eq!(
+            legacy_alias("x.ai/git/worktree/create_from_worktree_sync").as_deref(),
+            Some("supercharge/git/worktree/create_from_worktree_sync")
+        );
+        assert_eq!(legacy_alias("supercharge/git/worktree/list"), None);
+        assert_eq!(legacy_alias("supercharge/git/worktree/status"), None);
         assert_eq!(legacy_alias("supercharge/sessions/changed"), None);
         for m in [
             "list",

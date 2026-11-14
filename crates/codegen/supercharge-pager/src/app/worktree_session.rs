@@ -15,8 +15,8 @@ use super::effects::{
 use super::session_startup::worktree_session_cwd;
 use super::session_title_resolve::worktree_resume_failure_message;
 
-pub(crate) const CREATE_METHOD: &str = "x.ai/git/worktree/create_from_worktree_sync";
-pub(crate) const RESUME_METHOD: &str = "x.ai/git/worktree/resume_session";
+pub(crate) const CREATE_METHOD: &str = "supercharge/git/worktree/create_from_worktree_sync";
+pub(crate) const RESUME_METHOD: &str = "supercharge/git/worktree/resume_session";
 
 /// How the new worktree's working tree is seeded from the source checkout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -286,7 +286,7 @@ pub(crate) async fn resume_session_into_worktree(
 /// the caller can reclaim it.
 pub(crate) fn note_orphaned_worktree(message: &str, worktree_root: &Path) -> String {
     format!(
-        "{message} (worktree {} was created and is still on disk; remove it with `grok worktree rm`)",
+        "{message} (worktree {} was created and is still on disk; remove it with `supercharge worktree rm`)",
         worktree_root.display()
     )
 }
@@ -414,6 +414,6 @@ mod tests {
         let msg = note_orphaned_worktree("Couldn't create session: boom", Path::new("/wt/q"));
         assert!(msg.starts_with("Couldn't create session: boom"));
         assert!(msg.contains("/wt/q"));
-        assert!(msg.contains("grok worktree rm"));
+        assert!(msg.contains("supercharge worktree rm"));
     }
 }

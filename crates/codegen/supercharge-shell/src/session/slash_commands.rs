@@ -123,6 +123,18 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         },
     },
     BuiltinCommand {
+        name: "no-mistake",
+        description: "Validate committed work through the Supercharge review, test, and lint gate",
+        argument_hint: Some("[--skip=steps] [--no-publish] [--base-branch name] [<task>]"),
+        aliases: &[],
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        resolve: |args| BuiltinAction::NoMistake {
+            args: args.to_string(),
+        },
+    },
+    BuiltinCommand {
         name: "always-approve",
         description: "Toggle always-approve mode (skip all permission prompts)",
         argument_hint: Some("on|off"),
@@ -594,6 +606,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "models",
     "multiline",
     "new",
+    "no-mistake",
     "onboarding",
     "personas",
     "plan",
@@ -1408,6 +1421,9 @@ pub(super) enum BuiltinAction {
     Teleport {
         args: String,
     },
+    NoMistake {
+        args: String,
+    },
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
@@ -1449,6 +1465,7 @@ impl BuiltinAction {
             BuiltinAction::NewAgent { .. } => "new_agent",
             BuiltinAction::SwitchToLean => "lean",
             BuiltinAction::Teleport { .. } => "teleport",
+            BuiltinAction::NoMistake { .. } => "no-mistake",
         }
     }
     pub(crate) fn args_provided(&self) -> bool {
@@ -1490,6 +1507,7 @@ impl BuiltinAction {
             BuiltinAction::NewAgent { brief } => !brief.trim().is_empty(),
             BuiltinAction::SwitchToLean => false,
             BuiltinAction::Teleport { args } => !args.trim().is_empty(),
+            BuiltinAction::NoMistake { args } => !args.trim().is_empty(),
         }
     }
 }

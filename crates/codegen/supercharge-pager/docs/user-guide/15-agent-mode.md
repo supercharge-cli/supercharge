@@ -157,7 +157,7 @@ Beyond the base ACP protocol, Supercharge AI defines extension methods under the
 | -------------------------- | -------------------- | ------------------------------------------------ |
 | **Filesystem**             | `x.ai/fs/*`          | `list`, `exists`, `read_file`, `write_file`      |
 | **Git**                    | `x.ai/git/*`         | `status`, `stage`, `commit`, `diffs`, `discard`  |
-| **Git Worktree**           | `x.ai/git/worktree/*`| `create`, `remove`, `apply`, `list`, `gc`        |
+| **Git Worktree**           | `supercharge/git/worktree/*`| `create`, `remove`, `apply`, `list`, `gc`        |
 | **Search**                 | `x.ai/search/*`      | `fuzzy/open`, `fuzzy/change`, `content`          |
 | **Terminal**               | `x.ai/terminal/*`    | `create`, `kill`, `output`, `wait_for_exit`      |
 | **Session Management**     | `x.ai/session/*`     | `fork`, `resolve_local_for_worktree_resume`      |
@@ -174,7 +174,7 @@ The agent sends push notifications to clients for real-time updates:
 | Notification               | Description                          |
 | -------------------------- | ------------------------------------ |
 | `x.ai/search/fuzzy/status` | Fuzzy search results update          |
-| `x.ai/git/worktree/status` | Worktree creation progress           |
+| `supercharge/git/worktree/status` | Worktree creation progress           |
 | `x.ai/fs_notify`           | Filesystem change notification       |
 | `x.ai/fs/index`            | Full file index update               |
 | `x.ai/fs/index/delta`      | Incremental file index update        |

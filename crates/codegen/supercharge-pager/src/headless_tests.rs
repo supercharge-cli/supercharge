@@ -331,7 +331,7 @@ async fn worktree_create_opens_session_at_worktree_subdirectory() {
     let Some((method, params)) = log.ext.first() else {
         panic!("expected an ext call: {:?}", log.ext);
     };
-    assert_eq!(method, "x.ai/git/worktree/create_from_worktree_sync");
+    assert_eq!(method, "supercharge/git/worktree/create_from_worktree_sync");
     assert_eq!(
         params.get("sourceWorktreePath").and_then(|v| v.as_str()),
         Some(launch_cwd.to_string_lossy().as_ref())
@@ -433,7 +433,7 @@ async fn worktree_create_then_session_failure_names_the_orphaned_worktree() {
 
     assert!(err.contains("agent refused"), "{err}");
     assert!(err.contains(&wt_root.path().display().to_string()), "{err}");
-    assert!(err.contains("grok worktree rm"), "{err}");
+    assert!(err.contains("supercharge worktree rm"), "{err}");
 }
 
 #[tokio::test]
@@ -463,7 +463,7 @@ async fn worktree_resume_loads_reported_session_without_re_restoring_code() {
     let Some((method, params)) = log.ext.first() else {
         panic!("expected an ext call: {:?}", log.ext);
     };
-    assert_eq!(method, "x.ai/git/worktree/resume_session");
+    assert_eq!(method, "supercharge/git/worktree/resume_session");
     assert_eq!(
         params.get("sessionId").and_then(|v| v.as_str()),
         Some("orig")

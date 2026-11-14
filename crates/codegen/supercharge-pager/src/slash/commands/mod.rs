@@ -9,9 +9,9 @@ pub mod compact;
 pub mod compact_mode;
 pub mod config_agents;
 pub mod context;
-pub mod credits;
 pub mod context_window;
 pub mod copy;
+pub mod credits;
 pub mod dashboard;
 pub mod debug;
 pub mod delete;
@@ -46,20 +46,21 @@ pub mod model;
 pub mod multiline;
 pub mod narrator;
 pub mod new;
+pub mod no_mistake;
 pub mod personas;
 pub mod plan;
 pub mod plugin;
 pub mod pony;
-pub mod rea_mode;
 pub mod privacy;
 pub mod queue;
+pub mod rea_mode;
 pub mod recap;
 pub mod release_notes;
 pub mod remember;
 pub mod rename;
 pub mod resume;
-pub mod rewind;
 pub mod retry;
+pub mod rewind;
 pub mod screen_mode_switch;
 pub mod scroll_debug;
 pub mod session_info;
@@ -170,6 +171,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(imodels::IModelsCommand),
         Arc::new(privacy::PrivacyCommand),
         Arc::new(codecov::CodecovCommand),
+        Arc::new(no_mistake::NoMistakeCommand),
         Arc::new(doctor::DoctorCommand),
         Arc::new(import_claude::ImportClaudeCommand),
         Arc::new(home::HomeCommand),

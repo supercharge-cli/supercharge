@@ -16,7 +16,7 @@ use supercharge_tty_utils::git_command;
 
 use crate::util::supercharge_home::supercharge_home;
 
-const WORKTREE_POOL_LOG: &str = "xai_worktree_pool";
+const WORKTREE_POOL_LOG: &str = "supercharge_worktree_pool";
 
 static CLEANUP_ONCE: std::sync::Once = std::sync::Once::new();
 

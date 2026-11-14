@@ -79,6 +79,7 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
             | Command::Version { .. }
             | Command::Completions { .. }
             | Command::Worktree(_)
+            | Command::NoMistake(_)
             | Command::DiskUsage(_)
             | Command::Workspace(_)
             | Command::Telemetry { .. },
@@ -124,7 +125,8 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
             | Command::Completions { .. }
             | Command::DiskUsage(_)
             | Command::Workspace(_)
-            | Command::Telemetry { .. },
+            | Command::Telemetry { .. }
+            | Command::NoMistake(_),
         ) => false,
     }
 }
@@ -451,7 +453,9 @@ async fn kill_leaders() -> Result<()> {
 fn resolve_target(args: &LeaderTargetArgs) -> LeaderTarget {
     match args.pid {
         Some(pid) => LeaderTarget::Pid(pid),
-        None => LeaderTarget::Environment(supercharge_shell::env::SuperchargeBuildEnvironment::Production),
+        None => LeaderTarget::Environment(
+            supercharge_shell::env::SuperchargeBuildEnvironment::Production,
+        ),
     }
 }
 #[tracing::instrument(skip_all)]
@@ -2468,6 +2472,11 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
                 init_tracing_simple("cli");
                 let _otel_guard = supercharge_telemetry::otel_layer::otel_guard();
                 return run_leader_mgmt(leader_args).await;
+            }
+            Command::NoMistake(no_mistake_args) => {
+                init_tracing_simple("cli");
+                let _otel_guard = supercharge_telemetry::otel_layer::otel_guard();
+                return supercharge_pager::no_mistake_cmd::run(no_mistake_args);
             }
             Command::Worktree(worktree_args) => {
                 init_tracing_simple("cli");
