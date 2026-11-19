@@ -208,6 +208,8 @@ The `--json` report includes the full detail for each skill: its `name`, `descri
 
 Supercharge AI distributes platform skills separately from your personal skills. Bundled skills are cached under `~/.supercharge/bundled/skills/`; Supercharge AI never writes them into `~/.supercharge/skills/`. A same-named local, repo, or user skill overrides the bundled copy. `supercharge inspect` labels each definition by its actual source. (A plugin skill of the same name does not override a native skill; it stays available under its qualified `plugin:name` form.)
 
+Some skills are compiled into Supercharge AI itself and written to `~/.supercharge/builtin-skills/` at startup, such as `ui-sdk`, which teaches the agent to build interfaces from the UI SDK behavior library and switches itself on in frontend projects. See [UI Design with UI SDK](29-ui-design.md).
+
 Skills can also come from plugins. When you install a plugin that includes skills, they appear alongside your user and project skills. `supercharge inspect` labels each plugin-provided skill with its source as `plugin: <name>`.
 
 See the [Plugins guide](09-plugins.md) for more on installing plugins that provide skills.

@@ -105,6 +105,48 @@ async fn rea_block_skips_inherited_system() {
         .await;
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn ui_skill_block_toggles_once_beside_rea_and_skips_inherited_system() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            use supercharge_shared::ui_sdk::{AUTO_TAGS, ProjectFacts, auto_block};
+            let actor = actor_with_history(vec![
+                ConversationItem::system("base policy"),
+                ConversationItem::user("/ui-sdk build a picker"),
+            ])
+            .await;
+            let facts = ProjectFacts {
+                frameworks: "React".into(),
+                package_manager: "pnpm".into(),
+                install_command: "pnpm add @ui-sdk/core @ui-sdk/react".into(),
+                ..ProjectFacts::default()
+            };
+            let ui = auto_block(&facts, None);
+            let rea = supercharge_shared::rea::system_block(None);
+            let both = format!("base policy\n\n{rea}\n\n{ui}");
+            for _ in 0..2 {
+                actor.refresh_rea_system_prompt(Some(&rea)).await;
+                actor.refresh_ui_system_block(AUTO_TAGS, Some(&ui)).await;
+                let conv = actor.chat_state_handle.get_conversation().await;
+                assert_eq!(head_text(&conv).as_deref(), Some(both.as_str()));
+                assert!(matches!(&conv[1], ConversationItem::User(_)));
+            }
+            actor.refresh_ui_system_block(AUTO_TAGS, None).await;
+            let conv = actor.chat_state_handle.get_conversation().await;
+            assert_eq!(head_text(&conv).unwrap(), format!("base policy\n\n{rea}"));
+
+            let mut inherited =
+                actor_with_history(vec![ConversationItem::system("parent policy")]).await;
+            inherited.startup_hints.preserve_inherited_system = true;
+            inherited
+                .refresh_ui_system_block(AUTO_TAGS, Some(&ui))
+                .await;
+            let conv = inherited.chat_state_handle.get_conversation().await;
+            assert_eq!(head_text(&conv).as_deref(), Some("parent policy"));
+        })
+        .await;
+}
+
 fn head_text(conv: &[ConversationItem]) -> Option<String> {
     match conv.first() {
         Some(ConversationItem::System(sys)) => Some(sys.content.to_string()),

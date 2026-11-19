@@ -13,6 +13,7 @@ pub mod read_file;
 pub mod search_tool;
 pub mod skills;
 pub mod task_output;
+pub mod ui_sdk;
 pub mod use_tool;
 pub mod web_search;
 pub use curated_memory::CuratedMemoryTool;

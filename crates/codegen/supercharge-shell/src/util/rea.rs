@@ -3,12 +3,13 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-/// Write the built-in skills under the app home once per process.
+/// Write the built-in skills (REA and the UI skill) under the app home once per process.
 /// Returns the REA skill folder, or `None` when it could not be written (logged, never fatal).
 pub fn ensure_builtin_skills() -> Option<PathBuf> {
     static SKILL_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     SKILL_DIR
         .get_or_init(|| {
+            crate::util::ui_sdk::ensure_skill();
             let home = supercharge_tools::util::supercharge_home::supercharge_home();
             match supercharge_shared::rea::materialize(&home) {
                 Ok(dir) => Some(dir),

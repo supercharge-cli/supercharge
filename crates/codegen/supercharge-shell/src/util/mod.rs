@@ -5,6 +5,7 @@ pub mod hooks;
 pub mod limits;
 pub mod rea;
 pub(crate) mod text_sanitize;
+pub mod ui_sdk;
 pub(crate) mod user_identity;
 
 // The foundation utilities live in `supercharge-shell-base` (upstream of this crate so they build in parallel)

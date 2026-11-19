@@ -10,6 +10,7 @@ pub mod rea;
 pub mod session;
 pub mod stderr;
 pub mod ui_config;
+pub mod ui_sdk;
 
 #[cfg(test)]
 mod placeholder_image_format_tests;

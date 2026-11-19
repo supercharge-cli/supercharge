@@ -1068,6 +1068,28 @@ impl SessionActor {
         }
     }
 
+    /// Add (`Some(block)`) or remove (`None`) one of the Supercharge UI blocks.
+    /// Like the REA block, only our own tagged block changes; a current block stays in place.
+    pub(crate) async fn refresh_ui_system_block(
+        &self,
+        tags: supercharge_shared::ui_sdk::BlockTags,
+        block: Option<&str>,
+    ) {
+        if self.startup_hints.preserve_inherited_system {
+            return;
+        }
+        let Some(supercharge_sampling_types::ConversationItem::System(system)) =
+            self.chat_state_handle.get_system_message().await
+        else {
+            return;
+        };
+        let prompt = supercharge_shared::ui_sdk::apply_block(&system.content, tags, block);
+        if prompt != system.content.as_ref() {
+            let prompt = prompt.into_owned();
+            self.handle_replace_system_prompt(prompt).await;
+        }
+    }
+
     /// Refresh auth and push a fresh `SamplerConfig` before each turn.
     pub(crate) async fn prepare_sampler_for_turn(&self) {
         // Read the saved toggle each turn, including resumed sessions.
@@ -1082,6 +1104,16 @@ impl SessionActor {
             )
         });
         self.refresh_rea_system_prompt(rea_block.as_deref()).await;
+        // The UI skill switches itself on in frontend workspaces.
+        let ui_auto_block = crate::util::ui_sdk::auto_block(
+            self.tool_context.cwd.as_path(),
+            crate::util::ui_sdk::auto_skill_enabled(),
+        );
+        self.refresh_ui_system_block(
+            supercharge_shared::ui_sdk::AUTO_TAGS,
+            ui_auto_block.as_deref(),
+        )
+        .await;
         // Sync native REA tools with the config toggle each turn.
         {
             let bridge = self.agent.borrow().tool_bridge().clone();
