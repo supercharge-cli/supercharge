@@ -17,7 +17,7 @@ Installed paths match the Vectra contract:
 
 Provider configuration follows the app contract: choose a built-in profile with `SUPERAGENT_PROVIDER`, `SUPERAGENT_MODEL`, and `SUPERAGENT_PROVIDER_API_KEY_ENV`, or use `SUPERAGENT_PROVIDER=custom` with an HTTPS `SUPERAGENT_PROVIDER_BASE_URL`, `SUPERAGENT_PROVIDER_FORMAT=openai`, and a model ID.
 
-The browser sidecar uses port `9224`; Xvfb, x11vnc, and the noVNC websocket proxy remain loopback-only on ports `5900` and `6080`. The app reaches noVNC only through the authenticated gateway relay after a short-lived explicit browser handoff. Neither CDP nor the sidecar nor VNC is exposed publicly. Browser processes start only when `SUPERCHARGE_RUNTIME_MODE=e2b`; normal local Supercharge has no Playwright/noVNC process or browser tools. Durable state and the generated provider configuration are stored under `/home/user/.supercharge`, which remains writable after E2B’s runtime ownership mapping. The default workspace boundary is `/home/user/workspace`.
+The browser sidecar uses port `9223`; Xvfb, x11vnc, and the noVNC websocket proxy remain loopback-only on ports `5900` and `6080`. The app reaches noVNC only through the authenticated gateway relay after a short-lived explicit browser handoff. Neither CDP nor the sidecar nor VNC is exposed publicly. Browser processes start only when `SUPERCHARGE_RUNTIME_MODE=e2b`; normal local Supercharge has no Playwright/noVNC process or browser tools. Durable state and the generated provider configuration are stored under `/home/user/.supercharge`, which remains writable after E2B’s runtime ownership mapping. The default workspace boundary is `/home/user/workspace`.
 
 ## Prepare binaries
 
