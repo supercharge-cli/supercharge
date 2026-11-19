@@ -288,3 +288,12 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
     `providerId` and no `apiKey` then use the stored key; it is never sent to another provider.
   - `provider_remove` deletes a custom provider, a built-in provider's stored key, or the
     device sign-in token (`nous`). The active provider is refused; switch with `setup/save` first.
+
+## UI design (`/ui-sdk`, `/design`, `ui_verify`)
+
+No new ACP methods. What a Studio client sees:
+
+- `available_commands_update` lists the bundled skill `/ui-sdk` and the built-in `/design` (input hint `on|off|status|<what to build>`).
+- `/design <task>` runs as a normal prompt turn. `/design`, `/design status`, `/design on` and `/design off` reply with one agent message and end the turn without inference; on/off persist `[design] enabled` in `config.toml`.
+- In a frontend workspace, or with design mode on, the tool `ui_verify` is registered for the session (tool kind `other`). Its result is JSON text: `passed`, `project_root`, `frameworks`, `package_manager`, `results[]` (`check`, `status`, `command`, `exit_code`, `duration_ms`, `output`) and `next_step`.
+- `SUPERCHARGE_DESIGN_MODE=1` in the agent process environment turns design mode on for every session it serves; `0` forces it off.

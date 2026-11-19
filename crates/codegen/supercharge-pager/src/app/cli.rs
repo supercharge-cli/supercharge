@@ -140,6 +140,12 @@ See ~/.supercharge/README.md for more information.
     /// Validate committed work through the Supercharge review, test, and lint gate
     #[command(name = "no-mistake")]
     NoMistake(crate::no_mistake_cmd::NoMistakeArgs),
+    /// Start an interactive session in design mode for UI work
+    Ui {
+        /// What to design or build, e.g. `supercharge ui "an accessible settings page"`.
+        #[arg(value_name = "PROMPT")]
+        prompt: Option<String>,
+    },
     /// Show what the Supercharge configuration home uses on disk
     #[command(name = "du", visible_alias = "disk-usage")]
     DiskUsage(crate::disk_usage_cmd::DiskUsageArgs),
@@ -204,6 +210,7 @@ impl Command {
             Command::Completions { .. } => "completions",
             Command::Worktree(_) => "worktree",
             Command::NoMistake(_) => "no-mistake",
+            Command::Ui { .. } => "ui",
             Command::DiskUsage(_) => "du",
             Command::Workspace(_) => "workspace",
             Command::Dashboard => "dashboard",

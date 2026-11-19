@@ -617,8 +617,13 @@ fn available_commands_orders_builtins_first() {
         names,
         [
             "help",
+            "new_agent",
             "setup",
             "compact",
+            "lean",
+            "teleport",
+            "no-mistake",
+            "design",
             "always-approve",
             "flush",
             "dream",

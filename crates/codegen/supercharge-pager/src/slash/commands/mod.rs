@@ -15,6 +15,7 @@ pub mod credits;
 pub mod dashboard;
 pub mod debug;
 pub mod delete;
+pub mod design;
 pub mod docs;
 pub mod doctor;
 pub mod donate;
@@ -172,6 +173,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(privacy::PrivacyCommand),
         Arc::new(codecov::CodecovCommand),
         Arc::new(no_mistake::NoMistakeCommand),
+        Arc::new(design::DesignCommand),
         Arc::new(doctor::DoctorCommand),
         Arc::new(import_claude::ImportClaudeCommand),
         Arc::new(home::HomeCommand),

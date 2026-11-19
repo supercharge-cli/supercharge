@@ -466,6 +466,11 @@ pub async fn set_rea_enabled(value: bool) -> Result<()> {
     update_config(|cfg| cfg.rea.enabled = Some(value)).await
 }
 
+/// Persist `[design].enabled` (built-in design mode).
+pub async fn set_design_enabled(value: bool) -> Result<()> {
+    update_config(|cfg| cfg.design.enabled = Some(value)).await
+}
+
 /// Persist `[models].default_reasoning_effort`. Empty / invalid clears the key.
 pub async fn set_default_reasoning_effort(value: String) -> Result<()> {
     update_config(|cfg| {

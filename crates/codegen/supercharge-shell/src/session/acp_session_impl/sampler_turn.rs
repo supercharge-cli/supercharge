@@ -1104,14 +1104,23 @@ impl SessionActor {
             )
         });
         self.refresh_rea_system_prompt(rea_block.as_deref()).await;
-        // The UI skill switches itself on in frontend workspaces.
-        let ui_auto_block = crate::util::ui_sdk::auto_block(
-            self.tool_context.cwd.as_path(),
-            crate::util::ui_sdk::auto_skill_enabled(),
-        );
+        // Design mode carries the full design brief; otherwise the UI skill switches itself on in frontend workspaces.
+        let cwd = self.tool_context.cwd.as_path();
+        let design_block =
+            crate::util::ui_sdk::design_enabled().then(|| crate::util::ui_sdk::design_block(cwd));
+        let ui_auto_block = if design_block.is_some() {
+            None
+        } else {
+            crate::util::ui_sdk::auto_block(cwd, crate::util::ui_sdk::auto_skill_enabled())
+        };
         self.refresh_ui_system_block(
             supercharge_shared::ui_sdk::AUTO_TAGS,
             ui_auto_block.as_deref(),
+        )
+        .await;
+        self.refresh_ui_system_block(
+            supercharge_shared::ui_sdk::DESIGN_TAGS,
+            design_block.as_deref(),
         )
         .await;
         // Sync native REA tools with the config toggle each turn.
@@ -1123,6 +1132,16 @@ impl SessionActor {
                 }
             } else {
                 let _ = supercharge_tools::implementations::unregister_rea_tools(&bridge);
+            }
+            // UI tools follow the UI blocks: present while either one is in the prompt.
+            if ui_auto_block.is_some() || design_block.is_some() {
+                if let Err(e) =
+                    supercharge_tools::implementations::ui_sdk::register_ui_tools(&bridge)
+                {
+                    tracing::warn!(error = %e, "UI tool registration failed");
+                }
+            } else {
+                let _ = supercharge_tools::implementations::ui_sdk::unregister_ui_tools(&bridge);
             }
         }
         self.refresh_token_if_expired().await;

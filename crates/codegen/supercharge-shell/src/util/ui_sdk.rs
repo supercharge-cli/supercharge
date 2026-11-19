@@ -93,6 +93,146 @@ pub fn auto_block(cwd: &Path, auto_skill: bool) -> Option<String> {
     ))
 }
 
+/// Environment switch for design mode in this process (`1`/`true`/`on` or `0`/`false`/`off`); `supercharge ui` sets it.
+pub const DESIGN_MODE_ENV: &str = "SUPERCHARGE_DESIGN_MODE";
+
+/// Usage line for `/design`.
+pub const USAGE: &str = "Usage: /design on | off | status | <what to build>";
+
+/// What `/design <args>` asks for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DesignOp {
+    Status,
+    On,
+    Off,
+    /// Build or change UI described in plain words, then verify it.
+    Task(String),
+}
+
+impl DesignOp {
+    pub fn parse(args: &str) -> Self {
+        let args = args.trim();
+        match args.to_ascii_lowercase().as_str() {
+            "" | "status" => Self::Status,
+            "on" | "enable" => Self::On,
+            "off" | "disable" => Self::Off,
+            _ => Self::Task(args.to_string()),
+        }
+    }
+}
+
+fn parse_switch(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "on" | "yes" => Some(true),
+        "0" | "false" | "off" | "no" => Some(false),
+        _ => None,
+    }
+}
+
+/// The design-mode override from [`DESIGN_MODE_ENV`], when it is set to a recognised value.
+pub fn design_env_override() -> Option<bool> {
+    std::env::var(DESIGN_MODE_ENV)
+        .ok()
+        .and_then(|value| parse_switch(&value))
+}
+
+/// `[design] enabled` from a loaded config tree; off unless explicitly `true`.
+pub fn design_enabled_in(config: &toml::Value) -> bool {
+    config
+        .get("design")
+        .and_then(|design| design.get("enabled"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// Whether design mode is on: the environment override wins over `[design] enabled`.
+pub fn design_enabled() -> bool {
+    design_env_override().unwrap_or_else(|| {
+        crate::util::config::load_effective_config()
+            .ok()
+            .is_some_and(|cfg| design_enabled_in(&cfg))
+    })
+}
+
+/// The design-mode system block for `cwd`.
+pub fn design_block(cwd: &Path) -> String {
+    let facts = project_for(cwd).map(|project| facts_for(&project, cwd));
+    supercharge_shared::ui_sdk::design_block(facts.as_ref(), ensure_skill().as_deref())
+}
+
+/// The user message sent for `/design <task>` in `cwd`.
+pub fn design_task_prompt(cwd: &Path, task: &str) -> String {
+    let facts = project_for(cwd).map(|project| facts_for(&project, cwd));
+    supercharge_shared::ui_sdk::design_task_prompt(task, facts.as_ref(), ensure_skill().as_deref())
+}
+
+fn project_line(cwd: &Path) -> String {
+    match project_for(cwd) {
+        Some(project) => {
+            let facts = facts_for(&project, cwd);
+            let root = facts
+                .relative_root
+                .map(|root| format!(" in {root}"))
+                .unwrap_or_default();
+            let verify = if facts.verify_commands.is_empty() {
+                "no typecheck or build script".to_string()
+            } else {
+                facts.verify_commands.join(", then ")
+            };
+            let ui_sdk = if project.has_ui_sdk {
+                "UI SDK installed"
+            } else {
+                "UI SDK not installed yet"
+            };
+            format!(
+                "Project{root}: {}, {}, {ui_sdk}. Verify: {verify}.",
+                facts.frameworks, facts.package_manager
+            )
+        }
+        None => "No frontend project detected in this workspace.".to_string(),
+    }
+}
+
+/// `/design status` text.
+pub fn status_text(cwd: &Path, enabled: bool) -> String {
+    let source = match design_env_override() {
+        Some(_) => format!(" (set by {DESIGN_MODE_ENV} for this session)"),
+        None => String::new(),
+    };
+    format!(
+        "Design mode: {state}{source}.\n{project}\nUI skill: /{skill}, {auto}.\n{USAGE}",
+        state = if enabled { "on" } else { "off" },
+        project = project_line(cwd),
+        skill = supercharge_shared::ui_sdk::SKILL_NAME,
+        auto = if auto_skill_enabled() {
+            "turns on by itself in frontend projects"
+        } else {
+            "automatic use is off ([design] auto_skill = false)"
+        },
+    )
+}
+
+/// Reply after `/design on` or `/design off` was saved.
+pub fn toggled_text(cwd: &Path, on: bool) -> String {
+    let mut text = if on {
+        format!(
+            "Design mode on. From the next message Supercharge works as a product designer: UI SDK components, accessible states, and a typecheck and build loop before it reports done.\n{}",
+            project_line(cwd)
+        )
+    } else {
+        "Design mode off.".to_string()
+    };
+    if let Some(forced) = design_env_override()
+        && forced != on
+    {
+        text.push_str(&format!(
+            "\n{DESIGN_MODE_ENV} keeps it {} for this session; the saved setting applies to new sessions.",
+            if forced { "on" } else { "off" }
+        ));
+    }
+    text
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,5 +292,60 @@ mod tests {
             home.join(supercharge_agent::prompt::skills::BUILTIN_SKILLS_DIR)
                 .join(supercharge_shared::ui_sdk::SKILL_NAME)
         );
+    }
+
+    #[test]
+    fn design_op_parses_toggles_and_tasks() {
+        assert_eq!(DesignOp::parse(""), DesignOp::Status);
+        assert_eq!(DesignOp::parse(" Status "), DesignOp::Status);
+        assert_eq!(DesignOp::parse("ON"), DesignOp::On);
+        assert_eq!(DesignOp::parse("disable"), DesignOp::Off);
+        assert_eq!(
+            DesignOp::parse("  a date picker with keyboard support "),
+            DesignOp::Task("a date picker with keyboard support".into())
+        );
+    }
+
+    #[test]
+    fn design_toggle_reads_only_a_bool_enabled_key() {
+        let on: toml::Value = toml::from_str("[design]\nenabled = true\n").unwrap();
+        let off: toml::Value = toml::from_str("[design]\nenabled = false\n").unwrap();
+        let junk: toml::Value = toml::from_str("[design]\nenabled = \"yes\"\n").unwrap();
+        let none: toml::Value = toml::from_str("[rea]\nenabled = true\n").unwrap();
+        assert!(design_enabled_in(&on));
+        assert!(!design_enabled_in(&off));
+        assert!(!design_enabled_in(&junk));
+        assert!(!design_enabled_in(&none));
+        assert_eq!(parse_switch("TRUE"), Some(true));
+        assert_eq!(parse_switch(" off "), Some(false));
+        assert_eq!(parse_switch("maybe"), None);
+    }
+
+    #[test]
+    fn design_prompts_carry_the_project_and_the_verification_loop() {
+        let web = tempfile::tempdir().unwrap();
+        std::fs::write(
+            web.path().join("package.json"),
+            r#"{"dependencies":{"svelte":"5"},"scripts":{"check":"svelte-check","build":"vite build"}}"#,
+        )
+        .unwrap();
+        std::fs::write(web.path().join("yarn.lock"), "").unwrap();
+        let block = design_block(web.path());
+        assert!(block.starts_with(supercharge_shared::ui_sdk::DESIGN_TAGS.open));
+        assert!(block.contains("Svelte"), "{block}");
+        assert!(block.contains("yarn run check"), "{block}");
+        assert!(block.contains("ui_verify"));
+        let task = design_task_prompt(web.path(), "  a sortable table ");
+        assert!(
+            task.starts_with("Design task: a sortable table\n"),
+            "{task}"
+        );
+        let status = status_text(web.path(), false);
+        assert!(status.contains("Design mode: off"), "{status}");
+        assert!(status.contains("UI SDK not installed yet"), "{status}");
+
+        let empty = tempfile::tempdir().unwrap();
+        assert!(status_text(empty.path(), true).contains("No frontend project detected"));
+        assert!(design_block(empty.path()).contains("No frontend project was detected"));
     }
 }

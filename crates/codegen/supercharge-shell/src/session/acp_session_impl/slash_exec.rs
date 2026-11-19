@@ -141,6 +141,27 @@ impl SessionActor {
                 self.send_host_turn_slash_command_output(&text).await;
                 ok_end_turn(0, None)
             }
+            BuiltinAction::Design { op } => {
+                let cwd = self.tool_context.cwd.as_path().to_path_buf();
+                let text = match op {
+                    crate::util::ui_sdk::DesignOp::Status => crate::util::ui_sdk::status_text(
+                        &cwd,
+                        crate::util::ui_sdk::design_enabled(),
+                    ),
+                    crate::util::ui_sdk::DesignOp::On | crate::util::ui_sdk::DesignOp::Off => {
+                        let on = op == crate::util::ui_sdk::DesignOp::On;
+                        match crate::util::config::set_design_enabled(on).await {
+                            Ok(()) => crate::util::ui_sdk::toggled_text(&cwd, on),
+                            Err(e) => format!("Could not save design mode: {e}"),
+                        }
+                    }
+                    crate::util::ui_sdk::DesignOp::Task(_) => {
+                        crate::util::ui_sdk::USAGE.to_string()
+                    }
+                };
+                self.send_host_turn_slash_command_output(&text).await;
+                ok_end_turn(0, None)
+            }
             BuiltinAction::Help => {
                 let text =
                     crate::session::slash_commands::help_text(self.command_availability().await);

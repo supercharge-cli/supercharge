@@ -54,7 +54,7 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
     use supercharge_telemetry::process_info::LeaderMode::Standalone;
     let (entrypoint, interactivity) = match command {
         Some(Command::Agent(_)) => return None,
-        Some(Command::Dashboard) => return None,
+        Some(Command::Dashboard | Command::Ui { .. }) => return None,
         Some(Command::Login { .. }) => (Entrypoint::Cli, Interactivity::Interactive),
         Some(
             Command::Inspect { .. }
@@ -99,6 +99,7 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
         None
         | Some(Command::Agent(_))
         | Some(Command::Dashboard)
+        | Some(Command::Ui { .. })
         | Some(Command::Models)
         | Some(Command::Worktree(_)) => true,
         Some(
@@ -1793,6 +1794,21 @@ fn flag_dashboard_at_startup_if_requested(args: &mut PagerArgs) -> Result<()> {
     unsafe { std::env::set_var("SUPERCHARGE_OPEN_DASHBOARD_AT_STARTUP", "1") };
     Ok(())
 }
+/// `supercharge ui [PROMPT]` is an interactive session with design mode on for this process.
+/// Clears `args.command` so the regular subcommand match doesn't try to handle it.
+fn start_design_mode_if_requested(args: &mut PagerArgs) -> Result<()> {
+    let Some(Command::Ui { prompt }) = args.command.take() else {
+        return Ok(());
+    };
+    if let Some(prompt) = prompt.filter(|p| !p.trim().is_empty()) {
+        if args.prompt.is_some() {
+            anyhow::bail!("give the prompt once: `supercharge ui \"<what to build>\"`");
+        }
+        args.prompt = Some(prompt);
+    }
+    unsafe { std::env::set_var(supercharge_shell::util::ui_sdk::DESIGN_MODE_ENV, "1") };
+    Ok(())
+}
 /// Kick off background work that overlaps startup. Add new prewarms here.
 fn schedule_startup_prewarm() {
     supercharge_shell::agent::mvp_agent::warm_async_http_client();
@@ -1804,6 +1820,9 @@ fn configure_process_env(mut args: PagerArgs) -> Result<PagerArgs> {
         }
     }
     flag_dashboard_at_startup_if_requested(&mut args)?;
+    if matches!(args.command, Some(Command::Ui { .. })) {
+        start_design_mode_if_requested(&mut args)?;
+    }
     let args = args.apply_cwd()?;
     unsafe {
         if let Some(mode) = args.compaction_mode.as_deref() {
@@ -2110,7 +2129,7 @@ fn usage_run_mode(args: &PagerArgs) -> supercharge_telemetry::usage_stats::RunMo
             Some(AgentCmd::Serve(_) | AgentCmd::Daemon(_)) => RunMode::Server,
             Some(AgentCmd::Headless(_)) | None => RunMode::Headless,
         },
-        Some(Command::Dashboard) => RunMode::Tui,
+        Some(Command::Dashboard | Command::Ui { .. }) => RunMode::Tui,
         Some(_) => RunMode::Command,
         None if one_shot => RunMode::Headless,
         None => RunMode::Tui,
@@ -2597,6 +2616,10 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
             Command::Dashboard => {
                 args.command = Some(Command::Dashboard);
                 flag_dashboard_at_startup_if_requested(&mut args)?;
+            }
+            Command::Ui { prompt } => {
+                args.command = Some(Command::Ui { prompt });
+                start_design_mode_if_requested(&mut args)?;
             }
             // Normally handled synchronously in `main` before usage stats start.
             Command::Telemetry { action } => {

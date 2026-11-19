@@ -392,6 +392,10 @@ Browse the built-in How-to Guides, open the online Build docs, or jump straight 
 - `/docs web` opens https://docs.x.ai/build/overview in your browser.
 - `/docs <title>` opens a specific guide by case-insensitive title match.
 
+### `/design [on|off|status|<what to build>]`
+
+Design mode for UI work. `/design on` and `/design off` switch it for every session (`[design] enabled`); `/design` shows the mode and the detected frontend project; `/design <what to build>` runs one design task with the full brief: UI SDK components, accessible states, then a typecheck and build loop until both pass. See [UI Design](29-ui-design.md).
+
 ### `/tutorial`
 
 Open the onboarding tutorial: a short list of topics (your first prompt, attaching context, navigation, slash commands, worktrees, plan mode, customization, switching from another agent tool) — each a ~30-second read, with `→` flowing straight to the next topic. Nothing auto-shows — this command (or the command palette) is the way in.

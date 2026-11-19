@@ -244,6 +244,26 @@ fn rea_merge_writes_enabled_and_reloads() {
     assert_eq!(reparsed.rea.enabled, Some(true));
 }
 #[test]
+fn design_merge_writes_both_toggles_and_reloads() {
+    let mut root = TomlMap::new();
+    merge_section(
+        &mut root,
+        "design",
+        &super::super::mcp::DesignPersistConfig::default(),
+    );
+    assert!(
+        root.get("design").is_none(),
+        "unset toggles must not create [design]"
+    );
+    let design = super::super::mcp::DesignPersistConfig {
+        enabled: Some(true),
+        auto_skill: Some(false),
+    };
+    merge_section(&mut root, "design", &design);
+    let reparsed = load_config_from_toml(&TomlValue::Table(root));
+    assert_eq!(reparsed.design, design);
+}
+#[test]
 fn transport_oauth_client_id_takes_priority_over_block() {
     let json = r#"{
             "mcpServers": {

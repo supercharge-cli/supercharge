@@ -704,6 +704,15 @@ impl SessionActor {
                 }
                 otel_command_name = Some(action.command_name().to_string());
                 match action {
+                    BuiltinAction::Design {
+                        op: crate::util::ui_sdk::DesignOp::Task(task),
+                    } => {
+                        supercharge_telemetry::session_ctx::log_event(slash_used);
+                        vec![text_block(crate::util::ui_sdk::design_task_prompt(
+                            self.tool_context.cwd.as_path(),
+                            &task,
+                        ))]
+                    }
                     BuiltinAction::NewAgent { brief } => {
                         supercharge_telemetry::session_ctx::log_event(slash_used);
                         let dir = supercharge_dirs::supercharge_home().join("agents");

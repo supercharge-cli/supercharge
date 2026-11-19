@@ -52,6 +52,17 @@ pub struct Config {
     pub features: FeaturesPersistConfig,
     /// `[rea]`: built-in REA mode toggle.
     pub rea: ReaPersistConfig,
+    /// `[design]`: design mode and the automatic UI skill.
+    pub design: DesignPersistConfig,
+}
+
+/// The `[design]` section: design mode (`/design on`) and the automatic UI skill in frontend projects.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DesignPersistConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_skill: Option<bool>,
 }
 
 /// The `[rea]` section: whether REA mode adds the reverse-engineering guide to the system prompt.

@@ -135,6 +135,18 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         },
     },
     BuiltinCommand {
+        name: "design",
+        description: "Design mode for UI work: on, off, status, or describe a component to build and verify",
+        argument_hint: Some("on|off|status|<what to build>"),
+        aliases: &[],
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        resolve: |args| BuiltinAction::Design {
+            op: crate::util::ui_sdk::DesignOp::parse(args),
+        },
+    },
+    BuiltinCommand {
         name: "always-approve",
         description: "Toggle always-approve mode (skip all permission prompts)",
         argument_hint: Some("on|off"),
@@ -554,6 +566,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "dashboard",
     "debug",
     "delete",
+    "design",
     "docs",
     "donate",
     "support",
@@ -1424,6 +1437,9 @@ pub(super) enum BuiltinAction {
     NoMistake {
         args: String,
     },
+    Design {
+        op: crate::util::ui_sdk::DesignOp,
+    },
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
@@ -1466,6 +1482,7 @@ impl BuiltinAction {
             BuiltinAction::SwitchToLean => "lean",
             BuiltinAction::Teleport { .. } => "teleport",
             BuiltinAction::NoMistake { .. } => "no-mistake",
+            BuiltinAction::Design { .. } => "design",
         }
     }
     pub(crate) fn args_provided(&self) -> bool {
@@ -1508,6 +1525,7 @@ impl BuiltinAction {
             BuiltinAction::SwitchToLean => false,
             BuiltinAction::Teleport { args } => !args.trim().is_empty(),
             BuiltinAction::NoMistake { args } => !args.trim().is_empty(),
+            BuiltinAction::Design { op } => *op != crate::util::ui_sdk::DesignOp::Status,
         }
     }
 }
