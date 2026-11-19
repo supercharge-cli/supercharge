@@ -82,6 +82,33 @@ While the UI skill is active (a frontend project, or design mode) the agent gets
 
 Each result reports the command, exit code, duration and the end of its output (colour codes removed). Commands run with `CI=1`, have a 10-minute limit each (`timeout_secs`, up to 30 minutes), and are stopped together with everything they started when they time out or Supercharge exits. After it creates or changes a component the agent calls `ui_verify`, fixes the first real error, and repeats until every check passes. It never silences a check to get there.
 
+### Checking the running UI: `ui_browser`
+
+`ui_browser` lets the agent use the interface the way a keyboard or screen-reader user would, without screenshots. It drives the Chrome or Chromium already installed on your machine in headless mode with a throwaway profile, over the browser's debugging protocol. Nothing is downloaded.
+
+| Action | Input | Result |
+|---|---|---|
+| `open` | `url` (`localhost:5173` works) | Loads the page and returns its accessibility tree. |
+| `snapshot` | | Reads the tree again. |
+| `click` | `ref` | Real mouse click in the middle of the element. |
+| `type` | `ref`, `text`, optional `clear` | Focuses the element and types. |
+| `press` | `key`, optional `ref` | Keys such as `Enter`, `Escape`, `ArrowDown`, `Shift+Tab`, `Control+a`. |
+| `close` | | Stops the browser. |
+
+The tree lists each element's role, accessible name and state, with a ref to act on:
+
+```
+Page: Settings (http://localhost:5173/settings)
+Focus: Theme
+- document "Settings" [ref=e1]
+  - button "Theme" [ref=e2] (focused, expanded=false, haspopup=listbox)
+  - textbox "Display name" [ref=e3] (required, value="Ada")
+```
+
+Errors the page throws or logs with `console.error` are listed under the tree. Every action returns a fresh tree, and refs from an older tree stop working once the page changes.
+
+The browser is looked up in this order: `SUPERCHARGE_CHROME`, `CHROME_PATH`, `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser` or `chrome` on `PATH`, the standard install folders on macOS and Windows, and finally the browser installed by `supercharge browser install`. With no browser found the tool says so, and the agent carries on with `ui_verify` alone. The browser closes after 10 idle minutes and when Supercharge exits.
+
 ---
 
 ## Supercharge Studio and ACP
@@ -91,5 +118,5 @@ Everything works the same in ACP agent mode (`supercharge agent stdio`, `superch
 - the skill is written at startup and advertised in the session's available commands as `/ui-sdk`;
 - `/design` is advertised as a built-in command (`on|off|status|<what to build>`); `/design <task>` sends the design brief as the user message, and the other forms answer with a short status message and end the turn;
 - the UI skill note and the design-mode block are refreshed in the system prompt each turn;
-- `ui_verify` appears in the session's tools while the UI skill note or design mode is active, and disappears when neither is;
+- `ui_verify` and `ui_browser` appear in the session's tools while the UI skill note or design mode is active, and disappear when neither is; `ui_browser` uses a browser on the machine running the agent;
 - set `SUPERCHARGE_DESIGN_MODE=1` in the agent's environment to start every session of that process in design mode.
