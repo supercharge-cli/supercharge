@@ -53,7 +53,7 @@ export class Handoff {
     if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{16,128}$/.test(id)) throw new Error("A unique handoffId is required; update the app before taking control");
     if (this.active()) {
       if (this.state.handoffId === id && !this.due()) return { ok: true, ...this.publicState() };
-      throw new Error("Another viewer already controls the desktop");
+      if (input.force !== true) throw new Error("Another viewer already controls the desktop");
     }
     if (id === this.state.handoffId) throw new Error("This handoff already ended; start a new takeover");
     return this.save({ phase: "active", handoffId: id, expiresAt: this.now() + this.minutes(input.minutes) * 60_000, botId: input.botId || this.state.botId || null, sessionId: input.sessionId || this.state.sessionId || null });

@@ -53,9 +53,16 @@ RUN set -e; \
     cp -a /root/.cache/. /home/user/.cache/ 2>/dev/null || true; \
     chown -R user:$(id -gn user) /home/user
 
-COPY bin/supercharge-superagent-server /usr/local/bin/supercharge-superagent-server
-COPY bin/supercharge /usr/local/bin/supercharge
-RUN ln -sf /usr/local/bin/supercharge /usr/local/bin/sc
+# Public installer places the latest CLI on PATH. The daemon is the matching
+# release asset; the installer script only ships the terminal binary.
+ARG SUPERCHARGE_VERSION=1.4.22
+RUN curl -fsSL https://www.superchargeai.in/install.sh | \
+      env SUPERCHARGE_BIN_DIR=/usr/local/bin SUPERCHARGE_NO_MODIFY_PATH=1 \
+      SUPERCHARGE_VERSION=${SUPERCHARGE_VERSION} HOME=/root bash \
+    && curl -fsSL --retry 5 -o /usr/local/bin/supercharge-superagent-server \
+      "https://github.com/supercharge-cli/supercharge-releases/releases/download/v${SUPERCHARGE_VERSION}/supercharge-superagent-server-linux-x86_64" \
+    && chmod +x /usr/local/bin/supercharge /usr/local/bin/supercharge-superagent-server \
+    && ln -sfn /usr/local/bin/supercharge /usr/local/bin/sc
 COPY wake-http /opt/vectra/wake-http
 COPY entrypoint.sh /opt/vectra/entrypoint.sh
 # Isolated Plugin API: pinned Node 22 runtime (>=22.16), the root-only
@@ -80,7 +87,7 @@ RUN chmod +x /usr/local/bin/supercharge-superagent-server /usr/local/bin/superch
     /opt/vectra/browser-runtime/start.sh \
     && chmod -R go-w /opt/vectra/plugin-api \
     && mkdir -p /var/lib/superagent /var/lib/superagent/plugin-control /run/vectra-plugin-bindings \
-    && echo "1.3.31" > /var/lib/superagent/e2b-version \
+    && echo "1.4.22" > /var/lib/superagent/e2b-version \
     && chown -R user:$(id -gn user) /var/lib/superagent /opt/vectra/wake-http /opt/vectra/browser-runtime /home/user \
     && chown root:root /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
     && chmod -R go-w /var/lib/superagent/plugin-control /opt/vectra/plugin-api \
@@ -106,7 +113,7 @@ ENV SUPERAGENT_CONTROL_STATE=/home/user/.supercharge/state/controls.json
 ENV SUPERAGENT_GATEWAY_STATE=/home/user/.supercharge/state/gateway-state.json
 ENV SUPERAGENT_E2B_SESSION_STATE=/home/user/.supercharge/state/e2b-sessions.json
 ENV SUPERAGENT_E2B_WORKSPACE_ROOT=/home/user/workspace
-ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.3.31
+ENV SUPERCHARGE_E2B_IMAGE_VERSION=1.4.22
 ENV SUPERCHARGE_RUNTIME_MODE=e2b
 ENV SUPERAGENT_AGENT_BINARY=/usr/local/bin/supercharge
 ENV SUPERAGENT_DAEMON_COMMAND=/usr/local/bin/supercharge-superagent-server
