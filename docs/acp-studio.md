@@ -179,6 +179,11 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 | `_supercharge/setup/auth_start` | `{ providerId, kind?: "device" \| "browser" }` | `{ loginId, providerId, kind, url, userCode?, expiresIn, interval }` |
 | `_supercharge/setup/auth_poll` | `{ loginId }` | `AuthLogin` |
 | `_supercharge/setup/auth_cancel` | `{ loginId }` | `{ cancelled }` |
+| `_supercharge/setup/providers_list` | `{}` | `{ activeProviderId, activeModelId, configPath, providers: [ProviderInfo] }` |
+| `_supercharge/setup/provider_status` | `{ providerId }` | `ProviderInfo` |
+| `_supercharge/setup/provider_add_custom` | `{ name, baseUrl, format?, apiKey?, id?, validate? }` | `{ provider: ProviderInfo, models: [Model] }` |
+| `_supercharge/setup/provider_set_key` | `{ providerId, apiKey, validate? }` | `{ saved: true, providerId, active, reloaded, models: [Model], provider: ProviderInfo }` |
+| `_supercharge/setup/provider_remove` | `{ providerId }` | `{ removed, providerId }` |
 
 - `Provider`: `{ id, name, description, baseUrl, defaultModel, format: "openai"|"anthropic"|"responses", curated: [string], auth: "api_key"|"oauth_device", authMethods: [AuthMethod], keyOptional: bool, signedIn: bool|null }`.
   `auth` is the legacy single value (unchanged since 1.4.19). `authMethods` lists every way the
@@ -244,3 +249,23 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
   active provider with its default model, as the CLI's own sign-in does), so `setup/save` then
   picks the model.
 - `device_*` stay as the Nous-only path for existing clients; new clients should use `auth_*`.
+- Provider catalogue (`providers_list`, `provider_status`, `provider_add_custom`,
+  `provider_set_key`, `provider_remove`): Studio's provider settings use only these plus
+  `auth_*`, `setup/models` and `setup/save`, so the CLI stays the single owner of providers,
+  sign-ins and keys. Full spec and per-provider call sequences: `docs/providers-studio.md`.
+  - `ProviderInfo`: the `Provider` fields plus `formatName` ("Chat Completions" / "Messages" /
+    "Responses"), `custom`, `hasApiKey`, `active`, `ready` (`keyOptional || hasApiKey ||
+    signedIn`), `modelsSource` (`"live"`) and `modelsUrl`. `providers_list` returns every
+    built-in provider in picker order, then the saved custom providers. No key is ever returned.
+  - `provider_add_custom` runs the `/setup` checks (URL normalised, `http` only for loopback,
+    key sanity, strict `format`), lists the endpoint's models unless `validate: false`, and saves
+    `[provider_credentials.<id>]` with `custom = true`. `id` defaults to `custom-<slug of name>`
+    and may not shadow a built-in id. Adding does not activate: call `setup/save { providerId }`.
+    Re-adding the same `id` updates it; an omitted `apiKey` keeps the saved key.
+  - `provider_set_key` validates the key against the provider's model list (unless
+    `validate: false`), stores it in that provider's own slot, and, when the provider is active,
+    rewrites the active entry and reloads the catalog. Providers without `"api_key"` in
+    `authMethods` are rejected (use `auth_start`). `setup/models` / `setup/save` with that
+    `providerId` and no `apiKey` then use the stored key; it is never sent to another provider.
+  - `provider_remove` deletes a custom provider, a built-in provider's stored key, or the
+    device sign-in token (`nous`). The active provider is refused; switch with `setup/save` first.

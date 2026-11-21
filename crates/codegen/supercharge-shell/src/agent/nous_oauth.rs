@@ -201,9 +201,15 @@ pub fn poll_once(pending: &DeviceCodePending) -> Result<DevicePollStatus, String
     }
 }
 
+/// Forget the saved Nous login. Returns whether a token file existed.
+pub fn sign_out() -> bool {
+    std::fs::remove_file(oauth_path()).is_ok()
+}
+
 /// Whether a Nous login is saved (the token may still need a refresh).
 pub fn signed_in() -> bool {
-    load_state().is_some_and(|s| !s.access_token.trim().is_empty() || !s.refresh_token.trim().is_empty())
+    load_state()
+        .is_some_and(|s| !s.access_token.trim().is_empty() || !s.refresh_token.trim().is_empty())
 }
 
 fn state_from_token_json(v: &serde_json::Value, cid: &str) -> Result<NousOauthState, String> {
@@ -331,7 +337,10 @@ pub fn resolve_access_token() -> Result<String, String> {
 
 /// Host of an inference base URL, lowercased (`None` when unparsable).
 fn host_of(url: &str) -> Option<String> {
-    url::Url::parse(url.trim()).ok()?.host_str().map(str::to_ascii_lowercase)
+    url::Url::parse(url.trim())
+        .ok()?
+        .host_str()
+        .map(str::to_ascii_lowercase)
 }
 
 /// Whether `base_url` points at the Nous inference API (default host or the one saved at login).
@@ -349,7 +358,12 @@ pub(crate) fn covers_base_url(base_url: &str, state: Option<&NousOauthState>) ->
 
 /// State read from `nous_oauth.json`, re-read whenever the file's mtime or size changes.
 fn cached_state_at(path: &std::path::Path) -> Option<NousOauthState> {
-    type Entry = (std::path::PathBuf, Option<SystemTime>, u64, Option<NousOauthState>);
+    type Entry = (
+        std::path::PathBuf,
+        Option<SystemTime>,
+        u64,
+        Option<NousOauthState>,
+    );
     static CACHE: std::sync::Mutex<Option<Entry>> = std::sync::Mutex::new(None);
     let meta = std::fs::metadata(path).ok();
     let mtime = meta.as_ref().and_then(|m| m.modified().ok());
@@ -391,7 +405,9 @@ impl supercharge_sampler::dynamic_credentials::DynamicCredentialSource for NousC
         if !covers_base_url(base_url, state.as_ref()) {
             return None;
         }
-        state.map(|s| s.access_token).filter(|t| !t.trim().is_empty())
+        state
+            .map(|s| s.access_token)
+            .filter(|t| !t.trim().is_empty())
     }
 
     fn prepare<'a>(
@@ -476,13 +492,21 @@ mod tests {
             };
             std::fs::write(&path, serde_json::to_string(&state).unwrap()).unwrap();
         };
-        let src = NousCredentialSource { path_override: Some(path.clone()) };
+        let src = NousCredentialSource {
+            path_override: Some(path.clone()),
+        };
         write("first-token");
-        assert_eq!(src.bearer_for(INFERENCE_BASE).as_deref(), Some("first-token"));
+        assert_eq!(
+            src.bearer_for(INFERENCE_BASE).as_deref(),
+            Some("first-token")
+        );
         assert_eq!(src.bearer_for("https://api.other.test/v1"), None);
         // A new login with a different length changes size (and usually mtime).
         write("second-token-after-setup");
-        assert_eq!(src.bearer_for(INFERENCE_BASE).as_deref(), Some("second-token-after-setup"));
+        assert_eq!(
+            src.bearer_for(INFERENCE_BASE).as_deref(),
+            Some("second-token-after-setup")
+        );
         std::fs::remove_file(&path).unwrap();
         assert_eq!(src.bearer_for(INFERENCE_BASE), None);
     }

@@ -130,10 +130,7 @@ pub fn setup_provider_profiles() -> impl Iterator<Item = &'static SetupProviderP
 /// loopback server (a local model server where a key is optional). Remote endpoints always
 /// count as needing a key, so this fails closed.
 pub fn setup_provider_key_optional(profile: &SetupProviderProfile) -> bool {
-    url::Url::parse(profile.base_url)
-        .ok()
-        .and_then(|u| u.host_str().map(is_loopback_host))
-        .unwrap_or(false)
+    base_url_key_optional(profile.base_url)
 }
 
 /// Label for anonymous usage stats: the built-in provider id whose endpoint matches
@@ -488,6 +485,8 @@ pub enum ProviderSetupError {
     ApiKeyTooLong,
     #[error("model identifier is empty or too long")]
     InvalidModel,
+    #[error("{0}")]
+    InvalidProvider(String),
     #[error("{0}")]
     Fetch(String),
     #[error("provider configuration I/O failed: {0}")]
@@ -1645,6 +1644,246 @@ pub fn active_setup_provider_id(config: &toml::Value) -> Option<String> {
     setup_profile_id_from_config(config)
 }
 
+/// Table holding per-provider credential slots and custom provider definitions.
+pub const PROVIDER_CREDENTIALS_TABLE: &str = "provider_credentials";
+const MAX_CUSTOM_PROVIDER_NAME_LEN: usize = 80;
+const MAX_CUSTOM_PROVIDER_ID_LEN: usize = 48;
+
+/// Whether an endpoint works without a credential: a loopback model server.
+pub fn base_url_key_optional(base_url: &str) -> bool {
+    url::Url::parse(base_url.trim())
+        .ok()
+        .and_then(|u| u.host_str().map(is_loopback_host))
+        .unwrap_or(false)
+}
+
+/// A custom provider saved by ACP `provider_add_custom` in
+/// `[provider_credentials.<id>]` with `custom = true`. The key never leaves the CLI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedCustomProvider {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub format: SetupWireFormat,
+    pub api_key: String,
+}
+
+/// Custom provider ids are lowercase slugs (`a-z`, `0-9`, `-`, at most 48 chars) that do
+/// not shadow a built-in id or the reserved `setup` / `custom` ids.
+pub fn validate_custom_provider_id(id: &str) -> Result<(), ProviderSetupError> {
+    let ok_chars = id
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if id.is_empty()
+        || id.len() > MAX_CUSTOM_PROVIDER_ID_LEN
+        || !ok_chars
+        || id.starts_with('-')
+        || id.ends_with('-')
+    {
+        return Err(ProviderSetupError::InvalidProvider(format!(
+            "invalid provider id `{id}`: use 1-{MAX_CUSTOM_PROVIDER_ID_LEN} lowercase letters, digits or `-`"
+        )));
+    }
+    if id == SETUP_PROVIDER_ID || id == CUSTOM_PROVIDER_ID || find_setup_provider(id).is_some() {
+        return Err(ProviderSetupError::InvalidProvider(format!(
+            "provider id `{id}` is reserved by a built-in provider"
+        )));
+    }
+    Ok(())
+}
+
+/// Display names are trimmed, non-empty, at most 80 chars and free of control characters.
+pub fn validate_custom_provider_name(name: &str) -> Result<String, ProviderSetupError> {
+    let name = name.trim();
+    if name.is_empty()
+        || name.chars().count() > MAX_CUSTOM_PROVIDER_NAME_LEN
+        || name.chars().any(char::is_control)
+    {
+        return Err(ProviderSetupError::InvalidProvider(format!(
+            "provider name must be 1-{MAX_CUSTOM_PROVIDER_NAME_LEN} printable characters"
+        )));
+    }
+    Ok(name.to_owned())
+}
+
+/// Default id for a custom provider: `custom-<slug of name>`.
+pub fn custom_provider_id_from_name(name: &str) -> String {
+    let mut slug = String::new();
+    for c in name.trim().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.ends_with('-') && !slug.is_empty() {
+            slug.push('-');
+        }
+    }
+    let slug = slug.trim_end_matches('-');
+    let mut id = format!("custom-{}", if slug.is_empty() { "provider" } else { slug });
+    id.truncate(MAX_CUSTOM_PROVIDER_ID_LEN);
+    id.trim_end_matches('-').to_owned()
+}
+
+fn credential_slot<'a>(config: &'a toml::Value, provider_id: &str) -> Option<&'a toml::Value> {
+    config.get(PROVIDER_CREDENTIALS_TABLE)?.get(provider_id)
+}
+
+fn slot_str(slot: &toml::Value, key: &str) -> Option<String> {
+    slot.get(key)
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_owned)
+}
+
+fn custom_provider_from_slot(id: &str, slot: &toml::Value) -> Option<SavedCustomProvider> {
+    if slot.get("custom").and_then(toml::Value::as_bool) != Some(true) {
+        return None;
+    }
+    let base_url = normalize_provider_base_url(&slot_str(slot, "base_url")?).ok()?;
+    Some(SavedCustomProvider {
+        id: id.to_owned(),
+        name: slot_str(slot, "name").unwrap_or_else(|| id.to_owned()),
+        base_url,
+        format: slot_str(slot, "format")
+            .map(|f| SetupWireFormat::parse(&f))
+            .unwrap_or_default(),
+        api_key: slot_str(slot, "api_key")
+            .filter(|k| is_plausible_provider_api_key(k))
+            .unwrap_or_default(),
+    })
+}
+
+/// Every custom provider saved in config, in file order.
+pub fn saved_custom_providers(config: &toml::Value) -> Vec<SavedCustomProvider> {
+    config
+        .get(PROVIDER_CREDENTIALS_TABLE)
+        .and_then(toml::Value::as_table)
+        .map(|slots| {
+            slots
+                .iter()
+                .filter_map(|(id, slot)| custom_provider_from_slot(id, slot))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn saved_custom_provider(
+    config: &toml::Value,
+    provider_id: &str,
+) -> Option<SavedCustomProvider> {
+    custom_provider_from_slot(provider_id, credential_slot(config, provider_id)?)
+}
+
+/// Key stored for a provider by ACP `provider_set_key` (or a pasted-key setup of an
+/// isolated provider), read from its own slot only, never from another provider.
+pub fn stored_provider_api_key(config: &toml::Value, provider_id: &str) -> Option<String> {
+    credential_slot(config, provider_id)
+        .and_then(|slot| slot_str(slot, "api_key"))
+        .filter(|k| is_plausible_provider_api_key(k))
+}
+
+fn read_document(path: &Path) -> Result<toml_edit::DocumentMut, ProviderSetupError> {
+    match crate::util::config::read_to_string_or_empty(path) {
+        Ok(content) if !content.trim().is_empty() => content
+            .parse::<toml_edit::DocumentMut>()
+            .map_err(|error| ProviderSetupError::Io(error.to_string())),
+        Ok(_) => Ok(toml_edit::DocumentMut::new()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn checked_api_key(raw: &str) -> Result<String, ProviderSetupError> {
+    let api_key = sanitize_provider_api_key(raw);
+    if !raw.trim().is_empty() && api_key.is_empty() {
+        return Err(ProviderSetupError::InvalidApiKey);
+    }
+    if api_key.len() > MAX_API_KEY_LEN {
+        return Err(ProviderSetupError::ApiKeyTooLong);
+    }
+    Ok(api_key)
+}
+
+/// Write (or replace) a custom provider definition. Does not make it active; select it
+/// with `setup/save { providerId }` like a built-in provider.
+pub fn persist_custom_provider_at(
+    path: &Path,
+    provider: &SavedCustomProvider,
+) -> Result<(), ProviderSetupError> {
+    validate_custom_provider_id(&provider.id)?;
+    let name = validate_custom_provider_name(&provider.name)?;
+    let base_url = normalize_provider_base_url(&provider.base_url)?;
+    let api_key = checked_api_key(&provider.api_key)?;
+    let mut document = read_document(path)?;
+    {
+        let slots = document_table_mut(&mut document, PROVIDER_CREDENTIALS_TABLE)?;
+        let slot = child_table_mut(
+            slots,
+            &provider.id,
+            &format!("{PROVIDER_CREDENTIALS_TABLE}.{}", provider.id),
+        )?;
+        slot.insert("custom", toml_edit::value(true));
+        slot.insert("name", toml_edit::value(name));
+        slot.insert("base_url", toml_edit::value(base_url));
+        slot.insert("format", toml_edit::value(provider.format.as_str()));
+        if api_key.is_empty() {
+            slot.remove("api_key");
+        } else {
+            slot.insert("api_key", toml_edit::value(api_key));
+        }
+    }
+    crate::util::config::atomic_write_string(path, &document.to_string())?;
+    Ok(())
+}
+
+/// Store a pasted key in a provider's own slot (`[provider_credentials.<id>]`), keeping
+/// a custom definition's other fields. An empty key clears the slot's key.
+pub fn persist_provider_key_at(
+    path: &Path,
+    provider_id: &str,
+    base_url: &str,
+    api_key: &str,
+) -> Result<(), ProviderSetupError> {
+    let base_url = normalize_provider_base_url(base_url)?;
+    let api_key = checked_api_key(api_key)?;
+    let mut document = read_document(path)?;
+    {
+        let slots = document_table_mut(&mut document, PROVIDER_CREDENTIALS_TABLE)?;
+        let slot = child_table_mut(
+            slots,
+            provider_id,
+            &format!("{PROVIDER_CREDENTIALS_TABLE}.{provider_id}"),
+        )?;
+        if api_key.is_empty() {
+            slot.remove("api_key");
+        } else {
+            slot.insert("api_key", toml_edit::value(api_key));
+        }
+        if provider_id == "mistral" {
+            slot.insert("mode", toml_edit::value("api_key"));
+        }
+        slot.insert("base_url", toml_edit::value(base_url));
+    }
+    crate::util::config::atomic_write_string(path, &document.to_string())?;
+    Ok(())
+}
+
+/// Drop a provider's slot: a custom definition, or a built-in provider's stored key.
+/// Returns whether a slot existed. Never touches the active `[model_providers.setup]`.
+pub fn remove_provider_credentials_at(
+    path: &Path,
+    provider_id: &str,
+) -> Result<bool, ProviderSetupError> {
+    let mut document = read_document(path)?;
+    let removed = document
+        .get_mut(PROVIDER_CREDENTIALS_TABLE)
+        .and_then(toml_edit::Item::as_table_like_mut)
+        .and_then(|slots| slots.remove(provider_id))
+        .is_some();
+    if removed {
+        crate::util::config::atomic_write_string(path, &document.to_string())?;
+    }
+    Ok(removed)
+}
+
 /// Credential written by `/setup` for custom-endpoint catalog fetches.
 pub fn provider_setup_api_key_from_toml(config: &toml::Value) -> Option<String> {
     let base_url = config
@@ -1908,7 +2147,9 @@ pub fn load_existing_provider_setup_details() -> Option<ExistingProviderSetup> {
 }
 
 /// Path-injectable form of [`load_existing_provider_setup_details`].
-pub(crate) fn load_existing_provider_setup_details_at(path: &Path) -> Option<ExistingProviderSetup> {
+pub(crate) fn load_existing_provider_setup_details_at(
+    path: &Path,
+) -> Option<ExistingProviderSetup> {
     let content = crate::util::config::read_to_string_or_empty(path).unwrap_or_default();
     let parsed = if content.trim().is_empty() {
         None
@@ -3001,7 +3242,10 @@ mod tests {
             .map(|p| p.id)
             .collect();
         assert_eq!(optional, vec!["ollama", "lmstudio"]);
-        for p in SETUP_PROVIDERS.iter().filter(|p| !setup_provider_key_optional(p)) {
+        for p in SETUP_PROVIDERS
+            .iter()
+            .filter(|p| !setup_provider_key_optional(p))
+        {
             assert!(p.base_url.starts_with("https://"), "{} is remote", p.id);
         }
     }
@@ -3014,7 +3258,10 @@ mod tests {
         );
         assert_eq!(models.unwrap()[0].id, "local-model");
         assert_eq!(requests.len(), 1);
-        assert!(!requests[0].contains("authorization:"), "no credential is sent");
+        assert!(
+            !requests[0].contains("authorization:"),
+            "no credential is sent"
+        );
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");

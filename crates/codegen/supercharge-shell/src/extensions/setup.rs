@@ -11,6 +11,7 @@
 //! | `setup/image_status` | `{}` | image provider state |
 //! | `setup/image_save` | `{providerId?, baseUrl?, apiKey?, modelId, format?}` | `{saved, modelId}` |
 //! | `setup/auth_start` / `auth_poll` / `auth_cancel` | see [`super::setup_auth`] | provider sign-in |
+//! | `setup/providers_list` / `provider_status` / `provider_add_custom` / `provider_set_key` / `provider_remove` | see [`super::setup_providers`] | provider catalogue and keys |
 
 use std::sync::Mutex;
 
@@ -23,6 +24,7 @@ use crate::agent::provider_setup::{
     self as ps, ProviderModel, ProviderSetup, ProviderSetupError, SetupWireFormat,
 };
 use crate::extensions::setup_auth::{self as auth, AuthError};
+use crate::extensions::setup_providers as providers;
 use crate::extensions::{ExtResult, to_raw_response};
 
 pub(crate) const STATUS: &str = "supercharge/setup/status";
@@ -35,7 +37,7 @@ pub(crate) const IMAGE_STATUS: &str = "supercharge/setup/image_status";
 pub(crate) const IMAGE_SAVE: &str = "supercharge/setup/image_save";
 
 /// All setup methods (without the leading underscore), for routing and capability lists.
-pub(crate) const METHODS: [&str; 11] = [
+pub(crate) const METHODS: [&str; 16] = [
     STATUS,
     MODELS,
     SAVE,
@@ -47,6 +49,11 @@ pub(crate) const METHODS: [&str; 11] = [
     auth::AUTH_START,
     auth::AUTH_POLL,
     auth::AUTH_CANCEL,
+    providers::PROVIDERS_LIST,
+    providers::PROVIDER_STATUS,
+    providers::PROVIDER_ADD_CUSTOM,
+    providers::PROVIDER_SET_KEY,
+    providers::PROVIDER_REMOVE,
 ];
 
 /// Provider id that signs in with the device-code flow instead of an API key.
@@ -103,7 +110,41 @@ pub(crate) fn resolve_target(
     p: &Value,
     saved: Option<&ps::ExistingProviderSetup>,
 ) -> Result<Target, acp::Error> {
-    resolve_target_with(p, saved, &|id| stored_sign_in_key(id, user_config().as_ref()))
+    resolve_target_in(p, saved, user_config().as_ref())
+}
+
+/// [`resolve_target`] against an explicit config: a saved custom provider id resolves to
+/// its own URL, format and key; a built-in id may use a key stored by `provider_set_key`.
+pub(crate) fn resolve_target_in(
+    p: &Value,
+    saved: Option<&ps::ExistingProviderSetup>,
+    config: Option<&toml::Value>,
+) -> Result<Target, acp::Error> {
+    let provider_id = str_param(p, &["providerId", "provider_id", "provider"]).unwrap_or("");
+    if ps::find_setup_provider(provider_id).is_none()
+        && let Some(custom) = config.and_then(|c| ps::saved_custom_provider(c, provider_id))
+    {
+        let mut resolved = p.clone();
+        if let Some(obj) = resolved.as_object_mut() {
+            obj.entry("baseUrl")
+                .or_insert_with(|| Value::String(custom.base_url.clone()));
+            obj.entry("format")
+                .or_insert_with(|| Value::String(custom.format.as_str().to_owned()));
+        }
+        let mut t = resolve_target_with(&resolved, saved, &|_| None)?;
+        // The custom provider's own key, unless the client passed one or another URL.
+        if str_param(p, &["apiKey", "api_key"]).is_none()
+            && t.base_url == custom.base_url
+            && !custom.api_key.is_empty()
+        {
+            t.api_key = custom.api_key;
+        }
+        return Ok(t);
+    }
+    resolve_target_with(p, saved, &|id| {
+        stored_sign_in_key(id, config)
+            .or_else(|| config.and_then(|c| ps::stored_provider_api_key(c, id)))
+    })
 }
 
 fn user_config() -> Option<toml::Value> {
@@ -131,7 +172,10 @@ pub(crate) fn resolve_target_with(
     let profile = (!provider_id.is_empty())
         .then(|| ps::find_setup_provider(provider_id))
         .flatten();
-    if !provider_id.is_empty() && profile.is_none() && str_param(p, &["baseUrl", "base_url"]).is_none() {
+    if !provider_id.is_empty()
+        && profile.is_none()
+        && str_param(p, &["baseUrl", "base_url"]).is_none()
+    {
         return Err(invalid(format!("unknown provider `{provider_id}`")));
     }
     let base_url = str_param(p, &["baseUrl", "base_url"])
@@ -149,7 +193,8 @@ pub(crate) fn resolve_target_with(
         Some(k) => k.to_owned(),
         None => saved
             .filter(|s| {
-                ps::normalize_provider_base_url(&s.base_url).ok().as_deref() == Some(base_url.as_str())
+                ps::normalize_provider_base_url(&s.base_url).ok().as_deref()
+                    == Some(base_url.as_str())
             })
             .map(|s| s.api_key.clone())
             .filter(|k| !k.is_empty())
@@ -205,9 +250,11 @@ fn saved_default_model() -> Option<String> {
     let path = crate::util::config::user_config_path();
     let content = crate::util::config::read_to_string_or_empty(&path).ok()?;
     let parsed = toml::from_str::<toml::Value>(&content).ok()?;
-    parsed
-        .get("model")
-        .and_then(|m| m.as_str().map(str::to_owned).or_else(|| m.get("default")?.as_str().map(str::to_owned)))
+    parsed.get("model").and_then(|m| {
+        m.as_str()
+            .map(str::to_owned)
+            .or_else(|| m.get("default")?.as_str().map(str::to_owned))
+    })
 }
 
 /// `setup/status` result.
@@ -257,6 +304,9 @@ fn params_value(args: &acp::ExtRequest) -> Result<Value, acp::Error> {
 /// Route one `supercharge/setup/*` request (method name without the leading underscore).
 pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtRequest) -> ExtResult {
     let p = params_value(args)?;
+    if let Some(result) = providers::handle(agent, method, &p).await {
+        return to_raw_response(&result?);
+    }
     match method {
         STATUS => to_raw_response(&status_json()),
         MODELS => {
@@ -285,12 +335,22 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
                 Err(e) => return Err(e),
             };
             let model_id = requested
-                .or_else(|| target.default_model.clone().filter(|d| listed.iter().any(|m| &m.id == d)))
+                .or_else(|| {
+                    target
+                        .default_model
+                        .clone()
+                        .filter(|d| listed.iter().any(|m| &m.id == d))
+                })
                 .or_else(|| listed.first().map(|m| m.id.clone()))
                 .ok_or_else(|| invalid("provider returned no models; pass modelId"))?;
             let model_name = str_param(&p, &["modelName", "model_name"])
                 .map(str::to_owned)
-                .or_else(|| listed.iter().find(|m| m.id == model_id).map(|m| m.name.clone()))
+                .or_else(|| {
+                    listed
+                        .iter()
+                        .find(|m| m.id == model_id)
+                        .map(|m| m.name.clone())
+                })
                 .unwrap_or_else(|| model_id.clone());
             let setup = ProviderSetup {
                 base_url: target.base_url.clone(),
@@ -302,10 +362,12 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
             };
             if method == IMAGE_SAVE {
                 let s = setup.clone();
-                tokio::task::spawn_blocking(move || crate::agent::image_provider::persist_image_provider_setup(&s))
-                    .await
-                    .map_err(|e| internal(e.to_string()))?
-                    .map_err(setup_err)?;
+                tokio::task::spawn_blocking(move || {
+                    crate::agent::image_provider::persist_image_provider_setup(&s)
+                })
+                .await
+                .map_err(|e| internal(e.to_string()))?
+                .map_err(setup_err)?;
                 return to_raw_response(&json!({ "saved": true, "modelId": model_id }));
             }
             let s = setup.clone();
@@ -317,11 +379,10 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
             let reloaded = crate::extensions::session_admin::handle_reload_models(agent).is_ok();
             // Like the TUI, the change applies to open sessions right away: the requested
             // session, or every open session when none is named.
-            let targets: Vec<acp::SessionId> =
-                match str_param(&p, &["sessionId", "session_id"]) {
-                    Some(id) => vec![acp::SessionId::new(id.to_owned())],
-                    None => agent.resident_ids(),
-                };
+            let targets: Vec<acp::SessionId> = match str_param(&p, &["sessionId", "session_id"]) {
+                Some(id) => vec![acp::SessionId::new(id.to_owned())],
+                None => agent.resident_ids(),
+            };
             let mut switched = Vec::new();
             for session_id in targets {
                 let request = acp::SetSessionModelRequest::new(
@@ -382,7 +443,11 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
                         DevicePollStatus::Pending => "pending",
                         DevicePollStatus::SlowDown => {
                             interval += 5;
-                            if let Some(p) = pending_device().lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                            if let Some(p) = pending_device()
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .as_mut()
+                            {
                                 p.interval = interval;
                             }
                             "slow_down"
@@ -401,7 +466,11 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
             }
         }
         DEVICE_CANCEL => {
-            let had = pending_device().lock().unwrap_or_else(|e| e.into_inner()).take().is_some();
+            let had = pending_device()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take()
+                .is_some();
             to_raw_response(&json!({ "cancelled": had }))
         }
         IMAGE_STATUS => {
@@ -418,7 +487,8 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
             let provider_id = str_param(&p, &["providerId", "provider_id", "provider"])
                 .unwrap_or("")
                 .to_owned();
-            let kind = auth::choose_kind(&provider_id, str_param(&p, &["kind"])).map_err(auth_err)?;
+            let kind =
+                auth::choose_kind(&provider_id, str_param(&p, &["kind"])).map_err(auth_err)?;
             let flow = {
                 let provider_id = provider_id.clone();
                 tokio::task::spawn_blocking(move || auth::production_flow(&provider_id, kind))
@@ -426,7 +496,12 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
                     .map_err(|e| internal(e.to_string()))?
                     .map_err(auth_err)?
             };
-            to_raw_response(&auth::install(&provider_id, kind, flow, auth_notifier(agent)))
+            to_raw_response(&auth::install(
+                &provider_id,
+                kind,
+                flow,
+                auth_notifier(agent),
+            ))
         }
         auth::AUTH_POLL => {
             let login_id = str_param(&p, &["loginId", "login_id"]).unwrap_or("");
@@ -451,7 +526,8 @@ fn auth_notifier(agent: &MvpAgent) -> auth::Notify {
     let gateway = agent.gateway.clone();
     std::sync::Arc::new(move |value: Value| {
         if let Ok(raw) = serde_json::value::to_raw_value(&value) {
-            gateway.forward_fire_and_forget(acp::ExtNotification::new(auth::AUTH_CHANGED, raw.into()));
+            gateway
+                .forward_fire_and_forget(acp::ExtNotification::new(auth::AUTH_CHANGED, raw.into()));
         }
     })
 }
@@ -471,7 +547,9 @@ mod tests {
 
     #[test]
     fn builtin_provider_fills_url_format_and_default_model() {
-        let p = ps::setup_provider_profiles().next().expect("a builtin profile");
+        let p = ps::setup_provider_profiles()
+            .next()
+            .expect("a builtin profile");
         let t = resolve_target(&json!({"providerId": p.id, "apiKey": "k"}), None).unwrap();
         assert_eq!(t.provider_id, p.id);
         assert_eq!(t.format, p.format);
@@ -482,7 +560,8 @@ mod tests {
     #[test]
     fn omitted_key_reuses_saved_key_only_for_same_base_url() {
         let s = saved();
-        let t = resolve_target(&json!({"baseUrl": "https://api.example.test/v1"}), Some(&s)).unwrap();
+        let t =
+            resolve_target(&json!({"baseUrl": "https://api.example.test/v1"}), Some(&s)).unwrap();
         assert_eq!(t.api_key, "sk-saved");
         assert_eq!(t.format, SetupWireFormat::Responses);
         let t = resolve_target(&json!({"baseUrl": "https://other.test/v1"}), Some(&s)).unwrap();
@@ -499,7 +578,13 @@ mod tests {
 
     #[test]
     fn methods_advertise_auth_trigger() {
-        for m in [auth::AUTH_START, auth::AUTH_POLL, auth::AUTH_CANCEL, DEVICE_START, STATUS] {
+        for m in [
+            auth::AUTH_START,
+            auth::AUTH_POLL,
+            auth::AUTH_CANCEL,
+            DEVICE_START,
+            STATUS,
+        ] {
             assert!(METHODS.contains(&m), "{m}");
         }
     }
@@ -554,13 +639,16 @@ mod tests {
             },
         )
         .unwrap();
-        let config: toml::Value =
-            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let config: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(auth::signed_in("mistral-auth", Some(&config)), Some(true));
         let saved = ps::load_existing_provider_setup_details_at(&path);
         let lookup = |id: &str| stored_sign_in_key(id, Some(&config));
-        let t = resolve_target_with(&json!({"providerId": "mistral-auth"}), saved.as_ref(), &lookup)
-            .unwrap();
+        let t = resolve_target_with(
+            &json!({"providerId": "mistral-auth"}),
+            saved.as_ref(),
+            &lookup,
+        )
+        .unwrap();
         assert_eq!(t.api_key, "sk-issued-by-sign-in");
         // Still found when another provider is active.
         let other = ps::ExistingProviderSetup {
@@ -569,8 +657,12 @@ mod tests {
             format: SetupWireFormat::Openai,
             provider_id: "openai".into(),
         };
-        let t = resolve_target_with(&json!({"providerId": "mistral-auth"}), Some(&other), &lookup)
-            .unwrap();
+        let t = resolve_target_with(
+            &json!({"providerId": "mistral-auth"}),
+            Some(&other),
+            &lookup,
+        )
+        .unwrap();
         assert_eq!(t.api_key, "sk-issued-by-sign-in");
         // Key-only providers never borrow a sign-in key.
         assert_eq!(stored_sign_in_key("openai", Some(&config)), None);
@@ -582,8 +674,10 @@ mod tests {
         assert_eq!(t.base_url, "http://127.0.0.1:11434/v1");
         assert_eq!(t.api_key, "");
         // A key saved for a remote provider is never borrowed.
-        let t = resolve_target_with(&json!({"providerId": "lmstudio"}), Some(&saved()), &|_| None)
-            .unwrap();
+        let t = resolve_target_with(&json!({"providerId": "lmstudio"}), Some(&saved()), &|_| {
+            None
+        })
+        .unwrap();
         assert_eq!(t.api_key, "");
     }
 
@@ -601,7 +695,11 @@ mod tests {
         let v = status_json();
         let providers = v["providers"].as_array().unwrap();
         assert!(!providers.is_empty());
-        assert!(providers.iter().all(|p| p["auth"].is_string() && p["baseUrl"].is_string()));
+        assert!(
+            providers
+                .iter()
+                .all(|p| p["auth"].is_string() && p["baseUrl"].is_string())
+        );
         assert!(v.get("configured").is_some());
     }
 }
