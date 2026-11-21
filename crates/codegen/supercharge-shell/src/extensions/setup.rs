@@ -11,7 +11,7 @@
 //! | `setup/image_status` | `{}` | image provider state |
 //! | `setup/image_save` | `{providerId?, baseUrl?, apiKey?, modelId, format?}` | `{saved, modelId}` |
 //! | `setup/auth_start` / `auth_poll` / `auth_cancel` | see [`super::setup_auth`] | provider sign-in |
-//! | `setup/providers_list` / `provider_status` / `provider_add_custom` / `provider_set_key` / `provider_remove` | see [`super::setup_providers`] | provider catalogue and keys |
+//! | `setup/providers_list` / `provider_status` / `provider_add_custom` / `provider_update_custom` / `provider_set_key` / `provider_remove` | see [`super::setup_providers`] | provider catalogue and keys |
 
 use std::sync::Mutex;
 
@@ -37,7 +37,7 @@ pub(crate) const IMAGE_STATUS: &str = "supercharge/setup/image_status";
 pub(crate) const IMAGE_SAVE: &str = "supercharge/setup/image_save";
 
 /// All setup methods (without the leading underscore), for routing and capability lists.
-pub(crate) const METHODS: [&str; 16] = [
+pub(crate) const METHODS: [&str; 17] = [
     STATUS,
     MODELS,
     SAVE,
@@ -53,8 +53,15 @@ pub(crate) const METHODS: [&str; 16] = [
     providers::PROVIDER_STATUS,
     providers::PROVIDER_ADD_CUSTOM,
     providers::PROVIDER_SET_KEY,
+    providers::PROVIDER_UPDATE_CUSTOM,
     providers::PROVIDER_REMOVE,
 ];
+
+/// Wire names of [`METHODS`] (`_supercharge/setup/...`), as advertised in `initialize`
+/// `_meta.supercharge.methods` and `_meta["_supercharge/setup/methods"]`.
+pub(crate) fn advertised_methods() -> Vec<String> {
+    METHODS.iter().map(|m| format!("_{m}")).collect()
+}
 
 /// Provider id that signs in with the device-code flow instead of an API key.
 const OAUTH_PROVIDER: &str = "nous";
@@ -132,6 +139,7 @@ pub(crate) fn resolve_target_in(
                 .or_insert_with(|| Value::String(custom.format.as_str().to_owned()));
         }
         let mut t = resolve_target_with(&resolved, saved, &|_| None)?;
+        t.default_model = custom.default_model.clone();
         // The custom provider's own key, unless the client passed one or another URL.
         if str_param(p, &["apiKey", "api_key"]).is_none()
             && t.base_url == custom.base_url
@@ -389,7 +397,8 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
                     session_id.clone(),
                     acp::ModelId::new(model_id.clone()),
                 );
-                match agent.set_model_gated(request).await {
+                // Boxed: a session model switch is a large future in debug builds.
+                match Box::pin(agent.set_model_gated(request)).await {
                     Ok(_) => switched.push(session_id.0.to_string()),
                     Err(e) => tracing::warn!(
                         session_id = %session_id.0,
@@ -514,7 +523,7 @@ pub(crate) async fn handle(agent: &MvpAgent, method: &str, args: &acp::ExtReques
         }
         auth::AUTH_CANCEL => {
             let login_id = str_param(&p, &["loginId", "login_id"]).unwrap_or("");
-            let cancelled = auth::cancel(login_id).map_err(auth_err)?;
+            let cancelled = auth::cancel(login_id, &auth_notifier(agent)).map_err(auth_err)?;
             to_raw_response(&json!({ "cancelled": cancelled }))
         }
         other => Err(acp::Error::method_not_found().data(other.to_owned())),
@@ -574,6 +583,21 @@ mod tests {
     fn unknown_provider_without_url_is_rejected() {
         assert!(resolve_target(&json!({"providerId": "nope-provider"}), None).is_err());
         assert!(resolve_target(&json!({}), None).is_err());
+    }
+
+    #[test]
+    fn advertised_methods_carry_the_wire_prefix_and_every_provider_method() {
+        let methods = advertised_methods();
+        assert_eq!(methods.len(), METHODS.len());
+        assert!(methods.iter().all(|m| m.starts_with("_supercharge/setup/")));
+        for m in [
+            "_supercharge/setup/save",
+            "_supercharge/setup/auth_start",
+            "_supercharge/setup/providers_list",
+            "_supercharge/setup/provider_update_custom",
+        ] {
+            assert!(methods.iter().any(|x| x == m), "{m}");
+        }
     }
 
     #[test]

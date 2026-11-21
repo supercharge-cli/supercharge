@@ -13,7 +13,9 @@
 //! | `setup/auth_cancel` | `{loginId}` | `{cancelled}` |
 //!
 //! Terminal transitions (`done`, `denied`, `expired`, `error`) are also announced with the
-//! `_supercharge/setup/auth_changed` notification (same payload as `auth_poll`).
+//! `_supercharge/setup/auth_changed` notification (same payload as `auth_poll`). A pending
+//! sign-in stopped by `auth_cancel` or replaced by a new `auth_start` is announced once with
+//! `status: "cancelled"`.
 //!
 //! One sign-in runs at a time; `auth_start` cancels any sign-in already in progress.
 
@@ -173,8 +175,8 @@ impl Login {
             "status": status,
             "interval": self.interval.load(Ordering::Relaxed).max(1),
         });
-        if let Some(m) = message {
-            out["message"] = Value::String(m);
+        if let (Some(m), Some(map)) = (message, out.as_object_mut()) {
+            map.insert("message".into(), Value::String(m));
         }
         out
     }
@@ -216,7 +218,9 @@ pub(crate) fn choose_kind(provider_id: &str, kind: Option<&str>) -> Result<AuthK
         )));
     }
     match kind {
-        None => Ok(kinds[0]),
+        None => kinds.first().copied().ok_or_else(|| {
+            AuthError::Invalid(format!("provider `{provider_id}` does not support sign-in"))
+        }),
         Some(raw) => {
             let parsed = AuthKind::parse(raw)
                 .ok_or_else(|| AuthError::Invalid(format!("unknown auth kind `{raw}`")))?;
@@ -238,9 +242,40 @@ pub(crate) fn cancel_current() {
     }
 }
 
+/// [`cancel_current`], announcing a still-pending sign-in as `cancelled`.
+fn cancel_current_and_notify(notify: &Notify) {
+    let taken = lock().take();
+    if let Some(mut login) = taken {
+        let was_pending = login.phase == Phase::Pending;
+        login.stop();
+        if was_pending {
+            notify(cancelled_view(&login));
+        }
+    }
+}
+
+/// `AuthLogin` for a sign-in stopped by `auth_cancel` or replaced by a new `auth_start`.
+fn cancelled_view(login: &Login) -> Value {
+    let mut view = login.view();
+    if let Some(map) = view.as_object_mut() {
+        map.insert("status".into(), Value::String("cancelled".into()));
+        map.insert("message".into(), Value::String("Sign-in cancelled.".into()));
+    }
+    view
+}
+
+/// The current sign-in for one provider (`null` when none), for `ProviderInfo.authLogin`.
+pub(crate) fn view_for(provider_id: &str) -> Value {
+    lock()
+        .as_ref()
+        .filter(|l| l.provider_id == provider_id)
+        .map(Login::view)
+        .unwrap_or(Value::Null)
+}
+
 /// Register a started flow and run its waiter. Returns the `auth_start` result.
 pub(crate) fn install(provider_id: &str, kind: AuthKind, flow: Flow, notify: Notify) -> Value {
-    cancel_current();
+    cancel_current_and_notify(&notify);
     let Flow {
         started,
         wait,
@@ -283,8 +318,8 @@ pub(crate) fn install(provider_id: &str, kind: AuthKind, flow: Flow, notify: Not
         "expiresIn": started.expires_in,
         "interval": started.interval.max(1),
     });
-    if let Some(code) = started.user_code {
-        out["userCode"] = Value::String(code);
+    if let (Some(code), Some(map)) = (started.user_code, out.as_object_mut()) {
+        map.insert("userCode".into(), Value::String(code));
     }
     out
 }
@@ -339,18 +374,29 @@ pub(crate) fn poll(login_id: &str, notify: &Notify) -> Result<(Value, bool), Aut
 }
 
 /// `auth_cancel`: `true` when a matching sign-in was stopped.
-pub(crate) fn cancel(login_id: &str) -> Result<bool, AuthError> {
+/// `auth_cancel`. A pending sign-in is stopped and announced with `auth_changed`
+/// (`status: "cancelled"`); a finished one is just forgotten.
+pub(crate) fn cancel(login_id: &str, notify: &Notify) -> Result<bool, AuthError> {
     if login_id.is_empty() {
         return Err(AuthError::Invalid("loginId is required".into()));
     }
-    let mut guard = lock();
-    if guard.as_ref().is_some_and(|l| l.login_id == login_id) {
-        if let Some(mut login) = guard.take() {
-            login.stop();
+    let taken = {
+        let mut guard = lock();
+        if guard.as_ref().is_some_and(|l| l.login_id == login_id) {
+            guard.take()
+        } else {
+            None
         }
-        return Ok(true);
+    };
+    let Some(mut login) = taken else {
+        return Ok(false);
+    };
+    let was_pending = login.phase == Phase::Pending;
+    login.stop();
+    if was_pending {
+        notify(cancelled_view(&login));
     }
-    Ok(false)
+    Ok(true)
 }
 
 /// Summary of the current sign-in for `setup/status` (`null` when none).
@@ -602,11 +648,18 @@ mod tests {
             .as_str()
             .unwrap()
             .to_owned();
-        assert!(!cancel("login-other").unwrap());
-        assert!(cancel(&id).unwrap());
+        assert!(!cancel("login-other", &notify).unwrap());
+        assert!(rx.try_recv().is_err(), "an unknown id announces nothing");
+        assert!(cancel(&id, &notify).unwrap());
         assert!(hook.load(Ordering::Relaxed));
+        let note = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("cancel is announced");
+        assert_eq!(note["status"], "cancelled");
+        assert_eq!(note["loginId"], id.as_str());
+        assert_eq!(note["providerId"], "nous");
         assert!(matches!(poll(&id, &notify), Err(AuthError::Invalid(_))));
-        assert!(!cancel(&id).unwrap());
+        assert!(!cancel(&id, &notify).unwrap());
         // A late result from the cancelled waiter is dropped, not announced.
         let _ = finish.send(Finish::Done);
         assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
@@ -616,7 +669,7 @@ mod tests {
     #[test]
     #[serial_test::serial(setup_auth)]
     fn new_start_replaces_previous_login() {
-        let (notify, _rx) = collector();
+        let (notify, rx) = collector();
         let (first, _f1, hook1) = fake_flow(Some("A"), 600);
         let id1 = install("nous", AuthKind::Device, first, Arc::clone(&notify))["loginId"]
             .as_str()
@@ -629,6 +682,15 @@ mod tests {
             .to_owned();
         assert_ne!(id1, id2);
         assert!(hook1.load(Ordering::Relaxed));
+        // The replaced sign-in is announced as cancelled; the new one is reported per provider.
+        let note = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("replaced login announced");
+        assert_eq!(note["status"], "cancelled");
+        assert_eq!(note["loginId"], id1.as_str());
+        assert_eq!(view_for("nous")["loginId"], id2.as_str());
+        assert_eq!(view_for("nous")["status"], "pending");
+        assert_eq!(view_for("mistral-auth"), Value::Null);
         assert!(poll(&id1, &notify).is_err());
         assert_eq!(poll(&id2, &notify).unwrap().0["status"], "pending");
         cancel_current();
@@ -718,7 +780,10 @@ mod tests {
             poll("", &(Arc::new(|_| {}) as Notify)),
             Err(AuthError::Invalid(_))
         ));
-        assert!(matches!(cancel(""), Err(AuthError::Invalid(_))));
+        assert!(matches!(
+            cancel("", &(Arc::new(|_| {}) as Notify)),
+            Err(AuthError::Invalid(_))
+        ));
     }
 
     #[test]

@@ -607,7 +607,12 @@ impl acp::Agent for MvpAgent {
                     );
                     serde_json::json!({
                     "grokShell": true,
-                    "supercharge": { "steer": true, "sessionsChanged": true, "modelsList": true, "setup": true, "imageSetup": true, "deviceLogin": true, "authLogin": true },
+                    "supercharge": {
+                        "steer": true, "sessionsChanged": true, "modelsList": true, "setup": true,
+                        "imageSetup": true, "deviceLogin": true, "authLogin": true,
+                        // Same list as `_supercharge/setup/methods` below, under the Supercharge object.
+                        "methods": crate::extensions::setup::advertised_methods(),
+                    },
                     // Re-deriving this precedence client-side has regressed OIDC refresh, so clients consume the agent's choice from here
                     "defaultAuthMethodId": default_auth_method_id_wire,
                     // The agent can drive in-process SDK MCP servers over the ACP reverse channel (`x.ai/mcp/sdk_call`)
@@ -623,10 +628,7 @@ impl acp::Agent for MvpAgent {
                     "methods": ["_supercharge/plugins/list", "_supercharge/plugins/action", "_supercharge/plugins/catalog", "_supercharge/plugins/catalog_config", "_supercharge/plugins/catalog_configure", "_supercharge/plugins/details", "_supercharge/connections/list", "_supercharge/connections/configure", "_supercharge/connections/select", "_supercharge/connections/disconnect", "_supercharge/connections/connect", "_supercharge/connections/status", "_supercharge/connections/cancel", "_supercharge/agents/list", "_supercharge/agents/create"],
                     // Provider setup over ACP (`_supercharge/setup/*`, same logic as `/setup`).
                     "_supercharge/setup": true,
-                    "_supercharge/setup/methods": crate::extensions::setup::METHODS
-                        .iter()
-                        .map(|m| format!("_{m}"))
-                        .collect::<Vec<_>>(),
+                    "_supercharge/setup/methods": crate::extensions::setup::advertised_methods(),
                     "currentWorkingDirectory": current_working_directory.to_string_lossy().to_string(),
                     "agentVersion": supercharge_version::VERSION,
                     "agentId": agent_id(),
@@ -2070,7 +2072,9 @@ impl acp::Agent for MvpAgent {
                 crate::extensions::rewind::handle(self, &args).await
             }
             m if crate::extensions::setup::METHODS.contains(&m) => {
-                crate::extensions::setup::handle(self, m, &args).await
+                // Boxed: the setup handlers (model fetch, config write, catalog reload,
+                // session switch) are a large future; keep it off the dispatch stack frame.
+                Box::pin(crate::extensions::setup::handle(self, m, &args)).await
             }
             m if crate::extensions::custom_agents::METHODS.contains(&m) => {
                 crate::extensions::custom_agents::handle(self, m, &args).await

@@ -194,3 +194,30 @@ mod key_check {
         }
     }
 }
+
+/// Burn `depth + 1` frames of 256 KiB each; `black_box` keeps each buffer on the stack.
+#[inline(never)]
+fn burn_stack(depth: usize) -> u8 {
+    let mut buf = [0u8; 256 * 1024];
+    std::hint::black_box(&mut buf);
+    buf[0] = depth as u8;
+    if depth == 0 {
+        return buf[0];
+    }
+    burn_stack(depth - 1).wrapping_add(std::hint::black_box(&buf)[0])
+}
+
+#[test]
+fn persistent_agent_thread_has_an_explicit_large_stack() {
+    // The persistent agent polls every ACP handler on this thread. Debug builds need far
+    // more than the 2 MiB default for `setup/save`, so the stack must not depend on
+    // RUST_MIN_STACK. ~5 MiB of frames overflows a default thread and fits in 8 MiB.
+    assert!(super::PERSISTENT_AGENT_STACK_SIZE >= 8 * 1024 * 1024);
+    let handle = super::persistent_agent_thread_builder()
+        .spawn(|| {
+            assert_eq!(std::thread::current().name(), Some("agent-persistent"));
+            burn_stack(20)
+        })
+        .expect("spawn the persistent agent thread");
+    let _ = handle.join().expect("5 MiB of stack fits the agent thread");
+}

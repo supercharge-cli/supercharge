@@ -1197,15 +1197,11 @@ fn fetch_models_once(
         .text()
         .map_err(|error| ProviderSetupError::Fetch(error.to_string()))?;
     if !status.is_success() {
-        let snippet = redact_secret(body.trim(), api_key)
-            .chars()
-            .take(240)
-            .collect::<String>();
-        return Err(ProviderSetupError::Fetch(if snippet.is_empty() {
-            format!("provider returned HTTP {status}")
-        } else {
-            format!("provider returned HTTP {status}: {snippet}")
-        }));
+        return Err(ProviderSetupError::Fetch(provider_http_error(
+            status.as_u16(),
+            &body,
+            api_key,
+        )));
     }
     let parsed: Value = serde_json::from_str(&body)
         .map_err(|error| ProviderSetupError::Fetch(format!("invalid models JSON: {error}")))?;
@@ -1269,6 +1265,92 @@ pub fn fetch_provider_models_with_list_url(
         ));
     }
     Ok(models)
+}
+
+const MAX_PROVIDER_ERROR_MESSAGE_CHARS: usize = 120;
+
+/// Error text for a non-2xx model-list reply. Never the raw body: only the HTTP status, a
+/// short error code, and the provider's own message (from a JSON `error`), truncated and
+/// with the sent key and anything key-like masked. HTML or other bodies are dropped.
+pub fn provider_http_error(status: u16, body: &str, api_key: &str) -> String {
+    let parsed: Option<Value> = serde_json::from_str(body.trim()).ok();
+    let error = parsed.as_ref().map(|v| v.get("error").unwrap_or(v));
+    let field = |keys: &[&str]| -> Option<String> {
+        let e = error?;
+        keys.iter()
+            .find_map(|k| e.get(*k).and_then(Value::as_str))
+            .map(str::to_owned)
+    };
+    let is_code = |c: &str| {
+        !c.is_empty()
+            && c.len() <= 64
+            && c.chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+            && mask_key_like(c) == c
+    };
+    let (code, message) = match error.and_then(Value::as_str) {
+        Some(text) if is_code(text) => (Some(text.to_owned()), None),
+        Some(text) => (None, Some(text.to_owned())),
+        None => (
+            field(&["code", "type", "status"]).filter(|c| is_code(c)),
+            field(&["message", "detail"]),
+        ),
+    };
+    let code = code.or_else(|| default_http_error_code(status).map(str::to_owned));
+    let message = message
+        .map(|m| mask_key_like(&redact_secret(m.trim(), api_key)))
+        .map(|m| m.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|m| !m.is_empty())
+        .map(|m| truncate_chars(&m, MAX_PROVIDER_ERROR_MESSAGE_CHARS));
+    let mut out = format!("provider returned HTTP {status}");
+    if let Some(code) = code {
+        out.push_str(&format!(" ({code})"));
+    }
+    if let Some(message) = message {
+        out.push_str(": ");
+        out.push_str(&message);
+    }
+    out
+}
+
+fn default_http_error_code(status: u16) -> Option<&'static str> {
+    Some(match status {
+        400 => "bad_request",
+        401 => "unauthorized",
+        402 => "payment_required",
+        403 => "forbidden",
+        404 => "not_found",
+        408 => "timeout",
+        429 => "rate_limited",
+        500..=599 => "server_error",
+        _ => return None,
+    })
+}
+
+fn truncate_chars(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_owned();
+    }
+    let mut out: String = text.chars().take(max.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
+/// Mask words that look like credentials: known key prefixes, JWTs, and long opaque tokens.
+pub fn mask_key_like(text: &str) -> String {
+    static KEY_LIKE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?x)
+            \b(?:sk|pk|rk|gsk|xai)[-_][A-Za-z0-9_\-]{6,}
+            | \beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-.]+
+            | \bAIza[A-Za-z0-9_\-]{10,}
+            | [A-Za-z0-9_\-]*[0-9][A-Za-z0-9_\-]*[A-Za-z][A-Za-z0-9_\-]{18,}
+            | [A-Za-z0-9_\-]*[A-Za-z][A-Za-z0-9_\-]*[0-9][A-Za-z0-9_\-]{18,}
+            ",
+        )
+        .expect("static key mask regex")
+    });
+    KEY_LIKE.replace_all(text, "[redacted]").into_owned()
 }
 
 fn redact_secret(text: &str, secret: &str) -> String {
@@ -1666,6 +1748,10 @@ pub struct SavedCustomProvider {
     pub base_url: String,
     pub format: SetupWireFormat,
     pub api_key: String,
+    /// Model `setup/save` picks without a `modelId`: the one chosen when the provider was
+    /// added or updated, else the first model the endpoint listed. `None` only when the
+    /// provider was saved with `validate: false` and no `defaultModel`.
+    pub default_model: Option<String>,
 }
 
 /// Custom provider ids are lowercase slugs (`a-z`, `0-9`, `-`, at most 48 chars) that do
@@ -1749,6 +1835,7 @@ fn custom_provider_from_slot(id: &str, slot: &toml::Value) -> Option<SavedCustom
         api_key: slot_str(slot, "api_key")
             .filter(|k| is_plausible_provider_api_key(k))
             .unwrap_or_default(),
+        default_model: slot_str(slot, "default_model").filter(|m| m.len() <= MAX_MODEL_ID_LEN),
     })
 }
 
@@ -1824,6 +1911,17 @@ pub fn persist_custom_provider_at(
         slot.insert("name", toml_edit::value(name));
         slot.insert("base_url", toml_edit::value(base_url));
         slot.insert("format", toml_edit::value(provider.format.as_str()));
+        match provider.default_model.as_deref().map(str::trim) {
+            Some(model) if !model.is_empty() => {
+                if model.len() > MAX_MODEL_ID_LEN {
+                    return Err(ProviderSetupError::InvalidModel);
+                }
+                slot.insert("default_model", toml_edit::value(model));
+            }
+            _ => {
+                slot.remove("default_model");
+            }
+        }
         if api_key.is_empty() {
             slot.remove("api_key");
         } else {
@@ -4694,6 +4792,63 @@ mod context_window_metadata_tests {
                 }]
             })),
             Some(1_048_568)
+        );
+    }
+}
+
+#[cfg(test)]
+mod provider_http_error_tests {
+    use super::provider_http_error;
+
+    #[test]
+    fn rejected_key_error_has_status_code_and_a_masked_short_message() {
+        let body = r#"{"error":{"message":"Incorrect API key provided: sk-bad-secret-123456789. You can find your key at https://example.test/keys","type":"invalid_request_error","code":"invalid_api_key"}}"#;
+        let msg = provider_http_error(401, body, "sk-bad-secret-123456789");
+        assert!(
+            msg.starts_with("provider returned HTTP 401 (invalid_api_key): "),
+            "{msg}"
+        );
+        assert!(!msg.contains("sk-bad-secret"), "{msg}");
+        assert!(msg.contains("[redacted]"), "{msg}");
+        // Key-like strings the client did not send are masked too.
+        let msg = provider_http_error(
+            403,
+            r#"{"error":"token sk-live-abcdef1234567890 and eyJhbGciOi.eyJzdWIi.sig rejected"}"#,
+            "",
+        );
+        assert!(!msg.contains("sk-live"), "{msg}");
+        assert!(!msg.contains("eyJhbGciOi"), "{msg}");
+        assert!(
+            msg.starts_with("provider returned HTTP 403 (forbidden): "),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn non_json_bodies_are_dropped_and_long_messages_truncated() {
+        let html = "<html><body>Unauthorized for key sk-abc1234567890 at /v1/models</body></html>";
+        assert_eq!(
+            provider_http_error(401, html, "sk-abc1234567890"),
+            "provider returned HTTP 401 (unauthorized)"
+        );
+        assert_eq!(
+            provider_http_error(418, "", ""),
+            "provider returned HTTP 418"
+        );
+        let long = format!(r#"{{"message":"{}"}}"#, "word ".repeat(100));
+        let msg = provider_http_error(500, &long, "");
+        let tail = msg.split(": ").nth(1).unwrap();
+        assert!(tail.chars().count() <= 120, "{msg}");
+        assert!(tail.ends_with('…'), "{msg}");
+        // A bare error code string is reported as the code.
+        assert_eq!(
+            provider_http_error(429, r#"{"error":"rate_limit_exceeded"}"#, ""),
+            "provider returned HTTP 429 (rate_limit_exceeded)"
+        );
+        // A key-like `code` is not echoed.
+        assert_eq!(
+            provider_http_error(401, r#"{"error":{"code":"sk-abcdef1234567890"}}"#, ""),
+            "provider returned HTTP 401 (unauthorized)"
         );
     }
 }

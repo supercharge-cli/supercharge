@@ -135,6 +135,7 @@ const NATIVE_SUPERCHARGE_METHODS: &[&str] = &[
     "supercharge/setup/provider_status",
     "supercharge/setup/provider_add_custom",
     "supercharge/setup/provider_set_key",
+    "supercharge/setup/provider_update_custom",
     "supercharge/setup/provider_remove",
     "supercharge/agents/list",
     "supercharge/agents/create",

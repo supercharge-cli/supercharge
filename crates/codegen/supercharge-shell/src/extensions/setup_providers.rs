@@ -9,7 +9,8 @@
 //! |---|---|---|
 //! | `setup/providers_list` | `{}` | `{activeProviderId, activeModelId, configPath, providers: [ProviderInfo]}` |
 //! | `setup/provider_status` | `{providerId}` | `ProviderInfo` |
-//! | `setup/provider_add_custom` | `{name, baseUrl, format?, apiKey?, id?, validate?}` | `{provider: ProviderInfo, models: [Model]}` |
+//! | `setup/provider_add_custom` | `{name, baseUrl, format?, apiKey?, id?, defaultModel?, validate?}` | `{provider: ProviderInfo, models: [Model]}` |
+//! | `setup/provider_update_custom` | `{providerId, name?, baseUrl?, format?, apiKey?, defaultModel?, validate?}` | `{provider: ProviderInfo, models: [Model], active, reloaded}` |
 //! | `setup/provider_set_key` | `{providerId, apiKey, validate?}` | `{saved, providerId, active, reloaded, models: [Model], provider: ProviderInfo}` |
 //! | `setup/provider_remove` | `{providerId}` | `{removed, providerId}` |
 
@@ -28,6 +29,7 @@ pub(crate) const PROVIDERS_LIST: &str = "supercharge/setup/providers_list";
 pub(crate) const PROVIDER_STATUS: &str = "supercharge/setup/provider_status";
 pub(crate) const PROVIDER_ADD_CUSTOM: &str = "supercharge/setup/provider_add_custom";
 pub(crate) const PROVIDER_SET_KEY: &str = "supercharge/setup/provider_set_key";
+pub(crate) const PROVIDER_UPDATE_CUSTOM: &str = "supercharge/setup/provider_update_custom";
 pub(crate) const PROVIDER_REMOVE: &str = "supercharge/setup/provider_remove";
 
 fn invalid(msg: impl Into<String>) -> acp::Error {
@@ -129,6 +131,12 @@ fn info(
             || active_key_present(config, id));
     let active = active_id(config).as_deref() == Some(id);
     let ready = key_optional || has_api_key || signed_in == Some(true);
+    let auth_login = if custom {
+        Value::Null
+    } else {
+        auth::view_for(id)
+    };
+    let sign_in_pending = auth_login.get("status").and_then(Value::as_str) == Some("pending");
     json!({
         "id": id,
         "name": name,
@@ -146,6 +154,8 @@ fn info(
         "hasApiKey": has_api_key,
         "active": active,
         "ready": ready,
+        "authLogin": auth_login,
+        "signInPending": sign_in_pending,
         "modelsSource": "live",
         "modelsUrl": ps::resolve_provider_models_list_url(base_url, (!custom).then_some(id)),
     })
@@ -171,7 +181,7 @@ fn custom_info(c: &SavedCustomProvider, config: Option<&toml::Value>) -> Value {
         &c.name,
         "Custom provider",
         &c.base_url,
-        None,
+        c.default_model.as_deref(),
         c.format,
         &[],
         true,
@@ -239,13 +249,15 @@ pub(crate) fn custom_from_params(
         str_param(p, &["baseUrl", "base_url"]).ok_or_else(|| invalid("baseUrl is required"))?;
     let base_url = ps::normalize_provider_base_url(base_url).map_err(setup_err)?;
     let format = parse_format(str_param(p, &["format", "apiBackend", "api_backend"]))?;
-    // Updating an existing custom provider without `apiKey` keeps its saved key.
+    // Re-adding an existing custom provider at the same URL keeps its key and default model.
+    let existing = config
+        .and_then(|c| ps::saved_custom_provider(c, &id))
+        .filter(|c| c.base_url == base_url);
     let api_key = match str_param(p, &["apiKey", "api_key"]) {
         Some(k) => k.to_owned(),
-        None => config
-            .and_then(|c| ps::saved_custom_provider(c, &id))
-            .filter(|c| c.base_url == base_url)
-            .map(|c| c.api_key)
+        None => existing
+            .as_ref()
+            .map(|c| c.api_key.clone())
             .unwrap_or_default(),
     };
     if !ps::is_plausible_provider_api_key(&api_key) {
@@ -257,7 +269,88 @@ pub(crate) fn custom_from_params(
         base_url,
         format,
         api_key,
+        default_model: existing.and_then(|c| c.default_model),
     })
+}
+
+/// `apiKey` as sent: `Some("")` clears the key, `None` leaves it unchanged.
+fn raw_key_param(p: &Value) -> Option<&str> {
+    ["apiKey", "api_key"]
+        .iter()
+        .find_map(|k| p.get(*k).and_then(Value::as_str))
+        .map(str::trim)
+}
+
+/// Apply `provider_update_custom` fields to a saved custom provider. Fields left out keep
+/// their saved value. Moving to another origin needs an explicit `apiKey` (or `""`), so a
+/// saved key is never sent to a host it was not entered for.
+pub(crate) fn custom_update_from_params(
+    p: &Value,
+    config: Option<&toml::Value>,
+) -> Result<SavedCustomProvider, acp::Error> {
+    // `providerId` like every other per-provider call; `id` too, matching provider_add_custom.
+    let id = str_param(p, &["providerId", "provider_id", "provider", "id"])
+        .ok_or_else(|| invalid("providerId is required"))?;
+    let mut custom = config
+        .and_then(|c| ps::saved_custom_provider(c, id))
+        .ok_or_else(|| invalid(format!("unknown custom provider `{id}`")))?;
+    if let Some(name) = str_param(p, &["name", "displayName"]) {
+        custom.name = ps::validate_custom_provider_name(name).map_err(setup_err)?;
+    }
+    if let Some(raw) = str_param(p, &["format", "apiBackend", "api_backend"]) {
+        custom.format = parse_format(Some(raw))?;
+    }
+    let key = raw_key_param(p);
+    if let Some(raw) = str_param(p, &["baseUrl", "base_url"]) {
+        let base_url = ps::normalize_provider_base_url(raw).map_err(setup_err)?;
+        if !same_origin(&base_url, &custom.base_url) && key.is_none() && !custom.api_key.is_empty()
+        {
+            return Err(invalid(
+                "baseUrl moves to another host: pass apiKey for it (or \"\" to clear the saved key)",
+            ));
+        }
+        if base_url != custom.base_url {
+            // A model id chosen for the old endpoint may not exist on the new one.
+            custom.default_model = None;
+        }
+        custom.base_url = base_url;
+    }
+    if let Some(key) = key {
+        if !ps::is_plausible_provider_api_key(key) {
+            return Err(setup_err(ProviderSetupError::InvalidApiKey));
+        }
+        custom.api_key = key.to_owned();
+    }
+    Ok(custom)
+}
+
+fn same_origin(a: &str, b: &str) -> bool {
+    match (url::Url::parse(a), url::Url::parse(b)) {
+        (Ok(a), Ok(b)) => a.origin() == b.origin(),
+        _ => false,
+    }
+}
+
+/// Pick the custom provider's default model: an explicit `defaultModel` (which must be listed
+/// when models were fetched), else the saved one if still listed, else the first listed model.
+pub(crate) fn choose_custom_default(
+    explicit: Option<&str>,
+    saved: Option<&str>,
+    listed: &[ProviderModel],
+) -> Result<Option<String>, acp::Error> {
+    let is_listed = |id: &str| listed.iter().any(|m| m.id == id);
+    if let Some(model) = explicit {
+        if !listed.is_empty() && !is_listed(model) {
+            return Err(invalid(format!(
+                "defaultModel `{model}` is not in the provider's model list"
+            )));
+        }
+        return Ok(Some(model.to_owned()));
+    }
+    if let Some(model) = saved.filter(|m| listed.is_empty() || is_listed(m)) {
+        return Ok(Some(model.to_owned()));
+    }
+    Ok(listed.first().map(|m| m.id.clone()))
 }
 
 /// Where `provider_set_key` stores a key, and the endpoint used to validate it.
@@ -402,14 +495,23 @@ pub(crate) async fn handle(
                 .ok_or_else(|| invalid(format!("unknown provider `{id}`")))
         }),
         PROVIDER_ADD_CUSTOM => add_custom(&path, p).await,
+        PROVIDER_UPDATE_CUSTOM => update_custom(agent, &path, p).await,
         PROVIDER_SET_KEY => set_key(agent, &path, p).await,
         PROVIDER_REMOVE => remove(&path, p),
         _ => return None,
     })
 }
 
-async fn add_custom(path: &Path, p: &Value) -> Result<Value, acp::Error> {
-    let custom = custom_from_params(p, read_config(path).as_ref())?;
+fn default_model_param(p: &Value) -> Option<&str> {
+    str_param(p, &["defaultModel", "default_model", "modelId", "model_id"])
+}
+
+/// Validate (optionally), choose the default model and save a custom provider.
+async fn save_custom(
+    path: &Path,
+    p: &Value,
+    mut custom: SavedCustomProvider,
+) -> Result<(SavedCustomProvider, Vec<ProviderModel>), acp::Error> {
     let models = if validate_flag(p) {
         fetch(
             custom.base_url.clone(),
@@ -421,12 +523,91 @@ async fn add_custom(path: &Path, p: &Value) -> Result<Value, acp::Error> {
     } else {
         Vec::new()
     };
+    custom.default_model = choose_custom_default(
+        default_model_param(p),
+        custom.default_model.as_deref(),
+        &models,
+    )?;
     ps::persist_custom_provider_at(path, &custom).map_err(setup_err)?;
+    Ok((custom, models))
+}
+
+async fn add_custom(path: &Path, p: &Value) -> Result<Value, acp::Error> {
+    let custom = custom_from_params(p, read_config(path).as_ref())?;
+    let (custom, models) = save_custom(path, p, custom).await?;
     let config = read_config(path);
     Ok(json!({
         "provider": custom_info(&custom, config.as_ref()),
         "models": models.iter().map(model_json).collect::<Vec<_>>(),
     }))
+}
+
+async fn update_custom(
+    agent: &crate::agent::mvp_agent::MvpAgent,
+    path: &Path,
+    p: &Value,
+) -> Result<Value, acp::Error> {
+    let before = read_config(path);
+    let custom = custom_update_from_params(p, before.as_ref())?;
+    let (custom, models) = save_custom(path, p, custom).await?;
+    let active = active_id(before.as_ref()).as_deref() == Some(custom.id.as_str());
+    let mut reloaded = false;
+    if active {
+        let target = KeyTarget::Custom(custom.clone());
+        reloaded = rewrite_active(
+            agent,
+            path,
+            before.as_ref(),
+            &target,
+            &custom.api_key,
+            &models,
+        )?;
+    }
+    let config = read_config(path);
+    Ok(json!({
+        "provider": custom_info(&custom, config.as_ref()),
+        "models": models.iter().map(model_json).collect::<Vec<_>>(),
+        "active": active,
+        "reloaded": reloaded,
+    }))
+}
+
+/// The active provider also carries its URL and key in `[model_providers.setup]` and the
+/// default model entry; rewrite them through the `/setup` writer and reload the catalog.
+fn rewrite_active(
+    agent: &crate::agent::mvp_agent::MvpAgent,
+    path: &Path,
+    config: Option<&toml::Value>,
+    target: &KeyTarget,
+    api_key: &str,
+    models: &[ProviderModel],
+) -> Result<bool, acp::Error> {
+    let custom_default = match target {
+        KeyTarget::Custom(c) => c.default_model.clone(),
+        KeyTarget::Builtin { .. } => None,
+    };
+    let model_id = config
+        .and_then(default_model_from)
+        .filter(|m| models.is_empty() || models.iter().any(|l| &l.id == m))
+        .or(custom_default)
+        .or_else(|| listed_builtin(target.id()).map(|pr| pr.default_model.to_owned()))
+        .or_else(|| models.first().map(|m| m.id.clone()))
+        .ok_or_else(|| invalid("no default model saved; call setup/save"))?;
+    let model_name = models
+        .iter()
+        .find(|m| m.id == model_id)
+        .map(|m| m.name.clone())
+        .unwrap_or_else(|| model_id.clone());
+    let setup = ProviderSetup {
+        base_url: target.base_url().to_owned(),
+        api_key: api_key.to_owned(),
+        model_id,
+        model_name,
+        format: target.format(),
+        provider_id: target.id().to_owned(),
+    };
+    ps::persist_provider_setup_at(path, &setup).map_err(setup_err)?;
+    Ok(crate::extensions::session_admin::handle_reload_models(agent).is_ok())
 }
 
 async fn set_key(
@@ -452,33 +633,12 @@ async fn set_key(
         Vec::new()
     };
     persist_key_at(path, &target, api_key)?;
-    // The active provider also carries its key in `[model_providers.setup]` and the
-    // default model entry; rewrite them through the `/setup` writer so the new key applies.
     let active = active_id(config.as_ref()).as_deref() == Some(target.id());
-    let mut reloaded = false;
-    if active {
-        let model_id = config
-            .as_ref()
-            .and_then(default_model_from)
-            .or_else(|| listed_builtin(target.id()).map(|pr| pr.default_model.to_owned()))
-            .or_else(|| models.first().map(|m| m.id.clone()))
-            .ok_or_else(|| invalid("no default model saved; call setup/save"))?;
-        let model_name = models
-            .iter()
-            .find(|m| m.id == model_id)
-            .map(|m| m.name.clone())
-            .unwrap_or_else(|| model_id.clone());
-        let setup = ProviderSetup {
-            base_url: target.base_url().to_owned(),
-            api_key: api_key.to_owned(),
-            model_id,
-            model_name,
-            format: target.format(),
-            provider_id: target.id().to_owned(),
-        };
-        ps::persist_provider_setup_at(path, &setup).map_err(setup_err)?;
-        reloaded = crate::extensions::session_admin::handle_reload_models(agent).is_ok();
-    }
+    let reloaded = if active {
+        rewrite_active(agent, path, config.as_ref(), &target, api_key, &models)?
+    } else {
+        false
+    };
     let config = read_config(path);
     Ok(json!({
         "saved": true,
@@ -720,5 +880,186 @@ mod tests {
             SetupWireFormat::Responses
         );
         assert!(parse_format(Some("soap")).is_err());
+    }
+
+    fn model(id: &str) -> ProviderModel {
+        ProviderModel {
+            id: id.into(),
+            name: id.into(),
+            supports_thinking: false,
+            context_window: None,
+        }
+    }
+
+    #[test]
+    fn custom_default_model_is_a_listed_model_when_models_are_known() {
+        let listed = [model("m-a"), model("m-b")];
+        assert_eq!(
+            choose_custom_default(None, None, &listed)
+                .unwrap()
+                .as_deref(),
+            Some("m-a")
+        );
+        assert_eq!(
+            choose_custom_default(Some("m-b"), None, &listed)
+                .unwrap()
+                .as_deref(),
+            Some("m-b")
+        );
+        assert!(choose_custom_default(Some("m-x"), None, &listed).is_err());
+        // A saved default survives while still listed, else the first listed model wins.
+        assert_eq!(
+            choose_custom_default(None, Some("m-b"), &listed)
+                .unwrap()
+                .as_deref(),
+            Some("m-b")
+        );
+        assert_eq!(
+            choose_custom_default(None, Some("gone"), &listed)
+                .unwrap()
+                .as_deref(),
+            Some("m-a")
+        );
+        // `validate: false`: only an explicit or saved default; otherwise null.
+        assert_eq!(
+            choose_custom_default(Some("typed"), None, &[])
+                .unwrap()
+                .as_deref(),
+            Some("typed")
+        );
+        assert_eq!(choose_custom_default(None, None, &[]).unwrap(), None);
+    }
+
+    #[test]
+    fn custom_default_model_is_reported_and_used_by_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut c = custom_from_params(
+            &json!({"name": "Gw", "baseUrl": "https://gw.example.test/v1", "apiKey": "sk-gw"}),
+            None,
+        )
+        .unwrap();
+        c.default_model = choose_custom_default(None, None, &[model("m-a")]).unwrap();
+        ps::persist_custom_provider_at(&path, &c).unwrap();
+        let config = read(&path);
+        let info = provider_info(Some(&config), "custom-gw").unwrap();
+        assert_eq!(info["defaultModel"], "m-a");
+        let t = crate::extensions::setup::resolve_target_in(
+            &json!({"providerId": "custom-gw"}),
+            None,
+            Some(&config),
+        )
+        .unwrap();
+        assert_eq!(t.default_model.as_deref(), Some("m-a"));
+        // Re-adding at the same URL keeps the default.
+        let again = custom_from_params(
+            &json!({"name": "Gw", "id": "custom-gw", "baseUrl": "https://gw.example.test/v1"}),
+            Some(&config),
+        )
+        .unwrap();
+        assert_eq!(again.default_model.as_deref(), Some("m-a"));
+    }
+
+    #[test]
+    fn update_custom_patches_fields_and_guards_the_key_on_host_change() {
+        let config = cfg(
+            "[provider_credentials.custom-gw]\ncustom = true\nname = \"Gw\"\nbase_url = \"https://gw.example.test/v1\"\nformat = \"openai\"\napi_key = \"sk-gw-secret\"\ndefault_model = \"m-a\"\n",
+        );
+        // Rename only: everything else is kept.
+        let c = custom_update_from_params(
+            &json!({"id": "custom-gw", "name": "Gateway"}),
+            Some(&config),
+        )
+        .unwrap();
+        assert_eq!(c.name, "Gateway");
+        assert_eq!(c.api_key, "sk-gw-secret");
+        assert_eq!(c.default_model.as_deref(), Some("m-a"));
+        // Same origin, new path: key kept, default reset for the new endpoint.
+        let c = custom_update_from_params(
+            &json!({"providerId": "custom-gw", "baseUrl": "https://gw.example.test/v2", "format": "responses"}),
+            Some(&config),
+        )
+        .unwrap();
+        assert_eq!(c.base_url, "https://gw.example.test/v2");
+        assert_eq!(c.format, SetupWireFormat::Responses);
+        assert_eq!(c.api_key, "sk-gw-secret");
+        assert_eq!(c.default_model, None);
+        // Another host without apiKey is refused, so the key never reaches it.
+        let err = custom_update_from_params(
+            &json!({"providerId": "custom-gw", "baseUrl": "https://other.example.test/v1"}),
+            Some(&config),
+        )
+        .unwrap_err();
+        assert!(!format!("{err:?}").contains("sk-gw-secret"));
+        // ... unless a key (or "" to clear) is given.
+        let c = custom_update_from_params(
+            &json!({"providerId": "custom-gw", "baseUrl": "https://other.example.test/v1", "apiKey": ""}),
+            Some(&config),
+        )
+        .unwrap();
+        assert_eq!(c.api_key, "");
+        let c = custom_update_from_params(
+            &json!({"providerId": "custom-gw", "baseUrl": "https://other.example.test/v1", "apiKey": "sk-new"}),
+            Some(&config),
+        )
+        .unwrap();
+        assert_eq!(c.api_key, "sk-new");
+        // Unknown ids, built-ins and bad fields are rejected.
+        for bad in [
+            json!({"providerId": "custom-nope", "name": "x"}),
+            json!({"providerId": "openai", "name": "x"}),
+            json!({"name": "x"}),
+            json!({"providerId": "custom-gw", "format": "soap"}),
+            json!({"providerId": "custom-gw", "baseUrl": "http://remote.example.test/v1"}),
+            json!({"providerId": "custom-gw", "apiKey": "Authentication required. Run /login"}),
+        ] {
+            assert!(
+                custom_update_from_params(&bad, Some(&config)).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(setup_auth)]
+    fn provider_info_shows_an_in_progress_sign_in() {
+        let idle = provider_info(None, "nous").unwrap();
+        assert_eq!(idle["authLogin"], Value::Null);
+        assert_eq!(idle["signInPending"], false);
+        let (tx, rx) = std::sync::mpsc::channel::<auth::Finish>();
+        let flow = auth::Flow {
+            started: auth::Started {
+                url: "https://portal.example.test/device".into(),
+                user_code: Some("ABCD".into()),
+                expires_in: 600,
+                interval: 5,
+            },
+            wait: Box::new(move |_cancel, _interval| {
+                rx.recv().unwrap_or(auth::Finish::Error("gone".into()))
+            }),
+            on_cancel: None,
+        };
+        let started = auth::install(
+            "nous",
+            auth::AuthKind::Device,
+            flow,
+            std::sync::Arc::new(|_| {}),
+        );
+        let info = provider_info(None, "nous").unwrap();
+        assert_eq!(info["signInPending"], true);
+        assert_eq!(info["authLogin"]["loginId"], started["loginId"]);
+        assert_eq!(info["authLogin"]["status"], "pending");
+        assert!(info["authLogin"].get("userCode").is_none());
+        let list = list_json(None, Path::new("/tmp/config.toml"));
+        let device_provider = list["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == "mistral-auth")
+            .cloned()
+            .unwrap();
+        assert_eq!(device_provider["signInPending"], false);
+        let _ = tx.send(auth::Finish::Done);
+        auth::cancel_current();
     }
 }

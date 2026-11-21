@@ -19,33 +19,36 @@ the CLI source spells them without it.
 ## 1. The ACP calls Studio uses
 
 All methods are ACP extension requests on the `supercharge agent serve` WebSocket
-(see `docs/acp-studio.md` for connecting and the server key). `initialize` advertises them in
-`_meta["_supercharge/setup/methods"]` (`agent/mvp_agent/acp_agent.rs:626`).
-The method list is `METHODS` at `extensions/setup.rs:40`.
+(see `docs/acp-studio.md` for connecting and the server key). `initialize` lists them (with the
+leading underscore) in `_meta.supercharge.methods` (`agent/mvp_agent/acp_agent.rs:614`)
+and, for older clients, in `_meta["_supercharge/setup/methods"]`. Both come from `METHODS`
+(`extensions/setup.rs:40`). Check the list before calling a method so
+Studio works against older CLIs.
 
 | Step | Method | Request | Response |
 |---|---|---|---|
 | List | `_supercharge/setup/providers_list` | `{}` | `{ activeProviderId, activeModelId, configPath, providers: [ProviderInfo] }` |
 | Inspect one | `_supercharge/setup/provider_status` | `{ providerId }` | `ProviderInfo` |
-| Add custom | `_supercharge/setup/provider_add_custom` | `{ name, baseUrl, format?, apiKey?, id?, validate? }` | `{ provider: ProviderInfo, models: [Model] }` |
+| Add custom | `_supercharge/setup/provider_add_custom` | `{ name, baseUrl, format?, apiKey?, id?, defaultModel?, validate? }` | `{ provider: ProviderInfo, models: [Model] }` |
+| Edit custom | `_supercharge/setup/provider_update_custom` | `{ providerId, name?, baseUrl?, format?, apiKey?, defaultModel?, validate? }` | `{ provider: ProviderInfo, models: [Model], active, reloaded }` |
 | Paste a key | `_supercharge/setup/provider_set_key` | `{ providerId, apiKey, validate? }` | `{ saved, providerId, active, reloaded, models: [Model], provider: ProviderInfo }` |
 | Sign in | `_supercharge/setup/auth_start` | `{ providerId, kind? }` | `{ loginId, providerId, kind, url, userCode?, expiresIn, interval }` |
 | | `_supercharge/setup/auth_poll` | `{ loginId }` | `AuthLogin` |
 | | `_supercharge/setup/auth_cancel` | `{ loginId }` | `{ cancelled }` |
-| | notification `_supercharge/setup/auth_changed` | | `AuthLogin` (terminal status only) |
+| | notification `_supercharge/setup/auth_changed` | | `AuthLogin` (terminal status, or `cancelled`) |
 | List models | `_supercharge/setup/models` | `{ providerId?, baseUrl?, apiKey?, format? }` | `{ models: [Model], providerId, baseUrl, format, defaultModel }` |
 | Use | `_supercharge/setup/save` | `{ providerId?, baseUrl?, apiKey?, modelId?, modelName?, format?, sessionId? }` | `{ saved, modelId, reloaded, switchedSessions, models, message }` |
 | Forget | `_supercharge/setup/provider_remove` | `{ providerId }` | `{ removed, providerId }` |
 | Whole state | `_supercharge/setup/status` | `{}` | see `docs/acp-studio.md` |
 
-Handlers: `providers_list`, `provider_status`, `provider_add_custom`, `provider_set_key`,
-`provider_remove` in `extensions/setup_providers.rs:392`;
-`models` / `save` in `extensions/setup.rs:312`;
-`auth_*` in `extensions/setup.rs:486` and `extensions/setup_auth.rs:242`.
+Handlers: `providers_list`, `provider_status`, `provider_add_custom`, `provider_update_custom`,
+`provider_set_key`, `provider_remove` in `extensions/setup_providers.rs:485`;
+`models` / `save` in `extensions/setup.rs:320`;
+`auth_*` in `extensions/setup.rs:495` and `extensions/setup_auth.rs:277`.
 
 ### Shapes
 
-`ProviderInfo` (`extensions/setup_providers.rs:99`):
+`ProviderInfo` (`extensions/setup_providers.rs:101`):
 
 ```json
 {
@@ -65,6 +68,8 @@ Handlers: `providers_list`, `provider_status`, `provider_add_custom`, `provider_
   "hasApiKey": true,
   "active": false,
   "ready": true,
+  "authLogin": null,
+  "signInPending": false,
   "modelsSource": "live",
   "modelsUrl": "https://api.groq.com/openai/v1/models"
 }
@@ -72,7 +77,7 @@ Handlers: `providers_list`, `provider_status`, `provider_add_custom`, `provider_
 
 - `authMethods`: every way the provider accepts credentials, interactive kinds first
   (`"device"`, `"browser"`), then `"none"`, then `"api_key"`
-  (`extensions/setup_auth.rs:80`). Build the auth UI from this list only.
+  (`extensions/setup_auth.rs:82`). Build the auth UI from this list only.
   - `"device"` / `"browser"`: show a **Sign in** button → `auth_start`.
   - `"api_key"`: show a key field → `provider_set_key`.
   - `"none"`: the key field is optional (local servers).
@@ -82,24 +87,42 @@ Handlers: `providers_list`, `provider_status`, `provider_add_custom`, `provider_
 - `hasApiKey`: the CLI holds a pasted key for this provider (in its own slot, or as the active provider).
 - `ready`: the provider can list models now (`keyOptional || hasApiKey || signedIn`).
 - `active`: this is the provider `[models] default` runs on.
+- `authLogin`: the CLI's current sign-in for this provider (`AuthLogin`), or `null`. It stays
+  after it finishes (`done`, `denied`, ...) until the next `auth_start`. `signInPending` is
+  `true` while that sign-in is `pending`, so a reopened settings page can resume polling with
+  `authLogin.loginId` instead of starting again. Always `null` / `false` for custom providers.
+- `defaultModel`: a string for built-in providers. For a custom provider it is the model chosen
+  when it was added or updated (`defaultModel`), else the first model the endpoint listed. It is
+  `null` only when the provider was saved with `validate: false` and no `defaultModel`.
 - `auth`: legacy single value kept for 1.4.19 clients; ignore it in new code.
 - `modelsSource` is always `"live"` for listed providers: models come from `modelsUrl` at
-  `setup/models` time. There is no static fallback (`agent/provider_setup.rs:1216`).
+  `setup/models` time. There is no static fallback (`agent/provider_setup.rs:1212`).
   `curated` is only the preferred order for the picker.
 - No response ever contains an API key, token, refresh token, PKCE verifier or device code.
 
 `Model`: `{ id, name, supportsThinking, contextWindow }` (`contextWindow` may be `null`).
 
-`AuthLogin`: `{ loginId, providerId, kind, status: "pending"|"done"|"denied"|"expired"|"error", interval, message? }`.
+`AuthLogin`: `{ loginId, providerId, kind, status: "pending"|"done"|"denied"|"expired"|"error"|"cancelled", interval, message? }`.
+`cancelled` appears only in the `auth_changed` notification: it is sent once when a pending
+sign-in is stopped by `auth_cancel` or replaced by a new `auth_start`
+(`extensions/setup_auth.rs:379`). After that the `loginId` is gone
+(`auth_poll` fails with `invalid_params`). The notification never carries a URL, user code or token.
 
 Errors are ACP `invalid_params` (bad input, unknown provider, provider rejected the key, login
-denied/expired) or `internal_error` (I/O) (`extensions/setup_providers.rs:41`).
+denied/expired) or `internal_error` (I/O) (`extensions/setup_providers.rs:43`).
+When the provider refuses the model list (for example a wrong key), `data` is
+`provider returned HTTP <status> (<code>): <message>`: the status, a short error code (the
+provider's own `error.code` / `type`, else one derived from the status such as `unauthorized`),
+and the provider's `error.message` cut to 120 characters with the sent key and anything key-like
+replaced by `[redacted]`. The raw body is never returned; HTML or other non-JSON bodies are
+dropped (`agent/provider_setup.rs:1275`). Example:
+`provider returned HTTP 401 (invalid_api_key): Incorrect API key provided: [redacted].`
 
 ## 2. Call sequences
 
 Every flow ends the same way: `setup/models { providerId }` → user picks → `setup/save
 { providerId, modelId }`. `save` writes the config, hot-reloads the catalog and switches the
-open sessions (or `sessionId`) to the model (`extensions/setup.rs:324`).
+open sessions (or `sessionId`) to the model (`extensions/setup.rs:332`).
 After that, `_supercharge/models/list` and `session/set_model` see the provider's models.
 
 ### A. API-key provider (most providers, the routers, custom providers)
@@ -108,12 +131,19 @@ After that, `_supercharge/models/list` and `session/set_model` see the provider'
 2. `provider_set_key { providerId, apiKey }`. The CLI lists the provider's models with that key
    first (`validate: false` skips it); a rejected key fails with `invalid_params` and nothing is saved.
    The key goes to `[provider_credentials.<id>]`; if the provider is active the active entry is
-   rewritten too and the catalog reloads (`extensions/setup_providers.rs:432`).
+   rewritten too and the catalog reloads (`extensions/setup_providers.rs:613`).
 3. `provider_status { providerId }` → `hasApiKey: true, ready: true`.
 4. `setup/models { providerId }` (no `apiKey`: the CLI uses the stored one) → `setup/save { providerId, modelId }`.
 
 Passing `apiKey` straight to `setup/models` / `setup/save` also works (the `/setup` flow), but
 then the key is stored only when `save` runs.
+
+### Resuming a sign-in
+
+Studio may close and reopen the settings page while a sign-in runs. `providers_list` and
+`provider_status` carry `signInPending` and `authLogin` per provider: if `signInPending` is
+true, keep polling `auth_poll { loginId: authLogin.loginId }` (or wait for `auth_changed`)
+rather than calling `auth_start` again, which would cancel it.
 
 ### B. Device-code sign-in (`nous`)
 
@@ -138,13 +168,21 @@ call `setup/models` / `setup/save` to pick another model.
 
 ### E. Custom provider
 
-1. `provider_add_custom { name, baseUrl, format?, apiKey? }`. The CLI normalises the URL, checks
-   the key, lists the endpoint's models (skip with `validate: false`) and saves the definition. It
-   does **not** activate it. Response: `{ provider: ProviderInfo, models }`; `provider.id` is
-   `custom-<slug of name>` unless `id` was passed.
-2. Later key changes: `provider_set_key { providerId: "custom-…", apiKey }`.
-3. `setup/models { providerId: "custom-…" }` → `setup/save { providerId: "custom-…", modelId }`.
-   A custom id resolves to its saved URL, format and key (`extensions/setup.rs:118`).
+1. `provider_add_custom { name, baseUrl, format?, apiKey?, defaultModel? }`. The CLI normalises
+   the URL, checks the key, lists the endpoint's models (skip with `validate: false`), picks the
+   default model and saves the definition. It does **not** activate it. Response:
+   `{ provider: ProviderInfo, models }`; `provider.id` is `custom-<slug of name>` unless `id` was passed.
+2. Edit it in place with `provider_update_custom { providerId, ...changed fields }` (`id` is accepted too): fields left
+   out keep their saved value, and the endpoint is re-checked unless `validate: false`. Moving
+   `baseUrl` to another host needs `apiKey` in the same call (or `""` to clear the key), so a
+   saved key is never sent to a host it was not entered for. A changed `baseUrl` resets the
+   default model to the new endpoint's list. If the provider is active, its active entry is
+   rewritten and the catalog reloads (`active: true, reloaded: true`)
+   (`extensions/setup_providers.rs:287`).
+   Key-only changes can also use `provider_set_key { providerId: "custom-…", apiKey }`.
+3. `setup/models { providerId: "custom-…" }` → `setup/save { providerId: "custom-…", modelId? }`
+   (without `modelId`, `save` uses the custom provider's `defaultModel`).
+   A custom id resolves to its saved URL, format and key (`extensions/setup.rs:125`).
 4. `provider_remove { providerId: "custom-…" }` deletes it.
 
 ### F. Removing or signing out
@@ -152,7 +190,7 @@ call `setup/models` / `setup/save` to pick another model.
 `provider_remove { providerId }`: a custom provider's definition, a built-in provider's stored
 key (`[provider_credentials.<id>]`), or for `nous` the device sign-in token file. The active
 provider cannot be removed (`invalid_params`); switch first with `setup/save`
-(`extensions/setup_providers.rs:347`).
+(`extensions/setup_providers.rs:440`).
 
 ## 3. Built-in providers
 
@@ -204,9 +242,9 @@ Notes per provider:
 - **Mistral** has two rows, one per mode: `mistral-auth` (browser sign-in, `authMethods: ["browser"]`)
   and `mistral` (pasted key, `["api_key"]`). Both call `https://api.mistral.ai/v1`. Each keeps its
   own credential slot, so signing in never overwrites a pasted key and vice versa
-  (`agent/provider_setup.rs:1603`).
+  (`agent/provider_setup.rs:1685`).
 - **Nous Research** (`nous`) is device-code only. Its model list is fetched with the signed-in token
-  (`agent/provider_setup.rs:1234`).
+  (`agent/provider_setup.rs:1230`).
 - **Wiro** (`wiro`) takes `key` or, for signature projects, `key:secret` in the same key field.
 - **Free.ai** (`free-ai`) lists only grant-eligible self-hosted chat models from its `/models`
   (`agent/provider_setup.rs:768`).
@@ -228,15 +266,16 @@ TUI path: `/setup` → **Custom / paste a base URL** → base URL → format →
 model (or type a custom id) → effort → save
 (`crates/codegen/supercharge-pager/src/views/setup_modal.rs:37`). Over ACP the
 same validation runs in `provider_add_custom`
-(`extensions/setup_providers.rs:220`):
+(`extensions/setup_providers.rs:230`):
 
 | Field | Required | Rules |
 |---|---|---|
-| `name` | yes | 1–80 printable characters, trimmed (`agent/provider_setup.rs:1696`) |
-| `id` | no | defaults to `custom-<slug of name>`; 1–48 of `a-z 0-9 -`, no leading/trailing `-`; must not be a built-in id, `setup` or `custom` (`agent/provider_setup.rs:1673`) |
+| `name` | yes | 1–80 printable characters, trimmed (`agent/provider_setup.rs:1782`) |
+| `id` | no | defaults to `custom-<slug of name>`; 1–48 of `a-z 0-9 -`, no leading/trailing `-`; must not be a built-in id, `setup` or `custom` (`agent/provider_setup.rs:1759`) |
 | `baseUrl` | yes | trimmed, max 500 chars; `https://` added when no scheme; only `http`/`https`; plain `http` only for loopback hosts (`localhost`, `127.0.0.1`, `::1`); a trailing `/models` is dropped (`agent/provider_setup.rs:503`) |
-| `format` | no | `openai` (default, also `chat_completions`), `anthropic` (also `messages`), `responses`; anything else is rejected (`extensions/setup_providers.rs:61`) |
+| `format` | no | `openai` (default, also `chat_completions`), `anthropic` (also `messages`), `responses`; anything else is rejected (`extensions/setup_providers.rs:63`) |
 | `apiKey` | no | max 8192 chars; text that looks like an auth error message is rejected (`agent/provider_setup.rs:25`); omitted on an update keeps the saved key |
+| `defaultModel` | no | model `setup/save` uses without `modelId`; must be in the listed models when `validate` is on; defaults to the first listed model (`extensions/setup_providers.rs:336`) |
 | `validate` | no | default `true`: the CLI lists the endpoint's models before saving and fails on an error or an empty list |
 
 A loopback base URL makes the custom provider key-optional (`authMethods: ["none", "api_key"]`).
@@ -251,7 +290,7 @@ provider, the same as the TUI Custom row.
 
 Studio never runs these itself. They are listed so the UI copy and timing match. All run inside
 the CLI behind `auth_start` / `auth_poll` / `auth_cancel`; one sign-in at a time, a new
-`auth_start` cancels the previous one (`extensions/setup_auth.rs:242`).
+`auth_start` cancels the previous one (`extensions/setup_auth.rs:277`).
 
 ### Nous Research: device code (RFC 8628)
 
@@ -263,7 +302,7 @@ Source: `agent/nous_oauth.rs`.
    The public client id is `DEFAULT_CLIENT_ID` (`agent/nous_oauth.rs:17`),
    overridable with `SUPERCHARGE_NOUS_OAUTH_CLIENT_ID`. There is no client secret.
 2. `auth_start` returns `url` = `verification_uri_complete` (or `verification_uri`) and `userCode`
-   (`extensions/setup_auth.rs:386`).
+   (`extensions/setup_auth.rs:432`).
 3. The CLI polls `POST https://portal.nousresearch.com/api/oauth/token`
    (`grant_type=urn:ietf:params:oauth:grant-type:device_code`, `client_id`, `device_code`).
    `authorization_pending` → keep polling; `slow_down` → interval +5 s (reported in `auth_poll.interval`);
@@ -311,7 +350,7 @@ No OS keychain is used for model providers: keys are plain values in `config.tom
 tokens in `nous_oauth.json`. (The keychain is used only by plugin connections.) This is
 why Studio must not read or write these files: use the ACP calls above.
 
-`config.toml` keys written for providers (`agent/provider_setup.rs:1356`):
+`config.toml` keys written for providers (`agent/provider_setup.rs:1438`):
 
 ```toml
 [endpoints]
@@ -351,6 +390,7 @@ custom   = true
 name     = "My Gateway"
 base_url = "https://gw.example.com/v1"
 format   = "openai"
+default_model = "my-model"
 api_key  = "…"
 ```
 

@@ -162,7 +162,10 @@ emits `config_option_update` with the refreshed `reasoning_effort` option.
 
 Same logic as the TUI `/setup`; writes `~/.supercharge/config.toml` and hot-reloads the model
 catalog. Advertised in `initialize` `_meta`: `"supercharge": { "setup": true, "imageSetup": true,
-"deviceLogin": true, "authLogin": true }`, `"_supercharge/setup": true`, and `"_supercharge/setup/methods": [...]`.
+"deviceLogin": true, "authLogin": true, "methods": [...] }`, `"_supercharge/setup": true`, and
+`"_supercharge/setup/methods": [...]`. Both method lists are the same: every setup method's wire
+name with the leading underscore (`"_supercharge/setup/status"`, ...). Read
+`_meta.supercharge.methods`; the `_supercharge/setup/methods` key stays for older clients.
 Errors use ACP `invalid_params` (bad input, provider rejected, login expired/denied) or
 `internal_error` (I/O).
 
@@ -181,7 +184,8 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 | `_supercharge/setup/auth_cancel` | `{ loginId }` | `{ cancelled }` |
 | `_supercharge/setup/providers_list` | `{}` | `{ activeProviderId, activeModelId, configPath, providers: [ProviderInfo] }` |
 | `_supercharge/setup/provider_status` | `{ providerId }` | `ProviderInfo` |
-| `_supercharge/setup/provider_add_custom` | `{ name, baseUrl, format?, apiKey?, id?, validate? }` | `{ provider: ProviderInfo, models: [Model] }` |
+| `_supercharge/setup/provider_add_custom` | `{ name, baseUrl, format?, apiKey?, id?, defaultModel?, validate? }` | `{ provider: ProviderInfo, models: [Model] }` |
+| `_supercharge/setup/provider_update_custom` | `{ providerId, name?, baseUrl?, format?, apiKey?, defaultModel?, validate? }` | `{ provider: ProviderInfo, models: [Model], active, reloaded }` |
 | `_supercharge/setup/provider_set_key` | `{ providerId, apiKey, validate? }` | `{ saved: true, providerId, active, reloaded, models: [Model], provider: ProviderInfo }` |
 | `_supercharge/setup/provider_remove` | `{ providerId }` | `{ removed, providerId }` |
 
@@ -198,7 +202,13 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
   The legacy `auth` value stays `"api_key"` for key-optional providers (as in 1.4.19); read
   `authMethods` / `keyOptional` instead.
   `signedIn` is `null` for key-only providers.
-- `AuthLogin`: `{ loginId, providerId, kind, status: "pending"|"done"|"denied"|"expired"|"error", interval, message? }`.
+- `AuthLogin`: `{ loginId, providerId, kind, status: "pending"|"done"|"denied"|"expired"|"error"|"cancelled", interval, message? }`.
+  `cancelled` is sent only as an `auth_changed` notification, once, when a pending sign-in is
+  stopped by `auth_cancel` or replaced by a new `auth_start`.
+- A provider that refuses the model list (wrong key, no access) fails with `invalid_params` and
+  `data: "provider returned HTTP <status> (<code>): <message>"`: a short code (the provider's
+  `error.code`/`type`, else e.g. `unauthorized`) and its message cut to 120 characters with the
+  sent key and key-like strings shown as `[redacted]`. The raw response body is never returned.
 - `Model`: `{ id, name, supportsThinking, contextWindow }` (`contextWindow` may be `null`).
 - Target resolution: `providerId` (built-in) supplies `baseUrl`, `format` and the default model;
   `baseUrl` alone means a custom OpenAI-compatible endpoint (`format` defaults to `openai`).
@@ -250,18 +260,27 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
   picks the model.
 - `device_*` stay as the Nous-only path for existing clients; new clients should use `auth_*`.
 - Provider catalogue (`providers_list`, `provider_status`, `provider_add_custom`,
-  `provider_set_key`, `provider_remove`): Studio's provider settings use only these plus
+  `provider_update_custom`, `provider_set_key`, `provider_remove`): Studio's provider settings use only these plus
   `auth_*`, `setup/models` and `setup/save`, so the CLI stays the single owner of providers,
   sign-ins and keys. Full spec and per-provider call sequences: `docs/providers-studio.md`.
   - `ProviderInfo`: the `Provider` fields plus `formatName` ("Chat Completions" / "Messages" /
     "Responses"), `custom`, `hasApiKey`, `active`, `ready` (`keyOptional || hasApiKey ||
-    signedIn`), `modelsSource` (`"live"`) and `modelsUrl`. `providers_list` returns every
+    signedIn`), `authLogin` (this provider's current `AuthLogin` or `null`), `signInPending`
+    (`authLogin.status == "pending"`: resume polling that `loginId` instead of starting again),
+    `modelsSource` (`"live"`) and `modelsUrl`. `defaultModel` is a string for built-in providers;
+    for a custom provider it is the chosen `defaultModel` or the first listed model, and `null`
+    only when it was saved with `validate: false` and no `defaultModel`. `providers_list` returns every
     built-in provider in picker order, then the saved custom providers. No key is ever returned.
   - `provider_add_custom` runs the `/setup` checks (URL normalised, `http` only for loopback,
     key sanity, strict `format`), lists the endpoint's models unless `validate: false`, and saves
     `[provider_credentials.<id>]` with `custom = true`. `id` defaults to `custom-<slug of name>`
     and may not shadow a built-in id. Adding does not activate: call `setup/save { providerId }`.
     Re-adding the same `id` updates it; an omitted `apiKey` keeps the saved key.
+  - `provider_update_custom` edits a saved custom provider in place (`providerId`, or `id` as
+    in `provider_add_custom`): only the fields sent change, and the endpoint is re-checked unless `validate: false`. A `baseUrl` on another host
+    needs `apiKey` in the same request (`""` clears it); otherwise `invalid_params`. A changed
+    `baseUrl` re-picks `defaultModel`. Updating the active provider rewrites the active entry and
+    reloads the catalog (`active`, `reloaded`).
   - `provider_set_key` validates the key against the provider's model list (unless
     `validate: false`), stores it in that provider's own slot, and, when the provider is active,
     rewrites the active entry and reloads the catalog. Providers without `"api_key"` in

@@ -233,8 +233,7 @@ async fn ensure_persistent_agent(
                 drop(slot);
                 // Drop of this future (client gone mid-ready) must leave the slot, or later callers spin forever on a dead watch
                 let mut boot = BootSlotGuard::new(&state.agent_slot, boot_tx, boot_id);
-                if let Err(e) = thread::Builder::new()
-                    .name("agent-persistent".into())
+                if let Err(e) = persistent_agent_thread_builder()
                     .spawn(move || persistent_agent_thread(agent_config, conn_rx, ready_tx))
                 {
                     warn!(error = %e, "Failed to spawn persistent agent thread");
@@ -336,6 +335,22 @@ async fn fail_boot(
         *slot = AgentSlot::Down;
     }
     None
+}
+
+/// Stack for the thread that runs the persistent agent.
+///
+/// `LocalSet::block_on` polls the whole agent (ACP dispatch, extension handlers, session
+/// switches, config reloads) on this one thread's stack. In debug builds those state machines
+/// are not optimised and one `setup/save` alone needs more than the 2 MiB thread default
+/// (512 KiB on macOS), so the spawn must not depend on `RUST_MIN_STACK`. Same size as the
+/// pager's agent runtime thread and the session threads.
+pub(crate) const PERSISTENT_AGENT_STACK_SIZE: usize = 8 * 1024 * 1024;
+
+/// Builder for the persistent agent thread: named, with [`PERSISTENT_AGENT_STACK_SIZE`].
+pub(crate) fn persistent_agent_thread_builder() -> thread::Builder {
+    thread::Builder::new()
+        .name("agent-persistent".into())
+        .stack_size(PERSISTENT_AGENT_STACK_SIZE)
 }
 
 fn persistent_agent_thread(
