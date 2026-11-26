@@ -421,6 +421,8 @@ impl SessionContextFactory for WorkspaceSessionContextFactory {
                                 alpha_test_key: None,
                                 allowed_domains: None,
                                 excluded_domains: None,
+                                exa_api_key: None,
+                                linkup_api_key: None,
                             },
                             AppBuilderDeployerConfig::default(),
                         )
@@ -495,10 +497,14 @@ fn build_proxy_headers(base_url: &str) -> indexmap::IndexMap<String, String> {
         "user-agent".to_string(),
         format!("supercharge-workspace/{version}"),
     );
-    headers.insert("x-supercharge-client-version".to_string(), version.to_string());
+    headers.insert(
+        "x-supercharge-client-version".to_string(),
+        version.to_string(),
+    );
     headers.insert(
         "x-supercharge-client-identifier".to_string(),
-        std::env::var("SUPERCHARGE_CLIENT_NAME").unwrap_or_else(|_| "supercharge-shell".to_string()),
+        std::env::var("SUPERCHARGE_CLIENT_NAME")
+            .unwrap_or_else(|_| "supercharge-shell".to_string()),
     );
     if base_url.contains("cli-chat-proxy") || base_url.contains("chat-proxy") {
         headers.insert("X-XAI-Token-Auth".to_string(), "xai-grok-cli".to_string());
@@ -767,7 +773,10 @@ mod tests {
                 .expect("tool present")
                 .kind
         };
-        assert_eq!(kind_of("SuperchargeBuild:search_replace"), Some(ToolKind::Edit));
+        assert_eq!(
+            kind_of("SuperchargeBuild:search_replace"),
+            Some(ToolKind::Edit)
+        );
         assert_eq!(
             kind_of("adhoc.opaque"),
             None,

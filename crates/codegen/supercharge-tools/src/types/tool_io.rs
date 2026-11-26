@@ -216,6 +216,8 @@ mod tests {
         let ws: Result<WebSearchInput, _> = ToolInput::WebSearch(WebSearchInput {
             query: "q".into(),
             allowed_domains: None,
+            mode: None,
+            urls: None,
         })
         .try_into();
         assert_eq!(ws.unwrap().query, "q");

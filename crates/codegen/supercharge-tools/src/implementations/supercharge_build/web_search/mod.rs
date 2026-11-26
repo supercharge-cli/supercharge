@@ -1,10 +1,9 @@
 //! `web_search` tool — new architecture (`Tool` trait).
 //!
-//! Calls the Responses API with web search capability. Reads the
-//! pre-constructed `WebSearchClient` from Resources (inserted by
-//! `with_backend()` when the config is `Enabled`).
+//! Reads `WebSearchRouter` from Resources. Exa is preferred when a key is set,
+//! Linkup is the fallback, and the Responses API client is used when neither key is set.
 
-use crate::implementations::web_search::client::WebSearchClient;
+use crate::implementations::web_search::router::{SearchMode, WebSearchRouter};
 use crate::types::output::WebSearchOutput;
 use crate::types::requirements::{Expr, ToolRequirement};
 use crate::types::tool::{ToolKind, ToolNamespace};
@@ -19,6 +18,14 @@ pub struct WebSearchInput {
     pub query: String,
     #[schemars(description = "Optional list of domains to restrict search to.")]
     pub allowed_domains: Option<Vec<String>>,
+    /// `auto` (default) or `lite` for a cheaper, lower-latency lookup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(description = "Search mode: \"auto\" (default) or \"lite\".")]
+    pub mode: Option<String>,
+    /// When set, fetch trimmed text for these URLs instead of running a query.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(description = "Optional URLs whose page text should be fetched.")]
+    pub urls: Option<Vec<String>>,
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -84,19 +91,24 @@ impl supercharge_tool_runtime::Tool for WebSearchTool {
         let client;
         {
             let res = resources.lock().await;
-            client = res.require::<WebSearchClient>()?.clone();
+            client = res.require::<WebSearchRouter>()?.clone();
         }
 
+        let mode = SearchMode::parse(input.mode.as_deref()).map_err(|msg| {
+            supercharge_tool_runtime::ToolError::execution(
+                supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
+                msg,
+            )
+        })?;
         let query_span = tracing::info_span!("web_search.query");
-        let (content, citations) = client
-            .search(&input.query, input.allowed_domains.clone())
-            .await
-            .map_err(|e| {
-                supercharge_tool_runtime::ToolError::execution(
-                    supercharge_tool_protocol::ToolId::new("web_search").expect("valid"),
-                    e.to_string(),
-                )
-            })?;
+        let (content, citations, pre_formatted) = client
+            .search(
+                &input.query,
+                input.allowed_domains.clone(),
+                mode,
+                input.urls.clone(),
+            )
+            .await?;
         drop(query_span);
 
         Ok(WebSearchOutput {
@@ -104,7 +116,7 @@ impl supercharge_tool_runtime::Tool for WebSearchTool {
             content,
             citations,
             allowed_domains: input.allowed_domains.clone(),
-            pre_formatted: None,
+            pre_formatted,
         })
     }
 }
@@ -134,6 +146,8 @@ mod tests {
             WebSearchInput {
                 query: "test".into(),
                 allowed_domains: None,
+                mode: None,
+                urls: None,
             },
         )
         .await;

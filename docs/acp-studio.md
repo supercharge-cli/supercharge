@@ -171,7 +171,7 @@ Errors use ACP `invalid_params` (bad input, provider rejected, login expired/den
 
 | Method | Request | Response |
 |---|---|---|
-| `_supercharge/setup/status` | `{}` | `{ configured, providerId, baseUrl, format, hasApiKey, modelId, oauth: { nous: { signedIn }, "mistral-auth": { signedIn } }, deviceLoginPending, authLogin: AuthLogin \| null, configPath, providers: [Provider] }` |
+| `_supercharge/setup/status` | `{}` | `{ configured, providerId, baseUrl, format, hasApiKey, modelId, oauth: { nous: { signedIn }, "mistral-auth": { signedIn } }, deviceLoginPending, authLogin: AuthLogin \| null, configPath, providers: [Provider], webSearch: { enabled, hasExaApiKey, hasLinkupApiKey, backend: "exa" \| "linkup" \| "default" \| "none" } }` |
 | `_supercharge/setup/models` | `{ providerId?, baseUrl?, apiKey?, format? }` | `{ models: [Model], providerId, baseUrl, format, defaultModel }` |
 | `_supercharge/setup/save` | `{ providerId?, baseUrl?, apiKey?, modelId?, modelName?, format?, sessionId? }` | `{ saved: true, modelId, reloaded, switchedSessions: [string], models: [Model], message }` |
 | `_supercharge/setup/device_start` | `{}` | `{ userCode, verificationUri, verificationUriComplete, expiresIn, interval }` |

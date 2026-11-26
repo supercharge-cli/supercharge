@@ -37,6 +37,7 @@ use supercharge_agent::prompt::context::PromptAudience;
 use supercharge_agent::prompt::skills::SkillsConfig;
 use supercharge_agent::{Agent, AgentBuilder, CompactionPolicy, ReminderPolicy};
 use supercharge_tools::computer::types::{AsyncFileSystem, TerminalBackend};
+use supercharge_tools::implementations::lsp::LspBackend;
 use supercharge_tools::implementations::supercharge_build::app_builder::AppBuilderDeployerConfig;
 use supercharge_tools::implementations::supercharge_build::ask_user_question::types::UserQuestionRequest;
 use supercharge_tools::implementations::supercharge_build::image_gen::ImageGenConfig;
@@ -46,7 +47,6 @@ use supercharge_tools::implementations::supercharge_build::task::types::{
 };
 use supercharge_tools::implementations::supercharge_build::video_gen::VideoGenConfig;
 use supercharge_tools::implementations::supercharge_build::web_fetch::WebFetchConfig;
-use supercharge_tools::implementations::lsp::LspBackend;
 use supercharge_tools::implementations::web_search::WebSearchConfig;
 use supercharge_tools::notification::ToolNotificationHandle;
 use supercharge_tools::types::SharedApiKeyProvider;
@@ -650,6 +650,8 @@ mod legacy_tests {
                 alpha_test_key: None,
                 allowed_domains: None,
                 excluded_domains: None,
+                exa_api_key: None,
+                linkup_api_key: None,
             };
             spec
         };

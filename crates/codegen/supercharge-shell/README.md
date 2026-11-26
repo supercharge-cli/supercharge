@@ -1856,6 +1856,8 @@ api_key = "sk-custom"
 
 **Web search model:** Set `[models] web_search`, `SUPERCHARGE_WEB_SEARCH_MODEL`, or `--web-search-model` to point the `web_search` tool at a different model. The target endpoint must support the Responses API and web search.
 
+**Exa and Linkup:** Set `EXA_API_KEY` or `[toolset.web_search] exa_api_key` to search with Exa (`mode` `auto` by default, or `lite`). Set `LINKUP_API_KEY` or `linkup_api_key` as the fallback when Exa is unset or the Exa request fails. Environment variables override config. With neither key, `web_search` stays on the model path above. `disable_web_search = true` turns the tool off. `/setup` status reports whether each key is present, not the key itself.
+
 > **Overriding with a custom model:** Setting `[models] web_search` alone is not
 > enough if the model isn't already in the catalog (built-in defaults or
 > `supercharge models` output). You also need a `[model.*]` entry so Supercharge knows
@@ -2514,6 +2516,8 @@ The agent persists all session updates automatically. Clients can reconnect and 
 | `SUPERCHARGE_MEMORY`                   | Enable (`1`) or disable (`0`) cross-session memory                                                       |
 | `SUPERCHARGE_AGENT`                    | Custom agent definition path or name (see [Agent Profiles](#agent-profiles))                             |
 | `SUPERCHARGE_WEB_FETCH`                | Enable (`1`) or disable (`0`) the `web_fetch` tool                                                       |
+| `EXA_API_KEY`                          | Exa key for `web_search`. Overrides `[toolset.web_search] exa_api_key`. Empty is unset                   |
+| `LINKUP_API_KEY`                       | Linkup fallback key for `web_search`. Overrides `linkup_api_key`. Empty is unset                         |
 | `SUPERCHARGE_WEB_FETCH_PROXY`          | Egress proxy URL for `web_fetch` requests (overridden by `[toolset.web_fetch] proxy_endpoint`)           |
 | `SUPERCHARGE_RESPECT_GITIGNORE`        | Disable `.gitignore` filtering in tools when set to `0`                                                  |
 | `SUPERCHARGE_FEEDBACK_ENABLED`         | Enable (`1`) or disable (`0`) feedback system independently from telemetry                               |

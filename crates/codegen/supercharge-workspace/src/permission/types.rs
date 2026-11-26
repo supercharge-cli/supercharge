@@ -843,6 +843,8 @@ mod tests {
         let input = ToolInput::WebSearch(WebSearchInput {
             query: "rust lang".into(),
             allowed_domains: None,
+            mode: None,
+            urls: None,
         });
         let access = AccessKind::from(&input);
         assert!(

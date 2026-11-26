@@ -10,6 +10,7 @@ This inventory documents where the CLI may send data and which credential source
 | MCP HTTP/SSE | The MCP server URL in the active MCP configuration | The MCP server's configured headers, bearer env var, or OAuth registration | No model credential reuse |
 | MCP gateway connectors | The explicitly configured gateway URL | Gateway-specific configured auth | No model credential reuse |
 | Web search, media, voice, compaction, suggestions, and memory side calls | The active provider's configured endpoint when supported | The active provider/model credential or session-local provider route | No implicit xAI side service for custom providers |
+| Web search via Exa / Linkup | `https://api.exa.ai` (search, and contents only when the tool is given URLs) and `https://api.linkup.so` | `EXA_API_KEY` or `[toolset.web_search] exa_api_key`; `LINKUP_API_KEY` or `linkup_api_key`. Environment overrides config. Empty values are unset | Linkup runs when Exa is unset or the Exa call fails. With neither key, the model web-search path above is unchanged. `disable_web_search` turns every web search path off. Keys are never logged or returned in status |
 | Telemetry / traces / feedback | Configured Supercharge telemetry or explicit OTLP/trace endpoint | Deployment/configured telemetry credentials | No model API key reuse |
 | Updates | Supercharge release/update endpoints | No model credential | Not an inference path |
 

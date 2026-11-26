@@ -111,6 +111,8 @@ async fn web_search_uses_model_override_from_config_end_to_end() {
                 alpha_test_key: None,
                 allowed_domains: None,
                 excluded_domains: None,
+                exa_api_key: None,
+                linkup_api_key: None,
             },
         web_fetch_config: Default::default(),
         lsp: None,

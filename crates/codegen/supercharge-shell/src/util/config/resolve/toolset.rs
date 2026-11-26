@@ -361,9 +361,9 @@ fn resolve_ask_user_question_timeout_secs_from_tiers(
         .or(managed)
         .or(remote)
         .unwrap_or(
-            supercharge_tools::implementations::supercharge_build::ask_user_question::RESPONSE_TIMEOUT
-                .as_secs(),
-        )
+        supercharge_tools::implementations::supercharge_build::ask_user_question::RESPONSE_TIMEOUT
+            .as_secs(),
+    )
 }
 
 /// Precedence: requirements > env (`SUPERCHARGE_ASK_USER_QUESTION_TIMEOUT_SECS`, parsed by the tools crate's canonical parser) > user `config.toml`
@@ -391,7 +391,8 @@ fn resolve_ask_user_question_timeout_secs(
 /// Both fields resolve to concrete values, so the tool's legacy env fallback only runs for consumers that skip this resolver.
 pub(crate) fn resolve_ask_user_question_params_from_disk(
     remote: Option<&RemoteSettings>,
-) -> supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionParams {
+) -> supercharge_tools::implementations::supercharge_build::ask_user_question::AskUserQuestionParams
+{
     let requirements = crate::config::load_merged_requirements();
     let layers = match crate::config::ConfigLayers::load() {
         Ok(l) => Some(l),
@@ -432,6 +433,8 @@ pub(crate) fn resolve_ask_user_question_params_from_disk(
 pub const WEB_SEARCH_DOMAIN_CONFIG_PATHS: &[&str] = &[
     "toolset.web_search.allowed_domains",
     "toolset.web_search.excluded_domains",
+    "toolset.web_search.exa_api_key",
+    "toolset.web_search.linkup_api_key",
 ];
 
 /// Read a `[toolset.web_search] <key>` string array from the already-merged section.
@@ -477,6 +480,62 @@ fn cap_web_search_domains(list: Option<Vec<String>>, field: &str) -> Option<Vec<
         }
         domains
     })
+}
+
+/// Env wins over config. Empty or whitespace-only values are unset, so a blank env var does not
+/// wipe a config key.
+pub(crate) fn merge_provider_key(
+    env_value: Option<&str>,
+    config_value: Option<&str>,
+) -> Option<String> {
+    let from_env = env_value.map(str::trim).filter(|s| !s.is_empty());
+    if let Some(value) = from_env {
+        return Some(value.to_string());
+    }
+    config_value
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn read_provider_key(section: &TomlValue, key: &str) -> Option<String> {
+    let value = section.get(key)?;
+    let Some(text) = value.as_str() else {
+        tracing::warn!(
+            key,
+            "[toolset.web_search] {key} must be a string; ignoring it"
+        );
+        return None;
+    };
+    merge_provider_key(None, Some(text))
+}
+
+fn env_key(name: &str) -> Option<String> {
+    std::env::var(name).ok()
+}
+
+/// Exa and Linkup keys from `[toolset.web_search]`, with `EXA_API_KEY` and `LINKUP_API_KEY` overriding.
+/// Values are not logged.
+pub(crate) fn resolve_web_search_provider_keys() -> (Option<String>, Option<String>) {
+    let section = crate::config::load_effective_config().ok().and_then(|effective| {
+        effective
+            .get("toolset")
+            .and_then(|toolset| toolset.get("web_search"))
+            .cloned()
+    });
+    let config_exa = section
+        .as_ref()
+        .and_then(|s| read_provider_key(s, "exa_api_key"));
+    let config_linkup = section
+        .as_ref()
+        .and_then(|s| read_provider_key(s, "linkup_api_key"));
+    (
+        merge_provider_key(env_key("EXA_API_KEY").as_deref(), config_exa.as_deref()),
+        merge_provider_key(
+            env_key("LINKUP_API_KEY").as_deref(),
+            config_linkup.as_deref(),
+        ),
+    )
 }
 
 /// Layer precedence and the allow/exclude atomicity are handled **upstream** by `ConfigLayers`: per-layer normalization couples the two keys, then the normal `deep_merge_toml` picks the whole policy from the winning layer.
@@ -544,6 +603,20 @@ mod web_search_domains_tests {
             .get("web_search")
             .unwrap()
             .clone()
+    }
+
+    #[test]
+    fn provider_key_env_overrides_config_and_blank_is_unset() {
+        assert_eq!(
+            merge_provider_key(Some("  from-env  "), Some("from-config")).as_deref(),
+            Some("from-env")
+        );
+        assert_eq!(
+            merge_provider_key(Some("   "), Some("from-config")).as_deref(),
+            Some("from-config")
+        );
+        assert_eq!(merge_provider_key(None, Some("  ")), None);
+        assert_eq!(merge_provider_key(None, None), None);
     }
 
     #[test]

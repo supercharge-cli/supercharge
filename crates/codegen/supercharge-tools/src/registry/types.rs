@@ -230,9 +230,8 @@ pub struct SessionContext {
     /// When `Some`, injected into `Resources` so `memory_search` / `memory_get`
     /// tools can access it. When `None`, the tools return "not enabled".
     pub memory_backend: Option<Arc<dyn crate::types::memory_backend::MemoryBackend>>,
-    /// Optional web search configuration. When `Enabled`, a `WebSearchClient` is created and
-    /// injected into `Resources` so the `web_search` tool can call the Responses API. When
-    /// `Disabled` (default), the tool returns a graceful error if invoked.
+    /// Web search configuration. `Enabled` keeps the Responses API client. Exa or Linkup keys
+    /// make the tool available even when that client is off. `Disabled` with no keys leaves it off.
     pub web_search_config: crate::implementations::web_search::WebSearchConfig,
     /// Optional web fetch configuration. When `Enabled`, a `WebFetchClient`
     /// is created and injected into `Resources` so the `web_fetch` tool can
@@ -1066,12 +1065,20 @@ impl ToolRegistryBuilder {
         if let Some(auth_provider) = ctx.auth_provider.clone() {
             resources.insert(auth_provider);
         }
-        if let Ok(client) = crate::implementations::web_search::client::WebSearchClient::new(
+        let responses = crate::implementations::web_search::client::WebSearchClient::new(
             &ctx.web_search_config,
             ctx.api_key_provider.clone(),
-        ) {
-            let client = client.with_attribution_callback(ctx.attribution_callback.clone());
+        )
+        .ok()
+        .map(|client| client.with_attribution_callback(ctx.attribution_callback.clone()));
+        if let Some(client) = responses.clone() {
             resources.insert(client);
+        }
+        if let Some(router) = crate::implementations::web_search::WebSearchRouter::from_config(
+            &ctx.web_search_config,
+            responses,
+        ) {
+            resources.insert(router);
         }
         if let Some(lsp) = ctx.lsp {
             resources.insert(lsp);

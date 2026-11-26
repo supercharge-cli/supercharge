@@ -40,6 +40,7 @@ impl WebSearchClient {
             alpha_test_key,
             allowed_domains,
             excluded_domains,
+            ..
         } = config
         else {
             return Err(supercharge_tool_runtime::ToolError::execution(
@@ -386,6 +387,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: allowed,
             excluded_domains: excluded,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         WebSearchClient::new(&config, None).expect("client should build")
     }
@@ -470,6 +473,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         let client = WebSearchClient::new(&config, None).expect("client should build");
         assert_eq!(client.model, "custom-enterprise-model");
@@ -502,6 +507,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         let client = WebSearchClient::new(&config, None)
             .expect("client should build")
@@ -531,6 +538,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         let client = WebSearchClient::new(&config, None).expect("client should build");
         client.record_401_attribution(Some("any-bearer"));
@@ -797,6 +806,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         let provider: SharedApiKeyProvider = std::sync::Arc::new(NoneProvider);
         let client = WebSearchClient::new(&config, Some(provider)).expect("client should build");
@@ -831,6 +842,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         WebSearchClient::new(&config, None).expect("client should build")
     }
@@ -944,6 +957,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         let provider: SharedApiKeyProvider = std::sync::Arc::new(FreshProvider);
         let client = WebSearchClient::new(&config, Some(provider)).expect("client should build");

@@ -265,6 +265,36 @@ fn saved_default_model() -> Option<String> {
     })
 }
 
+/// Presence flags only. `backend` is `exa`, `linkup`, `default`, or `none`.
+pub(crate) fn web_search_status_value(disabled: bool, has_exa: bool, has_linkup: bool) -> Value {
+    let backend = if disabled {
+        "none"
+    } else if has_exa {
+        "exa"
+    } else if has_linkup {
+        "linkup"
+    } else {
+        "default"
+    };
+    json!({
+        "enabled": !disabled,
+        "hasExaApiKey": has_exa,
+        "hasLinkupApiKey": has_linkup,
+        "backend": backend,
+    })
+}
+
+fn web_search_status() -> Value {
+    let disabled = crate::config::load_effective_config()
+        .ok()
+        .and_then(|cfg| cfg.get("disable_web_search").and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+    let (exa, linkup) = crate::util::config::resolve_web_search_provider_keys();
+    let status = web_search_status_value(disabled, exa.is_some(), linkup.is_some());
+    drop((exa, linkup));
+    status
+}
+
 /// `setup/status` result.
 pub(crate) fn status_json() -> Value {
     let saved = ps::load_existing_provider_setup_details();
@@ -283,6 +313,7 @@ pub(crate) fn status_json() -> Value {
         "deviceLoginPending": pending_device().lock().unwrap_or_else(|e| e.into_inner()).is_some(),
         "configPath": crate::util::config::user_config_path().to_string_lossy(),
         "providers": providers_json(),
+        "webSearch": web_search_status(),
     })
 }
 
@@ -725,5 +756,32 @@ mod tests {
                 .all(|p| p["auth"].is_string() && p["baseUrl"].is_string())
         );
         assert!(v.get("configured").is_some());
+    }
+
+    #[test]
+    fn status_web_search_reports_presence_only() {
+        let secret = "exa-secret-KEY-xyz";
+        let on = web_search_status_value(false, true, false);
+        assert_eq!(on["enabled"], true);
+        assert_eq!(on["hasExaApiKey"], true);
+        assert_eq!(on["hasLinkupApiKey"], false);
+        assert_eq!(on["backend"], "exa");
+        let off = web_search_status_value(true, true, true);
+        assert_eq!(off["enabled"], false);
+        assert_eq!(off["backend"], "none");
+        assert_eq!(
+            web_search_status_value(false, false, true)["backend"],
+            "linkup"
+        );
+        assert_eq!(
+            web_search_status_value(false, false, false)["backend"],
+            "default"
+        );
+        let rendered = format!("{on}{off}");
+        assert!(!rendered.contains(secret));
+        let live = status_json();
+        assert!(live["webSearch"]["hasExaApiKey"].is_boolean());
+        assert!(live["webSearch"]["backend"].is_string());
+        assert!(!live.to_string().contains(secret));
     }
 }

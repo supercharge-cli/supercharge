@@ -528,6 +528,8 @@ pub(crate) async fn spawn_session_actor(
                 excluded_domains: web_search_domains
                     .as_ref()
                     .and_then(|o| o.excluded_domains.clone()),
+                exa_api_key: None,
+                linkup_api_key: None,
             }
         } else {
             tracing::warn!("web_search disabled: resolved config has no API key");
@@ -536,6 +538,22 @@ pub(crate) async fn spawn_session_actor(
     } else {
         tracing::warn!("web_search disabled: configured model could not be resolved");
         supercharge_tools::implementations::WebSearchConfig::Disabled
+    };
+    let web_search_config = if disable_web_search {
+        web_search_config
+    } else {
+        let (exa_api_key, linkup_api_key) = crate::util::config::resolve_web_search_provider_keys();
+        web_search_config.with_search_providers(
+            false,
+            exa_api_key,
+            linkup_api_key,
+            web_search_domains
+                .as_ref()
+                .and_then(|o| o.allowed_domains.clone()),
+            web_search_domains
+                .as_ref()
+                .and_then(|o| o.excluded_domains.clone()),
+        )
     };
     drop(web_search_config_span);
     let embed_base_url = sampling_config.base_url.clone();

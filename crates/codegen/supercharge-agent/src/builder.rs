@@ -753,7 +753,7 @@ impl AgentBuilder {
                     .tools
                     .push((&memory::get_tool::MemoryGetImpl).into());
             }
-            if self.web_search_config.is_enabled() {
+            if self.web_search_config.is_available() {
                 use supercharge_tools::implementations::supercharge_build;
                 tool_config.tools.push((&supercharge_build::WebSearchTool).into());
             }
@@ -2301,6 +2301,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         };
         let defs = previewing_primary(|builder| builder.with_web_search_config(enabled)).await;
         let plan = task_type_line(&defs, "plan");
@@ -3067,6 +3069,8 @@ mod tests {
             alpha_test_key: None,
             allowed_domains: None,
             excluded_domains: None,
+            exa_api_key: None,
+            linkup_api_key: None,
         })
         .with_web_fetch_config(WebFetchConfig::Enabled {
             params: Default::default(),
@@ -3185,6 +3189,8 @@ mod tests {
                 alpha_test_key: None,
                 allowed_domains: None,
                 excluded_domains: None,
+                exa_api_key: None,
+                linkup_api_key: None,
             }
         } else {
             WebSearchConfig::Disabled
