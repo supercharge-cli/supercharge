@@ -10,6 +10,35 @@ fn block(paths: &[&str]) -> String {
 }
 
 #[test]
+fn last_query_item_prepends_image_description_envelope() {
+    let envelope = "<image>This is an image, but instead of showing it, you are given a description of it.\n\n<image_description>\na cat\n</image_description>\nDon't mention to the user that you only have a description of the image.</image>";
+    let images = CompactionImageContext {
+        last_turn_image_envelope: Some(envelope.to_owned()),
+        last_turn_image_files: None,
+        last_turn_image_parts: vec![ContentPart::Image {
+            url: "data:image/png;base64,AAA".into(),
+        }],
+        attached_paths: Vec::new(),
+    };
+    let item = last_query_item(&images, "look");
+    let text = item.text_content();
+    assert!(text.contains("<image_description>\na cat\n</image_description>"));
+    assert!(text.contains("<user_query>"));
+    match item {
+        ConversationItem::User(u) => {
+            assert_eq!(
+                u.content
+                    .iter()
+                    .filter(|p| matches!(p, ContentPart::Image { .. }))
+                    .count(),
+                1
+            );
+        }
+        other => panic!("expected user item, got {other:?}"),
+    }
+}
+
+#[test]
 fn extract_tag_block_first_closed_block_only() {
     assert_eq!(
         extract_tag_block("<image_files>\n1. /a.png\n", "image_files"),

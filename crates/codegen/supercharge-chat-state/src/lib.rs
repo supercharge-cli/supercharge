@@ -34,6 +34,7 @@ pub mod conversation_util;
 pub mod events;
 pub mod handle;
 pub mod image_budget;
+pub mod keep_raw;
 pub mod persistence;
 pub mod types;
 pub mod usage;
@@ -48,6 +49,10 @@ pub use actor::state::{
 pub use commands::{ModelMetadata, StrictAppendAck, StrictAppendError};
 pub use compaction_mode::CompactionMode;
 pub use events::ChatStateEvent;
+pub use keep_raw::{
+    IMAGE_DESCRIPTION_UNAVAILABLE, KeepRawImages, KeepRawRewriteStats, apply_keep_raw_user_images,
+    user_item_has_image_description,
+};
 pub use handle::{ChatStateHandle, ChatStateMailboxClosed};
 pub use persistence::{
     ChatPersistence, MockChatPersistence, MockPersistenceReceiver, NullChatPersistence,

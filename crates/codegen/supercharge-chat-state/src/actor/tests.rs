@@ -793,6 +793,56 @@ async fn replace_conversation_persists_and_emits_reset() {
 }
 
 #[tokio::test]
+async fn keep_raw_rewrite_is_what_replace_history_persists() {
+    let mut older = ConversationItem::user(
+        "<image_description>\nold shot\n</image_description>\n<user_query>\nfirst\n</user_query>",
+    );
+    older.add_image("data:image/png;base64,OLD");
+    let mut newer = ConversationItem::user(
+        "<image_description>\nnew shot\n</image_description>\n<user_query>\nsecond\n</user_query>",
+    );
+    newer.add_image("data:image/png;base64,NEW");
+    let mut conv = vec![older, ConversationItem::assistant("ok"), newer];
+    let before = crate::estimate_conversation_tokens(&conv);
+    crate::apply_keep_raw_user_images(&mut conv, crate::KeepRawImages::Latest);
+    let after = crate::estimate_conversation_tokens(&conv);
+    assert!(after < before);
+
+    let mut h = TestHarness::with_conversation(vec![ConversationItem::system("sys")]);
+    h.handle.replace_conversation(conv.clone());
+    let _ = h.handle.get_conversation().await;
+    let records = h.drain_persistence();
+    assert!(
+        records
+            .iter()
+            .any(|r| matches!(r, PersistenceRecord::ReplaceHistory(_))),
+        "rewrite must persist via replace_history: {records:?}"
+    );
+    let stored = h.handle.get_conversation().await;
+    let older_urls: Vec<_> = stored.first().map(raw_image_urls).unwrap_or_default();
+    let newer_urls: Vec<_> = stored.get(2).map(raw_image_urls).unwrap_or_default();
+    assert!(older_urls.is_empty(), "older image must be text-only: {older_urls:?}");
+    assert_eq!(newer_urls.len(), 1);
+    assert!(stored.first().is_some_and(|i| i.text_content().contains("old shot")));
+}
+
+fn raw_image_urls(item: &ConversationItem) -> Vec<String> {
+    match item {
+        ConversationItem::User(u) => u
+            .content
+            .iter()
+            .filter_map(|p| match p {
+                supercharge_sampling_types::ContentPart::Image { url } => {
+                    Some(url.as_ref().to_owned())
+                }
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[tokio::test]
 async fn strip_conversation_images_replaces_only_listed_urls_and_persists() {
     let mut user = match ConversationItem::user("look at this") {
         ConversationItem::User(u) => u,

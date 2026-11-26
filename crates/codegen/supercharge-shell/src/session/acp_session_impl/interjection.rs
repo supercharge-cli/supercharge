@@ -111,6 +111,20 @@ impl SessionActor {
             .normalize_images_with_notices(wrapped, images, is_cursor)
             .await;
         if !is_cursor {
+            if !images.is_empty() {
+                match self
+                    .ingest_user_images_lenient(wrapped.clone(), &images)
+                    .await
+                {
+                    Ok(new_text) => *wrapped = new_text,
+                    Err(e) => {
+                        tracing::warn!(
+                            ?e,
+                            "interjection image persist failed; continuing with original text"
+                        );
+                    }
+                }
+            }
             return images;
         }
         if !images.is_empty() {
@@ -346,8 +360,11 @@ impl SessionActor {
                 None => wrapped.clone(),
             };
             let mut item = ConversationItem::interjection(model_text);
-            for img in &images {
-                item.add_image(pick_user_image_url(img));
+            for url in crate::session::image_describe::raw_image_urls_for_turn(
+                &images,
+                self.keep_raw_images,
+            ) {
+                item.add_image(url);
             }
             prepared.push((wrapped, sanitized, images, item));
         }
@@ -360,8 +377,9 @@ impl SessionActor {
             .unzip();
         if self
             .chat_state_handle
-            .try_push_user_messages_batch(chat_items)
-            .is_err()
+            .push_user_messages_batch_and_ack(chat_items)
+            .await
+            .is_none()
         {
             // The guard restores the entries so `flush_stranded_interjections` can still deliver them
             tracing::error!(
@@ -370,6 +388,7 @@ impl SessionActor {
             );
             return false;
         }
+        self.apply_keep_raw_history().await;
         // Persist only after the submit succeeded: on the failure/cancel paths the entries go back
         // to the buffer and the fallback-prompt turn persists them, so persisting here too would
         // duplicate the user chunks in updates.jsonl

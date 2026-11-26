@@ -2615,7 +2615,9 @@ fn test_strip_images_replaces_with_placeholder() {
         ConversationItem::User(u) => {
             assert_eq!(u.content.len(), 2);
             match at(&u.content, 1) {
-                ContentPart::Text { text } => assert_eq!(text.as_ref(), "[image]"),
+                ContentPart::Text { text } => {
+                    assert_eq!(text.as_ref(), crate::IMAGE_DESCRIPTION_UNAVAILABLE)
+                }
                 ContentPart::Image { .. } => panic!("image should have been stripped"),
             }
         }

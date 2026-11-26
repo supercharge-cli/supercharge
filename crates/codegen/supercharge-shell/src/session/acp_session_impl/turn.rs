@@ -1161,31 +1161,15 @@ impl SessionActor {
                     .await
                     .inspect_err(|err| turn_completion_emitter.emit_error(err))?
             } else {
-                let session_dir = crate::session::persistence::ensure_owner_only_session_dir(
-                    &crate::session::info::Info {
-                        id: self.session_info.id.clone(),
-                        cwd: self.session_info.cwd.clone(),
-                    },
-                )
-                .map_err(|e| {
-                    crate::sampling::error::local_error(
-                        "session_dir_create_failed",
-                        format!("failed to create session dir: {:?}", e.kind()),
-                    )
-                })
-                .inspect_err(|err| turn_completion_emitter.emit_error(err))?;
-                crate::session::image_describe::persist_and_prepend_image_files(
-                    &session_dir,
-                    &user_images,
-                    &user_message,
-                )
-                .map_err(|e| {
-                    crate::sampling::error::local_error(
-                        "assets_save_failed",
-                        format!("failed to save user images to assets dir: {:?}", e.kind()),
-                    )
-                })
-                .inspect_err(|err| turn_completion_emitter.emit_error(err))?
+                self.ingest_user_images_lenient(user_message, &user_images)
+                    .await
+                    .map_err(|e| {
+                        crate::sampling::error::local_error(
+                            "assets_save_failed",
+                            format!("failed to save user images to assets dir: {:?}", e.kind()),
+                        )
+                    })
+                    .inspect_err(|err| turn_completion_emitter.emit_error(err))?
             };
             let attached_image_refs = if self.is_cursor_harness() {
                 Vec::new()
@@ -1243,11 +1227,23 @@ impl SessionActor {
             };
             user_chat.set_prompt_index(current_prompt_index);
             if !self.is_cursor_harness() {
-                for image in &user_images {
-                    user_chat.add_image(pick_user_image_url(image));
+                let attach = crate::session::image_describe::raw_image_urls_for_turn(
+                    &user_images,
+                    self.keep_raw_images,
+                );
+                for url in attach {
+                    user_chat.add_image(url);
                 }
-                for image in &extra_images {
-                    user_chat.add_image(format!("data:{};base64,{}", image.mime_type, image.data));
+                if !matches!(
+                    self.keep_raw_images,
+                    supercharge_chat_state::KeepRawImages::None
+                ) {
+                    for image in &extra_images {
+                        user_chat.add_image(format!(
+                            "data:{};base64,{}",
+                            image.mime_type, image.data
+                        ));
+                    }
                 }
             }
             if self
@@ -1256,6 +1252,7 @@ impl SessionActor {
                 .await
                 .is_some()
             {
+                self.apply_keep_raw_history().await;
                 self.mark_front_message_committed().await;
                 let commit_ids: Vec<&str> = commit_ids.iter().map(String::as_str).collect();
                 self.mark_completions_reported(&commit_ids).await;

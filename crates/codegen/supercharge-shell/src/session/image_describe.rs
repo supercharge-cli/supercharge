@@ -222,12 +222,63 @@ pub(crate) enum ImageDescribeSource {
 #[derive(Debug, Default)]
 pub(crate) struct ImageDescribeCache {
     inner: Mutex<HashMap<(ImageDescribeSource, String, String, String), String>>,
+    by_content: Mutex<HashMap<String, String>>,
+    misses: std::sync::atomic::AtomicU64,
 }
 impl ImageDescribeCache {
     pub(crate) fn new() -> Self {
         Self {
             inner: Mutex::new(HashMap::new()),
+            by_content: Mutex::new(HashMap::new()),
+            misses: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+    pub(crate) fn miss_count(&self) -> u64 {
+        self.misses.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    fn cache_key(
+        raw_bytes: &[u8],
+        outline: Option<&str>,
+        current_query: &str,
+        source: ImageDescribeSource,
+        path_key: &str,
+    ) -> (ImageDescribeSource, String, String, String) {
+        (
+            source,
+            path_key.to_owned(),
+            content_fingerprint(raw_bytes),
+            describe_prompt_fingerprint(outline, current_query),
+        )
+    }
+    /// Look up or compute a description. `describe` runs only on a cache miss.
+    pub(crate) async fn get_or_describe_with<F, Fut>(
+        &self,
+        raw_bytes: &[u8],
+        outline: Option<&str>,
+        current_query: &str,
+        source: ImageDescribeSource,
+        path_key: &str,
+        describe: F,
+    ) -> Result<String, DescribeError>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<String, DescribeError>>,
+    {
+        let cache_key = Self::cache_key(raw_bytes, outline, current_query, source, path_key);
+        if let Some(d) = self.inner.lock().get(&cache_key).cloned() {
+            return Ok(d);
+        }
+        let content_fp = content_fingerprint(raw_bytes);
+        if let Some(d) = self.by_content.lock().get(&content_fp).cloned() {
+            self.inner.lock().insert(cache_key, d.clone());
+            return Ok(d);
+        }
+        self.misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let description = describe().await?;
+        self.inner.lock().insert(cache_key, description.clone());
+        self.by_content.lock().insert(content_fp, description.clone());
+        Ok(description)
     }
     /// Returns a cached description when `(source, path_key, bytes, prompt)` matches a prior successful describe.
     pub(crate) async fn get_or_describe(
@@ -241,22 +292,21 @@ impl ImageDescribeCache {
         source: ImageDescribeSource,
         path_key: &str,
     ) -> Result<String, DescribeError> {
-        let content_fp = content_fingerprint(raw_bytes);
-        let prompt_fp = describe_prompt_fingerprint(outline, current_query);
-        let cache_key = (source, path_key.to_owned(), content_fp, prompt_fp);
-        if let Some(d) = self.inner.lock().get(&cache_key).cloned() {
-            return Ok(d);
-        }
         let url = format!(
             "data:{};base64,{}",
             mime_type,
             base64::engine::general_purpose::STANDARD.encode(raw_bytes)
         );
         let prompt_text = build_describe_prompt(outline, current_query);
-        let description =
-            describe_user_images(client, model, prompt_text, std::slice::from_ref(&url)).await?;
-        self.inner.lock().insert(cache_key, description.clone());
-        Ok(description)
+        self.get_or_describe_with(
+            raw_bytes,
+            outline,
+            current_query,
+            source,
+            path_key,
+            || describe_user_images(client, model, prompt_text, std::slice::from_ref(&url)),
+        )
+        .await
     }
 }
 /// Build the `<image_files>` envelope that lists the workspace paths where copies of the user's images live.
@@ -412,6 +462,132 @@ pub(crate) fn persist_and_prepend_image_files(
         Some(files_block) => format!("{files_block}\n\n{original_user_message}"),
         None => original_user_message.to_owned(),
     })
+}
+
+/// Describe each persisted image, never aborting the turn.
+/// Cache hits skip `describe`. Misses that fail or return empty become
+/// [`supercharge_chat_state::IMAGE_DESCRIPTION_UNAVAILABLE`].
+pub(crate) async fn describe_persisted_images_lenient<F, Fut>(
+    cache: &ImageDescribeCache,
+    persisted: &[PersistedImage],
+    outline: Option<&str>,
+    current_query: &str,
+    mut describe: F,
+) -> Vec<String>
+where
+    F: FnMut(&[u8], &str) -> Fut,
+    Fut: std::future::Future<Output = Result<String, DescribeError>>,
+{
+    let limit = IMAGE_DESCRIPTION_PROCESSING_LIMIT;
+    let skip_count = persisted.len().saturating_sub(limit);
+    let mut description_parts = Vec::with_capacity(persisted.len());
+    for (i, p) in persisted.iter().enumerate() {
+        let part = if i < skip_count {
+            SKIPPED_IMAGE_MARKER.to_owned()
+        } else {
+            match cache
+                .get_or_describe_with(
+                    &p.raw_bytes,
+                    outline,
+                    current_query,
+                    ImageDescribeSource::UserAttachment,
+                    "",
+                    || describe(&p.raw_bytes, &p.mime_type),
+                )
+                .await
+            {
+                Ok(d) => d,
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "image describe failed; using placeholder and continuing the turn"
+                    );
+                    supercharge_chat_state::IMAGE_DESCRIPTION_UNAVAILABLE.to_owned()
+                }
+            }
+        };
+        if persisted.len() > 1 {
+            description_parts.push(format!("Image {}: {}", i + 1, part));
+        } else {
+            description_parts.push(part);
+        }
+    }
+    description_parts
+}
+
+/// Join description parts and prepend the existing `<image>` / `<image_files>` envelopes.
+pub(crate) fn render_described_user_message(
+    description_parts: &[String],
+    image_paths: &[String],
+    original_user_message: &str,
+) -> String {
+    if description_parts.is_empty() {
+        return match render_image_files_block(image_paths) {
+            Some(files_block) => format!("{files_block}\n\n{original_user_message}"),
+            None => original_user_message.to_owned(),
+        };
+    }
+    render_image_user_message(
+        &description_parts.join("\n\n"),
+        image_paths,
+        original_user_message,
+    )
+}
+
+/// Data URLs to `add_image` for this turn given [`supercharge_chat_state::KeepRawImages`].
+/// Conservative: re-open an older session asset only when the query names its
+/// path, `[Image #N]`, `image N`, or "first screenshot".
+pub(crate) fn referenced_older_asset_paths(query: &str, known_paths: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let lower = query.to_ascii_lowercase();
+    for path in known_paths {
+        if query.contains(path) {
+            out.push(path.clone());
+        }
+    }
+    if let Some(n) = referenced_image_index(&lower)
+        && let Some(path) = known_paths.get(n.saturating_sub(1))
+        && !out.contains(path)
+    {
+        out.push(path.clone());
+    }
+    out
+}
+
+fn referenced_image_index(lower_query: &str) -> Option<usize> {
+    if lower_query.contains("first screenshot") || lower_query.contains("first image") {
+        return Some(1);
+    }
+    for needle in ["[image #", "image #", "image "] {
+        if let Some(idx) = lower_query.find(needle) {
+            let rest = lower_query.get(idx + needle.len()..)?;
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(n) = digits.parse::<usize>()
+                && n > 0
+            {
+                return Some(n);
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn raw_image_urls_for_turn(
+    images: &[ImageContent],
+    keep: supercharge_chat_state::KeepRawImages,
+) -> Vec<String> {
+    if matches!(keep, supercharge_chat_state::KeepRawImages::None) {
+        return Vec::new();
+    }
+    images
+        .iter()
+        .map(|image| {
+            format!(
+                "data:{};base64,{}",
+                image.mime_type, image.data
+            )
+        })
+        .collect()
 }
 #[cfg(test)]
 mod tests {
@@ -717,5 +893,97 @@ mod tests {
     fn strip_template_tags_does_not_false_match_prefix() {
         let input = "<rules_extra>keep me</rules_extra>";
         assert_eq!(strip_template_context_tags(input), input);
+    }
+
+    fn sample_persisted(bytes: &[u8]) -> PersistedImage {
+        PersistedImage {
+            path: std::path::PathBuf::from("/tmp/assets/image-1.png"),
+            raw_bytes: bytes.to_vec(),
+            mime_type: "image/png".to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn describe_lenient_caches_by_content_hash() {
+        let cache = ImageDescribeCache::new();
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let p = sample_persisted(&[1, 2, 3]);
+        let mk = |calls: std::sync::Arc<std::sync::atomic::AtomicU64>| {
+            move |_b: &[u8], _m: &str| {
+                let calls = calls.clone();
+                async move {
+                    calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    Ok::<_, DescribeError>("a cat".to_owned())
+                }
+            }
+        };
+        let first =
+            describe_persisted_images_lenient(&cache, &[p.clone()], None, "look", mk(calls.clone()))
+                .await;
+        let second =
+            describe_persisted_images_lenient(&cache, &[p], None, "look", mk(calls.clone())).await;
+        assert_eq!(first, vec!["a cat".to_owned()]);
+        assert_eq!(second, first);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(cache.miss_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn describe_lenient_failure_uses_placeholder() {
+        let cache = ImageDescribeCache::new();
+        let p = sample_persisted(&[9, 9, 9]);
+        let parts = describe_persisted_images_lenient(
+            &cache,
+            &[p],
+            None,
+            "look",
+            |_b, _m| async { Err(DescribeError::EmptyResponse) },
+        )
+        .await;
+        assert_eq!(
+            parts,
+            vec![supercharge_chat_state::IMAGE_DESCRIPTION_UNAVAILABLE.to_owned()]
+        );
+    }
+
+    #[test]
+    fn referenced_paths_match_index_and_literal() {
+        let paths = vec![
+            "/s/assets/image-a.png".to_owned(),
+            "/s/assets/image-b.png".to_owned(),
+        ];
+        assert_eq!(
+            referenced_older_asset_paths("see /s/assets/image-a.png again", &paths),
+            vec!["/s/assets/image-a.png".to_owned()]
+        );
+        assert_eq!(
+            referenced_older_asset_paths("look at [Image #2]", &paths)
+                .first()
+                .map(String::as_str),
+            Some("/s/assets/image-b.png")
+        );
+        assert_eq!(
+            referenced_older_asset_paths("the first screenshot please", &paths)
+                .first()
+                .map(String::as_str),
+            Some("/s/assets/image-a.png")
+        );
+    }
+
+    #[test]
+    fn raw_urls_none_is_empty() {
+        let img = ImageContent::new("AAAA", "image/png");
+        assert!(
+            raw_image_urls_for_turn(&[img], supercharge_chat_state::KeepRawImages::None).is_empty()
+        );
+    }
+
+    #[test]
+    fn raw_urls_latest_keeps_current_turn() {
+        let img = ImageContent::new("AAAA", "image/png");
+        assert_eq!(
+            raw_image_urls_for_turn(&[img], supercharge_chat_state::KeepRawImages::Latest).len(),
+            1
+        );
     }
 }

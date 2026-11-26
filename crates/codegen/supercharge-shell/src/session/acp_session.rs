@@ -1157,6 +1157,8 @@ pub(crate) struct SessionActor {
     pub(crate) image_description_model: String,
     /// Cache auxiliary image outputs by content and prompt fingerprint.
     pub(crate) image_describe_cache: Arc<crate::session::image_describe::ImageDescribeCache>,
+    /// How many user-attached images stay raw in durable history.
+    pub(crate) keep_raw_images: supercharge_chat_state::KeepRawImages,
     /// Per-subagent token state keyed by `subagent_id`; sums into goal totals via [`Self::goal_tokens`].
     pub(crate) subagent_token_records: parking_lot::Mutex<HashMap<String, SubagentTokenRecord>>,
     pub(crate) workspace_ops: supercharge_workspace::WorkspaceOps,

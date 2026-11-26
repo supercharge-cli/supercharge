@@ -548,6 +548,7 @@ async fn create_test_actor_inner(
         rebuild_spec: crate::session::agent_rebuild::test_rebuild_spec_default(),
         image_description_model: crate::test_support::TEST_MODEL.to_owned(),
         image_describe_cache: Arc::new(crate::session::image_describe::ImageDescribeCache::new()),
+        keep_raw_images: supercharge_chat_state::KeepRawImages::Latest,
         subagent_token_records: parking_lot::Mutex::new(HashMap::new()),
         workspace_ops: supercharge_workspace::WorkspaceOps::for_test(),
         trace_config_template: std::cell::RefCell::new(None),

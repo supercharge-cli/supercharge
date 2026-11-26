@@ -3,6 +3,7 @@
 #![allow(clippy::items_after_test_module)]
 use super::*;
 use crate::session::repo_status_prefix::RepoStatusSnapshot;
+use base64::Engine as _;
 /// Replaces anything outside `[A-Za-z0-9._-]` with `_` so the result is a portable directory name on macOS/Linux.
 /// Whether `url` is an `http://` or `https://` URL, one the upstream API can fetch directly.
 /// `file://` and other local schemes are rejected by the API and must be inlined as a `data:` URL instead.
@@ -872,5 +873,135 @@ impl SessionActor {
             &image_paths,
             &original_user_message,
         ))
+    }
+
+    /// Persist, describe (lenient), and render envelopes for a non-aborting ingest.
+    /// Describe failures become placeholders; the turn still proceeds.
+    /// Returns the rendered user-message text. Persist errors still fail.
+    pub(super) async fn ingest_user_images_lenient(
+        &self,
+        original_user_message: String,
+        images: &[agent_client_protocol::ImageContent],
+    ) -> Result<String, std::io::Error> {
+        let session_dir = crate::session::persistence::ensure_owner_only_session_dir(
+            &crate::session::info::Info {
+                id: self.session_info.id.clone(),
+                cwd: self.session_info.cwd.clone(),
+            },
+        )?;
+        let persisted =
+            crate::session::image_describe::persist_user_images(&session_dir, images)?;
+        let image_paths: Vec<String> = persisted
+            .iter()
+            .map(|p| p.path.to_string_lossy().into_owned())
+            .collect();
+        let prior = self.chat_state_handle.get_conversation().await;
+        let outline = crate::session::image_describe::build_conversation_outline(&prior);
+        let current_query = crate::session::image_describe::strip_template_context_tags(
+            &supercharge_chat_state::compaction_utils::extract_user_query(&original_user_message),
+        );
+        let client_and_model = self.image_describe_client().await;
+        let description_parts = if let Some((client, model)) = client_and_model {
+            let cache = self.image_describe_cache.clone();
+            crate::session::image_describe::describe_persisted_images_lenient(
+                &cache,
+                &persisted,
+                outline.as_deref(),
+                &current_query,
+                |bytes, mime| {
+                    let client = client.clone();
+                    let model = model.clone();
+                    let outline = outline.clone();
+                    let current_query = current_query.clone();
+                    let bytes = bytes.to_vec();
+                    let mime = mime.to_owned();
+                    async move {
+                        let url = format!(
+                            "data:{mime};base64,{}",
+                            base64::engine::general_purpose::STANDARD.encode(&bytes)
+                        );
+                        let prompt_text = crate::session::image_describe::build_describe_prompt(
+                            outline.as_deref(),
+                            &current_query,
+                        );
+                        crate::session::image_describe::describe_user_images(
+                            client,
+                            &model,
+                            prompt_text,
+                            std::slice::from_ref(&url),
+                        )
+                        .await
+                    }
+                },
+            )
+            .await
+        } else {
+            Vec::new()
+        };
+        Ok(
+            crate::session::image_describe::render_described_user_message(
+                &description_parts,
+                &image_paths,
+                &original_user_message,
+            ),
+        )
+    }
+
+    async fn image_describe_client(
+        &self,
+    ) -> Option<(supercharge_sampler::SamplingClient, String)> {
+        let active_session_config = self.reconstruct_full_config().await;
+        let prefer_session =
+            !matches!(self.keep_raw_images, supercharge_chat_state::KeepRawImages::None);
+        let resolved_describe = if prefer_session {
+            None
+        } else {
+            self.resolve_aux_sampler_config(&self.image_description_model)
+                .await
+        };
+        let (describe_model, sampler_config) =
+            crate::agent::config::finalize_image_describe_sampler_config(
+                resolved_describe,
+                &active_session_config,
+                self.client_identifier.clone(),
+                Some(self.max_retries),
+            );
+        match supercharge_sampler::SamplingClient::new(sampler_config) {
+            Ok(client) => Some((client, describe_model)),
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "failed to build image-describe sampling client; keeping raw images"
+                );
+                None
+            }
+        }
+    }
+
+    /// Rewrite durable history so only the keep-raw policy's images remain.
+    /// Logs token estimates before vs after when anything changed.
+    pub(super) async fn apply_keep_raw_history(&self) {
+        let mut conv = self.chat_state_handle.get_conversation().await;
+        let before = supercharge_chat_state::estimate_conversation_tokens(&conv);
+        let stats = supercharge_chat_state::apply_keep_raw_user_images(
+            &mut conv,
+            self.keep_raw_images,
+        );
+        if stats.replaced == 0 {
+            return;
+        }
+        let after = supercharge_chat_state::estimate_conversation_tokens(&conv);
+        supercharge_telemetry::unified_log::info(
+            "shell.images.keep_raw_rewrite",
+            Some(self.session_info.id.0.as_ref()),
+            Some(serde_json::json!({
+                "keep_raw": format!("{:?}", self.keep_raw_images).to_lowercase(),
+                "replaced": stats.replaced,
+                "remaining_raw": stats.remaining_raw,
+                "tokens_before": before,
+                "tokens_after": after,
+            })),
+        );
+        self.chat_state_handle.replace_conversation(conv);
     }
 }

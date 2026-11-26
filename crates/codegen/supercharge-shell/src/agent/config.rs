@@ -1210,6 +1210,17 @@ pub struct ShellEnvironmentPolicyKnownKeys {
     pub set: Option<toml::Value>,
     pub include_only: Option<toml::Value>,
 }
+/// `[images]` — how user-attached images are kept in durable history.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct ImagesConfig {
+    /// `latest` (default): describe each attachment and keep only the most
+    /// recently attached image raw. `all`: describe but leave every image raw.
+    /// `none`: descriptions only, never `add_image`.
+    #[serde(default)]
+    pub keep_raw: supercharge_chat_state::KeepRawImages,
+}
+
 /// `[image_provider]` — independent image-generation endpoint, key, and model.
 /// Written by `/isetup` / `/imodels`. Not the chat `/setup` provider.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -1268,6 +1279,9 @@ pub struct Config {
     /// Image-generation provider, independent of chat `/setup`.
     #[serde(default)]
     pub image_provider: ImageProviderConfig,
+    /// `[images]` keep-raw policy for user attachments.
+    #[serde(default)]
+    pub images: ImagesConfig,
     /// `[goal]` section: canonical `/goal` configuration. See [`GoalConfig`].
     #[serde(default)]
     pub goal: GoalConfig,
@@ -1679,6 +1693,7 @@ impl Default for Config {
         let mut cfg = Self {
             features: Features::default(),
             image_provider: ImageProviderConfig::default(),
+            images: ImagesConfig::default(),
             goal: GoalConfig::default(),
             workflows: WorkflowsConfig::default(),
             doom_loop_recovery: crate::util::config::DoomLoopRecoverySettings::default(),

@@ -410,6 +410,27 @@ fn new_from_toml_cfg_restores_web_search_and_session_summary_models() {
     );
 }
 #[test]
+fn images_keep_raw_defaults_to_latest_and_parses_all_none() {
+    let empty: toml::Value = toml::Value::Table(toml::map::Map::new());
+    let cfg = Config::new_from_toml_cfg(&empty).expect("empty config should parse");
+    assert_eq!(
+        cfg.images.keep_raw,
+        supercharge_chat_state::KeepRawImages::Latest
+    );
+    let all: toml::Value = toml::from_str("[images]\nkeep_raw = \"all\"\n").unwrap();
+    let cfg_all = Config::new_from_toml_cfg(&all).expect("config should parse");
+    assert_eq!(
+        cfg_all.images.keep_raw,
+        supercharge_chat_state::KeepRawImages::All
+    );
+    let none: toml::Value = toml::from_str("[images]\nkeep_raw = \"none\"\n").unwrap();
+    let cfg_none = Config::new_from_toml_cfg(&none).expect("config should parse");
+    assert_eq!(
+        cfg_none.images.keep_raw,
+        supercharge_chat_state::KeepRawImages::None
+    );
+}
+#[test]
 fn hidden_default_web_search_resolution_is_explicit_and_responses_only() {
     let endpoints = EndpointsConfig::default();
     let resolved = resolve_web_search_sampling_config(

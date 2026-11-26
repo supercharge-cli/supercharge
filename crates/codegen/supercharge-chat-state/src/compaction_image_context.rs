@@ -9,6 +9,25 @@ use supercharge_sampling_types::{ContentPart, ConversationItem, SyntheticReason}
 
 use crate::compaction_utils::wrap_user_query;
 
+/// Remaining user `ContentPart::Image` parts in conversation order. Used when
+/// the last real user turn is text-only but an earlier item still holds the
+/// latest raw image under `keep_raw = latest`.
+pub(crate) fn remaining_user_image_parts(conversation: &[ConversationItem]) -> Vec<ContentPart> {
+    conversation
+        .iter()
+        .filter_map(|item| match item {
+            ConversationItem::User(user) => Some(
+                user.content
+                    .iter()
+                    .filter(|part| matches!(part, ContentPart::Image { .. }))
+                    .cloned(),
+            ),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
 /// Image state of the pre-compaction conversation the compacted history must carry. Pure data.
 #[derive(Debug, Clone, Default)]
 pub struct CompactionImageContext {
@@ -17,6 +36,8 @@ pub struct CompactionImageContext {
     pub last_turn_image_parts: Vec<ContentPart>,
     /// Verbatim `<image_files>…</image_files>` block from that item's text.
     pub last_turn_image_files: Option<String>,
+    /// Verbatim `<image>…</image>` envelope(s) from that item's text, when present.
+    pub last_turn_image_envelope: Option<String>,
     /// Paths from every `<image_files>` block in the summarized conversation: chronological, deduped,
     /// excluding the last turn's own block. Harvested text is untrusted; the shell verifies each path
     /// against the session `assets/` dir and caps the list.
@@ -52,8 +73,41 @@ pub(crate) fn image_context_from_item(item: &ConversationItem) -> CompactionImag
             .collect(),
         last_turn_image_files: extract_tag_block(&item.text_content(), "image_files")
             .map(str::to_owned),
+        last_turn_image_envelope: extract_image_envelopes(&item.text_content()),
         attached_paths: Vec::new(),
     }
+}
+
+/// Open `<image>` tags that are not `<image_files>` or `<image_description>`.
+fn find_image_open(text: &str) -> Option<usize> {
+    let mut search = 0usize;
+    while let Some(rel) = text.get(search..)?.find("<image") {
+        let abs = search + rel;
+        let after = abs + "<image".len();
+        match text.as_bytes().get(after) {
+            Some(b'>' | b' ' | b'\n' | b'\t') => return Some(abs),
+            _ => search = after,
+        }
+    }
+    None
+}
+
+/// Concatenate closed `<image>…</image>` envelopes from `text`.
+pub(crate) fn extract_image_envelopes(text: &str) -> Option<String> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(start) = find_image_open(rest) {
+        let after = start + "<image>".len();
+        let Some(rel) = rest.get(after..).and_then(|s| s.find("</image>")) else {
+            break;
+        };
+        let end = after + rel + "</image>".len();
+        if let Some(block) = rest.get(start..end) {
+            out.push(block.to_owned());
+        }
+        rest = rest.get(end..).unwrap_or("");
+    }
+    (!out.is_empty()).then(|| out.join("\n\n"))
 }
 
 /// The re-added last query: `[<image_files> block + "\n\n"] + wrap_user_query(q)` as one text
@@ -65,8 +119,18 @@ pub(crate) fn last_query_item(
 ) -> ConversationItem {
     let query = wrap_user_query(last_query);
     // A query extracted without a `<user_query>` wrapper already carries the block.
+    let mut prefix = String::new();
+    if let Some(env) = &images.last_turn_image_envelope
+        && !last_query.contains(env.as_str())
+    {
+        prefix.push_str(env);
+        prefix.push_str("\n\n");
+    }
     let text = match &images.last_turn_image_files {
-        Some(block) if !last_query.contains(block.as_str()) => format!("{block}\n\n{query}"),
+        Some(block) if !last_query.contains(block.as_str()) => {
+            format!("{prefix}{block}\n\n{query}")
+        }
+        _ if !prefix.is_empty() => format!("{prefix}{query}"),
         _ => query,
     };
     let text_part = ContentPart::Text {

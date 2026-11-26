@@ -6,7 +6,8 @@
 use std::collections::BTreeSet;
 use crate::compaction_image_context::{
     CompactionImageContext, collect_attached_image_paths, image_context_from_item, last_query_item,
-    parse_image_files_paths, render_attached_image_paths_note, tag_block_range,
+    parse_image_files_paths, remaining_user_image_parts, render_attached_image_paths_note,
+    tag_block_range,
 };
 use supercharge_sampling_types::{ContentPart, ConversationItem, SyntheticReason, ToolResultItem};
 pub const AGENT_MESSAGE_MODEL_LABEL: &str =
@@ -80,20 +81,31 @@ pub fn strip_reasoning_blocks(conversation: Vec<ConversationItem>) -> Vec<Conver
         .filter(|item| !matches!(item, ConversationItem::Reasoning(_)))
         .collect()
 }
-/// Replace `ContentPart::Image` entries with `"[image]"` so downstream
-/// consumers (summary model, segment store) don't carry megabytes of base64.
+/// Drop raw `ContentPart::Image` entries so the summary model never sees
+/// megabytes of base64. When the user item already carries an
+/// `<image_description>` envelope the image part is removed. Otherwise it is
+/// replaced with [`crate::IMAGE_DESCRIPTION_UNAVAILABLE`].
 pub(crate) fn strip_images(conversation: Vec<ConversationItem>) -> Vec<ConversationItem> {
     conversation
         .into_iter()
         .map(|item| match item {
             ConversationItem::User(mut u) => {
-                for part in &mut u.content {
+                let has_description = crate::user_item_has_image_description(&u.content);
+                let mut next = Vec::with_capacity(u.content.len());
+                for part in u.content {
                     if matches!(part, ContentPart::Image { .. }) {
-                        *part = ContentPart::Text {
-                            text: std::sync::Arc::<str>::from("[image]"),
-                        };
+                        if !has_description {
+                            next.push(ContentPart::Text {
+                                text: std::sync::Arc::<str>::from(
+                                    crate::IMAGE_DESCRIPTION_UNAVAILABLE,
+                                ),
+                            });
+                        }
+                    } else {
+                        next.push(part);
                     }
                 }
+                u.content = next;
                 ConversationItem::User(u)
             }
             other => other,
@@ -640,6 +652,9 @@ impl CompactionStateContext {
     pub async fn build(conversation: &[ConversationItem], inputs: CompactionInputs) -> Self {
         let last = find_last_real_user_item(conversation);
         let mut images = last.map(image_context_from_item).unwrap_or_default();
+        if images.last_turn_image_parts.is_empty() {
+            images.last_turn_image_parts = remaining_user_image_parts(conversation);
+        }
         let last_turn_paths =
             parse_image_files_paths(images.last_turn_image_files.as_deref().unwrap_or_default());
         images.attached_paths = collect_attached_image_paths(conversation, &last_turn_paths);
