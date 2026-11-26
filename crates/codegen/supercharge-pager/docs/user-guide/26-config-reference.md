@@ -430,12 +430,6 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 | `models.extra_headers` | `map<string,string>` | `yes` | `user` | Request headers applied to every model; per-model keys win. |
 | `models.hidden_models` | `string[]` | `yes` | `user` | Hide these model IDs from the picker; `-m` can still select them. |
 | `models.image_description` | `string` | `yes` | `user` | Vision model used to transcribe user-supplied images. |
-
-### `images`
-
-| Key | Type / Values | Requirements | Managed | Details |
-| --- | --- | --- | --- | --- |
-| `images.keep_raw` | `latest` / `all` / `none` | `yes` | `user` | How many user-attached images stay as raw image parts in history. Default `latest`: describe each attachment once and keep only the most recently attached image raw. `all` leaves every image raw (still describes once). `none` never sends raw images. |
 | `models.inference_idle_timeout_secs` | `number` | `yes` | `user` | Global idle timeout for streaming inference when a model leaves it unset. |
 | `models.max_completion_tokens` | `number` | `yes` | `user` | Global max completion tokens default when a model leaves it unset. |
 | `models.max_retries` | `number` | `yes` | `user` | Global inference retry default when a model leaves it unset. |
@@ -447,6 +441,12 @@ User-level configuration lives in `$SUPERCHARGE_HOME/config.toml` (default `~/.s
 | `models.temperature` | `number` | `yes` | `user` | Global sampling temperature default when a model leaves it unset. |
 | `models.top_p` | `number` | `yes` | `user` | Global top_p default when a model leaves it unset. |
 | `models.web_search` | `string` | `pin` | `user` | Model used by the client `web_search` tool. Also `SUPERCHARGE_WEB_SEARCH_MODEL`. |
+
+### `images`
+
+| Key | Type / Values | Requirements | Managed | Details |
+| --- | --- | --- | --- | --- |
+| `images.keep_raw` | `latest` / `all` / `none` | `yes` | `user` | How many user-attached images stay as raw image parts in history. Default `latest`: describe each attachment once and keep only the most recently attached image raw. `all` leaves every image raw (still describes once). `none` never sends raw images. |
 
 ### `path_not_found_hints`
 

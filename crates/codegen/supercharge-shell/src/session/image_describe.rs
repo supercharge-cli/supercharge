@@ -277,7 +277,9 @@ impl ImageDescribeCache {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let description = describe().await?;
         self.inner.lock().insert(cache_key, description.clone());
-        self.by_content.lock().insert(content_fp, description.clone());
+        self.by_content
+            .lock()
+            .insert(content_fp, description.clone());
         Ok(description)
     }
     /// Returns a cached description when `(source, path_key, bytes, prompt)` matches a prior successful describe.
@@ -298,14 +300,9 @@ impl ImageDescribeCache {
             base64::engine::general_purpose::STANDARD.encode(raw_bytes)
         );
         let prompt_text = build_describe_prompt(outline, current_query);
-        self.get_or_describe_with(
-            raw_bytes,
-            outline,
-            current_query,
-            source,
-            path_key,
-            || describe_user_images(client, model, prompt_text, std::slice::from_ref(&url)),
-        )
+        self.get_or_describe_with(raw_bytes, outline, current_query, source, path_key, || {
+            describe_user_images(client, model, prompt_text, std::slice::from_ref(&url))
+        })
         .await
     }
 }
@@ -572,6 +569,19 @@ fn referenced_image_index(lower_query: &str) -> Option<usize> {
     None
 }
 
+/// Same selector as the session ingest helper: inline bytes win; an HTTP(S)
+/// `uri` is forwarded only when there are no inline bytes.
+fn user_image_url(image: &ImageContent) -> String {
+    if let Some(uri) = image.uri.as_deref()
+        && image.data.is_empty()
+        && (uri.starts_with("http://") || uri.starts_with("https://"))
+    {
+        uri.to_owned()
+    } else {
+        format!("data:{};base64,{}", image.mime_type, image.data)
+    }
+}
+
 pub(crate) fn raw_image_urls_for_turn(
     images: &[ImageContent],
     keep: supercharge_chat_state::KeepRawImages,
@@ -579,15 +589,7 @@ pub(crate) fn raw_image_urls_for_turn(
     if matches!(keep, supercharge_chat_state::KeepRawImages::None) {
         return Vec::new();
     }
-    images
-        .iter()
-        .map(|image| {
-            format!(
-                "data:{};base64,{}",
-                image.mime_type, image.data
-            )
-        })
-        .collect()
+    images.iter().map(user_image_url).collect()
 }
 #[cfg(test)]
 mod tests {
@@ -917,9 +919,14 @@ mod tests {
                 }
             }
         };
-        let first =
-            describe_persisted_images_lenient(&cache, &[p.clone()], None, "look", mk(calls.clone()))
-                .await;
+        let first = describe_persisted_images_lenient(
+            &cache,
+            &[p.clone()],
+            None,
+            "look",
+            mk(calls.clone()),
+        )
+        .await;
         let second =
             describe_persisted_images_lenient(&cache, &[p], None, "look", mk(calls.clone())).await;
         assert_eq!(first, vec!["a cat".to_owned()]);
@@ -932,13 +939,9 @@ mod tests {
     async fn describe_lenient_failure_uses_placeholder() {
         let cache = ImageDescribeCache::new();
         let p = sample_persisted(&[9, 9, 9]);
-        let parts = describe_persisted_images_lenient(
-            &cache,
-            &[p],
-            None,
-            "look",
-            |_b, _m| async { Err(DescribeError::EmptyResponse) },
-        )
+        let parts = describe_persisted_images_lenient(&cache, &[p], None, "look", |_b, _m| async {
+            Err(DescribeError::EmptyResponse)
+        })
         .await;
         assert_eq!(
             parts,
@@ -984,6 +987,16 @@ mod tests {
         assert_eq!(
             raw_image_urls_for_turn(&[img], supercharge_chat_state::KeepRawImages::Latest).len(),
             1
+        );
+    }
+
+    #[test]
+    fn raw_urls_forward_remote_uri_when_no_inline_bytes() {
+        let mut img = ImageContent::new("", "image/png");
+        img.uri = Some("https://example.com/shot.png".to_owned());
+        assert_eq!(
+            raw_image_urls_for_turn(&[img], supercharge_chat_state::KeepRawImages::Latest),
+            vec!["https://example.com/shot.png".to_owned()]
         );
     }
 }
