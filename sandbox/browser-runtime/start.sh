@@ -17,6 +17,10 @@ if [[ ! "$bot_id" =~ ^[a-zA-Z0-9_-]{1,80}$ ]]; then
 fi
 export XDG_CURRENT_DESKTOP=XFCE
 export XDG_SESSION_TYPE=x11
+# The image bakes browsers here; a host-started runtime does not inherit it.
+if [ -z "${PLAYWRIGHT_BROWSERS_PATH:-}" ] && [ -d /opt/ms-playwright ]; then
+  export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+fi
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/supercharge-runtime-$(id -u)}"
 
 root_dir=/tmp/supercharge-browser
@@ -111,7 +115,7 @@ if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
     exit 1
   fi
 else
-  if [ "$bot_id" != main ] && [ -f "/tmp/.X${display}-lock" ] && [ -O "/tmp/.X${display}-lock" ] && ! alive xvfb; then
+  if [ -f "/tmp/.X${display}-lock" ] && [ -O "/tmp/.X${display}-lock" ] && ! alive xvfb; then
     read -r lock_pid <"/tmp/.X${display}-lock" || true
     if [[ "$lock_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$lock_pid" 2>/dev/null; then
       rm -f "/tmp/.X${display}-lock" "/tmp/.X11-unix/X${display}"
